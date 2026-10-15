@@ -2,7 +2,6 @@ import axe from 'axe-core';
 import type { Page } from '@playwright/test';
 import { expect, RunningApp, test } from './fixtures/app.fixture';
 import { apiUrl } from './helpers/app-actions';
-import { authHeaders } from './helpers/local-auth';
 
 type Theme = 'light' | 'dark';
 
@@ -166,14 +165,9 @@ test('keeps the chosen theme in the database', async ({
   await expect(themeOption(again.page, 'Dark')).toBeChecked();
 });
 
-test('moves a theme chosen before the database stored it', async ({
-  page,
-}) => {
+test('moves a theme chosen before the database stored it', async ({ page }) => {
   const url = apiUrl(page, '/ui-preferences');
-  const headers = await authHeaders(page);
-  expect(
-    (await (await page.request.get(url, { headers })).json()).theme,
-  ).toBeNull();
+  expect((await (await page.request.get(url)).json()).theme).toBeNull();
   await page.evaluate(() =>
     localStorage.setItem('questions-to-insights:theme', 'dark'),
   );
@@ -181,10 +175,7 @@ test('moves a theme chosen before the database stored it', async ({
   await page.reload();
   await expectTheme(page, 'dark');
   await expect
-    .poll(
-      async () =>
-        (await (await page.request.get(url, { headers })).json()).theme,
-    )
+    .poll(async () => (await (await page.request.get(url)).json()).theme)
     .toBe('dark');
 });
 

@@ -1,0 +1,193 @@
+<!-- What the agent has shown, newest first. A visual carries it in its own header. -->
+<ng-template #historyMenu>
+  @if (history().length > 0) {
+    <div class="relative">
+      <button
+        type="button"
+        (click)="menuOpen.set(!menuOpen())"
+        [attr.aria-expanded]="menuOpen()"
+        title="Shown in this session"
+        class="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[12px] text-fg hover:bg-surface-selected"
+      >
+        <lucide-angular [img]="Layers" [size]="13" />
+        <span>{{ history().length }}</span>
+        <lucide-angular [img]="ChevronDown" [size]="12" />
+      </button>
+      @if (menuOpen()) {
+        <button
+          type="button"
+          aria-label="Close panel menu"
+          class="fixed inset-0 z-20 cursor-default"
+          (click)="menuOpen.set(false)"
+        ></button>
+        <div class="absolute top-full right-0 z-30 mt-1 w-80 menu">
+          <div class="max-h-72 overflow-y-auto">
+            @for (entry of history(); track entry.id) {
+              <button
+                type="button"
+                (click)="pick(entry)"
+                class="menu-item"
+                [class.bg-surface-selected]="item()?.id === entry.id"
+              >
+                <lucide-angular
+                  [img]="kindIcons[entry.kind]"
+                  [size]="14"
+                  class="shrink-0 text-fg-muted"
+                />
+                <span class="min-w-0 flex-1 truncate">{{ entry.title }}</span>
+                <span class="shrink-0 text-[11px] text-fg-muted">{{
+                  formatTime(entry.shownAt)
+                }}</span>
+              </button>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+</ng-template>
+
+<div class="flex h-full min-h-0 flex-col">
+  @if (view() !== "visual") {
+    <div
+      class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3 whitespace-nowrap"
+    >
+      <span class="min-w-0 truncate text-[13px] font-medium text-fg">{{
+        heading()
+      }}</span>
+
+      <div class="ml-auto flex shrink-0 items-center gap-1.5">
+        <ng-container *ngTemplateOutlet="historyMenu" />
+        @if (downloadTitle(); as title) {
+          <div class="relative flex items-center">
+            <button
+              type="button"
+              class="btn-icon"
+              [title]="title"
+              [attr.aria-label]="title"
+              [disabled]="downloadingItem()"
+              (click)="download()"
+            >
+              <lucide-angular [img]="Download" [size]="16" />
+            </button>
+            @if (markdownItem()) {
+              <button
+                type="button"
+                class="btn-icon"
+                title="Download as…"
+                aria-label="Download as…"
+                data-testid="panel-download-menu"
+                aria-haspopup="menu"
+                [attr.aria-expanded]="downloadMenuOpen()"
+                [disabled]="downloadingItem()"
+                (click)="downloadMenuOpen.set(!downloadMenuOpen())"
+              >
+                <lucide-angular [img]="ChevronDown" [size]="12" />
+              </button>
+              @if (downloadMenuOpen()) {
+                <button
+                  type="button"
+                  aria-label="Close download menu"
+                  class="fixed inset-0 z-20 cursor-default"
+                  (click)="downloadMenuOpen.set(false)"
+                ></button>
+                <div class="absolute top-full right-0 z-30 mt-1 w-44 menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    class="menu-item"
+                    (click)="download('pdf')"
+                  >
+                    PDF (.pdf)
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    class="menu-item"
+                    (click)="download('md')"
+                  >
+                    Markdown (.md)
+                  </button>
+                </div>
+              }
+            }
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <div class="min-h-0 flex-1 overflow-hidden">
+    @switch (view()) {
+      @case ("visual") {
+        <app-interactive-visual-panel
+          class="h-full"
+          [sessionId]="session().id"
+          [visualization]="visualization()"
+          [loading]="loading()"
+          [error]="error()"
+          [downloading]="downloading()"
+          (downloadVisual)="downloadVisual.emit($event)"
+          (selectVersion)="selectVersion.emit($event)"
+          (revertVersion)="revertVersion.emit($event)"
+          (visualRefreshed)="visualRefreshed.emit($event)"
+          (dataPointSelected)="dataPointSelected.emit($event)"
+        >
+          <ng-container ngProjectAs="[panelHistory]">
+            <ng-container *ngTemplateOutlet="historyMenu" />
+          </ng-container>
+        </app-interactive-visual-panel>
+      }
+      @case ("document") {
+        @if (item(); as doc) {
+          @if (doc.kind === "document") {
+            <app-panel-document-view
+              class="block h-full"
+              [markdown]="doc.markdown"
+            />
+          }
+        }
+      }
+      @case ("file") {
+        @if (item(); as file) {
+          @if (file.kind === "file") {
+            <app-panel-file-view
+              class="block h-full"
+              [sessionId]="session().id"
+              [item]="file"
+            />
+          }
+        }
+      }
+      @case ("table") {
+        @if (item(); as table) {
+          @if (table.kind === "table") {
+            <app-panel-table-view class="block h-full" [item]="table" />
+          }
+        }
+      }
+      @default {
+        <div
+          class="flex h-full flex-col items-center justify-center gap-3 px-6 text-center"
+        >
+          <span
+            class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-muted"
+          >
+            <lucide-angular
+              [img]="Sparkles"
+              [size]="18"
+              class="text-fg-muted"
+            />
+          </span>
+          <div>
+            <p class="text-[13px] font-medium text-fg">Nothing to show yet</p>
+            <p class="mt-1 text-[12px] leading-5 text-fg-muted">
+              The agent can show files, documents, query results and visuals
+              here.
+            </p>
+          </div>
+        </div>
+      }
+    }
+  </div>
+</div>

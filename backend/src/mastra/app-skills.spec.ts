@@ -374,6 +374,13 @@ describe('skill folders', () => {
           'curated-knowledge',
           'deep-analysis',
           'interactive-visuals',
+          'rfp-carriers',
+          'rfp-client-renewal',
+          'rfp-current-program',
+          'rfp-market-scope',
+          'rfp-package',
+          'rfp-requirements',
+          'rfp-timeline',
         ]);
         expect(
           fresh.catalogSkills('assistant').map((skill) => skill.name),
@@ -439,6 +446,7 @@ describe('agent skills view (bundled)', () => {
         {
           name: 'interactive-visuals',
           description: expect.stringMatching(/^Use when /) as string,
+          level: 'built-in',
           loading: 'harness',
           files: [
             expect.objectContaining({ path: 'SKILL.md' }),

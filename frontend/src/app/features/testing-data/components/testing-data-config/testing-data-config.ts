@@ -158,7 +158,13 @@ export class TestingDataConfig implements OnInit {
     return this.state(fixtureId)?.connection ?? { ...EMPTY_CONNECTION };
   }
 
+  /** A self-registering sample takes no connection, so nothing to fill in. */
+  selfRegistering(fixtureId: string): boolean {
+    return !!this.fixtures().find((f) => f.id === fixtureId)?.selfRegistering;
+  }
+
   requiredFieldsFilled(fixtureId: string): boolean {
+    if (this.selfRegistering(fixtureId)) return true;
     const c = this.state(fixtureId)?.connection;
     return !!(c && c.host.trim() && c.database.trim() && c.user.trim());
   }

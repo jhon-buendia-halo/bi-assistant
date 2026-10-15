@@ -1,0 +1,95 @@
+# E2E results — roadmap 1.14.19 (BA-232), web target, 2026-10-15
+# Branch feat/BA-213-agent-tools-skills, HEAD 7669c9a plus the uncommitted test changes listed in e2e-impact.md.
+# Build: backend/dist + backend/public as built from HEAD (not rebuilt for this run).
+
+## Playwright (web project), from frontend/:
+## E2E_SKIP_DOCKER=1 npx playwright test --project=web --reporter=list --output=<scratchpad>/pw-shell \
+##   e2e/navigation.spec.ts e2e/appearance.spec.ts e2e/layout-accessibility.spec.ts e2e/chat-and-visuals.spec.ts \
+##   e2e/chat-clarification.spec.ts e2e/world-cup-workflow.spec.ts e2e/llm-settings.spec.ts e2e/developer-settings.spec.ts \
+##   e2e/developer-observability.spec.ts e2e/diagnostics.spec.ts e2e/session-management.spec.ts e2e/visual-tailoring.spec.ts
+## The two skipped tests are desktopOnly() scenarios: desktop not run.
+Running 63 tests using 1 worker
+  ✓   1 [web] › e2e/appearance.spec.ts:72:5 › opens in the light theme by default (3.9s)
+  ✓   2 [web] › e2e/appearance.spec.ts:82:5 › follows the operating system theme when System is chosen (3.5s)
+  ✓   3 [web] › e2e/appearance.spec.ts:102:5 › forces a theme regardless of the operating system (3.5s)
+  ✓   4 [web] › e2e/appearance.spec.ts:122:5 › remembers the chosen theme after a restart (5.2s)
+  ✓   5 [web] › e2e/appearance.spec.ts:151:5 › keeps the chosen theme in the database (7.2s)
+  ✓   6 [web] › e2e/appearance.spec.ts:168:5 › moves a theme chosen before the database stored it (3.2s)
+  ✓   7 [web] › e2e/appearance.spec.ts:182:5 › has no automatically detectable accessibility violations in either theme (4.1s)
+  ✓   8 [web] › e2e/chat-and-visuals.spec.ts:141:5 › renders streamed reasoning, tool activity, final Markdown, and supports stopping (7.3s)
+  ✓   9 [web] › e2e/chat-and-visuals.spec.ts:170:5 › renders a deterministic interactive visualization and its version controls (7.6s)
+  ✓  10 [web] › e2e/chat-clarification.spec.ts:53:5 › answering a clarification (4.5s)
+  ✓  11 [web] › e2e/chat-clarification.spec.ts:95:5 › a malformed clarification is asked again, never shown without options (4.4s)
+  ✓  12 [web] › e2e/developer-observability.spec.ts:79:5 › backend traces reach the OTLP endpoint when observability is on (11.8s)
+  ✓  13 [web] › e2e/developer-observability.spec.ts:97:5 › agent runs reach Phoenix when observability is on (14.8s)
+  ✓  14 [web] › e2e/developer-observability.spec.ts:118:5 › backend logs reach the OTLP endpoint when observability is on (7.5s)
+  ✓  15 [web] › e2e/developer-observability.spec.ts:133:5 › nothing is exported when observability is off (17.8s)
+  ✓  16 [web] › e2e/developer-settings.spec.ts:36:5 › developer observability is off by default (3.7s)
+  ✓  17 [web] › e2e/developer-settings.spec.ts:70:5 › turning observability on asks for a restart (4.0s)
+  -  18 [web] › e2e/developer-settings.spec.ts:94:7 › desktop app › the desktop app offers to restart the backend, and restarting applies it
+  ✓  19 [web] › e2e/developer-settings.spec.ts:115:7 › browser › in a browser, the notice asks me to restart the CLI (4.1s)
+  ✓  20 [web] › e2e/developer-settings.spec.ts:125:7 › browser › restarting the CLI applies the saved setting (6.5s)
+  ✓  21 [web] › e2e/developer-settings.spec.ts:140:5 › turning it back off before restarting needs no restart (4.4s)
+  ✓  22 [web] › e2e/developer-settings.spec.ts:157:5 › rejects an endpoint that is not a URL (3.7s)
+  ✓  23 [web] › e2e/developer-settings.spec.ts:167:5 › tests an endpoint that accepts OTLP traces (3.9s)
+  ✓  24 [web] › e2e/developer-settings.spec.ts:193:5 › tests an endpoint that is not listening (4.0s)
+  -  25 [web] › e2e/diagnostics.spec.ts:8:7 › desktop shell › captures live renderer failures, filters issues, and exports a redacted LLM-readable report
+  ✓  26 [web] › e2e/diagnostics.spec.ts:90:5 › replaces the help icon and supports log refresh, follow mode, and dismissal (3.8s)
+  ✓  27 [web] › e2e/layout-accessibility.spec.ts:9:5 › supports keyboard layout controls and persists the right-panel width (3.2s)
+  ✓  28 [web] › e2e/layout-accessibility.spec.ts:38:5 › has no automatically detectable accessibility violations in the application shell (3.2s)
+  ✓  29 [web] › e2e/layout-accessibility.spec.ts:48:5 › has no automatically detectable accessibility violations on any screen in either theme (18.8s)
+  ✓  30 [web] › e2e/layout-accessibility.spec.ts:170:5 › matches the stable application-shell visual baseline (3.2s)
+  ✓  31 [web] › e2e/llm-settings.spec.ts:94:5 › LenAI needs a deployment name and a base URL (3.4s)
+  ✓  32 [web] › e2e/llm-settings.spec.ts:107:5 › never shows the stored key (3.8s)
+  ✓  33 [web] › e2e/llm-settings.spec.ts:126:5 › keeps a key saved under the former development secret (7.0s)
+  ✓  34 [web] › e2e/llm-settings.spec.ts:155:5 › asks for the key again when the app secret changed (7.1s)
+  ✓  35 [web] › e2e/llm-settings.spec.ts:190:5 › offers the effort levels of the chosen model (4.1s)
+  ✓  36 [web] › e2e/llm-settings.spec.ts:230:5 › tests a reasoning model at its lowest effort (4.0s)
+  ✓  37 [web] › e2e/llm-settings.spec.ts:242:5 › saves the chosen effort and uses it on the next turn (8.1s)
+  ✓  38 [web] › e2e/llm-settings.spec.ts:288:5 › sets the reasoning effort from the new-session composer (3.4s)
+  ✓  39 [web] › e2e/llm-settings.spec.ts:306:5 › shows that no model is configured (3.3s)
+  ✓  40 [web] › e2e/navigation.spec.ts:24:5 › moves between areas from the rail (3.4s)
+  ✓  41 [web] › e2e/navigation.spec.ts:55:5 › the start page explains how the product works (3.9s)
+  ✓  42 [web] › e2e/navigation.spec.ts:98:5 › opens with the navigation drawer expanded (3.1s)
+  ✓  43 [web] › e2e/navigation.spec.ts:109:5 › remembers a collapsed drawer after a restart (9.2s)
+  ✓  44 [web] › e2e/navigation.spec.ts:134:5 › expands the rail into a drawer with labels (3.7s)
+  ✓  45 [web] › e2e/navigation.spec.ts:166:5 › shows the details panel only on demand (3.0s)
+  ✓  46 [web] › e2e/navigation.spec.ts:175:5 › opens Settings as an area with a section list (3.3s)
+  ✓  47 [web] › e2e/navigation.spec.ts:203:5 › shows the product name (3.1s)
+  ✓  48 [web] › e2e/navigation.spec.ts:215:5 › the app opens straight into the shell (4.4s)
+  ✓  49 [web] › e2e/session-management.spec.ts:85:5 › create stays disabled until the session has a name and a dataset (3.3s)
+  ✓  50 [web] › e2e/session-management.spec.ts:104:5 › shows guidance when there are no datasets (3.2s)
+  ✓  51 [web] › e2e/session-management.spec.ts:113:5 › a new session opens on its welcome block (3.7s)
+  ✓  52 [web] › e2e/session-management.spec.ts:150:5 › I start an RFP Builder session from New conversation (4.2s)
+  ✓  53 [web] › e2e/session-management.spec.ts:207:5 › the Agent field disables an agent that cannot start (3.4s)
+  ✓  54 [web] › e2e/session-management.spec.ts:228:5 › deletes a session after confirmation (3.9s)
+  ✓  55 [web] › e2e/session-management.spec.ts:259:5 › cancelling the delete confirmation keeps the session (3.9s)
+  ✓  56 [web] › e2e/session-management.spec.ts:277:5 › the Sessions page finds a session by name or ID (4.1s)
+  ✓  57 [web] › e2e/session-management.spec.ts:327:5 › I copy the session id to share it (3.8s)
+  ✓  58 [web] › e2e/visual-tailoring.spec.ts:136:5 › the visual follows the app's theme (4.7s)
+  ✓  59 [web] › e2e/visual-tailoring.spec.ts:179:5 › an older visual opens in the current theme (5.2s)
+  ✓  60 [web] › e2e/world-cup-workflow.spec.ts:15:5 › creates a PostgreSQL datasource, dataset, and session using the real World Cup database (5.8s)
+  ✓  61 [web] › e2e/world-cup-workflow.spec.ts:44:5 › preserves masked credentials when editing and supports datasource deletion (4.6s)
+  ✓  62 [web] › e2e/world-cup-workflow.spec.ts:70:5 › surfaces a failed connection in both the form and system diagnostics (4.7s)
+  ✓  63 [web] › e2e/world-cup-workflow.spec.ts:98:5 › shows the real catalog schema and column metadata before a dataset is saved (5.2s)
+  2 skipped
+  61 passed (5.3m)
+
+## Backend API e2e, from backend/: npm run test:e2e -- agent-sessions app.e2e response-status
+## (agent-sessions.e2e-spec.ts: typed name, 1.14.17; app.e2e-spec.ts: M14 old data dir, 1.14.19; response-status.e2e-spec.ts: re-run, no auth)
+## then: npx jest src/infrastructure/database/database.module.spec.ts (M14 unit tests)
+> @jhon-buendia-halo/questions-to-insights@0.33.0 test:e2e
+> jest --config ./test/jest-e2e.json agent-sessions app.e2e response-status --verbose
+Test Suites: 3 passed, 3 total
+Tests:       18 passed, 18 total
+Snapshots:   0 total
+Time:        5.927 s, estimated 6 s
+Ran all test suites matching agent-sessions|app.e2e|response-status.
+Test Suites: 1 passed, 1 total
+Tests:       15 passed, 15 total
+Snapshots:   0 total
+Time:        0.605 s, estimated 1 s
+Ran all test suites matching src/infrastructure/database/database.module.spec.ts.
+
+## Acceptance grep, repo root: grep -rn "ORG_\|RequirePermission\|CurrentUserService\|auth.can\|/me'" backend/src frontend/src
+(exit 1: no match)

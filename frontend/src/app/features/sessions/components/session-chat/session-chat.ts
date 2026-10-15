@@ -27,16 +27,19 @@ import {
   ShieldOff,
   Sparkles,
   Square,
+  FileArchive,
   Telescope,
   ThumbsDown,
   ThumbsUp,
   TriangleAlert,
   Wrench,
+  BookOpen,
   X,
 } from 'lucide-angular';
 import { SessionsApiService } from '../../services/sessions-api.service';
 import {
   AnalysisReport,
+  RfpPackage,
   ChatMessage,
   CrossCheck,
   DataPointSelection,
@@ -45,6 +48,8 @@ import {
   Session,
   ReasoningStep,
   ToolDataRecord,
+  PanelItemEvent,
+  WorkflowView,
   VisualEvent,
 } from '../../models/session.model';
 import {
@@ -54,6 +59,7 @@ import {
 } from '../../../knowledge/models/knowledge.model';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
+import { slug } from '../../services/slug';
 
 /** Human-readable text for a clicked mark: its label when it has one. */
 export function selectionText(selection: DataPointSelection): string {
@@ -126,6 +132,18 @@ export function deepAnalysisProgressLine(job: DeepAnalysisActivity): string {
   }
 }
 
+/** The skill tools of the framework (agents.md 3.9), labelled by what they do. */
+const SKILL_STEP_LABELS: Record<string, string> = {
+  skill: 'Using skill',
+  skill_read: 'Reading skill file',
+  skill_search: 'Searching skills',
+};
+
+/** The label of a skill tool's step, or null for any other tool. */
+export function skillStepLabel(toolName: string): string | null {
+  return SKILL_STEP_LABELS[toolName] ?? null;
+}
+
 @Component({
   selector: 'app-session-chat',
   imports: [LucideAngularModule, MarkdownPipe, NgTemplateOutlet],
@@ -153,10 +171,13 @@ export class SessionChat implements OnDestroy {
   readonly Sparkles = Sparkles;
   readonly Square = Square;
   readonly Telescope = Telescope;
+  readonly FileArchive = FileArchive;
   readonly ThumbsDown = ThumbsDown;
   readonly ThumbsUp = ThumbsUp;
   readonly TriangleAlert = TriangleAlert;
   readonly Wrench = Wrench;
+  readonly BookOpen = BookOpen;
+  readonly skillStepLabel = skillStepLabel;
   readonly X = X;
 
   private readonly api = inject(SessionsApiService);
@@ -172,6 +193,10 @@ export class SessionChat implements OnDestroy {
   /** A turn created/updated a visual; the host should refresh the panel. */
   readonly visualUpdated = output<VisualEvent>();
   readonly viewVisual = output<VisualEvent>();
+  /** The agent put something in the right panel (`panel-item`). */
+  readonly panelItem = output<PanelItemEvent>();
+  /** The workflow status bar changed (`workflow` stream event). */
+  readonly workflowChanged = output<WorkflowView>();
   /**
    * The session was persisted (a finished turn, answer feedback) — refresh
    * the host's copies. Same id, so the chat does not re-sync from it.
@@ -224,6 +249,11 @@ export class SessionChat implements OnDestroy {
   readonly showWelcome = computed(
     () => this.messages().length === 0 && !this.sending(),
   );
+  /**
+   * False for a session bound to a built-in agent such as the RFP Builder,
+   * which hides the assistant's own controls (rfp R15).
+   */
+  readonly runsAssistant = computed(() => !this.session().agentKey);
   /** Datasets wired to this session, named in the welcome block. */
   readonly welcomeDatasets = computed(() => this.session().datasets ?? []);
   /**
@@ -293,7 +323,6 @@ export class SessionChat implements OnDestroy {
   );
 
   constructor() {
-
     // Re-sync when the active session changes (component instance is reused).
     effect(() => {
       const session = this.session();
@@ -425,7 +454,7 @@ export class SessionChat implements OnDestroy {
           if (this.activeStream !== controller) return;
           this.toolCalls.set([
             ...this.toolCalls(),
-            { name: call.name, rationale: call.rationale },
+            { name: call.name, rationale: call.rationale, input: call.input },
           ]);
           this.scrollToBottom();
         },
@@ -462,6 +491,14 @@ export class SessionChat implements OnDestroy {
         onVisualUpdated: (event) => {
           if (this.activeStream !== controller) return;
           this.visualUpdated.emit(event);
+        },
+        onPanelItem: (event) => {
+          if (this.activeStream !== controller) return;
+          this.panelItem.emit(event);
+        },
+        onWorkflow: (workflow) => {
+          if (this.activeStream !== controller) return;
+          this.workflowChanged.emit(workflow);
         },
         onDone: (session) => {
           if (this.activeStream !== controller) return;
@@ -720,17 +757,12 @@ export class SessionChat implements OnDestroy {
     this.api.downloadDeepAnalysis(this.session().id, report.jobId).subscribe({
       next: (blob) => {
         this.reportDownloading.set(null);
-        const slug =
-          report.title
-            .normalize('NFKD')
-            .replace(/[^a-zA-Z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '')
-            .toLowerCase()
-            .slice(0, 64) || `deep-analysis-${report.jobId.slice(0, 8)}`;
+        const name =
+          slug(report.title) || `deep-analysis-${report.jobId.slice(0, 8)}`;
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${slug}.md`;
+        link.download = `${name}.md`;
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -742,6 +774,46 @@ export class SessionChat implements OnDestroy {
         this.toast.error(err?.error?.message ?? 'Report download failed');
       },
     });
+  }
+
+  /** `rfpId/file` being downloaded right now (`rfpId/` for the zip). */
+  readonly rfpDownloading = signal<string | null>(null);
+
+  /** Whether the package holds the rendered `rfp.pdf`. */
+  hasRfpPdf(pkg: RfpPackage): boolean {
+    return pkg.files.some((f) => f.name === 'rfp.pdf');
+  }
+
+  /** Save an RFP package's zip, or one of its files (ui.md 4.12). */
+  downloadRfpPackage(pkg: RfpPackage, file?: string): void {
+    if (this.rfpDownloading()) return;
+    this.rfpDownloading.set(`${pkg.rfpId}/${file ?? ''}`);
+    this.api
+      .downloadRfpPackage(this.session().id, pkg.rfpId, file, pkg.draft)
+      .subscribe({
+        next: (blob) => {
+          this.rfpDownloading.set(null);
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          // The server's name for the zip (api.md #105): `link.download` wins
+          // over its Content-Disposition, so build the same one here.
+          link.download = file
+            ? (file.split('/').pop() ?? file)
+            : `rfp-${slug(pkg.title) || pkg.rfpId.slice(0, 8)}${pkg.draft ? '-draft' : ''}.zip`;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 0);
+          this.toast.success('RFP package downloaded');
+        },
+        error: (err) => {
+          this.rfpDownloading.set(null);
+          this.toast.error(
+            err?.error?.message ?? 'RFP package download failed',
+          );
+        },
+      });
   }
 
   // --------------------------------------------------- cross-check chip

@@ -6,9 +6,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Client } from 'pg';
 import { DatasetsService } from '../datasets/datasets.service';
 import { DatasourcesService } from '../datasources/datasources.service';
+import { getIntellifyApiInfo } from '../../intellify-api/api-info';
 import type {
   CatalogInfo,
   PostgresConfig,
+  RestApiConfig,
+  RestEndpointDef,
 } from '../datasources/entities/datasource.entity';
 import type { DatasetEntitySnapshot } from '../datasets/repositories/datasets.repository';
 import type { LoadTestingDataDto } from './dto/testing-data.dto';
@@ -64,6 +67,10 @@ export interface SampleFixtureView {
   /** False for register-only samples: they ship no SQL and cannot be seeded. */
   seedable: boolean;
   schema: string;
+  /** True for a REST sample whose API this app runs (no connection form). */
+  selfRegistering: boolean;
+  /** Self-registering samples: the URL of the API this app started, if any. */
+  apiUrl?: string;
   /** Prefill for the form: the sample's documented coordinates. */
   defaults: TestingDataConnection;
   status: SampleFixtureStatus;
@@ -191,6 +198,7 @@ export class TestingDataService {
     if (!fixture) {
       return { ok: false, message: `Unknown sample fixture "${fixtureId}"` };
     }
+    if (fixture.selfRegistering) return this.loadSelfRegistering(fixture);
     if (fixture.datasourceKind === 'rest') {
       return {
         ok: false,
@@ -352,6 +360,155 @@ export class TestingDataService {
     };
   }
 
+  /**
+   * Register the REST API this app itself runs (R21): no connection, no
+   * database writes. Reads the API's URL and key in-process, checks its health,
+   * proposes its collection endpoints from its OpenAPI document and saves the
+   * datasource and the dataset over them.
+   */
+  private async loadSelfRegistering(
+    fixture: SampleFixture,
+  ): Promise<LoadTestingDataResult> {
+    const info = getIntellifyApiInfo();
+    if (!info) {
+      return {
+        ok: false,
+        message:
+          'The Intellify API is not running in this app (INTELLIFY_API=off or it failed to start) — see the system logs.',
+      };
+    }
+    const url = info.url.replace(/\/+$/, '');
+
+    const health = await readHealth(url);
+    if (!health.reachable) {
+      return {
+        ok: false,
+        message:
+          `The Intellify API at ${url} did not answer its health check ` +
+          `(${health.detail}) — see the system logs.`,
+      };
+    }
+    if (health.databaseDown) {
+      return {
+        ok: false,
+        message:
+          `The Intellify API cannot reach its database at ${intellifyDatabaseTarget()}. ` +
+          'Load the "Intellify" sample into that database first.',
+      };
+    }
+
+    const auth: RestApiConfig['auth'] = {
+      type: 'api-key-header',
+      headerName: 'X-API-Key',
+      token: info.apiKey,
+    };
+    const endpoints = await this.collectionEndpoints(fixture, url, auth);
+
+    const existing = await this.findDatasource(fixture);
+    const datasource = await this.datasources.save({
+      id: existing?.id,
+      name: fixture.datasourceName,
+      kind: 'rest',
+      config: { baseUrl: url, auth, endpoints },
+    });
+
+    const { catalogs } = await this.datasources.inventory(datasource.id, true);
+    const { entities, missing } = collectEntities(
+      catalogs,
+      requiredEntityKeys(fixture, 'api'),
+    );
+    if (missing.length > 0) {
+      this.logger.warn(
+        `${fixture.name} registering finished but the inventory is incomplete: ${missing.join(', ')}`,
+      );
+      return {
+        ok: false,
+        message:
+          `Missing entities after registering: ${missing.join(', ')}. ` +
+          'The Intellify API did not return everything the RFP Builder needs — check the system logs and load again.',
+        datasourceId: datasource.id,
+        seeded: false,
+      };
+    }
+
+    await this.datasets.save({
+      name: fixture.datasetName,
+      tables: entities.map((entity) => entity.key),
+      entities,
+      datasourceId: datasource.id,
+    });
+
+    return {
+      ok: true,
+      message:
+        `Registered the ${fixture.name} at ${url} and loaded ${entities.length} entities ` +
+        `into dataset "${fixture.datasetName}"`,
+      datasourceId: datasource.id,
+      datasetName: fixture.datasetName,
+      entityCount: entities.length,
+      seeded: false,
+    };
+  }
+
+  /**
+   * The API's ten collection endpoints. They come from the OpenAPI document
+   * through the datasources' REST discovery when it yields exactly the
+   * required routes; otherwise (an older or partial document, or discovery
+   * failing) they are built explicitly from the fixture's list so the
+   * registration never depends on how a spec happens to be written.
+   */
+  private async collectionEndpoints(
+    fixture: SampleFixture,
+    url: string,
+    auth: RestApiConfig['auth'],
+  ): Promise<RestEndpointDef[]> {
+    const expected = fixture.requiredTables.map((table) => ({
+      table,
+      path: `/v1/${table.replace(/_/g, '-')}`,
+    }));
+    try {
+      const discovery = await this.datasources.discoverRestEndpoints(
+        { baseUrl: url, auth, endpoints: [] },
+        `${url}/openapi.json`,
+      );
+      const proposed = discovery.endpoints
+        .filter((found) => found.listResponse && found.method === 'GET')
+        .map((found) => found.endpoint);
+      const byPath = new Map(
+        proposed.map((endpoint) => [normalisePath(endpoint.path), endpoint]),
+      );
+      if (
+        proposed.length === expected.length &&
+        expected.every(({ path }) => byPath.has(path))
+      ) {
+        return expected.map(({ table, path }) => ({
+          ...(byPath.get(path) as RestEndpointDef),
+          name: table,
+          group: 'intellify',
+        }));
+      }
+      this.logger.warn(
+        'Intellify API discovery did not propose exactly its ten collection routes; using the explicit endpoint list',
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Intellify API discovery failed (${describeError(err)}); using the explicit endpoint list`,
+      );
+    }
+    return expected.map(({ table, path }) => ({
+      name: table,
+      group: 'intellify',
+      path,
+      rowsPointer: '/data',
+      pagination: {
+        style: 'page',
+        pageParam: 'page',
+        sizeParam: 'per_page',
+        pageSize: 100,
+      },
+    }));
+  }
+
   private async findDatasource(fixture: SampleFixture) {
     const all = await this.datasources.list();
     return all.find((d) => d.name === fixture.datasourceName);
@@ -369,9 +526,65 @@ function describeFixture(
     description: fixture.description,
     seedable: Boolean(fixture.seedFile),
     schema: fixture.schema,
+    selfRegistering: Boolean(fixture.selfRegistering),
+    ...(fixture.selfRegistering
+      ? { apiUrl: getIntellifyApiInfo()?.url ?? undefined }
+      : {}),
     defaults: { ...fixture.defaults },
     status,
   };
+}
+
+const HEALTH_TIMEOUT_MS = 8_000;
+
+/** `GET <url>/health`: reachable, and whether the API's database is down. */
+async function readHealth(
+  url: string,
+): Promise<{ reachable: boolean; databaseDown: boolean; detail: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${url}/health`, {
+      signal: controller.signal,
+    });
+    let body: { ok?: unknown; database?: unknown } = {};
+    try {
+      body = (await response.json()) as typeof body;
+    } catch {
+      // A non-JSON answer from a 503 still counts as unreachable below.
+    }
+    const databaseDown = body.database === 'down' || body.ok === false;
+    if (!response.ok && !databaseDown) {
+      return {
+        reachable: false,
+        databaseDown: false,
+        detail: `HTTP ${response.status}`,
+      };
+    }
+    return { reachable: true, databaseDown, detail: '' };
+  } catch (err) {
+    return {
+      reachable: false,
+      databaseDown: false,
+      detail: describeError(err),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** `host:port/db` the Intellify API reads, from the same variables it does. */
+function intellifyDatabaseTarget(): string {
+  const host = process.env.INTELLIFY_DB_HOST || '127.0.0.1';
+  const port =
+    process.env.INTELLIFY_DB_PORT || process.env.WORLD_CUP_DB_PORT || '55432';
+  const name = process.env.INTELLIFY_DB_NAME || 'intellify_mercer_demo';
+  return `${host}:${port}/${name}`;
+}
+
+function normalisePath(path: string): string {
+  const trimmed = path.trim().replace(/\/+$/, '');
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }
 
 /**

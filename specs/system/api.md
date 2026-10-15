@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **59 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 15, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path). Multi-user support adds 33 routes: the auth and current-user routes (2.13, 7: three for org server mode only, three for local mode only, and `GET /me`), the SCIM routes (2.14, 14, org server mode only) and the admin routes (2.15, 12, both modes). A route of one mode answers 404 in the other (1.9).
+Endpoint total: **59 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 15, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
 
 ---
 
@@ -18,7 +18,7 @@ Endpoint total: **59 HTTP route handlers** across 9 controllers (sessions 14, da
 | Desktop (Electron renderer, `file://`) | Client uses `http://localhost:3000` (hardcoded). The backend child process listens on `PORT`, which the main process sets from `BACKEND_PORT` (default `3000`). See gap G1: a non-default `BACKEND_PORT` breaks the renderer. |
 | Dev (`ng serve` / `electron:dev`, page served from `http://localhost:4200`) | Protocol is `http:`, so the client uses relative URLs against the dev server. No proxy or override exists in the repo (G13). |
 
-The client rule is: `API_BASE_URL = (window.location.protocol === 'file:') ? 'http://localhost:3000' : ''`. All paths below are relative to that base. There is no API prefix and no versioning. Authentication exists in both modes (1.9): a session cookie on an org server, a bearer token in local mode.
+The client rule is: `API_BASE_URL = (window.location.protocol === 'file:') ? 'http://localhost:3000' : ''`. All paths below are relative to that base. There is no API prefix and no versioning. There is no authentication (1.9).
 
 ### 1.2 Wire format
 
@@ -59,7 +59,7 @@ Clients read the error text from `error.message` (Style B) or `body.message` wit
 
 ### 1.4 Success status codes
 
-POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56), `POST /auth/logout` (63) and `POST /admin/agents/transfer` (86); `POST /admin/role-assignments` (79) and `POST /admin/role-mappings` (89) answer 200 when nothing was written. GET/PUT/DELETE return **200**; `DELETE /knowledge/:id` returns **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
+POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56). GET/PUT/DELETE return **200**; `DELETE /knowledge/:id` returns **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
 
 ### 1.5 Validation
 
@@ -72,9 +72,8 @@ POST handlers return the framework default **201 Created**, except where an endp
 
 | Mode | CORS |
 |---|---|
-| Desktop (`main.ts`, Electron-spawned backend) | **Enabled** (`app.enableCors()`, allow-all) because the renderer's origin is `file://` (`Origin: null`). Preflights reflect the requested headers, so the `Authorization` header of a local auth session (1.9) is allowed. |
+| Desktop (`main.ts`, Electron-spawned backend) | **Enabled** (`app.enableCors()`, allow-all) because the renderer's origin is `file://` (`Origin: null`). |
 | Web / CLI | **Disabled**. Same-origin only. |
-| Org server (CLI in org server mode) | **Disabled**. Same-origin only, plus the Origin check of 1.9. |
 
 ### 1.7 Static web UI and SPA fallback
 
@@ -92,67 +91,13 @@ Everything else keeps the default 404 body (`{statusCode:404, message:"Cannot GE
 
 - Mutating calls return the refreshed document (e.g. `session`) so the UI replaces local state rather than patching it.
 - `message` strings from Style A are surfaced directly to the user.
-- Secrets never come back in plaintext: datasource secrets are masked as `••••••••` (8 U+2022 bullets), the LLM key as `••••••••` + last 4 characters. A client may send the mask back unchanged to mean "keep the stored secret" (see 2.2, 2.5).
+- Secrets never come back in plaintext: datasource secrets are masked as `••••••••` (8 U+2022 bullets), the LLM key as `••••••••` + last 4 characters, always (there is no caller for whom the key is sent unmasked or left out). A client may send the mask back unchanged to mean "keep the stored secret" (see 2.2, 2.5).
 
-### 1.9 Authentication, authorization and CSRF
+### 1.9 Authentication
 
-Rules: [admin](../capabilities/admin/spec.md) R1-R36 and R69-R74 (the admin screens: R37-R68). Decisions: ADR-0010, ADR-0011 and ADR-0012 in [architecture.md](architecture.md).
+There is **no authentication**. The app has one built-in user, the super admin (id `local`, [ADR-0030](architecture.md)), who is always the caller: no route needs a credential, no route answers 401 or 403, and there is no sign-in, session cookie, bearer token, Origin check or per-route permission. Every route is open to whoever reaches the port. What decides who can reach it is the bind address (5, 4.3, G10, G14): the web CLI binds `127.0.0.1`, while the desktop backend and a CLI started with `--host 0.0.0.0` accept connections from every interface, and then anyone who can reach the port has full access, including the stored LLM key's use and the developer settings.
 
-**Mode.** The server runs in org server mode when every required `ORG_*` variable (6.1) is set, and in local mode when none is. Some but not all is a startup error naming the missing ones. The Electron-spawned backend is always local (4.3).
-
-**Local mode.** The auth session travels as `Authorization: Bearer <token>`, the token answered by `POST /auth/local/sign-in` (2.13); no cookie is set or read. 401 and 403 answer exactly as in org server mode (below). There's no Origin check. Every request runs as the signed-in persona (admin R69), with owner scoping as on an org server. The org auth routes (`GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`) and SCIM (2.14) answer `404 { statusCode:404, message:"Not available in local mode", error:"Not Found" }`; `GET /me`, the local sign-in routes and the admin routes (2.15) are available. In org server mode the local sign-in routes answer the same 404 with `message:"Not available in org server mode"` (admin R73).
-
-**Cookies** (org server mode). Both `HttpOnly`, `SameSite=Lax`, and `Secure` unless `ORG_PUBLIC_BASE_URL` starts with `http://`.
-
-| Cookie | Path | Holds | Lifetime |
-|---|---|---|---|
-| `qti_session` | `/` | The auth-session token: 32 random bytes, base64url. The server stores only its SHA-256 ([data-model.md](data-model.md) 3.14.6). | Session cookie (no `Max-Age`); the server ends it after 8 h idle or 7 days (admin R9). |
-| `qti_oidc` | `/auth` | The sign-in round trip: `state`, `nonce`, the PKCE verifier and `returnTo`, sealed with the app secret (AES-256-GCM, as in [data-model.md](data-model.md) 2.3). | `Max-Age=600`; cleared by the callback. |
-
-**Unauthenticated.** Any route other than the public ones below, called without a valid auth session (`qti_session` in org server mode, the bearer token in local mode), answers:
-
-```json
-{ "statusCode": 401, "message": "Sign in required", "error": "Unauthorized" }
-```
-
-The check runs before the handler, so Style A endpoints (1.3) also answer a real 401. The static web UI (1.7) is public: the SPA loads, calls `GET /me`, gets 401 and shows the sign-in page.
-
-**Forbidden.** A signed-in caller without the route's permission gets, before the handler runs and with nothing changed:
-
-```json
-{ "statusCode": 403, "message": "Missing permission: <permission id>", "error": "Forbidden" }
-```
-
-The renderer shows its own toast for any 403 (`You don't have permission to do this.`, [ui.md](ui.md) 1.6), not this message.
-
-**CSRF.** In org server mode every request whose method is not `GET` or `HEAD` must carry `Origin` (else `Referer`) whose origin equals `ORG_PUBLIC_BASE_URL`; otherwise `403 { statusCode:403, message:"Cross-site request refused", error:"Forbidden" }`. SCIM routes are exempt.
-
-**Proxy.** In org server mode the app trusts the first proxy hop (`X-Forwarded-Proto`, `X-Forwarded-For`, `X-Forwarded-Host`), so redirects and the `Secure` cookie work behind the organisation's TLS proxy.
-
-**Current user.** Each request, in either mode, reads its auth session (one store read), checks that the user is still active, resolves their roles and permissions (admin R20, R21) and runs the handler as that user. Work started by the request (streams, deep analysis, eval runs, knowledge bootstrap) keeps that user (admin R32).
-
-**Permission per route.** Every route declares exactly one requirement, on the handler or on its controller (a handler's own requirement wins); a route with none stops the server at startup (admin R23). Private collections are also filtered by owner (admin R29, R30): another user's item answers as not found.
-
-| Routes | Requirement |
-|---|---|
-| Every `/sessions` route (2.1), including the chat stream, feedback, visuals and deep analysis (2.7) | `use-agents` |
-| `GET /agents`, `GET /agents/:key`, `GET /agents/:key/skills`, `GET /agents/:key/skills/:name/file`, `GET /agents/:key/evals`, `PUT /agents/:key/pin` | `use-agents` |
-| `POST /agents`, `PUT /agents/:id/draft`, `POST /agents/:id/publish`, `DELETE /agents/:id`, `POST /agents/:key/evals/run`, `GET /agents/:key/evals/runs`, `GET /agents/:key/evals/runs/:jobId`, `GET /agents/:key/evals/runs/:jobId/download`, `DELETE /agents/:key/evals/runs/:jobId` | `create-agents` |
-| Every `/knowledge` route (2.8) and every `/metrics` route (2.4) | `use-agents` |
-| `GET /datasources`, `GET /datasources/:id/inventory` | `use-agents` |
-| `POST /datasources`, `POST /datasources/test-connection`, `POST /datasources/rest/discover`, `DELETE /datasources/:id` | `manage-datasources` |
-| `GET /datasets` | `use-agents` |
-| `POST /datasets`, `DELETE /datasets/:name` | `manage-datasources` |
-| Every `/testing-data` route (2.9) | `manage-datasources` |
-| `GET /llm/settings`, `GET /llm/effort-levels` | `use-agents` |
-| `PUT /llm/settings`, `PUT /llm/reasoning`, `POST /llm/test-connection` | `manage-llm` |
-| Every `/developer-settings` route (2.11) | `edit-policies` |
-| `GET /ui-preferences`, `PUT /ui-preferences` (2.12) | `use-agents` (each user's own theme and drawer state) |
-| `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`, `GET /auth/local/users`, `POST /auth/local/sign-in`, `POST /auth/local/sign-out`, `GET /me` (2.13) | public: no permission checked (`GET /me` answers 401 itself without an auth session) |
-| Every `/scim/v2` route (2.14) | the SCIM bearer token, no auth session |
-| Every `/admin` route (2.15): role assignments, overview and its export, users, user roles, agent transfer, groups and group mappings | `manage-users` |
-
-`GET /llm/settings` leaves out `apiKeyMasked` (sends `null`) for a caller without `manage-llm`.
+The one exception is the Intellify RFP API (2.16), a separate NestJS application that keeps its own `X-API-Key` guard (ADR-0027).
 
 ---
 
@@ -162,7 +107,7 @@ Legend for **FE**: whether the shipped frontend calls it. Document types referen
 
 ### 2.1 Sessions
 
-Controller prefix `/sessions`. Capability: sessions-chat, visuals.
+Controller prefix `/sessions`. Capability: sessions-chat, visuals, agent-panel, rfp.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -180,8 +125,11 @@ Controller prefix `/sessions`. Capability: sessions-chat, visuals.
 | 12 | `POST /sessions/:id/visualizations/:vid/refresh` | Re-run SQL, refresh data in place | yes |
 | 13 | `POST /sessions/:id/visualizations/:vid/repair` | One-shot silent auto-repair | yes |
 | 14 | `GET /sessions/:id/visualizations/:vid/download` | Zip bundle | yes |
+| 105 | `GET /sessions/:id/rfp-packages/:rfpId/download` | Download an RFP package (zip) or one of its files | yes |
+| 106 | `GET /sessions/:id/panel-items/:itemId/file` | Read the text of a file panel item | yes |
+| 107 | `GET /sessions/:id/panel-items/:itemId/download` | Download a file, document or table panel item | yes |
 
-The session on the wire (endpoints 1-3, and the `done` event of 5) is the stored `SessionDoc` (data-model 3.4), or a preview session (endpoint 3), plus, for a session with an `agentId`, a derived `agent: { id: string; name: string; deleted: boolean; description: string; starterQuestions: string[] }`. While the agent exists, `name`, `description` and `starterQuestions` come from its Live version and `deleted` is `false`. Once it is deleted, `name` is the stored `agentName`, `deleted` is `true`, and `description` and `starterQuestions` are empty (sessions-chat R57-R59). For a preview session, `name`, `description` and `starterQuestions` come from the agent's **draft**, read at each request. It is computed on every read, never stored.
+The session on the wire (endpoints 1-3, and the `done` event of 5) is the stored `SessionDoc` (data-model 3.4), or a preview session (endpoint 3), plus two derived fields of the right panel ([agent-panel](../capabilities/agent-panel/spec.md), never stored as such): `panelItems: PanelItem[]` (always present, newest shown last as stored; the stored items, without any of the retired kind `phases`, plus a synthesized `visual:<id>` item for every visual without one, [data-model.md](data-model.md) 3.4.4) and `workflow?: WorkflowView` (present when the session's agent's prompt has a `## Workflow` section or the agent has defined its own steps with `update_workflow`; the extended view of [data-model.md](data-model.md) 3.4.4: `source`, `skipped`, `waiting?`, `note?` besides the phases and the saved progress; the `done` event carries it too), plus, for a session with an `agentId`, a derived `agent: { id: string; name: string; deleted: boolean; description: string; starterQuestions: string[] }`. While the agent exists, `name`, `description` and `starterQuestions` come from its Live version and `deleted` is `false`. Once it is deleted, `name` is the stored `agentName`, `deleted` is `true`, and `description` and `starterQuestions` are empty (sessions-chat R57-R59). For a preview session, `name`, `description` and `starterQuestions` come from the agent's **draft**, read at each request. For a session with an `agentKey` (bound to a built-in agent, ADR-0028), `agent` is `{ id: <agentKey>, name: <the registered agent's name>, deleted: false, description: <its description>, starterQuestions: <its built-in starters> }`; for `rfp` the starters are `Start an RFP for a client`, `Which of my clients renew on 1 January 2027?` and `Resume my draft RFPs` ([rfp](../capabilities/rfp/spec.md)). It is computed on every read, never stored.
 
 Preview sessions answer endpoints 2 and 4 to 14 like any session (a turn runs with the draft, sessions-chat R54) but are never in endpoint 1's list. Endpoint 4 on a preview discards it (memory thread and workspace included) and answers `{ ok:true, message:"Preview discarded" }`.
 
@@ -191,15 +139,16 @@ Preview sessions answer endpoints 2 and 4 to 14 like any session (a turn runs wi
 - Also used by the Electron main process as the **backend readiness probe** (must return 200).
 
 #### 2. `GET /sessions/:id`
-- Response `200`: `SessionDoc` (bare, not enveloped).
+- Response `200`: `SessionDoc` (bare, not enveloped), with `panelItems` and `workflow` as above.
 - Errors: `404 "Session <id> not found"` (Style B).
 
 #### 3. `POST /sessions`
 - Body: `{ name: string; datasets: string[] }` or `{ agentId: string }`. `name` required (trimmed, non-empty, **truncated to 64 chars**); `datasets` must be a non-empty array of dataset **names**.
-- With `agentId` (a user-agent id; sessions-chat R52): `name` and `datasets` in the body are ignored. The session takes the agent's Live name and those of its Live datasets that exist, and stores `agentId` and `agentName` (data-model 3.4).
+- With `agentId` (a user-agent id; sessions-chat R52): `datasets` in the body is ignored, and `name` is optional: a non-blank `name` (trimmed, truncated to 64 chars; sent by the New conversation screen's Agent picker) names the session, else it takes the agent's Live name. The session takes those of its Live datasets that exist, and stores `agentId` and `agentName` (data-model 3.4).
+- With `agentId` set to the registry key of a built-in agent that declares a dataset (today only `rfp`, whose dataset is `Intellify RFP API`; ADR-0028): `datasets` in the body is ignored and an optional non-blank `name` works as above. The session takes the typed name, else the agent's name (`RFP Builder`), and that dataset, and stores `agentKey` (the registry key) and `agentName` instead of `agentId` (data-model 3.4); every turn then runs that agent. When the dataset doesn't exist the call fails with the agent's requirement text, for `rfp` `"Load the \"Intellify RFP API\" sample in Settings → Testing Data first"`. A built-in key that declares no dataset (e.g. `assistant`) still fails with `"Agent \"<key>\" not found"`.
 - With `{ agentId, preview: true }` (agents-evals R60, R61): starts a **preview session** of the agent's draft. It is held in memory only (data-model 3.12), never listed and never written to the `sessions` collection. Its `id` is `preview-<uuid>`, its `name` `Preview: <draft name>`, its `datasets` those of the draft that exist, and it carries `preview: true` and `agentId`. Its derived `agent` comes from the draft. Success message `Preview started`. Failures: `"Agent \"<id>\" not found"` (also for a built-in key), `"Select at least one dataset to preview"`.
 - Success: `{ ok:true, message:"Session \"<name>\" created", session: SessionDoc }` with `messages: []`, `visualizations: []`, a generated UUID `id`, and a contained Mastra workspace created and linked (`workspaceId`).
-- Failures (Style A): `"session name is required"`, `"select at least one dataset"`. With `agentId`: `"Agent \"<id>\" not found"` (unknown id, or a built-in agent's key), `"Publish \"<name>\" before starting a chat"` (no Live version), `"None of this agent's datasets exist"`.
+- Failures (Style A): `"session name is required"`, `"select at least one dataset"`. With `agentId`: `"Agent \"<id>\" not found"` (unknown id, or the key of a built-in agent that declares no dataset), the built-in agent's requirement text (its dataset is missing), `"Publish \"<name>\" before starting a chat"` (no Live version), `"None of this agent's datasets exist"`.
 - Side effects: persists the session; creates the workspace directory `workspaces/session-<id>`.
 - Without `agentId`, does not verify the named datasets exist (see G7).
 
@@ -264,6 +213,26 @@ See [section 3.1](#31-chat-stream-post-sessionsidmessagesstream).
 - Response `200`: `application/zip`, `Content-Length`, `Content-Disposition: attachment; filename="<slug>-v<N>.zip"` where slug = title NFKD-normalised, non-alphanumerics to `-`, trimmed, lowercased, max 64 chars, fallback `visual-<first 8 of id>`. (The frontend ignores the header and saves as `<slug>.zip`.)
 - Zip contents: `index.html` (always regenerated with the readable frame, runtime inlined so it renders standalone), `styles.css`, `qti-frame.js`, `script.js`; plus `spec.json` + `qti-chart.js` for spec visuals; `answer.md` when the source answer exists; `data.json` when data rows exist.
 - Errors (Style B): 404 not found, 400 `"Version <n> does not exist"`.
+
+#### 105. `GET /sessions/:id/rfp-packages/:rfpId/download`
+- Query: `draft` (optional, `true`): serve the draft package stored by `export_rfp_draft` under `rfp/<rfpId>/draft/` instead of the final one (the zip is then named `rfp-<slug>-draft.zip`, and `file` names are relative to the draft folder). `file` (optional), the name of one file of the package as listed in the answer's `rfpPackage.files` (e.g. `rfp.md`, `rfp.pdf`, `exhibits/exhibit-a-census.csv`, `manifest.json`). Without it the whole package downloads.
+- Response `200`: without `file`, `application/zip` of the session workspace folder `rfp/<rfpId>/` (`rfp/<rfpId>/draft/` with `draft=true`; [data-model.md](data-model.md) 4.1), `Content-Disposition: attachment; filename="rfp-<slug>.zip"` (slug of the package title, as in #14, fallback `rfp-<first 8 of rfpId>`); with `file`, that file with its content type (`text/markdown`, `application/pdf`, `text/csv`, `application/json`) and `Content-Disposition: attachment; filename="<base name>"`.
+- The files are the ones `export_rfp_package` (or, with `draft=true`, `export_rfp_draft`) stored in the workspace ([agents.md](agents.md) 3.10); the route never calls the Intellify RFP API.
+- Errors (Style B): `404 "Session <id> not found"`; `404 "RFP package \"<rfpId>\" not found"` (nothing exported for that RFP in this session; with `draft=true`, no draft); `404 "RFP package \"<rfpId>\" has no file \"<file>\""`; `400 "Invalid file name \"<file>\""` for an absolute or `..` path. Capability: [rfp](../capabilities/rfp/spec.md).
+
+#### 106. `GET /sessions/:id/panel-items/:itemId/file`
+- Response `200`: `{ item: FilePanelItem, contentType: string, text: string }`: the stored item ([data-model.md](data-model.md) 3.4.4) and the file's text as it is now in the session workspace (at most 256 KB), with the content type of its extension (`.md` `text/markdown`, `.csv` `text/csv`, `.json` `application/json`, others `text/plain`). The panel's file view reads it when the item is opened.
+- The path is resolved under the session workspace with the same safe-path check as the tool (no absolute or `..` path, no symbolic link, text extensions only; [agents.md](agents.md) 3.11).
+- Errors (Style B): `404 "Session <id> not found"`; `404 "Panel item \"<itemId>\" not found"`; `400 "Panel item \"<itemId>\" is not a file"`; `404 "File \"<path>\" not found in the session workspace"`; `400 "File \"<path>\" is larger than 256 KB"`. Capability: [agent-panel](../capabilities/agent-panel/spec.md).
+
+#### 107. `GET /sessions/:id/panel-items/:itemId/download`
+- Query: `format` (optional): `pdf` or `md` for a `document` item or a `file` item whose path ends in `.md`, `csv` for a `table` item; absent means the defaults below. `format=pdf` renders the Markdown as PDF (`application/pdf`; filename `<slug>.pdf` for a document, the file's base name with `.pdf` in place of `.md` for a file), with the same renderer as the RFP package document (2.16.5, I31), the item's title as the PDF title.
+- Response `200`, as an attachment (`Content-Disposition: attachment; filename="<name>"`):
+  - a `file` item: the file's bytes with the content type of #106 and its base name as the filename;
+  - a `document` item: the Markdown as `text/markdown`, filename `<slug>.md`;
+  - a `table` item: `text/csv`, filename `<slug>.csv`, a header row of the item's columns and one line per stored row, fields quoted per RFC 4180 (a field with a comma, a quote or a line break is wrapped in double quotes and its quotes doubled); a null or undefined value is empty, an object is its JSON text.
+  The slug is the item's title as in #14 (fallback `panel-<first 8 of the item id>`).
+- Errors (Style B): as #106 for the session, the item and (for a file) the file; `400 "Panel item \"<itemId>\" can't be downloaded"` for a `visual` item (a visual downloads through #14); `400 "Panel item \"<itemId>\" can't be downloaded as PDF"` for `format=pdf` on any other item; `400 "Unknown download format \"<format>\": use pdf, md or csv"` for any other `format`. Capability: [agent-panel](../capabilities/agent-panel/spec.md).
 
 ### 2.2 Datasources
 
@@ -431,7 +400,7 @@ interface LlmSettingsView {
 
 ### 2.6 Agents, hub and evals
 
-Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra registry key (`assistant`, `interactive-visual-designer`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`; see [agents.md](agents.md)) **or** the id of a user agent ([data-model.md](data-model.md) section 3.10); the registry is checked first. `:id` is always a user-agent id. The catalogue merges both kinds. Rules: R43-R52 in [agents-evals](../capabilities/agents-evals/spec.md). The user-agent routes are declared before `GET /agents/:key`.
+Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra registry key (`assistant`, `rfp`, `visualization`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`; see [agents.md](agents.md)) **or** the id of a user agent ([data-model.md](data-model.md) section 3.10); the registry is checked first. `:id` is always a user-agent id. The catalogue merges both kinds. Rules: R43-R52 and R97-R104 in [agents-evals](../capabilities/agents-evals/spec.md). The user-agent routes are declared before `GET /agents/:key`.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -450,25 +419,30 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 | 43 | `POST /agents/:id/publish` | Publish the draft (makes it Live) | yes |
 | 44 | `DELETE /agents/:id` | Delete a user agent | yes |
 | 45 | `PUT /agents/:key/pin` | Pin or unpin any agent | yes |
+| 103 | `PUT /agents/:key/prompt` | Save a built-in agent's system prompt (an override) | yes |
+| 104 | `DELETE /agents/:key/prompt` | Reset a built-in agent's system prompt to the shipped one | yes |
 
 #### 33. `GET /agents`
 - Response `200`: `{ agents: AgentSummary[] }` sorted by `name`, built-in and user agents together.
-- `AgentSummary = { key, id, name, description, tools: string[] /* sorted tool names; a user agent shows the assistant's */, kind: 'official'|'system'|'user', status: 'builtin'|'draft'|'live', pinned: boolean, owner: 'Official'|'System'|'You', hasUnpublishedChanges: boolean, missingDatasets: string[], datasets: string[], starterQuestions: string[] }`.
-- For a user agent `key` equals `id`, and `name`, `description`, `datasets` and `starterQuestions` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty. `kind` is `official` for `assistant` and `system` for the other five.
+- `AgentSummary = { key, id, name, description, tools: string[] /* sorted tool names; a user agent shows those its effective configuration selects (agents.md 2.1) */, kind: 'official'|'system'|'user', status: 'builtin'|'draft'|'live', pinned: boolean, owner: 'Official'|'System'|'You', hasUnpublishedChanges: boolean, missingDatasets: string[], datasets: string[], starterQuestions: string[], chatRequirement?: string }`.
+- For a user agent `key` equals `id`, and `name`, `description`, `datasets`, `starterQuestions` and `tools` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty, except for a built-in agent that declares a dataset for its sessions (today `rfp`; ADR-0028): its `datasets` is `["Intellify RFP API"]`, `missingDatasets` lists it while no dataset of that name exists, and `chatRequirement` is then `Load the "Intellify RFP API" sample in Settings → Testing Data first` (the UI shows it as the reason Start chat is blocked). `chatRequirement` is absent otherwise. `kind` is `official` for `assistant` and `rfp`, and `system` for the other built-in agents.
 
 #### 34. `GET /agents/:key`
-- Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */ }`.
-- A user agent runs on the assistant, so its `instructions`, `toolDetails`, `memory` and `model` describe the assistant. Its own instructions are in `draft` and `live`.
+- Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */; toolLinks?: { name: string; status: 'always-on'|'linked'|'not-linked'; linkedVia: { instructions: boolean; skills: string[] /* skill names, sorted */ } }[] /* user agents only: every library tool sorted by name, from the Live version, else the draft */; llm: { provider: string | null; providerName: string | null; model: string | null; apiKeyConfigured: boolean; maxOutputTokens: number | null; reasoningEffort: string | null } /* the effective LLM settings the agent resolves to; never the key; every field null/false when no LLM is saved */; prompt?: { editable: string /* as served: the override, else the shipped text */; shipped: string; modified: boolean; builtInChanged: boolean /* modified and the shipped text's hash differs from baseHash */; linksAllowed: boolean /* true for the Official agents: assistant and rfp */; updatedAt: string | null /* the override's */ } /* built-in agents only */ }`.
+- For a built-in agent, `instructions` is the prompt as served, so it reflects an override (ADR-0026), and `prompt` carries the editable text, the shipped text and the override state ([data-model.md](data-model.md) 3.10.3). For the `assistant`, `editable` and `shipped` exclude the generated `## Tools` section ([agents.md](agents.md) 2.1).
+- A user agent runs on the assistant, so its `instructions`, `toolDetails`, `memory` and `model` describe the assistant, with the prompt and tools that the agent's tool selection gives it (Live version, else draft; [agents.md](agents.md) 2.1). Its own instructions are in `draft` and `live`, with links as written (R81). `toolLinks` (user agents) says why each library tool is there: `always-on` for `list_entities`, `describe_entity` and `run_readonly_sql`, `linked` when the instructions or a linked skill's body link it, else `not-linked`; the tools of its skills come from the Live copies, else the current skills. `llm.model` is the agent's own `model` override when a user agent sets one, else the configured model; `llm.reasoningEffort` is the agent's override, else the configured one. `llm` never carries the API key, only whether one is saved ([../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R87-R89).
 - Errors (Style B): `404 "Agent \"<key>\" not found"`. `:key` is resolved as a registry key first, then as a user-agent id.
 
 #### 34a. `GET /agents/:key/skills`
-- Response `200`: `AgentSkillsView`. A user agent runs on the assistant, so it answers with the assistant's skills. Only built-in skills exist; how they load and are checked is in [agents.md](agents.md) 7.3. The response shows what the backend loaded when it started.
+- Response `200`: `AgentSkillsView`. A user agent runs on the assistant, so it answers with the assistant's skills, followed by its own in-app skills, sorted by name among themselves (level `in-app`, loading `on-demand`): the `liveSkills` copies when it has a Live version, else the current skills its draft names. Their `files` are `SKILL.md` (rendered as in [agents.md](agents.md) 7.3) and the reference files, and 34b reads them. The built-in skills ship with the app (there are no user or project skills; ADR-0021); how they load and are checked is in [agents.md](agents.md) 7.3. The response shows what the backend loaded when it started.
   ```ts
+  type SkillLevel = 'built-in' | 'in-app';
   AgentSkillsView = {
     skills: {
-      name: string; description: string;
+      name: string; description: string; level: SkillLevel;
       loading: 'on-demand' | 'harness';
       files: { path: string; size: number }[]; // every regular file in the folder, relative, '/'-separated; SKILL.md first, then sorted
+      modified?: boolean;           // true when an in-app override of a built-in is served (data-model 3.10.2)
     }[];                            // sorted by name
   }
   ```
@@ -481,12 +455,12 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Errors (Style B): `404 "Agent \"<key>\" not found"`; `404 "Agent \"<key>\" has no skill \"<name>\""`; `400 "Invalid skill file path \"<path>\""` for an empty, absolute or `..` path; `404 "Skill \"<name>\" has no file \"<path>\""`.
 
 #### 35. `GET /agents/:key/evals`
-- Response `200`: `{ sets: AgentEvalSet[] }`. Only `assistant` has sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, checks: { id, name, description }[] }[] }`.
+- Response `200`: `{ sets: AgentEvalSet[] }`: the sets whose agent is `:key` (a set's `agentKey`, default `assistant`; [agents.md](agents.md) 8.1). Only `assistant` and `rfp` have sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, checks: { id, name, description }[] }[] }`.
 
 #### 36. `POST /agents/:key/evals/run`
 - Body: `{ datasourceId: string; caseIds?: string[] }`. `caseIds` omitted = all questions.
 - Success: `{ ok:true, message:"Eval run started", jobId }`. Returns immediately; the run is long-running (see [3.3](#33-eval-runs)).
-- Failures (Style A, `ok:false`): `"Agent \"<key>\" has no evals to run"` (non-assistant); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need).
+- Failures (Style A, `ok:false`): `"Agent \"<key>\" has no evals to run"` (an agent with no sets: neither `assistant` nor `rfp`); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need).
 - Side effects: persists an initial run record; spawns the run (one throwaway session is created for the run to host visual tools and deleted afterwards).
 
 #### 37. `GET /agents/:key/evals/runs`
@@ -503,17 +477,17 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Success: `{ ok:true, message:"Run deleted" }`. A run still `running`, or an unknown id, returns `{ ok:false, message:"Cannot delete a run that is still going" }` (the same message for both cases).
 
 #### 41. `POST /agents`
-- Body: `{ name: string; description?: string; instructions?: string; datasets?: string[]; starterQuestions?: string[]; model?: string; reasoningEffort?: 'low'|'medium'|'high' }`. Limits and normalisation: R43.
+- Body: `{ name: string; description?: string; instructions?: string /* may link skills and tools: [[skill:<name>]], [[tool:<name>]] */; datasets?: string[]; starterQuestions?: string[]; model?: string; reasoningEffort?: 'low'|'medium'|'high' }`. Limits and normalisation: R43. The agent's `tools` and `skills` are **derived from the links in `instructions`** and stored ([data-model.md](data-model.md) 3.10); a `tools` or `skills` field in the body is ignored.
 - Success: `{ ok:true, message:"Agent \"<name>\" saved as draft", agent: AgentSummary }`. The agent is a draft, not pinned.
-- Failures (Style A): `"Agent name is required"`; `"An agent named \"<name>\" already exists"`.
+- Failures (Style A): `"Agent name is required"`; `"An agent named \"<name>\" already exists"`; `"Unknown skill \"<name>\""` for a `[[skill:<name>]]` that is neither a built-in on-demand skill nor one of the caller's in-app skills (a built-in on-demand skill link, such as `curated-knowledge`, is accepted and not counted toward the 10-skill limit); `"Unknown tool \"<name>\""` for a `[[tool:<name>]]` that is not a library tool (`list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `create_visual`, `update_visual`, `ask_clarification`); `"An agent can have at most 10 skills"`. Checked after the name checks, in this order: unknown skill, the 10-skill limit on the distinct linked skills, then unknown tool.
 
 #### 42. `PUT /agents/:id/draft`
 - Body: as endpoint 41. Replaces the whole draft; a Live version is untouched.
 - Success: `{ ok:true, message:"Draft saved", agent: AgentSummary }`.
-- Failures (Style A): `"Agent \"<id>\" not found"`; `"Agent name is required"`; `"An agent named \"<name>\" already exists"`; `"Built-in agents can't be edited"` (`:id` is a registry key).
+- Failures (Style A): `"Agent \"<id>\" not found"`; `"Agent name is required"`; `"An agent named \"<name>\" already exists"`; `"Unknown skill \"<name>\""`; `"Unknown tool \"<name>\""`; `"An agent can have at most 10 skills"` (as 41; a built-in on-demand skill link is accepted and not counted); `"Built-in agents can't be edited"` (`:id` is a registry key).
 
 #### 43. `POST /agents/:id/publish`
-- No body. Copies the draft to the Live version and stamps `publishedAt`.
+- No body. Copies the draft to the Live version, copies the skills it names into `liveSkills` ([data-model.md](data-model.md) 3.10), and stamps `publishedAt`.
 - Success: `{ ok:true, message:"Agent \"<name>\" is Live", agent: AgentSummary }`.
 - Failures (Style A): `"Agent \"<id>\" not found"`; `"Select at least one dataset to publish"`; `"Agent name is required"`; `"Built-in agents can't be edited"`.
 
@@ -549,6 +523,71 @@ interface AssistantEvalCaseResult {
   error?: string; durationMs: number;
 }
 ```
+
+### 2.6.1 Skills
+
+Controller prefix `/skills`. Capability: agents-evals (R68-R74). In-app skills are described in [data-model.md](data-model.md) 3.10.1.
+
+| # | Method + path | Purpose | Style A |
+|---|---|---|---|
+| 94 | `GET /skills` | The caller's skills | no |
+| 95 | `GET /skills/:id` | One skill in full | no |
+| 96 | `POST /skills` | Create a skill | yes |
+| 97 | `PUT /skills/:id` | Save a skill | yes |
+| 98 | `DELETE /skills/:id` | Delete a skill | yes |
+| 99 | `GET /skills/built-in` | The built-in skills and their override state | no |
+| 100 | `GET /skills/built-in/:name` | One built-in skill, as served and as shipped | no |
+| 101 | `PUT /skills/built-in/:name` | Save an override | yes |
+| 102 | `DELETE /skills/built-in/:name` | Reset to the built-in | yes |
+
+The `built-in` routes are declared before `/skills/:id`.
+
+#### 94. `GET /skills`
+- Response `200`: `{ skills: SkillSummary[] }` sorted by `name`. `SkillSummary = { id, name, description, fileCount: number, agents: string[] /* names of the caller's agents whose draft or Live version names the skill, sorted; each is the agent's draft name */, tools: string[] /* the tools its body links, sorted, distinct */, updatedAt }`.
+
+#### 95. `GET /skills/:id`
+- Response `200`: `Skill = SkillSummary & { body: string; files: { path: string; content: string }[] }`.
+- Errors (Style B): `404 "Skill \"<id>\" not found"`.
+
+#### 96. `POST /skills`
+- Body: `{ name: string; description: string; body: string; files?: { path: string; content: string }[] }`. Name and description are trimmed.
+- Success: `{ ok:true, message:"Skill \"<name>\" created", skill: Skill }`.
+- Failures (Style A), checked in this order, the first that applies: `"Skill name is required"`; `"Use lowercase letters, digits and single hyphens in a skill name"`; `"A skill name is at most 64 characters"`; `"\"<name>\" is the name of a built-in skill"`; `"A skill named \"<name>\" already exists"`; `"The description must start with \"Use when\""`; `"The description is at most 300 characters"`; `"The body is empty"`; `"The body is at most 20,000 characters"`; `"A skill has at most 10 reference files"`; `"Name reference files references/<file name>"`; `"Two reference files are named \"<path>\""`; `"\"<path>\" is at most 20,000 characters"`; `"The body names <path>, which this skill doesn't have"`; `"Skills can link tools only"` (the body has a `[[skill:…]]`); `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not in the library, as in 41).
+
+#### 97. `PUT /skills/:id`
+- Body: as 96. Replaces the whole skill; its id stays, so the agents that link it keep it. Live agents keep their copies until republished.
+- Success: `{ ok:true, message:"Skill saved", skill: Skill }`.
+- Failures (Style A): `"Skill \"<id>\" not found"`; as 96; `"\"<name>\" is linked by <agent names, comma-separated>. Unlink it first."` when the name changes while the draft of any of the caller's agents links the skill (agent names sorted).
+
+#### 98. `DELETE /skills/:id`
+- Success: `{ ok:true, message:"Skill \"<name>\" deleted" }`. Nothing else changes ([data-model.md](data-model.md) 3.10).
+- Failures (Style A): `"Skill \"<id>\" not found"`; `"\"<name>\" is linked by <agent names, comma-separated>. Unlink it first."` while the draft of any of the caller's agents links the skill (names sorted); Live agents don't block it.
+
+#### 99. `GET /skills/built-in`
+- Response `200`: `{ skills: BuiltInSkillSummary[] }` sorted by name. `BuiltInSkillSummary = { name, description /* as served */, loading: 'on-demand' | 'harness', agents: string[] /* registry keys, agents.md 7.4 */, tools?: string[] /* the tools the served body links as [[tool:<name>]], in order of first appearance; left out when it links none (the RFP Builder's stage skills link theirs) */, modified: boolean, builtInChanged: boolean /* modified and the shipped built-in's hash differs from baseHash */, updatedAt: string | null /* the override's */ }`.
+
+#### 100. `GET /skills/built-in/:name`
+- Response `200`: `BuiltInSkill = BuiltInSkillSummary & { body: string; files: { path, content }[] /* as served */; builtIn: { description, body, files } /* as shipped */ }`.
+- Errors (Style B): `404 "Unknown built-in skill \"<name>\""`.
+
+#### 101. `PUT /skills/built-in/:name`
+- Body: `{ description: string; body: string; files: { path: string; content: string }[] }`. Saves the override (ADR-0023); it applies to the next call.
+- Success: `{ ok:true, message:"Built-in skill \"<name>\" saved", skill: BuiltInSkill }`.
+- Failures (Style A), the first that applies: `"Unknown built-in skill \"<name>\""`; `"The description must start with \"Use when\""`; `"The description is at most 300 characters"`; `"The body is empty"`; `"The body is at most 20,000 characters"`; `"<path> is not a file of this skill"`; `"<path> is missing (the skill it overrides has it)"`; `"\"<path>\" is at most 20,000 characters"`; `"<path> must use the placeholders {{a}}, {{b}}"` or `"<path> must use no placeholders"`.
+
+#### 102. `DELETE /skills/built-in/:name`
+- Success: `{ ok:true, message:"Built-in skill \"<name>\" reset" }`, also when there was no override.
+- Failures (Style A): `"Unknown built-in skill \"<name>\""`.
+
+#### 103. `PUT /agents/:key/prompt`
+- Body: `{ prompt: string }`, trimmed; the checks below run on the trimmed text. Saves the override (ADR-0026); it applies to the next call of every session, user agent, deep analysis, visual and eval run.
+- Success: `{ ok:true, message:"System prompt of \"<name>\" saved", agent: AgentDetail }`.
+- Failures (Style A), the first that applies: `"Agent \"<key>\" not found"`; `"Only built-in agents have a shared system prompt; edit a user agent's instructions instead"` (`:key` is a user-agent id); `"The prompt is empty"`; `"The prompt is at most 20,000 characters"`; for the `assistant` only: `"The assistant's prompt must start with \"You are the Questions to Insights assistant\""`, `"Only built-in skills can be linked here: this prompt is shared by every user"` (a `[[skill:<name>]]` whose name is not a built-in on-demand skill; a built-in one is accepted), `"Unknown tool \"<name>\""` (a `[[tool:…]]` not in the library, as in 41); for the `rfp` (RFP Builder) only (agents.md 2.8): `"The RFP Builder's prompt must start with \"You are the RFP Builder\""`, `"Only the RFP Builder's own skills can be linked here: this prompt is shared by every user"` (a `[[skill:<name>]]` that is not one of its own on-demand skills, its seven stage skills of agents.md 7.4), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its own tools: its RFP tools and `ask_clarification`); for a System agent only: `"This agent's prompt can't contain links"` (any `[[…]]`).
+- Declared before the `GET /agents/:key` catch-alls.
+
+#### 104. `DELETE /agents/:key/prompt`
+- Success: `{ ok:true, message:"System prompt of \"<name>\" reset", agent: AgentDetail }`, also when there was no override.
+- Failures (Style A): `"Agent \"<key>\" not found"`; the user-agent refusal of 103.
 
 ### 2.7 Deep analysis
 
@@ -650,7 +689,8 @@ interface PostgresConnection { host: string; port: number; database: string; use
 - Body: `{ host, port, database, user, password?, ssl? }` (all coerced from untyped JSON). Required: non-empty `host`, `database`, `user`; `port` an integer 1..65535; `database` must not contain `"`. `password` defaults to `''`; `ssl` true only for `true` or `"true"`.
 - Response `200` (Style A): `{ ok, message, datasourceId?, datasetName?, entityCount?, createdDatabase?, seeded? }`.
   - Success messages: seedable `"Seeded <schema> on <host:port> and loaded <n> entities into dataset \"<name>\"[ — created the database]"`; register-only `"Registered <host:port>/<db> and loaded <n> entities into dataset \"<name>\" — the <name> sample ships no seed SQL, so nothing was written to the database"`.
-  - Failure messages: unknown fixture (`Unknown sample fixture "<id>"`), REST-kind fixtures (registered by a script, not here), field validation, connection failure, missing database that cannot be created, seed failure, and `"Missing entities after seeding|registering: <list>. ..."` (returns `ok:false` but still includes `datasourceId`, `createdDatabase`, `seeded`).
+  - Failure messages: unknown fixture (`Unknown sample fixture "<id>"`), REST-kind fixtures other than the self-registering `intellify-api` (registered by a script, not here), field validation, connection failure, missing database that cannot be created, seed failure, and `"Missing entities after seeding|registering: <list>. ..."` (returns `ok:false` but still includes `datasourceId`, `createdDatabase`, `seeded`).
+- **Self-registering REST fixture `intellify-api`** ([testing-data](../capabilities/testing-data/spec.md), [rfp](../capabilities/rfp/spec.md)): the body is ignored and the field validation is skipped. The backend reads the embedded Intellify RFP API's URL and key (`IntellifyApiInfo`; 2.16), checks `GET /health`, discovers the endpoints from `GET /openapi.json` (as `POST /datasources/rest/discover`, #17), keeps the proposed collection endpoints with `group: "intellify"`, saves the datasource `Intellify RFP API` (`kind: "rest"`, `auth: { type: "api-key-header", headerName: "X-API-Key", token: <the API key> }`, reusing an existing record of that name), refreshes the inventory and saves the dataset `Intellify RFP API` with the 10 required entities (`clients`, `products`, `funding_types`, `plan_types`, `carriers`, `plan_designs`, `policies`, `financials`, `census`, `rfps`). No database is written. Success message `"Registered the Intellify RFP API at <url> and loaded 10 entities into dataset \"Intellify RFP API\""`. Failures: `"The Intellify API is not running in this app (INTELLIFY_API=off or it failed to start) — see the system logs."`; `"The Intellify API cannot reach its database at <host:port/db>. Load the \"Intellify\" sample into that database first."`; the missing-entities message. `GET /testing-data` lists it with `seedable: false`. Other REST-kind fixtures (`world-cup-rest`) stay register-only by script.
 - Side effects (seedable): connects (8 s timeout); if the database is absent, creates it from the `postgres` maintenance database; **drops and recreates the sample's schema** (`DROP SCHEMA IF EXISTS "<schema>" CASCADE`) and runs the bundled SQL in batches (120 s statement timeout); upserts a datasource named after the fixture (reusing the existing id when present); forces an inventory refresh; saves the fixture's dataset (with sampled values and join graph, same as `POST /datasets`). Register-only fixtures skip the seed and require the data to exist already.
 
 #### 57. `DELETE /testing-data/:fixtureId`
@@ -726,7 +766,7 @@ interface DeveloperSettingsView {
 
 ### 2.12 UI preferences
 
-Controller prefix `/ui-preferences`. Capability: app-shell (R39–R43, R50). One `settings` document per data directory in local mode, and one per user on an org server (data-model 3.2.1; ADR-0009): each route reads and writes the caller's own.
+Controller prefix `/ui-preferences`. Capability: app-shell (R39–R43, R50). One `ui-preferences` settings document per data directory (data-model 3.2.1).
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -746,251 +786,125 @@ interface UiPreferences { theme: ThemePreference | null; navExpanded: boolean | 
 - Validation (Style A): `"theme must be one of: system, light, dark"`, `"navExpanded must be true or false"`.
 - Success: `{ ok:true, message:"Preferences saved", preferences: UiPreferences }`.
 
-### 2.13 Auth and current user
+### 2.16 Intellify RFP API
 
-Controllers `/auth`, `/auth/local` and `/me`. Capability: [admin](../capabilities/admin/spec.md). Requirement: public (1.9). Routes 61-63 are org server mode only and 91-93 local mode only; each answers 404 in the other mode (1.9).
+A **separate NestJS application** in the backend package (`backend/src/intellify-api/`; ADR-0027 in [architecture.md](architecture.md)): the only way the RFP Builder agent reaches the Intellify data and saves an RFP ([rfp](../capabilities/rfp/spec.md); tools in [agents.md](agents.md) 3.10). It has its own port, authentication, error shape, OpenAPI document and PostgreSQL pool; none of the conventions in section 1 (Style A/B) apply to it. The app calls it only over HTTP, through the REST datasource `Intellify RFP API` that the `intellify-api` Testing Data fixture registers (2.9 #56).
 
-| # | Method + path | Purpose | FE |
-|---|---|---|---|
-| 61 | `GET /auth/login` | Start sign-in (redirect to the identity provider) | yes (full-page navigation) |
-| 62 | `GET /auth/callback` | Finish sign-in (redirect target registered with the identity provider) | no (the identity provider redirects here) |
-| 63 | `POST /auth/logout` | Sign out | yes |
-| 64 | `GET /me` | The current user, roles and permissions | yes |
-| 91 | `GET /auth/local/users` | The personas to sign in as (local mode) | yes (sign-in page) |
-| 92 | `POST /auth/local/sign-in` | Sign in as a persona (local mode) | yes |
-| 93 | `POST /auth/local/sign-out` | Sign out (local mode) | yes |
+**Running.** Embedded by default: `createApp()` starts it in the backend process after the app listens, on `INTELLIFY_API_HOST` (default `127.0.0.1`) and `INTELLIFY_API_PORT` (default `3100`; `0` = a free port), unless `INTELLIFY_API=off` or the CLI flag `--no-intellify-api` (5). Standalone: `npm run intellify-api` (6.4) runs `node dist/intellify-api/main.js`, configured from the environment only. If the embedded API fails to start (port busy, bad configuration), the app still starts and logs `Intellify API not started: <reason>`. Variables: 6.1. Database and `rfp` schema: [data-model.md](data-model.md) section 7.
 
-```ts
-type RoleId = 'user' | 'maker' | 'data-owner' | 'approver' | 'platform-admin';
-type PermissionId = 'use-agents' | 'create-agents' | 'share-agents-team' | 'request-publishing' | 'approve-publishing'
-  | 'approve-datasource-access' | 'manage-users' | 'edit-policies' | 'view-audit-log' | 'manage-datasources' | 'manage-llm';
-interface HeldRole {
-  role: RoleId;
-  source: 'implicit' | 'direct' | 'group' | 'bootstrap';
-  datasourceId?: string;   // data-owner only
-  groupId?: string;        // source 'group' only
-  assignmentId?: string;   // source 'direct' only; the id DELETE /admin/role-assignments/:id takes
-}
-interface MeView {
-  mode: 'local' | 'org';
-  user: { id: string; displayName: string; email: string | null; initials: string };
-  roles: HeldRole[];
-  permissions: PermissionId[];   // sorted, de-duplicated
-}
-```
+**Wire format.** Base path `/v1` for the data routes. `Content-Type: application/json; charset=utf-8` unless a route says otherwise. Intellify ids are the 24-hex `char(24)` strings; RFP ids are UUIDs. Dates are ISO `YYYY-MM-DD`; money is a number in USD.
 
-#### 61. `GET /auth/login`
-- Query: `returnTo` (optional). Kept only when it is a path starting with `/` and not `//`; otherwise `/`.
-- Response `302` to the identity provider's authorization endpoint (from its discovery document) with `response_type=code`, `scope=openid profile email`, `client_id`, `redirect_uri=<ORG_PUBLIC_BASE_URL>/auth/callback`, a random `state` and `nonce`, and `code_challenge` (S256). Sets `qti_oidc` (1.9).
-- Identity provider unreachable: `302 /?signInError=failed`.
+**Auth.** Every route except `GET /health` and `GET /openapi.json` needs `X-API-Key: <key>`, compared in constant time with the configured keys (`INTELLIFY_API_KEY` may hold several, comma-separated; embedded without it, the key in `<APP_DATA_DIR>/.intellify-api-key`, [data-model.md](data-model.md) 1.2). Missing or wrong: `401 { statusCode:401, error:"Unauthorized", message:"API key required" }`. The key is the whole access boundary: RFP records carry `createdBy` as an attribute, not an access control. `createdBy` comes from the body of `POST /v1/rfps`, else the `X-Qti-User` header (the app sends it in the body: the super admin's id, `local`, or `eval:<jobId>` for an eval run).
 
-#### 62. `GET /auth/callback`
-- Query: `code` and `state`, or `error` from the identity provider.
-- Checks: `qti_oidc` present and unsealed, `state` matches, code exchanged with the PKCE verifier, ID token signature, issuer, audience, expiry and `nonce` valid. When the issuer's first path segment is a tenant id (a GUID, as in `https://login.microsoftonline.com/<tenant id>/v2.0`), a `tid` claim that differs from it (case-insensitive) fails the sign-in (admin R7).
-- Then finds or creates the directory user (admin R12, R13): match by stored `oidcSubject` (`tid` + `oid` claims for Entra ID, else `sub`), else by `preferred_username` against `userName`, case-insensitive. The `email` claim is never used to match a user or to resolve roles; it is stored for display only. A just-in-time user gets `userName` = `preferred_username`, else the subject (both lowercased). A user matched by `preferred_username` whose stored `oidcSubject` is set and differs from the token's subject is refused (admin R13): `302 /?signInError=failed`, the user is not changed, a warning is logged and a `sign-in.refused` event is recorded with `details: { reason: "subject-mismatch" }` ([data-model.md](data-model.md) 3.14.7); this check comes before the deactivation check. A user with no stored `oidcSubject` is matched and gets it. Updates `displayName`, `email`, `lastSignInAt`. A user with `active: false` is refused.
-- Success: creates an `auth_sessions` document, sets `qti_session`, clears `qti_oidc`, records `sign-in` ([data-model.md](data-model.md) 3.14.7), `302` to the kept `returnTo`.
-- Failure: clears `qti_oidc`, `302 /?signInError=deactivated` for a deactivated user, `302 /?signInError=failed` for anything else. No auth session.
+**Error shape** (every non-2xx): `{ statusCode: number; error: string; message: string; code?: string; details?: string[] }`. Codes: `validation` (400; `details` lists the field problems), `not_found` (404; also an unknown route), `conflict` (409, e.g. a backwards status move), `database_unavailable` (503, message `database unavailable`, when PostgreSQL can't be reached; the API itself keeps running).
 
-#### 63. `POST /auth/logout`
-- Origin check applies (1.9). Deletes the caller's auth session if any, clears `qti_session` (`Max-Age=0`), records `sign-out`.
-- Response `200`: `{ ok:true, message:"Signed out", endSessionUrl: string | null }`: the identity provider's end-session endpoint with `client_id` and `post_logout_redirect_uri=<ORG_PUBLIC_BASE_URL>/`, or `null` when the provider has none. The renderer navigates there, or to `/` when `null`.
-- Without an auth session it still answers `200` (signing out twice is harmless).
+**Pagination** (the collection routes, 2.16.2, only): query `page` (1-based, default 1) and `per_page` (default 100, capped at 500); response `{ data: T[], page: number, per_page: number, total: number }`. A `page` or `per_page` that is not a positive integer is a 400 `validation`. The OpenAPI document declares both parameters and the `data` array, so REST discovery ([datasources](../capabilities/datasources/spec.md)) proposes these routes as tables with rows pointer `/data` and page-style pagination. Routes with a path parameter are deliberately not tables.
 
-#### 64. `GET /me`
-- Signed in: `200 MeView` with `mode:"org"` or `mode:"local"`. `initials` per [ui.md](ui.md) 1.3. A Data owner assignment or mapping whose datasource no longer exists is not listed and grants nothing ([data-model.md](data-model.md) 3.13).
-- Local mode, signed in as Demo User: `200 { mode:"local", user:{ id:"local", displayName:"Demo User", email:"demo@local.test", initials:"DU" }, roles:[{role:"user",source:"implicit"},{role:"platform-admin",source:"bootstrap"}], permissions:<all eleven> }`, plus any direct assignments Demo User holds.
-- Not signed in, in either mode: `401 { statusCode:401, message:"Sign in required", error:"Unauthorized", mode:"local" | "org" }`. The renderer reads `mode` to pick the sign-in page's variant ([ui.md](ui.md) 1.6, 4.17).
+**Soft deletes.** Every read over Intellify data leaves out rows with `deleted = true` unless the query has `includeDeleted=true`.
 
-#### 91. `GET /auth/local/users`
-- Local mode only (1.9). Public.
-- Response `200 { users: { id: string; displayName: string; email: string | null; initials: string; roles: RoleId[] }[] }`: every directory user who is active and not released ([data-model.md](data-model.md) 3.14.1), sorted by display name (case-insensitive). `roles` are the roles they hold from any source (admin R20), each once, `user` left out, in the order `platform-admin`, `approver`, `data-owner`, `maker`; empty for a user who holds only User. The sign-in page labels each as `<displayName> · <roles>` ([ui.md](ui.md) 4.17.1).
+**Read and write safety.** Every read over schema `intellify` runs in a `READ ONLY` transaction that is rolled back. Writes go only to schema `rfp`, through parameterised statements; no request value is ever interpolated into SQL.
 
-#### 92. `POST /auth/local/sign-in`
-- Local mode only (1.9). Public; no Origin check.
-- Body `{ userId: string }`.
-- The user must exist, be active and not released, else `404 { statusCode:404, message:"User <userId> not found", error:"Not Found" }` and no auth session.
-- Success: creates an `auth_sessions` document ([data-model.md](data-model.md) 3.14.6), stamps the user's `lastSignInAt`, records `sign-in` (3.14.7), and answers `200 { ok:true, message:"Signed in", token: string, me: MeView }`. `token` is the auth-session token (32 random bytes, base64url) to send as `Authorization: Bearer <token>`; the server stores only its SHA-256.
+#### 2.16.1 Service
 
-#### 93. `POST /auth/local/sign-out`
-- Local mode only (1.9). Public; the bearer token is optional.
-- Ends the caller's auth session if the token names one, and records `sign-out`.
-- Response `200 { ok:true, message:"Signed out" }`, with or without a session (signing out twice is harmless).
-
-### 2.14 SCIM 2.0 (directory provisioning)
-
-Controller prefix `/scim/v2`. Capability: [admin](../capabilities/admin/spec.md) R14-R17. Org server mode only. The subset Microsoft Entra ID's provisioning service sends; hand-written (ADR-0011). Shapes map to [data-model.md](data-model.md) 3.14.1-3.14.3.
-
-| # | Method + path | Purpose |
+| # | Method + path | Response |
 |---|---|---|
-| 65 | `GET /scim/v2/ServiceProviderConfig` | Capabilities: `patch` supported, `filter` supported (max 100), `bulk`, `changePassword`, `sort` and `etag` not supported, auth scheme `oauthbearertoken` |
-| 66 | `GET /scim/v2/ResourceTypes` | `User` and `Group` |
-| 67 | `GET /scim/v2/Schemas` | The core User and Group schemas, listing only the supported attributes |
-| 68 | `GET /scim/v2/Users` | List or filter users |
-| 69 | `POST /scim/v2/Users` | Create a user |
-| 70 | `GET /scim/v2/Users/:id` | Read a user |
-| 71 | `PUT /scim/v2/Users/:id` | Replace a user |
-| 72 | `PATCH /scim/v2/Users/:id` | Change attributes (including `active`) |
-| 73 | `DELETE /scim/v2/Users/:id` | Remove a user (deactivates, see below) |
-| 74 | `GET /scim/v2/Groups` | List or filter groups |
-| 75 | `POST /scim/v2/Groups` | Create a group |
-| 76 | `GET /scim/v2/Groups/:id` | Read a group with its members |
-| 77 | `PATCH /scim/v2/Groups/:id` | Rename, add or remove members |
-| 78 | `DELETE /scim/v2/Groups/:id` | Delete a group, its memberships and its group mappings |
+| I1 | `GET /health` | Public. `{ ok: boolean, version: string, database: 'up'\|'down', schema: 'intellify', rfpSchemaVersion: number\|null }`; `ok` is `false` when the database is down. |
+| I2 | `GET /openapi.json` | Public. The OpenAPI 3.0 document, title `Intellify RFP API`, generated at start from the controllers and DTOs. Each collection operation (2.16.2) is a `GET` without path parameters that declares `page` and `per_page` as optional integers and a `data` array schema. |
 
-- **Auth:** `Authorization: Bearer <ORG_SCIM_TOKEN>`, compared in constant time. Missing or wrong: `401` in SCIM error format. No cookie (an auth session does not open SCIM), no Origin check. Every SCIM request that passes the token check records at most one `scim.request` activity event per minute.
-- **Media type:** responses are `application/scim+json`; requests are accepted as `application/scim+json` or `application/json`.
-- **User resource:** `{ schemas:["urn:ietf:params:scim:schemas:core:2.0:User"], id, externalId?, userName, name:{ givenName?, familyName?, formatted? }, displayName?, emails:[{ value, type:"work", primary:true }], active, meta:{ resourceType:"User", created, lastModified, location } }`. Supported attributes: `userName` (required, unique case-insensitively), `externalId`, `active`, `displayName`, `name.givenName`, `name.familyName`, `name.formatted`, `emails[type eq "work"].value`. Others are accepted and ignored.
-- **Group resource:** `{ schemas:["urn:ietf:params:scim:schemas:core:2.0:Group"], id, externalId?, displayName, members:[{ value:<user id>, display? }], meta }`. `excludedAttributes=members` leaves `members` out.
-- **Filters:** `userName eq "<v>"` and `externalId eq "<v>"` on Users; `displayName eq "<v>"` and `externalId eq "<v>"` on Groups. Anything else: `400`, `scimType:"invalidFilter"`.
-- **Lists:** `{ schemas:["urn:ietf:params:scim:api:messages:2.0:ListResponse"], totalResults, startIndex, itemsPerPage, Resources }`; `startIndex` 1-based (default 1), `count` default and maximum 100. Users removed with `DELETE` are left out.
-- **PATCH:** `{ schemas:["urn:ietf:params:scim:api:messages:2.0:PatchOp"], Operations:[{ op, path?, value? }] }`. `op` is case-insensitive (`add`, `replace`, `remove`); boolean values may arrive as the strings `"True"` / `"False"`. Users: `replace` / `add` on any supported attribute, or without `path` with an object of attributes. Groups: `add` with `path:"members"` and a list of `{ value }`; `remove` with `path:'members[value eq "<id>"]'` or `path:"members"` and a list; `replace` on `displayName` or `externalId`.
-- **Deactivation:** setting `active` to `false` ends all the user's auth sessions and records `user.deactivated`; back to `true` records `user.reactivated`.
-- **`DELETE /scim/v2/Users/:id`:** sets `active:false` and `scimDeleted:true`, ends the user's auth sessions and removes their group memberships. The user stays in the directory, with their data and ownership, but SCIM reads of them answer `404`. A later `POST` with the same `userName` reactivates them under the same id, unless the user is released (below).
-- **`POST /scim/v2/Users` with a taken `userName`:** when the user holding it was removed with `DELETE`, or is deactivated (`active:false`) and has signed in (`oidcSubject` set), and both that user and the request carry an `externalId` and the two differ, the name belongs to a different person (admin R16). The old user is **released**: `userName` becomes `released:<its id>`, the old name moves to `releasedUserName`, `active:false` and `scimDeleted:true` are set, its auth sessions end and its group memberships go; its id, data and ownership stay. A new user is then created (`201`, a new id). When either `externalId` is missing, a removed user comes back under the same id as above. Entra ID always sends `externalId` (the user's object id). Any other taken `userName` answers `409` `uniqueness`.
-- **Responses:** `POST` `201` with the resource and a `Location` header; `GET`, `PUT`, `PATCH` `200` with the resource; `DELETE` `204`.
-- **Errors:** `{ schemas:["urn:ietf:params:scim:api:messages:2.0:Error"], status:"<code>", scimType?, detail }`: `400` (`invalidValue`, `invalidSyntax`, `invalidFilter`), `401`, `404` unknown id, `409` (`uniqueness`) for a duplicate `userName` or group `displayName`.
+#### 2.16.2 Collections
 
-### 2.15 Admin
+Paged (`{ data, page, per_page, total }`); the REST datasource's tables, group `intellify`. Each row below is one item of `data`.
 
-Controller prefix `/admin`. Capability: [admin](../capabilities/admin/spec.md) R22 and R37-R68. Requirement: `manage-users` (1.9). Both modes; in local mode there are no groups, no group mappings and no SCIM requests, so those lists are empty and the last sync is `null` (admin R74). Errors are Style B (1.3); successful writes answer an `ok` body like Style A. Activity events are the `activity_events` types in [data-model.md](data-model.md) 3.14.7; how each figure is derived is in 3.14.8.
-
-| # | Method + path | Purpose | FE |
+| # | Method + path | Query | Row shape |
 |---|---|---|---|
-| 79 | `POST /admin/role-assignments` | Assign a role to a user | yes (Assign role dialog) |
-| 80 | `DELETE /admin/role-assignments/:id` | Remove a direct role assignment | yes (Inactive makers dialog) |
-| 81 | `GET /admin/overview` | Tiles, Needs attention, weekly active users, recent activity | yes |
-| 82 | `GET /admin/overview/export` | The overview as a CSV download | yes (full-page download) |
-| 83 | `GET /admin/users` | Search, filter and page the users | yes |
-| 84 | `GET /admin/users/:id` | One user's detail | yes |
-| 85 | `PUT /admin/users/:id/roles` | Replace a user's direct role assignments | yes |
-| 86 | `POST /admin/agents/transfer` | Move user agents to another owner | yes |
-| 87 | `GET /admin/groups` | Search and page the groups | yes |
-| 88 | `GET /admin/role-mappings` | List the group mappings | yes |
-| 89 | `POST /admin/role-mappings` | Add a group mapping | yes |
-| 90 | `DELETE /admin/role-mappings/:id` | Remove a group mapping | yes |
+| I3 | `GET /v1/clients` | `q` (name or `oneCode`, case-insensitive substring) | `{ id, oneCode, name, tenantKey, headcount: number\|null /* latest census totalEmployees */, latestCensusYear: string\|null, linesOffered: number, nextRenewalEffectiveDate: string\|null }` |
+| I4 | `GET /v1/products` | | `{ id, name, locType, displayOrder }` (the 12 lines of coverage) |
+| I5 | `GET /v1/funding-types` | | `{ id, name, displayOrder, theme }` |
+| I6 | `GET /v1/plan-types` | `line` (product name) | `{ id, line, name }` |
+| I7 | `GET /v1/carriers` | `line`, `clientOneCode` | `{ id, name, code, lines: string[] /* product names, from insurer_categories */, incumbentFor: string[] /* lines where it carries a live policy for clientOneCode; [] without it */, finalCredits: number /* carrier credits isFinal and not expired for that client */ }` |
+| I8 | `GET /v1/plan-designs` | `clientOneCode`, `line` | `{ id, clientOneCode, clientName, line, planType /* from plan_financial.planType */, carrier, fundingType, state, creationFlag, policyNumber, enrolledEmployees, annualPremium, planYear }`, one row per plan design joined to its coverage and financials |
+| I9 | `GET /v1/policies` | `clientOneCode` | `{ id, clientOneCode, carrier, number, kickOffTiming, kickOffDays, coverages: number }` |
+| I10 | `GET /v1/financials` | `clientOneCode`, `line`, `planYear` | `Financial = { coverageId, clientOneCode, line, planDesignId, carrier, fundingType, planType, ratingBasis, planYear, enrolledEmployees, coveredLives, monthlyPremium, annualPremium, priorYearAnnualPremium, renewalIncreasePct, employerPct, employeeMonthlyEmployeeOnly, adminFeePepm, stopLossPepm, ratePer1000, pepm, rateEmployeeOnly, rateEmployeeSpouse, rateEmployeeChildren, rateFamily, enrollEmployeeOnly, enrollEmployeeSpouse, enrollEmployeeChildren, enrollFamily }`, the flattened `plan_financial`; `null` where a key doesn't apply to the line |
+| I11 | `GET /v1/census` | `clientOneCode`, `year` | `CensusRow = { documentId, clientOneCode, effectiveYear, totalEmployees, eligibleEmployees, enrolledEmployees, averageAge, averageSalary, femalePct, malePct, fullTime, partTime, tierEmployeeOnly, tierEmployeeSpouse, tierEmployeeChildren, tierFamily, statesCount, participationRate, source, uploadedAt }` |
+| I12 | `GET /v1/rfps` | `clientOneCode`, `status`, `createdBy` | `RfpSummary` (2.16.4), newest (`createdAt`) first |
 
-Shared shapes (`RoleId`, `HeldRole` in 2.13):
+#### 2.16.3 Per-client reads
+
+Not paged. `:oneCode` is the client's `one_code`. Every route answers `404 { code:"not_found", message:"Client \"<oneCode>\" not found" }` for an unknown or deleted client.
+
+| # | Method + path | Response |
+|---|---|---|
+| I13 | `GET /v1/clients/:oneCode` | `{ client: { id, oneCode, name, tenantKey, deleted }, contacts: [{ email, contactType, country }], headcount, latestCensusYear, lines: [{ line, locType, status /* latest loc_statuses by start_date */, statusSince, planDesigns: number }] }` |
+| I14 | `GET /v1/clients/:oneCode/renewals` | `{ planYear: number, renewals: [{ line, carrier, policyNumber, effectiveDate, kickOffTiming: { name, days }, kickOffDate, locStatus, annualPremium, renewalIncreasePct, reminders: [{ emailId, reminderDate }] }], upcomingWizards: [{ type, status }] }`. Plans are calendar-year: `effectiveDate` is 1 January after `plan_financial.planYear` (2026 → `2027-01-01`), and `kickOffDate` is `effectiveDate` minus the policy's kick-off days (`policies.kick_off_timing` → `renewal_kick_off_timings.days`). The response and the [rfp](../capabilities/rfp/spec.md) spec both state this assumption. |
+| I15 | `GET /v1/clients/:oneCode/program` | Query `line`. `{ lines: [{ line, locType, status, plans: [{ planDesignId, planType, carrier, carrierId, fundingType, state, creationFlag, policyNumber, eligibility: { workflowStatus, versions }, censusMapping: { mapped: number, unmapped: string[] }, financials: { planYear, enrolledEmployees, coveredLives, annualPremium, priorYearAnnualPremium, renewalIncreasePct, employerPct } }] }], carriers: [{ carrier, lines: string[] }] }` |
+| I16 | `GET /v1/clients/:oneCode/plans/:planDesignId` | The plan as in I15 with the full `planFinancial` object, every eligibility version, the census plans mapped to it, the alternate plans from wizards and its reminders. `404 "Plan design \"<planDesignId>\" not found for client \"<oneCode>\""`. |
+| I17 | `GET /v1/clients/:oneCode/financials` | Query `line`, `planYear`. `{ planYear, rows: Financial[] /* I10 */, totals: { annualPremium, priorYearAnnualPremium, renewalIncreasePct, enrolledEmployees } }` |
+| I18 | `GET /v1/clients/:oneCode/census` | Query `year` (default the latest). `{ years: string[], selected: CensusRow & { gender: { female, male }, byState: [{ state, employees }], tiers: [{ tier, employees, share }], employeeClass: { fullTime, partTime } }, plans: [{ line, censusPlanName, mappedTo: { planDesignId, planType, carrier } \| null }], aggregated: { headcount, enrolled, participationRate, averageAge, femalePct, tierMix, statesCount } \| null }` |
+| I19 | `GET /v1/clients/:oneCode/commercials` | `{ contributions: [{ line, periodStart, periodEnd }], carrierCredits: [{ carrier, expirationDate, isFinal, notifications: number }], fees: [{ carrier, effectiveDate, expirationDate }], survey: { periodStart, periodEnd, answers: object } \| null, pointSolutions: [{ vendor, product }] }` |
+| I20 | `GET /v1/clients/:oneCode/wizards` | `{ wizards: [{ id, line, type, status }], alternatePlans: [{ planDesignId, planType, name, fundingType, line }] }` |
+
+#### 2.16.4 RFP records
+
+Stored in schema `rfp` ([data-model.md](data-model.md) section 7). `:id` is the RFP's UUID; an unknown one answers `404 { code:"not_found", message:"RFP \"<id>\" not found" }`.
 
 ```ts
-type UserStatus = 'active' | 'inactive' | 'not-signed-in' | 'deactivated';   // admin R39
-interface UserRef { id: string; displayName: string }
-interface AdminUserRow {
-  id: string;
-  displayName: string;
-  email: string | null;
-  initials: string;                  // as in ui.md 1.3
-  roles: Exclude<RoleId, 'user'>[];  // distinct, from every source, order: platform-admin, approver, data-owner, maker; [] = User only
-  groups: string[];                  // group display names, sorted
-  agentsOwned: number;
-  lastActiveAt: string | null;       // admin R39; null = never signed in
-  status: UserStatus;
-}
-interface AdminHeldRole extends HeldRole {
-  datasourceName?: string;           // data-owner only; the datasource's current name, or its id if it no longer exists
-  groupNames?: string[];             // source 'group': every group that maps this role (and datasource)
-  datasourceMissing?: true;          // 84 only: a direct Data owner assignment whose datasource no longer exists
-}
-interface ActivityItem { id: string; type: string; at: string; text: string }   // text: the admin R47 sentence
+type RfpStatus = 'draft' | 'ready' | 'issued' | 'closed';     // moves forward only
+RfpSummary = { id, clientOneCode, clientName, title, planYear: number, effectiveDate, status: RfpStatus,
+  stage: number /* 0..7, the last completed stage */, lines: number, carriers: number, requirements: number,
+  milestones: number, createdBy: string | null, createdAt, updatedAt,
+  clientMissing?: true /* the client is no longer in intellify.clients (e.g. after a reseed) */ };
+Rfp = Omit<RfpSummary, 'lines'|'carriers'|'requirements'|'milestones'> & {
+  sections: { executiveSummary?, clientBackground?, scopeStatement?, instructionsToBidders?, evaluationCriteria?, notes? },
+  lines: RfpLine[], carriers: RfpCarrier[], requirements: RfpRequirement[], timeline: RfpMilestone[] };
+RfpLine = { id, position, line /* product name */, productId, planDesignIds: string[], marketBasis: 'as-is'|'alternate',
+  alternateFunding?: string, alternatePlanType?: string, notes? };
+RfpCarrier = { id, position, insurerId, insurerName, lines: string[], incumbent: boolean, contactEmail?, notes? };
+RfpRequirement = { id, position, section, question, required: boolean,
+  answerType: 'text'|'yes_no'|'number'|'table'|'attachment' };
+RfpMilestone = { id, position, milestone, dueDate, owner?, notes? };
 ```
 
-#### 79. `POST /admin/role-assignments`
-- Body: `{ userId: string; role: RoleId; datasourceId?: string }`. `datasourceId` is required for `data-owner` and refused for any other role.
-- Success `201`: `{ ok:true, message:"Role assigned", assignment: RoleAssignmentDoc }` ([data-model.md](data-model.md) 3.14.4). If the user already holds the same direct assignment: `200 { ok:true, message:"Role already assigned", assignment }`, nothing written.
-- Errors (Style B): `400` `"Unknown role: <role>"`, `"The User role is implicit"`, `"Data owner needs a datasource"`, `"Only Data owner takes a datasource"`; `404` `"User <id> not found"`, `"Datasource <id> not found"`.
-- Records `role.assigned`.
+The `PUT` list routes replace the whole list; `position` is the item's 1-based place in the body array, and the items come back in that order.
 
-#### 80. `DELETE /admin/role-assignments/:id`
-- Success `200`: `{ ok:true, message:"Role removed" }`. Records `role.removed`.
-- Errors: `404` `"Role assignment <id> not found"`; `400` `"You can't remove your own Platform admin role"` when the assignment is the caller's own `platform-admin` (admin R61). Bootstrap and group-mapped roles have no assignment id and cannot be removed here.
+| # | Method + path | Body | Response and rules |
+|---|---|---|---|
+| I21 | `POST /v1/rfps` | `{ clientOneCode, planYear, title?, createdBy? }` | `201 Rfp` with `status: 'draft'`, `stage: 1`. `title` defaults to `<client name> — <planYear> benefits RFP`; `effectiveDate` defaults to `<planYear>-01-01`. `400 validation` when the client doesn't exist in `intellify.clients` or `planYear` is not an integer in 2024..2035. |
+| I12 | `GET /v1/rfps` | (query `clientOneCode`, `status`, `createdBy`) | Paged `RfpSummary`, newest first (2.16.2). |
+| I22 | `GET /v1/rfps/:id` | | `Rfp`. |
+| I23 | `PATCH /v1/rfps/:id` | `{ title?, planYear?, effectiveDate?, status?, stage?, sections?: Partial<sections> }` | `Rfp`. `sections` merge key by key. `409 conflict` when `status` would move backwards (order `draft → ready → issued → closed`); `400 validation` for a `stage` outside 0..7, an unknown status or section key, or an unparseable date. Stamps `updatedAt`. |
+| I24 | `PUT /v1/rfps/:id/lines` | `Omit<RfpLine, 'id'\|'position'\|'productId'>[]` | `Rfp`. The API resolves `productId` from the line name. `400 validation` whose `details` list unknown lines and plan design ids that don't belong to the RFP's client. |
+| I25 | `PUT /v1/rfps/:id/carriers` | `{ insurer: string /* id or exact name, case-insensitive */, lines: string[], incumbent?: boolean, contactEmail?, notes? }[]` | `Rfp`. `400 validation` `Unknown carrier "<x>". Known: <names>`. |
+| I26 | `PUT /v1/rfps/:id/requirements` | `Omit<RfpRequirement, 'id'\|'position'>[]` | `Rfp`. `400 validation` for an unknown `answerType`. |
+| I27 | `PUT /v1/rfps/:id/timeline` | `Omit<RfpMilestone, 'id'\|'position'>[]` | `Rfp`. `400 validation` for an unparseable `dueDate`. |
+| I28 | `DELETE /v1/rfps/:id` | | `204`. `409 conflict` unless `status` is `draft`. |
+| I29 | `DELETE /v1/rfps` | (query `createdBy`, required) | `{ deleted: number }`: deletes the **drafts** created by `createdBy`, or, for an eval run's tag (`createdBy` starting `eval:`), **every** record it created whatever its status, since a run that reaches stage 7 leaves a `ready` record (eval clean-up, [rfp](../capabilities/rfp/spec.md) R14). `400 validation` without `createdBy`. |
 
-#### 81. `GET /admin/overview`
-- Response `200`:
-  ```ts
-  interface AdminOverview {
-    generatedAt: string;
-    activeUsers30d: number;
-    agentsLive: number;
-    attention: {
-      ownerlessAgents: { count: number; items: { agentId: string; agentName: string; formerOwner: UserRef | null }[] };
-      erroredAgents: { count: number; items: { agentId: string; agentName: string; owner: UserRef; errors: number; lastErrorAt: string; lastErrorMessage: string }[] };
-      inactiveMakers: { count: number; items: { user: UserRef; lastActiveAt: string; makerAssignmentId: string | null; makerGroups: string[] }[] };
-    };
-    weeklyActiveUsers: { weekStart: string; users: number }[];   // 8 entries, oldest first; weekStart = the Monday, YYYY-MM-DD (UTC)
-    recentActivity: ActivityItem[];                             // at most 10, newest first
-  }
-  ```
-  `agentName` is the agent's Live name, else its draft name. `formerOwner` is `null` when the owner is no longer in the directory. An errored agent's `owner` is its current owner (`displayName` `"unknown user"` when that user is no longer in the directory). Agents stored without an owner (admin R33) count in no figure. `makerAssignmentId` is the direct Maker assignment (the id endpoint 80 takes), `null` when Maker comes only from groups. Each `items` list holds at most 100 entries, ordered by name; `count` is always the full number.
-- Errors: none expected beyond 1.9.
+#### 2.16.5 RFP package
 
-#### 82. `GET /admin/overview/export`
-- Response `200`, `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="admin-report-<YYYY-MM-DD>.csv"` (UTC date). UTF-8 with a byte-order mark, CRLF after every row (the last included), RFC 4180 quoting. A cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'` before quoting (admin R48).
-- A header row `section,label,value`, then, in order:
-  - `summary,Active users · 30 days,<n>` and `summary,Agents live,<n>`;
-  - `attention,Agents without an active owner,<n>`, `attention,Agents with errors in the last 7 days,<n>`, `attention,Users inactive for 90+ days with Maker role,<n>`;
-  - 8 rows `weekly-active-users,<weekStart>,<n>`, oldest first;
-  - up to 10 rows `activity,<ISO at>,<sentence>`, newest first.
-- Computed exactly as endpoint 81 at the time of the request. Records nothing.
+A deterministic projection of the stored record and the live Intellify data for the RFP's client and lines in scope; nothing is snapshotted. Each route answers 404 for an unknown RFP.
 
-#### 83. `GET /admin/users`
-- Query: `q` (optional; trimmed, matched as in admin R50), `filter` (`all` default \| `platform-admin` \| `approver` \| `data-owner` \| `maker` \| `inactive`), `page` (1-based, default 1), `pageSize` (1-100, default 25), `excludeDeactivated` (`true` leaves out deactivated users; used by the User and New owner pickers).
-- Response `200`:
-  ```ts
-  interface AdminUsersPage {
-    items: AdminUserRow[];          // sorted by displayName (case-insensitive), then email
-    total: number;                  // after q and filter
-    page: number; pageSize: number;
-    counts: { users: number; groups: number; platformAdmins: number; approvers: number; dataOwners: number; makers: number; inactive: number };   // whole directory, ignoring q and filter (admin R49, R51)
-    lastSyncAt: string | null;      // the newest scim.request event; null before any (admin R54)
-  }
-  ```
-  A `page` past the end answers an empty `items` with the real `total`.
-- Errors: `400` `"Unknown filter: <filter>"`, `"page must be a positive integer"`, `"pageSize must be between 1 and 100"`.
+| # | Method + path | Response |
+|---|---|---|
+| I30 | `GET /v1/rfps/:id/document.md` | `text/markdown; charset=utf-8`: the RFP document (outline below). |
+| I31 | `GET /v1/rfps/:id/document.pdf` | `application/pdf`: the same Markdown rendered with pdfkit (headings, paragraphs, bullet lists, tables with a shaded header row, built-in Helvetica, a page break between sections). A plain rendering, not a design artefact. |
+| I32 | `GET /v1/rfps/:id/exhibits` | `{ exhibits: [{ name, title, rows: object[] }] }`, names in order `exhibit-a-census`, `exhibit-b-plan-designs`, `exhibit-c-financials`, `exhibit-d-carriers`. |
+| I33 | `GET /v1/rfps/:id/exhibits/:name.csv` | `text/csv; charset=utf-8`, RFC 4180 with a header row; `:name` is one of the four exhibit names (the path ends in `.csv`, e.g. `/v1/rfps/<id>/exhibits/exhibit-a-census.csv`). `404 "Exhibit \"<name>\" not found"` for another name. |
+| I34 | `GET /v1/rfps/:id/package.zip` | `application/zip` holding `rfp.md`, `rfp.pdf`, `exhibits/<name>.csv` (the four exhibits) and `manifest.json` (`{ rfpId, title, generatedAt, files: string[] }`): 7 files. Optional query `draft=true` (RFP R16): the document (Markdown and PDF) is titled `DRAFT — <RFP title>` and, right under the title, carries the line `Draft exported <YYYY-MM-DD> at stage <stage> of 7 — not for release to carriers.`; the PDF prints `DRAFT` in each page's header; `manifest.json` gains `"draft": true` and `"stage": <stage>` (`stage` is the RFP's completed stage, 0-7). The exhibits are unchanged. Without the query nothing changes. |
 
-#### 84. `GET /admin/users/:id`
-- Response `200`:
-  ```ts
-  interface AdminUserDetail extends AdminUserRow {
-    heldRoles: AdminHeldRole[];     // every source, including { role:'user', source:'implicit' }
-    groupList: UserRef[];           // the user's groups ({ id, displayName })
-    agents: { id: string; name: string; status: 'live' | 'draft' }[];   // sorted by name
-    isSelf: boolean;                // the caller (admin R61)
-    isBootstrap: boolean;           // userName in ORG_BOOTSTRAP_ADMINS (admin R18)
-  }
-  ```
-  `heldRoles` lists, in order, the implicit User role, the bootstrap Platform admin, the direct assignments (oldest first), then the roles from groups. A direct Data owner assignment whose datasource no longer exists grants nothing ([data-model.md](data-model.md) 3.13) but is still listed, with `datasourceMissing: true` and `datasourceName` set to its id, so the panel can offer to remove it; the row's `roles` leave it out. A group mapping whose datasource no longer exists is left out here (it shows in 88). A role mapped from several of the user's groups (for Data owner, on the same datasource) appears once, with every group in `groupNames` (sorted) and `groupId` the first of them.
-- Errors: `404` `"User <id> not found"`.
+Exhibits: **A census**, the client's latest census (`CensusRow`, I11) with its state and tier breakdown; **B plan designs**, the client's plan designs on the lines in scope (I8 rows); **C financials**, their financials (I10 rows); **D carriers**, the RFP's invited carriers (`RfpCarrier` without ids).
 
-#### 85. `PUT /admin/users/:id/roles`
-- Body: `{ roles: { role: RoleId; datasourceId?: string }[] }`, the complete set of **direct** assignments the user should hold (admin R62). Duplicates collapse. Roles held from groups or as a bootstrap admin are not part of it and are not changed.
-- Validates everything before writing: `404` `"User <id> not found"`, `400` `"roles must be a list"`, the `400` messages of endpoint 79 for each entry, `404` `"Datasource <id> not found"` for a Data owner assignment being **added** (one already stored is kept even when its datasource is gone), and `400` `"You can't remove your own Platform admin role"` when the caller is the user and the set drops their direct `platform-admin`.
-- Then deletes the direct assignments not in the set and creates the missing ones, as one transaction (all or nothing).
-- Success `200`: `{ ok:true, message:"Roles saved for <displayName>", added: number, removed: number, heldRoles: AdminHeldRole[] }`; with nothing to change, `message:"No changes"` and nothing written.
-- Records one `role.assigned` or `role.removed` per change.
+Document outline (Markdown, deterministic):
 
-#### 86. `POST /admin/agents/transfer`
-- Body: `{ agentIds: string[]; toUserId: string }`; 1-100 distinct ids of user agents, from any owner.
-- Validates everything before writing, in this order: `400` `"Choose at least one agent"`, `"Choose at most 100 agents"` (ids that are not strings are dropped, duplicates collapse); `404` `"User <id> not found"`; `400` `"<name> is deactivated"` (the new owner); `404` `"Agent <id> not found"` (also for an agent stored without an owner, admin R33); `400` `"\"<agent name>\" already belongs to <name>"`; `409` `"<name> already has an agent named \"<agent name>\""` when the new owner has a user agent with the same name (case-insensitive, Live or draft name), or two of the agents share a name. The message names the transferred agent's clashing name.
-- Then, as one transaction, sets each agent's `ownerId` to `toUserId` and `pinned` to `false`; the draft, Live version and `publishedAt` are unchanged (admin R64).
-- Success `200`: `{ ok:true, message:"Transferred <n> agent(s) to <displayName>", transferred: number }` (`1 agent`, `2 agents`).
-- Records one `agent.transferred` per agent.
-
-#### 87. `GET /admin/groups`
-- Query: `q` (optional, a substring of the group name, case-insensitive), `page`, `pageSize` as in endpoint 83.
-- Response `200`: `{ items: { id: string; displayName: string; members: number; mappings: { role: Exclude<RoleId,'user'>; datasourceId?: string; datasourceName?: string }[] }[]; total: number; page: number; pageSize: number }`, sorted by name (case-insensitive); each group's `mappings` in badge order (Platform admin, Approver, Data owner, Maker), then by datasource name.
-- Errors: the `page` / `pageSize` messages of endpoint 83.
-
-#### 88. `GET /admin/role-mappings`
-- Response `200`: `{ mappings: GroupRoleMappingView[] }`, sorted by group name (case-insensitive), then role in badge order (Platform admin, Approver, Data owner, Maker), then datasource name, where `GroupRoleMappingView = GroupRoleMappingDoc & { groupName: string; datasourceName?: string }` ([data-model.md](data-model.md) 3.14.5).
-
-#### 89. `POST /admin/role-mappings`
-- Body: `{ groupId: string; role: RoleId; datasourceId?: string }`, with the same rules as endpoint 79.
-- Success `201`: `{ ok:true, message:"Mapping added", mapping: GroupRoleMappingView }`. If the same mapping exists: `200 { ok:true, message:"Mapping already exists", mapping }`, nothing written.
-- Errors: the `400` messages of endpoint 79; `404` `"Group <id> not found"`, `"Datasource <id> not found"`.
-- Records `mapping.added`.
-
-#### 90. `DELETE /admin/role-mappings/:id`
-- Success `200`: `{ ok:true, message:"Mapping removed" }`. Records `mapping.removed`.
-- Errors: `404` `"Group mapping <id> not found"`.
+1. `# <title>`, then a facts line: client, plan year, effective date, status, generated at.
+2. `## 1. Executive summary`: the section text, or `_To be written._` when empty (the same for every narrative section below).
+3. `## 2. Client background`: the section text, the client facts and the latest census as a table.
+4. `## 3. Scope of this RFP`: the scope statement and a table of the lines (line, market basis, plans in scope, alternate funding and plan type).
+5. `## 4. Current program`: one table per line in scope (plan, carrier, funding, enrolled, annual premium, renewal increase).
+6. `## 5. Carriers invited`: a table.
+7. `## 6. Requirements and questionnaire`: one subsection per requirement `section`, questions numbered, each with required or optional and its answer type.
+8. `## 7. Timeline`: a table.
+9. `## 8. Instructions to bidders` and `## 9. Evaluation criteria`: the section texts.
+10. `## Exhibits`: the list of the four exhibits.
 
 ## 3. Streaming and long-running work
 
@@ -1012,27 +926,30 @@ interface StreamMessageRequest {
 
 **Framing.** Each event is a single `data: <JSON>\n\n` frame. No `event:` or `id:` fields, no `retry:`, no heartbeat/comment frames. Readers split on `\n\n`, take the line starting with `data: ` and `JSON.parse` it; malformed frames are skipped.
 
-**Event envelope.** `{ type, content?, session? }`. `content` is a string; for `tool`, `tool-result` and `visual-updated` it is itself **a JSON-encoded string** (double encoding) that the client parses.
+**Event envelope.** `{ type, content?, session? }`. `content` is a string; for `tool`, `tool-result`, `visual-updated`, `panel-item`, `workflow` and `rfp-package` it is itself **a JSON-encoded string** (double encoding) that the client parses.
 
 | `type` | Payload | Meaning |
 |---|---|---|
 | `reasoning` | `content: string` (delta) | Model reasoning text delta, for a live "thinking" display. Not persisted. Empty deltas are not emitted. |
 | `text` | `content: string` (delta) | Answer text delta. Concatenation of all `text` deltas is the streamed answer. One extra full-text `text` event may follow if a tool-only turn needed a synthesis pass. |
-| `tool` | `content: JSON string` `{ name: string; rationale?: string }` | A tool call started. `rationale` is the assistant's plain-language reason (flattened, max 400 chars) and is sent **with the call**, before the result. Legacy clients may receive a bare tool name instead of JSON; readers must fall back to treating non-JSON content as the name. Not emitted for `ask_clarification`. |
-| `tool-result` | `content: JSON string` | A tool call finished. For data tools (`run_readonly_sql`, `sample_rows`): `{ tool, input?, rowCount?, error?, rationale? }`. For visual tools (`create_visual`, `update_visual`): `{ tool, input? /* the instruction */, error? }`. **No `tool-result` is emitted for other tools** (`list_entities`, `describe_entity`). Row data is not streamed, only persisted in the final message. |
+| `tool` | `content: JSON string` `{ name: string; rationale?: string; input?: string }` | A tool call started. `rationale` is the assistant's plain-language reason (flattened, max 400 chars) and is sent **with the call**, before the result. `input` says what the call is about, flattened and clipped to 200 characters: for the framework's skill tools the skill it loads (`skill`: its `name`; `skill_read`: `<skillName>/<path>`; `skill_search`: the query), else the call's first text argument; omitted when there is none. Legacy clients may receive a bare tool name instead of JSON; readers must fall back to treating non-JSON content as the name. Not emitted for `ask_clarification`. |
+| `tool-result` | `content: JSON string` | A tool call finished. For data tools (`run_readonly_sql`, `sample_rows`): `{ tool, input?, rowCount?, error?, rationale? }`. For visual tools (`create_visual`, `update_visual`): `{ tool, input? /* the instruction */, error? }`. In a session bound to the RFP Builder (`agentKey: "rfp"`), every RFP tool ([agents.md](agents.md) 3.10) emits `{ tool, input? /* its first string argument */, rowCount?, error? }` (`rowCount` for a result that carries `columns` and `rows`, such as `get_client_financials`). **No `tool-result` is emitted for other tools** (`list_entities`, `describe_entity`). Row data is not streamed, only persisted in the final message. |
 | `visual-updated` | `content: JSON string` `VisualEvent` `{ visualId, version, title, action: "created"\|"updated" }` | A visual tool produced a visual this turn; sent just before that tool's `tool-result`. The panel refreshes live. |
+| `panel-item` | `content: JSON string` `PanelItemEvent` `{ item: PanelItem }` ([data-model.md](data-model.md) 3.4.4) | An agent showed something in the right panel this turn (`show_in_panel` returned without an error); never sent for a workflow change (`update_workflow`, the RFP Builder's stage auto-drive); sent just before that tool's `tool-result` `{ tool: "show_in_panel", input? /* the item's title */, error? }`. The client refreshes the session without disturbing the turn, makes the item the active one and opens the panel; for a `visual` item it also loads the visual. Every agent ([agent-panel](../capabilities/agent-panel/spec.md) R12). `visual-updated` stays for visual tools. |
+| `workflow` | `content: JSON string` `WorkflowView` `{ phases: { number, title, skill? }[], source: "prompt"\|"agent", current: number\|null, done: number[], skipped: number[], waiting?: boolean, note?: string }` ([data-model.md](data-model.md) 3.4.4) | The session's workflow changed this turn: after an `update_workflow` result without an error and after an RFP Builder stage was saved. `show_in_panel` never sends it. It carries the whole view, not a delta. It never creates a panel item and does not open the right panel. The client patches the session's `workflow` live, so the workflow bar moves while the turn streams; the persisted view arrives with `done` ([agent-panel](../capabilities/agent-panel/spec.md) R19). Every agent. |
+| `rfp-package` | `content: JSON string` `RfpPackageEvent` `{ rfpId, title, files: { name, bytes }[], exportedAt, draft?: boolean }` | `export_rfp_package` or `export_rfp_draft` stored an RFP package in the session workspace (`rfp/<rfpId>/`, or `rfp/<rfpId>/draft/` when `draft` is `true`, [data-model.md](data-model.md) 4.1) this turn; sent just before that tool's `tool-result`. The answer persisted at the end of the turn carries the same value as `rfpPackage` (data-model 3.4.1), and the chat shows the package card with its downloads (#105). RFP Builder sessions only ([rfp](../capabilities/rfp/spec.md)). |
 | `done` | `session: SessionDoc` | **Terminal, success.** The persisted session with this turn's messages. |
 | `error` | `content: string` | **Terminal, failure.** Human-readable message (`"message is required"`, `"Session <id> not found"`, provider/model errors). |
 
 **Ordering.**
 
 ```
-[reasoning* | text* | (tool → [visual-updated] → tool-result)*]  interleaved in model order
+[reasoning* | text* | (tool → [visual-updated | panel-item | workflow] → tool-result)*]  interleaved in model order
  → (optional silent post-processing)
  → done            or            error
 ```
 
-- `tool` always precedes its own `tool-result`; parallel/interleaved calls are possible. `visual-updated` precedes the matching `tool-result`.
+- `tool` always precedes its own `tool-result`; parallel/interleaved calls are possible. `visual-updated`, `panel-item` and `workflow` precede the matching `tool-result` (for an RFP stage auto-drive, which has no tool call of its own, they stand alone).
 - After the model stream ends there can be **silent server-side steps with no events**: a tool-disabled synthesis pass (only if the turn produced no text and no visual; emits one `text` event with the result, or falls back to the fixed message `"I completed the data analysis but could not produce a final response. Please retry your question."`), the **zero-SQL grounding guard** (one corrective pass when a non-empty answer called no tool at all), the verified-query match, and the **careful-mode cross-check** (`crossCheck` verdict). No keepalive is sent during them.
 - **The streamed deltas are not authoritative.** The grounding guard may replace the answer text after it was already streamed. The client must replace its whole message list with `done.session` rather than keep the deltas.
 
@@ -1054,7 +971,7 @@ interface StreamMessageRequest {
 - Whatever text had already streamed is still persisted as a (partial) assistant message together with captured `data`; the careful-mode cross-check is skipped. The client should reload the session (`GET /sessions/:id`) to show the persisted state; the shipped chat does this.
 - Abort errors are swallowed silently on both sides.
 
-**Errors mid-stream.** Any thrown error that is not an abort is caught by the controller and sent as `{ type:"error", content: <message> }`, then the response ends. The user message stays persisted; no assistant message is added. In org server mode, when the session was started from a user agent (not a preview) that it still runs (not deleted, nor transferred to another owner), the error is not a refused request (an empty message, an unknown session) and the client did not stop the turn, the server also records an `agent.turn-failed` activity event ([data-model.md](data-model.md) 3.14.7; admin R40). Endpoint 6 does the same for a failed non-streamed turn. A failed connect on the client yields `"Backend unreachable"`, a non-2xx or bodyless response yields `"Stream failed (<status>)"`, a read failure yields `"Stream disconnected"`.
+**Errors mid-stream.** Any thrown error that is not an abort is caught by the controller and sent as `{ type:"error", content: <message> }`, then the response ends. The user message stays persisted; no assistant message is added. A failed connect on the client yields `"Backend unreachable"`, a non-2xx or bodyless response yields `"Stream failed (<status>)"`, a read failure yields `"Stream disconnected"`.
 
 ### 3.2 Deep analysis
 
@@ -1063,13 +980,13 @@ Pattern: **start, poll, then download**. Endpoints 46-48.
 - State machine: `planning` → `investigating` (one step per angle, 1..`steps`, at most 5 angles, 3-5 planned) → `writing` → `done`; any failure → `error`. Not resumable.
 - Progress is observed by polling `GET /sessions/:id/deep-analysis/:jobId` (the shipped chat polls every **3000 ms**, gives up after 5 consecutive poll failures). `progress` is the human line for the pending card: `"Planning the investigation"`, `"Investigating angle <i> of <n>: <title>"`, `"Writing the report"`, `"Report ready — <n> angle(s) investigated"`, `"Deep analysis failed"`. `step`/`steps` are 1-based.
 - Completion is also observable in the transcript: on `done` an assistant message with `report` is appended; on `error` an assistant failure message is appended (so a reload shows the outcome even if polling stopped).
-- One running job per session (conflict returns the running `jobId` with `ok:false`). Job records are in memory (50 most recent kept), each with the user who started it; polling another user's job answers as not found ([data-model.md](data-model.md) 3.15); aborted on backend shutdown. Reports persist in the workspace and remain downloadable.
+- One running job per session (conflict returns the running `jobId` with `ok:false`). Job records are in memory (50 most recent kept); aborted on backend shutdown. Reports persist in the workspace and remain downloadable.
 
 ### 3.3 Eval runs
 
 Pattern: **start, poll, list, download, delete**. Endpoints 36-40.
 
-- One running run per agent and owner (`conflictWith` surfaced as `ok:false` + `jobId`). Another user's run, running or not, answers as not found and never conflicts ([data-model.md](data-model.md) 3.15).
+- One running run per agent (`conflictWith` surfaced as `ok:false` + `jobId`).
 - A run executes the selected questions sequentially against the datasets bound to the datasource. After every question the finished result is appended to `results` and the record is persisted (a crash mid-suite keeps finished questions). `currentQuestion` names the question in flight.
 - Observed by polling `GET /agents/:key/evals/runs/:jobId` (the shipped UI polls every **1500 ms** until `status !== "running"`); the run history (`…/runs`) reads persisted records with live in-memory state overlaid for in-flight runs. Persisted runs survive restart; an interrupted run is not resumed and its stored `status` may stay `running` (G4).
 - On completion the run is compared with the most recent previous completed run for the same agent, datasource and datasets, and `comparison` (regressions, improvements, unchanged by case id) is attached; a comparison failure never fails the run.
@@ -1145,8 +1062,8 @@ Entry `id` is `<epoch ms>-<sequence>`; `timestamp` ISO. Entries are appended as 
 
 | Item | Value |
 |---|---|
-| Spawn | Electron's own binary with `ELECTRON_RUN_AS_NODE=1` running `backend/dist/main.js` (packaged: `<resources>/backend/dist/main.js`); `stdio` piped; env passes `PORT`, `APP_DATA_DIR`, `APP_SECRET`, and drops every `ORG_*` variable, so the desktop backend always runs in local mode (1.9). Missing entry file records an error diagnostic and does not start. |
-| Readiness probe | `GET http://127.0.0.1:<BACKEND_PORT>/me`, **ready iff status 200 or 401** (nobody is signed in when the backend starts, ADR-0012); 500 ms request timeout; retried every 100 ms until a **30 s** deadline. |
+| Spawn | Electron's own binary with `ELECTRON_RUN_AS_NODE=1` running `backend/dist/main.js` (packaged: `<resources>/backend/dist/main.js`); `stdio` piped; env passes `PORT`, `APP_DATA_DIR`, `APP_SECRET`, and nothing else. Missing entry file records an error diagnostic and does not start. |
+| Readiness probe | `GET http://127.0.0.1:<BACKEND_PORT>/sessions`, **ready iff status 200**; 500 ms request timeout; retried every 100 ms until a **30 s** deadline. |
 | Startup | status `starting` → spawn → probe. Ready → `ready`. Deadline missed → error diagnostic, **window opens anyway**, probing continues in the background and pushes `ready` when it succeeds. |
 | Crash handling | Any exit not caused by app quit → status `restarting`, restart after back-off **1 s, 2 s, 4 s** (3 attempts), re-probing after each start. Attempts exhausted → status `down` (error diagnostic, no further restarts). |
 | Stability reset | Backend continuously ready for **60 s** resets the attempt counter. |
@@ -1171,9 +1088,11 @@ Binary `questions-to-insights` (`backend/src/cli.ts` compiled to `dist/cli.js`),
 | Flag | Argument | Default | Notes |
 |---|---|---|---|
 | `--port` | integer 0..65535 | `3000` | `0` = let the OS pick. Invalid value → exit 1 `invalid --port "<v>" (expected 0-65535)`. |
-| `--host` | string | `127.0.0.1` | Interface to bind. An org server behind the organisation's TLS proxy binds the interface the proxy reaches, typically `0.0.0.0` ([delivery.md](delivery.md) 4.1). |
+| `--host` | string | `127.0.0.1` | Interface to bind. `--host 0.0.0.0` opens the app to every machine that can reach the port, with full access and no sign-in (1.9, G14). |
 | `--data-dir` | path | `$QTI_DATA_DIR`, else `$APP_DATA_DIR`, else `~/.questions-to-insights` | Resolved to an absolute path; created (`mkdir -p`). Deliberately separate from the Electron `userData` dir so both can run at once. |
 | `--no-open` | none | opens the browser | Parsed as the negation of a boolean `open` option. |
+| `--intellify-api-port` | integer 0..65535 | `$INTELLIFY_API_PORT`, else `3100` | Port of the embedded Intellify RFP API (2.16); `0` = a free port. Sets `INTELLIFY_API_PORT` before the app is imported. Invalid value → exit 1 `invalid --intellify-api-port "<v>" (expected 0-65535)`. |
+| `--no-intellify-api` | none | starts the embedded API | Does not start the embedded Intellify RFP API (sets `INTELLIFY_API=off`). |
 | `-h`, `--help` | none | | Prints usage to stdout, exit 0. |
 | `-v`, `--version` | none | | Prints the package version (`unknown` if unreadable), exit 0. |
 
@@ -1195,10 +1114,12 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
   Questions to Insights <version>
   URL:      http://<host>:<port>          # host shown as `localhost` when bound to 0.0.0.0/::, IPv6 in brackets
   Data dir: <absolute path>
-  Mode:     org server, <ORG_PUBLIC_BASE_URL>   # only in org server mode
+  Intellify API: http://<INTELLIFY_API_HOST>:<port>   # e.g. http://127.0.0.1:3100; only when the embedded Intellify RFP API started (2.16)
   Press Ctrl+C to stop.
 (blank)
 ```
+
+The `Intellify API:` line carries the actual bound port of the embedded API (useful with `--intellify-api-port 0`); the E2E fixture reads it the way it reads `URL:`. When the API did not start, the line is left out and the backend log holds `Intellify API not started: <reason>`.
 
 **Browser opening.** Best effort, detached, errors ignored: `open <url>` (macOS), `cmd /c start "" <url>` (Windows), `xdg-open <url>` (other).
 
@@ -1222,14 +1143,19 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
 | `VISUAL_MODEL` | visual designer agent | Forces the designer model (router id `provider/model`). Unset: reasoning-family models are swapped for `openai/gpt-4.1-mini` and `nano` models upgraded to their `mini` sibling; others kept. | unset |
 | `OPENAI_API_KEY` | Mastra's env-bound model router (via model resolver) | Fallback model credential (`openai/gpt-4o-mini`) when no LLM settings are saved. | unset |
 | `WORLD_CUP_DB_PORT` | testing-data fixture registry | Port of the sample PostgreSQL server in the form prefill and compose stack. | `55432` |
-| `ORG_OIDC_ISSUER` | org server config ([admin](../capabilities/admin/spec.md) R3) | The identity provider's issuer URL; its discovery document is read from `<issuer>/.well-known/openid-configuration`. For Entra ID: `https://login.microsoftonline.com/<tenant id>/v2.0`; it must name one tenant, so a first path segment of `common`, `organizations` or `consumers` (any case) is a startup error: `ORG_OIDC_ISSUER must name one tenant (https://login.microsoftonline.com/<tenant id>/v2.0), not "<segment>"`. Required for org server mode. | unset (local mode) |
-| `ORG_OIDC_CLIENT_ID` | org server config | The app registration's client id. Required for org server mode. | unset |
-| `ORG_OIDC_CLIENT_SECRET` | org server config | The app registration's client secret. Required for org server mode. Never logged. | unset |
-| `ORG_PUBLIC_BASE_URL` | org server config | The URL people open, as the proxy serves it, e.g. `https://insights.contoso.com`; trailing slashes removed. Builds the redirect URI (`<url>/auth/callback`), the Origin check and the cookie `Secure` flag. Must be `https://` except for development and tests. Required for org server mode. | unset |
-| `ORG_SCIM_TOKEN` | org server config | The SCIM bearer token given to the identity provider. At least 32 characters (shorter is a startup error). Required for org server mode. Never logged. | unset |
-| `ORG_BOOTSTRAP_ADMINS` | org server config | Comma-separated user names that always hold Platform admin (admin R18), matched against the directory `userName`: for Entra ID the UPN (`preferred_username`, SCIM `userName`), which usually looks like an email. Never matched against the email. Optional; blanks ignored, case-insensitive. | unset |
+| `INTELLIFY_API` | `app-bootstrap.ts` | `off` disables the embedded Intellify RFP API (2.16); any other value or unset starts it. The CLI's `--no-intellify-api` sets it. | unset (started) |
+| `INTELLIFY_API_HOST` | Intellify API config (`intellify-api/config.ts`) | Interface the Intellify RFP API binds. | `127.0.0.1` |
+| `INTELLIFY_API_PORT` | Intellify API config | Its port; `0` = a free port. The CLI's `--intellify-api-port` sets it. | `3100` |
+| `INTELLIFY_API_KEY` | Intellify API config | The accepted API keys, comma-separated. Standalone (`npm run intellify-api`): required, startup fails without it. Embedded: optional; unset, the backend reads `<APP_DATA_DIR>/.intellify-api-key`, or creates it (32 random bytes hex, mode `0600`, as `.app-secret`). Never logged. | `<APP_DATA_DIR>/.intellify-api-key` (embedded) |
+| `INTELLIFY_DB_HOST` | Intellify API config | PostgreSQL host of the Intellify database ([data-model.md](data-model.md) section 7). | `127.0.0.1` |
+| `INTELLIFY_DB_PORT` | Intellify API config | Its port. | `WORLD_CUP_DB_PORT`, else `55432` |
+| `INTELLIFY_DB_NAME` | Intellify API config | Its database name. The `/health` and Testing Data messages name the database looked for. | `intellify_mercer_demo` |
+| `INTELLIFY_DB_USER` | Intellify API config | Its user. | `world_cup` |
+| `INTELLIFY_DB_PASSWORD` | Intellify API config | Its password. Never logged. | `world_cup_dev` |
+| `INTELLIFY_DB_SSL` | Intellify API config | `true` connects over TLS. | `false` |
+| `INTELLIFY_DB_SCHEMA` | Intellify API config | Schema holding the Intellify data (the `intellify` fixture's). The `rfp` schema's name is fixed. | `intellify` |
 | `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated dataset names to run the assistant evals against. Required by that script. | none |
-| `EVAL_SET` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | The question set to run (`world-cup`, `world-cup-rest`, `formula-1`). That script needs this or `EVAL_CASES`, not both ([agents.md](agents.md) 8.5). | none |
+| `EVAL_SET` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | The question set to run (`world-cup`, `world-cup-rest`, `formula-1`, `rfp`). That script needs this or `EVAL_CASES`, not both ([agents.md](agents.md) 8.5). | none |
 | `EVAL_CASES` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated eval case ids to run instead of a whole set; all from one set's fixture. | none |
 
 ### 6.2 CLI-only
@@ -1251,7 +1177,7 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
 
 ### 6.4 Developer scripts (not part of the shipped app)
 
-`BACKEND_URL` (default `http://127.0.0.1:3000`) and `WORLD_CUP_API_URL` (`http://127.0.0.1:55080`) for `setup-worldcup-rest.ts`; `WORLD_CUP_API_PORT` (`55080`) for the sample REST server; `WORLD_CUP_DB_HOST|PORT|DATABASE|USER|PASSWORD` (`127.0.0.1|55432|world_cup|world_cup|world_cup_dev`) for the dump script; `EVAL_ROW_LIMIT` (`500`), `EVAL_TIMEOUT_MS` (`300000`) for `run-eval.ts`; `CHECK_TIMEOUT_MS` (`180000`), `CHECK_MODEL` (`gpt-4o-mini`), `CHECK_ARM`, `CHECK_TRIALS` for `check-answers.ts`.
+`BACKEND_URL` (default `http://127.0.0.1:3000`) and `WORLD_CUP_API_URL` (`http://127.0.0.1:55080`) for `setup-worldcup-rest.ts`; `WORLD_CUP_API_PORT` (`55080`) for the sample REST server; `WORLD_CUP_DB_HOST|PORT|DATABASE|USER|PASSWORD` (`127.0.0.1|55432|world_cup|world_cup|world_cup_dev`) for the dump script; `EVAL_ROW_LIMIT` (`500`), `EVAL_TIMEOUT_MS` (`300000`) for `run-eval.ts`; `CHECK_TIMEOUT_MS` (`180000`), `CHECK_MODEL` (`gpt-4o-mini`), `CHECK_ARM`, `CHECK_TRIALS` for `check-answers.ts`. `npm run intellify-api` in `backend/` runs the Intellify RFP API standalone (`node dist/intellify-api/main.js`, after a build), configured only by the `INTELLIFY_*` variables of 6.1, with `INTELLIFY_API_KEY` required (2.16).
 
 ### 6.5 Frontend build/runtime
 
@@ -1270,9 +1196,9 @@ No environment variables. The only runtime switch is the page protocol (`file:` 
 - **G7. `POST /sessions` does not verify the named datasets exist.** Open question whether that is intended.
 - **G8. Error-style inconsistency.** Style A (`200 { ok:false }`) vs Style B (real 4xx) is endpoint-specific and also differs in list shapes (`{ sessions }`, `{ datasources }`, `{ metrics }`, `{ datasets }`, bare array for knowledge, bare `SessionDoc`). Several read endpoints (`GET /datasources`, eval-run listing) can still return a framework 500.
 - **G9. Request body size.** No explicit JSON body limit is configured, so the framework default (about 100 kB) applies; large dataset snapshots in `POST /datasets` could exceed it. Not verified against a real large dataset.
-- **G10. Desktop backend bind address.** (Unchanged by org server mode: the desktop app is always local, 1.9.) `main.ts` calls `createApp` without a host, so the Electron-spawned backend listens on **all interfaces** with CORS enabled and only the password-less local sign-in (G14); only the CLI binds `127.0.0.1` by default. Open question whether the desktop backend should bind loopback only.
+- **G10. Desktop backend bind address.** `main.ts` calls `createApp` without a host, so the Electron-spawned backend listens on **all interfaces** with CORS enabled and no authentication (G14); only the CLI binds `127.0.0.1` by default. Kept by the user's choice (ADR-0030).
 - **G11. `message` timing on feedback.** `POST …/messages/feedback` with `up` reports `"Answer saved as a verified query"` even when the answer had no SQL and nothing was saved.
 - **G12. Spec of `PUT /metrics/:id` not-found** is thrown as a 400-class exception but surfaced inside the `ok:false` envelope, so clients cannot distinguish "not found" from validation by status.
 - **G13. Dev-mode API routing.** For `ng serve` the client uses relative URLs and the repo has no Angular proxy config, so API calls from a bare `ng serve` page hit the dev server, not the backend. Under `electron:dev` the window loads `http://localhost:4200` (protocol `http:`), so the same relative-URL problem applies. Open question: how the live-reload dev flow reaches the backend (no proxy or `API_BASE_URL` override found).
-- **G14. Local mode is not a security boundary.** Local sign-in (91-93) asks for no password: anyone who can reach the local backend can sign in as any persona, Demo User included, and the desktop backend listens on all interfaces (G10). The personas show what each role can do; they don't protect data ([non-functional.md](../product/non-functional.md) section 3, ADR-0012).
+- **G14. No authentication, so reachability is the only boundary.** Anyone who can reach the backend has full access as the super admin, including the stored LLM key's use (the key itself is never returned) and the developer settings. The desktop backend listens on all interfaces (G10) and `--host 0.0.0.0` does the same for the CLI ([non-functional.md](../product/non-functional.md) section 3, ADR-0030).
 - **Not an HTTP surface:** verified queries (saved via feedback), the Mastra Studio, and the workspace filesystem have no endpoints of their own.

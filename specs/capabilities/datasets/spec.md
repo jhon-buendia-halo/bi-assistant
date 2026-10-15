@@ -79,9 +79,9 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
 - R38. The persisted collection was previously named `sandbox_selections` and session documents carried `sandboxes`; both are migrated to `datasets` on startup, without changing sessions' recency order. Legacy documents in the datasets collection that have no name (the older single-selection shape) SHALL be ignored when listing. See [data-model.md](../../system/data-model.md).
 
-### Sharing and permissions
+### Availability
 
-- R39. In both modes datasets SHALL be shared by every signed-in user, and every user's sessions and agents can use any of them. Listing datasets needs Use agents; saving and deleting a dataset need Manage datasources and datasets, and **New dataset**, **Delete dataset**, the dataset name field and **Save dataset** are hidden without it. A user without it can still open a dataset in the browser to see its entities and work on their own metrics. Rules: [../admin/spec.md](../admin/spec.md) R21, R25, R28.
+- R39. Every session and agent can use any dataset. Listing, creating, saving and deleting a dataset SHALL all be available to the user: **New dataset**, **Delete dataset**, the dataset name field and **Save dataset** are always shown.
 
 ## Edge cases and errors
 
@@ -93,7 +93,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - **Dataset list:** loading `Loading datasets…`; empty `No datasets yet — create one with “New dataset”.`; error shows the backend message.
 - **A column cannot be sampled** (permissions, timeout): the dataset still saves, without sample values for that entity.
 - **Datasource kind label:** the dataset list and the datasource picker should show "Databricks", "PostgreSQL" or "REST API". Open question: in the current UI a REST datasource is labelled "Databricks" in the picker, and a REST dataset shows no kind in the list.
-- **Inert controls:** the list's filter chips (All, Pinned, Yours, Shared with you) and its search and layout icons do nothing today.
+- **Inert controls:** the list's search and layout icons do nothing today.
 
 ## Contracts
 

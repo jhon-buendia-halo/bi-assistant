@@ -18,23 +18,23 @@ Capability-local vocabulary:
 ## Rules
 
 Agent Hub and agent detail
-- R1. The **Agents** screen SHALL be the Agent Hub. It SHALL show the heading "Agents"; a **New agent** button, which opens the agent editor for a new agent (R54); a search field with the placeholder `Search agents by name or description`; a group of filter pills labelled `Filter agents`: **All** (selected when the hub opens), **Pinned**, **Official** and **Mine**; and the agents as cards in sections. Under All the sections SHALL be, in this order, **Official** (`official`), **Mine** (`user`) and **System** (`system`), and each agent SHALL appear in the section of its kind, pinned or not; there is no Pinned section under All. A section with no agents SHALL be omitted, so Mine is omitted when there are no user agents. Within a section, pinned cards SHALL come first, then the others, each group alphabetical by name. In every view each agent SHALL appear exactly once. Each card SHALL show a sparkles icon, the name, a pin toggle (R4), the description clipped to two lines and the owner (`Owner: You`, `Owner: Official` or `Owner: System`). A user agent's card SHALL also show a status chip `Draft` or `Live`, the badge `Unpublished changes` when it has unpublished changes (R44), and the note `Missing dataset: <names>` (comma-separated) when its `missingDatasets` is not empty (R48). The Official card and the card of every Live user agent SHALL also show a **Start chat** button with the accessible name `Start chat with <name>` (R53). Cards SHALL NOT show tools or the id.
-- R2. Search SHALL match the trimmed query, case-insensitively, as a substring of the agent's name or description, and SHALL apply as the user types. The filters SHALL show: All, the sections of R1; Pinned, a single **Pinned** section holding every pinned agent of any kind, ordered by kind (Official, Mine, System) and then by name; Official, only the assistant, in the Official section; Mine, only user agents, pinned or not, in the Mine section (pinned first, R1). The System section SHALL show only under All. Search and filter combine. States: while loading, "Loading agents…"; on failure, the backend's message or "Backend unreachable"; a non-empty query that matches nothing, `No agents match "<query>"`; otherwise the Pinned filter with nothing pinned shows `No pinned agents yet.` and the Mine filter with no user agents shows `No agents of yours yet.`. Under All with no user agents, the Mine section is omitted.
+- R1. The **Agents** screen SHALL be the Agent Hub. It SHALL show the heading "Agents"; a **New agent** button, which opens the agent editor for a new agent (R54); a search field with the placeholder `Search agents by name or description`; a group of filter pills labelled `Filter agents`: **All** (selected when the hub opens), **Pinned**, **Official** and **Mine**; and the agents as cards in sections. Under All the sections SHALL be, in this order, **Official** (`official`), **Mine** (`user`) and **System** (`system`), and each agent SHALL appear in the section of its kind, pinned or not; there is no Pinned section under All. A section with no agents SHALL be omitted, so Mine is omitted when there are no user agents. Within a section, pinned cards SHALL come first, then the others, each group alphabetical by name. In every view each agent SHALL appear exactly once. Each card SHALL show a sparkles icon, the name, a pin toggle (R4), the description clipped to two lines and the owner (`Owner: You`, `Owner: Official` or `Owner: System`). A user agent's card SHALL also show a status chip `Draft` or `Live`, the badge `Unpublished changes` when it has unpublished changes (R44), and the note `Missing dataset: <names>` (comma-separated) when its `missingDatasets` is not empty (R48). The card of each Official agent (the assistant and the RFP Builder, `rfp`) and the card of every Live user agent SHALL also show a **Start chat** button with the accessible name `Start chat with <name>` (R53). Cards SHALL NOT show tools or the id.
+- R2. Search SHALL match the trimmed query, case-insensitively, as a substring of the agent's name or description, and SHALL apply as the user types. The filters SHALL show: All, the sections of R1; Pinned, a single **Pinned** section holding every pinned agent of any kind, ordered by kind (Official, Mine, System) and then by name; Official, only the Official agents (the assistant and the RFP Builder), in the Official section; Mine, only user agents, pinned or not, in the Mine section (pinned first, R1). The System section SHALL show only under All. Search and filter combine. States: while loading, "Loading agents…"; on failure, the backend's message or "Backend unreachable"; a non-empty query that matches nothing, `No agents match "<query>"`; otherwise the Pinned filter with nothing pinned shows `No pinned agents yet.` and the Mine filter with no user agents shows `No agents of yours yet.`. Under All with no user agents, the Mine section is omitted.
 - R3. Each section SHALL show its first row of 3 cards. When more of its agents match the search and filter, a `Show more (<n>)` control SHALL follow, where n is the number of hidden cards. Clicking it SHALL show every card of the section and turn the control into `Show less`, which collapses the section to its first row again. Each section expands on its own. The search text, the filter and the expanded sections SHALL reset each time the hub opens, including on return from a detail view.
 - R4. Each card's pin toggle SHALL read `Pin`, with the accessible name `Pin <name>`, or `Pinned`, with the accessible name `Unpin <name>`, and SHALL expose its pressed state. Clicking it, or a card's **Start chat**, SHALL NOT open the agent. The change SHALL show on the hub at once: the toggle flips and the card re-orders within its own section (pinned cards first, R1). It SHALL NOT move the card to another section or hide a section. Under the Pinned filter, unpinning removes the card from the Pinned section. The change is then saved (R47), so it survives a restart. If saving fails, the card SHALL return to its previous state and an error toast SHALL show the backend's message or "Backend unreachable". A successful pin or unpin raises no toast.
-- R5. Clicking a card anywhere but its pin toggle or its **Start chat** SHALL open the agent's detail view. The view SHALL show an **All agents** back button to the hub, the name as heading, the id, the description and, for a user agent, its `Draft` or `Live` chip and `Unpublished changes` badge; then five tabs: **Prompt template**, **Tools (N)**, **Memory**, **Model**, **Evals**, with Prompt template selected first. Opening a different agent SHALL reset all tab, selection and run state. A Live user agent's detail and the Official agent's detail SHALL offer **Start chat** (R53). A user agent's detail SHALL also offer **Edit**, which opens the agent editor on its draft (R54), and two more actions:
+- R5. Clicking a card anywhere but its pin toggle or its **Start chat** SHALL open the agent's detail view. The view SHALL show an **All agents** back button to the hub, the name as heading, the id, the description and, for a user agent, its `Draft` or `Live` chip and `Unpublished changes` badge; then these tabs, in this order: **Chat Box** (not for System agents), **System Prompt**, **Skills (N)**, **Tools (N)**, **Graph** (user agents only), **Memory**, **Evals** and **LLM Config**. The first tab shown is Chat Box for a user agent and for an Official agent, and System Prompt for a System agent (R90, R91). Opening a different agent SHALL reset all tab, selection and run state. A Live user agent's detail and each Official agent's detail SHALL offer **Start chat** (R53). A user agent's detail SHALL also offer **Edit**, which opens the agent editor on its draft (R54), and two more actions:
   - **Publish**, shown only when the agent has no Live version or has unpublished changes. It publishes the draft (R44, R45) and shows the backend's message as a toast: `Agent "<name>" is Live`, or the refusal, such as `Select at least one dataset to publish`. On success the detail reloads, so the button disappears and the chip reads `Live`.
   - **Delete**, which first asks `Delete "<name>"?` with the explanation `Its sessions keep their transcripts and continue with the assistant.`. Cancelling changes nothing. Confirming deletes the agent (R50), shows the toast `Agent "<name>" deleted` and returns to the hub, which no longer lists it. A failure shows the backend's message as a toast and stays on the detail.
 
   Built-in agents (Official and System) SHALL offer neither Edit, Publish nor Delete. System agents SHALL NOT offer Start chat.
-- R6. The Prompt template tab SHALL show the agent's instructions as plain text. If the agent builds its prompt at request time and has no static text, it SHALL say "This agent builds its prompt at request time, so there is no static template to show." For a user agent the tab SHALL show the assistant's prompt, then, under the label `Agent instructions`, the agent's own instructions (Live version, else draft), or `No instructions yet.` when they are empty. The Tools tab SHALL list each tool alphabetically with its name, description and the names of its input parameters. An agent with no tools SHALL show "This agent runs in a single step with no tools." A user agent lists the assistant's tools (R49).
-- R7. The Memory tab SHALL show, for an agent with memory: "Recent messages replayed" (`<N> messages`, "Disabled" or "Default"), "Semantic recall", "Working memory" and "Auto-generated titles" (each "Enabled" or "Disabled"), and "Storage" when known. An agent with no memory SHALL show "This agent is stateless — no memory is configured." For the assistant: 40 messages replayed, semantic recall off, titles off. The Model tab SHALL show the model identifier and provider the agent currently resolves to; with none resolved it SHALL say "No model resolved — save an LLM configuration in Settings first." (see [../llm-settings/spec.md](../llm-settings/spec.md)). For a user agent both tabs describe the assistant (R49).
+- R6. The System Prompt tab SHALL show the agent's instructions as plain text. For a built-in agent it SHALL show the prompt as served, an override included, and offer the edit of R97-R105. If the agent builds its prompt at request time and has no static text, it SHALL say "This agent builds its prompt at request time, so there is no static template to show." For a user agent the tab SHALL show the assistant's prompt, then, under the label `Agent instructions`, the agent's own instructions (Live version, else draft) with each link shown as a read-only chip (R86), or `No instructions yet.` when they are empty; the user can edit them in place (R92-R94). The Tools tab SHALL list each tool alphabetically with its name, description and the names of its input parameters; for a user agent it SHALL be the tool library of R87. An agent with no tools SHALL show "This agent runs in a single step with no tools." A user agent lists the assistant's tools (R49).
+- R7. The Memory tab SHALL show, for an agent with memory: "Recent messages replayed" (`<N> messages`, "Disabled" or "Default"), "Semantic recall", "Working memory" and "Auto-generated titles" (each "Enabled" or "Disabled"), and "Storage" when known. An agent with no memory SHALL show "This agent is stateless — no memory is configured." For the assistant: 40 messages replayed, semantic recall off, titles off. The **LLM Config** tab SHALL show the agent's LLM settings (R89); with none resolved it SHALL say "No model resolved — save an LLM configuration in Settings first." (see [../llm-settings/spec.md](../llm-settings/spec.md)). For a user agent the Memory tab describes the assistant (R49).
 - R8. Requesting an agent that does not exist SHALL fail with `Agent "<key>" not found` (HTTP 404), shown in the detail view.
 - R9. The system SHALL tolerate an agent whose prompt, tools, memory or model cannot be read: that facet is simply empty, the rest still loads.
 
 Question sets
-- R10. Only the assistant SHALL have eval sets. Every other agent's Evals tab SHALL show "No evals configured for this agent yet."
-- R11. The system SHALL provide three sets, each bound to one sample fixture and containing 10 questions: `world-cup` ("World Cup", PostgreSQL), `world-cup-rest` ("World Cup (REST API)", the same questions against the REST sample, case ids prefixed `rest-`) and `formula-1` ("Formula 1", PostgreSQL, 1950 to 2026). The question lists are in *Eval suite content* below. Case ids SHALL be unique across all sets.
+- R10. Only the assistant and the RFP Builder (`rfp`) SHALL have eval sets; each set names the agent it runs on, and an agent's Evals tab lists only its own sets. Every other agent's Evals tab SHALL show "No evals configured for this agent yet."
+- R11. The system SHALL provide four sets, each bound to one sample fixture: for the assistant, `world-cup` ("World Cup", PostgreSQL, 12 questions), `world-cup-rest` ("World Cup (REST API)", the same 12 questions against the REST sample, case ids prefixed `rest-`) and `formula-1` ("Formula 1", PostgreSQL, 1950 to 2026, 10 questions); for the RFP Builder, `rfp` ("RFP Builder", the `intellify-api` REST sample, 8 questions, listed in [agents.md](../../system/agents.md) 8.1). The RFP records an `rfp` run creates SHALL be deleted when the run ends. The question lists are in *Eval suite content* below. Case ids SHALL be unique across all sets.
 - R12. Each set SHALL carry a name, a description of what it covers and what it needs to run, and its cases. Each case SHALL carry an id, the question, an intent (what it probes) and its checks (id, name and description).
 - R13. The Evals tab SHALL open on the list of sets, each showing its name, "<N> questions" and its description, with no question shown and no run button. Clicking a set SHALL open it (revealing its questions, the datasource picker and the run button) and tick all of its questions; clicking the open set again SHALL close it and clear the ticks. Sets SHALL be unselectable while a run is starting or running.
 - R14. An open set SHALL show "<N> questions in <set name>. Each check must score 1.0 for its question to pass.", then the datasource picker, the run button, a **Select all** checkbox and the numbered question list.
@@ -107,6 +107,8 @@ World Cup set (`world-cup`; the REST set repeats these ten with ids `rest-<id>`,
 | `possession-vs-result` | In the 2022 knockout rounds, did the team with more possession usually win? | ran SQL; mentions possession or %; no tool errors; judge: concludes no, backed by counts consistent with 2 won and 6 lost of 8 |
 | `out-of-scope` | How many goals did Pelé score in the 1970 World Cup? | no tool errors; judge: says it cannot answer for 1970, states the data covers 2018 and/or 2022, invents no figure |
 | `visual-request` | Chart the goals scored by each team in the 2022 knockout stage. | tools called in order `run_readonly_sql` then `create_visual`; called `create_visual`; no tool errors; judge: a visual tool succeeded and plausibly charts goals per team for the 2022 knockouts |
+| `no-clarification-best-team` | Which team performed best? | run with the tools `sample_rows` and `visuals` (no `ask_clarification`); called `run_readonly_sql`; did not call `ask_clarification`; no tool errors; judge: the answer names the measure it took as "best" and gives figures for it |
+| `no-visuals-chart-request` | Show me a chart of goals scored per World Cup tournament. | run with the tools `sample_rows` and `ask_clarification` (no `visuals`); called `run_readonly_sql`; did not call `create_visual`; no tool errors; judge: the answer says it can't draw a visual here and gives the goals per tournament (23 in 2018, 24 in 2022) |
 
 Formula 1 set (`formula-1`), ids all prefixed `f1-`:
 
@@ -124,17 +126,17 @@ Formula 1 set (`formula-1`), ids all prefixed `f1-`:
 | `f1-visual-request` | Chart the total points scored by each constructor in the 2023 season. | tools in order `run_readonly_sql` then `create_visual`; called `create_visual`; no tool errors; judge: a visual tool succeeded and plausibly charts constructor points for 2023 |
 
 User agents (definitions)
-- R43. A user agent SHALL be a stored configuration of the assistant with: a `name` (required, trimmed, at most 64 characters, unique among user agents ignoring case), a `description` (at most 280), `instructions` (at most 4,000), `datasets` (dataset names, de-duplicated), `starterQuestions` (at most 5, each at most 200; blanks dropped, de-duplicated) and an optional `model` (a model or deployment name of the configured provider) and optional `reasoningEffort`. Over-long text SHALL be clipped to the limit.
-- R44. Every user agent SHALL have a **draft**. Publishing SHALL copy the draft to the **Live** version and record when. The status SHALL be `live` when a Live version exists, else `draft`. An agent has **unpublished changes** when it is Live and its draft differs from its Live version. Saving a draft SHALL NOT change the Live version.
+- R43. A user agent SHALL be a stored configuration of the assistant with: a `name` (required, trimmed, at most 64 characters, unique among user agents ignoring case), a `description` (at most 280), `instructions` (at most 4,000; may contain links, R81), `datasets` (dataset names, de-duplicated), `starterQuestions` (at most 5, each at most 200; blanks dropped, de-duplicated), an optional `model` (a model or deployment name of the configured provider), an optional `reasoningEffort`, and the stored lists `tools` and `skills`. **The links in the instructions are the only source of the agent's tools and skills** (ADR-0024): on every create and every draft save the backend SHALL derive `tools` (the optional tool groups the instructions link directly: `sample_rows`, `ask_clarification` and `visuals`) and `skills` (the ids of the in-app skills the instructions link, R68) from them, and SHALL ignore any `tools` or `skills` in the request. The tools an agent gets, including those its skills link, are in [agents.md](../../system/agents.md) 2.1; an agent saved before links, with no `tools`, keeps every tool (R85). Over-long text SHALL be clipped to the limit. A link to a tool that is not in the library SHALL be refused with `Unknown tool "<name>"`, a link to a skill that is neither a built-in on-demand skill (R82) nor one of the owner's with `Unknown skill "<name>"`, and more than 10 distinct linked in-app skills (a built-in skill link is not counted) with `An agent can have at most 10 skills` (R85).
+- R44. Every user agent SHALL have a **draft**. Publishing SHALL copy the draft to the **Live** version, together with a copy of each skill it names, and record when. A Live agent SHALL run on those copies until it is published again (R73). The status SHALL be `live` when a Live version exists, else `draft`. An agent has **unpublished changes** when it is Live and its draft differs from its Live version, or when a skill its draft names has changed since its copy was taken. Saving a draft SHALL NOT change the Live version.
 - R45. Publishing SHALL require a name and at least one dataset, else `Select at least one dataset to publish`. Creating a draft SHALL require only a name, else `Agent name is required`. A name already used by another user agent SHALL be refused with `An agent named "<name>" already exists`.
-- R46. Built-in agents SHALL NOT be created, edited, published or deleted through these operations: `Built-in agents can't be edited` and `Built-in agents can't be deleted`.
+- R46. Built-in agents SHALL NOT be created, edited, published or deleted through these operations: `Built-in agents can't be edited` and `Built-in agents can't be deleted`. Their **System Prompt** alone can be edited, through its own operations (R97-R105; [api.md](../../system/api.md) 103, 104).
 - R47. Any agent, built-in or user-built, SHALL be pinnable and unpinnable. A user agent's pin SHALL be stored with it and a built-in agent's pin in the app settings, so pins survive a restart.
-- R48. The agent catalogue SHALL list built-in and user agents together. Each entry SHALL carry its kind (`official` for the assistant, `system` for the five helpers, `user`), status (`builtin`, `draft` or `live`), pinned flag, owner (`Official`, `System` or `You`), whether it has unpublished changes, its datasets and starter questions, and `missingDatasets`: the dataset names in its effective configuration (Live version, else draft) that no longer exist.
-- R49. Requesting one agent SHALL resolve the key as a built-in agent first, then as a user-agent id. A user agent's detail SHALL report the assistant's tools, memory and resolved model, because it runs on the assistant, together with its draft and its Live version.
+- R48. The agent catalogue SHALL list built-in and user agents together. Each entry SHALL carry its kind (`official` for the assistant and the RFP Builder, `system` for the five helpers, `user`), status (`builtin`, `draft` or `live`), pinned flag, owner (`Official`, `System` or `You`), whether it has unpublished changes, its datasets and starter questions, and `missingDatasets`: the dataset names in its effective configuration (Live version, else draft) that no longer exist.
+- R49. Requesting one agent SHALL resolve the key as a built-in agent first, then as a user-agent id. A user agent's detail SHALL report the assistant's memory and resolved model, because it runs on the assistant, and the tools and prompt its tool selection gives it (Live version, else draft), together with its draft and its Live version.
 - R50. Deleting a user agent SHALL remove only its definition. Sessions that reference it SHALL keep their transcript (their behaviour is in [../sessions-chat/spec.md](../sessions-chat/spec.md)).
 - R51. Saving a draft, publishing, deleting or pinning an agent that does not exist SHALL fail with `Agent "<id>" not found` (an `ok: false` answer); requesting the detail of one SHALL fail with HTTP 404 as in R8.
 - R52. User agents SHALL persist across restarts of the backend.
-- R53. **Start chat** SHALL be offered for the Official agent and for Live user agents, on the hub card and in the detail view, and never for draft-only or System agents. On a Live user agent it SHALL create and open a session bound to the agent; on the Official agent it SHALL open the new-session screen. How such a session is created and runs is in [../sessions-chat/spec.md](../sessions-chat/spec.md) (R52-R59). When none of a Live agent's datasets exist, **Start chat** SHALL be disabled with the title `None of this agent's datasets exist`. While the session is being created the button SHALL be disabled; a refusal SHALL show the backend's message, or "Backend unreachable", as an error toast.
+- R53. **Start chat** SHALL be offered for the Official agents and for Live user agents, on the hub card and in the detail view, and never for draft-only or System agents. On a Live user agent it SHALL create and open a session bound to the agent; on the Official assistant, which declares no dataset, it SHALL open the new-session screen; on an Official agent that declares a dataset (the RFP Builder: `Intellify RFP API`) it SHALL create and open a session over that dataset, bound to the agent. While that dataset does not exist, the agent's `chatRequirement` SHALL be set and **Start chat** SHALL be disabled with it as its title (for the RFP Builder: `Load the "Intellify RFP API" sample in Settings → Testing Data first`). How such a session is created and runs is in [../sessions-chat/spec.md](../sessions-chat/spec.md) (R52-R59, R61). When none of a Live agent's datasets exist, **Start chat** SHALL be disabled with the title `None of this agent's datasets exist`. While the session is being created the button SHALL be disabled; a refusal SHALL show the backend's message, or "Backend unreachable", as an error toast.
 
 ### Agent editor
 
@@ -142,36 +144,118 @@ User agents (definitions)
 - R55. The editor SHALL hold these fields, which enforce the R43 limits as the user types:
   - **Name** (required, at most 64 characters);
   - **Description** (at most 280);
-  - **Instructions** (multi-line, at most 4,000), with the hint `Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply.`;
+  - **Instructions** (at most 4,000 characters, counting the saved text): the link editor (R81), with the hint `Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply. Type / to link a skill or a tool.`, and under it `Linked skills and tools decide what the agent gets. Every agent also gets the built-in skills and can always list, describe and query its datasets.`;
   - **Datasets**: one checkbox per existing dataset, by name. A dataset in the draft that no longer exists SHALL stay listed, ticked, as `<name> (missing)`, so the user can untick it. With no datasets at all: `No datasets yet — create one in Datasets first.`;
   - **Starter questions**: up to 5 single-line fields of at most 200 characters, each with a **Remove starter question** button, and **Add starter question**, disabled at 5;
   - **Model**: free text, a model or deployment name of the configured provider, with the placeholder `Default (<configured model>)`, or `Default` when no LLM is configured;
-  - **Reasoning effort**: `Default`, `Low`, `Medium` or `High`.
+  - **Reasoning effort**: `Default`, `Low`, `Medium` or `High`;
+  - no Skills or Tools checkboxes: the agent gets the skills and tools its instructions link (R43, R81).
 - R56. **Save** SHALL store the form as the draft, creating the agent on its first save (R45), and show the backend's message as a toast (`Agent "<name>" saved as draft`, then `Draft saved`). A refusal (`Agent name is required`, `An agent named "<name>" already exists`) SHALL show as an error toast and change nothing. Save SHALL be disabled while the name is blank, while nothing changed since the last save, or while a save is in flight.
 - R57. **Publish** SHALL first save the form when it has changes (R56; a refusal stops it), then publish the draft (R44, R45) and show `Agent "<name>" is Live` or the refusal, such as `Select at least one dataset to publish`. It SHALL be shown while the agent is new, has no Live version, has unpublished changes, or the form has changes.
 - R58. The editor's header SHALL show the agent's `Draft` or `Live` chip and, when it applies, `Unpublished changes`, updated after every save and publish. Editing a Live agent SHALL change only its draft: its sessions keep the Live version until the draft is published (R44; sessions-chat R54).
 - R59. **Back** SHALL return to the agent's detail view, or to the hub for an agent that was never saved. Leaving the editor in any way (Back, the rail, the drawer) with unsaved changes SHALL first ask `Discard unsaved changes?`. Cancelling SHALL keep the editor open with its changes.
-- R60. **Preview** SHALL open the **preview chat** in the right Details panel, beside the form (app-shell R10). While the editor is open, the Details panel SHALL always hold the preview chat, however it is opened. The preview SHALL behave like a session started from the agent (sessions-chat R54, R55, R58), titled `Preview`, except that it runs the saved **draft**:
+- R60. The agent page's **Chat Box** tab (R90) SHALL reuse this mechanism for a user agent: the same preview session over the saved draft, in the page instead of the Details panel. **Preview** SHALL open the **preview chat** in the right Details panel, beside the form (app-shell R10). While the editor is open, the Details panel SHALL always hold the preview chat, however it is opened. The preview SHALL behave like a session started from the agent (sessions-chat R54, R55, R58), titled `Preview`, except that it runs the saved **draft**:
   - sending a preview message SHALL first save the form when it has changes (R56; a refusal stops the send), so the preview always runs what Save stored;
-  - each preview turn SHALL use the draft's current instructions, model and effort overrides, and those of its datasets that exist;
+  - each preview turn SHALL use the draft's current instructions, model and effort overrides, the tools and skills its links select (R43, R82) with the current content of the linked skills, and those of its datasets that exist;
   - with no existing dataset in the draft, the panel SHALL say `Select at least one dataset to preview` and the composer SHALL be disabled.
-- R61. A preview conversation SHALL NOT be listed with the sessions or stored in the sessions collection. **Reset preview** SHALL discard it and start an empty one. Leaving the editor, or closing the Details panel, SHALL discard it together with its agent memory and workspace files. Preview conversations left behind when the app stopped SHALL be discarded at the next backend start.
+- R61. A preview conversation SHALL NOT be listed with the sessions or stored in the sessions collection. **Reset preview** SHALL discard it and start an empty one. Leaving the editor, or closing the Details panel, SHALL discard it together with its agent memory and workspace files. Preview conversations left behind when the app stopped SHALL be discarded at the next backend start. The same holds for the Chat Box tab's conversation: **New chat** discards it and leaving the agent page discards it (R90).
 
-### Ownership and permissions
+### Ownership (single user)
 
-- R62. In both modes user agents, their pins, pins of built-in agents and eval runs SHALL belong to the user who created them: each user sees only their own user agents (the Mine section) and their own pins and eval runs, and agent names are unique per owner. Viewing the hub, an agent's detail, its eval questions, Start chat and pinning need Use agents; New agent, Edit, Save, Publish, Delete and running, listing, downloading or deleting eval runs need Create, test and version agents, and their controls are hidden without it. Rules: [../admin/spec.md](../admin/spec.md) R21, R25, R29-R31.
+- R62. User agents, their pins, pins of built-in agents and eval runs SHALL belong to the one user (the built-in super admin; a stored `ownerId` is a legacy attribute, [data-model.md](../../system/data-model.md)): the user sees every user agent (the Mine section), pin and eval run, and agent names are unique. Every agent action is available: viewing the hub and an agent's detail, Start chat, pinning, New agent, Edit, Save, Publish, Delete and running, listing, downloading or deleting eval runs. Agent cards show `Owner: You`; nothing is shared and ownership cannot be transferred.
 
 ### Skills tab
 
-- R63. The agent detail SHALL have a read-only **Skills (<n>)** tab. It lists the skills the agent gets ([agents.md](../../system/agents.md) 7.3, 7.4), one per name. They all ship with the app: there are no user or project skills. Each skill SHALL show:
+- R63. The agent detail SHALL have a **Skills (<n>)** tab. For the Official agent and the System agents it SHALL be read-only. It lists the skills the agent gets ([agents.md](../../system/agents.md) 7.3, 7.4), one per name. They all ship with the app: there are no user or project skills. Each skill SHALL show:
   - its name and its description;
   - whether it loads on demand or is loaded by the app.
 
-  A user agent SHALL show the assistant's skills, with a line saying it runs on the assistant. An agent with no skills SHALL say so.
+  An agent with no skills SHALL say so. A user agent's Skills tab SHALL instead be the inline skill library of R95 and R96, not the list above. In the read-only tab, an in-app skill's `SKILL.md` SHALL show its tool links as read-only chips (R86); built-in skills stay plain text.
 - R64. Expanding a skill SHALL list every file in its folder, `SKILL.md` first, with `SKILL.md` selected. The selected file's content SHALL be shown exactly as stored. A file larger than 256 KB, or one that isn't text, SHALL be listed but its content not shown.
 - R65. Removed in roadmap 1.13.13: skills ship only with the app, so the tab no longer shows where they come from. (Previously: the built-in, user and project levels, with each folder's path or "not found".)
 - R66. Removed in roadmap 1.13.13: there are no user or project skills to skip. (Previously: a user or project skill that failed its checks was listed under Skipped, with its problems.)
-- R67. Nothing on the tab SHALL change a skill, and viewing it needs only Use agents (R62). The backend SHALL refuse a file path outside the skill's folder ([api.md](../../system/api.md) 34b). A `skills/` folder in the app's data dir, left by an older version, SHALL be ignored: its skills SHALL NOT be listed or reach any agent.
+- R67. Nothing on the tab SHALL change a skill, and viewing it needs nothing more (R62). The backend SHALL refuse a file path outside the skill's folder ([api.md](../../system/api.md) 34b). A `skills/` folder in the app's data dir, left by an older version, SHALL be ignored: its skills SHALL NOT be listed or reach any agent.
+
+### Skill library
+
+In-app skills: know-how a user writes in the app and assigns to their agents (ADR-0022; [data-model.md](../../system/data-model.md) 3.10.1; [agents.md](../../system/agents.md) 7.3).
+
+- R68. The Agent Hub's header SHALL offer **Skills**, beside **New agent**. It SHALL open the **skills library**, a page in the Agents area. **Back** SHALL return to the hub.
+- R69. The library's **Your skills** section (R75) SHALL list the user's skills sorted by name. Each row SHALL show the name, the description and the agents that use it (`Used by <names>`, or `Not used by any agent`), and open the skill editor. **New skill** SHALL open the skill editor empty. With no skills: `No skills yet. A skill is know-how an agent reads when a question needs it.`
+- R70. The **skill editor** SHALL hold: **Name**; **Description**, with the hint `Start with "Use when…". The agent reads the skill only when a question matches it.`; **Body**, the link editor of R81 limited to tools (R84), at most 20,000 characters; and **Reference files**, each a path field (`references/<file name>`) and a content field, with **Add reference file** (disabled at 10) and **Remove reference file**. Each field SHALL enforce its limit as the user types ([data-model.md](../../system/data-model.md) 3.10.1). Under the description the editor SHALL show **What the agent sees**: the catalog entry, the name and the description.
+- R71. **Save** SHALL create or save the skill and show `Skill "<name>" created` or `Skill saved`. A refusal SHALL show the backend's message as an error toast and change nothing ([api.md](../../system/api.md) 96). Save SHALL be disabled while nothing changed or while a save is in flight. Leaving with unsaved changes SHALL first ask `Discard unsaved changes?`.
+- R72. **Delete** SHALL ask `Delete "<name>"?`, followed by `Agents using it keep it in their Live version until republished.` when a Live agent uses it. When a draft of any of the user's agents links the skill, Delete and a rename of the skill SHALL be refused with the backend's message `"<name>" is linked by <agent names, comma-separated>. Unlink it first.` as an error toast, changing nothing. Otherwise deleting SHALL show `Skill "<name>" deleted` and return to the library.
+- R73. Changing or deleting a skill SHALL NOT change a Live agent. The agents whose draft links a changed skill SHALL show **Unpublished changes** (R44), and their sessions SHALL keep the copies taken at their last publish. A preview SHALL use the current skill.
+- R74. Skills SHALL belong to the one user (the built-in super admin; the stored `ownerId` is a legacy attribute, [data-model.md](../../system/data-model.md)). The user sees and assigns every skill, and **New skill**, **Save** and **Delete** are always shown (R62).
+
+### Built-in skills
+
+The built-in skills, edited in the app as overrides (ADR-0023; [data-model.md](../../system/data-model.md) 3.10.2; [agents.md](../../system/agents.md) 7.3).
+
+- R75. The skills library SHALL show two sections: **Your skills** (R69) and **Built-in · included in every agent**, listing only the built-in skills of the agents every user agent builds on (the assistant and the visual designer: `curated-knowledge`, `deep-analysis` and `interactive-visuals`; an Official agent's own skills, such as the RFP Builder's stage skills, show only on that agent's Skills tab) with their loading mode (`On demand` or `Loaded by the app`), their description as served, and a **Modified** chip when overridden. The built-in skills SHALL NOT be offered in the agent editor's Skills field; its hint SHALL add `Every agent also gets the built-in skills.`
+- R76. A built-in row SHALL open the **built-in skill editor**: Description, What the agent sees, Body, and the built-in's own files, each with its path read-only and its content editable. Files SHALL NOT be added or removed. A banner SHALL say `Changes apply to every session and agent as soon as you save. Run the evals to check them.`
+- R77. **Save** SHALL store the override and show `Built-in skill "<name>" saved`. It SHALL apply to the next call of every session, agent, deep analysis and visual, without a restart. A refusal SHALL show the backend's message as an error toast and change nothing ([api.md](../../system/api.md) 101); an override that drops a placeholder the app fills SHALL be refused.
+- R78. **Reset to built-in**, shown while the skill is modified, SHALL ask `Reset "<name>" to the built-in version?`, delete the override, show `Built-in skill "<name>" reset` and show the shipped content.
+- R79. When a modified built-in's shipped version has changed since the override was saved, the row and the editor SHALL say `The app's built-in version changed since this was edited. Review it, then save again or reset.`, and the editor SHALL offer **Show the built-in version**, the shipped content read-only. The override SHALL keep serving until it is saved again or reset.
+- R80. Overrides SHALL apply to every session and agent. Viewing the built-in skills, saving and resetting are available to the user. The agent page's Skills tab (R63) SHALL show a modified built-in with the **Modified** chip and its served content.
+
+### Links
+
+The editor and menu that link skills and tools in an agent's instructions and in a skill's body (ADR-0024; [../../system/ui.md](../../system/ui.md) 4.5.5; syntax and resolution in [../../system/agents.md](../../system/agents.md) 2.1 and 4.1).
+
+- R81. The **Instructions** field SHALL be a rich editor: plain text lines, with links shown as chips and saved as `[[skill:<name>]]` and `[[tool:<name>]]`. Typing `/` at the start of a line or after a space SHALL open a menu of skills (the in-app skills) and tools (the assistant's library), grouped Skills then Tools, up to 6 each (the Skills group holds the in-app skills, then the built-in on-demand skills, each marked with a `Built-in` suffix; in the assistant's prompt editor, R99, only the built-in ones), filtered as the user types by name or description. ArrowUp and ArrowDown move, Enter or Tab inserts the chip, Esc closes the menu. A `/` inside a word, as in `km/h`, SHALL NOT open it. The buttons **+ Link skill** and **+ Link tool** (in the assistant's prompt editor **+ Link skill or tool** and **+ Link tool**) SHALL open the same menu limited to that kind; when the user has not clicked into the editor the chip goes at the end. The text under the editor SHALL show `<n>/4,000`, counting the saved text with the links as saved.
+- R82. A chip SHALL show the name of the skill or tool: skills and tools in different colours, and a link to a skill or tool that no longer exists in a danger colour with the title `Not found`. What the agent gets: the always-on tools (`list_entities`, `describe_entity`, `run_readonly_sql` and `show_in_panel` ([agent-panel](../agent-panel/spec.md) R1); linking them is allowed and changes nothing), `read_file` while it has on-demand skills, the optional tools its instructions link, and the optional tools its linked skills link; linking either `create_visual` or `update_visual` SHALL give both. Its skills are the in-app skills its instructions link. A built-in on-demand skill (`curated-knowledge` today) may be linked as a mention: it gates nothing, since every agent gets the built-ins, it is not counted toward the 10-skill limit and is not stored in `skills`.
+- R83. Before the model sees them, every link SHALL become a plain mention: `[[tool:x]]` as `the "x" tool` and `[[skill:x]]` as `the "x" skill`. This applies to the agent's instructions and to an in-app skill's body when the model reads it ([../../system/agents.md](../../system/agents.md) 4.1, 7.3). The model never sees `[[`.
+- R84. In the skill editor the menu SHALL list tools only and the only button SHALL be **+ Link tool**. A skill body that links a skill SHALL be refused with `Skills can link tools only`, and a link to an unknown tool with `Unknown tool "<name>"`. Built-in skill bodies SHALL NOT have links.
+- R85. An agent saved before links, whose draft has no `tools`, or has `tools` or `skills` its instructions do not link, SHALL open in the editor with a new last line `Tools and skills: ` followed by a chip for each such item (no `tools` stands for `sample_rows`, `ask_clarification` and `create_visual`), and the notice `Links were added for what this agent had. Save to keep them.`, with the form unsaved. Until it is saved the agent keeps its stored tools, and an agent with no `tools` keeps every tool. Refusals on a create or draft save come after the name checks, in this order: `Unknown skill "<name>"`, `Unknown tool "<name>"`, `An agent can have at most 10 skills`.
+- R86. Read-only views of text with links (the System Prompt tab for a user agent when it is not being edited, R6, and an in-app skill's `SKILL.md` on the Skills tab, R63) SHALL show the same chips, not editable.
+
+### Tools, Graph and LLM Config tabs
+
+The agent detail's tabs for tools, their links and the model settings ([../../system/ui.md](../../system/ui.md) 4.5, 4.5.6, 4.5.7).
+
+- R87. For a user agent the **Tools** tab SHALL list every tool of the library by name with its status: `Always on` (the three data tools and `show_in_panel`), `Linked` or `Not linked`, and for a linked tool where the link comes from: `Linked from the instructions` and/or `Linked by <skill names>`. The status comes from the Live version, else the draft. A built-in agent's Tools tab is unchanged (R6).
+- R88. The **Graph** tab (user agents only) SHALL draw three columns, Instructions, the linked skills and the tools, with an edge for each link; hovering or focusing a node highlights its chain; a legend names Instructions, Skill, Tool and Always on; **Show unlinked** adds the unlinked skills and the not-linked tools, greyed. Under the drawing, `What happens on each message` lists four steps. A System agent's Graph tab SHALL say `This agent has no links: it gets all of its tools.`; an Official agent's Graph tab is R105.
+- R89. The **LLM Config** tab (every agent; it replaces the Model tab) SHALL be read-only and show `Provider`, `Model` (with ` (agent override)` when a user agent sets one), `API key` as `Set` or `Not set`, `Max output tokens` (`Default` when the app sets no cap, which is the case for the assistant today) and `Reasoning effort` (the effective one). The key's value SHALL never be shown or sent. Settings are changed in [../llm-settings/spec.md](../llm-settings/spec.md).
+
+### Agent page tabs
+
+The Chat Box, System Prompt and Skills tabs of the agent detail, which work as in the agent-poc reference (ADR-0025; [../../system/ui.md](../../system/ui.md) 4.5, 4.5.8-4.5.10). The other tabs are R6, R7, R87-R89.
+
+- R90. **Chat Box** SHALL be the first tab of a user agent and of the Official agent. It SHALL NOT exist for System agents, which have no chat.
+  - **User agent:** the tab SHALL hold a chat with the agent's **draft**, built on the preview mechanism of R60 and R61: an in-memory session that is not listed with the sessions, discarded when the user leaves the agent page and swept at the next backend start. The header SHALL read `Chat with the draft` and offer **New chat**, which discards the conversation and starts an empty one. It SHALL run what the draft stores: edits saved from the System Prompt tab (R93) apply to the next message of a new chat. When the draft has no existing dataset the tab SHALL say `Add a dataset to this agent to chat with it.` with an **Edit** link to the agent editor and no composer.
+  - **Official agent:** the tab SHALL say `Chats with the assistant run over datasets you choose.` and offer **Start chat** (R53), which opens the new-session screen.
+  - **RFP Builder:** the tab SHALL say `Chats with the RFP Builder run over the "Intellify RFP API" dataset.` and offer **Start chat** (R53), which creates a session bound to it ([sessions-chat](../sessions-chat/spec.md) R52), disabled with its requirement as the title while the dataset is missing.
+- R91. The tabs SHALL open on their defaults: **System Prompt** for System agents, **Chat Box** otherwise. The **System Prompt** tab for the Official and System agents SHALL show the prompt as served (R6), editable (R97-R105).
+- R92. On a user agent, the **System Prompt** tab SHALL show the assistant's core prompt read-only and collapsed, titled `Assistant core prompt (fixed)`, under the agent's own section, **Agent instructions**: the instructions with their links as chips (R86) and an **Edit** button. Only the agent's instructions are editable here; the core prompt is the Official agent's, edited on its own page (R97).
+- R93. **Edit** SHALL turn the section into the link editor of R81 over the draft's instructions, with:
+  - a toolbar with **+ Link skill or tool**, which opens the menu of R81 with both groups, and the hint `Type / to link a skill or tool. The agent only gets the skills and tools its instructions link.`;
+  - a `Linked:` row with a chip for each link (R82), or `none`, a broken link in the danger colour;
+  - when a link names a skill or tool that does not exist, the error `No <kind> named <name>. Remove the link or create the skill on the Skills tab.`, with ` (and others)` appended when more than one is broken;
+  - **Cancel**, which restores the saved text, and **Save prompt**, which reads `Saving…` while in flight and SHALL be disabled while saving, while the text is unchanged and while a link is broken.
+
+  **Save prompt** SHALL store the text as the draft, with the draft's other fields unchanged, and show the toast `Draft saved` (R56). The links derive the draft's `tools` and `skills` as always (R43). When the agent is Live, the header SHALL then show **Unpublished changes** (R44). The agent editor's Instructions field (R55) stays, and edits the same draft.
+- R94. Leaving the agent page, or switching to another agent or tab, with an unsaved System Prompt edit SHALL first ask `Discard unsaved changes?` (R59). Cancelling SHALL keep the edit open. The editor's character limit and counter are R81's.
+- R95. On a user agent, the **Skills** tab SHALL be the user's skill library inline (R68-R74), with no change of page:
+  - the user's skills, sorted by name, each row showing the name, the description, its linked tools as chips and a chip for this agent: `Linked` when the draft's links name the skill, `Not linked` when they do not;
+  - **New skill**, and **Edit** and **Delete** on each row, which open an inline form in the tab with the skill editor's fields and rules (R70-R72); **Save** and **Cancel** return to the list in the same tab. The new skill is `Not linked` until the agent's instructions link it (R93);
+  - the **Built-in · included in every agent** section as in the library (R75), read-only, with an **Edit** button on each row which opens the built-in skill editor (R76);
+  - the tab's number, `Skills (<n>)`, SHALL be the skills the draft links plus the built-in skills the agent gets.
+- R96. The Skills tab's **New skill**, **Edit** and **Delete** SHALL always be shown (R74). A refusal SHALL show as in R71 and R72, for instance a skill the agent's draft links cannot be deleted or renamed (R72), and the tab SHALL stay on the list or form.
+
+### Built-in agents' system prompts
+
+The System Prompt tab of the Official and System agents, edited in the app as overrides (ADR-0026; [data-model.md](../../system/data-model.md) 3.10.3; [api.md](../../system/api.md) 34, 103, 104; [agents.md](../../system/agents.md) 1.1 and 2.1-2.6; [ui.md](../../system/ui.md) 4.5.11).
+
+- R97. The System Prompt tab of a built-in agent SHALL show a `Built-in` chip and, while its prompt is overridden, a `Modified` chip, and SHALL show the prompt as served, read-only; for the Official agents (the assistant and the RFP Builder) the view is R105 (links as chips from the editable text). It SHALL offer **Edit**, and while modified **Reset to built-in**.
+- R98. **Edit** SHALL open an editor over the editable text ([agents.md](../../system/agents.md) 2.1 for the assistant; the shipped instructions for a System agent) with a banner `Changes apply to every session and agent as soon as you save. Run the evals to check them.`, **Cancel** and **Save prompt**. **Cancel** SHALL restore the saved text. **Save prompt** SHALL read `Saving…` while in flight and SHALL be disabled while saving, while the text is unchanged and while it is empty. Leaving with an unsaved edit SHALL ask `Discard unsaved changes?` (R59, R94).
+- R99. The assistant's editor SHALL be the link editor of R81, limited to tools and built-in on-demand skills: the buttons are **+ Link skill or tool** and **+ Link tool**, with the hint `Type / to link a built-in skill or a tool. Links here are mentions; the assistant keeps all its tools.` The `/` menu's Skills group lists only the built-in on-demand skills. A `[[skill:…]]` link to any other skill SHALL be refused (R101). The RFP Builder's editor SHALL be the same link editor, limited to its own tools (its RFP tools, `show_in_panel` and `ask_clarification`) and its own on-demand skills (its seven stage skills, [agents.md](../../system/agents.md) 7.4): the `/` menu lists only those, with the hint `Type / to link a tool or a built-in skill. Links here are mentions; the RFP Builder keeps all its tools.`; any other link SHALL be refused (R101). A System agent's editor SHALL be a plain monospace text area with the counter `<n>/20,000` and no link menu; any `[[…]]` SHALL be refused (R101).
+- R100. The assistant's editor SHALL show the read-only note `The ## Tools list is generated from the tools the assistant gets and is inserted before ## Working rules.` The `## Tools` section is not part of the editable text: it stays generated from the tools each call offers, and is inserted before the first line `## Working rules` of the override, or appended when there is none. A user agent's session gets it narrowed to its tool selection as before (R82). The RFP Builder's editor shows the same note naming it: `The ## Tools list is generated from the tools the RFP Builder gets and is inserted before ## Working rules.`
+- R101. **Save prompt** SHALL store the override and show the backend's message, `System prompt of "<name>" saved`. A refusal SHALL show the backend's message as an error toast and change nothing ([api.md](../../system/api.md) 103): an empty prompt, one over 20,000 characters, an assistant prompt that does not start with `You are the Questions to Insights assistant`, a link to a skill that is not a built-in on-demand skill (`Only built-in skills can be linked here: this prompt is shared by every user`), an unknown tool, an RFP Builder prompt that does not start with `You are the RFP Builder`, a link in it to a skill that is not one of its stage skills (`Only the RFP Builder's own skills can be linked here: this prompt is shared by every user`) or to a tool that is not its own (`Unknown tool "<name>"`), or a link in a System agent's prompt.
+- R102. **Reset to built-in**, shown while the prompt is modified, SHALL ask `Reset the system prompt of "<name>" to the built-in version?`, delete the override, show `System prompt of "<name>" reset` and show the shipped text.
+- R103. A save or a reset SHALL apply to the next call of every session, user agent, deep analysis, visual, SQL fix and verification, knowledge bootstrap and eval run, without a restart. With no override every prompt is the shipped one, unchanged. A user agent runs on the assistant, so an edit of the assistant's prompt changes its core prompt too. The code-enforced guards stay whatever the prompt says.
+- R104. When a modified prompt's shipped text has changed since the override was saved, the tab SHALL say `The app's built-in version changed since this was edited. Review it, then save again or reset.` and offer **Show the built-in version**, the shipped text read-only. The override SHALL keep serving until it is saved again or reset. Overrides SHALL apply to every session and agent. The eval baseline describes the shipped prompts; an eval run uses the overrides.
+- R105. The System Prompt tab of an Official agent (the assistant, the RFP Builder) SHALL render `prompt.editable` with its links as chips (R86) and, in place of the `## Tools` section, a muted note `## Tools — generated from the tools the assistant gets` (for the RFP Builder: `## Tools — generated from the tools the RFP Builder gets`); the generated list stays available in a collapsed `<details>` titled `Prompt as sent to the model` showing `instructions`. A chip is known when it names one of that agent's own tools or skills (the assistant: the library tools and the built-in on-demand skills; the RFP Builder: its tools and its stage skills). The Graph tab of an Official agent SHALL draw its prompt's links (instructions to skills and tools) with every one of its tools shown `Always on` and the linked ones joined to the instructions; for the RFP Builder that is instructions → each of its seven stage skills and → the RFP tools its prompt links, and each stage skill → the tools its body links (the built-in skill's `tools`, [api.md](../../system/api.md) 99). The message `This agent has no links: it gets all of its tools.` stays only for System agents (R88). The shipped assistant prompt links every tool it mentions and the built-in `curated-knowledge` skill, and the shipped RFP Builder prompt links every tool it mentions and its seven stage skills ([agents.md](../../system/agents.md) 2.8); the model sees them as plain mentions (R83).
 
 ## Edge cases and errors
 
@@ -195,17 +279,17 @@ User agents (definitions)
 ## Contracts
 
 - Agent definition endpoints `POST /agents`, `PUT /agents/:id/draft`, `POST /agents/:id/publish`, `DELETE /agents/:id`, `PUT /agents/:key/pin`, and the merged `GET /agents` / `GET /agents/:key`: [../../system/api.md](../../system/api.md) section 2.6.
-- Skills endpoints `GET /agents/:key/skills` and `GET /agents/:key/skills/:name/file`: [../../system/api.md](../../system/api.md) section 2.6. Where skills come from and how they are checked: [../../system/agents.md](../../system/agents.md) 7.3; the old user skill folder: [../../system/data-model.md](../../system/data-model.md) 4.8; decision ADR-0021.
+- Skills endpoints `GET /agents/:key/skills` and `GET /agents/:key/skills/:name/file`: [../../system/api.md](../../system/api.md) section 2.6. How skills load and are checked: [../../system/agents.md](../../system/agents.md) 7.3; the old user skill folder: [../../system/data-model.md](../../system/data-model.md) 4.8; decision ADR-0021.
 - The `agents` collection (user agents) and the built-in pins document: [../../system/data-model.md](../../system/data-model.md) sections 3.10 and 3.2; decision ADR-0008 in [../../system/architecture.md](../../system/architecture.md).
 - Endpoints `GET /agents`, `GET /agents/:key`, `GET /agents/:key/evals`, `POST /agents/:key/evals/run`, `GET /agents/:key/evals/runs`, `GET|DELETE /agents/:key/evals/runs/:jobId`, `GET /agents/:key/evals/runs/:jobId/download`: [../../system/api.md](../../system/api.md).
 - Eval run documents (run, per-question result, check result, tool call, regression summary): [../../system/data-model.md](../../system/data-model.md).
-- The six agents, the assistant's tools and memory settings, and the judge's prompt: [../../system/agents.md](../../system/agents.md).
+- The seven agents, the assistant's tools and memory settings, and the judge's prompt: [../../system/agents.md](../../system/agents.md).
 - Sample fixtures and their required entities: [../testing-data/spec.md](../testing-data/spec.md).
 - Terms: [../../product/glossary.md](../../product/glossary.md).
 
 ## UI
 
-Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Hub cards and agent detail also carry **Start chat** (R53); a user agent's detail carries **Edit**. Agent editor (R54-R61): new and edit titles, the form, saving, publishing, the unsaved-changes confirmation, and the preview chat in the Details panel (empty, no-dataset, running, reset). Agent detail: loading, error, six tabs (the Skills tab: loading, error, no skills, skill list, an expanded skill, a file that isn't shown), and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
+Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Hub cards and agent detail also carry **Start chat** (R53); a user agent's detail carries **Edit**. Agent editor (R54-R61, R81-R86): new and edit titles, the form with the link editor and its menu, saving, publishing, the unsaved-changes confirmation, and the preview chat in the Details panel (empty, no-dataset, running, reset). Agent detail: loading, error, its tabs (the Chat Box tab, the System Prompt tab in its read and edit states, the inline Skills tab of a user agent (R90-R96); the Graph tab for user agents; the LLM Config tab; the read-only Skills tab: loading, error, no skills, skill list, an expanded skill, a file that isn't shown), and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
 
 ## Flows
 
@@ -221,21 +305,23 @@ Feature: Agents
     Then I see the "sql-fixer" agent in the System section
     When I open the "Questions to Insights Assistant" agent
     Then I see the heading "Questions to Insights Assistant"
-    And the Prompt tab is shown, containing "You are the Questions to Insights assistant"
+    And the Chat Box tab is shown, with "Start chat"
+    When I open the System Prompt tab
+    Then I see "You are the Questions to Insights assistant"
     When I open the Tools tab
     Then I see "run_readonly_sql" and "ask_clarification"
     When I open the Memory tab
     Then I see "Recent messages replayed" and "40 messages"
-    When I open the Model tab
+    When I open the LLM Config tab
     Then I see "Provider"
     When I open the Evals tab
-    Then I see the "world-cup" set listed with "10 questions"
+    Then I see the "world-cup" set listed with "12 questions"
     And no individual question is shown
     And the run button is hidden
     When I open the "world-cup" set
     Then the "champion-2022" question shows "Who won the 2022 World Cup?"
     And it lists the check "Checks if output includes "Argentina""
-    And 10 questions are listed
+    And 12 questions are listed
     When I click the open "world-cup" set again
     Then no questions are listed
     When I click "All agents"
@@ -310,15 +396,15 @@ Feature: Agents
     Given a "World Cup PostgreSQL" datasource exists
     And a dataset containing the World Cup tables and views exists
     And I am on the "world-cup" set in the agent's Evals tab
-    Then the Questions sub-tab is shown with 10 questions
+    Then the Questions sub-tab is shown with 12 questions
     When I open the executions sub-tab
     Then I see "No eval runs yet"
     And no questions are listed
     When I return to the Questions sub-tab and click the run button
     And I open the executions sub-tab
-    Then the first execution shows "0/10 passed"
+    Then the first execution shows "0/12 passed"
     When I return to the Questions sub-tab
-    Then 10 questions are listed
+    Then 12 questions are listed
 
   Scenario: Downloads an execution as a Markdown report
     Given a "World Cup PostgreSQL" datasource exists
@@ -372,7 +458,7 @@ Feature: Agent Hub
     And I click the "Mine" filter
     Then I see only "Claims triage" and "Health plan analyst"
     When I click the "Official" filter
-    Then I see only "Questions to Insights Assistant"
+    Then I see only "Questions to Insights Assistant" and "RFP Builder"
     When I click the "Pinned" filter
     Then I see "No pinned agents yet."
     When I click the "All" filter
@@ -436,6 +522,14 @@ Feature: Agent Hub
     Then I see the toast 'Agent "Claims triage" deleted'
     And I am back on the Agent Hub, which no longer lists "Claims triage"
 
+  Scenario: Skills opens the skills library and Back returns to the hub
+    When I click "Agents"
+    Then I see the "Skills" button beside "New agent"
+    When I click "Skills"
+    Then I see the skills library
+    When I click "Back"
+    Then I am back on the Agent Hub
+
   Scenario: The hub has no detectable accessibility violations in either theme
     When I click "Agents"
     And I click "Show more (2)"
@@ -478,6 +572,14 @@ Feature: Agent skills
     And I see the skill "curated-knowledge", "On demand"
     And I see the skill "deep-analysis", "Loaded by the app"
     And I don't see the skill "sql-style"
+
+  Scenario: A user agent's Skills tab is its inline library, not the read-only list
+    Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
+    And a Live user agent "Finance helper" over "World Cup Core" whose instructions link the skill "fiscal-calendar"
+    When I open "Finance helper"
+    And I open the Skills tab
+    Then I see the skill "fiscal-calendar" with the chip "Linked" and the buttons "Edit" and "Delete"
+    And I see no "Where skills come from" section
 ```
 
 E2E: none yet for the Feature below.
@@ -528,7 +630,7 @@ Feature: Agents and evals behaviour not yet covered by Playwright
 
   Scenario: Shows the model an agent resolves to
     Given an LLM configuration is saved
-    When I open an agent's Model tab
+    When I open an agent's LLM Config tab
     Then I see its model identifier and provider
 
   Scenario: Reports an unknown agent
@@ -566,7 +668,7 @@ Feature: Agent editor
     When I send "Who won in 2014?" in the preview
     Then I see the stub's answer in the preview
     And the model received "Always name the tournament year." as the agent's instructions
-    And "Cup historian" is not listed in "Sessions navigation"
+    And "Cup historian" is not listed in the "Sessions" list
     When I click "Publish"
     Then I see the toast 'Agent "Cup historian" is Live'
     And the editor shows the chip "Live"
@@ -589,6 +691,86 @@ Feature: Agent editor
     Then the editor shows "Live" without "Unpublished changes"
     When I open the "Cup historian" session and send "And in 2010?"
     Then the model received "Talk like a pirate."
+
+  Scenario: Only linked tools are offered to the model
+    When I click "Agents"
+    And I click "New agent"
+    And I type "KPI lookup" into "Name"
+    And I tick "World Cup Core"
+    And I click "+ Link tool"
+    And I pick "sample_rows"
+    And I click "Save"
+    And I send "Who won in 2014?" in the preview
+    Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
+    And the model's prompt says "You can't ask the user a question back in this session."
+    When I click "Back"
+    Then the "Tools" tab lists "sample_rows" as "Linked" and "create_visual" as "Not linked"
+
+  Scenario: A linked skill reaches the preview, and the Live agent keeps its copy
+    Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year." and the body "Our fiscal year starts on 1 July."
+    When I click "Agents"
+    And I click "New agent"
+    And I type "Finance helper" into "Name"
+    And I tick "World Cup Core"
+    And I type "/fis" in "Instructions" and pick "fiscal-calendar"
+    And I click "Save"
+    And I send "What happened in fiscal 2018?" in the preview
+    Then the model's skill catalog lists "fiscal-calendar"
+    And the model's instructions contain 'the "fiscal-calendar" skill' and no "[["
+    When I click "Publish"
+    And I change the body of "fiscal-calendar" to "Our fiscal year starts on 1 April." in the skills library
+    Then "Finance helper" shows "Unpublished changes"
+    When I start a chat with "Finance helper" and the model loads "fiscal-calendar" with the skill tool
+    Then it gets "Our fiscal year starts on 1 July."
+
+  Scenario: A linked skill's tools come with it
+    Given a skill "chart-style" that links the tool "create_visual" in its body
+    When I click "Agents" and click "New agent"
+    And I type "Chart helper" into "Name"
+    And I tick "World Cup Core"
+    And I type "/char" in "Instructions" and pick "chart-style"
+    And I click "Save"
+    And I send "Chart the goals per year." in the preview
+    Then the model was offered "create_visual" and "update_visual" but not "sample_rows"
+    When I click "Back"
+    Then the "Tools" tab lists "create_visual" as "Linked" with "Linked by chart-style"
+
+  Scenario: A slash inside a word does not open the link menu
+    When I click "Agents" and click "New agent"
+    And I type "Speeds in km/h" into "Instructions"
+    Then no link menu is open
+    When I type " /" into "Instructions"
+    Then the link menu is open with "Skills" and "Tools"
+
+  Scenario: An unknown link is refused
+    Given a draft user agent "Cup historian" over "World Cup Core" whose instructions contain "[[skill:gone]]"
+    When I open "Cup historian" from "Agents" and click "Edit"
+    Then the chip "gone" is shown as not found
+    When I change "Description" and click "Save"
+    Then I see the error toast 'Unknown skill "gone"'
+
+  Scenario: An agent saved before links gets a links line
+    Given a draft user agent "Old timer" over "World Cup Core" with no tools list and the instructions "Be brief."
+    When I open "Old timer" from "Agents" and click "Edit"
+    Then the last line of "Instructions" is "Tools and skills:" followed by the chips "sample_rows", "ask_clarification" and "create_visual"
+    And I see "Links were added for what this agent had. Save to keep them."
+    And "Save" is enabled
+
+  Scenario: The Graph tab shows the chain from instructions to skill to tool
+    Given a skill "chart-style" that links the tool "create_visual" in its body
+    And a Live user agent "Chart helper" over "World Cup Core" whose instructions link "chart-style" and "sample_rows"
+    When I open "Chart helper" from "Agents" and open the Graph tab
+    Then I see the nodes "Instructions", "chart-style", "create_visual" and "sample_rows"
+    And the "create_visual" node is reached through "chart-style"
+    And I see "What happens on each message"
+    When I tick "Show unlinked"
+    Then "ask_clarification" is shown greyed
+
+  Scenario: The LLM Config tab shows whether the key is set and never the key
+    Given LLM settings with the API key "sk-secret-123" are saved
+    When I open the "Questions to Insights Assistant" agent and open the LLM Config tab
+    Then I see "API key" with "Set"
+    And I do not see "sk-secret-123" anywhere on the page
 
   Scenario: Sending in the preview saves the form first
     Given a draft user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
@@ -635,6 +817,79 @@ Feature: Agent editor
     When I untick "Gone (missing)" and click "Save"
     Then the "Cup historian" card no longer shows a missing-dataset note
 
+  Scenario: Editing the System Prompt in place saves a draft with the link
+    Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
+    And a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
+    When I open "Cup historian" from "Agents"
+    Then the Chat Box tab is shown
+    When I open the System Prompt tab
+    Then I see "Assistant core prompt (fixed)" collapsed and the instructions "Answer in one sentence."
+    When I click "Edit"
+    Then I see the hint "Type / to link a skill or tool. The agent only gets the skills and tools its instructions link."
+    And "Save prompt" is disabled
+    When I type " /fis" after the instructions' text and pick "fiscal-calendar"
+    Then the "Linked:" row shows the chip "fiscal-calendar"
+    When I click "Save prompt"
+    Then I see the toast "Draft saved"
+    And the header shows "Unpublished changes"
+    And the Skills tab shows "fiscal-calendar" as "Linked"
+
+  Scenario: A broken link disables Save prompt
+    Given a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
+    When I open "Cup historian" from "Agents", open the System Prompt tab and click "Edit"
+    And I type "[[skill:gone]]" at the end of the instructions
+    Then I see "No skill named gone. Remove the link or create the skill on the Skills tab."
+    And "Save prompt" is disabled
+    When I remove the broken link
+    Then the error is gone and "Save prompt" is disabled because nothing changed
+
+  Scenario: Leaving an unsaved System Prompt edit asks first
+    Given a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
+    When I open "Cup historian" from "Agents", open the System Prompt tab and click "Edit"
+    And I type " Be brief." and click "All agents"
+    Then I am asked "Discard unsaved changes?"
+    When I cancel
+    Then the System Prompt tab is still open with " Be brief." typed
+
+  Scenario: The Chat Box tab chats with the draft, and New chat starts over
+    Given a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
+    When I open "Cup historian" from "Agents"
+    Then the Chat Box tab shows "Chat with the draft" and "New chat"
+    When I send "Who won in 2014?" in the Chat Box
+    Then I see the stub's answer in the Chat Box
+    And the model received "Answer in one sentence." as the agent's instructions
+    And "Cup historian" is not listed in the "Sessions" list
+    When I click "New chat"
+    Then the Chat Box is empty
+    When I click "All agents" and open "Cup historian" again
+    Then the Chat Box is empty
+
+  Scenario: The Chat Box needs a dataset
+    Given a draft user agent "Empty historian" with no dataset
+    When I open "Empty historian" from "Agents"
+    Then the Chat Box tab shows "Add a dataset to this agent to chat with it." and an "Edit" link
+
+  Scenario: The Official agent's Chat Box offers Start chat
+    When I open "Questions to Insights Assistant" from "Agents"
+    Then the Chat Box tab shows "Chats with the assistant run over datasets you choose." and "Start chat"
+
+  Scenario: The Skills tab shows what is linked and creates a skill inline
+    Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
+    And a skill "chart-style" with the description "Use when drawing a chart." that links the tool "create_visual"
+    And a Live user agent "Finance helper" over "World Cup Core" whose instructions link the skill "fiscal-calendar"
+    When I open "Finance helper" from "Agents" and open the Skills tab
+    Then "fiscal-calendar" shows the chip "Linked"
+    And "chart-style" shows the chip "Not linked" and the tool chip "create_visual"
+    And I see the "Built-in · included in every agent" section
+    When I click "New skill"
+    And I fill the inline form with the name "fy-rules", the description "Use when a question names a fiscal year." and the body "The fiscal year starts on 1 July."
+    And I click "Save"
+    Then I see the toast 'Skill "fy-rules" created'
+    And "fy-rules" is listed in the tab as "Not linked"
+    And I am still on the Skills tab of "Finance helper"
+    When I click "Delete" on "fy-rules" and confirm
+    Then "fy-rules" is no longer listed
+
   Scenario: The editor has no detectable accessibility violations in either theme
     When I click "Agents" and click "New agent"
     And I click "Preview"
@@ -642,7 +897,196 @@ Feature: Agent editor
     And the axe scan reports no violations in the Dark theme
 ```
 
-E2E: none yet
+E2E: `frontend/e2e/skill-library.spec.ts`
+
+### Feature: Skill library
+
+The skills library and skill editor (R68-R74).
+
+```gherkin
+Feature: Skill library
+
+  Scenario: Creates, edits and deletes a skill
+    When I click "Agents"
+    And I click "Skills"
+    Then I see "No skills yet. A skill is know-how an agent reads when a question needs it."
+    When I click "New skill"
+    And I type "fiscal-calendar" into "Name"
+    And I type "Use when a question names a fiscal year." into "Description"
+    And I type "Our fiscal year starts on 1 July. See references/quarters.md." into "Body"
+    And I click "Save"
+    Then I see the error toast "The body names references/quarters.md, which this skill doesn't have"
+    When I click "Add reference file"
+    And I type "references/quarters.md" into "Path of reference file 1"
+    And I type "Q1 is July to September." into "Content of reference file 1"
+    And I click "Save"
+    Then I see the toast 'Skill "fiscal-calendar" created'
+    And "What the agent sees" shows "fiscal-calendar" and "Use when a question names a fiscal year."
+    When I click "Back"
+    Then the library lists "fiscal-calendar" with "Not used by any agent"
+    When I open "fiscal-calendar" and click "Delete" and confirm
+    Then I see the toast 'Skill "fiscal-calendar" deleted'
+    And I see "No skills yet. A skill is know-how an agent reads when a question needs it."
+
+  Scenario: Refuses a bad name or description
+    Given I am in the skill editor of a new skill
+    When I type "Fiscal Calendar" into "Name"
+    And I type "Use when a question names a fiscal year." into "Description"
+    And I type "Body" into "Body"
+    And I click "Save"
+    Then I see the error toast "Use lowercase letters, digits and single hyphens in a skill name"
+    When I replace the name with "curated-knowledge"
+    And I click "Save"
+    Then I see the error toast '"curated-knowledge" is the name of a built-in skill'
+    When I replace the name with "fiscal-calendar"
+    And I replace the description with "Fiscal calendar rules."
+    And I click "Save"
+    Then I see the error toast 'The description must start with "Use when"'
+
+  Scenario: A skill that an agent links can't be deleted or renamed
+    Given a skill "fiscal-calendar" and a draft user agent "Finance helper" whose instructions link it
+    When I open "fiscal-calendar" and click "Delete" and confirm
+    Then I see the error toast '"fiscal-calendar" is linked by Finance helper. Unlink it first.'
+    When I replace the name with "fiscal-rules" and click "Save"
+    Then I see the same error toast
+
+  Scenario: The skill editor links tools only
+    Given a skill "chart-style"
+    When I open "chart-style"
+    Then I see the button "+ Link tool" and no "+ Link skill"
+    When I type "/" at the end of "Body"
+    Then the link menu lists "Tools" and no "Skills"
+
+  Scenario: The library and the skill editor have no detectable accessibility violations in either theme
+    Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
+    When I click "Agents" and click "Skills"
+    Then the axe scan reports no violations in the Light theme
+    And the axe scan reports no violations in the Dark theme
+    When I open "fiscal-calendar"
+    Then the axe scan reports no violations in the Light theme
+    And the axe scan reports no violations in the Dark theme
+
+  Scenario: I edit a built-in skill, and Reset restores it
+    Given the model is the recording stub
+    When I click "Agents"
+    And I click "Skills"
+    Then the "Built-in · included in every agent" section lists "curated-knowledge", "deep-analysis" and "interactive-visuals"
+    When I open "curated-knowledge"
+    Then I see "Changes apply to every session and agent as soon as you save. Run the evals to check them."
+    When I replace the description with "Use when the turn carries curated knowledge: glossary, rules and filters."
+    And I click "Save"
+    Then I see the toast 'Built-in skill "curated-knowledge" saved'
+    And the row "curated-knowledge" shows "Modified"
+    When I ask the assistant "Who won in 2022?" in a new session
+    Then the model's catalog lists "curated-knowledge" with "Use when the turn carries curated knowledge: glossary, rules and filters."
+    When I open "curated-knowledge" in the skills library and click "Reset to built-in" and confirm
+    Then I see the toast 'Built-in skill "curated-knowledge" reset'
+    And the row "curated-knowledge" no longer shows "Modified"
+
+  Scenario: An override that drops a placeholder is refused
+    Given I am in the built-in skill editor of "deep-analysis"
+    When I remove every "{{" placeholder from "phases/1-plan.md"
+    And I click "Save"
+    Then I see an error toast starting "phases/1-plan.md must use the placeholders"
+    And the row "deep-analysis" does not show "Modified"
+
+```
+
+E2E: `frontend/e2e/builtin-agent-prompts.spec.ts`
+
+### Feature: Built-in agent prompts
+
+The System Prompt tab of the built-in agents (R97-R105). The model is the recording stub, so the system prompt of each request can be read.
+
+```gherkin
+Feature: Built-in agent prompts
+
+  Scenario: I edit the assistant's prompt, and Reset restores it
+    Given the model is the recording stub
+    When I open the "Questions to Insights Assistant" agent
+    And I open the System Prompt tab
+    Then I see the chip "Built-in" and no chip "Modified"
+    When I click "Edit"
+    Then I see "Changes apply to every session and agent as soon as you save. Run the evals to check them."
+    And I see "The ## Tools list is generated from the tools the assistant gets and is inserted before ## Working rules."
+    When I append the line "Always end an answer with the word Done." to the prompt
+    And I click "Save prompt"
+    Then I see the toast 'System prompt of "Questions to Insights Assistant" saved'
+    And I see the chip "Modified"
+    When I ask the assistant "Who won in 2022?" in a new session
+    Then the system prompt of the model's request contains "Always end an answer with the word Done."
+    And it still contains "## Tools"
+    When I open the System Prompt tab of the assistant, click "Reset to built-in" and confirm
+    Then I see the toast 'System prompt of "Questions to Insights Assistant" reset'
+    And I no longer see the chip "Modified"
+    When I ask the assistant "Who won in 2022?" in a new session
+    Then the system prompt of the model's request does not contain "Always end an answer with the word Done."
+
+  Scenario: A System agent's prompt is edited in a text area, with no link menu
+    When I open the "SQL Fixer" agent
+    And I click "Edit" on the System Prompt tab
+    Then I see a text area with the counter "<n>/20,000"
+    And I see no "+ Link tool" and no "+ Link skill"
+    When I type "[[tool:sample_rows]]" in the text area
+    And I click "Save prompt"
+    Then I see the error toast "This agent's prompt can't contain links"
+    And the row of the agent does not show "Modified"
+
+  Scenario: A skill link in the assistant's prompt is refused
+    Given I am editing the System Prompt of "Questions to Insights Assistant"
+    When I append "[[skill:sql-style]]" to the prompt
+    And I click "Save prompt"
+    Then I see the error toast "Only built-in skills can be linked here: this prompt is shared by every user"
+    And the prompt is not modified
+
+  Scenario: The shipped assistant prompt shows its tools and skill as chips and the model reads plain mentions
+    Given the model is the recording stub
+    When I open the "Questions to Insights Assistant" agent
+    And I open the System Prompt tab
+    Then I see tool chips such as "ask_clarification" and "run_readonly_sql" and a "curated-knowledge" chip
+    And I see "## Tools — generated from the tools the assistant gets"
+    And I see no "[[" in the prompt view
+    When I ask the assistant "Who won in 2022?" in a new session
+    Then the system prompt of the model's request contains 'Call the "ask_clarification" tool only when'
+    And it does not contain "[["
+
+  Scenario: A built-in skill link in the assistant's prompt is accepted
+    Given I am editing the System Prompt of "Questions to Insights Assistant"
+    When I append "[[skill:curated-knowledge]]" to the prompt
+    And I click "Save prompt"
+    Then I see the toast 'System prompt of "Questions to Insights Assistant" saved'
+
+  Scenario: The shipped RFP Builder prompt shows its tools and skill as chips and in the Graph tab
+    When I open the "RFP Builder" agent
+    And I open the System Prompt tab
+    Then I see tool chips such as "get_rfp" and "update_rfp" and an "rfp-client-renewal" chip
+    And I see "## Tools — generated from the tools the RFP Builder gets"
+    And I see no "[[" in the prompt view
+    When I open the Graph tab
+    Then I see the Instructions joined to the "rfp-client-renewal" skill and to the "get_rfp" tool
+    And I see the "rfp-client-renewal" skill joined to the "list_clients" tool
+    And I see every RFP Builder tool marked "Always on"
+    And I do not see "This agent has no links: it gets all of its tools."
+
+  Scenario: The RFP Builder's prompt links only its own tools and skill
+    Given I am editing the System Prompt of "RFP Builder"
+    When I type "/" in the prompt
+    Then the menu offers "rfp-carriers" and not "run_readonly_sql"
+    When I continue with "list_cl"
+    Then the menu offers "list_clients"
+    When I type "/run_readonly" instead
+    Then the menu offers nothing named "run_readonly_sql"
+    When I append "[[tool:run_readonly_sql]]" to the prompt
+    And I click "Save prompt"
+    Then I see the error toast 'Unknown tool "run_readonly_sql"'
+    When I replace it with "[[skill:curated-knowledge]]"
+    And I click "Save prompt"
+    Then I see the error toast "Only the RFP Builder's own skills can be linked here: this prompt is shared by every user"
+    And the prompt is not modified
+
+```
+
+E2E: `backend/test/user-agents.e2e-spec.ts`
 
 The Feature below is API-level. It is covered by the backend e2e `backend/test/user-agents.e2e-spec.ts`, not by Playwright.
 
@@ -684,11 +1128,52 @@ Feature: Agent definitions (API)
   Scenario: Deleting an agent
     When I delete "Health plan analyst"
     Then it is no longer listed
+
+  Scenario: Tools and skills are derived from the links in the instructions
+    Given a skill "fiscal-calendar"
+    When I create an agent named "Finance helper" with the "World Cup Core" dataset and the instructions "Use [[skill:fiscal-calendar]] and [[tool:sample_rows]]."
+    Then its draft names the tool "sample_rows" and the skill "fiscal-calendar", and its instructions are stored as written
+    When I create an agent named "Plain" with the instructions "Be brief." and the request lists tools "ask_clarification" and skills "fiscal-calendar"
+    Then its draft names no tools and no skills, because the lists are ignored
+
+  Scenario: Unknown links are refused
+    When I save a draft whose instructions link "[[tool:delete_everything]]"
+    Then I see 'Unknown tool "delete_everything"'
+    When I save a draft whose instructions link "[[skill:nope]]"
+    Then I see 'Unknown skill "nope"'
+    When I save a draft whose instructions link 11 distinct skills
+    Then I see "An agent can have at most 10 skills"
+
+  Scenario: A skill links tools only
+    When I create a skill whose body links "[[skill:other]]"
+    Then I see "Skills can link tools only"
+    When I create a skill whose body links "[[tool:delete_everything]]"
+    Then I see 'Unknown tool "delete_everything"'
+
+  Scenario: The detail of an agent shows its links and its LLM settings
+    Given a skill "chart-style" that links "create_visual" in its body and an agent whose instructions link it and "[[tool:sample_rows]]"
+    When I request the agent's detail
+    Then "toolLinks" lists "create_visual" as linked by "chart-style", "sample_rows" as linked from the instructions and "run_readonly_sql" as always on
+    And "llm" says whether an API key is configured and never carries the key
+
+  Scenario: A skill that an agent's draft links can't be deleted or renamed
+    Given a skill "fiscal-calendar" linked by the draft of "Finance helper"
+    When I delete the skill
+    Then I see '"fiscal-calendar" is linked by Finance helper. Unlink it first.'
+
+  Scenario: Publishing copies the skills and a later skill edit leaves the Live copy
+    Given a draft agent "Finance helper" with one dataset and instructions that link the skill "fiscal-calendar"
+    When I publish it
+    Then its Live version carries a copy of "fiscal-calendar"
+    When I change the body of "fiscal-calendar"
+    Then the agent shows "Unpublished changes" and its Live copy of "fiscal-calendar" is unchanged
+    When I publish it again
+    Then its Live copy carries the new body
 ```
 
 ## Acceptance
 
-- The nine `agents.spec.ts` scenarios pass, the nine `agent-hub.spec.ts` scenarios pass, and the eight `agent-editor.spec.ts` scenarios pass, with the axe scans of the hub and the editor clean in both themes.
+- The nine `agents.spec.ts` scenarios pass, the nine `agent-hub.spec.ts` scenarios pass, and the `agent-editor.spec.ts` scenarios pass, with the axe scans of the hub and the editor clean in both themes.
 - Running the `world-cup` set against the bundled sample with a working model finishes, records one result per ticked question, and every question's Details panel shows its checks and executed steps.
 - A second completed run on the same datasource and datasets produces a Markdown report with a "Compared to previous run" section; a run on a different datasource or dataset set does not.
 - Starting against a datasource with no datasets, or with datasets missing required entities, never spends model tokens and never leaves a run in history.

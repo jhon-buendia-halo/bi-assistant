@@ -6,11 +6,9 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Active visual.** The visual currently open in the right-hand panel. The assistant tailors it by default when the user asks for a change. See *Visual*.
 
-**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships six built-in agents (the assistant, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all.
+**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships seven built-in agents (the assistant, the *RFP Builder*, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all.
 
-**Agent error.** In *org server mode*, a chat turn in a session started from a *user agent* that ended in an error instead of an answer. A stopped turn, a refused request and a preview turn don't count. The admin Overview counts agents with errors in the last 7 days. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R40.
-
-**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, Mine and System, pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
+**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant and the *RFP Builder*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
 **Angle.** One sub-question of a *deep analysis*. A plan has between 3 and 5 angles (hard cap 5). Each is investigated on its own.
 
@@ -18,23 +16,21 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **App secret.** The key material from which the key that encrypts stored LLM API keys is derived. On desktop it is generated once and kept in a file in the data directory. See [non-functional.md](non-functional.md).
 
-**Approver.** A *role* that approves org-wide publishing of agents (*Approve org-wide publishing*, *View audit log*). Nothing uses it yet; the Requests epic does. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
-
 **Assistant.** The main agent. It answers business questions over a session's datasets, runs SQL, calls the visual tools and asks clarifying questions.
-
-**Bootstrap admin.** A person whose user name (for Entra ID the UPN, which usually looks like an email) is in the org server's bootstrap admin list (`ORG_BOOTSTRAP_ADMINS`). They hold *Platform admin* whenever they are signed in, without a stored assignment, so a new org server always has an admin. In *local mode* the bootstrap admin is always the *local user*, Demo User. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
 
 **Careful mode.** An opt-in per-turn setting in the chat. After the assistant answers, a second agent (the *SQL verifier*) re-derives the SQL independently, runs it, and compares its result set with the answer's. The answer gets an agree, disagree or error badge. Slower per answer. See *Cross-check*.
 
+**Carrier.** An insurer that writes one or more *lines of coverage*. A carrier is the *incumbent* on a client's line when it carries the client's live policy for that line. The *RFP Builder* proposes the carriers to invite to bid on an *RFP*. See [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md).
+
 **Catalog.** The top level of an *entity* name. A Databricks Unity Catalog catalog; the database name on PostgreSQL; `api` on a REST API datasource. See *Entity*.
+
+**Census.** A client's employee data for one plan year: headcount, eligible and enrolled employees, average age and salary, gender split, employees by state, enrolment by coverage tier and by employee class. The census names its own plans, which are mapped to the client's *plan designs*. It is the first *exhibit* of an *RFP package*.
 
 **Clarification.** A question the assistant asks the user, with 2 to 4 options, when interpretations diverge materially. The turn ends; the user's pick (or typed answer) arrives as the next message. At most one per user question.
 
 **Cross-check.** The result of *careful mode* on one answer: status `agree` (same results), `disagree` (results differ) or `error` (the check could not finish), plus a short note.
 
 **Data directory.** The folder holding all app data: application database, agent memory, observability data, per-session *workspaces* and the *app secret* file. Desktop and web mode use different data directories on purpose.
-
-**Data owner.** A *role* scoped to one *datasource*. It will approve access requests to that datasource (*Approve access to a data source*); until the Requests epic it guards nothing.
 
 **Developer observability.** An opt-in developer setting, off by default. When it is on, the backend exports agent traces to Arize Phoenix and backend traces, metrics and logs to an OpenTelemetry (OTLP) endpoint, in addition to the local observability store. It takes effect when the backend restarts. See [../capabilities/developer-settings/spec.md](../capabilities/developer-settings/spec.md).
 
@@ -66,6 +62,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Eval set.** A named group of eval cases bound to one *sample fixture* (World Cup on PostgreSQL, World Cup on REST, Formula 1).
 
+**Exhibit.** A table attached to an *RFP package* as a CSV file with a header row, computed from the Intellify data for the RFP's client and lines in scope: A census, B plan designs, C financials and D carriers.
+
 **Feedback.** The user's thumbs-up or thumbs-down on an answer. Thumbs-up also saves a *verified query*. Thumbs-down only marks the answer as wrong.
 
 **Fixture.** See *Sample fixture*.
@@ -74,7 +72,13 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Freeform visual.** A *visual* whose bundle is generated HTML, CSS and JavaScript, used when a *visual spec* cannot be produced. Tailoring a freeform visual stays freeform. Contrast *spec visual*.
 
-**Group mapping.** A rule that gives every member of an identity-provider group a *role* (for *Data owner*, on one datasource). Members get the role on their next request. Groups themselves come from the identity provider and are read-only in the app. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
+**Built-in agent prompt override.** An edit of the *system prompt* of a built-in agent (the assistant or a System agent), made on the agent's System Prompt tab. It is stored in the database, and replaces the shipped prompt on the next call, for every session and user agent, until **Reset to built-in** deletes it. The assistant's generated `## Tools` section is not part of the edited text. See [../system/data-model.md](../system/data-model.md) 3.10.3 and ADR-0026.
+
+**Built-in skill override.** An edit of a built-in *skill*, made in the skills library. It is stored in the database, and replaces the shipped skill on the next call until **Reset to built-in** deletes it. See [../system/data-model.md](../system/data-model.md) 3.10.2 and ADR-0023.
+
+**In-app skill.** A *skill* a user writes in the app (the skills library) instead of a folder: a name, a "Use when…" description, a body and reference files, stored in the database. It reaches a session only through a *user agent* whose instructions *link* it, and a *Live* agent runs on the copy taken when it was published. See [../system/data-model.md](../system/data-model.md) 3.10.1 and ADR-0022.
+
+**Intellify RFP API.** The REST API the app ships for the *RFP Builder*: read routes over the Intellify sample data and the store of *RFP* records, protected by an API key and described by an OpenAPI document. It starts with the app by default, on its own port, and can also run on its own. The app reaches it through the REST *datasource* that the "Intellify RFP API" *sample fixture* registers. See [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md) and ADR-0027.
 
 **Interpretation.** A one-line, deterministic summary of how an answer was produced (which entities, what kind of query), built by the system at save time. Never model output.
 
@@ -84,17 +88,13 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Knowledge used.** The list of knowledge entries that were actually included in the context of one answer, recorded when the context was built. It shows what the model was given, not what it applied.
 
+**Line of coverage.** A kind of employee benefit a client offers and a *carrier* insures, such as medical, dental, vision, life, disability, voluntary benefits or an employee assistance programme. The Intellify data has 12 (its *products*). Also called a *line*. An *RFP* markets one or more lines.
+
+**Link (skill or tool).** A reference written in an agent's instructions (or, for a tool, in an in-app skill's body) with `/` in the editor: shown as a chip, saved as `[[skill:<name>]]` or `[[tool:<name>]]`. The links decide which skills and optional tools the agent gets, and the model sees each as a plain mention (`the "x" tool`). See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R81-R86 and ADR-0024.
+
 **Live (agent).** The published version of a *user agent*. It is the version that starts sessions. Editing a Live agent changes only its *draft*, and the Live version keeps serving until the draft is published.
 
 **LLM provider.** The service the agents call. `openai`, `anthropic` or `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name). One global setting: provider, model, API key (stored encrypted, shown masked) and *reasoning effort*.
-
-**Local mode.** The default way the app runs, on one machine: you sign in as one of five *local personas*, without a password, and roles and ownership apply as in *org server mode*. The desktop app always runs in local mode. Opposite of *org server mode*. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
-
-**Local persona.** One of the five directory users that *local mode* seeds: Demo User, Uma User (User), Mark Maker (Maker), Dana Data Owner (Data owner of every datasource) and Avery Approver (Approver). Each shows what its role can do; none has a password.
-
-**Local user.** Demo User, the *local persona* with id `local`: always a *Platform admin* (as the *bootstrap admin*), and the owner of every item stored in local mode before local mode had sign-in.
-
-**Maker.** A *role* that can create, test, version and publish *user agents* (*Create, test and version agents*), and later share them.
 
 **Message.** One entry in a session's transcript, from the `user` or the `assistant`, with a timestamp that doubles as its identity (`at`). Assistant messages may carry data records, entities, a clarification, a visual event, feedback, a cross-check, a reasoning trail, knowledge used or a report.
 
@@ -102,19 +102,13 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Mined entry.** A *knowledge entry* with source `mined`.
 
-**Official agent.** The app's own *assistant*, shown in the agent hub as the Official agent. It is the only built-in agent that can start a chat.
+**Official agent.** One of the app's own agents that can start a chat: the *assistant* and the *RFP Builder*, shown in the agent hub's Official section. They are the only built-in agents that can start a chat.
 
-**Org server mode.** The app run by an organisation on its own server for many people: they sign in with Microsoft Entra ID, the directory is pushed by SCIM, *roles* decide what each person can do, and private data is kept per *owner*. Turned on by server configuration. Opposite of *local mode*. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
-
-**Ownership transfer.** A *Platform admin* moving one or more *user agents* to another *owner*, for example from a person who left. The agent keeps its *draft* and *Live* version; its sessions stay with their owners. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R64.
-
-**Owner.** The user who created a private item (a session with its visuals and memory, a user agent, a pin, a knowledge entry, a verified query, a metric, an eval run). Only the owner can see or change it. Datasources, datasets and the LLM configuration have no owner: they are shared org-wide. Stored as `ownerId`. In local mode, items stored before sign-in had none and were given to Demo User (the *local user*); on an org server an item without one belongs to nobody.
-
-**Permission.** One action a *role* allows, such as *Use agents in the gallery and chat* (`use-agents`) or *Manage datasources and datasets* (`manage-datasources`). Eleven in a fixed matrix; the server checks one on every request. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
+**Panel item.** One thing an agent showed in the right panel with `show_in_panel`, saved on the *session* with the time it was shown: a workspace file, a Markdown document, a query result table or a *visual*. The latest one is what the panel opens on; every one is listed in the *session panel*'s shown-items menu. See [agent-panel](../capabilities/agent-panel/spec.md).
 
 **Pin.** A user's mark on an agent, built-in or user-built, so it can be found quickly. Pins are stored locally and survive a restart.
 
-**Platform admin.** The *role* that holds every *permission*: manages users, roles, group mappings, policies, datasources, datasets and the LLM configuration, and sees the Admin area.
+**Plan design.** One benefit plan a client offers on a *line of coverage*: its carrier, funding type (for example fully insured or self-funded), plan type and state, with the financials of its coverage (premiums, rates by tier, enrolment, contributions and fees).
 
 **Preview chat.** A conversation in the agent editor's Details panel that runs a *user agent*'s saved *draft*. It is held in memory only, never listed with the sessions, and discarded with its memory when the editor closes.
 
@@ -122,11 +116,17 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Reasoning trail.** The "How I worked this out" list on an answer: one step per data-gathering call, with the assistant's plain-language rationale, the statement used and the outcome. The prose is the model's; ordering and outcomes come from what actually ran.
 
+**Renewal kick-off.** The date work on a line's renewal starts: the renewal effective date minus the policy's kick-off timing, a number of days. Intellify plans are taken to run by calendar year, so a renewal takes effect on 1 January after the plan year. An *RFP*'s timeline is built from the kick-off and the effective date.
+
 **Report.** The markdown output of a *deep analysis*: title, executive summary, findings by angle, data appendix.
 
 **Result guard.** A deterministic check on a query result that attaches a *warning*: a ratio of a sum to itself, a metric constant on every row, an unordered "top N".
 
-**Role.** A named set of *permissions* given to a user in *org server mode*: **User** (implicit for everyone signed in), *Maker*, *Data owner*, *Approver* or *Platform admin*. Roles are fixed and additive; a user's roles are their direct assignments plus their *group mappings*. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
+**RFP (request for proposal).** The document a benefits consultant sends *carriers* to invite bids on a client's *lines of coverage* at renewal. In the app, an RFP record kept by the *Intellify RFP API*: the client, plan year, effective date, status (`draft`, `ready`, `issued` or `closed`, moving forward only), the last completed stage, narrative sections, and the lines in scope, carriers invited, requirements and timeline. See [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md).
+
+**RFP Builder.** The second *Official agent*: a built-in agent that walks a Mercer benefits consultant through building an *RFP* for one client in seven stages over the Intellify data, saves each decision the consultant confirms through the *Intellify RFP API*, and assembles the *RFP package*. It has its own prompt, one skill per stage and its own tools, and no SQL tool. See [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md) and [../system/agents.md](../system/agents.md).
+
+**RFP package.** What the *RFP Builder* hands the consultant for one *RFP*: the RFP document in Markdown and PDF, the four *exhibits* as CSV files and a manifest, together in one zip that downloads from the chat. It is regenerated from the stored record and the live data on every export.
 
 **Row cap.** A limit on rows returned or stored. See [non-functional.md](non-functional.md). A result clipped by a cap is marked *truncated*.
 
@@ -136,11 +136,15 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Schema.** The middle level of an *entity* name.
 
-**Session.** One conversation with the assistant, bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Needs a name and at least one dataset. A session started from a *Live* *user agent* is bound to that agent and runs with its instructions (see [../capabilities/sessions-chat/spec.md](../capabilities/sessions-chat/spec.md), R52-R59). Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
+**Session.** One conversation with the assistant, bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Needs a name and at least one dataset. A session started from a *Live* *user agent* is bound to that agent and runs with its instructions (see [../capabilities/sessions-chat/spec.md](../capabilities/sessions-chat/spec.md), R52-R59). A session started from the *RFP Builder* is bound to it and runs it on every turn (see [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md)). Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
 
-**Skill.** A folder of instructions an agent gets: a `SKILL.md` (a name, a "Use when…" description, then a short phase map or router) plus the `phases/` and `reference/` files it names. It loads *on demand* (the model sees it in a catalog and reads it when a request matches) or *by the app* (code sends it when a condition holds). Every skill ships with the app; there are no user or project skills. The agent page's Skills tab shows them (see [../system/agents.md](../system/agents.md) 7.3, [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R63-R67).
+**Session panel.** The right-hand panel when the main view is a *session*'s chat. It shows one *panel item* at a time (the *visual* panel, a document, a file or a table), with a menu of everything shown in the session and a Download button. See [agent-panel](../capabilities/agent-panel/spec.md).
+
+**Skill.** A folder of instructions an agent gets: a `SKILL.md` (a name, a "Use when…" description, then a short phase map or router) plus the `phases/` and `reference/` files it names. It loads *on demand* (the framework lists it in a catalog and the model loads it with the skill tool when a request matches) or *by the app* (code sends it when a condition holds). Built-in skills ship with the app (there are no user or project skills); a user can also write *in-app skills* for her agents, and edit a built-in skill's text, which overrides the bundled one. The agent page's Skills tab shows them (see [../system/agents.md](../system/agents.md) 7.3, [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R63-R67).
 
 **Starter question.** One of up to five example questions a *user agent* carries. An empty session started from the agent offers them in its welcome block; clicking one fills the composer without sending it.
+
+**Super admin.** The one built-in user of the app, with the fixed id `local`. Every request is made as the super admin, who holds every capability: there is no sign-in, no password and no other user. Its name is not shown anywhere in the interface (agent cards say "Owner: You"). The `ownerId` that older versions stored on documents is kept as an inert attribute and used for nothing. See ADR-0030 in [../system/architecture.md](../system/architecture.md).
 
 **SQL repair.** When a statement fails with an engine error, the *SQL fixer* agent rewrites it and it is re-run, up to 2 repair attempts. The corrected SQL is what gets cited. Guard rejections and transport or auth failures are not repaired.
 
@@ -158,11 +162,11 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Tool call.** One invocation of a capability by the assistant during a turn. Data tools: `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`. Visual tools: `create_visual`, `update_visual`. UI tool: `ask_clarification`. Calls to the data tools are captured as *data records*.
 
+**Tool selection.** The optional *tool calls* a *user agent* lets the assistant make: any of `sample_rows`, `ask_clarification` and the visual tools. The data tools that list, describe and query the datasets are always on. A tool left out is not offered to the model, and the working rules that name it are replaced. See [../system/agents.md](../system/agents.md) 2.1 and ADR-0022.
+
 **Turn.** One user message and everything the assistant does in response, up to its final answer or a clarification. Includes streamed reasoning, tool calls and their results.
 
-**User status.** How the Admin area describes a directory user: **Active**, **Inactive** (no activity for 90 days or more), **Not signed in** (provisioned but never signed in) or **Deactivated** (turned off by the identity provider). Derived, never stored. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R39.
-
-**User agent.** An agent a user builds: a name, a description, instructions, the datasets it may query, starter questions and an optional model or reasoning-effort override. It runs on the *assistant* with the same tools and guards, and it has a *draft* and, once published, a *Live* version.
+**User agent.** An agent a user builds: a name, a description, instructions, the datasets it may query, starter questions and an optional model or reasoning-effort override. It runs on the *assistant* with the same guards and the tools its *tool selection* gives it, and it has a *draft* and, once published, a *Live* version.
 
 **Verified answer.** An answer whose final SQL matches a stored *verified query*, or that the user thumbed up. Shown with a "Verified" badge.
 
@@ -175,6 +179,12 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Visual version.** One immutable snapshot of a visual. Version 1 is created from the answer; each tailoring adds a version with its instruction. *Revert* moves the current-version pointer; it does not delete versions. A *refresh* re-runs the SQL and rewrites the current version's data in place without adding a version. An *auto-repair* version carries the instruction prefix `auto-repair: `.
 
 **Warning.** A fault note from a *result guard*, shown with the data record and returned to the assistant so it re-runs before answering.
+
+**Workflow bar.** The strip pinned under the page header, above the chat, that shows the steps of the process an agent is guiding the user through, the status of each (done, current, waiting for the user, skipped), and what the agent needs now. The agent drives it with `update_workflow`; its steps come from the agent's *workflow section*, or from the agent itself when it has none. See [agent-panel](../capabilities/agent-panel/spec.md) R13 to R20.
+
+**Workflow phase.** One step of an agent's *workflow section*: a numbered list line, optionally linked to the *skill* it uses. The agent marks the phase in progress and the completed phases with `update_workflow`, and the *workflow bar* shows them, with every step in its Details dropdown. See [agent-panel](../capabilities/agent-panel/spec.md) R8 and R16 to R17a.
+
+**Workflow section.** The part of an agent's instructions that starts at the line `## Workflow`; the app reads its numbered lines as the agent's *workflow phases*, so the workflow bar shows every phase from the first turn. See [agent-panel](../capabilities/agent-panel/spec.md) R8.
 
 **Workspace.** A contained folder on disk, one per session, where the session's visuals and reports are stored. Created with the session and rediscovered on restart. Legacy folder name: `project-<id>`.
 

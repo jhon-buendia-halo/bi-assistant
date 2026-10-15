@@ -1,10 +1,11 @@
-import { join } from 'path';
-import type { AppSkill } from '../app-skills';
+import { resolveLinks } from '../agent-links';
+import { type OptionalAgentTool, selects } from '../agent-tools';
 
 /**
- * The assistant's sectioned system prompt (ADR-0020, agents.md 2.1, 7.5 and
+ * The assistant's sectioned system prompt (ADR-0025, agents.md 2.1 and
  * Appendix A): identity, `## Tools` generated from the tools it is given,
- * `## Working rules`, then `## Skills` when it has on-demand skills.
+ * then `## Working rules`. On-demand skills are not in it: Mastra lists them
+ * and gives the model its skill tool.
  */
 
 export const ASSISTANT_IDENTITY: readonly string[] = [
@@ -19,7 +20,7 @@ export const ASSISTANT_IDENTITY: readonly string[] = [
 
 /** Rules A4-A12 and A19-A35; BA-210 sharpened A4, A12 and A32 and added A35. */
 export const ASSISTANT_WORKING_RULES: readonly string[] = [
-  'Call ask_clarification only when interpretations diverge materially —',
+  'Call [[tool:ask_clarification]] only when interpretations diverge materially —',
   'the metric or meaning itself is undefined ("best", "performed well",',
   '"top") or the choice would fundamentally change the analysis. In that',
   'case, ask first: one short question with 2-4 concrete options grounded',
@@ -30,8 +31,8 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   'it by checking coverage or by reporting every measure. You may also',
   'clarify mid-analysis when the real data turns out to be ambiguous — a',
   'filter value, member or entity name with several plausible matches — and',
-  'then the options must quote the actual values you found (via sample_rows',
-  '/ describe_entity), not invented ones. When only the scope is fuzzy —',
+  'then the options must quote the actual values you found (via [[tool:sample_rows]]',
+  '/ [[tool:describe_entity]]), not invented ones. When only the scope is fuzzy —',
   'which year, tournament or subset — and answering every reasonable scope',
   'is cheap, do NOT ask: run the analysis over the full scope (or the most',
   'natural default) and state the assumption in the answer, e.g. "Covering',
@@ -41,9 +42,9 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   're-asking.',
   '',
   'For every question:',
-  '1. Map the question to concrete entities and columns (list_entities,',
-  '   describe_entity; sample_rows when value formats are unclear).',
-  '2. Run the analysis yourself with run_readonly_sql. Prefer aggregations',
+  '1. Map the question to concrete entities and columns ([[tool:list_entities]],',
+  '   [[tool:describe_entity]]; [[tool:sample_rows]] when value formats are unclear).',
+  '2. Run the analysis yourself with [[tool:run_readonly_sql]]. Prefer aggregations',
   '   (GROUP BY, AVG/MIN/MAX, COUNT, window functions) so results come back',
   '   small and meaningful. Chain as many queries as the analysis needs —',
   '   never ask the user to run anything or wait for permission.',
@@ -52,7 +53,7 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   '',
   'Grounding:',
   "- Every factual claim about the session's data — names, scores, counts,",
-  '  dates, winners — must come from run_readonly_sql results you actually',
+  '  dates, winners — must come from results of [[tool:run_readonly_sql]] you actually',
   '  executed in this conversation. Never answer a data question from',
   '  general or parametric knowledge, even when you are confident of the',
   '  answer: run the query anyway, then answer from what it returns.',
@@ -67,7 +68,7 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   '  the question names.',
   '',
   'Say why, every time:',
-  '- run_readonly_sql and sample_rows both take a rationale. Write it in the',
+  '- [[tool:run_readonly_sql]] and [[tool:sample_rows]] both take a rationale. Write it in the',
   '  first person for a business reader: what this step checks and how it',
   '  gets you closer to the answer — "the question asks for cost per member',
   '  but no column holds that, so I first check how claims are keyed".',
@@ -77,19 +78,34 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   'Interactive visuals:',
   '- The session context lists existing visuals and which one is open in',
   '  the right panel. When the user asks to change, tweak, restyle or',
-  '  extend a visual, call update_visual (open visual by default) with a',
+  '  extend a visual, call [[tool:update_visual]] (open visual by default) with a',
   '  precise instruction, then confirm in one short sentence what changed.',
-  '- When the user asks for a chart/visual of an answer, call create_visual.',
+  '- When the user asks for a chart/visual of an answer, call [[tool:create_visual]].',
   '- Never paste HTML, CSS or JavaScript into the chat.',
+  '',
+  'Right panel:',
+  '- Call [[tool:show_in_panel]] when a result reads better beside the chat',
+  '  than in it: a document you wrote, a file in the workspace, a long query',
+  '  result as a sortable table, or a visual to bring back. Then say in one',
+  '  sentence what the panel shows.',
+  '',
+  'Workflow:',
+  '- When your instructions have a ## Workflow section, call',
+  '  [[tool:update_workflow]] when you start or finish a step, with a note',
+  '  saying what you need from the user, and todo with what the user must do',
+  '  for each open step.',
+  '- Without that section, when the user asks you to guide them through a',
+  '  process of several steps, create the steps with it first, each with its',
+  '  todo.',
   '',
   'Rules:',
   '- Always use fully-qualified catalog.schema.table names; only query',
   "  entities from the datasets. Write SQL in the dialect of the entity's",
   '  datasource (Databricks SQL, PostgreSQL or SQLite) and pass datasourceId to',
-  '  run_readonly_sql when the session spans more than one datasource.',
-  '- Sample values shown by describe_entity are real stored values — use',
+  '  [[tool:run_readonly_sql]] when the session spans more than one datasource.',
+  '- Sample values shown by [[tool:describe_entity]] are real stored values — use',
   "  them to match the user's phrasing to the values in the data. A curated",
-  '  [term] outranks your own reading of those values when they conflict.',
+  '  [term] (see [[skill:curated-knowledge]]) outranks your own reading of those values when they conflict.',
   '- Never dump raw schemas or column lists at the user unless they',
   '  explicitly ask for the schema — use that information internally.',
   '- If a query fails or times out, refine and retry (simpler aggregation,',
@@ -115,9 +131,111 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   '- A warning attached to a query result is about your own SQL. Act on it',
   '  and re-run before answering, rather than passing it to the user.',
   '- When the user asks what data they have, describe the datasets from the',
-  '  session context and describe_entity alone: answer without running any',
+  '  session context and [[tool:describe_entity]] alone: answer without running any',
   '  query.',
 ];
+
+/**
+ * The clarification paragraph (A4-A7) when `ask_clarification` is not
+ * selected (agents.md 2.1, ADR-0022).
+ */
+export const NO_CLARIFICATION_RULES: readonly string[] = [
+  "You can't ask the user a question back in this session. When a question is",
+  'ambiguous — an undefined measure such as "best", "top" or "performed well",',
+  'a fuzzy scope, or a name with several plausible matches in the data — pick',
+  'the most natural reading the data supports, run the analysis over it, and',
+  `state the assumption in the answer, e.g. "Taking 'best' as most matches`,
+  'won: ...". When answering every reasonable reading is cheap, cover them all',
+  'instead.',
+];
+
+/** The *Interactive visuals* block (A21-A23) when `visuals` is not selected. */
+export const NO_VISUALS_RULES: readonly string[] = [
+  'Interactive visuals:',
+  "- You can't create or change visuals in this session. When the user asks",
+  '  for a chart or visual, say so in one short sentence and give the numbers',
+  '  in the answer instead.',
+  '- Never paste HTML, CSS or JavaScript into the chat.',
+];
+
+/** Index of the line `text` in `lines`; throws when it is missing. */
+function lineIndex(lines: readonly string[], text: string, from = 0): number {
+  const index = lines.indexOf(text, from);
+  if (index < 0) throw new Error(`Working rules line not found: ${text}`);
+  return index;
+}
+
+/** `lines` with `[start, end]` (inclusive) replaced by `replacement`. */
+function replaceLines(
+  lines: readonly string[],
+  start: number,
+  end: number,
+  replacement: readonly string[],
+): string[] {
+  return [...lines.slice(0, start), ...replacement, ...lines.slice(end + 1)];
+}
+
+/** `lines` with the single line `from` replaced by `to`. */
+function swapLine(
+  lines: readonly string[],
+  from: string,
+  to: string,
+): string[] {
+  const index = lineIndex(lines, from);
+  return replaceLines(lines, index, index, [to]);
+}
+
+/**
+ * The `## Working rules` for a tool selection (agents.md 2.1): today's rules
+ * for every tool (undefined), else each rule that names an unselected tool
+ * replaced as a whole, word for word.
+ */
+export function assistantWorkingRules(
+  selection?: readonly OptionalAgentTool[],
+): string[] {
+  let rules = [...ASSISTANT_WORKING_RULES];
+  if (!selects(selection, 'sample_rows')) {
+    // Its three mentions: A5, step 1 of the method, and A19.
+    rules = swapLine(
+      rules,
+      'then the options must quote the actual values you found (via [[tool:sample_rows]]',
+      'then the options must quote the actual values you found (via',
+    );
+    rules = swapLine(
+      rules,
+      '/ [[tool:describe_entity]]), not invented ones. When only the scope is fuzzy —',
+      '[[tool:describe_entity]]), not invented ones. When only the scope is fuzzy —',
+    );
+    rules = swapLine(
+      rules,
+      '   [[tool:describe_entity]]; [[tool:sample_rows]] when value formats are unclear).',
+      '   [[tool:describe_entity]]).',
+    );
+    rules = swapLine(
+      rules,
+      '- [[tool:run_readonly_sql]] and [[tool:sample_rows]] both take a rationale. Write it in the',
+      '- [[tool:run_readonly_sql]] takes a rationale. Write it in the',
+    );
+  }
+  if (!selects(selection, 'ask_clarification')) {
+    const start = lineIndex(
+      rules,
+      'Call [[tool:ask_clarification]] only when interpretations diverge materially —',
+    );
+    const end = lineIndex(rules, 're-asking.', start);
+    rules = replaceLines(rules, start, end, NO_CLARIFICATION_RULES);
+  }
+  if (!selects(selection, 'visuals')) {
+    const start = lineIndex(rules, 'Interactive visuals:');
+    const end = lineIndex(
+      rules,
+      '- Never paste HTML, CSS or JavaScript into the chat.',
+      start,
+    );
+    rules = replaceLines(rules, start, end, NO_VISUALS_RULES);
+  }
+  return rules;
+}
 
 /** What the Tools section needs from a tool: its description and inputs. */
 export interface PromptTool {
@@ -146,56 +264,16 @@ export function toolLines(tools: Record<string, PromptTool>): string[] {
   );
 }
 
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-const RUN_SCRIPTS =
-  'Run bundled scripts with run_skill_script rather than reading them into context, unless SKILL.md says otherwise.';
-const NO_SCRIPTS =
-  "Bundled scripts can't be run here: don't read them into context unless SKILL.md says otherwise.";
-
-/** The `## Skills` section (agents.md 7.5); empty when there are no skills. */
-export function skillsSection(
-  skills: readonly Pick<AppSkill, 'name' | 'description' | 'dir'>[],
-  canRunScripts: boolean,
-): string[] {
-  if (!skills.length) return [];
-  return [
-    '## Skills',
-    'Skills are folders of instructions, scripts and references for specific kinds',
-    'of work. Below is the list of installed skills (name, description, location).',
-    '',
-    "Before starting any task that matches a skill's description, read that skill's",
-    'SKILL.md with read_file and follow it. Several skills may apply; read each one.',
-    'Read files that SKILL.md references only when the current step needs them.',
-    canRunScripts ? RUN_SCRIPTS : NO_SCRIPTS,
-    '',
-    '<available_skills>',
-    ...[...skills]
-      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-      .flatMap((skill) => [
-        '  <skill>',
-        `    <name>${escapeXml(skill.name)}</name>`,
-        `    <description>${escapeXml(skill.description)}</description>`,
-        `    <location>${escapeXml(join(skill.dir, 'SKILL.md'))}</location>`,
-        '  </skill>',
-      ]),
-    '</available_skills>',
-  ];
-}
-
-/** The whole prompt, lines joined with `\n`. */
+/**
+ * The whole prompt, lines joined with `\n`. `tools` are the tools the call
+ * is offered and `selection` the agent's tool selection: undefined (every
+ * tool) gives the full prompt of Appendix A unchanged (agents.md 2.1). The
+ * rules' links are resolved to plain mentions after the replacements.
+ */
 export function buildAssistantInstructions(
   tools: Record<string, PromptTool>,
-  skills: readonly Pick<AppSkill, 'name' | 'description' | 'dir'>[],
+  selection?: readonly OptionalAgentTool[],
 ): string {
-  const skillLines = skillsSection(skills, 'run_skill_script' in tools);
   return [
     ...ASSISTANT_IDENTITY,
     '',
@@ -203,7 +281,132 @@ export function buildAssistantInstructions(
     ...toolLines(tools),
     '',
     '## Working rules',
-    ...ASSISTANT_WORKING_RULES,
-    ...(skillLines.length ? ['', ...skillLines] : []),
+    ...assistantWorkingRules(selection).map(resolveLinks),
   ].join('\n');
+}
+
+/**
+ * The shipped editable text of the assistant (ADR-0026): the prompt without
+ * its generated `## Tools` section — identity, a blank line, `## Working
+ * rules`, then the rules for the full tool selection.
+ */
+export function assistantShippedPrompt(): string {
+  return [
+    ...ASSISTANT_IDENTITY,
+    '',
+    '## Working rules',
+    ...ASSISTANT_WORKING_RULES,
+  ].join('\n');
+}
+
+type Swap = [readonly string[], readonly string[]];
+
+/** First index at which `block` occurs as consecutive lines of `lines`. */
+function findBlock(lines: readonly string[], block: readonly string[]): number {
+  for (let i = 0; i + block.length <= lines.length; i += 1) {
+    if (block.every((line, j) => lines[i + j] === line)) return i;
+  }
+  return -1;
+}
+
+/** `lines` with the first verbatim `from` block swapped for `to`; as is when absent. */
+function swapBlock(lines: string[], [from, to]: Swap): string[] {
+  const at = findBlock(lines, from);
+  return at < 0 ? lines : replaceLines(lines, at, at + from.length - 1, to);
+}
+
+/** The shipped rules from `startLine` to `endLine`, to be replaced by `to`. */
+function shippedBlock(
+  startLine: string,
+  endLine: string,
+  to: readonly string[],
+): Swap {
+  const start = lineIndex(ASSISTANT_WORKING_RULES, startLine);
+  const end = lineIndex(ASSISTANT_WORKING_RULES, endLine, start);
+  return [ASSISTANT_WORKING_RULES.slice(start, end + 1), to];
+}
+
+/**
+ * The BA-217 replacements an unselected tool triggers, as whole blocks (the
+ * ones `assistantWorkingRules` applies to the shipped rules). The whole-
+ * paragraph ones come first: the `sample_rows` lines also sit inside the
+ * clarification paragraph.
+ */
+function selectionReplacements(
+  selection?: readonly OptionalAgentTool[],
+): Swap[] {
+  const swaps: Swap[] = [];
+  if (!selects(selection, 'ask_clarification')) {
+    swaps.push(
+      shippedBlock(
+        'Call [[tool:ask_clarification]] only when interpretations diverge materially —',
+        're-asking.',
+        NO_CLARIFICATION_RULES,
+      ),
+    );
+  }
+  if (!selects(selection, 'visuals')) {
+    swaps.push(
+      shippedBlock(
+        'Interactive visuals:',
+        '- Never paste HTML, CSS or JavaScript into the chat.',
+        NO_VISUALS_RULES,
+      ),
+    );
+  }
+  if (!selects(selection, 'sample_rows')) {
+    swaps.push(
+      [
+        [
+          'then the options must quote the actual values you found (via [[tool:sample_rows]]',
+        ],
+        ['then the options must quote the actual values you found (via'],
+      ],
+      [
+        [
+          '/ [[tool:describe_entity]]), not invented ones. When only the scope is fuzzy —',
+        ],
+        [
+          '[[tool:describe_entity]]), not invented ones. When only the scope is fuzzy —',
+        ],
+      ],
+      [
+        [
+          '   [[tool:describe_entity]]; [[tool:sample_rows]] when value formats are unclear).',
+        ],
+        ['   [[tool:describe_entity]]).'],
+      ],
+      [
+        [
+          '- [[tool:run_readonly_sql]] and [[tool:sample_rows]] both take a rationale. Write it in the',
+        ],
+        ['- [[tool:run_readonly_sql]] takes a rationale. Write it in the'],
+      ],
+    );
+  }
+  return swaps;
+}
+
+/**
+ * The prompt of a call under an in-app override (ADR-0026, agents.md 2.1):
+ * the override text with the BA-217 rule replacements applied to the blocks
+ * that match the shipped ones verbatim (an edited block stays as written),
+ * links turned into plain mentions, and the generated `## Tools` section
+ * inserted before the first line that is exactly `## Working rules`, or
+ * appended after a blank line when there is none.
+ */
+export function buildOverriddenAssistantInstructions(
+  override: string,
+  tools: Record<string, PromptTool>,
+  selection?: readonly OptionalAgentTool[],
+): string {
+  let lines = override.split('\n');
+  for (const swap of selectionReplacements(selection)) {
+    lines = swapBlock(lines, swap);
+  }
+  const body = resolveLinks(lines.join('\n')).split('\n');
+  const section = ['## Tools', ...toolLines(tools)];
+  const at = body.indexOf('## Working rules');
+  if (at < 0) return `${body.join('\n').trimEnd()}\n\n${section.join('\n')}`;
+  return [...body.slice(0, at), ...section, '', ...body.slice(at)].join('\n');
 }

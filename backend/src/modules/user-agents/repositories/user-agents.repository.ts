@@ -1,16 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { OWNED_AGENTS_STORE } from '../../../infrastructure/database/doc-store';
+import { AGENTS_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
 import type { UserAgentDoc } from '../entities/user-agent.entity';
 
 /**
- * User agents (the `agents` collection), most recently updated first.
- * Owner-scoped: each user sees only their own (data-model 3.15).
- */
+ * User agents (the `agents` collection), most recently updated first. */
 @Injectable()
 export class UserAgentsRepository {
   constructor(
-    @Inject(OWNED_AGENTS_STORE) private readonly store: DocStore<UserAgentDoc>,
+    @Inject(AGENTS_STORE) private readonly store: DocStore<UserAgentDoc>,
   ) {}
 
   list(): Promise<UserAgentDoc[]> {

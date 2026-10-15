@@ -9,12 +9,39 @@ import {
 import { randomUUID } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
 import { parseClarification } from '../../mastra/tools/clarification.tool';
+import { rfpTools } from '../../mastra/tools/rfp.tools';
+import { parseWorkflow } from '../../mastra/workflow-section';
+import { agentPromptOverrideFor } from '../../mastra/agent-prompt-overrides';
+import { assistantShippedPrompt } from '../../mastra/agents/assistant-prompt';
+import { RFP_PROMPT } from '../../mastra/agents/system-prompts';
+import {
+  RFP_CREATED_BY_CONTEXT_KEY,
+  TURN_RFP_CONTEXT_KEY,
+  isoToday,
+  rfpOrientationBlock,
+  type RfpOrientationRecord,
+  type TurnRfpHolder,
+} from '../../mastra/rfp-context';
+import { builtinAgentSession } from '../agents/builtin-sessions';
+import { RfpPackagesService } from '../rfp-packages/rfp-packages.service';
 import { MastraService } from '../../mastra/mastra.service';
 import {
   AGENT_OVERRIDES_CONTEXT_KEY,
   type AgentOverrides,
   resolveAgentModel,
 } from '../../mastra/model-resolver';
+import {
+  AGENT_TOOLS_CONTEXT_KEY,
+  isFullSelection,
+  selects,
+  toolSelectionFrom,
+} from '../../mastra/agent-tools';
+import {
+  AGENT_SKILLS_CONTEXT_KEY,
+  type AgentSkill,
+} from '../../mastra/agent-skills';
+import { effectiveOptionalTools, resolveLinks } from '../../mastra/agent-links';
+import { toSkillCopy } from '../skills/entities/skill.entity';
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import type { AgentConfig } from '../user-agents/entities/user-agent.entity';
 import {
@@ -23,7 +50,16 @@ import {
   type ProviderOptions,
 } from '../../mastra/model-compat';
 import { setDatasetToolServices } from '../../mastra/tool-services';
-import type { DatasetSnapshot, SqlRunResult } from '../../mastra/tool-services';
+import type {
+  DatasetSnapshot,
+  PanelToolInput,
+  PanelToolResult,
+  DatasetToolTurnRecord,
+  RfpPackageResult,
+  SqlRunResult,
+  WorkflowToolInput,
+  WorkflowToolResult,
+} from '../../mastra/tool-services';
 import { ASSISTANT_MAX_STEPS } from '../../mastra/agent-constants';
 import { sqlFixOutputSchema } from '../../mastra/agents/sql-fixer.agent';
 import { sqlVerifyOutputSchema } from '../../mastra/agents/sql-verifier.agent';
@@ -52,9 +88,19 @@ import { MetricsService } from '../metrics/metrics.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
-import { ActivityService } from '../auth/activity.service';
-import { CurrentUserService } from '../auth/current-user.service';
+import { SUPER_ADMIN } from '../../common/super-admin';
 import { sourceEntities } from './visualization-document';
+import {
+  buildPanelItem,
+  tableCsv,
+  titleSlug,
+  upsertPanelItem,
+  visualItemId,
+  withVisualItems,
+} from './panel-items';
+import { applyWorkflowUpdate, workflowViewOf } from './workflow-update';
+import { renderPdf } from '../../common/markdown-pdf';
+import { WorkspaceFileError, readWorkspaceFile } from './workspace-files';
 import { compareResults } from './result-compare';
 import {
   STORED_ROWS_CAP,
@@ -67,18 +113,48 @@ import {
 import {
   ChatMessage,
   CrossCheck,
+  FilePanelItem,
   InteractiveVisualization,
   MessageFeedback,
+  PanelItem,
   SessionAgentRef,
   SessionDoc,
   SessionView,
   SessionVisualization,
   ReasoningStep,
+  RfpPackageRef,
   ToolDataRecord,
   VisualEvent,
+  WorkflowPhase,
+  WorkflowState,
+  WorkflowView,
 } from './entities/session.entity';
 
 const VISUAL_TOOLS = new Set(['create_visual', 'update_visual']);
+/** The built-in panel tool (agents.md 3.11); its result becomes a `panel-item` event. */
+const SHOW_IN_PANEL_TOOL = 'show_in_panel';
+/** The workflow status bar's tool (agents.md 3.11); its result becomes a `workflow` event. */
+const UPDATE_WORKFLOW_TOOL = 'update_workflow';
+const UPDATE_RFP_TOOL = 'update_rfp';
+/** The RFP Builder's stages: `update_rfp`'s stage drives the workflow tracker. */
+const RFP_STAGES = 7;
+/** The agent a session without `agentKey` runs (agents.md 5.1). */
+const ASSISTANT_AGENT_KEY = 'assistant';
+/** The RFP Builder's registry key (agents.md 2.8, ADR-0028). */
+const RFP_AGENT_KEY = 'rfp';
+/** The RFP tools of agents.md 3.10: each emits a `tool-result` (api.md 3.1). */
+const RFP_TOOLS = new Set(
+  Object.keys(rfpTools).filter(
+    (name) =>
+      name !== 'ask_clarification' &&
+      name !== SHOW_IN_PANEL_TOOL &&
+      name !== UPDATE_WORKFLOW_TOOL,
+  ),
+);
+const EXPORT_RFP_PACKAGE_TOOLS = new Set([
+  'export_rfp_package',
+  'export_rfp_draft',
+]);
 /**
  * requestContext key carrying the curated-knowledge snippets this turn's
  * system block was built from, so the persist step can record them on the
@@ -114,7 +190,15 @@ const CROSS_CHECK_ROW_LIMIT = STORED_ROWS_CAP;
 
 export type StreamEvent = {
   type:
-    'reasoning' | 'text' | 'tool' | 'tool-result' | 'visual-updated' | 'done';
+    | 'reasoning'
+    | 'text'
+    | 'tool'
+    | 'tool-result'
+    | 'visual-updated'
+    | 'panel-item'
+    | 'workflow'
+    | 'rfp-package'
+    | 'done';
   content?: string;
   session?: SessionDoc;
 };
@@ -128,13 +212,9 @@ export class SessionsService implements OnModuleInit {
 
   /**
    * Preview sessions of the agent editor, held in memory only and never in
-   * the sessions collection (agents-evals R61, data-model 3.12), with the
-   * user who opened each: for anyone else it does not exist (data-model 3.15).
+   * the sessions collection (agents-evals R61, data-model 3.12).
    */
-  private readonly previews = new Map<
-    string,
-    { doc: SessionDoc; ownerId: string }
-  >();
+  private readonly previews = new Map<string, SessionDoc>();
 
   /**
    * Provider options filed under the bucket the configured model actually
@@ -161,20 +241,9 @@ export class SessionsService implements OnModuleInit {
     private readonly metrics: MetricsService,
     private readonly knowledge: KnowledgeService,
     private readonly userAgents: UserAgentsService,
-    // Defaulted so unit tests that never switch users can leave it out.
-    private readonly currentUser: CurrentUserService = new CurrentUserService(),
-    // Records agent errors in org server mode (admin R40); absent in unit tests.
-    @Optional() private readonly activity?: ActivityService,
+    // The RFP Builder's REST target and package export (agents.md 3.10).
+    @Optional() private readonly rfpPackages?: RfpPackagesService,
   ) {}
-
-  /** The current user's preview with this id, if any. */
-  private ownPreview(id: string): SessionDoc | undefined {
-    const entry = this.previews.get(id);
-    if (!entry || entry.ownerId !== this.currentUser.ownerKey()) {
-      return undefined;
-    }
-    return entry.doc;
-  }
 
   async onModuleInit(): Promise<void> {
     // Install the DI bridge the Mastra tools use (they load with no Nest DI).
@@ -211,6 +280,19 @@ export class SessionsService implements OnModuleInit {
         await this.saveVisualMetadata(session, metadata);
         return this.toolResult(metadata);
       },
+      showPanelItem: (sessionId, input, turnRecords) =>
+        this.showPanelItem(sessionId, input, turnRecords),
+      updateWorkflow: (sessionId, input) =>
+        this.updateWorkflow(sessionId, input),
+      restTarget: (datasourceId) =>
+        this.requireRfpPackages().restTarget(datasourceId),
+      exportRfpPackage: (sessionId, datasourceId, rfpId, options) =>
+        this.requireRfpPackages().exportRfpPackage(
+          sessionId,
+          datasourceId,
+          rfpId,
+          options,
+        ),
     });
 
     // A preview left open when the app stopped has no session left to own
@@ -218,9 +300,8 @@ export class SessionsService implements OnModuleInit {
     await this.sweepPreviews();
 
     // Backfill workspaces for sessions created before workspace support and
-    // restore their registrations after every process restart. Startup work:
-    // it walks every owner's sessions (data-model 3.15).
-    const sessions = await this.repository.listAllOwners();
+    // restore their registrations after every process restart.
+    const sessions = await this.repository.listAll();
     await Promise.all(
       sessions.map(async (session) => {
         const workspace = await this.mastra.ensureSessionWorkspace(
@@ -228,10 +309,7 @@ export class SessionsService implements OnModuleInit {
           session.name,
         );
         if (session.workspaceId !== workspace.id) {
-          await this.repository.setWorkspaceIdAnyOwner(
-            session.id,
-            workspace.id,
-          );
+          await this.repository.setWorkspaceId(session.id, workspace.id);
         }
       }),
     );
@@ -300,6 +378,33 @@ export class SessionsService implements OnModuleInit {
     if (overrides.model || overrides.reasoningEffort) {
       requestContext.set(AGENT_OVERRIDES_CONTEXT_KEY, overrides);
     }
+    // The agent's tool selection (ADR-0022): only a list without all three
+    // optional tools goes on the context; otherwise every tool is offered.
+    // The agent's in-app skills join the assistant's catalog (ADR-0022): the
+    // copies its Live version runs on, or for a preview the current skills.
+    const agentSkills = agent ? await this.agentSkillsFor(session) : [];
+    // The tools offered are those the instructions link plus those its
+    // skills link (ADR-0024); a config without `tools` keeps every tool.
+    if (agent?.tools) {
+      const tools = effectiveOptionalTools(agent.tools, agentSkills);
+      if (!isFullSelection(tools)) {
+        requestContext.set(AGENT_TOOLS_CONTEXT_KEY, tools);
+      }
+    }
+    if (agentSkills.length) {
+      requestContext.set(AGENT_SKILLS_CONTEXT_KEY, agentSkills);
+    }
+    const selection = toolSelectionFrom(requestContext);
+    const visualsBlock = selects(selection, 'visuals')
+      ? [
+          '',
+          'Interactive visuals in this session (id — title, current version):',
+          ...(visualLines.length ? visualLines : ['(none yet)']),
+          activeVisualId
+            ? `Visual currently open in the right panel: ${activeVisualId}.`
+            : 'No visual is open in the right panel.',
+        ]
+      : [];
     return {
       // Analysis often chains several schema + SQL tool calls per turn.
       maxSteps: ASSISTANT_MAX_STEPS,
@@ -313,18 +418,13 @@ export class SessionsService implements OnModuleInit {
         {
           role: 'system' as const,
           content: [
-            ...entityOrientationLines(session.datasets, datasets),
-            '',
-            'Interactive visuals in this session (id — title, current version):',
-            ...(visualLines.length ? visualLines : ['(none yet)']),
-            activeVisualId
-              ? `Visual currently open in the right panel: ${activeVisualId}.`
-              : 'No visual is open in the right panel.',
+            ...entityOrientationLines(session.datasets, datasets, selection),
+            ...visualsBlock,
           ].join('\n'),
         },
         ...(metrics ? [{ role: 'system' as const, content: metrics }] : []),
         // The knowledge block; its rules are the on-demand curated-knowledge
-        // skill in the catalog (ADR-0020).
+        // skill (ADR-0025).
         ...knowledgeContext(knowledge.block),
         ...(verified ? [{ role: 'system' as const, content: verified }] : []),
         // Last, so the base prompt and every curated block come first.
@@ -368,6 +468,24 @@ export class SessionsService implements OnModuleInit {
     return live;
   }
 
+  /**
+   * The skills a session's turns carry (agents.md 4.2): the `liveSkills`
+   * copies of the agent it was started from, or for a preview the current
+   * skills its draft names; none once the agent is gone.
+   */
+  private async agentSkillsFor(session: SessionDoc): Promise<AgentSkill[]> {
+    const doc = session.agentId
+      ? await this.userAgents.get(session.agentId)
+      : null;
+    if (!doc) return [];
+    if (session.preview) {
+      return (await this.userAgents.skillsFor(doc.draft.skills)).map(
+        toSkillCopy,
+      );
+    }
+    return doc.live ? (doc.liveSkills ?? []) : [];
+  }
+
   /** Chat turns: the shared grounding plus this session's memory thread. */
   private async agentOptions(
     session: SessionDoc,
@@ -375,6 +493,10 @@ export class SessionsService implements OnModuleInit {
     abortSignal?: AbortSignal,
     activeVisualId?: string,
   ) {
+    // A session bound to the RFP Builder gets its own context (ADR-0028).
+    if (session.agentKey === RFP_AGENT_KEY) {
+      return this.rfpAgentOptions(session, question, abortSignal);
+    }
     return {
       ...(await this.agentContext(
         session,
@@ -385,6 +507,105 @@ export class SessionsService implements OnModuleInit {
       // Each session is an isolated, persistent Mastra conversation.
       memory: { thread: session.id, resource: session.id },
     };
+  }
+
+  /**
+   * A turn of the RFP Builder (agents.md 4.1, 4.2, 5.1): Block R1 only, no
+   * metrics, knowledge, verified-query or agent-instructions block, and the
+   * `rfp` requestContext keys, with a fresh `turn-rfp` holder per turn.
+   */
+  private async rfpAgentOptions(
+    session: SessionDoc,
+    question?: string,
+    abortSignal?: AbortSignal,
+  ) {
+    const requestContext = new RequestContext();
+    requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
+    requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
+    if (question) requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
+    const workspace = await this.mastra.ensureSessionWorkspace(
+      session.id,
+      session.name,
+    );
+    requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
+    requestContext.set(RFP_CREATED_BY_CONTEXT_KEY, SUPER_ADMIN.id);
+    const turnRfp: TurnRfpHolder = {};
+    requestContext.set(TURN_RFP_CONTEXT_KEY, turnRfp);
+    const { reasoningEffort } = await this.llmService.getView();
+    return {
+      maxSteps: ASSISTANT_MAX_STEPS,
+      providerOptions: await this.providerOptions({ reasoningEffort }),
+      context: [
+        {
+          role: 'system' as const,
+          content: await this.rfpOrientation(session),
+        },
+      ],
+      requestContext,
+      abortSignal,
+      memory: { thread: session.id, resource: session.id },
+    };
+  }
+
+  /**
+   * Block R1 (agents.md 4.1): the REST datasource the RFP tools resolve, the
+   * session's active RFP read from the API when the turn starts, and today.
+   * An RFP that can't be read is reported as none active, never as an error.
+   */
+  private async rfpOrientation(session: SessionDoc): Promise<string> {
+    const datasource = await this.rfpDatasource(session);
+    if (!datasource) {
+      return [
+        'Intellify RFP API for this session: none (no dataset of this session is bound to a REST datasource).',
+        'No RFP is active in this session yet: start at stage 1.',
+        `Today is ${isoToday()}.`,
+      ].join('\n');
+    }
+    let rfp: RfpOrientationRecord | undefined;
+    if (session.rfpId && this.rfpPackages) {
+      try {
+        rfp = (await this.rfpPackages.getJson(
+          datasource.id,
+          `/v1/rfps/${encodeURIComponent(session.rfpId)}`,
+        )) as RfpOrientationRecord;
+      } catch (error) {
+        this.logger.warn(
+          `Could not read the active RFP ${session.rfpId} of session ${session.id}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+    return rfpOrientationBlock({
+      datasourceId: datasource.id,
+      datasourceName: datasource.name,
+      ...(rfp ? { rfp: { ...rfp, id: rfp.id ?? session.rfpId } } : {}),
+      today: isoToday(),
+    });
+  }
+
+  /** The first of the session's datasets bound to a REST datasource. */
+  private async rfpDatasource(
+    session: SessionDoc,
+  ): Promise<{ id: string; name: string } | undefined> {
+    const datasets = await this.boundDatasets(session.datasets);
+    const rest = session.datasets
+      .map((name) => datasets.find((dataset) => dataset.name === name))
+      .find((dataset) => dataset?.datasourceKind === 'rest');
+    if (!rest?.datasourceId) return undefined;
+    let name = rest.datasourceId;
+    try {
+      name = (await this.datasourcesService.get(rest.datasourceId)).name;
+    } catch {
+      // The id still names it.
+    }
+    return { id: rest.datasourceId, name };
+  }
+
+  /** The RFP package service, which only a unit test leaves out. */
+  private requireRfpPackages(): RfpPackagesService {
+    if (!this.rfpPackages) {
+      throw new Error('RFP packages are not available in this process');
+    }
+    return this.rfpPackages;
   }
 
   /**
@@ -786,7 +1007,7 @@ export class SessionsService implements OnModuleInit {
    * session's memory thread or workspace goes through here first.
    */
   async get(id: string): Promise<SessionDoc> {
-    const preview = this.ownPreview(id);
+    const preview = this.previews.get(id);
     if (preview) return { ...preview };
     const session = await this.repository.get(id);
     if (!session) throw new NotFoundException(`Session ${id} not found`);
@@ -819,9 +1040,26 @@ export class SessionsService implements OnModuleInit {
   /**
    * Start chat on a Live user agent (sessions-chat R52): named after the
    * agent, over those of its Live datasets that still exist, bound to it.
-   * Built-in agents are not stored, so their keys are "not found".
+   * A built-in agent that declares a dataset (the RFP Builder, R61) gets a
+   * session over that dataset, bound by its registry key; any other
+   * built-in key is "not found".
    */
-  async createFromAgent(agentId: string): Promise<SessionDoc> {
+  async createFromAgent(agentId: string, name?: string): Promise<SessionDoc> {
+    // An optional typed name (the New conversation screen) replaces the
+    // agent's default one; blank keeps the default.
+    const typed = typeof name === 'string' ? name.trim().slice(0, 64) : '';
+    const builtin = this.builtinSessionAgent(agentId);
+    if (builtin) {
+      const { datasetName, requirement } = builtin.session;
+      const existing = await this.userAgents.datasetNames();
+      if (!existing.has(datasetName)) {
+        throw new BadRequestException(requirement);
+      }
+      return this.insertSession(typed || builtin.name, [datasetName], {
+        agentKey: agentId,
+        agentName: builtin.name,
+      });
+    }
     const agent = await this.userAgents.get(agentId);
     if (!agent) throw new NotFoundException(`Agent "${agentId}" not found`);
     if (!agent.live) {
@@ -833,7 +1071,7 @@ export class SessionsService implements OnModuleInit {
     if (!datasets.length) {
       throw new BadRequestException("None of this agent's datasets exist");
     }
-    return this.insertSession(agent.live.name, datasets, {
+    return this.insertSession(typed || agent.live.name, datasets, {
       agentId,
       agentName: agent.live.name,
     });
@@ -868,10 +1106,7 @@ export class SessionsService implements OnModuleInit {
       createdAt: now,
       updatedAt: now,
     };
-    this.previews.set(id, {
-      doc: preview,
-      ownerId: this.currentUser.ownerKey(),
-    });
+    this.previews.set(id, preview);
     return { ...preview };
   }
 
@@ -907,24 +1142,21 @@ export class SessionsService implements OnModuleInit {
     id: string,
     patch: Partial<SessionDoc>,
   ): Promise<SessionDoc | null> {
-    const preview = this.ownPreview(id);
+    const preview = this.previews.get(id);
     if (!preview) return this.repository.update(id, patch);
     const updated = {
       ...preview,
       ...patch,
       updatedAt: new Date().toISOString(),
     };
-    this.previews.set(id, {
-      doc: updated,
-      ownerId: this.currentUser.ownerKey(),
-    });
+    this.previews.set(id, updated);
     return { ...updated };
   }
 
   private async insertSession(
     name: string,
     datasets: string[],
-    agent?: Pick<SessionDoc, 'agentId' | 'agentName'>,
+    agent?: Pick<SessionDoc, 'agentId' | 'agentName' | 'agentKey'>,
   ): Promise<SessionDoc> {
     const id = randomUUID();
     const workspace = await this.mastra.ensureSessionWorkspace(id, name);
@@ -941,30 +1173,328 @@ export class SessionsService implements OnModuleInit {
 
   /**
    * A session as the API returns it: the stored document plus the derived
-   * `agent` (api.md 2.1). Computed on every read, never stored.
+   * `agent`, `workflow` and the full `panelItems` list (api.md 2.1). Computed
+   * on every read, never stored.
    */
   async toView(session: SessionDoc): Promise<SessionView> {
-    if (!session.agentId) return session;
+    if (session.agentKey) {
+      return this.viewOf(session, this.builtinAgentRef(session));
+    }
+    if (!session.agentId) return this.viewOf(session);
     const doc = await this.userAgents.get(session.agentId);
     // A preview shows the draft it runs (api.md 2.1).
     const config = session.preview ? doc?.draft : doc?.live;
-    return { ...session, agent: agentRef(session, config) };
+    return this.viewOf(session, agentRef(session, config), config);
   }
 
   /** `toView` for a list, reading the agents once. */
   async toViews(sessions: SessionDoc[]): Promise<SessionView[]> {
-    if (!sessions.some((session) => session.agentId)) return sessions;
-    const agents = new Map(
-      (await this.userAgents.list()).map((doc) => [doc.id, doc.live]),
+    const agents = sessions.some((session) => session.agentId)
+      ? new Map((await this.userAgents.list()).map((doc) => [doc.id, doc.live]))
+      : new Map<string, AgentConfig | undefined>();
+    return sessions.map((session) => {
+      if (session.agentKey) {
+        return this.viewOf(session, this.builtinAgentRef(session));
+      }
+      if (!session.agentId) return this.viewOf(session);
+      const config = agents.get(session.agentId);
+      return this.viewOf(session, agentRef(session, config), config);
+    });
+  }
+
+  private viewOf(
+    session: SessionDoc,
+    agent?: SessionAgentRef,
+    config?: AgentConfig,
+  ): SessionView {
+    const workflow = workflowViewOf(
+      this.effectiveWorkflowFor(session, config),
+      session.workflowState,
     );
-    return sessions.map((session) =>
-      session.agentId
+    return {
+      ...session,
+      ...(agent ? { agent } : {}),
+      panelItems: withVisualItems(session),
+      ...(workflow ? { workflow } : {}),
+    };
+  }
+
+  /**
+   * The phases of the `## Workflow` section of the prompt the session runs
+   * (ADR-0029): the RFP Builder's prompt (override or shipped), a user
+   * agent's Live instructions when they have the section, else the
+   * assistant's prompt. `config` is the running agent version, when any.
+   */
+  effectiveWorkflowFor(
+    session: SessionDoc,
+    config?: AgentConfig,
+  ): WorkflowPhase[] {
+    if (session.agentKey) {
+      return session.agentKey === RFP_AGENT_KEY
+        ? parseWorkflow(
+            agentPromptOverrideFor(RFP_AGENT_KEY)?.prompt ?? RFP_PROMPT,
+          )
+        : [];
+    }
+    const own = config ? parseWorkflow(config.instructions) : [];
+    if (own.length) return own;
+    return parseWorkflow(
+      agentPromptOverrideFor(ASSISTANT_AGENT_KEY)?.prompt ??
+        assistantShippedPrompt(),
+    );
+  }
+
+  /** The agent version a session's turns run (its Live version; a preview's draft). */
+  private async runningConfig(
+    session: SessionDoc,
+  ): Promise<AgentConfig | undefined> {
+    if (!session.agentId) return undefined;
+    const doc = await this.userAgents.get(session.agentId);
+    return session.preview ? doc?.draft : doc?.live;
+  }
+
+  /**
+   * A registered built-in agent that declares a dataset for its sessions
+   * (ADR-0028), with its name; undefined for any other key.
+   */
+  private builtinSessionAgent(key: string) {
+    const session = builtinAgentSession(key);
+    const agent = session ? this.mastra.listAgents()[key] : undefined;
+    if (!session || !agent) return undefined;
+    return { agent, session, name: agent.name ?? key };
+  }
+
+  /**
+   * The `agent` of a session bound to a built-in agent (api.md 2.1): the
+   * registered agent's name and description and its built-in starters;
+   * never deleted.
+   */
+  private builtinAgentRef(session: SessionDoc): SessionAgentRef {
+    const key = session.agentKey ?? '';
+    const agent = this.mastra.listAgents()[key];
+    let description = '';
+    try {
+      description = agent?.getDescription() ?? '';
+    } catch {
+      description = '';
+    }
+    return {
+      id: key,
+      name: agent?.name ?? session.agentName ?? key,
+      deleted: false,
+      description,
+      starterQuestions: [...(builtinAgentSession(key)?.starterQuestions ?? [])],
+    };
+  }
+
+  // --------------------------------------------------------- panel items
+
+  /**
+   * The `show_in_panel` bridge (agents.md 3.11): validate the call, store the
+   * item on the session and return the summary the model sees. Throws the
+   * message the tool answers with.
+   */
+  private async showPanelItem(
+    sessionId: string,
+    input: PanelToolInput,
+    turnRecords?: DatasetToolTurnRecord[],
+  ): Promise<PanelToolResult> {
+    const session = await this.get(sessionId);
+    const { item, summary } = await buildPanelItem(input, {
+      session,
+      turnRecords,
+    });
+    await this.updateDoc(session.id, {
+      panelItems: upsertPanelItem(session.panelItems ?? [], item),
+    });
+    return summary;
+  }
+
+  /**
+   * The `update_workflow` bridge (agents.md 3.11): validate the call against
+   * the session's steps, save the state and return the summary the model sees.
+   * Throws the message the tool answers with.
+   */
+  private async updateWorkflow(
+    sessionId: string,
+    input: WorkflowToolInput,
+  ): Promise<WorkflowToolResult> {
+    const session = await this.get(sessionId);
+    const promptSteps = this.effectiveWorkflowFor(
+      session,
+      await this.runningConfig(session),
+    ).length;
+    const { state, result } = applyWorkflowUpdate(input, {
+      promptSteps,
+      state: session.workflowState,
+    });
+    await this.updateDoc(session.id, { workflowState: state });
+    return result;
+  }
+
+  /** The workflow view of a stored session, for the `workflow` event. */
+  private async workflowOf(
+    session: SessionDoc,
+  ): Promise<WorkflowView | undefined> {
+    return workflowViewOf(
+      this.effectiveWorkflowFor(session, await this.runningConfig(session)),
+      session.workflowState,
+    );
+  }
+
+  /** Emit the `workflow` event: the session's current workflow view (api.md 3.1). */
+  private async emitWorkflow(
+    sessionId: string,
+    emit: (event: StreamEvent) => void,
+  ): Promise<void> {
+    const workflow = await this.workflowOf(await this.get(sessionId));
+    if (workflow) {
+      emit({ type: 'workflow', content: JSON.stringify(workflow) });
+    }
+  }
+
+  /** Emit the `panel-item` event for a stored item (api.md 3.1). */
+  private async emitPanelItem(
+    sessionId: string,
+    itemId: string,
+    emit: (event: StreamEvent) => void,
+  ): Promise<void> {
+    const session = await this.get(sessionId);
+    const item = withVisualItems(session).find((i) => i.id === itemId);
+    if (!item) return;
+    emit({ type: 'panel-item', content: JSON.stringify({ item }) });
+  }
+
+  /**
+   * The RFP Builder's saved stage drives its tracker: the next stage is the
+   * current one, those up to it are done (ADR-0029).
+   */
+  private async driveRfpStage(
+    sessionId: string,
+    stage: number,
+    emit: (event: StreamEvent) => void,
+  ): Promise<void> {
+    const session = await this.get(sessionId);
+    if (!this.effectiveWorkflowFor(session).length) return;
+    const completed = Math.max(0, Math.min(Math.trunc(stage), RFP_STAGES));
+    const now = new Date().toISOString();
+    const current = Math.min(completed + 1, RFP_STAGES);
+    // The card belongs to the phase it was written for: moving on clears it,
+    // waiting included.
+    const previous = session.workflowState;
+    const card =
+      previous?.current === current
         ? {
-            ...session,
-            agent: agentRef(session, agents.get(session.agentId)),
+            ...(previous.waiting ? { waiting: true } : {}),
+            ...(previous.note ? { note: previous.note } : {}),
           }
-        : session,
-    );
+        : {};
+    const workflowState: WorkflowState = {
+      current,
+      done: Array.from({ length: completed }, (_, i) => i + 1),
+      ...(previous?.skipped?.length ? { skipped: previous.skipped } : {}),
+      ...(previous?.todos ? { todos: previous.todos } : {}),
+      ...card,
+      updatedAt: now,
+    };
+    await this.updateDoc(sessionId, { workflowState });
+    await this.emitWorkflow(sessionId, emit);
+  }
+
+  private requirePanelItem(session: SessionDoc, itemId: string): PanelItem {
+    const item = withVisualItems(session).find((i) => i.id === itemId);
+    if (!item) {
+      throw new NotFoundException(`Panel item "${itemId}" not found`);
+    }
+    return item;
+  }
+
+  /** A file item's text, read from the session workspace (api.md #106). */
+  async panelItemFile(
+    id: string,
+    itemId: string,
+  ): Promise<{ item: FilePanelItem; contentType: string; text: string }> {
+    const session = await this.get(id);
+    const item = this.requirePanelItem(session, itemId);
+    if (item.kind !== 'file') {
+      throw new BadRequestException(`Panel item "${itemId}" is not a file`);
+    }
+    try {
+      const file = await readWorkspaceFile(session.id, item.path);
+      return { item, contentType: file.contentType, text: file.text };
+    } catch (error) {
+      throw panelFileException(error);
+    }
+  }
+
+  /** A file, document or table item as an attachment (api.md #107). */
+  async downloadPanelItem(
+    id: string,
+    itemId: string,
+    format?: 'pdf' | 'md' | 'csv',
+  ): Promise<{ filename: string; contentType: string; body: Buffer }> {
+    const session = await this.get(id);
+    const item = this.requirePanelItem(session, itemId);
+    if (format === 'pdf') {
+      const cantPdf = () =>
+        new BadRequestException(
+          `Panel item "${itemId}" can't be downloaded as PDF`,
+        );
+      let markdown: string;
+      let filename: string;
+      if (item.kind === 'document') {
+        markdown = item.markdown;
+        filename = `${titleSlug(item.title) || 'document'}.pdf`;
+      } else if (item.kind === 'file' && /\.md$/i.test(item.path)) {
+        try {
+          markdown = (await readWorkspaceFile(session.id, item.path)).text;
+        } catch (error) {
+          throw panelFileException(error);
+        }
+        const base = item.path.split('/').pop() ?? item.path;
+        filename = base.replace(/\.md$/i, '.pdf');
+      } else {
+        throw cantPdf();
+      }
+      return {
+        filename,
+        contentType: 'application/pdf',
+        body: await renderPdf(markdown, {
+          title: item.title,
+          createdAt: new Date(),
+          author: 'Questions to Insights',
+        }),
+      };
+    }
+    switch (item.kind) {
+      case 'file':
+        try {
+          const file = await readWorkspaceFile(session.id, item.path);
+          return {
+            filename: item.path.split('/').pop() ?? item.path,
+            contentType: file.contentType,
+            body: file.body,
+          };
+        } catch (error) {
+          throw panelFileException(error);
+        }
+      case 'document':
+        return {
+          filename: `${titleSlug(item.title) || 'document'}.md`,
+          contentType: 'text/markdown',
+          body: Buffer.from(item.markdown, 'utf8'),
+        };
+      case 'table':
+        return {
+          filename: `${titleSlug(item.title) || 'table'}.csv`,
+          contentType: 'text/csv',
+          body: Buffer.from(tableCsv(item.columns, item.rows), 'utf8'),
+        };
+      default:
+        throw new BadRequestException(
+          `Panel item "${itemId}" can't be downloaded`,
+        );
+    }
   }
 
   // ------------------------------------------------------------- visuals
@@ -1005,6 +1535,20 @@ export class SessionsService implements OnModuleInit {
     version?: number,
   ): Promise<{ filename: string; archive: Buffer }> {
     return this.visuals.download(await this.get(id), visualizationId, version);
+  }
+
+  /**
+   * An RFP package stored in the session workspace, or one of its files
+   * (api.md #105). Owner-scoped: another user's session is not found.
+   */
+  async downloadRfpPackage(
+    id: string,
+    rfpId: string,
+    file?: string,
+    draft = false,
+  ): Promise<{ filename: string; contentType: string; body: Buffer }> {
+    const session = await this.get(id);
+    return this.requireRfpPackages().download(session.id, rfpId, file, draft);
   }
 
   async revertVisualization(
@@ -1134,6 +1678,14 @@ export class SessionsService implements OnModuleInit {
     );
     const patch: Partial<SessionDoc> = {
       visualizations: [...others, metadata],
+      // The visual joins the panel history, newest shown (ADR-0029).
+      panelItems: upsertPanelItem(fresh.panelItems ?? [], {
+        id: visualItemId(metadata.id),
+        kind: 'visual',
+        title: metadata.title,
+        shownAt: new Date().toISOString(),
+        visualId: metadata.id,
+      }),
     };
     if (event) {
       const verb =
@@ -1171,59 +1723,25 @@ export class SessionsService implements OnModuleInit {
     const trimmed = (content ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
     const session = await this.get(id);
-    try {
-      this.appendUserMessage(session, trimmed);
-      const agent = this.mastra.getAgent('assistant');
-      const input = await this.agentInput(agent, session);
-      const options = await this.agentOptions(session, trimmed);
-      const result = await agent.generate(input, options);
-      const reasoning = reasoningTrail(toolRecords(result));
-      const knowledge = knowledgeUsed(options.requestContext);
-      session.messages.push({
-        role: 'assistant',
-        content: (result.text ?? '').trim(),
-        at: new Date().toISOString(),
-        ...(reasoning ? { reasoning } : {}),
-        ...(knowledge ? { knowledge } : {}),
-      });
-      const updated = await this.updateDoc(id, {
-        messages: session.messages,
-      });
-      return updated ?? session;
-    } catch (error) {
-      await this.recordAgentError(session, error);
-      throw error;
-    }
-  }
-
-  /**
-   * An agent error (admin R40; api.md 3.1; data-model 3.14.7): in either
-   * mode, a turn in a session started from a user agent that ended in an
-   * error. Called only once the request reached the assistant, so an empty
-   * message or an unknown session never counts; a stopped turn, a preview
-   * and an agent this session no longer runs (deleted, or transferred to
-   * another owner) don't either. Recording never hides the turn's error.
-   */
-  private async recordAgentError(
-    session: SessionDoc,
-    error: unknown,
-    abortSignal?: AbortSignal,
-  ): Promise<void> {
-    if (abortSignal?.aborted) return;
-    if (!this.activity || !session.agentId || session.preview) return;
-    try {
-      if (!(await this.userAgents.get(session.agentId))) return;
-      const message = error instanceof Error ? error.message : String(error);
-      await this.activity.record('agent.turn-failed', {
-        actorId: this.currentUser.ownerKey(),
-        subjectId: session.agentId,
-        details: { sessionId: session.id, message: message.slice(0, 200) },
-      });
-    } catch (recordError) {
-      this.logger.warn(
-        `Could not record the agent error of session ${session.id}: ${recordError instanceof Error ? recordError.message : String(recordError)}`,
-      );
-    }
+    this.appendUserMessage(session, trimmed);
+    const agent = this.mastra.getAgent(session.agentKey ?? ASSISTANT_AGENT_KEY);
+    const input = await this.agentInput(agent, session);
+    const options = await this.agentOptions(session, trimmed);
+    const result = await agent.generate(input, options);
+    const reasoning = reasoningTrail(toolRecords(result));
+    const knowledge = knowledgeUsed(options.requestContext);
+    session.messages.push({
+      role: 'assistant',
+      content: (result.text ?? '').trim(),
+      at: new Date().toISOString(),
+      ...(reasoning ? { reasoning } : {}),
+      ...(knowledge ? { knowledge } : {}),
+    });
+    const updated = await this.updateDoc(id, {
+      messages: session.messages,
+      ...turnRfpPatch(session, options.requestContext),
+    });
+    return updated ?? session;
   }
 
   /**
@@ -1245,19 +1763,14 @@ export class SessionsService implements OnModuleInit {
     const trimmed = (content ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
     const session = await this.get(id);
-    try {
-      await this.streamTurn(
-        session,
-        trimmed,
-        emit,
-        abortSignal,
-        activeVisualId,
-        careful,
-      );
-    } catch (error) {
-      await this.recordAgentError(session, error, abortSignal);
-      throw error;
-    }
+    await this.streamTurn(
+      session,
+      trimmed,
+      emit,
+      abortSignal,
+      activeVisualId,
+      careful,
+    );
   }
 
   /** The streamed turn itself, once the request reached the assistant. */
@@ -1275,7 +1788,11 @@ export class SessionsService implements OnModuleInit {
     // provider is still connecting, and that turn should survive a reload.
     await this.updateDoc(id, { messages: session.messages });
 
-    const agent = this.mastra.getAgent('assistant');
+    // The session's agent: the assistant, or the built-in agent it is bound
+    // to (agents.md 5.1, ADR-0028).
+    const agentKey = session.agentKey ?? ASSISTANT_AGENT_KEY;
+    const isAssistant = agentKey === ASSISTANT_AGENT_KEY;
+    const agent = this.mastra.getAgent(agentKey);
     const input = await this.agentInput(agent, session);
     // Own controller so a clarification can end the model turn without the
     // client having disconnected.
@@ -1294,12 +1811,18 @@ export class SessionsService implements OnModuleInit {
     // tailored visual needs but that never touched the source answer). Fresh
     // RequestContext + array per call — no leakage across turns or sessions.
     const data: ToolDataRecord[] = [];
+    // The visual tools and `show_in_panel` read them, for every agent (agents.md 4.2).
     options.requestContext.set(TURN_RECORDS_CONTEXT_KEY, data);
     const stream = await agent.stream(input, options);
 
     let text = '';
     let clarification: ChatMessage['clarification'] | null = null;
     let visualEvent: VisualEvent | undefined;
+    // The package an `export_rfp_package` call stored this turn (RFP Builder).
+    let rfpPackage: RfpPackageRef | undefined;
+    // The RFP Builder's `turn-rfp` holder, and the stage the tracker last showed.
+    const rfpHolder = turnRfpHolder(options.requestContext);
+    let drivenStage: number | undefined;
     const pendingCalls = new Map<string, Record<string, unknown>>();
     // Every tool name the model actually invoked this turn — the zero-SQL-
     // turn grounding guard below fires only when this stays empty.
@@ -1342,11 +1865,18 @@ export class SessionsService implements OnModuleInit {
           // The client shows the reason before the result arrives, so the
           // rationale travels with the call, not with its rows.
           const rationale = statedRationale((payload.args ?? {})['rationale']);
+          // What the call is about, shown while it runs: the skill a skill
+          // tool loads, else the call's first text argument (api.md 3.1).
+          const input = toolCallInput(
+            payload.toolName ?? 'tool',
+            payload.args ?? {},
+          );
           emit({
             type: 'tool',
             content: JSON.stringify({
               name: payload.toolName ?? 'tool',
               ...(rationale ? { rationale } : {}),
+              ...(input ? { input } : {}),
             }),
           });
         } else if (chunk.type === 'tool-result') {
@@ -1393,6 +1923,80 @@ export class SessionsService implements OnModuleInit {
             });
             continue;
           }
+          if (toolName === SHOW_IN_PANEL_TOOL) {
+            const result = (payload.result ?? {}) as {
+              id?: string;
+              kind?: string;
+              title?: string;
+              error?: string;
+            };
+            if (!result.error && result.id) {
+              await this.emitPanelItem(id, result.id, emit);
+            }
+            emit({
+              type: 'tool-result',
+              content: JSON.stringify({
+                tool: toolName,
+                input:
+                  result.title ??
+                  (typeof args['title'] === 'string'
+                    ? args['title']
+                    : undefined),
+                error: result.error,
+              }),
+            });
+            continue;
+          }
+          if (toolName === UPDATE_WORKFLOW_TOOL) {
+            const error = resultError(payload.result);
+            if (!error) await this.emitWorkflow(id, emit);
+            emit({
+              type: 'tool-result',
+              content: JSON.stringify({
+                tool: toolName,
+                input:
+                  typeof args['note'] === 'string'
+                    ? args['note'].slice(0, 80)
+                    : undefined,
+                error,
+              }),
+            });
+            continue;
+          }
+          if (!isAssistant && RFP_TOOLS.has(toolName)) {
+            // Every RFP tool shows its step (api.md 3.1); a result with
+            // columns and rows is also kept as a data record (agents.md 5.1).
+            const error = resultError(payload.result);
+            if (EXPORT_RFP_PACKAGE_TOOLS.has(toolName) && !error) {
+              const stored = rfpPackageRef(payload.result);
+              if (stored) {
+                rfpPackage = stored;
+                emit({ type: 'rfp-package', content: JSON.stringify(stored) });
+              }
+            }
+            const record = toolDataRecord(toolName, args, payload.result);
+            if (record) data.push(record);
+            // A saved stage moves the tracker mid-turn (ADR-0029).
+            if (
+              toolName === UPDATE_RFP_TOOL &&
+              !error &&
+              rfpHolder?.stage !== undefined &&
+              rfpHolder.stage !== drivenStage
+            ) {
+              drivenStage = rfpHolder.stage;
+              await this.driveRfpStage(id, drivenStage, emit);
+            }
+            emit({
+              type: 'tool-result',
+              content: JSON.stringify({
+                tool: toolName,
+                input: firstStringArgument(args),
+                rowCount: record?.rowCount,
+                error,
+              }),
+            });
+            continue;
+          }
           const record = toolDataRecord(toolName, args, payload.result);
           if (record) {
             data.push(record);
@@ -1413,6 +2017,10 @@ export class SessionsService implements OnModuleInit {
       if (!turn.signal.aborted) throw error;
     } finally {
       abortSignal?.removeEventListener('abort', forwardAbort);
+    }
+    // The stage `create_rfp` or `get_rfp` reported moves the tracker too.
+    if (rfpHolder?.stage !== undefined && rfpHolder.stage !== drivenStage) {
+      await this.driveRfpStage(id, rfpHolder.stage, emit);
     }
     if (!turn.signal.aborted && !clarification && !text) {
       text = ((await stream.text) ?? '').trim();
@@ -1451,6 +2059,7 @@ export class SessionsService implements OnModuleInit {
     // it does not keep the streamed deltas), so overwriting `text` here is
     // enough to make the corrected answer the one the user ends up seeing.
     if (
+      isAssistant &&
       !turn.signal.aborted &&
       !clarification &&
       text.trim() &&
@@ -1485,12 +2094,14 @@ export class SessionsService implements OnModuleInit {
         ...(entities.length ? { entities } : {}),
         ...(reasoning ? { reasoning } : {}),
         ...(knowledge ? { knowledge } : {}),
+        ...(rfpPackage ? { rfpPackage } : {}),
       });
     } else if (text.trim() || visualEvent) {
       const interpretation = interpretationLine(data, entities);
       // Careful mode only, and only when there is a result set to corroborate.
+      // The assistant's only: another agent runs no SQL to cross-check.
       const crossChecked =
-        careful && !turn.signal.aborted
+        careful && isAssistant && !turn.signal.aborted
           ? await this.crossCheckAnswer(session, trimmed, data)
           : undefined;
       messages.push({
@@ -1509,9 +2120,13 @@ export class SessionsService implements OnModuleInit {
           : {}),
         ...(visualEvent ? { visual: visualEvent } : {}),
         ...(crossChecked ? { crossCheck: crossChecked } : {}),
+        ...(rfpPackage ? { rfpPackage } : {}),
       });
     }
-    const updated = await this.updateDoc(id, { messages });
+    const updated = await this.updateDoc(id, {
+      messages,
+      ...turnRfpPatch(session, options.requestContext),
+    });
     if (!turn.signal.aborted || clarification) {
       emit({ type: 'done', session: await this.toView(updated ?? fresh) });
     }
@@ -1753,6 +2368,106 @@ function reasoningTrail(
   return steps.length ? steps : undefined;
 }
 
+/**
+ * The session's new active RFP, from this turn's `turn-rfp` holder (agents.md
+ * 4.2, 5.1); nothing when the turn opened none or the same one.
+ */
+function turnRfpPatch(
+  session: SessionDoc,
+  requestContext: { get(key: string): unknown } | undefined,
+): Pick<SessionDoc, 'rfpId'> {
+  const holder = requestContext?.get(TURN_RFP_CONTEXT_KEY) as
+    TurnRfpHolder | undefined;
+  const rfpId = holder?.rfpId;
+  return typeof rfpId === 'string' && rfpId && rfpId !== session.rfpId
+    ? { rfpId }
+    : {};
+}
+
+/** This turn's `turn-rfp` holder, set for the RFP Builder only. */
+function turnRfpHolder(requestContext: {
+  get(key: string): unknown;
+}): TurnRfpHolder | undefined {
+  return requestContext.get(TURN_RFP_CONTEXT_KEY) as TurnRfpHolder | undefined;
+}
+
+/** A workspace file error as the API answers it: 404 for a missing file, else 400. */
+function panelFileException(error: unknown): Error {
+  if (error instanceof WorkspaceFileError) {
+    return error.reason === 'missing'
+      ? new NotFoundException(error.message)
+      : new BadRequestException(error.message);
+  }
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+/** The `{ error }` a tool answered with, if any. */
+function resultError(result: unknown): string | undefined {
+  const error = (result as { error?: unknown } | null | undefined)?.error;
+  return typeof error === 'string' ? error : undefined;
+}
+
+/** A tool call's first string argument: the step's input (api.md 3.1). */
+function firstStringArgument(
+  args: Record<string, unknown>,
+): string | undefined {
+  return Object.values(args).find(
+    (value): value is string => typeof value === 'string',
+  );
+}
+
+/** Longest `input` a `tool` event carries. */
+const TOOL_CALL_INPUT_CHARS = 200;
+
+/**
+ * The `input` of a `tool` event: for the framework's skill tools the skill
+ * (and file) they load or the search query, else the first text argument,
+ * flattened and clipped (api.md 3.1).
+ */
+export function toolCallInput(
+  toolName: string,
+  args: Record<string, unknown>,
+): string | undefined {
+  const text = (value: unknown) =>
+    typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  let input: string | undefined;
+  if (toolName === 'skill') input = text(args['name']);
+  else if (toolName === 'skill_read') {
+    const skill = text(args['skillName']);
+    const path = text(args['path']);
+    input = skill && path ? `${skill}/${path}` : (skill ?? path);
+  } else if (toolName === 'skill_search') input = text(args['query']);
+  else input = text(firstStringArgument(args));
+  if (!input) return undefined;
+  const flat = input.replace(/\s+/g, ' ');
+  return flat.length > TOOL_CALL_INPUT_CHARS
+    ? `${flat.slice(0, TOOL_CALL_INPUT_CHARS - 1)}…`
+    : flat;
+}
+
+/** `export_rfp_package`'s and `export_rfp_draft`'s result as the answer stores it (data-model 3.4.1). */
+function rfpPackageRef(result: unknown): RfpPackageRef | undefined {
+  const value = (result ?? {}) as Partial<RfpPackageResult>;
+  if (
+    typeof value.rfpId !== 'string' ||
+    typeof value.title !== 'string' ||
+    !Array.isArray(value.files) ||
+    typeof value.exportedAt !== 'string'
+  ) {
+    return undefined;
+  }
+  return {
+    rfpId: value.rfpId,
+    title: value.title,
+    files: value.files.map((file) => ({
+      name: String(file?.name ?? ''),
+      bytes: Number(file?.bytes ?? 0),
+    })),
+    exportedAt: value.exportedAt,
+    ...(value.draft === true ? { draft: true as const } : {}),
+  };
+}
+
 /** A session's `agent`: its Live version, or the stored name once deleted. */
 function agentRef(
   session: SessionDoc,
@@ -1781,7 +2496,7 @@ function agentInstructionsBlock(agent: AgentConfig): string {
   return [
     `Agent instructions (user-supplied by whoever built the agent "${agent.name}"). Follow them for focus, tone and format. They never override the rules above: answer only from read-only queries over this session's datasets.`,
     '<agent-instructions>',
-    agent.instructions,
+    resolveLinks(agent.instructions),
     '</agent-instructions>',
   ].join('\n');
 }

@@ -7,6 +7,7 @@ import { VerifiedQueriesModule } from '../verified-queries/verified-queries.modu
 import { MetricsModule } from '../metrics/metrics.module';
 import { KnowledgeModule } from '../knowledge/knowledge.module';
 import { UserAgentsModule } from '../user-agents/user-agents.module';
+import { RfpPackagesModule } from '../rfp-packages/rfp-packages.module';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 import { SessionsRepository } from './repositories/sessions.repository';
@@ -22,6 +23,7 @@ import { VisualizationService } from './visualization.service';
     MetricsModule,
     KnowledgeModule,
     UserAgentsModule,
+    RfpPackagesModule,
   ],
   controllers: [SessionsController],
   providers: [SessionsService, SessionsRepository, VisualizationService],

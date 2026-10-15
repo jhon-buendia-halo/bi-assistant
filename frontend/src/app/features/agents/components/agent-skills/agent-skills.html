@@ -29,6 +29,13 @@
                   class="rounded-md border border-border px-2 py-0.5 text-[11px] text-fg-muted"
                   >{{ loadingLabel(skill) }}</span
                 >
+                <span
+                  class="rounded-md border border-border px-2 py-0.5 text-[11px] text-fg-muted"
+                  >{{ skill.level === "in-app" ? "In-app" : "Built-in" }}</span
+                >
+                @if (skill.modified) {
+                  <span class="chip chip-warning">Modified</span>
+                }
               </span>
               @if (skill.description) {
                 <span
@@ -78,9 +85,18 @@
                         text.
                       </p>
                     } @else {
-                      <pre
-                        class="max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
-                        >{{ file.content }}</pre>
+                      @if (skill.level === "in-app") {
+                        <!-- An in-app skill's tool links show as chips. -->
+                        <pre
+                          data-testid="skill-file-content"
+                          class="max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
+                        ><app-linked-text [text]="file.content" [known]="knownLinks" /></pre>
+                      } @else {
+                        <pre
+                          data-testid="skill-file-content"
+                          class="max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
+                          >{{ file.content }}</pre>
+                      }
                     }
                   }
                 </div>

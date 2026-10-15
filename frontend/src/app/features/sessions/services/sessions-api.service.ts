@@ -2,11 +2,14 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
-import { AuthService } from '../../../core/auth/auth.service';
 import {
   DeepAnalysisResult,
   InteractiveVisualization,
+  PanelFileContent,
+  PanelItemEvent,
+  WorkflowView,
   MessageFeedback,
+  RfpPackage,
   Session,
   SessionActionResult,
   ToolDataRecord,
@@ -18,6 +21,8 @@ export interface ToolCallEvent {
   name: string;
   /** Plain-English reason the assistant reached for this tool. */
   rationale?: string;
+  /** What the call is about: the skill a skill tool loads, else its first text argument. */
+  input?: string;
 }
 
 /**
@@ -29,15 +34,19 @@ export function parseToolEvent(content: string): ToolCallEvent {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (parsed && typeof parsed === 'object') {
-      const { name, rationale } = parsed as {
+      const { name, rationale, input } = parsed as {
         name?: unknown;
         rationale?: unknown;
+        input?: unknown;
       };
       if (typeof name === 'string' && name.trim()) {
         return {
           name: name.trim(),
           ...(typeof rationale === 'string' && rationale.trim()
             ? { rationale: rationale.trim() }
+            : {}),
+          ...(typeof input === 'string' && input.trim()
+            ? { input: input.trim() }
             : {}),
         };
       }
@@ -51,7 +60,6 @@ export function parseToolEvent(content: string): ToolCallEvent {
 @Injectable({ providedIn: 'root' })
 export class SessionsApiService {
   private readonly http = inject(HttpClient);
-  private readonly auth = inject(AuthService);
 
   list(): Observable<{ sessions: Session[] }> {
     return this.http.get<{ sessions: Session[] }>(`${API_BASE_URL}/sessions`);
@@ -121,9 +129,13 @@ export class SessionsApiService {
   }
 
   /** Start a session bound to a Live user agent, named after it (R52). */
-  createFromAgent(agentId: string): Observable<SessionActionResult> {
+  createFromAgent(
+    agentId: string,
+    name?: string,
+  ): Observable<SessionActionResult> {
     return this.http.post<SessionActionResult>(`${API_BASE_URL}/sessions`, {
       agentId,
+      ...(name ? { name } : {}),
     });
   }
 
@@ -175,6 +187,31 @@ export class SessionsApiService {
     );
   }
 
+  /** Text of a `file` panel item (api.md 106). */
+  getPanelItemFile(
+    sessionId: string,
+    itemId: string,
+  ): Observable<PanelFileContent> {
+    return this.http.get<PanelFileContent>(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/panel-items/${encodeURIComponent(itemId)}/file`,
+    );
+  }
+
+  /** A panel item as a file: its bytes, `.pdf`, `.md` or `.csv` (api.md 107). */
+  downloadPanelItem(
+    sessionId: string,
+    itemId: string,
+    format?: 'pdf' | 'md' | 'csv',
+  ): Observable<Blob> {
+    return this.http.get(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/panel-items/${encodeURIComponent(itemId)}/download`,
+      {
+        responseType: 'blob',
+        ...(format ? { params: { format } } : {}),
+      },
+    );
+  }
+
   // ------------------------------------------------------- deep analysis
 
   /**
@@ -209,6 +246,29 @@ export class SessionsApiService {
     );
   }
 
+  /** The package as a zip, or one of its files when `file` is given; `draft` serves the draft package (#105). */
+  downloadRfpPackage(
+    sessionId: string,
+    rfpId: string,
+    file?: string,
+    draft?: boolean,
+  ): Observable<Blob> {
+    return this.http.get(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/rfp-packages/${encodeURIComponent(rfpId)}/download`,
+      {
+        responseType: 'blob',
+        ...(file || draft
+          ? {
+              params: {
+                ...(file ? { file } : {}),
+                ...(draft ? { draft: 'true' } : {}),
+              },
+            }
+          : {}),
+      },
+    );
+  }
+
   sendMessage(id: string, content: string): Observable<SessionActionResult> {
     return this.http.post<SessionActionResult>(
       `${API_BASE_URL}/sessions/${encodeURIComponent(id)}/messages`,
@@ -239,6 +299,12 @@ export class SessionsApiService {
       /** Summary of one finished call, including why it was run. */
       onToolResult?: (summary: ToolDataRecord) => void;
       onVisualUpdated?: (event: VisualEvent) => void;
+      /** `show_in_panel` (or an RFP stage change) put an item in the panel. */
+      onPanelItem?: (event: PanelItemEvent) => void;
+      /** The workflow status bar changed (`update_workflow`, phases, RFP stage). */
+      onWorkflow?: (workflow: WorkflowView) => void;
+      /** `export_rfp_package` stored a package this turn. */
+      onRfpPackage?: (rfpPackage: RfpPackage) => void;
       onDone?: (session: Session) => void;
       onError?: (message: string) => void;
     },
@@ -255,7 +321,6 @@ export class SessionsApiService {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...this.auth.authHeaders(),
           },
           body: JSON.stringify({
             content,
@@ -276,10 +341,7 @@ export class SessionsApiService {
       return;
     }
     if (!res.ok || !res.body) {
-      // A streamed fetch bypasses the HTTP interceptor (401, 403: ui.md 1.6).
-      handlers.onError?.(
-        this.auth.refusalOf(res.status) ?? `Stream failed (${res.status})`,
-      );
+      handlers.onError?.(`Stream failed (${res.status})`);
       return;
     }
     const reader = res.body.getReader();
@@ -319,6 +381,29 @@ export class SessionsApiService {
               case 'visual-updated':
                 try {
                   handlers.onVisualUpdated?.(JSON.parse(event.content ?? '{}'));
+                } catch {
+                  // Malformed event — ignore.
+                }
+                break;
+              case 'panel-item':
+                try {
+                  handlers.onPanelItem?.(JSON.parse(event.content ?? '{}'));
+                } catch {
+                  // Malformed event — ignore.
+                }
+                break;
+              case 'workflow':
+                try {
+                  handlers.onWorkflow?.(
+                    JSON.parse(event.content ?? '{}') as WorkflowView,
+                  );
+                } catch {
+                  // Malformed event — ignore.
+                }
+                break;
+              case 'rfp-package':
+                try {
+                  handlers.onRfpPackage?.(JSON.parse(event.content ?? '{}'));
                 } catch {
                   // Malformed event — ignore.
                 }

@@ -1,6 +1,4 @@
-import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import { Body, Controller, Get, Post, Put, Query } from '@nestjs/common';
-import { CurrentUserService } from '../auth/current-user.service';
 import { LlmService } from './llm.service';
 import type {
   EffortLevelsView,
@@ -11,30 +9,20 @@ import type {
 
 @Controller('llm')
 export class LlmController {
-  constructor(
-    private readonly llmService: LlmService,
-    private readonly currentUser: CurrentUserService,
-  ) {}
+  constructor(private readonly llmService: LlmService) {}
 
-  /** The masked key only for `manage-llm` (api.md 1.9, non-functional N76). */
+  /** The view always carries the masked key (api.md, ADR-0030). */
   @Get('settings')
-  @RequirePermission('use-agents')
-  async getSettings(): Promise<LlmSettingsView> {
-    const view = await this.llmService.getView();
-    const canManage = this.currentUser
-      .current()
-      ?.permissions.includes('manage-llm');
-    return canManage ? view : { ...view, apiKeyMasked: null };
+  getSettings(): Promise<LlmSettingsView> {
+    return this.llmService.getView();
   }
 
   @Get('effort-levels')
-  @RequirePermission('use-agents')
   effortLevels(@Query('model') model?: string): EffortLevelsView {
     return this.llmService.effortLevels(model);
   }
 
   @Put('settings')
-  @RequirePermission('manage-llm')
   async saveSettings(
     @Body() dto: SaveLlmSettingsDto,
   ): Promise<{ ok: boolean; message: string; settings?: LlmSettingsView }> {
@@ -48,7 +36,6 @@ export class LlmController {
   }
 
   @Put('reasoning')
-  @RequirePermission('manage-llm')
   async saveReasoning(
     @Body() body: { effort?: ReasoningEffort },
   ): Promise<{ ok: boolean; message: string; settings?: LlmSettingsView }> {
@@ -68,7 +55,6 @@ export class LlmController {
   }
 
   @Post('test-connection')
-  @RequirePermission('manage-llm')
   async testConnection(
     @Body() dto: SaveLlmSettingsDto,
   ): Promise<{ ok: boolean; message: string }> {

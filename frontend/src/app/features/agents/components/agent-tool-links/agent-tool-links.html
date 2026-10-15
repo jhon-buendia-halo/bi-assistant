@@ -1,0 +1,33 @@
+<div class="flex flex-col gap-2">
+  @for (tool of rows(); track tool.name) {
+    <div
+      [attr.data-testid]="'tool-link-' + tool.name"
+      class="rounded-xl bg-surface-muted px-4 py-3"
+    >
+      <div class="flex flex-wrap items-center gap-2">
+        <lucide-angular [img]="Wrench" [size]="14" class="text-fg-muted" />
+        <span class="font-mono text-[13px] text-fg">{{ tool.name }}</span>
+        <span
+          [attr.data-testid]="'tool-status-' + tool.name"
+          [class]="statusChip(tool.status)"
+          >{{ statusLabel(tool.status) }}</span
+        >
+      </div>
+      @if (tool.description) {
+        <p class="mt-2 max-w-[80ch] text-[12px] leading-relaxed text-fg-muted">
+          {{ tool.description }}
+        </p>
+      }
+      @if (tool.linkedVia.instructions) {
+        <p class="mt-1.5 text-[12px] text-fg-muted">
+          Linked from the instructions
+        </p>
+      }
+      @if (tool.linkedVia.skills.length > 0) {
+        <p class="mt-1.5 text-[12px] text-fg-muted">
+          {{ skillsLabel(tool.linkedVia.skills) }}
+        </p>
+      }
+    </div>
+  }
+</div>

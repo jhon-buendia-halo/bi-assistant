@@ -1,0 +1,101 @@
+Command (from frontend/): E2E_SKIP_DOCKER=1 npx playwright test --project=web --reporter=list --output=<scratch> e2e/rfp-builder.spec.ts e2e/testing-data.spec.ts
+Target: web (built backend/dist + backend/public at HEAD 7669c9a), LLM stub, embedded Intellify RFP API over intellify_mercer_demo on 127.0.0.1:55432. Desktop not run (no desktopOnly() scenario in these files).
+Run: 2026-10-15
+The two failures are app bugs (soft assertions; every other assertion in those tests passed): see e2e-impact.md / the report.
+
+Running 13 tests using 1 worker
+  ✓   1 [web] › e2e/rfp-builder.spec.ts:282:7 › without the API sample › start chat is blocked until the API sample is registered (3.0s)
+  ✓   2 [web] › e2e/rfp-builder.spec.ts:305:7 › with the API sample registered › the hub offers the RFP Builder as an Official agent (3.1s)
+  ✓   3 [web] › e2e/rfp-builder.spec.ts:316:7 › with the API sample registered › start chat opens a session bound to the RFP Builder (3.8s)
+  ✓   4 [web] › e2e/rfp-builder.spec.ts:335:7 › with the API sample registered › the first turn loads the stage-1 skill and reads the client (4.4s)
+  ✓   5 [web] › e2e/rfp-builder.spec.ts:404:7 › with the API sample registered › a created RFP becomes the session’s active RFP (4.5s)
+  ✘   6 [web] › e2e/rfp-builder.spec.ts:455:7 › with the API sample registered › the package is downloadable from the chat (14.9s)
+  ✘   7 [web] › e2e/rfp-builder.spec.ts:533:7 › with the API sample registered › I export a draft before the review (15.5s)
+  ✓   8 [web] › e2e/rfp-builder.spec.ts:602:7 › with the API sample registered › a draft never replaces the final package (4.5s)
+  ✓   9 [web] › e2e/rfp-builder.spec.ts:672:7 › with the API sample registered › an RFP Builder chat hides the assistant’s controls (4.2s)
+  ✓  10 [web] › e2e/rfp-builder.spec.ts:694:7 › with the API sample registered › the System Prompt tab shows the RFP Builder’s prompt (4.7s)
+  ✓  11 [web] › e2e/testing-data.spec.ts:58:5 › lists the bundled samples and what is loaded (5.0s)
+  ✓  12 [web] › e2e/testing-data.spec.ts:91:7 › loads the Intellify sample into a new database › seeds it, registers it and reports 49/49 (6.1s)
+  ✓  13 [web] › e2e/testing-data.spec.ts:144:5 › registers the Intellify RFP API (4.7s)
+  1) [web] › e2e/rfp-builder.spec.ts:455:7 › with the API sample registered › the package is downloadable from the chat 
+    Error: expect(locator).toHaveText(expected) failed
+    Locator: getByTestId('rfp-package-card').getByTestId('rfp-package-file')
+    Timeout: 10000ms
+    - Expected  - 6
+    + Received  + 7
+      Array [
+    -   "rfp.md",
+    -   "rfp.pdf",
+    -   "exhibits/exhibit-a-census.csv",
+    -   "exhibits/exhibit-b-plan-designs.csv",
+    -   "exhibits/exhibit-c-financials.csv",
+    -   "exhibits/exhibit-d-carriers.csv",
+    +   " rfp.md ",
+    +   " rfp.pdf ",
+    +   " exhibits/exhibit-a-census.csv ",
+    +   " exhibits/exhibit-b-plan-designs.csv ",
+    +   " exhibits/exhibit-c-financials.csv ",
+    +   " exhibits/exhibit-d-carriers.csv ",
+    +   " manifest.json ",
+      ]
+    Call log:
+      - Expect "soft toHaveText" getByTestId('rfp-package-card').getByTestId('rfp-package-file') with timeout 10000ms
+      - waiting for getByTestId('rfp-package-card').getByTestId('rfp-package-file')
+        24 × locator resolved to 7 elements
+      493 |     await expect
+      494 |       .soft(card.getByTestId('rfp-package-file'))
+    > 495 |       .toHaveText(PACKAGE_FILES.filter((name) => name !== 'manifest.json'));
+          |        ^
+      496 |     await card.scrollIntoViewIfNeeded();
+      497 |     await page.screenshot({
+      498 |       path: testInfo.outputPath('rfp-package-card.png'),
+    Error: expect(received).toBe(expected) // Object.is equality
+    Expected: "rfp-orchard-manufacturing-2027-benefits-rfp.zip"
+    Received: "e98b1efc-0dd7-41c1-a24b-d7d7aca87653.zip"
+      519 |     );
+      520 |     // The file is named after the RFP (R9, api.md #105).
+    > 521 |     expect.soft(zipDownload.suggestedFilename()).toBe(`rfp-${TITLE_SLUG}.zip`);
+          |                                                  ^
+      522 |
+      523 |     const [pdfDownload] = await Promise.all([
+      524 |       page.waitForEvent('download'),
+    ../../../../../../../..pw-rfp/rfp-builder-with-the-API-s-2ee75--downloadable-from-the-chat-web/test-failed-1.png
+    [Nest] 47857  - 10/15/2026, 8:06:02 AM     LOG [NestFactory] Starting Nest application...
+    [Nest] 47857  - 10/15/2026, 8:06:02 AM     LOG [InstanceLoader] AppModule dependencies initialized +57ms
+    ...
+    Error Context: ../../../../../../../..pw-rfp/rfp-builder-with-the-API-s-2ee75--downloadable-from-the-chat-web/error-context.md
+  2) [web] › e2e/rfp-builder.spec.ts:533:7 › with the API sample registered › I export a draft before the review 
+    Error: expect(locator).toBeVisible() failed
+    Locator: getByText('RFP package downloaded')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+    Call log:
+      - Expect "soft toBeVisible" getByText('RFP package downloaded') with timeout 10000ms
+      - waiting for getByText('RFP package downloaded')
+      594 |     // R16: downloading a draft shows the same toast as the final package,
+      595 |     // and the zip is named after the RFP with "-draft" (api.md #105).
+    > 596 |     await expect.soft(page.getByText('RFP package downloaded')).toBeVisible();
+          |                                                                 ^
+      597 |     expect
+      598 |       .soft(download.suggestedFilename())
+      599 |       .toMatch(new RegExp(`^rfp-(draft-)?${TITLE_SLUG}-draft\\.zip$`));
+    Error: expect(received).toMatch(expected)
+    Expected pattern: /^rfp-(draft-)?orchard-manufacturing-2027-benefits-rfp-draft\.zip$/
+    Received string:  "bc63a021-e3a2-468d-9e2d-a9633bbe2ad6-draft.zip"
+      597 |     expect
+      598 |       .soft(download.suggestedFilename())
+    > 599 |       .toMatch(new RegExp(`^rfp-(draft-)?${TITLE_SLUG}-draft\\.zip$`));
+          |        ^
+      600 |   });
+      601 |
+      602 |   test('a draft never replaces the final package', async ({
+    ../../../../../../../..pw-rfp/rfp-builder-with-the-API-s-42f54-t-a-draft-before-the-review-web/test-failed-1.png
+    [Nest] 48434  - 10/15/2026, 8:06:17 AM     LOG [NestFactory] Starting Nest application...
+    [Nest] 48434  - 10/15/2026, 8:06:17 AM     LOG [InstanceLoader] AppModule dependencies initialized +54ms
+    ...
+    Error Context: ../../../../../../../..pw-rfp/rfp-builder-with-the-API-s-42f54-t-a-draft-before-the-review-web/error-context.md
+  2 failed
+    [web] › e2e/rfp-builder.spec.ts:455:7 › with the API sample registered › the package is downloadable from the chat 
+    [web] › e2e/rfp-builder.spec.ts:533:7 › with the API sample registered › I export a draft before the review 
+  11 passed (1.3m)

@@ -35,6 +35,10 @@ export interface TestingDataFixture {
   /** false = this fixture can only be registered against an existing database, never seeded. */
   seedable: boolean;
   schema: string;
+  /** true = a REST API this app runs itself: no connection form, nothing to test. */
+  selfRegistering?: boolean;
+  /** Self-registering fixtures: the URL of the API this app started, when running. */
+  apiUrl?: string;
   defaults: PostgresConnectionConfig;
   status: TestingDataFixtureStatus;
 }

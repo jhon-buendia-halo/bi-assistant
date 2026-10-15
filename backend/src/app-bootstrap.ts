@@ -16,8 +16,11 @@ import { existsSync } from 'node:fs';
 import { AddressInfo } from 'node:net';
 import { extname, join, resolve } from 'node:path';
 import { AppModule } from './app.module';
-import { loadOrgServerConfig } from './config/org-server.config';
+import { DATA_DIR } from './infrastructure/database/database.module';
 import { startupDeveloperSettings } from './infrastructure/developer-settings/developer-settings.file';
+import { setIntellifyApiInfo } from './intellify-api/api-info';
+import { createIntellifyApi } from './intellify-api/bootstrap';
+import { intellifyApiConfig, readOrCreateApiKey } from './intellify-api/config';
 
 export interface CreateAppOptions {
   port: number;
@@ -25,10 +28,7 @@ export interface CreateAppOptions {
   host?: string;
   /** Directory holding the built web UI; defaults to `resolveWebRoot()`. */
   webRoot?: string;
-  /**
-   * Allow cross-origin requests (Electron renderer runs from file://).
-   * Ignored in org server mode, which serves the UI from its own origin.
-   */
+  /** Allow cross-origin requests (Electron renderer runs from file://). */
   cors?: boolean;
 }
 
@@ -38,8 +38,8 @@ export interface CreatedApp {
   port: number;
   /** Web root actually served, or null when only the API is available. */
   webRoot: string | null;
-  /** `ORG_PUBLIC_BASE_URL` in org server mode, null in local mode. */
-  orgPublicBaseUrl: string | null;
+  /** Where the embedded Intellify RFP API listens; null when it is off or failed. */
+  intellifyApiUrl: string | null;
 }
 
 /** `WEB_ROOT` env, else `<package>/public` (next to `dist/`). */
@@ -100,26 +100,51 @@ function installDeveloperLogExport(): void {
   installNestLogExport();
 }
 
+/**
+ * Starts the Intellify RFP API (ADR-0027) next to the app, unless
+ * `INTELLIFY_API=off`. Never throws: a failure is logged and the app runs on
+ * without it (`getIntellifyApiInfo()` stays null).
+ */
+async function startEmbeddedIntellifyApi(
+  app: INestApplication,
+  logger: Logger,
+): Promise<string | null> {
+  try {
+    const config = intellifyApiConfig();
+    if (!config.enabled) return null;
+    const apiKeys = config.apiKeys.length
+      ? config.apiKeys
+      : [readOrCreateApiKey(DATA_DIR)];
+    const api = await createIntellifyApi({
+      port: config.port,
+      host: config.host,
+      db: config.db,
+      apiKeys,
+    });
+    setIntellifyApiInfo({ url: api.url, apiKey: apiKeys[0] });
+    logger.log(`Intellify API listening on ${api.url}`);
+    // Closing the app closes the API with it.
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- called with `this` below
+    const originalClose = app.close;
+    app.close = async () => {
+      setIntellifyApiInfo(null);
+      await api.close().catch(() => undefined);
+      return originalClose.call(app) as Promise<void>;
+    };
+    return api.url;
+  } catch (error) {
+    logger.warn(`Intellify API not started: ${(error as Error).message}`);
+    return null;
+  }
+}
+
 export async function createApp(
   options: CreateAppOptions,
 ): Promise<CreatedApp> {
   const logger = new Logger('Bootstrap');
   installDeveloperLogExport();
-  // Fails fast on a partial org server configuration (admin R3).
-  const orgConfig = loadOrgServerConfig();
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  // SCIM clients send `application/scim+json` (api.md 2.14). Registering the
-  // JSON parser here replaces Nest's default one, so it takes both types.
-  app.useBodyParser('json', {
-    type: ['application/json', 'application/scim+json'],
-  });
-  if (orgConfig) {
-    // Behind the organisation's TLS proxy: trust its first hop (api.md 1.9).
-    app.set('trust proxy', 1);
-    logger.log(`Org server mode: ${orgConfig.publicBaseUrl}`);
-  } else if (options.cors) {
-    app.enableCors();
-  }
+  if (options.cors) app.enableCors();
 
   const webRoot = options.webRoot ? resolve(options.webRoot) : resolveWebRoot();
   const serveWeb = hasWebUi(webRoot);
@@ -145,6 +170,8 @@ export async function createApp(
     await app.listen(options.port);
   }
 
+  const intellifyApiUrl = await startEmbeddedIntellifyApi(app, logger);
+
   const address = app.getHttpServer().address() as AddressInfo;
   const port = address.port;
   const displayHost =
@@ -158,6 +185,6 @@ export async function createApp(
     url: `http://${displayHost}:${port}`,
     port,
     webRoot: serveWeb ? webRoot : null,
-    orgPublicBaseUrl: orgConfig?.publicBaseUrl ?? null,
+    intellifyApiUrl,
   };
 }

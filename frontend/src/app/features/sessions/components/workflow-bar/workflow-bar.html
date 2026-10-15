@@ -1,0 +1,334 @@
+<section
+  class="relative border-b border-border bg-surface px-4 py-1"
+  data-testid="workflow-bar"
+>
+  <div class="flex items-center gap-3">
+    @if (empty()) {
+      <p
+        class="min-w-0 flex-1 truncate py-1 text-[12px] text-fg-muted"
+        data-testid="workflow-bar-empty"
+      >
+        Workflow ·
+        <span class="font-medium text-fg">No workflow yet</span>
+        @if (!narrow()) {
+          · The agent shows its steps here when it guides you through a process.
+        }
+      </p>
+    } @else if (collapsed()) {
+      <p class="min-w-0 flex-1 truncate text-[12px] text-fg-muted">
+        Workflow ·
+        <span class="font-semibold text-fg-strong">{{ currentTitle() }}</span>
+        · {{ doneCount() }}/{{ total() }}
+      </p>
+    } @else {
+      <div
+        #list
+        role="list"
+        aria-label="Workflow"
+        class="flex min-w-0 flex-1 items-center overflow-x-auto py-0.5"
+        [class.pr-6]="fade()"
+        [attr.data-compact]="compact() ? 'true' : null"
+        [attr.data-fade]="fade() ? 'true' : null"
+        [style.mask-image]="fade() ? fadeMask : null"
+        [style.-webkit-mask-image]="fade() ? fadeMask : null"
+      >
+        @for (
+          step of visibleSteps();
+          track step.phase.number;
+          let last = $last
+        ) {
+          <div
+            role="listitem"
+            class="flex shrink-0 items-center"
+            [attr.aria-current]="
+              step.status === 'current' || step.status === 'waiting'
+                ? 'step'
+                : null
+            "
+            [attr.data-status]="step.status"
+          >
+            <button
+              type="button"
+              class="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] hover:bg-surface-selected"
+              [title]="tooltip(step)"
+              [attr.aria-label]="
+                'Step ' +
+                step.phase.number +
+                ': ' +
+                step.phase.title +
+                ', ' +
+                label(step.status)
+              "
+              (click)="openStep(step.phase)"
+            >
+              @switch (step.status) {
+                @case ("done") {
+                  <span
+                    class="flex size-4 items-center justify-center rounded-full bg-success-soft text-on-success-soft"
+                  >
+                    <lucide-angular [img]="Check" [size]="10" />
+                  </span>
+                }
+                @case ("waiting") {
+                  <span
+                    class="flex size-4 items-center justify-center rounded-full bg-warning-soft text-on-warning-soft"
+                  >
+                    <lucide-angular [img]="Clock" [size]="10" />
+                  </span>
+                }
+                @case ("current") {
+                  <span class="size-2.5 rounded-full bg-primary"></span>
+                }
+                @default {
+                  <span
+                    class="size-3.5 rounded-full border border-border-strong"
+                  ></span>
+                }
+              }
+              <span
+                class="whitespace-nowrap"
+                [class.hidden]="iconOnly(step.status)"
+                [class.font-semibold]="
+                  step.status === 'current' || step.status === 'waiting'
+                "
+                [class.text-fg-strong]="
+                  step.status === 'current' || step.status === 'waiting'
+                "
+                [class.text-fg]="step.status === 'done'"
+                [class.text-fg-muted]="
+                  step.status === 'upcoming' || step.status === 'skipped'
+                "
+                [class.line-through]="step.status === 'skipped'"
+              >
+                {{ step.phase.title }}
+              </span>
+            </button>
+            @if (!last) {
+              <span
+                class="mx-1 h-px w-4 shrink-0 bg-border"
+                aria-hidden="true"
+              ></span>
+            }
+          </div>
+        }
+      </div>
+      <span class="ml-1 shrink-0 text-[12px] font-medium text-fg-muted">
+        {{ doneCount() }}/{{ total() }} done
+      </span>
+    }
+    @if (!empty()) {
+      <button
+        type="button"
+        class="btn btn-secondary shrink-0 !px-2.5 !py-0.5 text-[12px]"
+        data-testid="workflow-details-toggle"
+        data-details-root
+        aria-controls="workflow-details"
+        [attr.aria-expanded]="detailsOpen()"
+        (click)="toggleDetails()"
+      >
+        Details
+        <lucide-angular
+          [img]="detailsOpen() ? ChevronUp : ChevronDown"
+          [size]="14"
+        />
+      </button>
+      <button
+        type="button"
+        class="btn-icon"
+        [title]="collapsed() ? 'Show workflow' : 'Hide workflow'"
+        [attr.aria-label]="collapsed() ? 'Show workflow' : 'Hide workflow'"
+        [attr.aria-expanded]="!collapsed()"
+        (click)="toggleCollapsed()"
+      >
+        <lucide-angular
+          [img]="collapsed() ? ChevronDown : ChevronUp"
+          [size]="16"
+        />
+      </button>
+    }
+  </div>
+
+  @if (!empty() && !collapsed() && hasCard()) {
+    <div
+      class="mt-1.5 flex items-center gap-2"
+      role="region"
+      aria-label="What the agent needs now"
+    >
+      <lucide-angular
+        [img]="ChevronRight"
+        [size]="14"
+        class="shrink-0 text-fg-muted"
+      />
+      @if (allDone()) {
+        <p
+          class="flex min-w-0 flex-1 items-center gap-1.5 text-[13px] leading-5 font-semibold text-on-success-soft"
+          data-testid="workflow-bar-done"
+        >
+          <lucide-angular [img]="Check" [size]="14" class="shrink-0" />
+          All steps done
+        </p>
+      } @else {
+        <p
+          class="min-w-0 flex-1 truncate text-[13px] leading-5"
+          data-testid="workflow-bar-action"
+          [title]="'Your next step: ' + nextStepText()"
+        >
+          <span class="font-semibold text-fg-strong">Your next step:</span>
+          <span class="text-fg"> {{ nextStepText() }}</span>
+        </p>
+      }
+    </div>
+  }
+
+  @if (!empty() && detailsOpen()) {
+    <div
+      id="workflow-details"
+      class="card absolute inset-x-4 top-full z-30 mt-1 max-h-[60vh] overflow-y-auto p-3"
+      role="region"
+      aria-label="Workflow details"
+      data-testid="workflow-details"
+      data-details-root
+    >
+      <!-- Steps scroll under this header, so none shows half-cut at the top. -->
+      <p
+        class="sticky -top-3 z-10 -mx-3 -mt-3 mb-2 border-b border-border bg-surface px-3 py-2 text-[12px] font-medium text-fg-muted"
+        data-testid="workflow-details-header"
+      >
+        Workflow · {{ doneCount() }}/{{ total() }} done
+      </p>
+      <ol class="flex flex-col gap-2">
+        @for (step of steps(); track step.phase.number) {
+          <li
+            class="flex items-start gap-3 rounded-xl border px-3 py-2"
+            [class.border-border-selected]="
+              step.status === 'current' || step.status === 'waiting'
+            "
+            [class.bg-surface-selected]="
+              step.status === 'current' || step.status === 'waiting'
+            "
+            [class.border-border]="
+              step.status !== 'current' && step.status !== 'waiting'
+            "
+            [attr.data-status]="step.status"
+            [attr.data-current]="
+              step.status === 'current' || step.status === 'waiting'
+                ? 'true'
+                : null
+            "
+            data-testid="workflow-details-step"
+          >
+            <span
+              class="mt-0.5 w-5 shrink-0 text-right text-[12px] text-fg-muted"
+              >{{ step.phase.number }}</span
+            >
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <span
+                  class="text-[13px]"
+                  [class.text-fg]="
+                    step.status !== 'upcoming' && step.status !== 'skipped'
+                  "
+                  [class.text-fg-muted]="
+                    step.status === 'upcoming' || step.status === 'skipped'
+                  "
+                  [class.font-semibold]="
+                    step.status === 'current' || step.status === 'waiting'
+                  "
+                  [class.line-through]="step.status === 'skipped'"
+                  >{{ step.phase.title }}</span
+                >
+                @switch (step.status) {
+                  @case ("done") {
+                    <span class="chip chip-success">Done</span>
+                  }
+                  @case ("current") {
+                    <span class="chip chip-info">Current</span>
+                  }
+                  @case ("waiting") {
+                    <span class="chip chip-warning">Waiting for you</span>
+                  }
+                  @case ("skipped") {
+                    <span class="chip chip-neutral">Skipped</span>
+                  }
+                }
+              </div>
+              @if (
+                step.phase.action &&
+                step.status !== "done" &&
+                step.status !== "skipped"
+              ) {
+                <p
+                  class="mt-0.5 text-[12px] text-fg-muted"
+                  data-testid="workflow-details-action"
+                >
+                  To do: {{ step.phase.action }}
+                </p>
+              }
+              @if (step.phase.skill) {
+                <p class="mt-0.5 font-mono text-[11px] text-fg-muted">
+                  {{ step.phase.skill }}
+                </p>
+              }
+              @if (
+                (step.status === "current" || step.status === "waiting") &&
+                view().note
+              ) {
+                <div
+                  class="prose-dark mt-2 text-[13px]"
+                  data-testid="workflow-details-note"
+                  [innerHTML]="view().note! | markdown"
+                ></div>
+              }
+            </div>
+          </li>
+        }
+      </ol>
+      <!-- Room to scroll the last steps up under the header (sized on open). -->
+      <div data-testid="workflow-details-spacer" aria-hidden="true"></div>
+    </div>
+  }
+
+  @if (popover(); as pop) {
+    <button
+      type="button"
+      aria-label="Close step details"
+      class="fixed inset-0 z-20 cursor-default"
+      (click)="closePopover()"
+    ></button>
+    <div
+      class="menu absolute top-full left-4 z-30 mt-1 w-64 px-3 py-2"
+      role="dialog"
+      aria-label="Step details"
+    >
+      <p class="text-[11px] text-fg-muted">Step {{ pop.phase.number }}</p>
+      <p class="text-[13px] font-medium text-fg-strong">
+        {{ pop.phase.title }}
+      </p>
+      <p class="mt-1">
+        <span
+          class="chip"
+          [class.chip-success]="pop.status === 'done'"
+          [class.chip-info]="pop.status === 'current'"
+          [class.chip-warning]="pop.status === 'waiting'"
+          [class.chip-neutral]="
+            pop.status === 'skipped' || pop.status === 'upcoming'
+          "
+          >{{ label(pop.status) }}</span
+        >
+      </p>
+      @if (
+        pop.phase.action && pop.status !== "done" && pop.status !== "skipped"
+      ) {
+        <p class="mt-1 text-[12px] text-fg">
+          <span class="font-medium text-fg-strong">To do</span>
+          {{ pop.phase.action }}
+        </p>
+      }
+      @if (pop.phase.skill) {
+        <p class="mt-1 font-mono text-[11px] text-fg-muted">
+          {{ pop.phase.skill }}
+        </p>
+      }
+    </div>
+  }
+</section>

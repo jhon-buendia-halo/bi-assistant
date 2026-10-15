@@ -1,5 +1,4 @@
 import { expect, Page } from '@playwright/test';
-import { authHeaders } from './local-auth';
 import { WORLD_CUP_CATALOG, WORLD_CUP_DB } from './world-cup-db';
 
 export const WORLD_CUP_DATASOURCE = 'World Cup PostgreSQL';
@@ -39,7 +38,10 @@ export async function createWorldCupDataset(
   page: Page,
   tables: string[] = ['matches'],
 ): Promise<void> {
-  await page.getByRole('button', { name: 'Datasets' }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Datasets' })
+    .click();
   await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
   await page.getByRole('button', { name: 'New dataset' }).click();
   await expect(
@@ -76,15 +78,21 @@ export async function createWorldCupDataset(
 
 /** Shows the Sessions area, where the session list lives. */
 export async function openSessions(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Sessions', exact: true })
+    .click();
   await expect(
-    page.getByRole('navigation', { name: 'Sessions navigation' }),
+    page.getByRole('navigation', { name: 'Sessions', exact: true }),
   ).toBeVisible();
 }
 
 export async function createWorldCupSession(page: Page): Promise<string> {
   await openSessions(page);
-  await page.getByTitle('New conversation').click();
+  await page
+    .locator('header')
+    .getByRole('button', { name: 'Start New Conversation' })
+    .click();
   await expect(page.getByPlaceholder('My new session')).toBeVisible();
   await page.getByPlaceholder('My new session').fill(WORLD_CUP_SESSION);
   await page
@@ -98,15 +106,14 @@ export async function createWorldCupSession(page: Page): Promise<string> {
   await expect(page.locator('header')).toContainText(WORLD_CUP_DATASOURCE);
   await expect(page.locator('header')).toContainText('PostgreSQL');
 
-  // Scope to the session list: the chat pane's welcome card also carries a
-  // `session-*` test id and shows the session name.
-  const session = page
-    .getByRole('navigation', { name: 'Sessions navigation' })
-    .locator('[data-testid^="session-"]')
-    .filter({ hasText: WORLD_CUP_SESSION });
-  const testId = await session.getAttribute('data-testid');
-  if (!testId) throw new Error('Created session did not expose its id');
-  return testId.slice('session-'.length);
+  // The session ID button in the session header carries the id.
+  const label = await page
+    .locator('header')
+    .getByTestId('session-id')
+    .getAttribute('aria-label');
+  const id = /^Copy session ID (.+)$/.exec(label ?? '')?.[1];
+  if (!id) throw new Error('Created session did not expose its id');
+  return id;
 }
 
 export async function createWorldCupWorkspace(page: Page): Promise<string> {
@@ -124,7 +131,6 @@ export async function createWorldCupWorkspace(page: Page): Promise<string> {
 export async function followOsTheme(page: Page): Promise<void> {
   const res = await page.request.put(apiUrl(page, '/ui-preferences'), {
     data: { theme: 'system' },
-    headers: await authHeaders(page),
   });
   expect(res.ok()).toBe(true);
   await page.evaluate(() =>

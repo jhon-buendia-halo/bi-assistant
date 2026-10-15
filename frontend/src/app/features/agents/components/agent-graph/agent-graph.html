@@ -1,0 +1,126 @@
+<div class="flex flex-col">
+  <div class="flex flex-wrap items-center gap-3">
+    <p class="text-[12px] text-fg-muted">
+      How the instructions pull in skills and tools. Hover or focus a node to
+      trace its chain.
+    </p>
+    <label
+      class="ml-auto flex cursor-pointer items-center gap-2 text-[13px] text-fg-muted"
+    >
+      <input
+        type="checkbox"
+        data-testid="graph-show-unlinked"
+        class="h-3.5 w-3.5 accent-primary"
+        [checked]="showUnlinked()"
+        (change)="showUnlinked.set($any($event.target).checked)"
+      />
+      Show unlinked
+    </label>
+  </div>
+
+  @if (graph(); as g) {
+    <div class="mt-4 overflow-x-auto py-2" data-testid="agent-graph">
+      <svg
+        class="mx-auto block"
+        [attr.viewBox]="'0 0 ' + g.width + ' ' + g.height"
+        [attr.width]="g.width"
+        [attr.height]="g.height"
+        role="img"
+        aria-labelledby="agent-graph-title agent-graph-desc"
+      >
+        <title id="agent-graph-title">
+          Links between the instructions, skills and tools
+        </title>
+        <desc id="agent-graph-desc">
+          @for (edge of g.edges; track edge.id) {
+            {{ edge.label }}{{ edge.active ? "" : " (not used)" }}.
+          }
+        </desc>
+        <defs>
+          <marker
+            id="agent-arrow-active"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto"
+          >
+            <path d="M0,0 L10,5 L0,10 z" class="arrow" />
+          </marker>
+          <marker
+            id="agent-arrow-inactive"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto"
+          >
+            <path d="M0,0 L10,5 L0,10 z" class="arrow inactive" />
+          </marker>
+        </defs>
+
+        @for (edge of g.edges; track edge.id) {
+          <path
+            class="edge"
+            [class.inactive]="!edge.active"
+            [class.dim]="dimmed(edge.from, edge.to)"
+            [attr.d]="edge.path"
+            [attr.marker-end]="
+              'url(#agent-arrow-' + (edge.active ? 'active' : 'inactive') + ')'
+            "
+          >
+            <title>{{ edge.label }}</title>
+          </path>
+        }
+
+        @for (node of g.nodes; track node.id) {
+          <g
+            class="node"
+            [class]="node.kind"
+            [class.always-on]="node.alwaysOn"
+            [class.inactive]="!node.active"
+            [class.missing]="node.missing"
+            [class.dim]="dimmed(node.id)"
+            [attr.data-testid]="'graph-node-' + node.id"
+            [attr.transform]="'translate(' + node.x + ',' + node.y + ')'"
+            tabindex="0"
+            role="img"
+            [attr.aria-label]="nodeLabel(node)"
+            (mouseenter)="focused.set(node.id)"
+            (mouseleave)="focused.set(null)"
+            (focus)="focused.set(node.id)"
+            (blur)="focused.set(null)"
+          >
+            <rect [attr.width]="NODE_W" [attr.height]="NODE_H" rx="10" />
+            <text x="14" y="24" class="name">{{ node.name }}</text>
+            <text x="14" y="43" class="subtitle">{{ node.subtitle }}</text>
+          </g>
+        }
+      </svg>
+    </div>
+  }
+
+  <ul class="legend mt-3 flex flex-wrap gap-x-6 gap-y-2" aria-label="Legend">
+    <li><span class="swatch prompt"></span>Instructions</li>
+    <li><span class="swatch skill"></span>Skill</li>
+    <li><span class="swatch tool"></span>Tool</li>
+    <li><span class="swatch always-on"></span>Always on</li>
+  </ul>
+
+  <h3
+    class="mt-7 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+  >
+    What happens on each message
+  </h3>
+  <ol class="mt-3 grid list-none gap-3 p-0 md:grid-cols-2">
+    @for (step of steps; track $index; let i = $index) {
+      <li
+        class="rounded-xl border border-border px-4 py-3 text-[13px] text-fg"
+      >
+        <span class="mr-1 text-fg-muted">{{ i + 1 }}.</span>{{ step }}
+      </li>
+    }
+  </ol>
+</div>

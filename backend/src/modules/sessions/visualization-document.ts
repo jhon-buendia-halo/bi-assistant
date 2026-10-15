@@ -361,11 +361,49 @@ ${visualBody}
 </main>`;
 }
 
-/** Frame styles are namespaced (`qti-`) so the agent's CSS cannot break readability. */
-const FRAME_CSS = `
-:root {
+/**
+ * The frame's colour tokens, Light and Dark. They mirror the app's own theme
+ * tokens (ui.md 6.0) so a visual reads as part of the panel around it, and the
+ * series palette keeps 3:1 against each theme's page colour.
+ */
+const LIGHT_TOKENS = `
+  color-scheme: light;
+  --qti-bg: #ffffff;
+  --qti-fg: rgb(0 0 0 / 0.85);
+  --qti-fg-strong: #001f52;
+  --qti-fg-muted: rgb(0 0 0 / 0.6);
+  --qti-surface: #f8fafc;
+  --qti-border: rgb(0 0 0 / 0.1);
+  --qti-link: #0b41ad;
+  --qti-focus: #0b41ad;
+  /* Categorical series palette — accessible on the white page. */
+  --qti-cat-1: #0284c7; /* sky-600 */
+  --qti-cat-2: #d97706; /* amber-600 */
+  --qti-cat-3: #059669; /* emerald-600 */
+  --qti-cat-4: #7c3aed; /* violet-600 */
+  --qti-cat-5: #e11d48; /* rose-600 */
+  --qti-cat-6: #0891b2; /* cyan-600 */
+  --qti-cat-7: #65a30d; /* lime-600 */
+  --qti-cat-8: #ea580c; /* orange-600 */
+  --qti-pos: #059669;
+  --qti-neg: #dc2626;
+  --qti-grid: rgb(0 0 0 / 0.08);
+  --qti-axis: rgb(0 0 0 / 0.6);
+  --qti-tooltip-bg: #ffffff;
+  /* Text on a filled series colour (pie slices, dense heatmap cells). */
+  --qti-on-cat: #ffffff;`;
+
+const DARK_TOKENS = `
   color-scheme: dark;
-  /* Categorical series palette — accessible on the #171717 dark background. */
+  --qti-bg: #12233a;
+  --qti-fg: #d5dfec;
+  --qti-fg-strong: #eef4fc;
+  --qti-fg-muted: #93a6bf;
+  --qti-surface: #16294a;
+  --qti-border: #24384f;
+  --qti-link: #5b95ff;
+  --qti-focus: #7fb0ff;
+  /* Categorical series palette — accessible on the dark page. */
   --qti-cat-1: #38bdf8; /* sky-400 */
   --qti-cat-2: #fbbf24; /* amber-400 */
   --qti-cat-3: #34d399; /* emerald-400 */
@@ -374,31 +412,46 @@ const FRAME_CSS = `
   --qti-cat-6: #22d3ee; /* cyan-400 */
   --qti-cat-7: #a3e635; /* lime-400 */
   --qti-cat-8: #fb923c; /* orange-400 */
-  /* Semantic tokens. */
   --qti-pos: #34d399;
   --qti-neg: #f87171;
-  --qti-grid: rgba(255,255,255,.07);
-  --qti-axis: #71717a;
-  --qti-tooltip-bg: #26262b;
+  --qti-grid: rgb(255 255 255 / 0.08);
+  --qti-axis: #93a6bf;
+  --qti-tooltip-bg: #1a3357;
+  --qti-on-cat: #0b1626;`;
+
+/**
+ * Frame styles are namespaced (`qti-`) so the agent's CSS cannot break
+ * readability. The host panel sets `data-theme` on the root to the app's
+ * resolved theme; a document without it (a downloaded `index.html`) follows
+ * the operating system.
+ */
+const FRAME_CSS = `
+:root {${LIGHT_TOKENS}
 }
-html, body { margin: 0; background: #171717; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {${DARK_TOKENS}
+  }
+}
+:root[data-theme="dark"] {${DARK_TOKENS}
+}
+html, body { margin: 0; background: var(--qti-bg); }
 .qti-frame {
   max-width: 920px; margin: 0 auto; padding: 24px 24px 40px; box-sizing: border-box;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: 14px; line-height: 1.65; color: #d4d4d8;
+  font-size: 14px; line-height: 1.65; color: var(--qti-fg);
 }
 .qti-header { margin-bottom: 18px; }
-.qti-title { margin: 0 0 8px; font-size: 22px; line-height: 1.3; font-weight: 600; color: #fafafa; }
-.qti-question { margin: 0; font-size: 14px; color: #a1a1aa; }
+.qti-title { margin: 0 0 8px; font-size: 22px; line-height: 1.3; font-weight: 600; color: var(--qti-fg-strong); }
+.qti-question { margin: 0; font-size: 14px; color: var(--qti-fg-muted); }
 .qti-label { display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: 999px;
-  background: rgba(255,255,255,.08); font-size: 11px; font-weight: 600; letter-spacing: .04em;
-  text-transform: uppercase; color: #a1a1aa; vertical-align: middle; }
+  border: 1px solid var(--qti-border); background: var(--qti-surface); font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--qti-fg-muted); vertical-align: middle; }
 .qti-entities { margin: 12px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .qti-chip { display: inline-block; padding: 2px 9px; border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #d4d4d8; }
-.qti-visual { margin: 0 0 22px; padding: 16px; border: 1px solid rgba(255,255,255,.08);
-  border-radius: 14px; background: rgba(255,255,255,.02);
+  border: 1px solid var(--qti-border); background: var(--qti-surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: var(--qti-fg); }
+.qti-visual { margin: 0 0 22px; padding: 16px; border: 1px solid var(--qti-border);
+  border-radius: 12px; background: var(--qti-bg); color: var(--qti-fg);
   /* The boundary wide designer content scrolls in instead of spilling out. */
   position: relative; overflow-x: auto; }
 /* Scope root for the designer's stylesheet — a plain div, so its element
@@ -406,61 +459,62 @@ html, body { margin: 0; background: #171717; }
 .qti-visual-body { position: relative; }
 .qti-section { margin: 0 0 22px; }
 .qti-h2 { margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .06em;
-  text-transform: uppercase; color: #71717a; }
-.qti-takeaway { margin: 0; font-size: 15px; line-height: 1.6; color: #e4e4e7; }
+  text-transform: uppercase; color: var(--qti-fg-muted); }
+.qti-takeaway { margin: 0; font-size: 15px; line-height: 1.6; color: var(--qti-fg); }
 .qti-prose p { margin: 0 0 .75em; } .qti-prose p:last-child { margin-bottom: 0; }
-.qti-prose strong { color: #f4f4f5; } .qti-prose a { color: #7dd3fc; }
-.qti-prose h1, .qti-prose h2, .qti-prose h3, .qti-prose h4 { margin: 1em 0 .4em; color: #f4f4f5; font-size: 15px; }
+.qti-prose strong { color: var(--qti-fg-strong); } .qti-prose a { color: var(--qti-link); }
+.qti-prose h1, .qti-prose h2, .qti-prose h3, .qti-prose h4 { margin: 1em 0 .4em; color: var(--qti-fg-strong); font-size: 15px; }
 .qti-prose ul, .qti-prose ol { margin: .25em 0 .75em; padding-left: 1.4em; }
 .qti-prose li { margin: .15em 0; }
 .qti-prose code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
-  background: rgba(255,255,255,.08); border-radius: 4px; padding: .1em .35em; }
-.qti-prose pre { padding: .75em .9em; background: rgba(255,255,255,.05); border-radius: 8px; overflow-x: auto; }
+  background: var(--qti-surface); border-radius: 4px; padding: .1em .35em; }
+.qti-prose pre { padding: .75em .9em; background: var(--qti-surface); border: 1px solid var(--qti-border); border-radius: 8px; overflow-x: auto; }
 .qti-prose table, .qti-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .qti-prose th, .qti-prose td, .qti-table th, .qti-table td { padding: .4em .7em; text-align: left;
-  border: 1px solid rgba(255,255,255,.08); white-space: nowrap; }
-.qti-prose th, .qti-table th { background: rgba(255,255,255,.06); color: #e4e4e7; font-weight: 600; }
+  border: 1px solid var(--qti-border); white-space: nowrap; }
+.qti-prose th, .qti-table th { background: var(--qti-surface); color: var(--qti-fg-strong); font-weight: 600; }
 .qti-table-wrap { overflow-x: auto; margin-top: 8px; }
 .qti-reasoning { margin: 0; padding: 0; list-style: none; counter-reset: qti-step; }
 .qti-reasoning li { counter-increment: qti-step; margin: 0 0 14px; padding-left: 28px; position: relative; }
 .qti-reasoning li:last-child { margin-bottom: 0; }
 .qti-reasoning li::before { content: counter(qti-step); position: absolute; left: 0; top: 0;
-  width: 18px; height: 18px; border-radius: 999px; background: rgba(255,255,255,.08);
-  color: #a1a1aa; font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; }
-.qti-reasoning-rationale { margin: 0; font-size: 14px; line-height: 1.6; color: #d4d4d8; }
+  width: 18px; height: 18px; border-radius: 999px; background: var(--qti-surface); border: 1px solid var(--qti-border);
+  box-sizing: border-box; color: var(--qti-fg-muted); font-size: 11px; font-weight: 600; line-height: 16px; text-align: center; }
+.qti-reasoning-rationale { margin: 0; font-size: 14px; line-height: 1.6; color: var(--qti-fg); }
 .qti-why { margin-top: 2px; }
-.qti-provenance { border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: rgba(255,255,255,.02); }
-.qti-provenance summary { cursor: pointer; padding: 10px 14px; font-size: 13px; color: #a1a1aa; }
-.qti-provenance summary:hover { color: #e4e4e7; }
+.qti-provenance { border: 1px solid var(--qti-border); border-radius: 10px; background: var(--qti-bg); }
+.qti-provenance summary { cursor: pointer; padding: 10px 14px; font-size: 13px; color: var(--qti-fg-muted); }
+.qti-provenance summary:hover { color: var(--qti-fg-strong); }
 .qti-provenance ol { margin: 0; padding: 0 14px 14px 14px; list-style: none; }
 .qti-provenance > .qti-muted { margin: 0 0 4px; padding: 0 14px; }
 .qti-provenance li { margin-top: 12px; }
-.qti-query-label { margin: 0 0 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #a1a1aa; }
-.qti-sql { margin: 0; padding: 10px 12px; border-radius: 8px; background: rgba(0,0,0,.35);
+.qti-query-label { margin: 0 0 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--qti-fg-muted); }
+.qti-sql { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--qti-surface); border: 1px solid var(--qti-border);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5;
-  white-space: pre-wrap; color: #a1a1aa; }
-.qti-error { margin: 6px 0 0; color: #f87171; font-size: 12.5px; }
-.qti-muted { margin: 6px 0 0; font-size: 12px; color: #71717a; }
+  white-space: pre-wrap; color: var(--qti-fg); }
+.qti-error { margin: 6px 0 0; color: var(--qti-neg); font-size: 12.5px; }
+.qti-muted { margin: 6px 0 0; font-size: 12px; color: var(--qti-fg-muted); }
 /* Clickable data marks: defaults the designer's own CSS can still override. */
 [data-qti-value] { cursor: pointer; }
-[data-qti-value]:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
-.qti-footer { padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); font-size: 12px; color: #71717a; }
+[data-qti-value]:focus-visible { outline: 2px solid var(--qti-focus); outline-offset: 2px; }
+.qti-footer { padding-top: 14px; border-top: 1px solid var(--qti-border); font-size: 12px; color: var(--qti-fg-muted); }
 /* Ready-made KPI tile row for composed answers. */
 .qti-kpis { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; }
-.qti-kpi { flex: 1 1 140px; padding: 12px 14px; border: 1px solid rgba(255,255,255,.08);
-  border-radius: 12px; background: rgba(255,255,255,.03); }
+.qti-kpi { flex: 1 1 140px; padding: 12px 14px; border: 1px solid var(--qti-border);
+  border-radius: 12px; background: var(--qti-surface); }
 .qti-kpi-value { display: block; font-size: 26px; line-height: 1.2; font-weight: 600;
-  color: #fafafa; font-variant-numeric: tabular-nums; }
+  color: var(--qti-fg-strong); font-variant-numeric: tabular-nums; }
 .qti-kpi-label { display: block; margin-top: 4px; font-size: 11px; font-weight: 600;
-  letter-spacing: .04em; text-transform: uppercase; color: #a1a1aa; }
+  letter-spacing: .04em; text-transform: uppercase; color: var(--qti-fg-muted); }
 .qti-kpi-delta { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 600; }
 .qti-kpi-delta.qti-up { color: var(--qti-pos); }
 .qti-kpi-delta.qti-down { color: var(--qti-neg); }
 .qti-kpi-spark { display: block; height: 40px; margin-top: 6px; }
 /* Hover/focus readout box for chart marks. */
 .qti-tooltip { position: absolute; padding: 6px 9px; border-radius: 6px;
-  background: var(--qti-tooltip-bg); border: 1px solid rgba(255,255,255,.12);
-  font-size: 12px; line-height: 1.4; color: #e4e4e7; pointer-events: none; z-index: 10; }
+  background: var(--qti-tooltip-bg); border: 1px solid var(--qti-border);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+  font-size: 12px; line-height: 1.4; color: var(--qti-fg); pointer-events: none; z-index: 10; }
 @media (max-width: 640px) { .qti-frame { padding: 16px 14px 32px; } .qti-title { font-size: 19px; } }
 @media (prefers-reduced-motion: reduce) { .qti-frame * { animation: none !important; transition: none !important; } }
 `;
@@ -610,6 +664,12 @@ export const FRAME_SELECT_SCRIPT = `(function () {
     if (message.type === 'qti-filter' && Array.isArray(message.filters)) {
       activeFilters = message.filters;
       setData(applyFilters());
+      return;
+    }
+    // The app's theme changed while the visual is open: switch the frame's
+    // tokens in place, so the visual keeps its state instead of reloading.
+    if (message.type === 'qti-theme' && (message.theme === 'light' || message.theme === 'dark')) {
+      document.documentElement.setAttribute('data-theme', message.theme);
     }
   });
 

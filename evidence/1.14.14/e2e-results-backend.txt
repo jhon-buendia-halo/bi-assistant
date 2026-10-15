@@ -1,0 +1,29 @@
+Command: npm --prefix backend run test:e2e -- intellify-api   (jest --config ./test/jest-e2e.json intellify-api)
+Run: 2026-10-15T13:07:42.319Z
+
+backend/test/intellify-api.e2e-spec.ts — passed
+  PASS  reads › answers 401 without an API key and with a wrong one (54 ms)
+  PASS  reads › pages /v1/clients and totals the non-deleted clients (38 ms)
+  PASS  reads › filters clients by name or code and honours includeDeleted (16 ms)
+  PASS  reads › rejects a page or per_page that is not a positive integer (15 ms)
+  PASS  reads › declares page, per_page and a data array for every collection in /openapi.json (4 ms)
+  PASS  reads › lists the reference collections (17 ms)
+  PASS  reads › fills incumbency and final credits for a client on /v1/carriers (16 ms)
+  PASS  reads › flattens plan financials on /v1/financials and /v1/plan-designs (23 ms)
+  PASS  reads › serves policies and census rows (8 ms)
+  PASS  reads › returns the program with carriers and plan year 2026 (23 ms)
+  PASS  reads › computes renewal dates from the plan year and the kick-off timing (12 ms)
+  PASS  reads › serves client, plan, financials, census, commercials and wizards (69 ms)
+  PASS  reads › answers 404 for an unknown client on every per-client route (23 ms)
+  PASS  reads › cannot write through a read (READ ONLY transaction) (7 ms)
+  PASS  rfp records and package › creates an RFP, builds it up and exports the package (300 ms)
+  PASS  rfp records and package › refuses unknown clients, carriers, lines and plan designs (32 ms)
+  PASS  rfp records and package › moves status forward only and deletes drafts only (25 ms)
+  PASS  rfp records and package › exports a draft package marked DRAFT with its stage (draft=true) (101 ms)
+  PASS  rfp records and package › bulk-deletes every record of an eval run's tag, whatever its status (34 ms)
+  PASS  rfp records and package › takes createdBy from X-Qti-User and bulk-deletes the drafts (28 ms)
+
+backend/test/intellify-api-reseed.e2e-spec.ts — passed
+  PASS  keeps a draft and its lists when the intellify schema is seeded again (2316 ms)
+
+Tests: 21 passed, 0 failed, 0 skipped, 21 total

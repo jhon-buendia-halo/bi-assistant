@@ -504,14 +504,9 @@ function startBackend() {
     return;
   }
   // Reuse Electron's binary as plain Node so packaged apps don't need a system Node.
-  // The desktop backend always runs in local mode (admin R2): drop any
-  // org server configuration inherited from the shell (api.md 4.3).
-  const inheritedEnv = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("ORG_")),
-  );
   backendProcess = spawn(process.execPath, [entry], {
     env: {
-      ...inheritedEnv,
+      ...process.env,
       ELECTRON_RUN_AS_NODE: "1",
       PORT: BACKEND_PORT,
       // SQLite app database lives in the OS-standard per-user app folder
@@ -647,20 +642,20 @@ function stopBackend() {
   }
 }
 
-// Readiness probe (api.md 4.3): `GET /me` answers 200 when signed in and
-// 401 when not (local mode signs in, ADR-0012); either means the backend is up.
+// Readiness probe (api.md 4.3): `GET /sessions` answers 200 once the backend
+// is up; there is no sign-in (ADR-0030).
 function backendIsReady() {
   return new Promise((resolve) => {
     const request = http.get(
       {
         hostname: "127.0.0.1",
         port: BACKEND_PORT,
-        path: "/me",
+        path: "/sessions",
         timeout: 500,
       },
       (response) => {
         response.resume();
-        resolve(response.statusCode === 200 || response.statusCode === 401);
+        resolve(response.statusCode === 200);
       },
     );
     request.on("timeout", () => request.destroy());

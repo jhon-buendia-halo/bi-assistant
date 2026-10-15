@@ -2,6 +2,8 @@
 
 - **Jira:** [BA-161](https://halo-powered.atlassian.net/browse/BA-161) · **Roadmap:** Milestone 2.1 · **Status:** Confirmed
 
+> Undone by ADR-0030 / roadmap 1.14.19 (2026-10-14): the app is single-user with one built-in super admin; this epic's sign-in, roles, directory and Admin area no longer exist. The text below is the historical spec and is not rewritten.
+
 ## Goal
 
 An organisation runs the app on its own server for many people. People sign in with their company Entra ID account. They share the organisation's datasources and datasets, keep their own sessions, agents and knowledge private, and can do only what their role allows. Platform admins manage users, groups, roles and permissions in an admin panel.

@@ -23,7 +23,7 @@ jest.mock('../../modules/sessions/turn-data', () => ({
 
 import { runEvals } from '@mastra/core/evals';
 import { appSkillBody } from '../app-skills';
-import { runAssistantEvalCase } from './assistant.evals';
+import { ASSISTANT_EVAL_SETS, runAssistantEvalCase } from './assistant.evals';
 import type { AssistantEvalCase } from './assistant.evals';
 
 const BLOCK =
@@ -83,5 +83,77 @@ describe('runAssistantEvalCase context (agents.md 4.1, 8.5)', () => {
       expect(contents).toHaveLength(1);
       expect(contents.join('\n')).not.toContain('Curated knowledge:');
     }
+  });
+});
+
+/** The requestContext the eval run sent with the question. */
+function sentRequestContext(): { get(key: string): unknown } {
+  const [config] = (runEvals as jest.Mock).mock.calls.at(-1) as [
+    { data: { requestContext: { get(key: string): unknown } }[] },
+  ];
+  return config.data[0].requestContext;
+}
+
+describe('tool selection in the eval cases (agents.md 8.1, ADR-0022)', () => {
+  const setCases = (id: string) =>
+    ASSISTANT_EVAL_SETS.find((set) => set.id === id)?.cases ?? [];
+
+  it('has 12 World Cup cases, two of them with a tool selection', () => {
+    const cases = setCases('world-cup');
+    expect(cases).toHaveLength(12);
+    expect(
+      cases
+        .filter((evalCase) => evalCase.agentTools)
+        .map(({ id, question, agentTools }) => ({ id, question, agentTools })),
+    ).toEqual([
+      {
+        id: 'no-clarification-best-team',
+        question: 'Which team performed best?',
+        agentTools: ['sample_rows', 'visuals'],
+      },
+      {
+        id: 'no-visuals-chart-request',
+        question: 'Show me a chart of goals scored per World Cup tournament.',
+        agentTools: ['sample_rows', 'ask_clarification'],
+      },
+    ]);
+    expect(
+      cases
+        .filter((evalCase) => evalCase.agentTools)
+        .every((evalCase) => evalCase.judgeRubric),
+    ).toBe(true);
+  });
+
+  it('derives the same 12 for the REST set, selections included', () => {
+    const rest = setCases('world-cup-rest');
+    expect(rest).toHaveLength(12);
+    expect(
+      rest.find((evalCase) => evalCase.id === 'rest-no-visuals-chart-request')
+        ?.agentTools,
+    ).toEqual(['sample_rows', 'ask_clarification']);
+  });
+
+  it('runs a case with its selection on the context and the matching Block 1', async () => {
+    await runAssistantEvalCase(
+      { ...evalCase, agentTools: ['ask_clarification', 'visuals'] },
+      ['World Cup Core'],
+    );
+
+    expect(sentRequestContext().get('agent-tools')).toEqual([
+      'ask_clarification',
+      'visuals',
+    ]);
+    expect(sentContext()[0].content).toContain(
+      'Use describe_entity / run_readonly_sql to inspect and query them.',
+    );
+  });
+
+  it('runs a case without a selection with every tool', async () => {
+    await runAssistantEvalCase(evalCase, ['World Cup Core']);
+
+    expect(sentRequestContext().get('agent-tools')).toBeUndefined();
+    expect(sentContext()[0].content).toContain(
+      'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
+    );
   });
 });

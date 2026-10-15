@@ -16,7 +16,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
 ### The catalogue
 
-- R1. The catalogue SHALL be the single definition of every sample: the panel, the loader and the eval suite's data check read from it, so adding a sample means adding one seed file and one catalogue entry. A catalogue entry SHALL declare: id (stable, used in URLs and by eval sets), name, description, optional seed file, owned schema, default connection (host, port, database, user, password, SSL), datasource name, dataset name, required table names and optional kind.
+- R1. The catalogue SHALL be the single definition of every sample: the panel, the loader and the eval suite's data check read from it, so adding a sample means adding one seed file and one catalogue entry. A catalogue entry SHALL declare: id (stable, used in URLs and by eval sets), name, description, optional seed file, owned schema, default connection (host, port, database, user, password, SSL), datasource name, dataset name, required table names, optional kind (PostgreSQL by default, or REST) and, for a REST sample, whether it is **self-registering** (R21).
 - R2. The system SHALL ship these fixtures, in this panel order:
 
   | Id | Name | Schema | Seed | Datasource name | Dataset name | Required entities |
@@ -25,8 +25,9 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
   | `formula-1` | Formula 1 | `formula1` | bundled gzipped SQL | "Formula 1 PostgreSQL" | "Formula 1" | 48 (seasons, drivers, constructors, circuits, races, standings and per-session results; full list in the catalogue) |
   | `intellify` | Intellify | `intellify` | bundled gzipped SQL | "Intellify PostgreSQL" | "Intellify" | 49: every collection of the Intellify data model (clients, products, plan designs, policies, coverages and financials, census, carrier credits, fees, surveys, MercerVIP point solutions, platform reference lists; full list in the catalogue) |
 | `world-cup-rest` | World Cup (REST API) | `world_cup` | none (register-only, kind REST) | "World Cup REST API" | "World Cup (REST)" | the same 9 names as World Cup, keyed `api.world_cup.<table>` |
+  | `intellify-api` | Intellify RFP API | `intellify` | none (self-registering, kind REST, R21) | "Intellify RFP API" | "Intellify RFP API" | 10: the API's collection endpoints `clients`, `products`, `funding_types`, `plan_types`, `carriers`, `plan_designs`, `policies`, `financials`, `census`, `rfps` |
 
-  World Cup describes "Men’s FIFA World Cup, 2018 and 2022 — tournaments, matches, teams, venues, players, goals and two reporting views." Formula 1 describes "Formula One world championship, 1950 to 2026 — seasons, drivers, constructors, circuits, races, standings and per-session results." Intellify describes "Intellify employee-benefits data model (Halo × Marsh), synthetic data — clients, lines of coverage, plan designs, policies and premiums, census, carrier credits and point solutions." The REST sample describes "The World Cup sample over a local REST API ('npm run worldcup:api' serves it on http://127.0.0.1:55080)."
+  World Cup describes "Men’s FIFA World Cup, 2018 and 2022 — tournaments, matches, teams, venues, players, goals and two reporting views." Formula 1 describes "Formula One world championship, 1950 to 2026 — seasons, drivers, constructors, circuits, races, standings and per-session results." Intellify describes "Intellify employee-benefits data model (Halo × Marsh), synthetic data — clients, lines of coverage, plan designs, policies and premiums, census, carrier credits and point solutions." The REST sample describes "The World Cup sample over a local REST API ('npm run worldcup:api' serves it on http://127.0.0.1:55080)." The Intellify RFP API describes "The Intellify sample through the Intellify RFP API (the embedded service on INTELLIFY_API_PORT, default 3100): the RFP Builder agent's datasource, and its collection endpoints as tables."
 - R3. The default connection of the PostgreSQL samples SHALL be host `127.0.0.1`, port `55432` (overridable with the `WORLD_CUP_DB_PORT` environment variable), SSL off, and the development-only credentials of the repository's compose database: user `world_cup`, password `world_cup_dev`; database `world_cup` for World Cup, `formula1` for Formula 1 and `intellify` for Intellify (all live on the same server, whose superuser is the first sample's user). The REST sample's defaults are placeholders (`127.0.0.1:55080`).
 - R4. The seed files are data assets: `001_world_cup.sql` (a transaction that creates schema `world_cup` with tables for confederations, countries, teams, tournaments, tournament teams, venues, players, squad members, matches, match team statistics, goals, disciplinary events, indexes and reporting views) `002_formula_1.sql.gz` (a gzipped dump creating schema `formula1`) and `003_intellify.sql.gz` (gzipped; creates schema `intellify` with the 49 tables of the Intellify data model, their 52 foreign keys, a comment on every table and column naming the source collection or Mongo field, and deterministic synthetic rows). The Intellify seed is generated, not hand-written: `python3 scripts/generate-intellify-seed.py` rewrites it byte for byte, so change the generator and regenerate rather than editing the seed. A rebuild SHALL carry them over verbatim; they are not described row by row. The World Cup SQL is also shipped as the compose database's first-boot init script and the two copies SHALL be kept identical.
 
@@ -39,7 +40,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 ### Loading
 
 - R8. Loading a fixture SHALL accept a connection (host, port, database, user, password, SSL) and validate it before touching anything: `Host is required`, `Database is required`, `User is required`, `Port must be a positive integer` (an integer from 1 to 65535), `Database name must not contain a double quote`. An unknown fixture id answers `Unknown sample fixture "<id>"`.
-- R9. The REST sample SHALL NOT be loadable from the panel; loading it answers `The World Cup (REST API) sample is registered for evals only — create its datasource with scripts/setup-worldcup-rest.ts instead of loading it here.`
+- R9. The World Cup REST sample (`world-cup-rest`) SHALL NOT be loadable from the panel; loading it answers `The World Cup (REST API) sample is registered for evals only — create its datasource with scripts/setup-worldcup-rest.ts instead of loading it here.`
 - R10. The loader SHALL connect to the named database. If it does not exist (SQLSTATE `3D000`) and the fixture is seedable, the loader SHALL create it by connecting to the maintenance database `postgres` with the same credentials and issuing `CREATE DATABASE`, then continue. If it cannot create it the message is `Database "<db>" does not exist on <host>:<port> and the user "<user>" could not create it. Create the database yourself (or supply a user with CREATEDB rights) and load again. (<cause>)`. If the fixture is register-only the message is `Database "<db>" does not exist on <target>, and the <name> sample ships no seed SQL — point this at a database that already carries the data.`
 - R11. A connection that cannot be established SHALL answer with an actionable message that names the target and the user but never the password: for a refused connection `Could not reach PostgreSQL at <host>:<port> — nothing is listening there. The bundled <name> fixture starts with "docker compose up -d" from the repo root; otherwise check the host and port. (<detail>)` (the compose hint only for seedable fixtures); otherwise `Could not connect to <db> at <target> as "<user>" — <detail>`.
 - R12. For a seedable fixture the loader SHALL drop the fixture's schema if it exists (`DROP SCHEMA IF EXISTS … CASCADE`) and replay the seed script inside a single transaction, so a failure leaves no half-built schema. Statements SHALL be sent in batches of 50 (a whole dump in one request exhausts server memory; one per request is too slow). The script is split on statement boundaries respecting quotes, quoted identifiers, comments (including nested block comments) and dollar quoting; transaction-control statements in the dump (`BEGIN`, `COMMIT`, `START TRANSACTION`) and the dump tool's `\restrict` / `\unrestrict` meta-commands are removed. A gzipped seed is decompressed first. Timeouts: connect 8 s, statements 120 s.
@@ -54,15 +55,19 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - R18. Removing a fixture SHALL delete its dataset (first) and its datasource from the app only. It SHALL NOT touch the database. Answers: `Removed the <name> datasource and dataset from this app. The database itself was left untouched.`, or `Nothing to remove — the sample is not loaded` when neither existed; unknown id as in R8.
 - R19. Because fixtures are matched to records by **name**, a datasource or dataset the user created by hand with a fixture's name is treated as that fixture's: loading overwrites the datasource's configuration and removing deletes it. Open question: the E2E suite and users commonly create a datasource called "World Cup PostgreSQL" by hand; decide whether to mark fixture-owned records instead of matching by name.
 
-### Permissions
+### Availability
 
-- R20. In both modes every testing-data action SHALL need Manage datasources and datasets, because it creates and removes shared datasources and datasets; the Testing Data section is hidden without it. Rules: [../admin/spec.md](../admin/spec.md) R21, R25.
+- R20. Every testing-data action SHALL be available to the user; the app has no roles or permissions.
+
+### Self-registering samples
+
+- R21. A **self-registering** REST sample (today only `intellify-api`) registers a REST API that the app itself runs, the Intellify RFP API (ADR-0027, [../rfp/spec.md](../rfp/spec.md)). Loading it SHALL take no connection (R8's validation is skipped and any body is ignored) and SHALL write to no database. It SHALL: read the URL and key of the API this app started, or answer `The Intellify API is not running in this app (INTELLIFY_API=off or it failed to start) — see the system logs.`; check the API's health, or answer `The Intellify API cannot reach its database at <host:port/db>. Load the "Intellify" sample into that database first.`; discover the API's collection endpoints from its OpenAPI document; save the REST datasource "Intellify RFP API" with API-key-header authentication (`X-API-Key`, the key read above), reusing the record of that name as R14 does; refresh its inventory; and save the dataset "Intellify RFP API" with the 10 required entities (R15 applies when one is missing). Success answers `Registered the Intellify RFP API at <url> and loaded 10 entities into dataset "Intellify RFP API"`. Status and Remove work as for every sample (R5-R7, R18); removing never touches the API or its database.
 
 ## Edge cases and errors
 
 - **Server not running:** R11's message, with the compose hint.
 - **Database missing and the user cannot create it:** R10's message.
-- **User without permission to drop the schema or create objects:** the seed fails and the transaction rolls back; message per R13 with the server's detail.
+- **Database user without permission to drop the schema or create objects:** the seed fails and the transaction rolls back; message per R13 with the server's detail.
 - **Port or host wrong in the form:** "Test connection" (which uses the generic PostgreSQL connection test, see [datasources](../datasources/spec.md)) shows the `Postgres — …` message inline.
 - **Partial state:** a fixture whose datasource exists but whose dataset is missing or incomplete shows `<n>/<required> entities` and not-loaded; Remove stays disabled because it requires "loaded". Open question: allow Remove for a partially loaded fixture.
 - **Register-only REST sample:** the panel offers "Register testing data" with a PostgreSQL connection form, but the backend refuses (R9). Open question: hide the form and show the script instruction for register-only REST samples, or make the panel able to register them.
@@ -89,13 +94,14 @@ Settings → **Testing Data** (see [ui.md](../../system/ui.md)). Heading "Testin
 - **Test connection** (becomes "Testing…") runs a PostgreSQL connection test with the form values and shows the message inline, green on success and red on failure. Disabled when Host, Database or User is empty or the card is busy.
 - Primary action: seedable and not loaded → **Load testing data**; seedable and loaded → **Recreate testing data**; register-only → **Register testing data**. While running: "Loading…" or "Registering…". Same disabled rule.
 - Pressing the primary action opens a confirmation panel (amber) instead of acting: seedable — "This drops and recreates schema `<schema>` on `<host>:<port>/<database>`. Everything in that schema will be lost."; register-only — `This registers "<name>" as a datasource and dataset against the existing database at <target>. No schema changes are made.` With **Confirm** and **Cancel**. On success a toast shows the loader's message and the status refreshes.
+- Self-registering REST sample (Intellify RFP API, R21): the card shows no Connection form and no **Test connection**; in their place a line `API URL: <url>` with the URL of the API this app started (left out when the API is not running). The primary action is **Register testing data** ("Registering…"), and its confirmation reads `This registers the Intellify RFP API at <url> as a datasource and dataset. No database changes are made.`
 - "Remove" section: "Deletes the "<name>" datasource and dataset records from the app only. It does not touch the database itself." A **Remove** button ("Removing…"), disabled unless the fixture is loaded or the card is busy, opens an amber confirmation ("This removes the "<name>" datasource and dataset records from the app. The database and its data are not touched.") with **Confirm** / **Cancel**. Opening one confirmation closes the other.
 
 ## Flows
 
 ### Feature: Testing data
 
-E2E: `frontend/e2e/testing-data.spec.ts` for "Lists the bundled samples and what is loaded" and "Loads the Intellify sample into a new database"; the other scenarios are not automated yet.
+E2E: `frontend/e2e/testing-data.spec.ts` for "Lists the bundled samples and what is loaded", "Loads the Intellify sample into a new database" and "Registers the Intellify RFP API"; the other scenarios are not automated yet.
 
 ```gherkin
 Feature: Testing data
@@ -105,7 +111,7 @@ Feature: Testing data
 
   Scenario: Lists the bundled samples and what is loaded
     When I open Settings and click "Testing Data"
-    Then I see the "World Cup", "Formula 1", "Intellify" and "World Cup (REST API)" samples
+    Then I see the "World Cup", "Formula 1", "Intellify", "World Cup (REST API)" and "Intellify RFP API" samples
     And each shows "0/<required> entities" with a cross when nothing is loaded
     And each shows its description
 
@@ -148,6 +154,19 @@ Feature: Testing data
     Then I see a message that starts with "Seeded intellify on 127.0.0.1:55432 and loaded 49 entities into dataset "Intellify"" and ends with "— created the database"
     And the sample shows "49/49 entities" and "127.0.0.1:55432/<that name>"
     And "Intellify PostgreSQL" appears under "Datasource Configuration"
+
+  Scenario: Registers the Intellify RFP API
+    Given the Intellify sample is loaded into the database the Intellify RFP API reads
+    And I am in "Testing Data"
+    When I expand the "Intellify RFP API" sample
+    Then I see "API URL:" with the API's URL and no connection form
+    When I click "Register testing data"
+    Then I see "This registers the Intellify RFP API at <url> as a datasource and dataset. No database changes are made."
+    When I click "Confirm"
+    Then I see a message that starts with "Registered the Intellify RFP API at" and ends with "loaded 10 entities into dataset "Intellify RFP API""
+    And the sample shows "10/10 entities" with a check mark
+    And "Intellify RFP API" appears under "Datasource Configuration"
+    And the "Intellify RFP API" dataset appears under "Datasets"
 
   Scenario: Tests the connection from the card
     Given I am in "Testing Data" with the "World Cup" sample expanded

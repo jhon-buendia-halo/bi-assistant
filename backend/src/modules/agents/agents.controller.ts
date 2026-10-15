@@ -1,4 +1,3 @@
-import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import {
   Body,
   Controller,
@@ -13,6 +12,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { evalRunFilename, renderEvalRunMarkdown } from './eval-report';
+import { AgentPromptsService } from './agent-prompts.service';
 import { AgentsService } from './agents.service';
 import type { AgentSkillsView } from '../../mastra/app-skills';
 import { EvalRunsService } from './eval-runs.service';
@@ -34,17 +34,16 @@ export class AgentsController {
   constructor(
     private readonly agents: AgentsService,
     private readonly evalRuns: EvalRunsService,
+    private readonly prompts: AgentPromptsService,
   ) {}
 
   @Get()
-  @RequirePermission('use-agents')
   async list(): Promise<{ agents: AgentSummary[] }> {
     return { agents: await this.agents.list() };
   }
 
   /** Create a user agent as a draft (R43, R45). */
   @Post()
-  @RequirePermission('create-agents')
   create(@Body() dto: SaveAgentDto): Promise<AgentResult> {
     return styleA(async () => {
       const agent = await this.agents.create(toInput(dto));
@@ -57,7 +56,6 @@ export class AgentsController {
 
   /** Replace a user agent's draft; its Live version is untouched (R44). */
   @Put(':id/draft')
-  @RequirePermission('create-agents')
   saveDraft(
     @Param('id') id: string,
     @Body() dto: SaveAgentDto,
@@ -69,7 +67,6 @@ export class AgentsController {
   }
 
   @Post(':id/publish')
-  @RequirePermission('create-agents')
   publish(@Param('id') id: string): Promise<AgentResult> {
     return styleA(async () => {
       const agent = await this.agents.publish(id);
@@ -77,9 +74,35 @@ export class AgentsController {
     });
   }
 
+  /** Save a built-in agent's shared system prompt override (ADR-0026). */
+  @Put(':key/prompt')
+  savePrompt(
+    @Param('key') key: string,
+    @Body() body: { prompt?: unknown },
+  ): Promise<AgentResult> {
+    return styleA(async () => {
+      const name = await this.prompts.save(key, body);
+      return {
+        message: `System prompt of "${name}" saved`,
+        agent: (await this.agents.get(key)) ?? undefined,
+      };
+    });
+  }
+
+  /** Reset a built-in agent's system prompt to the shipped one (ADR-0026). */
+  @Delete(':key/prompt')
+  resetPrompt(@Param('key') key: string): Promise<AgentResult> {
+    return styleA(async () => {
+      const name = await this.prompts.reset(key);
+      return {
+        message: `System prompt of "${name}" reset`,
+        agent: (await this.agents.get(key)) ?? undefined,
+      };
+    });
+  }
+
   /** Pin or unpin any agent, built-in or user-built (R47). */
   @Put(':key/pin')
-  @RequirePermission('use-agents')
   pin(
     @Param('key') key: string,
     @Body() dto: PinAgentDto,
@@ -93,7 +116,6 @@ export class AgentsController {
 
   /** Start a run against one datasource. Long-running: poll the job below. */
   @Post(':key/evals/run')
-  @RequirePermission('create-agents')
   async runEvals(
     @Param('key') key: string,
     @Body() body: { datasourceId?: string; caseIds?: string[] },
@@ -116,7 +138,6 @@ export class AgentsController {
 
   /** Past and in-flight runs for the agent, newest first. */
   @Get(':key/evals/runs')
-  @RequirePermission('create-agents')
   async evalRuns_list(
     @Param('key') key: string,
   ): Promise<{ runs: EvalRunView[] }> {
@@ -124,7 +145,6 @@ export class AgentsController {
   }
 
   @Get(':key/evals/runs/:jobId')
-  @RequirePermission('create-agents')
   async evalRunStatus(
     @Param('jobId') jobId: string,
   ): Promise<{ ok: boolean; message: string } & Partial<EvalRunView>> {
@@ -135,7 +155,6 @@ export class AgentsController {
 
   /** The run as a Markdown report — summary, failures, traces, answers. */
   @Get(':key/evals/runs/:jobId/download')
-  @RequirePermission('create-agents')
   async evalRunDownload(
     @Param('jobId') jobId: string,
     @Res() res: Response,
@@ -155,7 +174,6 @@ export class AgentsController {
   }
 
   @Delete(':key/evals/runs/:jobId')
-  @RequirePermission('create-agents')
   async evalRunDelete(
     @Param('jobId') jobId: string,
   ): Promise<{ ok: boolean; message: string }> {
@@ -167,7 +185,6 @@ export class AgentsController {
 
   /** Delete a user agent; sessions that used it are not touched (R50). */
   @Delete(':id')
-  @RequirePermission('create-agents')
   remove(@Param('id') id: string): Promise<AgentResult> {
     return styleA(async () => {
       const agent = await this.agents.delete(id);
@@ -177,13 +194,11 @@ export class AgentsController {
 
   // Declared before ':key' so the more specific path wins.
   @Get(':key/skills')
-  @RequirePermission('use-agents')
   skills(@Param('key') key: string): Promise<AgentSkillsView> {
     return this.agents.skills(key);
   }
 
   @Get(':key/skills/:name/file')
-  @RequirePermission('use-agents')
   skillFile(
     @Param('key') key: string,
     @Param('name') name: string,
@@ -193,13 +208,11 @@ export class AgentsController {
   }
 
   @Get(':key/evals')
-  @RequirePermission('use-agents')
   evals(@Param('key') key: string): { sets: AgentEvalSet[] } {
     return { sets: this.agents.evalSets(key) };
   }
 
   @Get(':key')
-  @RequirePermission('use-agents')
   async get(@Param('key') key: string): Promise<AgentDetail> {
     const agent = await this.agents.get(key);
     if (!agent) throw new NotFoundException(`Agent "${key}" not found`);
@@ -235,5 +248,7 @@ function toInput(dto: SaveAgentDto): AgentConfigInput {
     starterQuestions: strings(dto?.starterQuestions),
     model: text(dto?.model),
     reasoningEffort: dto?.reasoningEffort,
+    tools: strings(dto?.tools),
+    skills: strings(dto?.skills),
   };
 }

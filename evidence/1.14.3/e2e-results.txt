@@ -1,0 +1,48 @@
+Command (frontend/, 2026-10-15, branch feat/BA-213-agent-tools-skills, backend/dist + backend/public built from HEAD):
+  npx tsc -p e2e/tsconfig.json && E2E_EVIDENCE_DIR=$PWD/../evidence E2E_SKIP_DOCKER=1 npx playwright test --project=web --reporter=list \
+    e2e/agent-editor.spec.ts e2e/skill-library.spec.ts e2e/builtin-agent-prompts.spec.ts e2e/agent-hub.spec.ts e2e/agent-skills.spec.ts \
+    e2e/agents.spec.ts e2e/agent-sessions.spec.ts e2e/assistant-skills.spec.ts e2e/designer-skills.spec.ts e2e/chat-clarification.spec.ts \
+    e2e/chat-and-visuals.spec.ts e2e/world-cup-workflow.spec.ts
+Whole run: 82 passed (6.8m), 0 failed, 0 skipped. Desktop not run (no desktopOnly() scenario in these files).
+Below: the lines of the spec files this feature's impact analysis lists.
+
+  ✓  24 [web] › e2e/agent-hub.spec.ts:95:5 › shows the built-in agents and mine in sections (3.5s)
+  ✓  25 [web] › e2e/agent-hub.spec.ts:146:5 › search narrows the agents by name or description (3.8s)
+  ✓  26 [web] › e2e/agent-hub.spec.ts:162:5 › filters limit the hub to one kind of agent (3.6s)
+  ✓  27 [web] › e2e/agent-hub.spec.ts:186:5 › pinned agents come first in their own section and survive a restart (5.4s)
+  ✓  28 [web] › e2e/agent-hub.spec.ts:246:5 › flags an agent whose dataset no longer exists (3.2s)
+  ✓  29 [web] › e2e/agent-hub.spec.ts:263:5 › a card opens the agent's detail view with its actions (4.3s)
+  ✓  30 [web] › e2e/agent-hub.spec.ts:289:5 › publishing a draft makes it Live (4.1s)
+  ✓  31 [web] › e2e/agent-hub.spec.ts:315:5 › deleting an agent asks first (3.8s)
+  ✓  32 [web] › e2e/agent-hub.spec.ts:343:5 › skills opens the skills library and Back returns to the hub (3.7s)
+  ✓  33 [web] › e2e/agent-hub.spec.ts:372:5 › the hub has no detectable accessibility violations in either theme (5.0s)
+  ✓  72 [web] › e2e/skill-library.spec.ts:155:5 › creates, edits and deletes a skill (4.4s)
+  ✓  73 [web] › e2e/skill-library.spec.ts:206:5 › refuses a bad name or description (3.9s)
+  ✓  74 [web] › e2e/skill-library.spec.ts:234:5 › a skill that an agent links can't be deleted or renamed (3.9s)
+  ✓  75 [web] › e2e/skill-library.spec.ts:268:5 › the skill editor links tools only (3.6s)
+  ✓  76 [web] › e2e/skill-library.spec.ts:294:5 › the library and the skill editor have no detectable accessibility violations in either theme (6.5s)
+  ✓  77 [web] › e2e/skill-library.spec.ts:324:7 › built-in skills › I edit a built-in skill, and Reset restores it (9.4s)
+  ✓  78 [web] › e2e/skill-library.spec.ts:390:7 › built-in skills › an override that drops a placeholder is refused (4.4s)
+
+17 of these passed.
+
+--- Backend API e2e (Feature "Agent definitions (API)") ---
+Command: npx jest --config ./test/jest-e2e.json user-agents  (cwd backend/, = npm run test:e2e -- user-agents; boots backend/dist built from HEAD)
+test/user-agents.e2e-spec.ts
+  PASS Agent definitions (API) > Creating an agent stores a draft (35 ms)
+  PASS Agent definitions (API) > Publishing makes the draft Live (8 ms)
+  PASS Agent definitions (API) > Editing a Live agent keeps serving the Live version (12 ms)
+  PASS Agent definitions (API) > Names must be unique and publishing needs a dataset (9 ms)
+  PASS Agent definitions (API) > Built-in agents are read-only (6 ms)
+  PASS Agent definitions (API) > Pins apply to user and built-in agents and survive a restart (2095 ms)
+  PASS Agent definitions (API) > A user agent's detail reports the assistant's tools with its draft and Live version (17 ms)
+  PASS Agent definitions (API) > Unknown ids are reported as not found (14 ms)
+  PASS Agent definitions (API) > Deleting an agent (9 ms)
+  PASS Agent definitions (API): links, skills and LLM settings > Skills refuse a bad name or description (18 ms)
+  PASS Agent definitions (API): links, skills and LLM settings > Tools and skills are derived from the links in the instructions (19 ms)
+  PASS Agent definitions (API): links, skills and LLM settings > Unknown links are refused (39 ms)
+  PASS Agent definitions (API): links, skills and LLM settings > A skill links tools only (4 ms)
+  PASS Agent definitions (API): links, skills and LLM settings > The detail of an agent shows its links and its LLM settings (43 ms)
+  PASS Agent definitions (API): links, skills and LLM settings > A skill that an agent's draft links can't be deleted or renamed (6 ms)
+  PASS Agent definitions (API): links, skills and LLM settings > Publishing copies the skills and a later skill edit leaves the Live copy (17 ms)
+Tests: 16 passed, 0 failed, 16 total

@@ -1,4 +1,3 @@
-import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import {
   Body,
   Controller,
@@ -20,7 +19,6 @@ interface MetricResult {
 }
 
 @Controller('metrics')
-@RequirePermission('use-agents')
 export class MetricsController {
   constructor(private readonly metrics: MetricsService) {}
 

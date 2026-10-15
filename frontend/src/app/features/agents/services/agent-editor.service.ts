@@ -6,10 +6,17 @@ import { LlmApiService } from '../../llm/services/llm-api.service';
 import { Session } from '../../sessions/models/session.model';
 import { SessionsApiService } from '../../sessions/services/sessions-api.service';
 import {
+  AgentConfig,
   AgentMutationResult,
   AgentStatus,
   AgentsApiService,
 } from './agents-api.service';
+import { linkableBuiltInSkills } from './prompt-links';
+import {
+  BuiltInSkillSummary,
+  SkillSummary,
+  SkillsApiService,
+} from './skills-api.service';
 import {
   AgentForm,
   agentFormChanged,
@@ -19,6 +26,7 @@ import {
   datasetOptions,
   emptyAgentForm,
   hasExistingDataset,
+  legacyInstructions,
   showAgentPublish,
 } from './agent-editor.util';
 
@@ -43,6 +51,7 @@ export class AgentEditorService {
   private readonly agentsApi = inject(AgentsApiService);
   private readonly datasetsApi = inject(DatasetsApiService);
   private readonly llmApi = inject(LlmApiService);
+  private readonly skillsApi = inject(SkillsApiService);
   private readonly sessionsApi = inject(SessionsApiService);
   private readonly toast = inject(ToastService);
 
@@ -57,6 +66,10 @@ export class AgentEditorService {
   readonly hasUnpublishedChanges = signal(false);
   /** Names of the datasets that exist. */
   readonly existingDatasets = signal<string[]>([]);
+  /** The user's skills library, sorted by name (R55). */
+  readonly librarySkills = signal<SkillSummary[]>([]);
+  /** The built-in on-demand skills, linkable as mentions. */
+  readonly builtInSkills = signal<BuiltInSkillSummary[]>([]);
   /** The configured LLM's model, for the Model placeholder. */
   readonly configuredModel = signal<string | null>(null);
   readonly saving = signal(false);
@@ -92,6 +105,9 @@ export class AgentEditorService {
     ),
   );
 
+  /** Set when the editor added links for a legacy draft's tools and skills. */
+  readonly legacyNotice = signal(false);
+
   /** Resolves once the agent, datasets and model have loaded. */
   private ready: Promise<void> = Promise.resolve();
   /** Bumped on every open, close and discard, to drop stale answers. */
@@ -109,6 +125,9 @@ export class AgentEditorService {
     this.hasUnpublishedChanges.set(false);
     this.loadError.set(null);
     this.existingDatasets.set([]);
+    this.librarySkills.set([]);
+    this.builtInSkills.set([]);
+    this.legacyNotice.set(false);
     this.configuredModel.set(null);
     this.loading.set(agentId !== null);
 
@@ -126,6 +145,24 @@ export class AgentEditorService {
       },
       () => undefined,
     );
+    let library: SkillSummary[] | null = null;
+    const skills = firstValueFrom(this.skillsApi.list()).then(
+      (res) => {
+        if (generation !== this.generation) return;
+        library = res.skills;
+        this.librarySkills.set(res.skills);
+      },
+      () => undefined,
+    );
+    this.skillsApi.listBuiltIn().subscribe({
+      next: (res) => {
+        if (generation === this.generation) {
+          this.builtInSkills.set(linkableBuiltInSkills(res.skills));
+        }
+      },
+      error: () => undefined,
+    });
+    let draftConfig: AgentConfig | null = null;
     const agent =
       agentId === null
         ? Promise.resolve()
@@ -137,6 +174,7 @@ export class AgentEditorService {
                 this.loadError.set(`Agent "${agentId}" cannot be edited`);
                 return;
               }
+              draftConfig = draft;
               const form = agentFormFromConfig(draft);
               this.form.set(form);
               this.saved.set(form);
@@ -148,8 +186,21 @@ export class AgentEditorService {
               this.loadError.set(err?.error?.message ?? 'Backend unreachable');
             },
           );
-    this.ready = Promise.all([datasets, agent]).then(() => {
-      if (generation === this.generation) this.loading.set(false);
+    this.ready = Promise.all([datasets, skills, agent]).then(() => {
+      if (generation !== this.generation) return;
+      const draft = draftConfig as AgentConfig | null;
+      if (draft && agentId !== null) {
+        // A draft saved with the tool and skill checkboxes gets links for them.
+        const text = legacyInstructions(
+          draft,
+          (library as SkillSummary[] | null) ?? [],
+        );
+        if (text !== null) {
+          this.form.update((form) => ({ ...form, instructions: text }));
+          this.legacyNotice.set(true);
+        }
+      }
+      this.loading.set(false);
     });
   }
 
@@ -233,6 +284,7 @@ export class AgentEditorService {
     this.agentId.set(res.agent.key ?? res.agent.id);
     // The snapshot that was sent, not what was typed while it was in flight.
     this.saved.set(form);
+    this.legacyNotice.set(false);
     this.status.set(res.agent.status ?? 'draft');
     this.hasUnpublishedChanges.set(!!res.agent.hasUnpublishedChanges);
     if (options.refreshPreview !== false) this.refreshPreview();

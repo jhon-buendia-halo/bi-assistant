@@ -13,6 +13,7 @@ const SAMPLES = [
   { id: 'formula-1', name: 'Formula 1', required: 48 },
   { id: 'intellify', name: 'Intellify', required: 49 },
   { id: 'world-cup-rest', name: 'World Cup (REST API)', required: 9 },
+  { id: 'intellify-api', name: 'Intellify RFP API', required: 10 },
 ];
 
 async function openTestingData(page: Page): Promise<void> {
@@ -138,4 +139,65 @@ test.describe('loads the Intellify sample into a new database', () => {
       .click();
     await expect(page.getByText('Intellify PostgreSQL')).toBeVisible();
   });
+});
+
+test('registers the Intellify RFP API', async ({ app, page }, testInfo) => {
+  // Given the Intellify sample is loaded into the database the API reads
+  // (the shared `intellify_mercer_demo`, see .claude/skills/intellify-api).
+  // Registering writes to no database (R21), so the shared one is safe.
+  const apiUrl = app.intellifyApiUrl;
+  expect(apiUrl, 'the CLI banner names the embedded API').toBeTruthy();
+  await openTestingData(page);
+  await card(page, 'intellify-api').getByRole('button').first().click();
+
+  await expect(
+    page.getByTestId('testing-data-api-url-intellify-api'),
+  ).toHaveText(apiUrl!);
+  await expect(page.getByTestId('testing-data-host-intellify-api')).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByTestId('testing-data-database-intellify-api'),
+  ).toHaveCount(0);
+  await expect(page.getByTestId('testing-data-test-intellify-api')).toHaveCount(
+    0,
+  );
+
+  const register = page.getByTestId('testing-data-load-intellify-api');
+  await expect(register).toHaveText('Register testing data');
+  await register.click();
+  await expect(
+    page.getByTestId('testing-data-confirm-panel-intellify-api'),
+  ).toContainText(
+    `This registers the Intellify RFP API at ${apiUrl} as a datasource and dataset. No database changes are made.`,
+  );
+  await page.getByTestId('testing-data-confirm-intellify-api').click();
+
+  await expect(
+    page
+      .getByRole('region', { name: 'Notifications' })
+      .getByText(
+        `Registered the Intellify RFP API at ${apiUrl} and loaded 10 entities into dataset "Intellify RFP API"`,
+      ),
+  ).toBeVisible({ timeout: 60_000 });
+  await expect(status(page, 'intellify-api')).toHaveText('10/10 entities');
+  await page.screenshot({
+    path: testInfo.outputPath('testing-data-intellify-api-registered.png'),
+  });
+
+  await page
+    .getByRole('navigation', { name: 'Settings navigation' })
+    .getByRole('button', { name: 'Datasource Configuration' })
+    .click();
+  await expect(
+    page
+      .locator('[data-testid^="datasource-"]')
+      .filter({ hasText: 'Intellify RFP API' }),
+  ).toBeVisible();
+
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Datasets' })
+    .click();
+  await expect(page.getByTestId('dataset-Intellify RFP API')).toBeVisible();
 });

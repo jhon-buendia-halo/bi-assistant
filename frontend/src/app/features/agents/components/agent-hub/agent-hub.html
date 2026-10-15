@@ -2,21 +2,31 @@
   <!-- Header -->
   <div class="flex items-center">
     <h2
-      class="text-[24px] leading-8 font-light tracking-[0.12px] text-fg-strong"
+      class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
     >
       Agents
     </h2>
-    @if (auth.can("create-agents")) {
+    <div class="ml-auto flex items-center gap-2">
       <button
         type="button"
-        data-testid="agent-new"
-        (click)="newAgent.emit()"
-        class="btn btn-primary ml-auto"
+        data-testid="agent-skills-library"
+        (click)="openSkills.emit()"
+        class="btn btn-secondary"
       >
-        <lucide-angular [img]="Plus" [size]="14" />
-        <span>New agent</span>
+        <lucide-angular [img]="BookOpen" [size]="14" />
+        <span>Skills</span>
       </button>
-    }
+              <button
+          type="button"
+          data-testid="agent-new"
+          (click)="newAgent.emit()"
+          class="btn btn-primary"
+        >
+          <lucide-angular [img]="Plus" [size]="14" />
+          <span>New agent</span>
+        </button>
+      
+    </div>
   </div>
 
   <!-- Search: a full-width row under the header -->

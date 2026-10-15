@@ -15,6 +15,7 @@ const view: AgentSkillsView = {
     {
       name: 'sql-style',
       description: 'Use when writing SQL for the World Cup data.',
+      level: 'built-in',
       loading: 'on-demand',
       files: [
         { path: 'SKILL.md', size: 120 },
@@ -25,6 +26,7 @@ const view: AgentSkillsView = {
     {
       name: 'curated-knowledge',
       description: 'Use when the turn carries a curated knowledge block.',
+      level: 'built-in',
       loading: 'harness',
       files: [{ path: 'SKILL.md', size: 80 }],
     },
@@ -101,22 +103,25 @@ describe('AgentSkills', () => {
       'agent-skill-sql-style',
     ]);
 
-    // Name, the loading badge and the description: no level badge,
-    // overrides label or warnings.
+    // Name, the loading and level badges and the description.
     const parts = (row: HTMLElement) =>
       Array.from(
-        row.querySelectorAll<HTMLElement>('button > span > span, button > span'),
+        row.querySelectorAll<HTMLElement>(
+          'button > span > span, button > span',
+        ),
       )
         .filter((span) => span.children.length === 0)
         .map((span) => text(span));
     expect(parts(rows[0])).toEqual([
       'curated-knowledge',
       'Loaded by the app',
+      'Built-in',
       'Use when the turn carries a curated knowledge block.',
     ]);
     expect(parts(rows[1])).toEqual([
       'sql-style',
       'On demand',
+      'Built-in',
       'Use when writing SQL for the World Cup data.',
     ]);
     expect(rows[0].querySelector('lucide-angular')).toBeNull();

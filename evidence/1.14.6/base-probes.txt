@@ -1,0 +1,10 @@
+# Probes against origin/main (ed2069b), local mode signed in as Demo User
+GET /skills -> HTTP 404
+GET /skills/built-in -> HTTP 404
+PUT /agents/assistant/prompt -> HTTP 404
+DELETE /agents/assistant/prompt -> HTTP 404
+POST /skills body {name:fiscal-calendar,...} -> HTTP 404
+GET /agents/assistant keys: ['datasets', 'description', 'hasUnpublishedChanges', 'id', 'instructions', 'key', 'kind', 'memory', 'missingDatasets', 'model', 'name', 'owner', 'pinned', 'starterQuestions', 'status', 'toolDetails', 'tools']
+POST /agents with [[tool:sample_rows]] then GET draft tools/skills:
+  create answer: True Agent "KPI lookup" saved as draft 7eb75dbe-c097-4e27-9ac3-ee12f8bd0925
+GET /agents/<id> on base: tools = ['ask_clarification', 'create_visual', 'describe_entity', 'list_entities', 'read_file', 'run_readonly_sql', 'sample_rows', 'update_visual'] | toolLinks False | llm False | draft keys ['datasets', 'description', 'instructions', 'name', 'starterQuestions']

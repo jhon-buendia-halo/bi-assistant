@@ -17,6 +17,10 @@ function stubServices(
     getDatasets: jest.fn(),
     sampleRows: jest.fn(),
     runReadOnlySql: jest.fn(),
+    restTarget: jest.fn(),
+    exportRfpPackage: jest.fn(),
+    showPanelItem: jest.fn(),
+    updateWorkflow: jest.fn(),
     ...overrides,
   };
 }

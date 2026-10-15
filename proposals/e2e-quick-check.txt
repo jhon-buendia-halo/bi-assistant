@@ -1,0 +1,76 @@
+  ✓   1 [web] › e2e/agent-editor.spec.ts:129:5 › creates an agent, previews it, publishes it and deletes it (4.1s)
+  ✓   2 [web] › e2e/agent-editor.spec.ts:178:5 › editing a Live agent keeps its sessions on the Live version until republished (7.7s)
+  ✓   3 [web] › e2e/agent-editor.spec.ts:232:5 › sending in the preview saves the form first (3.4s)
+  ✓   4 [web] › e2e/agent-editor.spec.ts:251:5 › reset and leaving the editor discard the preview (3.6s)
+  ✓   5 [web] › e2e/agent-editor.spec.ts:280:5 › preview needs a dataset, and names must be unique (3.2s)
+  ✓   6 [web] › e2e/agent-editor.spec.ts:302:5 › leaving with unsaved changes asks first (3.2s)
+  ✓   7 [web] › e2e/agent-editor.spec.ts:325:5 › a dataset that no longer exists stays visible in the editor (3.3s)
+  ✓   8 [web] › e2e/agent-editor.spec.ts:347:5 › the editor has no detectable accessibility violations in either theme (4.7s)
+  ✓   9 [web] › e2e/agent-hub.spec.ts:92:5 › shows the built-in agents and mine in sections (2.8s)
+  ✓  10 [web] › e2e/agent-hub.spec.ts:143:5 › search narrows the agents by name or description (2.6s)
+  ✓  11 [web] › e2e/agent-hub.spec.ts:159:5 › filters limit the hub to one kind of agent (2.9s)
+  ✓  12 [web] › e2e/agent-hub.spec.ts:181:5 › pinned agents come first in their own section and survive a restart (4.4s)
+  ✓  13 [web] › e2e/agent-hub.spec.ts:241:5 › flags an agent whose dataset no longer exists (2.5s)
+  ✓  14 [web] › e2e/agent-hub.spec.ts:258:5 › a card opens the agent's detail view with its actions (3.3s)
+  ✓  15 [web] › e2e/agent-hub.spec.ts:284:5 › publishing a draft makes it Live (3.4s)
+  ✓  16 [web] › e2e/agent-hub.spec.ts:310:5 › deleting an agent asks first (3.2s)
+  ✓  17 [web] › e2e/agent-hub.spec.ts:338:5 › the hub has no detectable accessibility violations in either theme (4.3s)
+  ✓  18 [web] › e2e/agent-sessions.spec.ts:128:5 › start chat on an agent card opens a session bound to the agent (2.8s)
+  ✓  19 [web] › e2e/agent-sessions.spec.ts:154:5 › only Live agents and the Official agent offer Start chat (3.3s)
+  ✓  20 [web] › e2e/agent-sessions.spec.ts:188:5 › start chat is unavailable when none of the agent's datasets exist (2.6s)
+  ✓  21 [web] › e2e/agent-sessions.spec.ts:208:5 › the agent's Live instructions and model shape every turn (3.4s)
+  ✓  22 [web] › e2e/agent-sessions.spec.ts:262:5 › instructions can't switch off the read-only guard (3.2s)
+  ✓  23 [web] › e2e/agent-sessions.spec.ts:302:5 › deleting the agent keeps its sessions on the plain assistant (7.0s)
+  ✓  24 [web] › e2e/agent-skills.spec.ts:64:5 › shows the designer built-in skill and the content of its files (3.2s)
+  ✓  25 [web] › e2e/agent-skills.spec.ts:104:5 › an agent without skills says so (3.0s)
+  ✓  26 [web] › e2e/agent-skills.spec.ts:113:5 › a user skill and a project override reach the assistant (3.1s)
+  ✓  27 [web] › e2e/agent-skills.spec.ts:184:5 › a broken user skill is skipped and says why (3.0s)
+  ✘  28 [web] › e2e/agents.spec.ts:29:5 › opens an agent from the Agents list and switches between its tabs (13.3s)
+  ✓  29 [web] › e2e/agents.spec.ts:98:5 › shows the stateless, no-tool agents accurately (3.2s)
+  ✘  30 [web] › e2e/agents.spec.ts:119:5 › offers the configured datasources and starts a run from the evals tab (15.9s)
+  ✘  31 [web] › e2e/agents.spec.ts:145:5 › runs only the ticked questions (14.1s)
+  ✓  32 [web] › e2e/agents.spec.ts:174:5 › refuses to run against a datasource with no datasets (4.1s)
+  ✓  33 [web] › e2e/agents.spec.ts:188:5 › explains an incomplete eval dataset without starting a run (4.8s)
+  ✓  34 [web] › e2e/agents.spec.ts:205:5 › opens a question in the right panel with what it is scored on (3.3s)
+  ✘  35 [web] › e2e/agents.spec.ts:231:5 › separates the question suite from past executions (15.8s)
+  ✓  36 [web] › e2e/agents.spec.ts:260:5 › downloads an execution as a Markdown report (6.3s)
+  ✓  37 [web] › e2e/assistant-skills.spec.ts:96:5 › the assistant is offered only its own skills (3.2s)
+  ✓  38 [web] › e2e/assistant-skills.spec.ts:130:5 › a turn without curated knowledge carries no knowledge rules (3.2s)
+  ✓  39 [web] › e2e/assistant-skills.spec.ts:144:5 › a turn with curated knowledge carries the block, and the rules stay on demand (3.2s)
+  ✓  40 [web] › e2e/assistant-skills.spec.ts:223:5 › a user-level skill is offered to the assistant on demand (4.6s)
+  ✓  41 [web] › e2e/assistant-skills.spec.ts:256:5 › the assistant reads a skill's files with read_file, and only those (4.5s)
+  ✓  42 [web] › e2e/assistant-skills.spec.ts:296:5 › a user-level override of the curated-knowledge skill is the one the model reads (4.6s)
+    Error: expect(locator).toContainText(expected) failed
+      - Expect "toContainText" getByTestId('eval-set-world-cup') with timeout 10000ms
+      - waiting for getByTestId('eval-set-world-cup')
+           - unexpected value "World Cup12 questionsQuestions against the bundled World Cup sample (2018 and 2022). Select its PostgreSQL datasource with a saved dataset containing the world_cup tables and views."
+    test-results/agents-opens-an-agent-from-4846d-d-switches-between-its-tabs-web/test-failed-1.png
+    Error: expect(locator).toContainText(expected) failed
+      - Expect "toContainText" getByTestId('eval-run') with timeout 10000ms
+      - waiting for getByTestId('eval-run')
+           - unexpected value "Run 12 selected"
+    test-results/agents-offers-the-configur-17a1b-ts-a-run-from-the-evals-tab-web/test-failed-1.png
+    Error: expect(locator).toContainText(expected) failed
+      - Expect "toContainText" getByTestId('eval-run') with timeout 10000ms
+      - waiting for getByTestId('eval-run')
+           - unexpected value "Run 12 selected"
+    test-results/agents-runs-only-the-ticked-questions-web/test-failed-1.png
+    Error: expect(locator).toHaveCount(expected) failed
+      - Expect "toHaveCount" locator('[data-testid^="eval-case-"]') with timeout 10000ms
+      - waiting for locator('[data-testid^="eval-case-"]')
+        - locator resolved to 0 elements
+        - unexpected value "0"
+           - unexpected value "12"
+    test-results/agents-separates-the-question-suite-from-past-executions-web/test-failed-1.png
+  4 failed
+  38 passed (3.4m)
+  ✓  1 [org] › e2e/org-isolation.spec.ts:34:5 › users share datasources and datasets (4.3s)
+  ✓  2 [org] › e2e/org-isolation.spec.ts:48:5 › sessions are private to their owner (4.2s)
+  ✓  3 [org] › e2e/org-isolation.spec.ts:68:5 › agents and pins are private to their owner (4.8s)
+  ✓  4 [org] › e2e/org-isolation.spec.ts:110:5 › knowledge is private to its owner (4.2s)
+  ✓  5 [org] › e2e/org-permissions.spec.ts:46:5 › a User sees no maker, data or admin controls (3.4s)
+  ✓  6 [org] › e2e/org-permissions.spec.ts:73:5 › a Maker can create an agent (3.3s)
+  ✓  7 [org] › e2e/org-permissions.spec.ts:86:5 › a bootstrap admin sees the Admin area (4.9s)
+  ✓  8 [org] › e2e/org-permissions.spec.ts:127:5 › a Platform admin manages shared settings (3.1s)
+  ✓  9 [org] › e2e/org-permissions.spec.ts:143:5 › an action the user lost the right to is refused (3.3s)
+  9 passed (36.3s)

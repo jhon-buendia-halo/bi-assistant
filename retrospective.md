@@ -14,6 +14,41 @@ Entry template:
 
 ---
 
+## 2026-10-15 — 1.14.2 to 1.14.19 acceptance gate and merge of epic BA-213
+
+### What went well
+- Splitting the gate across four E2E agents by spec-file ownership, each running Playwright on the one shared build with its own `--output` folder, finished 18 stories' E2E in about 25 minutes with no build clash. The final full suite (164 passed) proved the fixes broke nothing.
+- Telling the agents not to touch production code made every app bug come back with a diagnosis: three package-card bugs, R75 and two prompt gaps were fixed once, centrally, then re-run.
+- A frontend unit test caught my first R75 fix, which filtered the built-in skills at the source and hid the RFP Builder's own stage skills from its Graph.
+
+### What went wrong
+- About 330 files sat uncommitted across four stories before anyone asked; the per-story commits had to be split by whole file, so a file touched by several stories sits in one of their commits.
+- The eval gate ran on a saved model whose OpenAI credits ran out mid-run, and parallel RFP eval runs shared one database and saw each other's drafts (a false failure). The epic merged with the evals deferred.
+- Two agents created the same new spec file (`session-management.spec.ts`) at the same time, and two shared one scratch file name; one overwrote the other's first version.
+- `gh` was active on the personal account, so the first PR creation failed; Karma had no Chrome until `CHROME_BIN` pointed at Playwright's Chromium.
+
+### What to do differently
+- Commit each story when its fast loop is green; never let a second story start on top of uncommitted work.
+- Before an eval gate, check the provider has credit for about 3 × (cases) × 2 turns and run the RFP set's runs one after another (they share `intellify_mercer_demo`).
+- When fanning out E2E agents, assign every new Feature's spec file to exactly one agent up front (a Feature shared by two stories goes to one of them) and give each agent its own scratch subfolder.
+- Create PRs with `GH_TOKEN=$(gh auth token --user jhon-buendia-halo)` and run frontend unit tests with `CHROME_BIN` set to Playwright's Chromium (both recorded in memory).
+
+## 2026-10-14 — 1.14.1 ADR, epic spec and roadmap for agent tools and skills (BA-214)
+
+### What went well
+- Searching Jira for open issues on skills before creating the epic found BA-211 (remove the user and project skill folders), which contradicted the plan's "pick existing folder skills". One question settled it before any issue was created, and the stories were reordered around it.
+- Measuring the prompt from the compiled agent (`assistantAgent.getInstructions()`), not from the spec text, gave exact numbers per section. It showed the `## Skills` section is already sent on every call, which made the cost of assigning skills small and easy to argue.
+
+### What went wrong
+- My first suggestion said the first user skill would add about 1,045 characters to every turn. I took that from agents.md 7.4 ("No built-in skill is on demand"), which is stale: `curated-knowledge` has been on demand since ADR-0020, so the section was already there.
+- I proposed reusing folder skills without first checking Jira for open work on skills. BA-211, created the same morning, removed them.
+- Jira from the worktree took three tries: no `.env` there, a blocked attempt to copy the credentials, and a create refused over `$'…'` quoting. `JIRA_CONFIG_FILE` was in the script all along.
+
+### What to do differently
+- Before proposing a design for a subsystem, search Jira for open issues about it (`project = BA AND summary ~ "<area>" AND statusCategory != Done`) and read any created in the last two weeks.
+- Take prompt sizes from the compiled agent, never from spec prose. Keep `evidence/1.14.1/measure-prompt.cjs` as the way to do it.
+- In a worktree, run `jira.sh` with `JIRA_CONFIG_FILE=<main checkout>/.env`, pass plain double-quoted one-line descriptions, and never copy the `.env`.
+
 ## 2026-10-14 — 1.1.2 Intellify sample as a Testing Data fixture (BA-212)
 
 ### What went well

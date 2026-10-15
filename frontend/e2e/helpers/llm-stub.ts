@@ -45,6 +45,12 @@ export interface LlmStub {
   probes: StubProbe[];
   /** Decides each agent call's reply; the default answers `STUB_ANSWER`. */
   reply: (request: StubRequest) => StubReply;
+  /**
+   * Optional: a promise the stub awaits before answering `request` (the
+   * request is recorded at once). Lets a test hold a turn open, e.g. to check
+   * what the app shows while it still streams. Unset answers at once.
+   */
+  hold?: (request: StubRequest) => Promise<void> | undefined;
   close(): Promise<void>;
 }
 
@@ -206,6 +212,14 @@ export async function startLlmStub(): Promise<LlmStub> {
         reasoningEffort: body.reasoning_effort,
       };
       stub.requests.push(request);
+      const held = stub.hold?.(request);
+      if (held) {
+        void held.then(
+          () => respond(res, request.stream, stub.reply(request)),
+          () => res.destroy(),
+        );
+        return;
+      }
       respond(res, request.stream, stub.reply(request));
     });
   });

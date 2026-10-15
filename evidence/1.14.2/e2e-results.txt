@@ -1,0 +1,78 @@
+Command (frontend/, 2026-10-15, branch feat/BA-213-agent-tools-skills, backend/dist + backend/public built from HEAD):
+  npx tsc -p e2e/tsconfig.json && E2E_EVIDENCE_DIR=$PWD/../evidence E2E_SKIP_DOCKER=1 npx playwright test --project=web --reporter=list \
+    e2e/agent-editor.spec.ts e2e/skill-library.spec.ts e2e/builtin-agent-prompts.spec.ts e2e/agent-hub.spec.ts e2e/agent-skills.spec.ts \
+    e2e/agents.spec.ts e2e/agent-sessions.spec.ts e2e/assistant-skills.spec.ts e2e/designer-skills.spec.ts e2e/chat-clarification.spec.ts \
+    e2e/chat-and-visuals.spec.ts e2e/world-cup-workflow.spec.ts
+Whole run: 82 passed (6.8m), 0 failed, 0 skipped. Desktop not run (no desktopOnly() scenario in these files).
+Below: the lines of the spec files this feature's impact analysis lists.
+
+  ✓   1 [web] › e2e/agent-editor.spec.ts:133:5 › creates an agent, previews it, publishes it and deletes it (4.6s)
+  ✓   2 [web] › e2e/agent-editor.spec.ts:182:5 › editing a Live agent keeps its sessions on the Live version until republished (8.4s)
+  ✓   3 [web] › e2e/agent-editor.spec.ts:236:5 › sending in the preview saves the form first (3.9s)
+  ✓   4 [web] › e2e/agent-editor.spec.ts:255:5 › reset and leaving the editor discard the preview (4.4s)
+  ✓   5 [web] › e2e/agent-editor.spec.ts:287:5 › preview needs a dataset, and names must be unique (4.2s)
+  ✓   6 [web] › e2e/agent-editor.spec.ts:309:5 › leaving with unsaved changes asks first (4.0s)
+  ✓   7 [web] › e2e/agent-editor.spec.ts:332:5 › a dataset that no longer exists stays visible in the editor (3.8s)
+  ✓   8 [web] › e2e/agent-editor.spec.ts:354:5 › the editor has no detectable accessibility violations in either theme (5.0s)
+  ✓   9 [web] › e2e/agent-editor.spec.ts:490:5 › only linked tools are offered to the model (4.8s)
+  ✓  10 [web] › e2e/agent-editor.spec.ts:526:5 › a linked skill reaches the preview, and the Live agent keeps its copy (5.5s)
+  ✓  11 [web] › e2e/agent-editor.spec.ts:600:5 › a linked skill's tools come with it (5.6s)
+  ✓  12 [web] › e2e/agent-editor.spec.ts:632:5 › a slash inside a word does not open the link menu (4.7s)
+  ✓  13 [web] › e2e/agent-editor.spec.ts:643:5 › an unknown link is refused (4.4s)
+  ✓  14 [web] › e2e/agent-editor.spec.ts:664:5 › an agent saved before links gets a links line (4.4s)
+  ✓  15 [web] › e2e/agent-editor.spec.ts:693:5 › the Graph tab shows the chain from instructions to skill to tool (4.1s)
+  ✓  16 [web] › e2e/agent-editor.spec.ts:743:5 › the LLM Config tab shows whether the key is set and never the key (3.8s)
+  ✓  17 [web] › e2e/agent-editor.spec.ts:764:5 › editing the System Prompt in place saves a draft with the link (4.5s)
+  ✓  18 [web] › e2e/agent-editor.spec.ts:819:5 › a broken link disables Save prompt (4.1s)
+  ✓  19 [web] › e2e/agent-editor.spec.ts:844:5 › leaving an unsaved System Prompt edit asks first (4.2s)
+  ✓  20 [web] › e2e/agent-editor.spec.ts:869:5 › the Chat Box tab chats with the draft, and New chat starts over (4.4s)
+  ✓  21 [web] › e2e/agent-editor.spec.ts:903:5 › the Chat Box needs a dataset (4.0s)
+  ✓  22 [web] › e2e/agent-editor.spec.ts:912:5 › the Official agent's Chat Box offers Start chat (4.1s)
+  ✓  23 [web] › e2e/agent-editor.spec.ts:921:5 › the Skills tab shows what is linked and creates a skill inline (4.4s)
+  ✓  34 [web] › e2e/agent-sessions.spec.ts:132:5 › start chat on an agent card opens a session bound to the agent (4.0s)
+  ✓  35 [web] › e2e/agent-sessions.spec.ts:159:5 › only Live agents and the Official agent offer Start chat (4.2s)
+  ✓  36 [web] › e2e/agent-sessions.spec.ts:193:5 › start chat is unavailable when none of the agent's datasets exist (3.1s)
+  ✓  37 [web] › e2e/agent-sessions.spec.ts:213:5 › the agent's Live instructions and model shape every turn (4.1s)
+  ✓  38 [web] › e2e/agent-sessions.spec.ts:267:5 › instructions can't switch off the read-only guard (4.3s)
+  ✓  39 [web] › e2e/agent-sessions.spec.ts:307:5 › deleting the agent keeps its sessions on the plain assistant (7.8s)
+  ✓  40 [web] › e2e/agent-sessions.spec.ts:352:5 › the agent's tool selection and skills apply to every turn (4.2s)
+  ✓  45 [web] › e2e/agents.spec.ts:31:5 › opens an agent from the Agents list and switches between its tabs (5.0s)
+  ✓  46 [web] › e2e/agents.spec.ts:115:5 › shows the stateless, no-tool agents accurately (4.3s)
+  ✓  47 [web] › e2e/agents.spec.ts:139:5 › offers the configured datasources and starts a run from the evals tab (7.3s)
+  ✓  48 [web] › e2e/agents.spec.ts:168:5 › runs only the ticked questions (5.0s)
+  ✓  49 [web] › e2e/agents.spec.ts:200:5 › refuses to run against a datasource with no datasets (4.7s)
+  ✓  50 [web] › e2e/agents.spec.ts:217:5 › explains an incomplete eval dataset without starting a run (5.9s)
+  ✓  51 [web] › e2e/agents.spec.ts:237:5 › opens a question in the right panel with what it is scored on (3.9s)
+  ✓  52 [web] › e2e/agents.spec.ts:266:5 › separates the question suite from past executions (7.4s)
+  ✓  53 [web] › e2e/agents.spec.ts:298:5 › downloads an execution as a Markdown report (7.7s)
+  ✓  66 [web] › e2e/chat-and-visuals.spec.ts:141:5 › renders streamed reasoning, tool activity, final Markdown, and supports stopping (7.5s)
+  ✓  67 [web] › e2e/chat-and-visuals.spec.ts:170:5 › renders a deterministic interactive visualization and its version controls (7.5s)
+  ✓  68 [web] › e2e/chat-clarification.spec.ts:53:5 › answering a clarification (4.4s)
+  ✓  69 [web] › e2e/chat-clarification.spec.ts:95:5 › a malformed clarification is asked again, never shown without options (4.1s)
+  ✓  79 [web] › e2e/world-cup-workflow.spec.ts:15:5 › creates a PostgreSQL datasource, dataset, and session using the real World Cup database (5.9s)
+  ✓  80 [web] › e2e/world-cup-workflow.spec.ts:44:5 › preserves masked credentials when editing and supports datasource deletion (4.5s)
+  ✓  81 [web] › e2e/world-cup-workflow.spec.ts:70:5 › surfaces a failed connection in both the form and system diagnostics (5.0s)
+  ✓  82 [web] › e2e/world-cup-workflow.spec.ts:98:5 › shows the real catalog schema and column metadata before a dataset is saved (5.3s)
+
+47 of these passed.
+
+--- Backend API e2e (Feature "Agent definitions (API)") ---
+Command: npx jest --config ./test/jest-e2e.json user-agents  (cwd backend/, = npm run test:e2e -- user-agents; boots backend/dist built from HEAD)
+test/user-agents.e2e-spec.ts
+  PASS Agent definitions (API) > Creating an agent stores a draft (35 ms)
+  PASS Agent definitions (API) > Publishing makes the draft Live (8 ms)
+  PASS Agent definitions (API) > Editing a Live agent keeps serving the Live version (12 ms)
+  PASS Agent definitions (API) > Names must be unique and publishing needs a dataset (9 ms)
+  PASS Agent definitions (API) > Built-in agents are read-only (6 ms)
+  PASS Agent definitions (API) > Pins apply to user and built-in agents and survive a restart (2095 ms)
+  PASS Agent definitions (API) > A user agent's detail reports the assistant's tools with its draft and Live version (17 ms)
+  PASS Agent definitions (API) > Unknown ids are reported as not found (14 ms)
+  PASS Agent definitions (API) > Deleting an agent (9 ms)
+  PASS Agent definitions (API): links, skills and LLM settings > Skills refuse a bad name or description (18 ms)
+  PASS Agent definitions (API): links, skills and LLM settings > Tools and skills are derived from the links in the instructions (19 ms)
+  PASS Agent definitions (API): links, skills and LLM settings > Unknown links are refused (39 ms)
+  PASS Agent definitions (API): links, skills and LLM settings > A skill links tools only (4 ms)
+  PASS Agent definitions (API): links, skills and LLM settings > The detail of an agent shows its links and its LLM settings (43 ms)
+  PASS Agent definitions (API): links, skills and LLM settings > A skill that an agent's draft links can't be deleted or renamed (6 ms)
+  PASS Agent definitions (API): links, skills and LLM settings > Publishing copies the skills and a later skill edit leaves the Live copy (17 ms)
+Tests: 16 passed, 0 failed, 16 total

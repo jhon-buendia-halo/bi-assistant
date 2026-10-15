@@ -1,10 +1,8 @@
-import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import { Body, Controller, Get, Put } from '@nestjs/common';
 import type { UiPreferences } from './entities/ui-preferences.entity';
 import { UiPreferencesService } from './ui-preferences.service';
 
 @Controller('ui-preferences')
-@RequirePermission('use-agents')
 export class UiPreferencesController {
   constructor(private readonly preferences: UiPreferencesService) {}
 

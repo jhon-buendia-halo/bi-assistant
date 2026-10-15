@@ -1,13 +1,12 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
-import {
-  CurrentUserService,
-  LOCAL_USER,
-} from '../../modules/auth/current-user.service';
 import { SessionsService } from '../../modules/sessions/sessions.service';
 import { KnowledgeService } from '../../modules/knowledge/knowledge.service';
-import { ASSISTANT_EVAL_SETS, runAssistantEvals } from './assistant.evals';
+import { randomUUID } from 'crypto';
+import { writeFileSync } from 'fs';
+import { runAssistantEvals } from './assistant.evals';
 import { selectCliEvalCases } from './eval-cli-selection';
+import { EVAL_SETS, agentForCases, evalTargetFor } from './eval-sets';
 
 /**
  * CLI entry point for the same suite the Agents → Evals tab runs.
@@ -36,9 +35,17 @@ async function main(): Promise<void> {
   }
   // Pick the questions before booting anything: with no selection every set
   // would run, and the one-fixture preflight refuses that (agents.md 8.5).
-  const selection = selectCliEvalCases(process.env, ASSISTANT_EVAL_SETS);
+  const selection = selectCliEvalCases(process.env, EVAL_SETS);
   if ('error' in selection) {
     console.error(selection.error);
+    process.exitCode = 1;
+    return;
+  }
+  // The agent the questions run on: the assistant, or the RFP Builder for
+  // EVAL_SET=rfp (agents.md 8.1).
+  const agent = agentForCases(selection.caseIds);
+  if ('error' in agent) {
+    console.error(agent.error);
     process.exitCode = 1;
     return;
   }
@@ -48,18 +55,17 @@ async function main(): Promise<void> {
   });
 
   try {
-    await app
-      .get(CurrentUserService)
-      .runAs(LOCAL_USER, () => runAsDemoUser(app, datasets, selection.caseIds));
+    await runEvals(app, datasets, selection.caseIds, agent.agentKey);
   } finally {
     await app.close();
   }
 }
 
-async function runAsDemoUser(
+async function runEvals(
   app: Awaited<ReturnType<typeof NestFactory.createApplicationContext>>,
   datasets: string[],
   caseIds: string[],
+  agentKey: string,
 ): Promise<void> {
   // Same Nest app the eval-runs.service in-app runner uses, so a throwaway
   // session for create_visual/update_visual works here too — no CLI-only
@@ -76,14 +82,23 @@ async function runAsDemoUser(
       const mark = result.passed ? 'PASS' : 'FAIL';
       console.log(`${mark}  ${result.id}  (${result.durationMs}ms)`);
       if (result.error) console.log(`      error: ${result.error}`);
-      for (const [id, score] of Object.entries(result.scores)) {
-        console.log(`      ${id}: ${score}`);
+      // Every check, built-in, custom or judge, with why a failed one failed.
+      for (const check of result.checkResults) {
+        const verdict = check.passed ? 'pass' : 'FAIL';
+        console.log(
+          `      ${verdict} ${check.id}: ${check.description.slice(0, 120)}` +
+            (check.reason ? `\n           ↳ ${check.reason}` : ''),
+        );
       }
     },
     caseIds,
     sessions,
     knowledgeBlock,
+    evalTargetFor(agentKey, randomUUID()),
   );
+  // The whole run (answers and tool calls included) for reading failures.
+  const resultsFile = process.env['EVAL_RESULTS_FILE'];
+  if (resultsFile) writeFileSync(resultsFile, JSON.stringify(results, null, 2));
   const passed = results.filter((result) => result.passed).length;
   console.log(`\n${passed}/${results.length} questions passed`);
   process.exitCode = passed === results.length ? 0 : 1;

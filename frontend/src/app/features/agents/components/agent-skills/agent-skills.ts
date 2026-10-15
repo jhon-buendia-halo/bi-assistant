@@ -13,6 +13,8 @@ import {
   AgentSkillsView,
   AgentsApiService,
 } from '../../services/agents-api.service';
+import { knownLinks } from '../../services/prompt-links';
+import { LinkedText } from '../linked-text/linked-text';
 
 /** What an expanded skill row shows on its right: the selected file. */
 interface OpenSkill {
@@ -29,7 +31,7 @@ interface OpenSkill {
  */
 @Component({
   selector: 'app-agent-skills',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, LinkedText],
   templateUrl: './agent-skills.html',
 })
 export class AgentSkills {
@@ -37,6 +39,9 @@ export class AgentSkills {
   readonly Loader2 = Loader2;
 
   private readonly api = inject(AgentsApiService);
+
+  /** The tools an in-app skill's body can link; other links show as not found. */
+  protected readonly knownLinks = knownLinks([]);
 
   /** Key the skill files are read through. */
   readonly agentKey = input.required<string>();

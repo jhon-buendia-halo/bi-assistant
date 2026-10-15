@@ -20,9 +20,6 @@ if (fs.existsSync(localEnv)) {
 
 const snapshots = '{snapshotDir}/{testFileDir}/{testFileName}-snapshots/{arg}';
 
-/** The org server Features run only in the `org` project (BA-163). */
-const orgSpecs = /[\\/]org-[^\\/]*\.spec\.ts$/;
-
 export default defineConfig<object, { target: Target }>({
   testDir: './e2e',
   outputDir: './test-results',
@@ -48,25 +45,16 @@ export default defineConfig<object, { target: Target }>({
   },
   // `web` is the default target; `desktop` runs only when asked for (see
   // the Test target convention in CLAUDE.md). Pick one with --project.
-  // `org` drives the web app in org server mode (`npm run test:e2e:org`).
   projects: [
     {
       name: 'web',
       use: { target: 'web' },
-      testIgnore: orgSpecs,
       snapshotPathTemplate: `${snapshots}-web-{platform}{ext}`,
     },
     {
       name: 'desktop',
       use: { target: 'desktop' },
-      testIgnore: orgSpecs,
       snapshotPathTemplate: `${snapshots}-{platform}{ext}`,
-    },
-    {
-      name: 'org',
-      use: { target: 'web' },
-      testMatch: orgSpecs,
-      snapshotPathTemplate: `${snapshots}-org-{platform}{ext}`,
     },
   ],
 });

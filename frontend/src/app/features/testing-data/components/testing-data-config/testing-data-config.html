@@ -84,116 +84,130 @@
                 </p>
               }
 
-              <p class="text-[13px] font-medium text-fg">Connection</p>
+              @if (fixture.selfRegistering) {
+                @if (fixture.apiUrl) {
+                  <p class="text-[13px] text-fg-muted">
+                    API URL:
+                    <span
+                      [attr.data-testid]="'testing-data-api-url-' + fixture.id"
+                      class="font-mono"
+                      >{{ fixture.apiUrl }}</span
+                    >
+                  </p>
+                }
+              } @else {
+                <p class="text-[13px] font-medium text-fg">Connection</p>
 
-              <div class="grid grid-cols-3 gap-3">
-                <label class="col-span-2 flex flex-col gap-1">
+                <div class="grid grid-cols-3 gap-3">
+                  <label class="col-span-2 flex flex-col gap-1">
+                    <span class="field-label"
+                      >Host</span
+                    >
+                    <input
+                      type="text"
+                      [attr.data-testid]="'testing-data-host-' + fixture.id"
+                      placeholder="localhost"
+                      [value]="connectionFor(fixture.id).host"
+                      (input)="
+                        patch(fixture.id, { host: $any($event.target).value })
+                      "
+                      class="field"
+                    />
+                  </label>
+                  <label class="flex flex-col gap-1">
+                    <span class="field-label"
+                      >Port</span
+                    >
+                    <input
+                      type="number"
+                      [attr.data-testid]="'testing-data-port-' + fixture.id"
+                      placeholder="5432"
+                      [value]="connectionFor(fixture.id).port"
+                      (input)="
+                        patch(fixture.id, {
+                          port: +$any($event.target).value,
+                        })
+                      "
+                      class="field"
+                    />
+                  </label>
+                </div>
+
+                <label class="flex flex-col gap-1">
                   <span class="field-label"
-                    >Host</span
+                    >Database</span
                   >
                   <input
                     type="text"
-                    [attr.data-testid]="'testing-data-host-' + fixture.id"
-                    placeholder="localhost"
-                    [value]="connectionFor(fixture.id).host"
+                    [attr.data-testid]="'testing-data-database-' + fixture.id"
+                    [value]="connectionFor(fixture.id).database"
                     (input)="
-                      patch(fixture.id, { host: $any($event.target).value })
+                      patch(fixture.id, { database: $any($event.target).value })
                     "
                     class="field"
                   />
                 </label>
-                <label class="flex flex-col gap-1">
-                  <span class="field-label"
-                    >Port</span
-                  >
+
+                <div class="grid grid-cols-2 gap-3">
+                  <label class="flex flex-col gap-1">
+                    <span class="field-label"
+                      >User</span
+                    >
+                    <input
+                      type="text"
+                      [attr.data-testid]="'testing-data-user-' + fixture.id"
+                      placeholder="postgres"
+                      [value]="connectionFor(fixture.id).user"
+                      (input)="
+                        patch(fixture.id, { user: $any($event.target).value })
+                      "
+                      class="field"
+                    />
+                  </label>
+                  <label class="flex flex-col gap-1">
+                    <span class="field-label"
+                      >Password</span
+                    >
+                    <input
+                      type="password"
+                      [attr.data-testid]="'testing-data-password-' + fixture.id"
+                      placeholder="••••••••"
+                      [value]="connectionFor(fixture.id).password"
+                      (input)="
+                        patch(fixture.id, {
+                          password: $any($event.target).value,
+                        })
+                      "
+                      class="field"
+                    />
+                  </label>
+                </div>
+
+                <label class="flex items-center gap-2 text-[12px] text-fg-muted">
                   <input
-                    type="number"
-                    [attr.data-testid]="'testing-data-port-' + fixture.id"
-                    placeholder="5432"
-                    [value]="connectionFor(fixture.id).port"
-                    (input)="
-                      patch(fixture.id, {
-                        port: +$any($event.target).value,
-                      })
+                    type="checkbox"
+                    [checked]="connectionFor(fixture.id).ssl"
+                    (change)="
+                      patch(fixture.id, { ssl: $any($event.target).checked })
                     "
-                    class="field"
+                    class="h-3.5 w-3.5 accent-primary"
                   />
+                  <span>Use SSL</span>
                 </label>
-              </div>
 
-              <label class="flex flex-col gap-1">
-                <span class="field-label"
-                  >Database</span
-                >
-                <input
-                  type="text"
-                  [attr.data-testid]="'testing-data-database-' + fixture.id"
-                  [value]="connectionFor(fixture.id).database"
-                  (input)="
-                    patch(fixture.id, { database: $any($event.target).value })
-                  "
-                  class="field"
-                />
-              </label>
-
-              <div class="grid grid-cols-2 gap-3">
-                <label class="flex flex-col gap-1">
-                  <span class="field-label"
-                    >User</span
+                @if (testResultFor(fixture.id); as result) {
+                  <p
+                    class="whitespace-pre-wrap text-[12px]"
+                    [class.text-on-success-soft]="result.ok"
+                    [class.text-on-danger-soft]="!result.ok"
                   >
-                  <input
-                    type="text"
-                    [attr.data-testid]="'testing-data-user-' + fixture.id"
-                    placeholder="postgres"
-                    [value]="connectionFor(fixture.id).user"
-                    (input)="
-                      patch(fixture.id, { user: $any($event.target).value })
-                    "
-                    class="field"
-                  />
-                </label>
-                <label class="flex flex-col gap-1">
-                  <span class="field-label"
-                    >Password</span
-                  >
-                  <input
-                    type="password"
-                    [attr.data-testid]="'testing-data-password-' + fixture.id"
-                    placeholder="••••••••"
-                    [value]="connectionFor(fixture.id).password"
-                    (input)="
-                      patch(fixture.id, {
-                        password: $any($event.target).value,
-                      })
-                    "
-                    class="field"
-                  />
-                </label>
-              </div>
-
-              <label class="flex items-center gap-2 text-[12px] text-fg-muted">
-                <input
-                  type="checkbox"
-                  [checked]="connectionFor(fixture.id).ssl"
-                  (change)="
-                    patch(fixture.id, { ssl: $any($event.target).checked })
-                  "
-                  class="h-3.5 w-3.5 accent-primary"
-                />
-                <span>Use SSL</span>
-              </label>
-
-              @if (testResultFor(fixture.id); as result) {
-                <p
-                  class="whitespace-pre-wrap text-[12px]"
-                  [class.text-on-success-soft]="result.ok"
-                  [class.text-on-danger-soft]="!result.ok"
-                >
-                  {{ result.message }}
-                </p>
+                    {{ result.message }}
+                  </p>
+                }
               }
 
               <div class="mt-1 flex items-center gap-2">
+                @if (!fixture.selfRegistering) {
                 <button
                   type="button"
                   [attr.data-testid]="'testing-data-test-' + fixture.id"
@@ -215,6 +229,7 @@
                     <span>Test connection</span>
                   }
                 </button>
+                }
                 <button
                   type="button"
                   [attr.data-testid]="'testing-data-load-' + fixture.id"
@@ -257,7 +272,16 @@
                       [size]="14"
                       class="mt-0.5 shrink-0"
                     />
-                    @if (fixture.seedable) {
+                    @if (fixture.selfRegistering) {
+                      <span>
+                        This registers the {{ fixture.name }} at
+                        <span class="font-mono">{{
+                          fixture.apiUrl ?? "its URL"
+                        }}</span>
+                        as a datasource and dataset. No database changes are
+                        made.
+                      </span>
+                    } @else if (fixture.seedable) {
                       <span>
                         This drops and recreates schema
                         <code class="rounded bg-surface-muted px-1 py-0.5">{{

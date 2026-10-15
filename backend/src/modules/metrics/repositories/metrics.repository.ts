@@ -1,16 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { OWNED_METRICS_STORE } from '../../../infrastructure/database/doc-store';
+import { METRICS_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
 import type { MetricDoc } from '../entities/metric.entity';
 
-/**
- * Curated metric definitions, keyed by id and unique by `name` per owner
- * (owner-scoped, data-model 3.15).
- */
+/** Curated metric definitions, keyed by id and unique by `name`. */
 @Injectable()
 export class MetricsRepository {
   constructor(
-    @Inject(OWNED_METRICS_STORE) private readonly store: DocStore<MetricDoc>,
+    @Inject(METRICS_STORE) private readonly store: DocStore<MetricDoc>,
   ) {}
 
   list(): Promise<MetricDoc[]> {

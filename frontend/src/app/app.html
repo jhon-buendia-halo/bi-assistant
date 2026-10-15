@@ -14,31 +14,40 @@
 
   <app-backend-status-banner class="relative" />
 
-  <div class="relative flex min-h-0 flex-1 gap-3 p-3">
+  <div class="relative flex min-h-0 flex-1 gap-2 p-2">
     <!-- Navigation rail; the menu button widens it into the drawer -->
     <aside
       aria-label="Navigation rail"
-      class="flex shrink-0 flex-col gap-3 overflow-hidden rounded-xl bg-rail px-2 pt-2 pb-4 transition-[width] duration-150"
-      [class.w-16]="!navExpanded()"
-      [class.w-60]="navExpanded()"
+      class="flex shrink-0 flex-col gap-2 overflow-hidden rounded-xl bg-rail px-2 pt-1 pb-3 transition-[width] duration-150"
+      [class.w-14]="!navExpanded()"
+      [class.w-52]="navExpanded()"
     >
       <!-- Clears the macOS traffic lights; drags the window -->
-      <div class="app-drag h-6 w-full shrink-0"></div>
+      <div class="app-drag h-5 w-full shrink-0"></div>
 
-      <button
-        type="button"
-        (click)="toggleNav()"
-        [title]="navExpanded() ? 'Collapse navigation' : 'Expand navigation'"
-        [attr.aria-label]="navExpanded() ? 'Collapse navigation' : 'Expand navigation'"
-        [attr.aria-expanded]="navExpanded()"
-        class="flex h-12 shrink-0 items-center rounded-lg px-3 text-icon hover:bg-surface-muted"
-      >
-        <lucide-angular [img]="Menu" [size]="24" />
-      </button>
+      <!-- The menu button: beside the title in the drawer, alone on the narrow rail -->
+      <ng-template #navToggle>
+        <button
+          type="button"
+          (click)="toggleNav()"
+          [title]="navExpanded() ? 'Collapse navigation' : 'Expand navigation'"
+          [attr.aria-label]="navExpanded() ? 'Collapse navigation' : 'Expand navigation'"
+          [attr.aria-expanded]="navExpanded()"
+          class="flex size-8 shrink-0 items-center justify-center rounded-lg text-icon hover:bg-surface-muted"
+        >
+          <lucide-angular [img]="Menu" [size]="18" />
+        </button>
+      </ng-template>
 
-      <div class="flex shrink-0 items-center gap-3 px-3.5 py-0.5">
+      @if (!navExpanded()) {
+        <div class="flex shrink-0 px-1">
+          <ng-container *ngTemplateOutlet="navToggle" />
+        </div>
+      }
+
+      <div class="flex h-9 shrink-0 items-center gap-3 pl-2.5" [class.pr-1]="navExpanded()">
         <span
-          class="flex size-7 shrink-0 items-center justify-center rounded-full"
+          class="flex size-6 shrink-0 items-center justify-center rounded-full"
           style="background: var(--logo-gradient)"
         >
           <img
@@ -49,15 +58,16 @@
           />
         </span>
         @if (navExpanded()) {
-          <span class="truncate text-[14px] font-semibold text-fg-strong"
+          <span class="min-w-0 flex-1 truncate text-[13px] font-semibold text-fg-strong"
             >Agentic Hub</span
           >
+          <ng-container *ngTemplateOutlet="navToggle" />
         }
       </div>
 
       <nav
         aria-label="Workspace navigation"
-        class="flex shrink-0 flex-col gap-2"
+        class="flex shrink-0 flex-col gap-1"
       >
         @for (item of railItems; track item.area) {
           <button
@@ -66,13 +76,13 @@
             [title]="item.label"
             [attr.aria-label]="item.label"
             [attr.aria-current]="currentArea() === item.area ? 'page' : null"
-            class="flex h-12 items-center gap-3 rounded-lg px-3.5 text-icon transition-colors hover:bg-surface-muted"
+            class="flex h-9 items-center gap-3 rounded-lg px-2.5 text-icon transition-colors hover:bg-surface-muted"
             [class.bg-surface-selected]="currentArea() === item.area"
             [class.text-accent]="currentArea() === item.area"
           >
-            <lucide-angular class="shrink-0" [img]="item.icon" [size]="20" />
+            <lucide-angular class="shrink-0" [img]="item.icon" [size]="18" />
             @if (navExpanded()) {
-              <span class="truncate text-[14px] font-medium text-fg" aria-hidden="true">{{
+              <span class="truncate text-[13px] font-medium text-fg" aria-hidden="true">{{
                 item.label
               }}</span>
             }
@@ -80,122 +90,25 @@
         }
       </nav>
 
-      @if (navExpanded()) {
-        <!-- Sessions list (app-shell R46, R48) -->
-        <div class="flex min-h-0 flex-1 flex-col border-t border-border pt-3">
-          <div class="flex shrink-0 items-center justify-between pr-1 pl-3.5">
-            <h2 class="text-[13px] font-semibold text-fg-strong">Sessions</h2>
-            <button
-              type="button"
-              (click)="openComposer()"
-              title="New conversation"
-              class="btn-icon"
-              [class.bg-surface-selected]="mainView() === 'conversation-new'"
-            >
-              <lucide-angular [img]="Plus" [size]="16" />
-            </button>
-          </div>
-          <nav
-            aria-label="Sessions navigation"
-            class="mt-2 flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto"
-          >
-                @for (session of sessions(); track session.id) {
-                  <div
-                    [attr.data-testid]="'session-' + session.id"
-                    class="list-row group relative flex items-center p-0"
-                    [class.list-row-selected]="
-                      mainView() === 'session-chat' &&
-                      activeSession()?.id === session.id
-                    "
-                  >
-                    <button
-                      type="button"
-                      (click)="openSession(session)"
-                      [disabled]="deletingSession() === session.id"
-                      class="flex min-w-0 flex-1 flex-col px-3 py-2.5 text-left disabled:opacity-50"
-                    >
-                      <span class="truncate text-[13px] font-medium text-fg">{{
-                        session.name
-                      }}</span>
-                      @if (sessionSubtitle(session); as subtitle) {
-                        <span class="truncate text-[12px] text-fg-muted">{{
-                          subtitle
-                        }}</span>
-                      }
-                    </button>
-                    <button
-                      type="button"
-                      title="Session options"
-                      [attr.aria-label]="'Options for ' + session.name"
-                      (click)="toggleSessionMenu(session.id)"
-                      [disabled]="deletingSession() === session.id"
-                      class="btn-icon mr-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                      [class.opacity-100]="sessionMenuOpen() === session.id"
-                    >
-                      <lucide-angular [img]="EllipsisVertical" [size]="14" />
-                    </button>
-                    @if (sessionMenuOpen() === session.id) {
-                      <div
-                        class="fixed inset-0 z-20"
-                        (click)="sessionMenuOpen.set(null)"
-                      ></div>
-                      <div class="menu absolute top-full right-0 z-30 mt-1 w-44">
-                        <button
-                          type="button"
-                          (click)="deleteSession(session)"
-                          class="menu-item text-on-danger-soft"
-                        >
-                          <lucide-angular [img]="Trash2" [size]="14" />
-                          <span>Delete session</span>
-                        </button>
-                      </div>
-                    }
-                  </div>
-                } @empty {
-                  <p class="px-1 text-[12px] text-fg-muted">No sessions yet.</p>
-                }
-          </nav>
-        </div>
-      } @else {
-        <div class="flex-1"></div>
-      }
+      <div class="flex-1"></div>
 
-      <div class="flex shrink-0 flex-col gap-3" [class.items-center]="!navExpanded()">
-        @if (showAdmin()) {
-          <!-- Manage users only, both modes (admin R34) -->
-          <button
-            type="button"
-            (click)="selectArea('admin')"
-            title="Admin"
-            aria-label="Admin"
-            [attr.aria-current]="currentArea() === 'admin' ? 'page' : null"
-            class="flex h-12 w-full items-center gap-3 rounded-lg px-3.5 text-icon transition-colors hover:bg-surface-muted"
-            [class.bg-surface-selected]="currentArea() === 'admin'"
-          >
-            <lucide-angular class="shrink-0" [img]="Shield" [size]="20" />
-            @if (navExpanded()) {
-              <span class="text-[14px] font-medium text-fg" aria-hidden="true">Admin</span>
-            }
-          </button>
-        }
-        @if (auth.user()) {
-          <!-- The signed-in user's initials and account menu, both modes (admin R10) -->
-          <app-account-menu />
-        }
+      <div class="flex shrink-0 flex-col gap-1" [class.items-center]="!navExpanded()">
+        
+        
         <button
           type="button"
           (click)="systemLogsOpen.set(true)"
           title="System logs and diagnostics"
           aria-label="Open system logs"
-          class="relative flex h-12 w-full items-center gap-3 rounded-lg px-3.5 text-icon transition-colors hover:bg-surface-muted"
+          class="relative flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-icon transition-colors hover:bg-surface-muted"
         >
-          <lucide-angular class="shrink-0" [img]="ScrollText" [size]="20" />
+          <lucide-angular class="shrink-0" [img]="ScrollText" [size]="18" />
           @if (navExpanded()) {
-            <span class="text-[14px] font-medium text-fg" aria-hidden="true">System logs</span>
+            <span class="text-[13px] font-medium text-fg" aria-hidden="true">System logs</span>
           }
           @if (diagnostics.issueCount() > 0) {
             <span
-              class="absolute top-1.5 left-7 flex min-w-4 items-center justify-center rounded-full bg-danger-soft px-1 text-[9px] font-semibold leading-4 text-on-danger-soft"
+              class="absolute top-0.5 left-6 flex min-w-4 items-center justify-center rounded-full bg-danger-soft px-1 text-[9px] font-semibold leading-4 text-on-danger-soft"
               >{{
                 diagnostics.issueCount() > 99
                   ? "99+"
@@ -210,20 +123,20 @@
           title="Settings"
           aria-label="Settings"
           [attr.aria-current]="currentArea() === 'settings' ? 'page' : null"
-          class="flex h-12 w-full items-center gap-3 rounded-lg px-3.5 text-icon transition-colors hover:bg-surface-muted"
+          class="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-icon transition-colors hover:bg-surface-muted"
           [class.bg-surface-selected]="currentArea() === 'settings'"
         >
-          <lucide-angular class="shrink-0" [img]="Settings" [size]="20" />
+          <lucide-angular class="shrink-0" [img]="Settings" [size]="18" />
           @if (navExpanded()) {
-            <span class="text-[14px] font-medium text-fg" aria-hidden="true">Settings</span>
+            <span class="text-[13px] font-medium text-fg" aria-hidden="true">Settings</span>
           }
         </button>
         <div class="h-px w-full bg-border"></div>
         <div
-          class="flex flex-col items-center gap-1 pt-1"
+          class="flex flex-col items-center gap-0.5 pt-1"
           title="Powered by LenAI"
         >
-          <span class="flex size-[38px] items-center justify-center overflow-hidden rounded">
+          <span class="flex size-8 items-center justify-center overflow-hidden rounded">
             <img
               src="brand/agentic-hub/lenai-mark.svg"
               alt=""
@@ -245,11 +158,11 @@
 
     <!-- Canvas: banner above the page and the details panel -->
     <div
-      class="flex min-w-0 flex-1 flex-col gap-3 rounded-xl bg-canvas p-4"
+      class="flex min-w-0 flex-1 flex-col gap-2 rounded-xl bg-canvas p-3"
     >
       <div
         role="banner"
-        class="app-drag relative flex min-h-[136px] shrink-0 items-center overflow-hidden rounded-xl px-8 pt-6 pb-8 shadow-subtle"
+        class="app-drag relative flex min-h-[52px] shrink-0 items-center overflow-hidden rounded-xl px-6 py-2 shadow-subtle"
         style="background: var(--banner-base)"
       >
         <img
@@ -265,13 +178,13 @@
           style="background: var(--banner-shade)"
         ></div>
         <h1
-          class="relative text-[40px] leading-[48px] font-semibold tracking-[0.2px] text-white"
+          class="relative text-[22px] leading-7 font-semibold tracking-[0.2px] text-white"
         >
           Agentic Hub
         </h1>
       </div>
 
-      <div class="flex min-h-0 flex-1 gap-3">
+      <div class="flex min-h-0 flex-1 gap-2">
         <main class="card relative flex min-w-0 flex-1 overflow-hidden">
           @if (currentArea() === "settings") {
             <!-- Settings list pane -->
@@ -279,7 +192,7 @@
               class="flex w-[260px] shrink-0 flex-col border-r border-border"
             >
               <div class="p-3">
-                <div class="field flex items-center gap-2 py-1.5">
+                <div class="field flex items-center gap-2">
                   <lucide-angular
                     [img]="Search"
                     [size]="14"
@@ -306,7 +219,7 @@
                     [attr.aria-current]="
                       settingsSection() === section.key ? 'page' : null
                     "
-                    class="list-row flex items-center gap-2.5 py-2 text-[13px]"
+                    class="list-row flex items-center gap-2.5 py-1.5 text-[13px]"
                     [class.list-row-selected]="settingsSection() === section.key"
                   >
                     <lucide-angular
@@ -328,23 +241,23 @@
             @if (currentArea() === "sessions") {
               <!-- Page header (Figma AgentHeader; app-shell R49) -->
               <header
-                class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-8 py-4"
+                class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-6 py-2.5"
               >
                 <div class="flex min-w-0 flex-1 items-center gap-3">
                   <img
                     src="brand/agentic-hub/page-header-icon.svg"
                     alt=""
-                    width="36"
-                    height="36"
+                    width="28"
+                    height="28"
                   />
                   <div class="min-w-0 flex-1">
                     <h2
-                      class="truncate text-[24px] leading-8 font-light tracking-[0.12px] text-fg-strong"
+                      class="truncate text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
                     >
                       {{ pageTitle() }}
                     </h2>
                     @if (showSessionContext()) {
-                      <div class="mt-1 flex min-w-0 items-center gap-2">
+                      <div class="mt-0.5 flex min-w-0 items-center gap-2">
                         @if (activeSession()?.agent; as agent) {
                           <!-- Agent first, then 12 px before the datasources (R57). -->
                           <lucide-angular
@@ -401,6 +314,20 @@
                             >Unavailable</span
                           >
                         }
+                        @if (activeSession(); as session) {
+                          <!-- The session's id, to share when something looks wrong. -->
+                          <button
+                            type="button"
+                            data-testid="session-id"
+                            class="ml-1 inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px] text-fg-muted hover:bg-surface-selected hover:text-fg"
+                            [title]="'Session ID ' + session.id + ' (click to copy)'"
+                            [attr.aria-label]="'Copy session ID ' + session.id"
+                            (click)="copySessionId(session.id)"
+                          >
+                            <span>ID {{ session.id.slice(0, 8) }}</span>
+                            <lucide-angular [img]="Copy" [size]="12" />
+                          </button>
+                        }
                       </div>
                     }
                   </div>
@@ -411,7 +338,7 @@
                     (click)="openComposer()"
                     class="btn btn-secondary"
                   >
-                    <lucide-angular [img]="SquarePen" [size]="20" />
+                    <lucide-angular [img]="SquarePen" [size]="18" />
                     <span>Start New Conversation</span>
                   </button>
                   @if (!rightPanelOpen()) {
@@ -443,35 +370,35 @@
                 @switch (shownSettingsSection()) {
                   @case ("datasources") {
                     <div
-                      class="flex flex-1 justify-center overflow-y-auto px-6 py-10"
+                      class="flex flex-1 justify-center overflow-y-auto px-6 py-6"
                     >
                       <app-datasource-config class="w-full max-w-[560px]" />
                     </div>
                   }
                   @case ("llm") {
                     <div
-                      class="flex flex-1 justify-center overflow-y-auto px-6 py-10"
+                      class="flex flex-1 justify-center overflow-y-auto px-6 py-6"
                     >
                       <app-llm-config class="w-full max-w-[480px]" />
                     </div>
                   }
                   @case ("testing-data") {
                     <div
-                      class="flex flex-1 justify-center overflow-y-auto px-6 py-10"
+                      class="flex flex-1 justify-center overflow-y-auto px-6 py-6"
                     >
                       <app-testing-data-config class="w-full max-w-[560px]" />
                     </div>
                   }
                   @case ("developer") {
                     <div
-                      class="flex flex-1 justify-center overflow-y-auto px-6 py-10"
+                      class="flex flex-1 justify-center overflow-y-auto px-6 py-6"
                     >
                       <app-developer-settings class="w-full max-w-[560px]" />
                     </div>
                   }
                   @case ("appearance") {
                     <div
-                      class="flex flex-1 justify-center overflow-y-auto px-6 py-10"
+                      class="flex flex-1 justify-center overflow-y-auto px-6 py-6"
                     >
                       <app-appearance-settings class="w-full max-w-[560px]" />
                     </div>
@@ -485,7 +412,7 @@
                   }
                 }
               } @else if (mainView() === "dataset") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
                   <app-dataset-list
                     class="w-full max-w-[960px]"
                     (newDataset)="openDatasetEditor(null)"
@@ -493,7 +420,7 @@
                   />
                 </div>
               } @else if (mainView() === "dataset-new") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
                   <app-catalog-browser
                     class="w-full max-w-[960px]"
                     [initial]="editingDataset()"
@@ -501,29 +428,31 @@
                   />
                 </div>
               } @else if (mainView() === "agents") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
                   <app-agent-hub
                     class="w-full max-w-[960px]"
                     (openAgent)="openAgent($event)"
                     (newAgent)="openAgentEditor(null)"
+                    (openSkills)="openSkillsLibrary()"
                     [startingAgentKey]="startingAgentKey()"
                     (startChat)="startChatWithAgent($event)"
                   />
                 </div>
               } @else if (mainView() === "agent-detail" && activeAgentKey()) {
-                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
                   <app-agent-detail
                     class="w-full max-w-[960px]"
                     [agentKey]="activeAgentKey()!"
-                    (back)="mainView.set('agents')"
+                    (back)="closeAgentDetail()"
                     (deleted)="onAgentDeleted()"
                     (edit)="openAgentEditor($event.key)"
+                    (openBuiltInSkill)="openBuiltInSkillEditor($event, true)"
                     [starting]="startingAgentKey() === activeAgentKey()"
                     (startChat)="startChatWithAgent($event)"
                   />
                 </div>
               } @else if (mainView() === "agent-editor") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
                   <app-agent-editor
                     class="w-full max-w-[960px]"
                     [agentId]="editingAgentId()"
@@ -531,15 +460,44 @@
                     (preview)="rightPanelOpen.set(true)"
                   />
                 </div>
+              } @else if (mainView() === "skills") {
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+                  <app-skills-library
+                    class="w-full max-w-[960px]"
+                    (back)="mainView.set('agents')"
+                    (openSkill)="openSkillEditor($event?.id ?? null)"
+                    (openBuiltIn)="openBuiltInSkillEditor($event)"
+                  />
+                </div>
+              } @else if (mainView() === "skill-editor") {
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+                  <app-skill-editor
+                    class="w-full max-w-[960px]"
+                    [skillId]="editingSkillId()"
+                    (back)="openSkillsLibrary()"
+                    (deleted)="mainView.set('skills')"
+                  />
+                </div>
+              } @else if (
+                mainView() === "builtin-skill-editor" && editingBuiltInName();
+                as builtInName
+              ) {
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+                  <app-builtin-skill-editor
+                    class="w-full max-w-[960px]"
+                    [skillName]="builtInName"
+                    (back)="closeBuiltInSkillEditor()"
+                  />
+                </div>
               } @else if (mainView() === "knowledge") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
                   <app-knowledge-list class="w-full max-w-[960px]" />
                 </div>
-              } @else if (mainView() === "admin") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
-                  <app-admin-area class="w-full max-w-[1280px]" />
-                </div>
               } @else if (mainView() === "session-chat" && activeSession()) {
+                <app-workflow-bar
+                  class="block shrink-0"
+                  [workflow]="activeSession()!.workflow"
+                />
                 <app-session-chat
                   class="min-h-0 flex-1"
                   [session]="activeSession()!"
@@ -550,6 +508,8 @@
                   [dataPointSelection]="selectedDataPoint()"
                   (generateVisual)="generateInteractiveVisual($event)"
                   (visualUpdated)="onVisualUpdated($event)"
+                  (panelItem)="onPanelItem($event)"
+                  (workflowChanged)="onWorkflowChanged($event)"
                   (viewVisual)="showVisualization($event, $event.version)"
                   (sessionUpdated)="onSessionUpdated($event)"
                 />
@@ -561,6 +521,112 @@
                   <div
                     class="card w-full max-w-[920px] p-4"
                   >
+                    <div class="relative mb-3 flex flex-col gap-1.5">
+                      <span class="field-label" id="new-session-agent-label"
+                        >Agent</span
+                      >
+                      <button
+                        type="button"
+                        id="new-session-agent"
+                        data-testid="new-session-agent"
+                        class="field flex items-center gap-2 text-left text-[14px]"
+                        aria-haspopup="listbox"
+                        aria-labelledby="new-session-agent-label new-session-agent"
+                        [attr.aria-expanded]="composerAgentMenuOpen()"
+                        [attr.aria-controls]="
+                          composerAgentMenuOpen() ? 'new-session-agent-list' : null
+                        "
+                        [attr.aria-activedescendant]="
+                          composerAgentMenuOpen()
+                            ? 'new-session-agent-option-' + composerAgentActive()
+                            : null
+                        "
+                        (click)="
+                          composerAgentMenuOpen()
+                            ? closeComposerAgentMenu()
+                            : openComposerAgentMenu()
+                        "
+                        (keydown)="onComposerAgentKeydown($event)"
+                      >
+                        <lucide-angular
+                          [img]="Sparkles"
+                          [size]="14"
+                          class="shrink-0 text-fg-muted"
+                        />
+                        <span class="min-w-0 flex-1 truncate">{{
+                          composerAgentName()
+                        }}</span>
+                        <lucide-angular
+                          [img]="ChevronDown"
+                          [size]="14"
+                          class="shrink-0 text-fg-muted"
+                        />
+                      </button>
+                      @if (composerAgentMenuOpen()) {
+                        <button
+                          type="button"
+                          tabindex="-1"
+                          aria-label="Close agent menu"
+                          class="fixed inset-0 z-20 cursor-default"
+                          (click)="closeComposerAgentMenu()"
+                        ></button>
+                        <div
+                          id="new-session-agent-list"
+                          role="listbox"
+                          aria-label="Agent"
+                          class="menu absolute top-full right-0 left-0 z-30 mt-1 max-h-80 overflow-y-auto"
+                        >
+                          @for (
+                            row of composerAgentRows();
+                            track row.key;
+                            let i = $index
+                          ) {
+                            <div
+                              role="option"
+                              [id]="'new-session-agent-option-' + i"
+                              [attr.data-agent-key]="row.key"
+                              [attr.aria-selected]="row.key === composerAgentKey()"
+                              [attr.aria-disabled]="row.disabledReason ? true : null"
+                              class="flex flex-col rounded-lg px-2.5 py-2"
+                              [class.cursor-pointer]="!row.disabledReason"
+                              [class.cursor-not-allowed]="!!row.disabledReason"
+                              [class.bg-surface-selected]="
+                                row.key === composerAgentKey() ||
+                                (i === composerAgentActive() && !row.disabledReason)
+                              "
+                              [class.opacity-70]="!!row.disabledReason"
+                              (mousedown)="$event.preventDefault()"
+                              (mouseenter)="
+                                row.disabledReason ? null : composerAgentActive.set(i)
+                              "
+                              (click)="chooseComposerAgent(row.key)"
+                            >
+                              <span class="truncate text-[13px] text-fg">{{
+                                row.name
+                              }}</span>
+                              @if (row.disabledReason) {
+                                <span
+                                  class="truncate text-[12px] text-on-warning-soft"
+                                  [title]="row.disabledReason"
+                                  >{{ row.disabledReason }}</span
+                                >
+                              } @else if (row.description) {
+                                <span
+                                  class="truncate text-[12px] text-fg-muted"
+                                  [title]="row.description"
+                                  >{{ row.description }}</span
+                                >
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
+                      <span
+                        class="text-[12px] text-fg-muted"
+                        data-testid="new-session-agent-description"
+                        >{{ composerAgentDescription() }}</span
+                      >
+                    </div>
                     <label class="flex flex-col gap-1.5">
                       <span class="field-label">Session name</span>
                       <input
@@ -581,9 +647,7 @@
                           <lucide-angular [img]="Sparkle" [size]="13" />
                           <span>{{ llmModel() ?? "No model configured" }}</span>
                         </button>
-                        <!-- Hidden without Manage LLM configuration (admin R26) -->
-                        @if (auth.can("manage-llm")) {
-                          <div class="relative">
+                                                  <div class="relative">
                             <button
                               (click)="effortMenuOpen.set(!effortMenuOpen())"
                               title="Reasoning effort"
@@ -614,17 +678,22 @@
                               </div>
                             }
                           </div>
-                        }
+                        
                       </div>
                       <div class="flex items-center gap-3">
                         <button
                           (click)="createSession()"
                           [disabled]="
                             creatingSession() ||
-                            selectedDatasets().size === 0 ||
-                            composerName().trim() === ''
+                            (!composerAgent() &&
+                              (selectedDatasets().size === 0 ||
+                                composerName().trim() === ''))
                           "
-                          title="Name the session and select at least one dataset"
+                          [title]="
+                            composerAgent()
+                              ? 'Start a session with this agent'
+                              : 'Name the session and select at least one dataset'
+                          "
                           class="btn btn-primary"
                         >
                           @if (creatingSession()) {
@@ -638,6 +707,20 @@
                     </div>
                   </div>
 
+                  @if (composerAgent()) {
+                    <!-- The agent's own datasets, read-only -->
+                    <div
+                      class="mt-8 w-full max-w-[920px]"
+                      data-testid="new-session-agent-datasets"
+                    >
+                      <p class="field-label">Datasets</p>
+                      <div class="mt-2 flex flex-wrap gap-2">
+                        @for (name of composerAgentDatasets(); track name) {
+                          <span class="chip chip-neutral">{{ name }}</span>
+                        }
+                      </div>
+                    </div>
+                  } @else {
                   <!-- Dataset selection: the session needs at least one -->
                   <div class="mt-8 w-full max-w-[920px]">
                     <p class="field-label">
@@ -680,20 +763,33 @@
                       </div>
                     }
                   </div>
+                  }
                 </div>
               } @else if (mainView() === "sessions") {
-                <div
-                  class="flex flex-1 items-center justify-center px-6 text-center text-[13px] text-fg-muted"
-                >
-                  Select a session or start a new conversation.
+                <!-- The Sessions page's list (app-shell R3) -->
+                <div class="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+                  @defer (on immediate) {
+                    <app-sessions-list
+                      [sessions]="sessions()"
+                      [loading]="!sessionsLoaded()"
+                      [activeId]="activeSession()?.id ?? null"
+                      [deletingId]="deletingSession()"
+                      (openSession)="openSession($event)"
+                      (deleteSession)="deleteSession($event)"
+                      (newConversation)="openComposer()"
+                    />
+                  }
                 </div>
               } @else {
-                <div class="flex-1"></div>
-
-                <!-- Chat input placeholder -->
-                <div class="flex justify-center px-6 pb-6">
-                  <div class="card h-28 w-full max-w-[860px]"></div>
-                </div>
+                <!-- Start page: what the product does and where to begin. -->
+                @defer (on immediate) {
+                  <app-welcome
+                    class="block min-h-0 flex-1"
+                    (openDatasets)="selectArea('datasets')"
+                    (startConversation)="openComposer()"
+                    (openAgents)="selectArea('agents')"
+                  />
+                }
               }
             </div>
           </div>
@@ -723,7 +819,7 @@
 
             <!-- Panel header: collapse; the agent editor's preview adds its title and Reset -->
             <div
-              class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3"
+              class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3"
             >
               @if (mainView() === "agent-editor") {
                 <h3
@@ -760,23 +856,26 @@
               class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-card"
             >
               @if (mainView() === "session-chat" && activeSession()) {
-                <app-interactive-visual-panel
-                  class="min-h-0 flex-1"
-                  [sessionId]="activeSession()!.id"
-                  [visualization]="activeVisualization()"
-                  [visualizations]="activeSession()!.visualizations ?? []"
-                  [loading]="generatingVisualSession() === activeSession()!.id"
-                  [error]="visualizationError()"
-                  [downloading]="
-                    downloadingVisualization() === activeVisualization()?.id
-                  "
-                  (viewVisual)="showVisualization($event)"
-                  (downloadVisual)="downloadVisualization($event)"
-                  (selectVersion)="selectVisualVersion($event)"
-                  (revertVersion)="revertVisualVersion($event)"
-                  (visualRefreshed)="onVisualRefreshed($event)"
-                  (dataPointSelected)="onDataPointSelected($event)"
-                />
+                <!-- Deferred: the panel views stay out of the initial bundle. -->
+                @defer (on immediate) {
+                  <app-session-panel
+                    class="min-h-0 flex-1"
+                    [session]="activeSession()!"
+                    [item]="activePanelItem()"
+                    (selectItem)="onSelectPanelItem($event)"
+                    [visualization]="activeVisualization()"
+                    [loading]="generatingVisualSession() === activeSession()!.id"
+                    [error]="visualizationError()"
+                    [downloading]="
+                      downloadingVisualization() === activeVisualization()?.id
+                    "
+                    (downloadVisual)="downloadVisualization($event)"
+                    (selectVersion)="selectVisualVersion($event)"
+                    (revertVersion)="revertVisualVersion($event)"
+                    (visualRefreshed)="onVisualRefreshed($event)"
+                    (dataPointSelected)="onDataPointSelected($event)"
+                  />
+                }
               } @else if (mainView() === "agent-editor") {
                 <app-agent-preview class="min-h-0 flex-1" />
               } @else if (mainView() === "agent-detail") {

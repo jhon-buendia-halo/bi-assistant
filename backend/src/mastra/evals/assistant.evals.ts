@@ -2,6 +2,7 @@ import { checks } from '@mastra/evals/checks';
 import { runEvals } from '@mastra/core/evals';
 import { RequestContext } from '@mastra/core/request-context';
 import type { MastraScorer } from '@mastra/core/evals';
+import type { Agent } from '@mastra/core/agent';
 import { assistantAgent } from '../agents/assistant.agent';
 import { resolveAgentModel } from '../model-resolver';
 import { providerOptionsFor } from '../model-compat';
@@ -17,7 +18,14 @@ import {
   TURN_RECORDS_CONTEXT_KEY,
 } from '../tools/visual.tools';
 import { getDatasetToolServices } from '../tool-services';
+import type { DatasetSnapshot } from '../tool-services';
 import { entityOrientationLines, knowledgeContext } from '../context-blocks';
+import {
+  AGENT_TOOLS_CONTEXT_KEY,
+  isFullSelection,
+  type OptionalAgentTool,
+  toolSelectionFrom,
+} from '../agent-tools';
 import { runResultSetCheck } from './result-set-check';
 import type { ResultSetCheckOptions } from './result-set-check';
 import {
@@ -72,6 +80,65 @@ export interface AssistantEvalCase {
    * (`../agents/eval-judge.agent`) as an additional check.
    */
   judgeRubric?: string;
+  /**
+   * Run the case with this tool selection, as a session bound to a user
+   * agent would (agents.md 2.1, 4.2). Omitted = every tool.
+   */
+  agentTools?: OptionalAgentTool[];
+  /**
+   * Deterministic checks the built-in ones cannot express: tool arguments,
+   * the order of particular calls, or state read back after the run. Each
+   * has its own id, so a case can hold several of the same kind (the
+   * built-in checks share one id per kind, see above).
+   */
+  customChecks?: EvalCustomCheck[];
+}
+
+/** One tool call as the agent made it, with its parsed input and output. */
+export interface EvalRawToolCall {
+  name: string;
+  input: unknown;
+  output: unknown;
+  /** The call threw, or its result carries an `error`. */
+  failed: boolean;
+}
+
+/** What a custom check reads. */
+export interface EvalCustomCheckInput {
+  /** The final answer text. */
+  answer: string;
+  toolCalls: EvalRawToolCall[];
+  datasets: string[];
+  /** Values the target's setup produced for the case (e.g. a draft's id). */
+  vars: Record<string, string>;
+}
+
+/**
+ * A deterministic check written in code. `run` answers `undefined` when the
+ * check passes and the reason when it fails; a throw fails it too.
+ */
+export interface EvalCustomCheck {
+  /** Unique within its case. */
+  id: string;
+  description: string;
+  run(
+    input: EvalCustomCheckInput,
+  ): string | undefined | Promise<string | undefined>;
+}
+
+/** One earlier turn sent before a case's question (multi-turn cases). */
+export interface EvalHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/** What a target's setup turns a case into before it runs. */
+export interface PreparedEvalQuestion {
+  question: string;
+  /** Earlier turns, oldest first, sent before the question. */
+  history?: EvalHistoryMessage[];
+  /** Values the orientation block and the custom checks read. */
+  vars?: Record<string, string>;
 }
 
 /**
@@ -92,6 +159,11 @@ export interface AssistantEvalSet {
    * lives in exactly one place for both the loader and the suite.
    */
   fixtureId: string;
+  /**
+   * The registry key of the agent the set runs on (agents.md 8.1); absent
+   * means the `assistant`.
+   */
+  agentKey?: string;
   cases: AssistantEvalCase[];
 }
 
@@ -289,6 +361,53 @@ const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
       'chart that clearly covers something else). Score pass=false if no ' +
       'visual tool call succeeded, or the visual it produced does not match ' +
       'this request.',
+  },
+  {
+    id: 'no-clarification-best-team',
+    question: 'Which team performed best?',
+    intent:
+      'The ambiguous question again, for an agent without ask_clarification — it must pick a reading, answer it and state the assumption.',
+    agentTools: ['sample_rows', 'visuals'],
+    scorers: [
+      checks.calledTool('run_readonly_sql'),
+      checks.didNotCall('ask_clarification'),
+      checks.noToolErrors(),
+    ],
+    judgeRubric:
+      'The question ("Which team performed best?") does not say what "best" ' +
+      'means, and this assistant cannot ask the user a question back, so it ' +
+      'must pick a reading itself and answer it. Score pass=true only if the ' +
+      'final answer explicitly names the measure it took as "best" (e.g. ' +
+      'matches won, final placing, goals scored) and gives figures for that ' +
+      'measure that come from the queries it ran, naming the team or teams ' +
+      'that come out on top. Covering several measures is fine as long as ' +
+      'each is named and backed by figures. Score pass=false if the answer ' +
+      'asks the user which measure they mean instead of answering, gives no ' +
+      'figures, does not say which measure it used, or states figures the ' +
+      'tool calls do not support.',
+  },
+  {
+    id: 'no-visuals-chart-request',
+    question: 'Show me a chart of goals scored per World Cup tournament.',
+    intent:
+      'A chart request for an agent without visuals — it must say it cannot draw one here and give the numbers instead.',
+    agentTools: ['sample_rows', 'ask_clarification'],
+    scorers: [
+      checks.calledTool('run_readonly_sql'),
+      checks.didNotCall('create_visual'),
+      checks.noToolErrors(),
+    ],
+    judgeRubric:
+      'The user asked for a chart of goals scored per World Cup tournament, ' +
+      'but this assistant cannot create visuals. In this dataset the ' +
+      'knockout matches of 2018 have 23 goals and those of 2022 have 24 ' +
+      '(penalty shootouts not counted). Score pass=true only if the final ' +
+      'answer says, briefly, that it cannot draw a chart or visual here AND ' +
+      'gives the goals per tournament with figures consistent with 23 for ' +
+      '2018 and 24 for 2022 (a table or list is fine; shootout penalties ' +
+      'shown separately are fine). Score pass=false if it claims to have ' +
+      'created a chart, pastes HTML, CSS or JavaScript, gives no figures, or ' +
+      'states totals that contradict 23 and 24.',
   },
 ];
 
@@ -637,6 +756,71 @@ export const ASSISTANT_EVAL_SETS: AssistantEvalSet[] = [
 export const ASSISTANT_EVAL_CASES: AssistantEvalCase[] =
   ASSISTANT_EVAL_SETS.flatMap((set) => set.cases);
 
+/** What the orientation builder of an eval target gets for one case. */
+export interface EvalOrientationInput {
+  datasets: string[];
+  snapshots: DatasetSnapshot[];
+  requestContext: RequestContext;
+  /** The case's setup values (`PreparedEvalQuestion.vars`). */
+  vars?: Record<string, string>;
+}
+
+/**
+ * The agent a set's cases run on and what each case sends it (agents.md
+ * 8.1, `agentKey`): the assistant by default, the RFP Builder for the `rfp`
+ * set (`rfp.evals.ts`).
+ */
+export interface EvalTarget {
+  /** Registry key of the agent. */
+  agentKey: string;
+  agent: Agent;
+  /** The sets that run on this agent. */
+  sets: AssistantEvalSet[];
+  /** The orientation system message of a case (Block 1's dataset half, or Block R1). */
+  orientation(input: EvalOrientationInput): string | Promise<string>;
+  /** Whether the curated-knowledge block (Block 3) is sent. */
+  sendsKnowledge: boolean;
+  /** Adds the agent's own keys to a case's requestContext. */
+  configureContext?(requestContext: RequestContext): void;
+  /** The question a case sends, after any setup it needs. */
+  prepareQuestion?(
+    evalCase: AssistantEvalCase,
+    input: Omit<EvalOrientationInput, 'requestContext' | 'vars'>,
+  ): Promise<string | PreparedEvalQuestion>;
+  /** Clean-up after each case (passed, failed or thrown). Never throws. */
+  afterCase?(datasets: string[]): Promise<void>;
+  /** Clean-up once a run's cases are done (or it failed). Never throws. */
+  finish?(datasets: string[]): Promise<void>;
+  /**
+   * The registry key of the agent the run's throwaway session is bound to,
+   * so session-scoped tools resolve as in a real chat with this agent
+   * (`update_workflow` reads the bound agent's `## Workflow`); none for the
+   * assistant.
+   */
+  sessionAgentKey?: string;
+  /**
+   * How much of each tool input and output the LLM judge reads; the
+   * report's 2,000 characters when unset. The RFP Builder's tools answer
+   * whole records, so its judge reads more of them.
+   */
+  judgeTraceChars?: number;
+}
+
+/** The assistant's sets, run as they always have been. */
+export const ASSISTANT_EVAL_TARGET: EvalTarget = {
+  agentKey: 'assistant',
+  agent: assistantAgent,
+  sets: ASSISTANT_EVAL_SETS,
+  // Block 1's dataset half, in the variant the case's tool selection gives.
+  orientation: ({ datasets, snapshots, requestContext }) =>
+    entityOrientationLines(
+      datasets,
+      snapshots,
+      toolSelectionFrom(requestContext),
+    ).join('\n'),
+  sendsKnowledge: true,
+};
+
 /** One tool the agent called while answering, in call order. */
 export interface EvalToolCall {
   name: string;
@@ -684,16 +868,17 @@ const MAX_TRACE_FIELD = 2000;
 /** Anything `String()` can render: every non-nullish value. */
 type Stringable = { toString(): string };
 
-function encode(value: unknown): string | undefined {
+function encode(
+  value: unknown,
+  max: number = MAX_TRACE_FIELD,
+): string | undefined {
   if (value === undefined || value === null) return undefined;
   const stringable: Stringable = value;
   const text =
     typeof value === 'string'
       ? value
       : (safeStringify(value) ?? String(stringable));
-  return text.length > MAX_TRACE_FIELD
-    ? `${text.slice(0, MAX_TRACE_FIELD)}… (truncated)`
-    : text;
+  return text.length > max ? `${text.slice(0, max)}… (truncated)` : text;
 }
 
 function safeStringify(value: unknown): string | undefined {
@@ -717,12 +902,26 @@ function safeStringify(value: unknown): string | undefined {
  * flattens the chunk again.
  */
 function extractToolCalls(targetResult: unknown): EvalToolCall[] {
+  return extractRawToolCalls(targetResult).map((call) => ({
+    name: call.name,
+    input: encode(call.input),
+    output: call.thrown ? undefined : encode(call.output),
+    error: call.thrown
+      ? (encode(call.output) ?? 'Tool call failed')
+      : undefined,
+  }));
+}
+
+/** The calls with their parsed input and output (for the custom checks). */
+function extractRawToolCalls(
+  targetResult: unknown,
+): (EvalRawToolCall & { thrown: boolean })[] {
   const resultSteps = field(targetResult, 'steps');
   const steps: unknown[] = Array.isArray(resultSteps)
     ? (resultSteps as unknown[])
     : [targetResult];
 
-  const calls: EvalToolCall[] = [];
+  const calls: (EvalRawToolCall & { thrown: boolean })[] = [];
   for (const step of steps) {
     if (!step) continue;
     const stepCalls = arrayField(step, 'toolCalls');
@@ -744,15 +943,13 @@ function extractToolCalls(targetResult: unknown): EvalToolCall[] {
         field(callPayload, 'toolName') ??
         field(callPayload, 'name') ??
         'unknown';
+      const thrown = Boolean(field(matchPayload, 'isError'));
       calls.push({
         name: String(name),
-        input: encode(
-          field(callPayload, 'input') ?? field(callPayload, 'args'),
-        ),
-        output: field(matchPayload, 'isError') ? undefined : encode(output),
-        error: field(matchPayload, 'isError')
-          ? (encode(output) ?? 'Tool call failed')
-          : undefined,
+        input: field(callPayload, 'input') ?? field(callPayload, 'args'),
+        output,
+        thrown,
+        failed: thrown || typeof field(output, 'error') === 'string',
       });
     }
   }
@@ -841,17 +1038,27 @@ function templateText(value: unknown): string {
  * list at all. An explicit empty list selects nothing — it must not be read as
  * "run everything", or an empty selection would start a full (paid) run.
  */
-export function selectEvalCases(caseIds?: string[]): AssistantEvalCase[] {
-  if (!caseIds) return ASSISTANT_EVAL_CASES;
+export function selectEvalCases(
+  caseIds?: string[],
+  sets: AssistantEvalSet[] = ASSISTANT_EVAL_SETS,
+): AssistantEvalCase[] {
+  const all =
+    sets === ASSISTANT_EVAL_SETS
+      ? ASSISTANT_EVAL_CASES
+      : sets.flatMap((set) => set.cases);
+  if (!caseIds) return all;
   const wanted = new Set(caseIds);
-  return ASSISTANT_EVAL_CASES.filter((evalCase) => wanted.has(evalCase.id));
+  return all.filter((evalCase) => wanted.has(evalCase.id));
 }
 
 /** The sets the selection touches — every set when nothing is named. */
-export function selectEvalSets(caseIds?: string[]): AssistantEvalSet[] {
-  if (!caseIds) return ASSISTANT_EVAL_SETS;
+export function selectEvalSets(
+  caseIds?: string[],
+  sets: AssistantEvalSet[] = ASSISTANT_EVAL_SETS,
+): AssistantEvalSet[] {
+  if (!caseIds) return sets;
   const wanted = new Set(caseIds);
-  return ASSISTANT_EVAL_SETS.filter((set) =>
+  return sets.filter((set) =>
     set.cases.some((evalCase) => wanted.has(evalCase.id)),
   );
 }
@@ -862,8 +1069,11 @@ export function selectEvalSets(caseIds?: string[]): AssistantEvalSet[] {
  * unrelated — a run scoped to one cannot answer the other), or to a fixture id
  * the registry does not know.
  */
-export function fixtureForCases(caseIds?: string[]): SampleFixture {
-  const sets = selectEvalSets(caseIds);
+export function fixtureForCases(
+  caseIds?: string[],
+  from: AssistantEvalSet[] = ASSISTANT_EVAL_SETS,
+): SampleFixture {
+  const sets = selectEvalSets(caseIds, from);
   if (sets.length === 0) {
     throw new Error(
       'No question set matches the selected questions, so there is no sample ' +
@@ -892,12 +1102,18 @@ function evalRequestContext(
   sessionId: string | undefined,
   turnRecords: ToolDataRecord[],
   question: string,
+  agentTools?: readonly OptionalAgentTool[],
 ): RequestContext {
   const requestContext = new RequestContext();
   requestContext.set(DATASETS_CONTEXT_KEY, datasets);
   if (sessionId) requestContext.set(SESSION_ID_CONTEXT_KEY, sessionId);
   requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
   requestContext.set(TURN_RECORDS_CONTEXT_KEY, turnRecords);
+  // The case's tool selection, as a session bound to a user agent carries
+  // it (agents.md 4.2); none when the case keeps every tool.
+  if (agentTools && !isFullSelection(agentTools)) {
+    requestContext.set(AGENT_TOOLS_CONTEXT_KEY, [...agentTools]);
+  }
   return requestContext;
 }
 
@@ -956,11 +1172,14 @@ const EVAL_SESSION_PLACEHOLDER_ANSWER =
 export async function createEvalSession(
   sessions: SessionsService,
   datasets: string[],
+  /** Bind the session to this built-in agent (`EvalTarget.sessionAgentKey`). */
+  agentKey?: string,
 ): Promise<EvalSession> {
-  const session = await sessions.create(
-    `assistant eval ${new Date().toISOString()}`.slice(0, 64),
-    datasets,
-  );
+  const name =
+    `${agentKey ?? 'assistant'} eval ${new Date().toISOString()}`.slice(0, 64);
+  const session = agentKey
+    ? await sessions.createFromAgent(agentKey, name)
+    : await sessions.create(name, datasets);
   await sessions.appendAssistantMessage(session.id, {
     content: EVAL_SESSION_PLACEHOLDER_ANSWER,
   });
@@ -1007,12 +1226,23 @@ async function runJudgeCheck(
   evalCase: AssistantEvalCase,
   answer: string,
   toolCalls: EvalToolCall[],
+  /** The question as sent, when the target's setup filled it in. */
+  question: string = evalCase.question,
+  /** Earlier turns sent before the question, if any. */
+  history: EvalHistoryMessage[] = [],
 ): Promise<EvalCheckResult | undefined> {
   if (!evalCase.judgeRubric) return undefined;
   const description = `LLM judge: ${evalCase.judgeRubric}`;
   try {
     const prompt = [
-      `Question asked: ${evalCase.question}`,
+      ...(history.length
+        ? [
+            'Earlier conversation, oldest first:',
+            ...history.map((m) => `${m.role}: ${m.content}`),
+            '',
+          ]
+        : []),
+      `Question asked: ${question}`,
       '',
       'Rubric:',
       evalCase.judgeRubric,
@@ -1095,11 +1325,18 @@ export async function runAssistantEvalCase(
    * omitted (or empty) when neither wires one in.
    */
   knowledgeBlock?: string,
+  /** The agent the case runs on; the assistant when omitted (agents.md 8.1). */
+  target: EvalTarget = ASSISTANT_EVAL_TARGET,
 ): Promise<AssistantEvalCaseResult> {
   const startedAt = Date.now();
+  // The question sent: the case's own, unless the target's setup fills it.
+  let question = evalCase.question;
   // Captured from the per-item callback: the run itself only reports numbers.
   let answer = '';
   let toolCalls: EvalToolCall[] = [];
+  let rawToolCalls: EvalRawToolCall[] = [];
+  let history: EvalHistoryMessage[] = [];
+  let vars: Record<string, string> = {};
   let scorerPayloads: Record<string, any> = {};
   // Populated live via onStepFinish as the run executes — the same records a
   // real turn would have threaded through TURN_RECORDS_CONTEXT_KEY.
@@ -1108,24 +1345,46 @@ export async function runAssistantEvalCase(
   try {
     const datasetSnapshots =
       await getDatasetToolServices().getDatasets(datasets);
-    const orientation = entityOrientationLines(datasets, datasetSnapshots).join(
-      '\n',
+    if (target.prepareQuestion) {
+      const prepared = await target.prepareQuestion(evalCase, {
+        datasets,
+        snapshots: datasetSnapshots,
+      });
+      if (typeof prepared === 'string') {
+        question = prepared;
+      } else {
+        question = prepared.question;
+        history = prepared.history ?? [];
+        vars = prepared.vars ?? {};
+      }
+    }
+    const requestContext = evalRequestContext(
+      datasets,
+      sessionId,
+      turnRecords,
+      question,
+      evalCase.agentTools,
     );
+    target.configureContext?.(requestContext);
+    const orientation = await target.orientation({
+      datasets,
+      snapshots: datasetSnapshots,
+      requestContext,
+      vars,
+    });
 
     const result = await runEvals({
       data: [
         {
-          input: evalCase.question,
-          requestContext: evalRequestContext(
-            datasets,
-            sessionId,
-            turnRecords,
-            evalCase.question,
-          ),
+          // A multi-turn case sends its earlier turns before the question.
+          input: history.length
+            ? [...history, { role: 'user' as const, content: question }]
+            : question,
+          requestContext,
         },
       ],
       scorers: evalCase.scorers,
-      target: assistantAgent,
+      target: target.agent,
       // Same step budget and dataset/entity + join-hint grounding a real chat
       // turn gets from SessionsService.agentContext — without this the model
       // used to run out of steps mid-analysis (the AI-SDK default cap is 5)
@@ -1134,13 +1393,19 @@ export async function runAssistantEvalCase(
         maxSteps: ASSISTANT_MAX_STEPS,
         context: [
           { role: 'system', content: orientation },
-          ...knowledgeContext(knowledgeBlock),
+          ...(target.sendsKnowledge ? knowledgeContext(knowledgeBlock) : []),
         ],
         onStepFinish: (step: unknown) => captureStepRecords(step, turnRecords),
       },
       onItemComplete: ({ targetResult, scorerResults }) => {
         answer = String(targetResult?.text ?? '');
         toolCalls = extractToolCalls(targetResult);
+        rawToolCalls = extractRawToolCalls(targetResult).map((call) => ({
+          name: call.name,
+          input: call.input,
+          output: call.output,
+          failed: call.failed,
+        }));
         scorerPayloads = scorerResults ?? {};
       },
     });
@@ -1157,13 +1422,15 @@ export async function runAssistantEvalCase(
     // model routinely finishing without prose.
     if (!answer.trim() && toolCalls.length > 0) {
       answer = await synthesizeToolOnlyTurn(
-        assistantAgent,
-        evalCase.question,
+        target.agent,
+        question,
         turnRecords,
         new AbortController().signal,
         providerOptionsFor(await resolveAgentModel(), {
           reasoningEffort: 'medium',
         }),
+        undefined,
+        requestContext,
       );
     }
 
@@ -1196,14 +1463,44 @@ export async function runAssistantEvalCase(
     );
     if (resultSetCheck) checkResults.push(resultSetCheck);
 
+    // Custom checks: tool arguments, call order, state read back.
+    for (const check of evalCase.customChecks ?? []) {
+      checkResults.push(
+        await runCustomCheck(check, {
+          answer,
+          toolCalls: rawToolCalls,
+          datasets,
+          vars,
+        }),
+      );
+    }
+
     // LLM-judge (Feature 2) — for cases where a regex/text check on the
     // final answer would be too brittle.
-    const judgeCheck = await runJudgeCheck(evalCase, answer, toolCalls);
+    const judgeCheck = await runJudgeCheck(
+      evalCase,
+      answer,
+      target.judgeTraceChars
+        ? rawToolCalls.map((call) => ({
+            name: call.name,
+            input: encode(call.input, target.judgeTraceChars),
+            output: call.failed
+              ? undefined
+              : encode(call.output, target.judgeTraceChars),
+            error: call.failed
+              ? (encode(call.output, target.judgeTraceChars) ??
+                'Tool call failed')
+              : undefined,
+          }))
+        : toolCalls,
+      question,
+      history,
+    );
     if (judgeCheck) checkResults.push(judgeCheck);
 
     return {
       id: evalCase.id,
-      question: evalCase.question,
+      question,
       scores,
       checkResults,
       answer,
@@ -1215,7 +1512,7 @@ export async function runAssistantEvalCase(
   } catch (err) {
     return {
       id: evalCase.id,
-      question: evalCase.question,
+      question,
       scores: {},
       checkResults: [],
       answer,
@@ -1224,7 +1521,30 @@ export async function runAssistantEvalCase(
       error: err instanceof Error ? err.message : String(err),
       durationMs: Date.now() - startedAt,
     };
+  } finally {
+    await target.afterCase?.(datasets);
   }
+}
+
+/** One custom check's verdict; a throw is a failure with its message. */
+async function runCustomCheck(
+  check: EvalCustomCheck,
+  input: EvalCustomCheckInput,
+): Promise<EvalCheckResult> {
+  let reason: string | undefined;
+  try {
+    reason = await check.run(input);
+  } catch (err) {
+    reason = `check error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+  const passed = reason === undefined;
+  return {
+    id: check.id,
+    description: check.description,
+    score: passed ? 1 : 0,
+    passed,
+    reason,
+  };
 }
 
 /**
@@ -1243,30 +1563,34 @@ export async function runAssistantEvals(
   caseIds?: string[],
   sessions?: SessionsService,
   knowledgeBlock?: string,
+  /** The agent and sets to run; the assistant's when omitted (agents.md 8.1). */
+  target: EvalTarget = ASSISTANT_EVAL_TARGET,
 ): Promise<AssistantEvalCaseResult[]> {
   const datasetError = assistantEvalDatasetError(
     datasets,
     await getDatasetToolServices().getDatasets(datasets),
-    fixtureForCases(caseIds),
+    fixtureForCases(caseIds, target.sets),
   );
   if (datasetError) throw new Error(datasetError);
   const evalSession = sessions
-    ? await createEvalSession(sessions, datasets)
+    ? await createEvalSession(sessions, datasets, target.sessionAgentKey)
     : undefined;
   try {
     const results: AssistantEvalCaseResult[] = [];
-    for (const evalCase of selectEvalCases(caseIds)) {
+    for (const evalCase of selectEvalCases(caseIds, target.sets)) {
       const result = await runAssistantEvalCase(
         evalCase,
         datasets,
         evalSession?.id,
         knowledgeBlock,
+        target,
       );
       results.push(result);
       onCaseComplete?.(result);
     }
     return results;
   } finally {
+    await target.finish?.(datasets);
     await cleanupEvalSession(sessions, evalSession);
   }
 }

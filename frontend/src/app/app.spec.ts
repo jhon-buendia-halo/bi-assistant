@@ -1,10 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
 import { App } from './app';
-import { ALL_PERMISSIONS, MeView } from './core/auth/auth.models';
-import { AuthService } from './core/auth/auth.service';
-import { LOCAL_UMA, localMe, orgMe } from './core/auth/auth.testing';
 
 describe('App', () => {
   beforeEach(async () => {
@@ -34,6 +34,34 @@ describe('App', () => {
       compiled.querySelector('[aria-label="Open system logs"]'),
     ).toBeTruthy();
     expect(compiled.querySelector('[title="Help"]')).toBeFalsy();
+  });
+
+  it('should list sessions on the Sessions page, not in the drawer', async () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    app.sessions.set([{ id: 's1', name: 'Alpha', datasets: [], messages: [] }]);
+    app.sessionsLoaded.set(true);
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(
+      compiled.querySelector('[aria-label="Sessions navigation"]'),
+    ).toBeFalsy();
+    expect(compiled.querySelector('[data-testid="session-s1"]')).toBeFalsy();
+
+    app.selectArea('sessions');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('sessions');
+    // From an open chat, the rail returns to the list.
+    app.mainView.set('session-chat');
+    app.selectArea('sessions');
+    expect(app.mainView()).toBe('sessions');
+    expect(
+      compiled.querySelector(
+        'nav[aria-label="Sessions"] [data-testid="session-s1"]',
+      ),
+    ).toBeTruthy();
   });
 
   it('should show the app version in the settings sidebar', () => {
@@ -104,7 +132,14 @@ describe('App', () => {
       new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }),
     );
 
-    expect(app.rightPanelWidth()).toBe(initialWidth - 24);
+    // The panel is clamped to the viewport (innerWidth - 240), which is narrow
+    // in headless Chrome, so the default 572 can already exceed the maximum.
+    expect(app.rightPanelWidth()).toBe(
+      Math.min(
+        app.rightPanelMaxWidth(),
+        Math.max(app.rightPanelMinWidth, initialWidth - 24),
+      ),
+    );
   });
 
   it('should show the active session datasource in the header', () => {
@@ -143,7 +178,7 @@ describe('App', () => {
   });
 });
 
-describe('App in local and org server mode', () => {
+describe('App without sign-in or permissions (BA-232)', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
@@ -151,11 +186,7 @@ describe('App in local and org server mode', () => {
     }).compileComponents();
   });
 
-  /** The shell as `me` sees it (the root shows it once signed in). */
-  function shellAs(me: MeView) {
-    const auth = TestBed.inject(AuthService);
-    auth.me.set(me);
-    auth.status.set('signed-in');
+  function shell() {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     return {
@@ -174,60 +205,19 @@ describe('App in local and org server mode', () => {
     ).map((button) => button.textContent?.trim() ?? '');
   }
 
-  it("shows Demo User's initials, account menu and Admin in local mode (admin R10, R34)", () => {
-    const { element } = shellAs(localMe());
-    const avatar = rail(element).querySelector(
-      'button[aria-label="Account menu"]',
-    ) as HTMLButtonElement;
-    expect(avatar.textContent?.trim()).toBe('DU');
-    expect(avatar.title).toBe('Demo User');
+  it('renders the shell at once with no account menu and no Admin item', () => {
+    const { element } = shell();
+    expect(rail(element)).toBeTruthy();
     expect(
-      rail(element).querySelector('button[aria-label="Admin"]'),
-    ).toBeTruthy();
-  });
-
-  it('offers no Admin to a local persona without Manage users', () => {
-    const { element } = shellAs(LOCAL_UMA);
-    const avatar = rail(element).querySelector(
-      'button[aria-label="Account menu"]',
-    ) as HTMLButtonElement;
-    expect(avatar.textContent?.trim()).toBe('UU');
+      rail(element).querySelector('button[aria-label="Account menu"]'),
+    ).toBeNull();
     expect(
       rail(element).querySelector('button[aria-label="Admin"]'),
     ).toBeNull();
   });
 
-  it("shows the signed-in user's initials on an org server (admin R10)", () => {
-    const { element } = shellAs(orgMe(['use-agents']));
-    const avatar = rail(element).querySelector(
-      'button[aria-label="Account menu"]',
-    ) as HTMLButtonElement;
-    expect(avatar.textContent?.trim()).toBe('AL');
-    expect(avatar.title).toBe('Ada Lovelace');
-    expect(avatar.getAttribute('aria-haspopup')).toBe('menu');
-    expect(rail(element).querySelector('[title="Demo User"]')).toBeNull();
-  });
-
-  it('offers Admin only with Manage users on an org server (admin R34)', () => {
-    const { element: user } = shellAs(orgMe(['use-agents']));
-    expect(rail(user).querySelector('button[aria-label="Admin"]')).toBeNull();
-  });
-
-  it('opens the Admin area from the rail and marks it current', () => {
-    const { fixture, app, element } = shellAs(orgMe([...ALL_PERMISSIONS]));
-    const admin = rail(element).querySelector(
-      'button[aria-label="Admin"]',
-    ) as HTMLButtonElement;
-    admin.click();
-    fixture.detectChanges();
-
-    expect(app.mainView()).toBe('admin');
-    expect(admin.getAttribute('aria-current')).toBe('page');
-    expect(element.querySelector('main h2')?.textContent?.trim()).toBe('Admin');
-  });
-
-  it('offers every Settings section to Demo User in local mode', () => {
-    const { fixture, app, element } = shellAs(localMe());
+  it('offers every Settings section', () => {
+    const { fixture, app, element } = shell();
     app.selectArea('settings');
     fixture.detectChanges();
     expect(settingsLabels(element)).toEqual([
@@ -239,40 +229,167 @@ describe('App in local and org server mode', () => {
     ]);
   });
 
-  it('offers only the Settings sections the user may open (app-shell R50)', () => {
-    const { fixture, app, element } = shellAs(
-      orgMe(['use-agents', 'manage-llm']),
-    );
-    app.selectArea('settings');
-    fixture.detectChanges();
-    expect(settingsLabels(element)).toEqual([
-      'LLM Configuration',
-      'Appearance',
-    ]);
-  });
-
-  it('falls back to "Choose a settings section." when the chosen one is hidden', () => {
-    const { fixture, app, element } = shellAs(orgMe(['use-agents']));
-    app.selectArea('settings');
-    app.settingsSection.set('developer');
-    fixture.detectChanges();
-    expect(element.textContent).toContain('Choose a settings section.');
-    expect(element.querySelector('app-developer-settings')).toBeNull();
-  });
-
-  it('hides the composer Reasoning effort without Manage LLM configuration (admin R26)', () => {
-    const { fixture, app, element } = shellAs(orgMe(['use-agents']));
-    app.mainView.set('conversation-new');
-    fixture.detectChanges();
-    expect(element.querySelector('main [title="Reasoning effort"]')).toBeNull();
-  });
-
-  it('shows the composer Reasoning effort to Demo User', () => {
-    const { fixture, app, element } = shellAs(localMe());
+  it('shows the composer Reasoning effort', () => {
+    const { fixture, app, element } = shell();
     app.mainView.set('conversation-new');
     fixture.detectChanges();
     expect(
       element.querySelector('main [title="Reasoning effort"]'),
     ).toBeTruthy();
+  });
+});
+
+describe('New conversation Agent picker (BA-230)', () => {
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+  });
+
+  const rfp = {
+    key: 'rfp',
+    id: 'rfp',
+    name: 'RFP Builder',
+    description: 'Builds RFPs.',
+    tools: [],
+    kind: 'official',
+    status: 'builtin',
+    datasets: ['Intellify RFP API'],
+    missingDatasets: [],
+    chatRequirement: 'Load the sample first',
+  };
+
+  function open(agents: unknown[] = [rfp]) {
+    const fixture = TestBed.createComponent(App);
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    fixture.componentInstance.openComposer();
+    http
+      .match((r) => r.url.endsWith('/agents'))
+      .forEach((r) => r.flush({ agents }));
+    fixture.detectChanges();
+    return { fixture, http, app: fixture.componentInstance };
+  }
+
+  type Fx = { nativeElement: HTMLElement; detectChanges(): void };
+  const trigger = (fixture: Fx) =>
+    fixture.nativeElement.querySelector(
+      '[data-testid="new-session-agent"]',
+    ) as HTMLButtonElement;
+  const listbox = (fixture: Fx) =>
+    fixture.nativeElement.querySelector(
+      '[role="listbox"][aria-label="Agent"]',
+    ) as HTMLElement | null;
+  const options = (fixture: Fx) =>
+    Array.from(
+      fixture.nativeElement.querySelectorAll('[role="option"]'),
+    ) as HTMLElement[];
+  const press = (fixture: Fx, key: string) => {
+    trigger(fixture).dispatchEvent(
+      new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+    );
+    fixture.detectChanges();
+  };
+
+  it('preselects Assistant and keeps the dataset picker', () => {
+    const { fixture } = open();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(trigger(fixture).textContent).toContain('Assistant');
+    expect(trigger(fixture).getAttribute('aria-haspopup')).toBe('listbox');
+    expect(trigger(fixture).getAttribute('aria-expanded')).toBe('false');
+    expect(listbox(fixture)).toBeNull();
+    expect(el.textContent).toContain(
+      'Answers questions over the datasets you pick.',
+    );
+    expect(el.textContent).toContain(
+      'Select at least one dataset for this session',
+    );
+    expect(
+      el.querySelector('[data-testid="new-session-agent-datasets"]'),
+    ).toBeNull();
+  });
+
+  it('lists each agent with its name and description', () => {
+    const { fixture } = open();
+    trigger(fixture).click();
+    fixture.detectChanges();
+    expect(trigger(fixture).getAttribute('aria-expanded')).toBe('true');
+    expect(
+      options(fixture).map((o) => o.children[0].textContent?.trim()),
+    ).toEqual(['Assistant', 'RFP Builder']);
+    expect(options(fixture)[0].getAttribute('aria-selected')).toBe('true');
+    expect(options(fixture)[1].children[1].textContent).toContain(
+      rfp.description,
+    );
+  });
+
+  it('lists an agent that cannot start disabled with its reason', () => {
+    const { fixture, app } = open([
+      { ...rfp, missingDatasets: ['Intellify RFP API'] },
+    ]);
+    trigger(fixture).click();
+    fixture.detectChanges();
+    const option = options(fixture)[1];
+    expect(option.getAttribute('aria-disabled')).toBe('true');
+    expect(option.children[1].textContent).toContain('Load the sample first');
+    option.click();
+    fixture.detectChanges();
+    expect(app.composerAgentKey()).toBe('assistant');
+    expect(listbox(fixture)).not.toBeNull();
+  });
+
+  it('shows the agent datasets read-only and creates from the agent with the name', () => {
+    const { fixture, http, app } = open();
+    trigger(fixture).click();
+    fixture.detectChanges();
+    options(fixture)[1].click();
+    fixture.detectChanges();
+    expect(listbox(fixture)).toBeNull();
+    expect(trigger(fixture).textContent).toContain('RFP Builder');
+    const el = fixture.nativeElement as HTMLElement;
+    const datasets = el.querySelector(
+      '[data-testid="new-session-agent-datasets"]',
+    ) as HTMLElement;
+    expect(datasets.textContent).toContain('Intellify RFP API');
+    expect(el.textContent).not.toContain(
+      'Select at least one dataset for this session',
+    );
+    app.composerName.set('Acme');
+    app.createSession();
+    const req = http.expectOne(
+      (r) => r.method === 'POST' && r.url.endsWith('/sessions'),
+    );
+    expect(req.request.body).toEqual({ agentId: 'rfp', name: 'Acme' });
+  });
+
+  it('opens and picks with the keyboard, skipping disabled agents, and Escape closes', () => {
+    const { fixture, app } = open([
+      { ...rfp, missingDatasets: ['Intellify RFP API'] },
+      { ...rfp, key: 'rfp2', id: 'rfp2', name: 'Second' },
+    ]);
+    press(fixture, 'ArrowDown');
+    expect(listbox(fixture)).not.toBeNull();
+    press(fixture, 'ArrowDown');
+    expect(app.composerAgentActive()).toBe(2);
+    press(fixture, 'ArrowUp');
+    expect(app.composerAgentActive()).toBe(0);
+    press(fixture, 'ArrowDown');
+    press(fixture, 'Enter');
+    expect(app.composerAgentKey()).toBe('rfp2');
+    expect(listbox(fixture)).toBeNull();
+    press(fixture, 'Enter');
+    expect(listbox(fixture)).not.toBeNull();
+    press(fixture, 'Escape');
+    expect(listbox(fixture)).toBeNull();
+    expect(app.composerAgentKey()).toBe('rfp2');
+  });
+
+  it('forgets the pick on the next visit', () => {
+    const { app } = open();
+    app.pickComposerAgent('rfp');
+    expect(app.composerAgentKey()).toBe('rfp');
+    app.openComposer();
+    expect(app.composerAgentKey()).toBe('assistant');
   });
 });

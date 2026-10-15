@@ -64,6 +64,21 @@ jest.mock('./visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
 
+// `marked` is ESM-only; the PDF renderer is stubbed to echo its markdown.
+jest.mock('../../common/markdown-pdf', () => ({
+  renderPdf: jest.fn((markdown: string) =>
+    Promise.resolve(Buffer.from(`%PDF-stub ${markdown}`)),
+  ),
+}));
+jest.mock('./workspace-files', () => {
+  const actual =
+    jest.requireActual<typeof import('./workspace-files')>('./workspace-files');
+  return {
+    ...actual,
+    readWorkspaceFile: jest.fn(actual.readWorkspaceFile),
+  };
+});
+
 import { BadRequestException, Logger } from '@nestjs/common';
 import { resolveAgentModel } from '../../mastra/model-resolver';
 import { appSkillBody } from '../../mastra/app-skills';
@@ -78,10 +93,15 @@ import { setDatasetToolServices } from '../../mastra/tool-services';
 import type { DatasetToolServices } from '../../mastra/tool-services';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../mastra/tools/visual.tools';
 import { sourceEntities } from './visualization-document';
-import type { OrgServerConfig } from '../../config/org-server.config';
-import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
-import { SessionsService, StreamEvent } from './sessions.service';
+import { renderPdf } from '../../common/markdown-pdf';
+import { readWorkspaceFile } from './workspace-files';
+import {
+  SessionsService,
+  StreamEvent,
+  toolCallInput,
+} from './sessions.service';
 import type { SessionDoc } from './entities/session.entity';
+import { setAgentPromptOverrides } from '../../mastra/agent-prompt-overrides';
 
 describe('SessionsService streaming', () => {
   /** A service wired to one streamed turn, with everything else stubbed. */
@@ -106,9 +126,11 @@ describe('SessionsService streaming', () => {
         id: string;
         agentName?: string;
         live: Record<string, unknown> | null;
+        /** The copies taken at the last publish (ADR-0022). */
+        liveSkills?: Record<string, unknown>[];
+        /** The current skill documents the draft names (a preview). */
+        currentSkills?: Record<string, unknown>[];
       };
-      /** Org server mode (admin R40): the turn runs as a signed-in user. */
-      org?: boolean;
       /** The session is an agent editor's preview (agents-evals R60). */
       preview?: boolean;
       /** Careful mode: what the verifier replies and what its SQL returns. */
@@ -144,11 +166,21 @@ describe('SessionsService streaming', () => {
     const live = options.userAgent?.live;
     const userAgents = {
       ...userAgentsStub,
-      get: jest
+      get: jest.fn().mockResolvedValue(
+        live
+          ? {
+              id: options.userAgent!.id,
+              draft: live,
+              live,
+              ...(options.userAgent!.liveSkills
+                ? { liveSkills: options.userAgent!.liveSkills }
+                : {}),
+            }
+          : null,
+      ),
+      skillsFor: jest
         .fn()
-        .mockResolvedValue(
-          live ? { id: options.userAgent!.id, draft: live, live } : null,
-        ),
+        .mockResolvedValue(options.userAgent?.currentSkills ?? []),
     };
     const agent = {
       getMemory: jest.fn().mockResolvedValue({
@@ -196,10 +228,6 @@ describe('SessionsService streaming', () => {
             .fn()
             .mockResolvedValue({ columns: ['n'], rows: check.rows ?? [] }),
     };
-    const users = options.org
-      ? new CurrentUserService({} as OrgServerConfig)
-      : new CurrentUserService();
-    const activity = { record: jest.fn().mockResolvedValue(undefined) };
     const service = new SessionsService(
       repository as never,
       {
@@ -244,15 +272,11 @@ describe('SessionsService streaming', () => {
       metrics as never,
       knowledge as never,
       userAgents as never,
-      users,
-      activity as never,
     );
     return {
       service,
       session,
       agent,
-      users,
-      activity,
       verifiedQueries,
       metrics,
       knowledge,
@@ -316,7 +340,10 @@ describe('SessionsService streaming', () => {
         content: 'Argentina won through superior chance creation.',
       }),
     );
-    expect(events.at(-1)).toEqual({ type: 'done', session });
+    expect(events.at(-1)).toEqual({
+      type: 'done',
+      session: { ...session, panelItems: [] },
+    });
   });
 
   it('builds the interpretation line from the queries that ran', async () => {
@@ -599,6 +626,196 @@ describe('SessionsService streaming', () => {
       ).toBe(false);
     });
 
+    it("puts the agent's tool selection on the turn and trims Block 1 (ADR-0022)", async () => {
+      const { service, agent } = buildStreaming(answerStream([]), {
+        userAgent: {
+          id: 'agent-1',
+          live: { ...historian, tools: ['ask_clarification'] },
+        },
+      });
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      const options = turnOptions(agent);
+      expect(options.requestContext.get('agent-tools')).toEqual([
+        'ask_clarification',
+      ]);
+      const block1 = options.context[0].content;
+      expect(block1).toContain(
+        'Use describe_entity / run_readonly_sql to inspect and query them.',
+      );
+      expect(block1).not.toContain('sample_rows');
+      expect(block1).not.toContain('Interactive visuals in this session');
+      expect(block1).not.toContain('right panel');
+    });
+
+    it('keeps the full Block 1 and no selection when the agent selects every tool', async () => {
+      for (const tools of [
+        undefined,
+        ['visuals', 'sample_rows', 'ask_clarification'],
+      ]) {
+        const { service, agent } = buildStreaming(answerStream([]), {
+          userAgent: {
+            id: 'agent-1',
+            live: { ...historian, ...(tools ? { tools } : {}) },
+          },
+        });
+
+        await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+        const options = turnOptions(agent);
+        expect(options.requestContext.get('agent-tools')).toBeUndefined();
+        const block1 = options.context[0].content;
+        expect(block1).toContain(
+          'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
+        );
+        expect(block1).toContain(
+          'Interactive visuals in this session (id — title, current version):\n(none yet)\nNo visual is open in the right panel.',
+        );
+      }
+    });
+
+    it('keeps the visuals lines and drops only the sample_rows hint without sample_rows', async () => {
+      const { service, agent } = buildStreaming(answerStream([]), {
+        userAgent: {
+          id: 'agent-1',
+          live: { ...historian, tools: ['visuals'] },
+        },
+      });
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      const options = turnOptions(agent);
+      expect(options.requestContext.get('agent-tools')).toEqual(['visuals']);
+      const block1 = options.context[0].content;
+      expect(block1).toContain(
+        'Use describe_entity / run_readonly_sql to inspect and query them.',
+      );
+      expect(block1).toContain('Interactive visuals in this session');
+    });
+
+    it("puts the agent's skill copies on the turn, and none for a plain session (ADR-0022)", async () => {
+      const copy = {
+        id: 'skill-1',
+        name: 'fiscal-calendar',
+        description: 'Use when a question names a fiscal year.',
+        body: 'Our fiscal year starts on 1 July.',
+        files: [],
+      };
+      const { service, agent } = buildStreaming(answerStream([]), {
+        userAgent: {
+          id: 'agent-1',
+          live: { ...historian, skills: ['skill-1'] },
+          liveSkills: [copy],
+          // A later edit of the skill must not reach a Live agent.
+          currentSkills: [{ ...copy, body: 'Changed.' }],
+        },
+      });
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      expect(turnOptions(agent).requestContext.get('agent-skills')).toEqual([
+        copy,
+      ]);
+
+      const plain = buildStreaming(answerStream([]), {
+        userAgent: { id: 'agent-1', live: historian },
+      });
+      await plain.service.streamMessage('session-1', 'Who?', () => {});
+      expect(
+        turnOptions(plain.agent).requestContext.get('agent-skills'),
+      ).toBeUndefined();
+    });
+
+    it('runs a preview on the current skills its draft names, skipping deleted ones', async () => {
+      const current = {
+        id: 'skill-1',
+        name: 'fiscal-calendar',
+        description: 'Use when a question names a fiscal year.',
+        body: 'Our fiscal year starts on 1 April.',
+        files: [],
+      };
+      const { service, agent } = buildStreaming(answerStream([]), {
+        preview: true,
+        userAgent: {
+          id: 'agent-1',
+          live: { ...historian, skills: ['skill-1', 'gone'] },
+          liveSkills: [{ ...current, body: 'Old.' }],
+          currentSkills: [{ ...current, ownerId: 'x' }],
+        },
+      });
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      const skills = turnOptions(agent).requestContext.get('agent-skills') as {
+        body: string;
+      }[];
+      expect(skills.map((skill) => skill.body)).toEqual([current.body]);
+    });
+
+    it('turns links in the instructions into plain mentions in Block 5 (ADR-0024)', async () => {
+      const { service, agent } = buildStreaming(answerStream([]), {
+        userAgent: {
+          id: 'agent-1',
+          live: {
+            ...historian,
+            instructions:
+              'Follow [[skill:fiscal-calendar]], use [[tool:sample_rows]].',
+          },
+        },
+      });
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      const { context } = turnOptions(agent);
+      const last = context[context.length - 1].content;
+      expect(last).toContain(
+        'Follow the "fiscal-calendar" skill, use the "sample_rows" tool.',
+      );
+      expect(last).not.toContain('[[');
+    });
+
+    it('offers the tools a linked skill links, from the Live copies, and the current skills in a preview', async () => {
+      const skill = (body: string) => ({
+        id: 'skill-1',
+        name: 'fiscal-calendar',
+        description: 'Use when a question names a fiscal year.',
+        body,
+        files: [],
+      });
+      const live = {
+        ...historian,
+        tools: ['ask_clarification'],
+        skills: ['skill-1'],
+      };
+      const published = buildStreaming(answerStream([]), {
+        userAgent: {
+          id: 'agent-1',
+          live,
+          liveSkills: [skill('Use [[tool:sample_rows]].')],
+          currentSkills: [skill('Use [[tool:create_visual]].')],
+        },
+      });
+      await published.service.streamMessage('session-1', 'Who?', () => {});
+      expect(
+        turnOptions(published.agent).requestContext.get('agent-tools'),
+      ).toEqual(['sample_rows', 'ask_clarification']);
+
+      const preview = buildStreaming(answerStream([]), {
+        preview: true,
+        userAgent: {
+          id: 'agent-1',
+          live,
+          liveSkills: [skill('Use [[tool:sample_rows]].')],
+          currentSkills: [skill('Use [[tool:create_visual]].')],
+        },
+      });
+      await preview.service.streamMessage('session-1', 'Who?', () => {});
+      expect(
+        turnOptions(preview.agent).requestContext.get('agent-tools'),
+      ).toEqual(['ask_clarification', 'visuals']);
+    });
+
     it('re-stamps the agent name when the agent was renamed', async () => {
       const { service, repository, session } = buildStreaming(
         answerStream([]),
@@ -806,6 +1023,7 @@ describe('SessionsService streaming', () => {
       expect(JSON.parse(call!.content!)).toEqual({
         name: 'run_readonly_sql',
         rationale: FIRST,
+        input: 'select 1',
       });
       const result = events.find((event) => event.type === 'tool-result');
       expect(JSON.parse(result!.content!)).toEqual(
@@ -1097,152 +1315,6 @@ describe('SessionsService streaming', () => {
       });
     });
   });
-
-  describe('agent errors (admin R40; api.md 3.1)', () => {
-    const historian = {
-      name: 'Cup historian',
-      description: '',
-      instructions: '',
-      datasets: ['football'],
-      starterQuestions: [],
-    };
-    const ada = { ...LOCAL_USER, id: 'ada', displayName: 'Ada Lovelace' };
-
-    it('records agent.turn-failed for a failed turn in a session started from a user agent', async () => {
-      const { service, users, activity } = buildStreaming(
-        failingStream(new Error('Model unavailable')),
-        { org: true, userAgent: { id: 'agent-1', live: historian } },
-      );
-
-      await expect(
-        users.runAs(ada, () =>
-          service.streamMessage('session-1', 'Who won?', () => {}),
-        ),
-      ).rejects.toThrow('Model unavailable');
-
-      expect(activity.record).toHaveBeenCalledTimes(1);
-      expect(activity.record).toHaveBeenCalledWith('agent.turn-failed', {
-        actorId: 'ada',
-        subjectId: 'agent-1',
-        details: { sessionId: 'session-1', message: 'Model unavailable' },
-      });
-    });
-
-    it('records in local mode too, as the signed-in persona (ADR-0012)', async () => {
-      const { service, users, activity } = buildStreaming(
-        failingStream(new Error('Model unavailable')),
-        { userAgent: { id: 'agent-1', live: historian } },
-      );
-      const mark = { ...LOCAL_USER, id: 'local-mark' };
-
-      await expect(
-        users.runAs(mark, () =>
-          service.streamMessage('session-1', 'Who won?', () => {}),
-        ),
-      ).rejects.toThrow('Model unavailable');
-
-      expect(activity.record).toHaveBeenCalledWith('agent.turn-failed', {
-        actorId: 'local-mark',
-        subjectId: 'agent-1',
-        details: { sessionId: 'session-1', message: 'Model unavailable' },
-      });
-    });
-
-    it('cuts the message to 200 characters and never hides the turn error', async () => {
-      const { service, users, activity } = buildStreaming(
-        failingStream(new Error('x'.repeat(500))),
-        { org: true, userAgent: { id: 'agent-1', live: historian } },
-      );
-      activity.record.mockRejectedValue(new Error('store is down'));
-
-      await expect(
-        users.runAs(ada, () =>
-          service.streamMessage('session-1', 'Who won?', () => {}),
-        ),
-      ).rejects.toThrow('x'.repeat(500));
-
-      const [, fields] = activity.record.mock.calls[0] as [
-        string,
-        { details: { message: string } },
-      ];
-      expect(fields.details.message).toBe('x'.repeat(200));
-    });
-
-    it('records a failed non-streamed turn too', async () => {
-      const { service, users, activity, agent } = buildStreaming(
-        answerStream([]),
-        { org: true, userAgent: { id: 'agent-1', live: historian } },
-      );
-      agent.generate.mockRejectedValue(new Error('Provider down'));
-
-      await expect(
-        users.runAs(ada, () => service.sendMessage('session-1', 'Who won?')),
-      ).rejects.toThrow('Provider down');
-
-      expect(activity.record).toHaveBeenCalledWith(
-        'agent.turn-failed',
-        expect.objectContaining({ subjectId: 'agent-1' }),
-      );
-    });
-
-    it.each([
-      ['a plain session', { org: true }],
-      [
-        'a preview',
-        {
-          org: true,
-          preview: true,
-          userAgent: { id: 'agent-1', live: historian },
-        },
-      ],
-      [
-        'an agent the session no longer resolves (deleted or transferred)',
-        { org: true, userAgent: { id: 'agent-1', live: null } },
-      ],
-    ])('records nothing for %s', async (_label, options) => {
-      const { service, users, activity } = buildStreaming(
-        failingStream(new Error('Model unavailable')),
-        options,
-      );
-
-      await expect(
-        users.runAs(ada, () =>
-          service.streamMessage('session-1', 'Who won?', () => {}),
-        ),
-      ).rejects.toThrow('Model unavailable');
-
-      expect(activity.record).not.toHaveBeenCalled();
-    });
-
-    it('records nothing for a stopped turn or a refused request', async () => {
-      const { service, users, activity, repository } = buildStreaming(
-        failingStream(new Error('Model unavailable')),
-        { org: true, userAgent: { id: 'agent-1', live: historian } },
-      );
-      const stopped = new AbortController();
-      stopped.abort();
-
-      await users.runAs(ada, async () => {
-        await expect(
-          service.streamMessage(
-            'session-1',
-            'Who won?',
-            () => {},
-            stopped.signal,
-          ),
-        ).rejects.toThrow('Model unavailable');
-        await expect(
-          service.streamMessage('session-1', '   ', () => {}),
-        ).rejects.toThrow('message is required');
-        repository.get.mockResolvedValueOnce(null);
-        await expect(
-          service.streamMessage('missing', 'Who won?', () => {}),
-        ).rejects.toThrow('Session missing not found');
-      });
-
-      expect(activity.record).not.toHaveBeenCalled();
-    });
-  });
 });
 
 describe('SessionsService SQL self-correction', () => {
@@ -1268,7 +1340,7 @@ describe('SessionsService SQL self-correction', () => {
       ],
     };
     const service = new SessionsService(
-      { listAllOwners: jest.fn().mockResolvedValue([]) } as never,
+      { listAll: jest.fn().mockResolvedValue([]) } as never,
       {
         getAgent: jest.fn().mockReturnValue(fixer),
         ensureSessionWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
@@ -1463,7 +1535,7 @@ describe('SessionsService visual tool bridge (turn records)', () => {
       visualizations: [],
     };
     const repository = {
-      listAllOwners: jest.fn().mockResolvedValue([]),
+      listAll: jest.fn().mockResolvedValue([]),
       get: jest.fn().mockResolvedValue(session),
       update: jest.fn().mockImplementation((_id, patch) => {
         Object.assign(session, patch);
@@ -2030,7 +2102,6 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
   };
 
   function build(agent: Record<string, unknown> | null, datasets: string[]) {
-    const users = new CurrentUserService();
     const repository = {
       insert: jest
         .fn()
@@ -2063,9 +2134,8 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
       {} as never,
       {} as never,
       userAgents as never,
-      users,
     );
-    return { service, repository, mastra, users };
+    return { service, repository, mastra };
   }
 
   it('names the session after the Live agent and keeps only existing datasets', async () => {
@@ -2083,6 +2153,14 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
       agentName: 'Cup historian',
       messages: [],
     });
+  });
+
+  it('uses a typed session name when given', async () => {
+    const { service } = build({ id: 'agent-1', draft: live, live }, [
+      'World Cup Core',
+    ]);
+    const session = await service.createFromAgent('agent-1', ' My chat ');
+    expect(session.name).toBe('My chat');
   });
 
   it('refuses an unknown agent, a draft-only agent and one with no dataset left', async () => {
@@ -2138,57 +2216,41 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
 
   describe('preview sessions (agents-evals R60, R61)', () => {
     it('runs the draft in memory and is never stored', async () => {
-      const { service, repository, mastra, users } = build(
+      const { service, repository, mastra } = build(
         { id: 'agent-1', draft: { ...live, name: 'Draft name' } },
         ['World Cup Core'],
       );
-      // As Demo User: nobody is signed in outside `runAs` (ADR-0012).
-      await users.runAs(LOCAL_USER, async () => {
-        const preview = await service.createPreview('agent-1');
+      const preview = await service.createPreview('agent-1');
 
-        expect(preview).toMatchObject({
-          name: 'Preview: Draft name',
-          datasets: ['World Cup Core'],
-          agentId: 'agent-1',
-          preview: true,
-        });
-        expect(preview.id).toMatch(/^preview-/);
-        expect(repository.insert).not.toHaveBeenCalled();
-        expect(await service.get(preview.id)).toMatchObject({ preview: true });
-        expect((await service.toView(preview)).agent?.name).toBe('Draft name');
-
-        await service.delete(preview.id);
-        expect(mastra.deleteSessionResources).toHaveBeenCalledWith(preview.id);
-        expect(repository.delete).not.toHaveBeenCalled();
-        await expect(service.get(preview.id)).rejects.toThrow('not found');
+      expect(preview).toMatchObject({
+        name: 'Preview: Draft name',
+        datasets: ['World Cup Core'],
+        agentId: 'agent-1',
+        preview: true,
       });
+      expect(preview.id).toMatch(/^preview-/);
+      expect(repository.insert).not.toHaveBeenCalled();
+      expect(await service.get(preview.id)).toMatchObject({ preview: true });
+      expect((await service.toView(preview)).agent?.name).toBe('Draft name');
+
+      await service.delete(preview.id);
+      expect(mastra.deleteSessionResources).toHaveBeenCalledWith(preview.id);
+      expect(repository.delete).not.toHaveBeenCalled();
+      await expect(service.get(preview.id)).rejects.toThrow('not found');
     });
 
-    it('belongs to the user who opened it (admin R29, R30)', async () => {
-      const { service, mastra, users } = build(
+    it('is reachable by its id until deleted', async () => {
+      const { service, mastra } = build(
         { id: 'agent-1', draft: { ...live, name: 'Draft name' } },
         ['World Cup Core'],
       );
-      const ada = { ...LOCAL_USER, id: 'ada' };
-      const bob = { ...LOCAL_USER, id: 'bob' };
 
-      const preview = await users.runAs(ada, () =>
-        service.createPreview('agent-1'),
-      );
+      const preview = await service.createPreview('agent-1');
 
-      await users.runAs(bob, async () => {
-        await expect(service.get(preview.id)).rejects.toThrow('not found');
-        await expect(service.delete(preview.id)).rejects.toThrow('not found');
-      });
-      // Demo User is scoped like anyone; outside a request nobody is.
-      await users.runAs(LOCAL_USER, async () => {
-        await expect(service.get(preview.id)).rejects.toThrow('not found');
-      });
-      await expect(service.get(preview.id)).rejects.toThrow('Sign in required');
+      expect(await service.get(preview.id)).toMatchObject({ preview: true });
       expect(mastra.deleteSessionResources).not.toHaveBeenCalled();
-      await users.runAs(ada, async () => {
-        expect(await service.get(preview.id)).toMatchObject({ preview: true });
-      });
+      await service.delete(preview.id);
+      expect(mastra.deleteSessionResources).toHaveBeenCalledWith(preview.id);
     });
 
     it('refuses an unknown agent and a draft with no existing dataset', async () => {
@@ -2201,5 +2263,444 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
         ),
       ).rejects.toThrow('Select at least one dataset to preview');
     });
+  });
+});
+
+describe('SessionsService panel items (ADR-0029)', () => {
+  async function build(extra: Partial<SessionDoc> = {}) {
+    const session: SessionDoc = {
+      id: 'session-1',
+      name: 'Claims',
+      datasets: ['claims'],
+      messages: [],
+      visualizations: [],
+      ...extra,
+    };
+    const repository = {
+      listAll: jest.fn().mockResolvedValue([]),
+      get: jest.fn().mockResolvedValue(session),
+      update: jest.fn().mockImplementation((_id, patch) => {
+        Object.assign(session, patch);
+        return Promise.resolve(session);
+      }),
+    };
+    const visuals = {
+      create: jest.fn().mockResolvedValue({
+        metadata: {
+          id: 'visual-1',
+          title: 'Chart',
+          description: 'A chart.',
+          path: 'visuals/visual-1',
+          sourceMessageAt: '2024-01-01T00:00:00.000Z',
+          createdAt: '2024-01-01T00:00:00.000Z',
+        },
+      }),
+      currentVersion: jest.fn().mockReturnValue(1),
+    };
+    const service = new SessionsService(
+      repository as never,
+      {
+        ensureSessionWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
+      } as never,
+      { getByNames: jest.fn().mockResolvedValue([]) } as never,
+      {} as never,
+      {} as never,
+      visuals as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      userAgentsStub as never,
+    );
+    await service.onModuleInit();
+    const calls = (setDatasetToolServices as jest.Mock).mock
+      .calls as unknown[][];
+    const installed = calls.at(-1)![0] as DatasetToolServices;
+    return { service, session, installed };
+  }
+
+  const records = [
+    {
+      tool: 'run_readonly_sql',
+      input: 'select 1',
+      columns: ['team', 'note'],
+      rows: [
+        { team: 'Argentina', note: 'said "hi", ok' },
+        { team: 'France', note: null },
+      ],
+      rowCount: 2,
+      rationale: 'Count the finalists. Then compare.',
+    },
+  ];
+
+  it('stores a composed document and downloads it as Markdown', async () => {
+    const { service, session, installed } = await build();
+
+    const shown = await installed.showPanelItem('session-1', {
+      kind: 'document',
+      title: 'Findings',
+      markdown: '# Findings',
+    });
+
+    expect(shown).toMatchObject({
+      shown: true,
+      kind: 'document',
+      title: 'Findings',
+    });
+    expect(session.panelItems).toEqual([
+      expect.objectContaining({ id: shown.id, markdown: '# Findings' }),
+    ]);
+    await expect(
+      service.downloadPanelItem('session-1', shown.id),
+    ).resolves.toMatchObject({
+      filename: 'findings.md',
+      contentType: 'text/markdown',
+      body: Buffer.from('# Findings'),
+    });
+  });
+
+  it("shows this turn's query result as a table and downloads it as CSV", async () => {
+    const { service, installed } = await build();
+
+    const shown = await installed.showPanelItem(
+      'session-1',
+      { kind: 'table' },
+      records,
+    );
+
+    expect(shown).toMatchObject({
+      kind: 'table',
+      title: 'Count the finalists',
+      rowCount: 2,
+    });
+    const { body, filename, contentType } = await service.downloadPanelItem(
+      'session-1',
+      shown.id,
+    );
+    expect(filename).toBe('count-the-finalists.csv');
+    expect(contentType).toBe('text/csv');
+    expect(body.toString()).toBe(
+      'team,note\r\nArgentina,"said ""hi"", ok"\r\nFrance,',
+    );
+  });
+
+  it('refuses what the tool contract refuses, with its messages', async () => {
+    const { installed } = await build();
+    const show = (input: Parameters<typeof installed.showPanelItem>[1]) =>
+      installed.showPanelItem('session-1', input, records);
+    await expect(show({ kind: 'table', record: 3 })).rejects.toThrow(
+      'record 3 does not exist: this turn has 1 query results',
+    );
+    await expect(
+      installed.showPanelItem('session-1', { kind: 'table' }, []),
+    ).rejects.toThrow(
+      'No query result in this turn to show: run the query first',
+    );
+    await expect(show({ kind: 'visual', visualId: 'nope' })).rejects.toThrow(
+      'Visual "nope" not found in this session',
+    );
+    await expect(show({ kind: 'file', path: '../etc/passwd' })).rejects.toThrow(
+      'Invalid file path "../etc/passwd"',
+    );
+  });
+
+  it('upserts the visual into the panel history when it is created, and re-stamps it on show', async () => {
+    const { session, installed } = await build();
+
+    await installed.createVisual('session-1', undefined, 'chart it');
+    expect(session.panelItems).toEqual([
+      expect.objectContaining({
+        id: 'visual:visual-1',
+        kind: 'visual',
+        visualId: 'visual-1',
+      }),
+    ]);
+
+    const before = session.panelItems![0].shownAt;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await installed.showPanelItem('session-1', {
+      kind: 'visual',
+      visualId: 'visual-1',
+    });
+    expect(session.panelItems).toHaveLength(1);
+    expect(session.panelItems![0].shownAt > before).toBe(true);
+  });
+
+  it('lets an agent without a ## Workflow section define its steps and set their status (update_workflow)', async () => {
+    const { service, session, installed } = await build();
+
+    await expect(installed.updateWorkflow('session-1', {})).rejects.toThrow(
+      'There is no workflow yet: pass steps to create one',
+    );
+    await expect(
+      installed.updateWorkflow('session-1', { steps: 'Only one' }),
+    ).rejects.toThrow(
+      'steps takes 2 to 12 titles of at most 80 characters each',
+    );
+
+    expect(
+      await installed.updateWorkflow('session-1', {
+        steps: 'Scope | Analyse | Report',
+        note: 'Which period?',
+        waiting: true,
+      }),
+    ).toEqual({ updated: true, steps: 3, current: 1, done: [], skipped: [] });
+    expect(session.workflowState).toMatchObject({
+      steps: ['Scope', 'Analyse', 'Report'],
+      current: 1,
+      waiting: true,
+      note: 'Which period?',
+    });
+    // It sets status only: no panel item, the panel stays closed.
+    expect(session.panelItems).toBeUndefined();
+    let view = await service.toView(await service.get('session-1'));
+    expect(view.workflow).toEqual({
+      phases: [
+        { number: 1, title: 'Scope' },
+        { number: 2, title: 'Analyse' },
+        { number: 3, title: 'Report' },
+      ],
+      source: 'agent',
+      current: 1,
+      done: [],
+      skipped: [],
+      waiting: true,
+      note: 'Which period?',
+    });
+
+    // Same step: the card stays; a new step clears it.
+    await installed.updateWorkflow('session-1', { done: '1', skipped: '3' });
+    expect(session.workflowState).toMatchObject({
+      current: 1,
+      done: [1],
+      skipped: [3],
+      waiting: true,
+      note: 'Which period?',
+    });
+    await installed.updateWorkflow('session-1', { current: 2 });
+    expect(session.workflowState).toMatchObject({ current: 2, done: [1] });
+    expect(session.workflowState).not.toHaveProperty('waiting');
+    expect(session.workflowState).not.toHaveProperty('note');
+    await expect(
+      installed.updateWorkflow('session-1', { current: 4 }),
+    ).rejects.toThrow('current must be a step number from 1 to 3');
+
+    // The workflow never reaches the panel: still no panel item.
+    expect(session.panelItems).toBeUndefined();
+    view = await service.toView(await service.get('session-1'));
+    expect(view.workflow).toMatchObject({ source: 'agent', current: 2 });
+  });
+
+  it("refuses steps when the prompt's ## Workflow section defines them", async () => {
+    setAgentPromptOverrides([
+      {
+        key: 'assistant',
+        prompt: '## Workflow\n1. Ask\n2. Answer',
+        baseHash: 'x',
+      },
+    ]);
+    try {
+      const { session, installed } = await build({
+        workflowState: {
+          current: 1,
+          done: [],
+          steps: ['Stale', 'Steps'],
+          updatedAt: 'x',
+        },
+      });
+      await expect(
+        installed.updateWorkflow('session-1', { steps: 'A | B' }),
+      ).rejects.toThrow(
+        'Your ## Workflow section defines the steps; set their status instead',
+      );
+      await expect(
+        installed.updateWorkflow('session-1', { done: '3' }),
+      ).rejects.toThrow('done must list step numbers from 1 to 2');
+      expect(
+        await installed.updateWorkflow('session-1', { current: 2, done: '1' }),
+      ).toEqual({
+        updated: true,
+        steps: 2,
+        current: 2,
+        done: [1],
+        skipped: [],
+      });
+      expect(session.workflowState).toMatchObject({ current: 2, done: [1] });
+    } finally {
+      setAgentPromptOverrides([]);
+    }
+  });
+
+  it('derives a visual item for a session saved without panel items, and its workflow', async () => {
+    setAgentPromptOverrides([
+      {
+        key: 'assistant',
+        prompt: '## Workflow\n1. Ask\n2. Answer',
+        baseHash: 'x',
+      },
+    ]);
+    try {
+      const { service } = await build({
+        visualizations: [
+          {
+            id: 'v-old',
+            title: 'Old chart',
+            description: '',
+            path: 'visuals/v-old',
+            sourceMessageAt: '2024-01-01T00:00:00.000Z',
+            createdAt: '2024-02-02T00:00:00.000Z',
+          },
+        ],
+        workflowState: { current: 2, done: [1], updatedAt: 'x' },
+      });
+      const view = await service.toView(await service.get('session-1'));
+      expect(view.panelItems).toEqual([
+        {
+          id: 'visual:v-old',
+          kind: 'visual',
+          title: 'Old chart',
+          shownAt: '2024-02-02T00:00:00.000Z',
+          visualId: 'v-old',
+        },
+      ]);
+      expect(view.workflow).toEqual({
+        phases: [
+          { number: 1, title: 'Ask' },
+          { number: 2, title: 'Answer' },
+        ],
+        source: 'prompt',
+        current: 2,
+        done: [1],
+        skipped: [],
+      });
+    } finally {
+      setAgentPromptOverrides([]);
+    }
+  });
+
+  it('downloads a document and a .md file as PDF, and refuses other items (BA-231)', async () => {
+    const { service } = await build({
+      panelItems: [
+        {
+          id: 'doc-1',
+          kind: 'document',
+          title: 'Q3 Findings!',
+          shownAt: 'x',
+          markdown: '# Hi',
+        },
+        {
+          id: 'file-md',
+          kind: 'file',
+          title: 'Plan',
+          shownAt: 'x',
+          path: 'notes/plan.md',
+        },
+        {
+          id: 'file-txt',
+          kind: 'file',
+          title: 'T',
+          shownAt: 'x',
+          path: 'a.txt',
+        },
+        {
+          id: 'tbl',
+          kind: 'table',
+          title: 'T',
+          shownAt: 'x',
+          columns: ['a'],
+          rows: [[1]],
+        },
+      ] as never,
+    });
+    (readWorkspaceFile as jest.Mock).mockResolvedValueOnce({
+      text: '# Plan',
+      body: Buffer.from('# Plan'),
+      contentType: 'text/markdown',
+    });
+    const doc = await service.downloadPanelItem('session-1', 'doc-1', 'pdf');
+    expect(doc).toMatchObject({
+      filename: 'q3-findings.pdf',
+      contentType: 'application/pdf',
+    });
+    expect(doc.body.toString()).toBe('%PDF-stub # Hi');
+    expect(renderPdf).toHaveBeenCalledWith(
+      '# Hi',
+      expect.objectContaining({
+        title: 'Q3 Findings!',
+        author: 'Questions to Insights',
+        createdAt: expect.any(Date) as Date,
+      }),
+    );
+    await expect(
+      service.downloadPanelItem('session-1', 'file-md', 'pdf'),
+    ).resolves.toMatchObject({
+      filename: 'plan.pdf',
+      contentType: 'application/pdf',
+    });
+    await expect(
+      service.downloadPanelItem('session-1', 'doc-1', 'md'),
+    ).resolves.toMatchObject({ filename: 'q3-findings.md' });
+    for (const itemId of ['file-txt', 'tbl']) {
+      await expect(
+        service.downloadPanelItem('session-1', itemId, 'pdf'),
+      ).rejects.toThrow(`Panel item "${itemId}" can't be downloaded as PDF`);
+    }
+  });
+
+  it('serves a file item only as a file, and a visual cannot be downloaded', async () => {
+    const { service } = await build({
+      panelItems: [
+        {
+          id: 'doc-1',
+          kind: 'document',
+          title: 'Doc',
+          shownAt: 'x',
+          markdown: 'm',
+        },
+        {
+          id: 'visual:v',
+          kind: 'visual',
+          title: 'V',
+          shownAt: 'x',
+          visualId: 'v',
+        },
+      ],
+    });
+    await expect(service.panelItemFile('session-1', 'doc-1')).rejects.toThrow(
+      'Panel item "doc-1" is not a file',
+    );
+    await expect(
+      service.downloadPanelItem('session-1', 'visual:v'),
+    ).rejects.toThrow('Panel item "visual:v" can\'t be downloaded');
+    await expect(service.panelItemFile('session-1', 'nope')).rejects.toThrow(
+      'Panel item "nope" not found',
+    );
+  });
+});
+
+describe('toolCallInput (api.md 3.1)', () => {
+  it('names the skill a skill tool loads', () => {
+    expect(toolCallInput('skill', { name: 'rfp-client-renewal' })).toBe(
+      'rfp-client-renewal',
+    );
+    expect(
+      toolCallInput('skill_read', {
+        skillName: 'rfp-carriers',
+        path: 'references/carriers.md',
+      }),
+    ).toBe('rfp-carriers/references/carriers.md');
+    expect(toolCallInput('skill_search', { query: 'stop-loss' })).toBe(
+      'stop-loss',
+    );
+  });
+
+  it("takes another tool's first text argument, flattened and clipped", () => {
+    expect(toolCallInput('get_rfp', { rfpId: 'e006cebc' })).toBe('e006cebc');
+    expect(
+      toolCallInput('run_readonly_sql', { sql: 'SELECT 1\n  FROM t' }),
+    ).toBe('SELECT 1 FROM t');
+    const long = toolCallInput('run_readonly_sql', { sql: 'x'.repeat(300) });
+    expect(long).toHaveLength(200);
+    expect(long?.endsWith('…')).toBe(true);
+    expect(toolCallInput('list_entities', {})).toBeUndefined();
   });
 });
