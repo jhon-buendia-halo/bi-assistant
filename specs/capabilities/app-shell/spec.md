@@ -1,6 +1,6 @@
 # App shell
 
-The app shell is the frame every other capability lives in: a navigation rail, an "Agentic Hub" banner, a main area, a collapsible and resizable right-hand details panel, a status banner that tells the user when the local backend is not healthy, transient toast messages, and the system logs overlay. It must stay usable from the keyboard, free of automatically detectable accessibility violations, and visually stable. Detailed layout, spacing and design tokens belong to [../../system/ui.md](../../system/ui.md); this file owns the behaviour.
+The app shell is the frame every other capability lives in: a navigation rail, a "US Health Agentic Hub" banner, a main area, a collapsible and resizable right-hand details panel, a status banner that tells the user when the local backend is not healthy, transient toast messages, and the system logs overlay. It must stay usable from the keyboard, free of automatically detectable accessibility violations, and visually stable. Detailed layout, spacing and design tokens belong to [../../system/ui.md](../../system/ui.md); this file owns the behaviour.
 
 ## Concepts
 
@@ -16,13 +16,13 @@ Capability-local vocabulary, used only for UI words:
 ## Rules
 
 Layout and navigation
-- R1. The system SHALL present, left to right: the navigation rail (expandable into a drawer, R48), then a column holding the "Agentic Hub" banner above the page and, when open, the details panel. Everything sits inside a textured gradient frame.
+- R1. The system SHALL present, left to right: the navigation rail (expandable into a drawer, R48), then a column holding the "US Health Agentic Hub" banner above the page and, when open, the details panel. Everything sits inside a textured gradient frame.
 - R2. On launch the navigation drawer SHALL be expanded unless the user last collapsed it (R50), the details panel SHALL be collapsed and the main view SHALL be home. The details panel state SHALL NOT be remembered between launches.
 - R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Agents**, **Knowledge** and **Sessions**. Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it, except in the agent editor and, for **Sessions**, in a chat or the composer: there, **Agents** SHALL return to the hub, after the unsaved-changes question (agents-evals R59). Agents stays current while an agent's detail is open, Datasets while the dataset editor is open, and Sessions while the composer or a chat is open. Choosing **Sessions** SHALL open the Sessions page with the list of sessions (R46), also from an open chat or the composer, and SHALL NOT change the drawer.
 - R4. Below the workspace items the rail SHALL offer **Open system logs** (tooltip "System logs and diagnostics") and **Settings**, then a divider and the LenAI mark with "Powered by LenAI". The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+". The rail SHALL show no account avatar, no account menu and no Admin item: the app has one built-in super admin and nothing in the UI shows a user name.
 - R5. Choosing **Settings** on the rail SHALL show the Settings area: a list pane with "Settings navigation" offering five sections, **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** ([../developer-settings/spec.md](../developer-settings/spec.md)) and **Appearance** (R39–R45), beside the chosen section's form. Choosing a section SHALL show it and mark it current; choosing the current section again SHALL deselect it and show the prompt "Choose a settings section." Choosing another rail area SHALL leave Settings; coming back SHALL show the section that was chosen.
 - R6. Removed in roadmap 1.8.3: the rail cannot be collapsed. (Previously: the Collapse sidebar and Expand sidebar controls.)
-- R7. The banner SHALL be the page's only level-one heading and SHALL read "Agentic Hub". Screen titles ("Datasets", "Agents", a settings section…) are level-two headings.
+- R7. The banner SHALL be the page's only level-one heading and SHALL read "US Health Agentic Hub" (since 2026-10-15, BA-234; it read "Agentic Hub" before). Only the banner carries "US Health": the window and document title (R33), the Settings build identity (R32), the welcome heading (R51) and the drawer label beside the menu button SHALL keep reading "Agentic Hub". Screen titles ("Datasets", "Agents", a settings section…) are level-two headings.
 - R8. The sidebar and details panel SHALL keep a fixed minimum usable width for the main area (see R12) so the main content is never squeezed to nothing.
 
 Details panel: collapse and resize
@@ -216,7 +216,7 @@ Feature: Navigation rail
     Then the "Appearance" section is still shown
 
   Scenario: Shows the product name
-    Then the page's level-one heading reads "Agentic Hub"
+    Then the page's level-one heading reads "US Health Agentic Hub"
     And the document title is "Agentic Hub"
     When I click "Settings" on the rail
     Then the settings list ends with "Agentic Hub v" followed by the version
