@@ -27,6 +27,14 @@
     }
     <span class="mt-auto flex flex-wrap items-center gap-2 pt-1">
       <span class="text-[12px] text-fg-muted">Owner: {{ owner() }}</span>
+      @if (a.showcase) {
+        <span
+          [attr.data-testid]="'agent-showcase-' + a.key"
+          class="chip chip-neutral"
+          [attr.title]="a.chatRequirement"
+          >Showcase</span
+        >
+      }
       @if (isUser()) {
         <span
           [attr.data-testid]="'agent-status-' + a.key"

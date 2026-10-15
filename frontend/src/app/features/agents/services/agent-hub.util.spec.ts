@@ -306,3 +306,42 @@ describe('newSessionAgentOptions (New conversation Agent picker)', () => {
     ]);
   });
 });
+
+describe('showcase agents (agents-evals R106)', () => {
+  const reason = 'Showcase agent: not available to chat yet.';
+  const survey: Agent = {
+    ...agent('survey', 'Survey Agent', 'official'),
+    datasets: [],
+    showcase: true,
+    chatRequirement: reason,
+  };
+
+  it('blocks Start chat with the showcase reason, without opening the composer', () => {
+    expect(canStartChat(survey)).toBeTrue();
+    expect(startChatBlockedReason(survey)).toBe(reason);
+    expect(startsInComposer(survey)).toBeFalse();
+  });
+
+  it('puts showcase agents after the Official agents that can chat', () => {
+    const lad: Agent = { ...survey, key: 'lad-coe', name: 'LAD COE Agent' };
+    const [official] = buildHubSections([survey, assistant, lad], 'all', '');
+    expect(official.agents.map((a) => a.key)).toEqual([
+      assistant.key,
+      'lad-coe',
+      'survey',
+    ]);
+  });
+
+  it('lists a showcase agent in the Agent picker, disabled with its reason', () => {
+    const rfp: Agent = {
+      ...agent('rfp', 'RFP Builder', 'official'),
+      datasets: ['Intellify RFP API'],
+    };
+    const options = newSessionAgentOptions([assistant, survey, rfp]);
+    expect(options.map((option) => option.agent.key)).toEqual([
+      'rfp',
+      'survey',
+    ]);
+    expect(options[1].disabledReason).toBe(reason);
+  });
+});

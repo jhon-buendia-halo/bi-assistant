@@ -33,6 +33,11 @@ import type { AgentPromptView } from './entities/agent-prompt-override.entity';
 import { evalSetsFor } from '../../mastra/evals/eval-sets';
 import { builtinAgentSession } from './builtin-sessions';
 import {
+  SHOWCASE_AGENT_KEYS,
+  SHOWCASE_REASON,
+  isShowcaseAgent,
+} from '../../mastra/agents/showcase-catalog';
+import {
   effectiveConfig,
   hasUnpublishedChanges,
   missingDatasets,
@@ -50,7 +55,11 @@ import type {
 /** The registry key of the official agent; every other built-in is `system`. */
 const OFFICIAL_AGENT_KEY = 'assistant';
 /** The built-in agents shown as Official (api.md 2.6 #33): the assistant and the RFP Builder. */
-const OFFICIAL_AGENT_KEYS: readonly string[] = [OFFICIAL_AGENT_KEY, 'rfp'];
+const OFFICIAL_AGENT_KEYS: readonly string[] = [
+  OFFICIAL_AGENT_KEY,
+  'rfp',
+  ...SHOWCASE_AGENT_KEYS,
+];
 
 export interface AgentSummary {
   /** Registry key the agent is registered under in the Mastra instance. */
@@ -79,6 +88,8 @@ export interface AgentSummary {
    * blocked while that dataset is missing. Absent otherwise.
    */
   chatRequirement?: string;
+  /** A showcase agent: an Official card that cannot chat (agents-evals R106). */
+  showcase?: boolean;
 }
 
 export interface AgentToolDetail {
@@ -509,6 +520,10 @@ export class AgentsService {
       starterQuestions: [],
       ...(builtinSession && missing.length
         ? { chatRequirement: builtinSession.requirement }
+        : {}),
+      // A showcase agent never chats; the hub shows why (R106).
+      ...(isShowcaseAgent(key)
+        ? { showcase: true, chatRequirement: SHOWCASE_REASON }
         : {}),
     };
   }

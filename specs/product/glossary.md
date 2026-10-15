@@ -6,9 +6,9 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Active visual.** The visual currently open in the right-hand panel. The assistant tailors it by default when the user asks for a change. See *Visual*.
 
-**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships seven built-in agents (the assistant, the *RFP Builder*, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all.
+**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships eleven built-in agents (the assistant, the *RFP Builder*, the four *showcase agents*, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all.
 
-**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant and the *RFP Builder*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
+**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant, the *RFP Builder* and the *showcase agents*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
 **Angle.** One sub-question of a *deep analysis*. A plan has between 3 and 5 angles (hard cap 5). Each is investigated on its own.
 
@@ -72,7 +72,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Freeform visual.** A *visual* whose bundle is generated HTML, CSS and JavaScript, used when a *visual spec* cannot be produced. Tailoring a freeform visual stays freeform. Contrast *spec visual*.
 
-**Built-in agent prompt override.** An edit of the *system prompt* of a built-in agent (the assistant or a System agent), made on the agent's System Prompt tab. It is stored in the database, and replaces the shipped prompt on the next call, for every session and user agent, until **Reset to built-in** deletes it. The assistant's generated `## Tools` section is not part of the edited text. See [../system/data-model.md](../system/data-model.md) 3.10.3 and ADR-0026.
+**Built-in agent prompt override.** An edit of the *system prompt* of a built-in agent (an *Official agent* or a System agent), made on the agent's System Prompt tab. It is stored in the database, and replaces the shipped prompt on the next call, for every session and user agent, until **Reset to built-in** deletes it. The assistant's generated `## Tools` section is not part of the edited text. See [../system/data-model.md](../system/data-model.md) 3.10.3 and ADR-0026.
 
 **Built-in skill override.** An edit of a built-in *skill*, made in the skills library. It is stored in the database, and replaces the shipped skill on the next call until **Reset to built-in** deletes it. See [../system/data-model.md](../system/data-model.md) 3.10.2 and ADR-0023.
 
@@ -102,7 +102,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Mined entry.** A *knowledge entry* with source `mined`.
 
-**Official agent.** One of the app's own agents that can start a chat: the *assistant* and the *RFP Builder*, shown in the agent hub's Official section. They are the only built-in agents that can start a chat.
+**Official agent.** One of the app's own agents shown in the agent hub's Official section: the *assistant*, the *RFP Builder* and the four *showcase agents*. The assistant and the RFP Builder are the only built-in agents that can start a chat; the showcase agents cannot yet.
 
 **Panel item.** One thing an agent showed in the right panel with `show_in_panel`, saved on the *session* with the time it was shown: a workspace file, a Markdown document, a query result table or a *visual*. The latest one is what the panel opens on; every one is listed in the *session panel*'s shown-items menu. See [agent-panel](../capabilities/agent-panel/spec.md).
 
@@ -139,6 +139,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Session.** One conversation with the assistant, bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Needs a name and at least one dataset. A session started from a *Live* *user agent* is bound to that agent and runs with its instructions (see [../capabilities/sessions-chat/spec.md](../capabilities/sessions-chat/spec.md), R52-R59). A session started from the *RFP Builder* is bound to it and runs it on every turn (see [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md)). Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
 
 **Session panel.** The right-hand panel when the main view is a *session*'s chat. It shows one *panel item* at a time (the *visual* panel, a document, a file or a table), with a menu of everything shown in the session and a Download button. See [agent-panel](../capabilities/agent-panel/spec.md).
+
+**Showcase agent.** An *Official agent* shown to present a further US Health use case before it can chat: the Benchmarking Agent, the Survey Agent, the LAD COE Agent (Life, Absence and Disability Center of Excellence) and the Strategy Agent. It has a description and an editable system prompt, but no tools, dataset, skills or evals; its card carries a `Showcase` chip and its Start chat is always disabled with `Showcase agent: not available to chat yet.` See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R106 and [../system/agents.md](../system/agents.md) 2.9.
 
 **Skill.** A folder of instructions an agent gets: a `SKILL.md` (a name, a "Use when…" description, then a short phase map or router) plus the `phases/` and `reference/` files it names. It loads *on demand* (the framework lists it in a catalog and the model loads it with the skill tool when a request matches) or *by the app* (code sends it when a condition holds). Built-in skills ship with the app (there are no user or project skills); a user can also write *in-app skills* for her agents, and edit a built-in skill's text, which overrides the bundled one. The agent page's Skills tab shows them (see [../system/agents.md](../system/agents.md) 7.3, [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R63-R67).
 

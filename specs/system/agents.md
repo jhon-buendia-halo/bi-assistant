@@ -48,16 +48,20 @@ All agents are registered once in a single framework instance and looked up by *
 | `assistant-eval-judge` | `assistant-eval-judge` | Assistant Eval Judge | Grades one assistant eval case's tool calls and final answer against a rubric. |
 | `knowledge-bootstrap` | `knowledge-bootstrap` | Knowledge Bootstrap | Mines business-glossary terms, instructions and coverage facts from a dataset's schema and sample rows. |
 | `rfp` | `rfp-builder` | RFP Builder | Walks a Mercer benefits consultant through building a carrier RFP for one client over the Intellify data, stage by stage, and assembles the RFP package. |
+| `benchmarking` | `benchmarking-agent` | Benchmarking Agent | Compares a client’s health and benefits program with its peers: cost per employee, plan design, contributions by tier and where each measure sits in the market. |
+| `survey` | `survey-agent` | Survey Agent | Turns an employee benefits survey into findings and recommendations: response rates, what employees value, satisfaction gaps and comment themes. |
+| `lad-coe` | `lad-coe-agent` | LAD COE Agent | The Life, Absence and Disability Center of Excellence: reviews life, disability and leave programs against the market, claims experience and leave rules. |
+| `strategy` | `strategy-agent` | Strategy Agent | Builds a multi-year health and benefits strategy: where the client stands, the cost of doing nothing, strategic options and a year-by-year roadmap. |
 
-The prompt each row's agent runs on is the shipped one unless overridden (1.1). Lookup of an unknown key throws. The catalogue lists agents sorted by display name.
+The prompt each row's agent runs on is the shipped one unless overridden (1.1). Lookup of an unknown key throws. The catalogue lists agents sorted by display name. It shows `assistant`, `rfp` and the four **showcase agents** `benchmarking`, `survey`, `lad-coe` and `strategy` (2.9) as Official, and the other five as System ([api.md](api.md) 33); the showcase agents are registered but never run.
 
-**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the seven registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0022), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0025). Rules: sessions-chat R52-R59. A session can also be bound to a **built-in** agent that declares a dataset, today only `rfp` (2.8): it stores the agent's registry key and every turn runs that agent instead of the `assistant` (ADR-0028, sessions-chat R61).
+**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the eleven registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0022), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0025). Rules: sessions-chat R52-R59. A session can also be bound to a **built-in** agent that declares a dataset, today only `rfp` (2.8): it stores the agent's registry key and every turn runs that agent instead of the `assistant` (ADR-0028, sessions-chat R61).
 
 Not registered (never listed in the catalogue):
 
 - **LLM connection probe** (`llm-connection-probe`, "LLM connection probe", instructions `You answer connection probes exactly as asked.`) — a throwaway agent built per test on the *submitted, not yet saved* Anthropic settings. See [llm-settings](../capabilities/llm-settings/spec.md).
 
-> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the seven agents, a composite storage, a Pino logger and observability. `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
+> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the eleven agents, a composite storage, a Pino logger and observability. `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
 
 ### 1.3 Model resolution
 
@@ -699,6 +703,152 @@ The rules encoded, in this order (prefix R, to keep them apart from the assistan
 - **R17** (2026-10-15) Asked to run SQL or use a tool it doesn't have, it says in one sentence that it can't, then answers from its own tools and names the tool the figure came from.
 
 > Implementation note: `mastra/agents/rfp.agent.ts` (`rfpAgent`, registered as `rfp`); the shipped text without `## Tools` is `RFP_PROMPT` in `agents/system-prompts.ts` and `SHIPPED.rfp` in `shipped-agent-prompts.ts`; `## Tools` lines come from `mastra/tool-section.ts`; skills from `catalogSkills('rfp')` through `mastra/skill-sources.ts`; tools in `mastra/tools/rfp.tools.ts`.
+
+### 2.9 Showcase agents: `benchmarking`, `survey`, `lad-coe`, `strategy`
+
+**Purpose.** Four Official agents that show further US Health use cases in the Agent Hub before they can chat (BA-235, roadmap 1.15.2; the Benchmarking Agent was added on 2026-10-15): each has a description and a viewable, editable system prompt, and nothing else. Behaviour rules: [agents-evals](../capabilities/agents-evals/spec.md) R106.
+
+**Invoked by.** Nothing: they are **never run**. No chat turn, synthesis pass, grounding pass, careful mode, deep analysis or eval calls them. Each still resolves its model like every agent (1.3, at call time), so a rebuild that later lets them chat needs no model wiring; the call never happens today.
+
+**How chat is refused.** The catalogue marks each one `showcase: true` with the `chatRequirement` `Showcase agent: not available to chat yet.` ([api.md](api.md) 33), so every **Start chat** and the New conversation picker show them disabled with that reason; `POST /sessions` with `{ agentId: "<showcase key>" }` is refused with the same text and creates nothing ([api.md](api.md) 3). Their prompts are not part of any other agent's prompt, so no eval set covers them.
+
+**Prompt requirements.** A plain prompt with no links and no generated `## Tools` section: an identity line naming the agent and the US Health Agentic Hub, a `Process:` list and a `Rules:` list. It can be overridden in the app (1.1, ADR-0026) like a System agent's: any non-empty text up to 20,000 characters with no `[[…]]` (`This agent's prompt can't contain links`), with no required first line ([api.md](api.md) 103). In the hub's Official section they come after the agents that can chat, alphabetical by display name, and the section always shows every card ([agents-evals](../capabilities/agents-evals/spec.md) R3).
+
+#### `benchmarking` (id `benchmarking-agent`) — Benchmarking Agent
+
+- **Registry key:** `benchmarking` · **Agent id:** `benchmarking-agent` · **Display name:** Benchmarking Agent · **Kind:** Official (owner `Official`).
+- **Description (verbatim):** Compares a client’s health and benefits program with its peers: cost per employee, plan design, contributions by tier and where each measure sits in the market.
+- **Tools:** none. **Dataset:** none. **Skills:** none (on demand or harness-loaded). **Memory:** none. **Evals:** none.
+- **Shipped prompt** (`BENCHMARKING_PROMPT`, verbatim; lines joined with `\n`):
+
+```text
+You are the Benchmarking Agent of the US Health Agentic Hub. You help a
+Mercer consultant compare one client’s health and benefits program with
+its market.
+
+Process:
+- Confirm the client, the plan year and the peer group before comparing:
+  industry, region, employer size and, when relevant, union status.
+- Compare cost first: total cost per employee and its trend, and the
+  employer and employee share, against the peer median and quartiles.
+- Compare plan design line by line: deductibles, out-of-pocket maximums,
+  copays and coinsurance, HSA and HRA funding, pharmacy tiers, and
+  dental, vision, life and disability provisions.
+- Compare contributions by coverage tier (employee only, employee plus
+  spouse, employee plus children, family) and the share of employees in
+  high-deductible plans.
+- Show where the client sits for each measure (below, at or above
+  market, with its percentile) and lead with the gaps that cost the most
+  or matter most to employees.
+
+Rules:
+- Name the benchmark source, its year and its peer group with every
+  comparison, and never mix peer groups in one table.
+- Use only the data you are given; say when a peer group is too small
+  to compare.
+```
+
+#### `survey` (id `survey-agent`) — Survey Agent
+
+- **Registry key:** `survey` · **Agent id:** `survey-agent` · **Display name:** Survey Agent · **Kind:** Official (owner `Official`).
+- **Description (verbatim):** Turns an employee benefits survey into findings and recommendations: response rates, what employees value, satisfaction gaps and comment themes.
+- **Tools:** none. **Dataset:** none. **Skills:** none (on demand or harness-loaded). **Memory:** none. **Evals:** none.
+- **Shipped prompt** (`SURVEY_PROMPT`, verbatim; lines joined with `\n`):
+
+```text
+You are the Survey Agent of the US Health Agentic Hub. You help a Mercer
+benefits consultant turn an employee benefits survey into findings a
+client can act on.
+
+Process:
+- Confirm the client, the survey and its field period before any analysis.
+- Report the response rate and who answered (by location, job level,
+  tenure and coverage tier) before any finding, and flag groups too small
+  to report (fewer than 10 answers).
+- For each benefit (medical, dental, vision, life, disability, wellbeing),
+  give how valued it is and how satisfied employees are, and put the
+  benefits valued most but rated lowest first.
+- Summarise free-text comments as themes with a count and one short,
+  anonymised quote each; never show a name or anything that identifies
+  a person.
+- Compare with the previous survey and the market benchmark when given,
+  and say when a difference is too small to matter.
+- End with three to five recommendations, each tied to a finding.
+
+Rules:
+- Use only the survey data you are given; never invent a figure.
+- Show percentages with their base (n) and keep tables short.
+```
+
+#### `lad-coe` (id `lad-coe-agent`) — LAD COE Agent
+
+- **Registry key:** `lad-coe` · **Agent id:** `lad-coe-agent` · **Display name:** LAD COE Agent · **Kind:** Official (owner `Official`).
+- **Description (verbatim):** The Life, Absence and Disability Center of Excellence: reviews life, disability and leave programs against the market, claims experience and leave rules.
+- **Tools:** none. **Dataset:** none. **Skills:** none (on demand or harness-loaded). **Memory:** none. **Evals:** none. LAD stands for Life, Absence and Disability, COE for Center of Excellence.
+- **Shipped prompt** (`LAD_COE_PROMPT`, verbatim; lines joined with `\n`):
+
+```text
+You are the LAD COE Agent of the US Health Agentic Hub: the Life, Absence
+and Disability Center of Excellence. You help a Mercer consultant review
+and improve a client’s life, absence and disability programs.
+
+Process:
+- Confirm the client and the plan year, then list the programs in place:
+  basic and supplemental life and AD&D, short-term and long-term
+  disability, paid and statutory leave, and the carriers or
+  administrators behind each.
+- Compare plan designs with market practice: benefit percentage, monthly
+  maximum, elimination period, own-occupation period, and life multiples
+  and guaranteed issue.
+- Review claims experience and loss ratios for the last three years, and
+  incidence and duration for disability and leave.
+- Check leave policies against federal and state requirements (FMLA and
+  state paid family and medical leave) and name every state where the
+  policy falls short.
+- Recommend changes with their cost impact and employee impact, and say
+  which ones need a carrier negotiation.
+
+Rules:
+- Use only the data you are given; when a figure is missing, say what you
+  need instead of estimating it.
+- You inform, you do not give legal advice: point compliance questions to
+  counsel.
+```
+
+#### `strategy` (id `strategy-agent`) — Strategy Agent
+
+- **Registry key:** `strategy` · **Agent id:** `strategy-agent` · **Display name:** Strategy Agent · **Kind:** Official (owner `Official`).
+- **Description (verbatim):** Builds a multi-year health and benefits strategy: where the client stands, the cost of doing nothing, strategic options and a year-by-year roadmap.
+- **Tools:** none. **Dataset:** none. **Skills:** none (on demand or harness-loaded). **Memory:** none. **Evals:** none.
+- **Shipped prompt** (`STRATEGY_PROMPT`, verbatim; lines joined with `\n`):
+
+```text
+You are the Strategy Agent of the US Health Agentic Hub. You help a Mercer
+consultant build a three-to-five-year health and benefits strategy for
+one client.
+
+Process:
+- Start from the client’s goals: cost, talent attraction and retention,
+  employee wellbeing and equity, and ask the consultant to rank them.
+- Summarise where the client is today: total cost and its trend, cost per
+  employee against the benchmark, plan and funding mix, contributions,
+  and employee sentiment from the latest survey.
+- Project the cost of doing nothing over the strategy horizon with the
+  trend assumptions the consultant confirms.
+- Propose two or three strategic options (for example plan design
+  changes, funding or carrier moves, point solutions, contribution
+  strategy), each with its savings, its employee impact, its risks and
+  the year it would take effect.
+- Lay out a year-by-year roadmap for the option the consultant chooses,
+  with the decisions and communications each year needs.
+
+Rules:
+- Keep assumptions explicit and in one table, and never present a
+  projection as a fact.
+- Use only the data you are given and say when a benchmark is missing.
+```
+
+> Implementation note: `mastra/agents/showcase-catalog.ts` is plain data with no framework import: `SHOWCASE_REASON`, `BENCHMARKING_PROMPT`, `SURVEY_PROMPT`, `LAD_COE_PROMPT`, `STRATEGY_PROMPT`, `SHOWCASE_AGENTS` (key, id, name, description, prompt, in hub order), `SHOWCASE_AGENT_KEYS` and `isShowcaseAgent(key)`; `AgentsService` (Official kind, `showcase`, `chatRequirement`), `SessionsService` (the refusal) and `shipped-agent-prompts.ts` (`SHIPPED.benchmarking`, `SHIPPED.survey`, `SHIPPED['lad-coe']`, `SHIPPED.strategy`, the editable shipped text) read it. `mastra/agents/showcase.agents.ts` builds the four `Agent`s from it (`showcaseAgents`, instructions through `agentInstructions(key, prompt)` so an override applies, model `async () => resolveAgentModel()`), registered under their keys in `mastra/index.ts`.
 
 ---
 
@@ -1436,6 +1586,7 @@ Skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS` for har
 | `assistant` | `curated-knowledge` (how to apply Block 3, 4.1), and in a session bound to a user agent that agent's in-app skills (7.3) | `deep-analysis`: one phase file per deep-analysis call (2.7). |
 | `visualization` (designer) | none (it runs without tools) | `interactive-visuals` (7.2): the router body of `SKILL.md`, plus `reference/spec-mode.md` on spec calls or `reference/freeform.md` on freeform calls |
 | `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
+| `benchmarking`, `survey`, `lad-coe`, `strategy` (showcase, 2.9) | none | none |
 | `rfp` (RFP Builder, 2.8) | its seven stage skills (below) | none |
 
 `curated-knowledge` is the assistant's only built-in skill on demand (ADR-0020), so every assistant call carries the framework's skill catalog and skill tools. Two other on-demand skills were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move.
@@ -1657,7 +1808,7 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
 ## 9. Agents catalogue (introspection contract)
 
-`GET /agents` and `GET /agents/:key` expose, per registered agent: `key`, `id`, `name`, `description`, `tools` (sorted names); detail adds `instructions` (prompt flattened to text, as served: a built-in agent's override is reflected, 1.1; for a user agent it follows the agent's tool selection but does not list its in-app skills), for a built-in agent `prompt` (`{editable, shipped, modified, builtInChanged, linksAllowed, updatedAt}`, [api.md](api.md) 34), `toolDetails` (`{name, description, inputs: top-level input field names}`), `memory` (`null` when none, else `{storage, lastMessages, semanticRecall, workingMemory, generateTitle}`), and `model` (`{id, provider}` of the currently resolved model, `null` when it cannot be resolved without settings). An agent's skills are a separate endpoint, `GET /agents/:key/skills` (7.3, [api.md](api.md) 2.6). Any accessor that throws is reported as empty. UI strings for agents without tools/memory/evals (`This agent runs in a single step with no tools.`, `This agent is stateless — no memory is configured.`, `No evals configured for this agent yet.`) are owned by [agents-evals](../capabilities/agents-evals/spec.md).
+`GET /agents` and `GET /agents/:key` expose, per registered agent: `key`, `id`, `name`, `description`, `tools` (sorted names); detail adds `instructions` (prompt flattened to text, as served: a built-in agent's override is reflected, 1.1; for a user agent it follows the agent's tool selection but does not list its in-app skills), for a built-in agent `prompt` (`{editable, shipped, modified, builtInChanged, linksAllowed, updatedAt}`, [api.md](api.md) 34), for a showcase agent (2.9) `showcase: true` and its `chatRequirement`, `toolDetails` (`{name, description, inputs: top-level input field names}`), `memory` (`null` when none, else `{storage, lastMessages, semanticRecall, workingMemory, generateTitle}`), and `model` (`{id, provider}` of the currently resolved model, `null` when it cannot be resolved without settings). An agent's skills are a separate endpoint, `GET /agents/:key/skills` (7.3, [api.md](api.md) 2.6). Any accessor that throws is reported as empty. UI strings for agents without tools/memory/evals (`This agent runs in a single step with no tools.`, `This agent is stateless — no memory is configured.`, `No evals configured for this agent yet.`) are owned by [agents-evals](../capabilities/agents-evals/spec.md).
 
 ---
 

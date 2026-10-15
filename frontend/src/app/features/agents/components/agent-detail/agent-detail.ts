@@ -187,7 +187,7 @@ export class AgentDetail implements OnDestroy {
       skills: `Skills${this.skillsCountLabel(kind, skills)}`,
     };
     return AGENT_TAB_ORDER.filter(
-      (tab) => tab.id !== 'chat' || hasChatTab(kind),
+      (tab) => tab.id !== 'chat' || hasChatTab(kind, !!agent?.showcase),
     ).map((tab) => ({
       id: tab.id,
       label: labels[tab.id] ?? tab.label,
@@ -348,7 +348,11 @@ export class AgentDetail implements OnDestroy {
         if (this.agentKey() !== key) return;
         this.agent.set(agent);
         this.loading.set(false);
-        if (initial) this.activeTab.set(defaultAgentTab(agentKind(agent)));
+        if (initial) {
+          this.activeTab.set(
+            defaultAgentTab(agentKind(agent), !!agent.showcase),
+          );
+        }
         if (agent.kind === 'user') {
           this.loadLibrarySkills(key);
           if (initial) this.loadBuiltInSkills(key);

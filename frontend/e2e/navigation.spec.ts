@@ -201,8 +201,9 @@ test('opens Settings as an area with a section list', async ({ page }) => {
 });
 
 test('shows the product name', async ({ page }) => {
+  // Only the banner names US Health (app-shell R7, BA-234).
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'Agentic Hub',
+    'US Health Agentic Hub',
   );
   await expect(page).toHaveTitle('Agentic Hub');
 
