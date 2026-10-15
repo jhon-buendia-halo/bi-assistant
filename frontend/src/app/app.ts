@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   HostListener,
@@ -16,25 +17,22 @@ import {
   ChevronDown,
   CircleCheck,
   CornerDownLeft,
+  Copy,
   Database,
-  EllipsisVertical,
   FlaskConical,
   FolderKanban,
   PanelLeft,
   Menu,
   SquarePen,
   PanelRight,
-  Plus,
   RotateCcw,
   Search,
   ScrollText,
   Settings,
-  Shield,
   Signal,
   Sparkle,
   Sparkles,
   TestTube,
-  Trash2,
   Workflow,
   SunMoon,
   Wrench,
@@ -65,7 +63,17 @@ import { SkillEditorService } from './features/agents/services/skill-editor.serv
 import { AgentEditorService } from './features/agents/services/agent-editor.service';
 import { AgentPageState } from './features/agents/services/agent-page-state.service';
 import { Agent } from './features/agents/services/agents-api.service';
-import { startsInComposer } from './features/agents/services/agent-hub.util';
+import {
+  ASSISTANT_PICKER_DESCRIPTION,
+  ASSISTANT_PICKER_KEY,
+  NewSessionAgentOption,
+  newSessionAgentOptions,
+  startsInComposer,
+} from './features/agents/services/agent-hub.util';
+import {
+  Agent as AgentEntry,
+  AgentsApiService,
+} from './features/agents/services/agents-api.service';
 import { KnowledgeList } from './features/knowledge/components/knowledge-list/knowledge-list';
 import { CatalogBrowser } from './features/datasets/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
@@ -82,33 +90,29 @@ import {
 import { LlmApiService } from './features/llm/services/llm-api.service';
 import { SessionsApiService } from './features/sessions/services/sessions-api.service';
 import { SessionChat } from './features/sessions/components/session-chat/session-chat';
-import { InteractiveVisualPanel } from './features/sessions/components/interactive-visual-panel/interactive-visual-panel';
+import { SessionsList } from './features/sessions/components/sessions-list/sessions-list';
+import { Welcome } from './features/home/components/welcome/welcome';
+import { WorkflowBar } from './features/sessions/components/workflow-bar/workflow-bar';
+import { SessionPanel } from './features/sessions/components/session-panel/session-panel';
 import {
   ChatMessage,
   DataPointSelection,
   InteractiveVisualization,
+  PanelItem,
+  PanelItemEvent,
+  WorkflowView,
   Session,
   SessionActionResult,
   SessionVisualization,
   VisualEvent,
   sessionAgentLabel,
-  sessionListSubtitle,
 } from './features/sessions/models/session.model';
 import { ReasoningEffort } from './features/llm/models/llm.model';
 import { ToastService } from './core/toast/toast.service';
 import { APP_VERSION } from './core/config/app-version';
-import { AuthService } from './core/auth/auth.service';
-import { PermissionId } from './core/auth/auth.models';
-import { AccountMenu } from './core/auth/account-menu/account-menu';
-import { AdminArea } from './features/admin/components/admin-area/admin-area';
 
 type SettingsSection =
-  | 'datasources'
-  | 'llm'
-  | 'testing-data'
-  | 'developer'
-  | 'appearance'
-  | null;
+  'datasources' | 'llm' | 'testing-data' | 'developer' | 'appearance' | null;
 type MainView =
   | 'home'
   | 'dataset'
@@ -122,17 +126,10 @@ type MainView =
   | 'knowledge'
   | 'sessions'
   | 'conversation-new'
-  | 'session-chat'
-  | 'admin';
+  | 'session-chat';
 
-/** What the navigation rail selects (app-shell R3–R5, R46; admin R34). */
-type Area =
-  | 'datasets'
-  | 'agents'
-  | 'knowledge'
-  | 'sessions'
-  | 'admin'
-  | 'settings';
+/** What the navigation rail selects (app-shell R3–R5, R46). */
+type Area = 'datasets' | 'agents' | 'knowledge' | 'sessions' | 'settings';
 
 /** The view each workspace area opens on. */
 const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
@@ -140,7 +137,6 @@ const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
   agents: 'agents',
   knowledge: 'knowledge',
   sessions: 'sessions',
-  admin: 'admin',
 };
 
 const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
@@ -156,7 +152,6 @@ const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   sessions: 'sessions',
   'conversation-new': 'sessions',
   'session-chat': 'sessions',
-  admin: 'admin',
 };
 
 const DEFAULT_RIGHT_PANEL_WIDTH = 572;
@@ -166,9 +161,19 @@ const MIN_PRIMARY_CONTENT_WIDTH = 240;
 const RIGHT_PANEL_RESIZE_STEP = 24;
 const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
 
+/** A row of the New conversation screen's Agent picker. */
+export interface ComposerAgentRow {
+  key: string;
+  name: string;
+  description: string;
+  /** Why the agent cannot start a chat now, or null. */
+  disabledReason: string | null;
+}
+
 @Component({
   selector: 'app-shell',
   imports: [
+    NgTemplateOutlet,
     LucideAngularModule,
     BackendStatusBanner,
     DatasourceConfig,
@@ -191,9 +196,10 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     ToastContainer,
     SystemLogsPanel,
     SessionChat,
-    InteractiveVisualPanel,
-    AccountMenu,
-    AdminArea,
+    SessionPanel,
+    WorkflowBar,
+    Welcome,
+    SessionsList,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -208,27 +214,24 @@ export class App {
   readonly ChevronDown = ChevronDown;
   readonly CircleCheck = CircleCheck;
   readonly CornerDownLeft = CornerDownLeft;
+  readonly Copy = Copy;
   readonly Database = Database;
-  readonly EllipsisVertical = EllipsisVertical;
   readonly FlaskConical = FlaskConical;
   readonly FolderKanban = FolderKanban;
   readonly PanelLeft = PanelLeft;
   readonly Menu = Menu;
   readonly SquarePen = SquarePen;
   readonly PanelRight = PanelRight;
-  readonly Plus = Plus;
   readonly RotateCcw = RotateCcw;
   readonly Search = Search;
   readonly ScrollText = ScrollText;
   readonly Settings = Settings;
-  readonly Shield = Shield;
   readonly Signal = Signal;
   readonly Sparkle = Sparkle;
   readonly Sparkles = Sparkles;
   readonly TestTube = TestTube;
   readonly Wrench = Wrench;
   readonly SunMoon = SunMoon;
-  readonly Trash2 = Trash2;
   readonly Workflow = Workflow;
 
   readonly settingsOpen = signal(false);
@@ -364,7 +367,6 @@ export class App {
   }
 
   readonly agentLabel = sessionAgentLabel;
-  readonly sessionSubtitle = sessionListSubtitle;
 
   /**
    * Back to the hub after deleting a user agent. Its sessions now read
@@ -414,6 +416,14 @@ export class App {
   private readonly llmApi = inject(LlmApiService);
 
   private readonly toast = inject(ToastService);
+
+  /** Copy the open session's id, which a user shares to diagnose it. */
+  copySessionId(id: string): void {
+    void navigator.clipboard.writeText(id).then(
+      () => this.toast.success('Session ID copied'),
+      () => this.toast.error('Copy failed'),
+    );
+  }
   // Created with the shell so the resolved theme is applied from start-up.
   private readonly theme = inject(ThemeService);
   readonly diagnostics = inject(DiagnosticsService);
@@ -426,18 +436,132 @@ export class App {
 
   /** Datasets offered in the composer; the session needs at least one. */
   readonly composerDatasets = signal<Dataset[]>([]);
+  private readonly agentsApi = inject(AgentsApiService);
+  readonly assistantPickerKey = ASSISTANT_PICKER_KEY;
+  /** Agents the New conversation screen can start (sessions-chat R64). */
+  readonly composerAgents = signal<NewSessionAgentOption[]>([]);
+  /** The picked agent's key; Assistant on every visit, never remembered. */
+  readonly composerAgentKey = signal<string>(ASSISTANT_PICKER_KEY);
+  readonly composerAgent = computed<AgentEntry | null>(
+    () =>
+      this.composerAgents().find(
+        (option) => option.agent.key === this.composerAgentKey(),
+      )?.agent ?? null,
+  );
+  readonly composerAgentDescription = computed(
+    () => this.composerAgent()?.description ?? ASSISTANT_PICKER_DESCRIPTION,
+  );
+  readonly composerAgentDatasets = computed(
+    () => this.composerAgent()?.datasets ?? [],
+  );
+
+  pickComposerAgent(key: string): void {
+    const option = this.composerAgents().find((o) => o.agent.key === key);
+    this.composerAgentKey.set(
+      option && !option.disabledReason ? key : ASSISTANT_PICKER_KEY,
+    );
+  }
+
+  /** Rows of the Agent picker: Assistant first, then the agents it offers. */
+  readonly composerAgentRows = computed<ComposerAgentRow[]>(() => [
+    {
+      key: ASSISTANT_PICKER_KEY,
+      name: 'Assistant',
+      description: ASSISTANT_PICKER_DESCRIPTION,
+      disabledReason: null,
+    },
+    ...this.composerAgents().map((o) => ({
+      key: o.agent.key,
+      name: o.agent.name,
+      description: o.agent.description ?? '',
+      disabledReason: o.disabledReason,
+    })),
+  ]);
+  readonly composerAgentName = computed(
+    () =>
+      this.composerAgentRows().find((r) => r.key === this.composerAgentKey())
+        ?.name ?? 'Assistant',
+  );
+  readonly composerAgentMenuOpen = signal(false);
+  /** Index in `composerAgentRows` of the highlighted option while open. */
+  readonly composerAgentActive = signal(0);
+
+  openComposerAgentMenu(): void {
+    const index = this.composerAgentRows().findIndex(
+      (r) => r.key === this.composerAgentKey(),
+    );
+    this.composerAgentActive.set(Math.max(0, index));
+    this.composerAgentMenuOpen.set(true);
+  }
+
+  closeComposerAgentMenu(): void {
+    this.composerAgentMenuOpen.set(false);
+    document.getElementById('new-session-agent')?.focus();
+  }
+
+  chooseComposerAgent(key: string): void {
+    const row = this.composerAgentRows().find((r) => r.key === key);
+    if (!row || row.disabledReason) return;
+    this.pickComposerAgent(key);
+    this.closeComposerAgentMenu();
+  }
+
+  onComposerAgentKeydown(event: KeyboardEvent): void {
+    const rows = this.composerAgentRows();
+    if (!this.composerAgentMenuOpen()) {
+      if (['Enter', ' ', 'ArrowDown'].includes(event.key)) {
+        event.preventDefault();
+        this.openComposerAgentMenu();
+      }
+      return;
+    }
+    const step = (dir: 1 | -1) => {
+      let i = this.composerAgentActive();
+      for (let n = 0; n < rows.length; n++) {
+        i = (i + dir + rows.length) % rows.length;
+        if (!rows[i].disabledReason) return i;
+      }
+      return this.composerAgentActive();
+    };
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        this.composerAgentActive.set(step(1));
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        this.composerAgentActive.set(step(-1));
+        break;
+      case 'Enter':
+      case ' ':
+        event.preventDefault();
+        this.chooseComposerAgent(rows[this.composerAgentActive()]?.key ?? '');
+        break;
+      case 'Escape':
+        event.preventDefault();
+        event.stopPropagation();
+        this.closeComposerAgentMenu();
+        break;
+      case 'Tab':
+        this.composerAgentMenuOpen.set(false);
+        break;
+    }
+  }
   readonly selectedDatasets = signal<Set<string>>(new Set());
   readonly composerName = signal('');
   readonly creatingSession = signal(false);
 
   readonly sessions = signal<Session[]>([]);
+  /** False until the first list answer, for the Sessions page's loading line. */
+  readonly sessionsLoaded = signal(false);
   readonly activeSession = signal<Session | null>(null);
-  readonly sessionMenuOpen = signal<string | null>(null);
   readonly deletingSession = signal<string | null>(null);
   readonly generatingVisualSession = signal<string | null>(null);
   readonly downloadingVisualization = signal<string | null>(null);
   readonly activeVisualization = signal<InteractiveVisualization | null>(null);
   readonly visualizationError = signal<string | null>(null);
+  /** What the right panel shows: the latest thing the agent showed, or the user's pick. */
+  readonly activePanelItem = signal<PanelItem | null>(null);
   /** Latest data mark clicked inside a visual; drives the chat follow-up chips. */
   readonly selectedDataPoint = signal<DataPointSelection | null>(null);
 
@@ -573,20 +697,25 @@ export class App {
         }),
       )
       .subscribe({
-        next: (res) => this.sessions.set(res.sessions),
+        next: (res) => {
+          this.sessions.set(res.sessions);
+          this.sessionsLoaded.set(true);
+        },
         // Preserve already-loaded sessions if the backend is briefly offline.
-        error: () => this.toast.error('Could not load sessions'),
+        error: () => {
+          this.sessionsLoaded.set(true);
+          this.toast.error('Could not load sessions');
+        },
       });
   }
 
   openSession(session: Session): void {
     if (!this.confirmLeaveAgentEditor()) return;
-    this.sessionMenuOpen.set(null);
     this.selectedDataPoint.set(null);
     this.activeSession.set(session);
     this.mainView.set('session-chat');
     this.loadActiveSessionDatasources(session);
-    this.loadLatestVisualization(session);
+    this.loadLatestPanelItem(session);
   }
 
   private loadActiveSessionDatasources(session: Session): void {
@@ -619,10 +748,58 @@ export class App {
     });
   }
 
-  private loadLatestVisualization(session: Session): void {
+  /** The item shown latest (largest `shownAt`), if the agent showed anything. */
+  private latestPanelItem(session: Session): PanelItem | null {
+    let latest: PanelItem | null = null;
+    for (const item of session.panelItems ?? []) {
+      if (!latest || item.shownAt >= latest.shownAt) latest = item;
+    }
+    return latest;
+  }
+
+  /** The visual panel item of `visualId`: the saved one, else a stand-in. */
+  private visualPanelItem(
+    session: Session,
+    visualId: string,
+    title?: string,
+  ): PanelItem {
+    const saved = session.panelItems?.find(
+      (item) => item.kind === 'visual' && item.visualId === visualId,
+    );
+    if (saved) return saved;
+    const meta = session.visualizations?.find((v) => v.id === visualId);
+    return {
+      id: `visual:${visualId}`,
+      kind: 'visual',
+      title: title ?? meta?.title ?? 'Visual',
+      shownAt: meta?.createdAt ?? new Date().toISOString(),
+      visualId,
+    };
+  }
+
+  /**
+   * Opening a session: the panel shows what the agent showed last. The latest
+   * visual still loads behind a non-visual item, as the tailoring target.
+   */
+  private loadLatestPanelItem(session: Session): void {
+    const latest = this.latestPanelItem(session);
+    this.activePanelItem.set(latest);
+    this.loadLatestVisualization(
+      session,
+      latest?.kind === 'visual' ? latest.visualId : undefined,
+    );
+  }
+
+  private loadLatestVisualization(
+    session: Session,
+    preferredId?: string,
+  ): void {
     this.activeVisualization.set(null);
     this.visualizationError.set(null);
-    const latest = session.visualizations?.at(-1);
+    const latest = preferredId
+      ? (session.visualizations?.find((v) => v.id === preferredId) ??
+        session.visualizations?.at(-1))
+      : session.visualizations?.at(-1);
     if (!latest) return;
 
     this.sessionsApi.getVisualization(session.id, latest.id).subscribe({
@@ -683,6 +860,39 @@ export class App {
       const meta = session.visualizations?.find((v) => v.id === event.visualId);
       if (meta) this.showVisualization(meta, event.version);
     });
+  }
+
+  /** The `workflow` stream event: patch the open session's status bar live. */
+  onWorkflowChanged(workflow: WorkflowView): void {
+    this.activeSession.update((s) => (s ? { ...s, workflow } : s));
+  }
+
+  /** The agent called `show_in_panel`: show it live. */
+  onPanelItem(event: PanelItemEvent): void {
+    const { item } = event;
+    if (!item) return;
+    this.rightPanelOpen.set(true);
+    if (item.kind === 'visual') {
+      this.activePanelItem.set(item);
+      this.refreshActiveSession((session) => {
+        const meta = session.visualizations?.find(
+          (v) => v.id === item.visualId,
+        );
+        if (meta) this.showVisualization(meta);
+      });
+      return;
+    }
+    this.activePanelItem.set(item);
+    this.refreshActiveSession();
+  }
+
+  /** The user picked an entry of the panel's "Shown in this session" menu. */
+  onSelectPanelItem(item: PanelItem): void {
+    this.activePanelItem.set(item);
+    if (item.kind !== 'visual') return;
+    const session = this.activeSession();
+    const meta = session?.visualizations?.find((v) => v.id === item.visualId);
+    if (meta) this.showVisualization(meta);
   }
 
   selectVisualVersion(version: number): void {
@@ -754,6 +964,13 @@ export class App {
     this.visualizationError.set(null);
     this.selectedDataPoint.set(null);
     this.rightPanelOpen.set(true);
+    this.activePanelItem.set(
+      this.visualPanelItem(
+        session,
+        id,
+        'title' in visualization ? visualization.title : undefined,
+      ),
+    );
     this.sessionsApi.getVisualization(session.id, id, version).subscribe({
       next: (loaded) => {
         if (this.activeSession()?.id === session.id) {
@@ -807,6 +1024,13 @@ export class App {
     if (!session || this.generatingVisualSession()) return;
 
     this.generatingVisualSession.set(session.id);
+    this.activePanelItem.set({
+      id: 'visual:pending',
+      kind: 'visual',
+      title: 'Visuals',
+      shownAt: new Date().toISOString(),
+      visualId: '',
+    });
     this.activeVisualization.set(null);
     this.visualizationError.set(null);
     this.rightPanelOpen.set(true);
@@ -829,6 +1053,13 @@ export class App {
         if (this.activeSession()?.id === result.session.id) {
           this.activeSession.set(result.session);
           this.activeVisualization.set(result.visualization);
+          this.activePanelItem.set(
+            this.visualPanelItem(
+              result.session,
+              result.visualization.id,
+              result.visualization.title,
+            ),
+          );
         }
         this.toast.success(result.message);
       },
@@ -843,12 +1074,7 @@ export class App {
     });
   }
 
-  toggleSessionMenu(id: string): void {
-    this.sessionMenuOpen.set(this.sessionMenuOpen() === id ? null : id);
-  }
-
   deleteSession(session: Session): void {
-    this.sessionMenuOpen.set(null);
     const confirmed = window.confirm(
       `Delete “${session.name}”?\n\nThis permanently removes its conversation, agent memory, and workspace files.`,
     );
@@ -867,6 +1093,7 @@ export class App {
         );
         if (this.activeSession()?.id === session.id) {
           this.activeSession.set(null);
+          this.activePanelItem.set(null);
           this.activeVisualization.set(null);
           this.visualizationError.set(null);
           // The agent editor is never left without asking (agents-evals R59).
@@ -884,33 +1111,44 @@ export class App {
   createSession(): void {
     if (this.creatingSession()) return;
     const name = this.composerName().trim();
-    if (!name || this.selectedDatasets().size === 0) return;
+    const agent = this.composerAgent();
+    if (!agent && (!name || this.selectedDatasets().size === 0)) return;
     this.creatingSession.set(true);
-    this.sessionsApi
-      .create(name, Array.from(this.selectedDatasets()))
-      .subscribe({
-        next: (res) => {
-          this.creatingSession.set(false);
-          if (res.ok && res.session) {
-            this.toast.success(res.message);
-            this.composerName.set('');
-            this.loadSessions();
-            this.openSession(res.session);
-          } else {
-            this.toast.error(res.message);
-          }
-        },
-        error: (err) => {
-          this.creatingSession.set(false);
-          this.toast.error(err?.error?.message ?? 'Backend unreachable');
-        },
-      });
+    // An agent starts through the same path as Start chat, with the typed
+    // name when there is one (sessions-chat R64).
+    (agent
+      ? this.sessionsApi.createFromAgent(agent.key, name || undefined)
+      : this.sessionsApi.create(name, Array.from(this.selectedDatasets()))
+    ).subscribe({
+      next: (res) => {
+        this.creatingSession.set(false);
+        if (res.ok && res.session) {
+          this.toast.success(res.message);
+          this.composerName.set('');
+          this.loadSessions();
+          this.openSession(res.session);
+        } else {
+          this.toast.error(res.message);
+        }
+      },
+      error: (err) => {
+        this.creatingSession.set(false);
+        this.toast.error(err?.error?.message ?? 'Backend unreachable');
+      },
+    });
   }
 
   openComposer(): void {
     if (!this.confirmLeaveAgentEditor()) return;
     this.mainView.set('conversation-new');
     this.selectedDatasets.set(new Set());
+    this.composerAgentKey.set(ASSISTANT_PICKER_KEY);
+    this.composerAgents.set([]);
+    this.agentsApi.getAgents().subscribe({
+      next: (res) =>
+        this.composerAgents.set(newSessionAgentOptions(res.agents)),
+      error: () => this.composerAgents.set([]),
+    });
     this.llmApi.getSettings().subscribe({
       next: (v) => {
         this.llmModel.set(v.configured ? v.model : null);
@@ -966,7 +1204,11 @@ export class App {
     this.settingsOpen() ? 'settings' : (AREA_OF_VIEW[this.mainView()] ?? null),
   );
 
-  readonly railItems: { area: Exclude<Area, 'settings'>; label: string; icon: LucideIconData }[] = [
+  readonly railItems: {
+    area: Exclude<Area, 'settings'>;
+    label: string;
+    icon: LucideIconData;
+  }[] = [
     { area: 'datasets', label: 'Datasets', icon: FlaskConical },
     { area: 'agents', label: 'Agents', icon: Bot },
     { area: 'knowledge', label: 'Knowledge', icon: BookOpen },
@@ -977,45 +1219,32 @@ export class App {
     key: Exclude<SettingsSection, null>;
     label: string;
     icon: LucideIconData;
-    /** Hidden without it (app-shell R50); Appearance is always offered. */
-    permission?: PermissionId;
   }[] = [
     {
       key: 'datasources',
       label: 'Datasource Configuration',
       icon: Database,
-      permission: 'manage-datasources',
     },
     {
       key: 'llm',
       label: 'LLM Configuration',
       icon: Bot,
-      permission: 'manage-llm',
     },
     {
       key: 'testing-data',
       label: 'Testing Data',
       icon: TestTube,
-      permission: 'manage-datasources',
     },
     {
       key: 'developer',
       label: 'Developer',
       icon: Wrench,
-      permission: 'edit-policies',
     },
     { key: 'appearance', label: 'Appearance', icon: SunMoon },
   ];
 
-  /** Who is signed in and what they may do (admin R10, R25). */
-  readonly auth = inject(AuthService);
-
-  /** The Settings sections the user may open, in their fixed order. */
-  readonly visibleSettingsSections = computed(() =>
-    this.settingsSections.filter(
-      (section) => !section.permission || this.auth.can(section.permission),
-    ),
-  );
+  /** Every Settings section is always offered, in their fixed order. */
+  readonly visibleSettingsSections = computed(() => this.settingsSections);
 
   /** The chosen section, or none when it is hidden (ui.md 1.6). */
   readonly shownSettingsSection = computed<SettingsSection>(() => {
@@ -1025,13 +1254,10 @@ export class App {
       : null;
   });
 
-  /** The Admin rail item: Manage users only, in both modes (R34). */
-  readonly showAdmin = computed(() => this.auth.can('manage-users'));
-
   private readonly uiPreferences = inject(UiPreferencesService);
 
   /**
-   * The rail's drawer with labels and the session list (app-shell R48).
+   * The rail's drawer with the item labels (app-shell R48).
    * Expanded unless the user last collapsed it (R2, R50).
    */
   readonly navExpanded = this.uiPreferences.navExpanded;
@@ -1067,7 +1293,12 @@ export class App {
     // The rail is a way out of the agent editor, Agents included: it returns
     // to the hub (agents-evals R59).
     const leavingEditor = !this.settingsOpen() && this.inEditor();
-    const alreadyShown = this.currentArea() === area && !leavingEditor;
+    // Sessions is shown only on its list: from a chat or the composer the
+    // rail returns to the list (app-shell R3).
+    const alreadyShown =
+      this.currentArea() === area &&
+      !leavingEditor &&
+      (area !== 'sessions' || this.mainView() === 'sessions');
     if (!alreadyShown && !this.confirmLeaveAgentEditor()) return;
     if (area === 'settings') {
       // Settings covers the main view; the editor closes rather than wait
@@ -1077,8 +1308,6 @@ export class App {
       return;
     }
     this.settingsOpen.set(false);
-    // The session list lives in the drawer, so Sessions opens it (R3).
-    if (area === 'sessions') this.navExpanded.set(true);
     if (!alreadyShown) this.mainView.set(AREA_ROOT[area]);
   }
 

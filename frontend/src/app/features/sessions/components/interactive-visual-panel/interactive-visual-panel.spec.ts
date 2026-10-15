@@ -10,9 +10,11 @@ import {
   Session,
   SessionActionResult,
 } from '../../models/session.model';
+import { ThemeService } from '../../../../core/theme/theme.service';
 import {
   InteractiveVisualPanel,
   buildTailorInstruction,
+  withVisualTheme,
 } from './interactive-visual-panel';
 
 describe('buildTailorInstruction', () => {
@@ -395,5 +397,70 @@ describe('InteractiveVisualPanel data point selection', () => {
     panel.onFrameMessage(visualSelect('Aetna'));
 
     expect(selections).toEqual([{ value: 'Aetna', label: undefined }]);
+  });
+});
+
+describe('withVisualTheme', () => {
+  it('writes the theme on the document root', () => {
+    expect(withVisualTheme('<!doctype html>\n<html lang="en"><body></body></html>', 'dark')).toBe(
+      '<!doctype html>\n<html data-theme="dark" lang="en"><body></body></html>',
+    );
+  });
+
+  it('leaves an empty document alone', () => {
+    expect(withVisualTheme('', 'light')).toBe('');
+  });
+});
+
+describe('InteractiveVisualPanel theme', () => {
+  let fixture: ComponentFixture<InteractiveVisualPanel>;
+  let theme: ThemeService;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [InteractiveVisualPanel],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    theme = TestBed.inject(ThemeService);
+    theme.setPreference('light');
+    fixture = TestBed.createComponent(InteractiveVisualPanel);
+    fixture.componentRef.setInput('sessionId', session.id);
+    fixture.componentRef.setInput(
+      'visualization',
+      visual({ document: '<html lang="en"><body></body></html>' }),
+    );
+    fixture.detectChanges();
+  });
+
+  afterEach(() => theme.setPreference('light'));
+
+  function frame(): HTMLIFrameElement {
+    return fixture.nativeElement.querySelector(
+      'iframe[title="Interactive visualization"]',
+    ) as HTMLIFrameElement;
+  }
+
+  it('opens the visual in the app theme', () => {
+    expect(frame().getAttribute('srcdoc')).toContain(
+      '<html data-theme="light" lang="en">',
+    );
+  });
+
+  it('sends a theme change to the open frame without reloading it', () => {
+    const before = frame().getAttribute('srcdoc');
+    // The sandboxed frame's window is cross-origin, so stand in for it.
+    const post = jasmine.createSpy('postMessage');
+    Object.defineProperty(frame(), 'contentWindow', {
+      value: { postMessage: post },
+    });
+
+    theme.setPreference('dark');
+    fixture.detectChanges();
+
+    expect(post.calls.mostRecent().args as unknown[]).toEqual([
+      { type: 'qti-theme', theme: 'dark' },
+      '*',
+    ]);
+    expect(frame().getAttribute('srcdoc')).toBe(before);
   });
 });

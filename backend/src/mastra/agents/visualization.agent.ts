@@ -84,7 +84,11 @@ export const interactiveVisualOutputSchema = z.object({
   html: z
     .string()
     .describe('Accessible body HTML fragment without scripts or styles'),
-  css: z.string().describe('Responsive dark-theme CSS without imports'),
+  css: z
+    .string()
+    .describe(
+      "Responsive CSS that takes its colours from the frame's tokens, without imports",
+    ),
   javascript: z
     .string()
     .describe('Browser-native JavaScript that adds the interaction'),

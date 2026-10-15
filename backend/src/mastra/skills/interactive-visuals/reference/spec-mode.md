@@ -59,8 +59,8 @@ Rules:
   data clearly argues otherwise, and say why in the description when you
   deviate.
 - No colours, sizes, fonts, HTML, CSS or JavaScript in the spec. There is no
-  field for them, and the frame's palette is already accessible on the dark
-  panel.
+  field for them, and the frame's palette already follows the app's Light or
+  Dark theme.
 
 Also return:
 

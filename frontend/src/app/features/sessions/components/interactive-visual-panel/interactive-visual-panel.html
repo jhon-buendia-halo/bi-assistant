@@ -1,11 +1,13 @@
 <div class="flex h-full min-h-0 flex-col">
   <div
-    class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 whitespace-nowrap"
+    class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3 whitespace-nowrap"
   >
     <lucide-angular [img]="BarChart3" [size]="15" class="shrink-0 text-fg-muted" />
     <span class="shrink-0 text-[13px] font-medium text-fg">Visuals</span>
 
     <div class="ml-auto flex shrink-0 items-center gap-1.5">
+      <!-- The session panel's "Shown in this session" menu, when hosted there. -->
+      <ng-content select="[panelHistory]" />
       @if (visualization(); as visual) {
         <!-- Single version control: which version is shown, which is current, and the action -->
         <div class="relative">
@@ -208,47 +210,6 @@
           }
         </button>
       }
-
-      @if (savedVisualizations(); as visuals) {
-        @if (visuals.length > 0) {
-          <div class="relative">
-            <button
-              type="button"
-              (click)="visualMenuOpen.set(!visualMenuOpen())"
-              [attr.aria-expanded]="visualMenuOpen()"
-              title="Saved visuals in this session"
-              class="flex items-center gap-1.5 rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg hover:border-border-strong hover:bg-surface-selected"
-            >
-              <lucide-angular [img]="GalleryVerticalEnd" [size]="13" />
-              <span>{{ visuals.length }}</span>
-              <lucide-angular [img]="ChevronDown" [size]="12" />
-            </button>
-            @if (visualMenuOpen()) {
-              <button
-                type="button"
-                aria-label="Close visual menu"
-                class="fixed inset-0 z-20 cursor-default"
-                (click)="visualMenuOpen.set(false)"
-              ></button>
-              <div
-                class="absolute top-full right-0 z-30 mt-1 max-h-72 w-80 overflow-y-auto menu"
-              >
-                @for (visual of visuals; track visual.id) {
-                  <button
-                    type="button"
-                    (click)="selectVisualization(visual)"
-                    class="flex w-full flex-col rounded-lg px-2.5 py-2 text-left hover:bg-surface-muted"
-                    [class.bg-surface-selected]="visualization()?.id === visual.id"
-                  >
-                    <span class="w-full truncate text-[12px] text-fg">{{ visual.title }}</span>
-                    <span class="mt-0.5 text-[11px] text-fg-muted">v{{ visual.currentVersion ?? 1 }} · {{ formatCreatedAt(visual.createdAt) }}</span>
-                  </button>
-                }
-              </div>
-            }
-          </div>
-        }
-      }
     </div>
   </div>
 
@@ -307,7 +268,8 @@
         </div>
       }
       <iframe
-        class="h-full w-full rounded-xl border border-border bg-surface-muted"
+        #visualFrame
+        class="h-full w-full rounded-xl border border-border bg-surface"
         sandbox="allow-scripts"
         referrerpolicy="no-referrer"
         title="Interactive visualization"

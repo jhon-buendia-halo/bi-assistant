@@ -977,7 +977,7 @@ function qtiBar(
             formatValue(value, format),
             {
               'text-anchor': value >= 0 ? 'start' : 'end',
-              fill: '#d4d4d8',
+              fill: 'var(--qti-fg)',
             },
           ),
         );
@@ -1068,7 +1068,7 @@ function qtiBar(
             barX + barWidth / 2,
             value >= 0 ? top - 5 : top + barHeight + 12,
             formatValue(value, format || 'compact'),
-            { 'text-anchor': 'middle', fill: '#d4d4d8', 'font-size': 10 },
+            { 'text-anchor': 'middle', fill: 'var(--qti-fg)', 'font-size': 10 },
           ),
         );
       }
@@ -1079,7 +1079,7 @@ function qtiBar(
           start + inner / 2,
           yScale(positive) - 5,
           formatValue(positive, format || 'compact'),
-          { 'text-anchor': 'middle', fill: '#d4d4d8', 'font-size': 10 },
+          { 'text-anchor': 'middle', fill: 'var(--qti-fg)', 'font-size': 10 },
         ),
       );
     }
@@ -1280,7 +1280,7 @@ function qtiLine(
             xScale(index),
             yScale(value) - 8,
             formatValue(value, format || 'compact'),
-            { 'text-anchor': 'middle', fill: '#d4d4d8', 'font-size': 10 },
+            { 'text-anchor': 'middle', fill: 'var(--qti-fg)', 'font-size': 10 },
           ),
         );
       }
@@ -1508,6 +1508,9 @@ function qtiHeatmap(
       const bucket = grouped.values[category] || {};
       const value = bucket[name];
       const has = Number.isFinite(value);
+      const intensity = has
+        ? 0.14 + 0.82 * (maxValue ? Math.abs(value) / maxValue : 0)
+        : 0;
       const cell = qtiSvg('rect', {
         x: margin.left + column * cellWidth + 1,
         y: margin.top + lane * cellHeight + 1,
@@ -1515,9 +1518,7 @@ function qtiHeatmap(
         height: cellHeight - 2,
         rx: 3,
         fill: has ? 'var(--qti-cat-1)' : 'var(--qti-grid)',
-        'fill-opacity': has
-          ? 0.14 + 0.82 * (maxValue ? Math.abs(value) / maxValue : 0)
-          : 1,
+        'fill-opacity': has ? intensity : 1,
       });
       qtiMark(cell, category, x);
       qtiBindTooltip(root, cell, [
@@ -1531,7 +1532,16 @@ function qtiHeatmap(
           margin.left + column * cellWidth + cellWidth / 2,
           margin.top + lane * cellHeight + cellHeight / 2 + 4,
           formatValue(has ? value : null, format || 'compact'),
-          { 'text-anchor': 'middle', fill: '#fafafa', 'font-size': 10 },
+          {
+            'text-anchor': 'middle',
+            // A dense cell is filled with the series colour; a light one
+            // shows the page through it.
+            fill:
+              has && intensity > 0.55
+                ? 'var(--qti-on-cat)'
+                : 'var(--qti-fg-strong)',
+            'font-size': 10,
+          },
         ),
       );
     }
@@ -1852,7 +1862,7 @@ function qtiDonut(
           formatValue(slice.value, format || 'compact'),
           {
             'text-anchor': 'middle',
-            fill: '#18181b',
+            fill: 'var(--qti-on-cat)',
             'font-size': 11,
             'font-weight': 600,
           },
@@ -1864,7 +1874,7 @@ function qtiDonut(
   svg.appendChild(
     qtiText(cx, cy, formatValue(total, format || 'compact'), {
       'text-anchor': 'middle',
-      fill: '#fafafa',
+      fill: 'var(--qti-fg-strong)',
       'font-size': 24,
       'font-weight': 600,
     }),
@@ -1942,12 +1952,12 @@ function qtiEnsureStyle(): void {
     '.qti-chart [data-qti-value]:hover { filter: brightness(1.15); }',
     '.qti-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 0 0 10px; }',
     '.qti-legend-item { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px;',
-    '  border: 0; border-radius: 6px; background: transparent; color: #a1a1aa;',
+    '  border: 0; border-radius: 6px; background: transparent; color: var(--qti-fg-muted);',
     '  font: inherit; font-size: 12px; cursor: pointer; }',
     '.qti-legend-item[aria-pressed="false"] { opacity: .45; text-decoration: line-through; }',
     '.qti-legend-swatch { width: 10px; height: 10px; border-radius: 3px; }',
     '.qti-detail { margin-top: 16px; }',
-    '.qti-detail summary { cursor: pointer; font-size: 12px; color: #a1a1aa; }',
+    '.qti-detail summary { cursor: pointer; font-size: 12px; color: var(--qti-fg-muted); }',
     '.qti-sortable th { cursor: pointer; user-select: none; white-space: nowrap; }',
     '.qti-tooltip { display: none; white-space: nowrap; }',
     '@media (prefers-reduced-motion: reduce) {',

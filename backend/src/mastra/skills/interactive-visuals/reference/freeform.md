@@ -21,8 +21,9 @@ of a spec — for example when a spec cannot express the visual.
 - Include a useful interaction such as filtering, sorting, toggling a measure,
   or inspecting values. Keep controls keyboard accessible and give the visual
   an accessible name or text alternative.
-- Design for a dark panel, adapt cleanly to narrow widths, and avoid animation
-  that ignores reduced-motion preferences.
+- The panel follows the app's Light or Dark theme, so the visual must read
+  in both. Adapt cleanly to narrow widths, and avoid animation that ignores
+  reduced-motion preferences.
 - **Interaction requirements** — every chart shows a hover/focus tooltip with
   the exact values (use `.qti-tooltip`); multi-series charts get a clickable
   legend that toggles series visibility; axes get subtle gridlines using
@@ -51,6 +52,12 @@ of a spec — for example when a spec cannot express the visual.
 - Use the frame-provided CSS custom properties for all series and semantic
   colors (`var(--qti-cat-1)` … `var(--qti-cat-8)`, `var(--qti-pos)` /
   `var(--qti-neg)`). Never invent hex colors for data marks.
+- Take every other color from the frame's theme tokens too: text
+  `var(--qti-fg)`, headings `var(--qti-fg-strong)`, secondary text
+  `var(--qti-fg-muted)`, fills `var(--qti-surface)`, lines
+  `var(--qti-border)`, page `var(--qti-bg)`, text on a series color
+  `var(--qti-on-cat)`. Never hardcode a text, background or border color:
+  it breaks in one of the two themes.
 - Use `.qti-kpis` / `.qti-kpi` / `.qti-kpi-value` / `.qti-kpi-label` /
   `.qti-kpi-delta` with `.qti-up` / `.qti-down` and `.qti-kpi-spark` for KPI
   tiles instead of restyling them from scratch.

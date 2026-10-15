@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   HostListener,
   computed,
   effect,
@@ -7,13 +8,14 @@ import {
   input,
   output,
   signal,
+  untracked,
+  viewChild,
 } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import {
   BarChart3,
   ChevronDown,
   Download,
-  GalleryVerticalEnd,
   History,
   Loader2,
   LucideAngularModule,
@@ -26,9 +28,23 @@ import {
   DataPointSelection,
   InteractiveVisualization,
   SessionActionResult,
-  SessionVisualization,
 } from '../../models/session.model';
 import { SessionsApiService } from '../../services/sessions-api.service';
+import {
+  ResolvedTheme,
+  ThemeService,
+} from '../../../../core/theme/theme.service';
+
+/**
+ * Starts the visual's document in the app's theme: the frame picks its Light
+ * or Dark tokens from the root's `data-theme` (visuals R40).
+ */
+export function withVisualTheme(
+  document: string,
+  theme: ResolvedTheme,
+): string {
+  return document.replace(/<html\b/i, `<html data-theme="${theme}"`);
+}
 
 export type TailorChartType =
   | 'auto'
@@ -48,10 +64,7 @@ export interface TailorOptions {
   topN: number | null;
 }
 
-const CHART_TYPE_PHRASES: Record<
-  Exclude<TailorChartType, 'auto'>,
-  string
-> = {
+const CHART_TYPE_PHRASES: Record<Exclude<TailorChartType, 'auto'>, string> = {
   bar: 'Change the visual to a bar chart.',
   line: 'Change the visual to a line chart.',
   scatter: 'Change the visual to a scatter plot.',
@@ -121,7 +134,6 @@ export class InteractiveVisualPanel {
   readonly BarChart3 = BarChart3;
   readonly ChevronDown = ChevronDown;
   readonly Download = Download;
-  readonly GalleryVerticalEnd = GalleryVerticalEnd;
   readonly History = History;
   readonly Loader2 = Loader2;
   readonly RefreshCw = RefreshCw;
@@ -136,11 +148,9 @@ export class InteractiveVisualPanel {
 
   readonly sessionId = input<string | null>(null);
   readonly visualization = input<InteractiveVisualization | null>(null);
-  readonly visualizations = input<SessionVisualization[]>([]);
   readonly loading = input(false);
   readonly error = input<string | null>(null);
   readonly downloading = input(false);
-  readonly viewVisual = output<SessionVisualization>();
   readonly downloadVisual = output<InteractiveVisualization>();
   readonly selectVersion = output<number>();
   readonly revertVersion = output<number>();
@@ -148,7 +158,6 @@ export class InteractiveVisualPanel {
   readonly visualRefreshed = output<SessionActionResult>();
   /** The user clicked a data mark inside the sandboxed visual. */
   readonly dataPointSelected = output<DataPointSelection>();
-  readonly visualMenuOpen = signal(false);
   readonly versionMenuOpen = signal(false);
   readonly tailorMenuOpen = signal(false);
   /** Runtime error reported by the sandboxed visual via postMessage. */
@@ -182,7 +191,13 @@ export class InteractiveVisualPanel {
     if (!visual) return [];
     const history = visual.versions?.length
       ? visual.versions
-      : [{ version: 1, createdAt: visual.createdAt, sourceMessageAt: visual.sourceMessageAt }];
+      : [
+          {
+            version: 1,
+            createdAt: visual.createdAt,
+            sourceMessageAt: visual.sourceMessageAt,
+          },
+        ];
     return history.slice().reverse();
   });
   readonly currentVersion = computed(
@@ -204,21 +219,20 @@ export class InteractiveVisualPanel {
 
   @HostListener('window:message', ['$event'])
   onFrameMessage(event: MessageEvent): void {
-    const data = event.data as
-      | {
-          type?: string;
-          message?: string;
-          value?: string;
-          label?: string;
-          column?: string;
-        }
-      | null;
+    const data = event.data as {
+      type?: string;
+      message?: string;
+      value?: string;
+      label?: string;
+      column?: string;
+    } | null;
     if (data?.type === 'visual-error') {
       this.handleRuntimeError(data.message ?? 'The visual threw an error');
       return;
     }
     if (data?.type === 'visual-select' && data.value !== undefined) {
-      const column = data.column === undefined ? undefined : String(data.column);
+      const column =
+        data.column === undefined ? undefined : String(data.column);
       this.dataPointSelected.emit({
         value: String(data.value),
         label: data.label === undefined ? undefined : String(data.label),
@@ -304,7 +318,9 @@ export class InteractiveVisualPanel {
 
   setTopN(raw: string): void {
     const value = Number(raw);
-    this.tailorTopN.set(raw.trim() === '' || !Number.isFinite(value) ? null : Math.round(value));
+    this.tailorTopN.set(
+      raw.trim() === '' || !Number.isFinite(value) ? null : Math.round(value),
+    );
   }
 
   applyTailoring(): void {
@@ -328,9 +344,7 @@ export class InteractiveVisualPanel {
       },
       error: (err) => {
         this.tailoring.set(false);
-        this.tailorError.set(
-          err?.error?.message ?? 'Backend unreachable',
-        );
+        this.tailorError.set(err?.error?.message ?? 'Backend unreachable');
       },
     });
   }
@@ -347,21 +361,27 @@ export class InteractiveVisualPanel {
     this.selectVersion.emit(version);
   }
 
-  readonly savedVisualizations = computed(() =>
-    this.visualizations().slice().reverse(),
-  );
-
   private readonly sanitizer = inject(DomSanitizer);
+  private readonly theme = inject(ThemeService);
+  private readonly frame =
+    viewChild<ElementRef<HTMLIFrameElement>>('visualFrame');
+  // The theme is read untracked: a theme change is sent to the open frame
+  // (below) instead of reloading the visual and losing its state.
   readonly safeDocument = computed(() =>
     this.sanitizer.bypassSecurityTrustHtml(
-      this.visualization()?.document ?? '',
+      withVisualTheme(
+        this.visualization()?.document ?? '',
+        untracked(this.theme.resolved),
+      ),
     ),
   );
-
-  selectVisualization(visualization: SessionVisualization): void {
-    this.visualMenuOpen.set(false);
-    this.viewVisual.emit(visualization);
-  }
+  private readonly syncFrameTheme = effect(() => {
+    const theme = this.theme.resolved();
+    this.frame()?.nativeElement.contentWindow?.postMessage(
+      { type: 'qti-theme', theme },
+      '*',
+    );
+  });
 
   formatCreatedAt(createdAt: string): string {
     const date = new Date(createdAt);

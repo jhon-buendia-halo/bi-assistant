@@ -496,3 +496,63 @@ describe('designer stylesheet scoping', () => {
     expect(document).toContain('<div class="qti-visual-body">');
   });
 });
+
+describe('frame theme (visuals R40)', () => {
+  /** The frame's own sheet: the first <style> block. */
+  const frameCss = (document: string) =>
+    document.slice(document.indexOf('<style>'), document.indexOf('</style>'));
+
+  it('defaults to the Light tokens and switches to Dark on data-theme="dark"', () => {
+    const css = frameCss(sandboxedVisualizationDocument(bundle));
+
+    expect(css).toMatch(
+      /:root \{\s*color-scheme: light;[\s\S]*?--qti-bg: #ffffff;/,
+    );
+    expect(css).toMatch(
+      /:root\[data-theme="dark"\] \{\s*color-scheme: dark;[\s\S]*?--qti-bg: #12233a;/,
+    );
+  });
+
+  it('follows the operating system when the document carries no theme', () => {
+    const css = frameCss(storedVisualizationDocument(bundle));
+
+    expect(css).toMatch(
+      /@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme="light"\]\) \{\s*color-scheme: dark;/,
+    );
+  });
+
+  it('paints the frame from the tokens, never from fixed colours', () => {
+    const css = frameCss(sandboxedVisualizationDocument(bundle));
+    const rules = css.slice(css.indexOf('html, body'));
+
+    expect(rules).toContain('background: var(--qti-bg)');
+    expect(rules).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+  });
+
+  it('switches data-theme in place on a qti-theme message from the host', () => {
+    type Listener = (event: { data: unknown }) => void;
+    const listeners: Record<string, Listener> = {};
+    const setAttribute = jest.fn();
+    const fakeWindow: Record<string, unknown> = {
+      addEventListener: (type: string, listener: Listener) => {
+        listeners[type] = listener;
+      },
+    };
+    const fakeDocument = {
+      getElementById: () => null,
+      addEventListener: () => undefined,
+      documentElement: { setAttribute },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const run = new Function('window', 'document', FRAME_SELECT_SCRIPT) as (
+      window: unknown,
+      document: unknown,
+    ) => void;
+    run(fakeWindow, fakeDocument);
+
+    listeners.message({ data: { type: 'qti-theme', theme: 'dark' } });
+    expect(setAttribute).toHaveBeenCalledWith('data-theme', 'dark');
+    listeners.message({ data: { type: 'qti-theme', theme: 'purple' } });
+    expect(setAttribute).toHaveBeenCalledTimes(1);
+  });
+});

@@ -69,38 +69,75 @@ test('has no automatically detectable accessibility violations on any screen in 
     await expect(page.getByRole('heading', { name })).toBeVisible();
   };
   const screens: [string, () => Promise<void>][] = [
-    ['Datasets', async () => {
-      await rail('Datasets').click();
-      await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
-    }],
-    ['Dataset editor', async () => {
-      await rail('Datasets').click();
-      await page.getByRole('button', { name: 'New dataset' }).click();
-      await expect(page.getByRole('heading', { name: 'New dataset' })).toBeVisible();
-    }],
-    ['Agents', async () => {
-      await rail('Agents').click();
-      await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
-    }],
-    ['Agent detail', async () => {
-      await rail('Agents').click();
-      await page.getByTestId('agent-assistant').click();
-      await expect(page.getByText('All agents')).toBeVisible();
-    }],
-    ['Knowledge', async () => {
-      await rail('Knowledge').click();
-      await expect(page.getByRole('heading', { name: 'Knowledge' })).toBeVisible();
-    }],
-    ['Sessions', async () => {
-      await rail('Sessions').click();
-      await expect(page.getByRole('navigation', { name: 'Sessions navigation' })).toBeVisible();
-    }],
-    ['New-session composer', async () => {
-      await rail('Sessions').click();
-      await page.getByTitle('New conversation').click();
-      await expect(page.getByPlaceholder('My new session')).toBeVisible();
-    }],
-    ['Datasource Configuration', () => settingsSection('Datasource Configuration')],
+    [
+      'Datasets',
+      async () => {
+        await rail('Datasets').click();
+        await expect(
+          page.getByRole('heading', { name: 'Datasets' }),
+        ).toBeVisible();
+      },
+    ],
+    [
+      'Dataset editor',
+      async () => {
+        await rail('Datasets').click();
+        await page.getByRole('button', { name: 'New dataset' }).click();
+        await expect(
+          page.getByRole('heading', { name: 'New dataset' }),
+        ).toBeVisible();
+      },
+    ],
+    [
+      'Agents',
+      async () => {
+        await rail('Agents').click();
+        await expect(
+          page.getByRole('heading', { name: 'Agents' }),
+        ).toBeVisible();
+      },
+    ],
+    [
+      'Agent detail',
+      async () => {
+        await rail('Agents').click();
+        await page.getByTestId('agent-assistant').click();
+        await expect(page.getByText('All agents')).toBeVisible();
+      },
+    ],
+    [
+      'Knowledge',
+      async () => {
+        await rail('Knowledge').click();
+        await expect(
+          page.getByRole('heading', { name: 'Knowledge' }),
+        ).toBeVisible();
+      },
+    ],
+    [
+      'Sessions',
+      async () => {
+        await rail('Sessions').click();
+        await expect(
+          page.getByRole('navigation', { name: 'Sessions', exact: true }),
+        ).toBeVisible();
+      },
+    ],
+    [
+      'New-session composer',
+      async () => {
+        await rail('Sessions').click();
+        await page
+          .locator('header')
+          .getByRole('button', { name: 'Start New Conversation' })
+          .click();
+        await expect(page.getByPlaceholder('My new session')).toBeVisible();
+      },
+    ],
+    [
+      'Datasource Configuration',
+      () => settingsSection('Datasource Configuration'),
+    ],
     ['LLM Configuration', () => settingsSection('LLM Configuration')],
     ['Testing Data', () => settingsSection('Testing Data')],
     ['Developer', () => settingsSection('Developer')],
