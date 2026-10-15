@@ -8,8 +8,8 @@ import { DatasourcesService } from '../../modules/datasources/datasources.servic
 import { setAgentModelResolver } from '../model-resolver';
 import { getDatasetToolServices } from '../tool-services';
 import { assistantEvalDatasetError } from './assistant-eval-datasets';
-import { evalSetById, loadEvalSets } from './eval-sets';
-import type { EvalSetDefinition } from './eval-sets';
+import { evalSetById, loadEvalSets } from './eval-set-files';
+import type { EvalSetDefinition } from './eval-set-files';
 import { runReferenceSql } from './result-set-check';
 import { tableReferences } from './checks/sql-text';
 import { catalogOfEntities, referenceInCatalog } from './databricks-catalog';
@@ -68,7 +68,7 @@ function lastParts(parts: readonly string[], count: number): string {
 
 /**
  * The first table or view a reference reads that is not an entity of the
- * selected datasets (agents-evals R66), or undefined when it reads none.
+ * selected datasets (agents-evals R109), or undefined when it reads none.
  * Names compare as the dataset preflight compares them (R20): on the last
  * two name parts, ignoring case; a one-part name on its only part. The
  * reading is conservative (`tableReferences`): a name it cannot tell is a
@@ -97,12 +97,12 @@ export function referenceOutsideDatasets(
  * a time, print `✓ <id>  <dialect>  <n> rows` or `✗ <id>  <dialect>  <reason>`
  * per case, then a summary. A failed case does not stop the others. A
  * preflight error prints and runs nothing. A reference that reads a table
- * outside `datasetEntities` fails without running (R66): the database may
+ * outside `datasetEntities` fails without running (R109): the database may
  * hold the table, but a run scoped to the datasets cannot read it. A
  * reference that returns no rows fails too: it is almost always a filter on
  * a misspelled value, and an empty answer is better written as a count.
  * A Databricks set's references run in the catalog of `datasetEntities`,
- * their `` `evals`. `` rewritten (R148); entities that name no single catalog
+ * their `` `evals`. `` rewritten (R191); entities that name no single catalog
  * fail like the preflight. Exit code 1 on any failure.
  */
 export async function validateEvalSet(
@@ -151,7 +151,7 @@ export async function validateEvalSet(
     }
     let line: string;
     try {
-      // `<n> rows` whatever n is: the line format of agents-evals R66.
+      // `<n> rows` whatever n is: the line format of agents-evals R109.
       const { rowCount } = await run(
         inCatalog(evalCase.expectedSql),
         evalCase.id,

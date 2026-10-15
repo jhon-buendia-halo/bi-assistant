@@ -1,7 +1,7 @@
 /**
  * Generator for the `marketing_analytics` synthetic eval fixture (BA-185).
  *
- * Writes `backend/src/modules/testing-data/fixtures/007_marketing_analytics.sql`,
+ * Writes `backend/src/modules/testing-data/fixtures/008_marketing_analytics.sql`,
  * the Testing Data seed, and `backend/scripts/fixtures/marketing-analytics/facts.json`,
  * the planted truths, from one hard-coded seed. The output is byte-identical
  * on every run, so every hand-verified `expectedSql` in
@@ -44,7 +44,7 @@ const SQL_PATH = join(
   __dirname,
   '..', '..', '..',
   'backend', 'src', 'modules', 'testing-data', 'fixtures',
-  '007_marketing_analytics.sql',
+  '008_marketing_analytics.sql',
 );
 const FACTS_PATH = join(
   __dirname,

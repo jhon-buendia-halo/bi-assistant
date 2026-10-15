@@ -12,7 +12,7 @@ const verdict = (answer: string) =>
     context,
   );
 
-describe('noHtml (R73, I4)', () => {
+describe('noHtml (R116, I4)', () => {
   it.each([
     ['<div class="chart">Goals</div>', 'HTML'],
     ['Line one<br/>line two', 'HTML'],

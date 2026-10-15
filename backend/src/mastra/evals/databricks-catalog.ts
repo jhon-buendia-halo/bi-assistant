@@ -1,11 +1,11 @@
 /**
  * The Unity Catalog catalog a Databricks reference query runs in
- * (agents-evals R148).
+ * (agents-evals R191).
  *
  * Set files write every Databricks reference in one canonical form,
- * `` `evals`.<schema>.<table> `` (R162), but a workspace may not allow a
+ * `` `evals`.<schema>.<table> `` (R205), but a workspace may not allow a
  * catalog named `evals`: the loader can put a sample in any catalog
- * (testing-data R23). Wherever a reference runs, the catalog is therefore
+ * (testing-data R24). Wherever a reference runs, the catalog is therefore
  * read from the selected datasets' entity keys (`<catalog>.<schema>.<table>`)
  * and the backticked `` `evals`. `` is rewritten to it. PostgreSQL and SQLite
  * references are never touched.
@@ -14,7 +14,7 @@
  * validator, the preflight and the unit tests import it.
  */
 import { DATABRICKS_FIXTURE_CATALOG } from '../../modules/testing-data/fixtures/registry';
-import type { EvalDialect } from './eval-sets';
+import type { EvalDialect } from './eval-set-files';
 
 /** The catalog every Databricks reference names in its set file. */
 export const REFERENCE_CATALOG = DATABRICKS_FIXTURE_CATALOG;

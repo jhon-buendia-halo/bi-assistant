@@ -15,7 +15,7 @@ function sqlTurn(...statements: string[]): CheckTurn {
   };
 }
 
-describe('dialect (R74, I6)', () => {
+describe('dialect (R117, I6)', () => {
   it('fails PostgreSQL syntax on the REST set (SQLite), naming it', () => {
     expect(
       dialect.evaluate(

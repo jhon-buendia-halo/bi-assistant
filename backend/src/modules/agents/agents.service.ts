@@ -73,7 +73,7 @@ export interface AgentEvalCase {
   question: string;
   /** What the question probes for. */
   intent: string;
-  /** The case's category, shown as a chip (agents-evals R106). */
+  /** The case's category, shown as a chip (agents-evals R149). */
   category: string;
   /** `dev`, or `held-out` for cases kept out of prompt tuning. */
   split: string;

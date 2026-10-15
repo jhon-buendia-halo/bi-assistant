@@ -15,7 +15,7 @@ function excerpt(text: string, index: number, length: number): string {
 }
 
 /**
- * `notMatches` (agents-evals R79, no default criterion): a pattern that must
+ * `notMatches` (agents-evals R122, no default criterion): a pattern that must
  * appear nowhere, such as a figure the data cannot hold on an out-of-scope
  * question (the no-fabrication substitute of research 2.3). It is brittle
  * both ways by nature: a refusal worded with a stray number fails it, and a

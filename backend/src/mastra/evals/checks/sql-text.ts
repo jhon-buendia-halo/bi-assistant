@@ -1,6 +1,6 @@
 /**
  * Just enough SQL reading for the deterministic checks and the validator
- * (agents-evals R68, R66): comments and string literals set aside, and the
+ * (agents-evals R111, R109): comments and string literals set aside, and the
  * table references of a statement. No parser dependency, the same decision
  * as `failure-labels.ts` on `feat/engine-eval-loop`, whose tokenizer this
  * follows: a parser adds dialect gaps and packaging weight, and these rules
@@ -170,7 +170,7 @@ function nameParts(token: SqlToken): string[] {
 }
 
 /**
- * The table references of a statement (R68), in order, each as its name
+ * The table references of a statement (R111), in order, each as its name
  * parts (`world_cup.goals` → `['world_cup', 'goals']`), duplicates kept. A
  * reference is a name after FROM or JOIN, or after a comma in a FROM list.
  * Left out: names a WITH clause defines, subqueries, table functions

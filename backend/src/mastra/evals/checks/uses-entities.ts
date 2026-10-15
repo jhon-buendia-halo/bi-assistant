@@ -27,7 +27,7 @@ export function expectedEntities(
 }
 
 /**
- * `usesEntities` (agents-evals R80, criterion D2, schema linking): one query
+ * `usesEntities` (agents-evals R123, criterion D2, schema linking): one query
  * that ran reads every entity the answer needs, by default those the
  * reference reads. Compared on the table name alone, because the dialects
  * qualify it differently (`world_cup.goals`, `api.world_cup.goals`).

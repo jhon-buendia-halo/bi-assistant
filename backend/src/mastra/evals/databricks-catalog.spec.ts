@@ -6,7 +6,7 @@ import {
   referenceForDatasets,
   referenceInCatalog,
 } from './databricks-catalog';
-import { loadEvalSets } from './eval-sets';
+import { loadEvalSets } from './eval-set-files';
 
 const SETS = loadEvalSets();
 /** A real reference: the golden set's pass-accuracy question on Databricks. */
@@ -15,7 +15,7 @@ const GOLDEN = SETS.find(
 )?.cases.find((evalCase) => evalCase.id === 'dbx-pass-accuracy-by-team')
   ?.expectedSql as string;
 
-describe('the catalog of the selected datasets (agents-evals R148)', () => {
+describe('the catalog of the selected datasets (agents-evals R191)', () => {
   it('is the first part of every entity key, compared ignoring case', () => {
     expect(REFERENCE_CATALOG).toBe('evals');
     expect(
@@ -43,7 +43,7 @@ describe('the catalog of the selected datasets (agents-evals R148)', () => {
   });
 });
 
-describe('a reference rewritten to the catalog (agents-evals R148)', () => {
+describe('a reference rewritten to the catalog (agents-evals R191)', () => {
   it('rewrites every backticked `evals`. of a real reference, and nothing else', () => {
     expect(GOLDEN).toContain('FROM `evals`.world_cup.match_team_statistics s');
     const rewritten = referenceInCatalog(GOLDEN, 'dev_sandbox');

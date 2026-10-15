@@ -18,8 +18,8 @@ import { getDatasetToolServices } from '../tool-services';
 import { entityOrientationLines } from '../context-blocks';
 import { runResultSetCheck } from './result-set-check';
 import type { ResultSetCheckOptions } from './result-set-check';
-import { loadEvalSets } from './eval-sets';
-import type { EvalCategory, EvalCriterion, EvalSplit } from './eval-sets';
+import { loadEvalSets } from './eval-set-files';
+import type { EvalCategory, EvalCriterion, EvalSplit } from './eval-set-files';
 import { toAssistantEvalSets } from './eval-check-scorers';
 import {
   JUDGE_OFF,
@@ -46,7 +46,7 @@ import type { SessionsService } from '../../modules/sessions/sessions.service';
  * Eval suite for the Questions to Insights assistant.
  *
  * The questions are data: one JSON file per question bank under `./sets/`,
- * loaded and checked by `./eval-sets.ts` (ADR-0015). They are grouped into
+ * loaded and checked by `./eval-set-files.ts` (ADR-0015). They are grouped into
  * sets, one per bundled sample and datasource kind, and every expected
  * substring in them is a fact that is actually in that sample's data — a check
  * failing means the agent got it wrong, not that the fixture drifted.
@@ -68,7 +68,7 @@ export interface AssistantEvalCase {
   intent: string;
   scorers: MastraScorer<any, any, any, any>[];
   /**
-   * The criterion each scorer measures (agents-evals R81, R102), one entry
+   * The criterion each scorer measures (agents-evals R124, R145), one entry
    * per scorer in the same order; `undefined` where a check names none.
    */
   checkCriteria?: (EvalCriterion | undefined)[];
@@ -87,7 +87,7 @@ export interface AssistantEvalCase {
    * quality, whether a visual plausibly answers the request). When present,
    * `runAssistantEvalCase` scores it with the LLM judge
    * (`../agents/eval-judge.agent`) as an additional check — when the run's
-   * judge option allows it; otherwise the check is not scored (R101).
+   * judge option allows it; otherwise the check is not scored (R144).
    */
   judgeRubric?: string;
   /** The case's primary category (research 2.6); never graded. */
@@ -163,9 +163,9 @@ export interface ScoredCheckResult {
 
 /** One check's verdict on a question, with why it landed there. */
 export interface EvalCheckResult extends ScoredCheckResult {
-  /** `not-scored` only for a judge check the run did not call (R102). */
+  /** `not-scored` only for a judge check the run did not call (R145). */
   status: EvalStatus;
-  /** The criterion the check measures, when it has one (R102). */
+  /** The criterion the check measures, when it has one (R145). */
   criterion?: string;
 }
 
@@ -173,7 +173,7 @@ export interface EvalCheckResult extends ScoredCheckResult {
 export interface AssistantEvalCaseResult {
   id: string;
   question: string;
-  /** The case's category (R103); absent on runs saved before BA-184. */
+  /** The case's category (R146); absent on runs saved before BA-184. */
   category?: string;
   /** Score per scorer id, 0..1. Empty when the run threw. */
   scores: Record<string, number>;
@@ -183,7 +183,7 @@ export interface AssistantEvalCaseResult {
   answer: string;
   /** The tool calls the agent made, in order — the executed process. */
   toolCalls: EvalToolCall[];
-  /** Passed, failed or not scored (R103). */
+  /** Passed, failed or not scored (R146). */
   status: EvalStatus;
   /** True exactly when `status` is `passed`: a not-scored question is not. */
   passed: boolean;
@@ -567,7 +567,7 @@ async function runJudgeCheck(
 }
 
 /**
- * The judge check of a case with a rubric (R101, R102): the judge's verdict
+ * The judge check of a case with a rubric (R144, R145): the judge's verdict
  * when the run's option lets it grade this case's category, else a not-scored
  * check, with no model call. Its criterion follows the case's category.
  */
@@ -611,7 +611,7 @@ export async function runAssistantEvalCase(
    * omitted (or empty) when neither wires one in.
    */
   knowledgeBlock?: string,
-  /** The run's judge option (R100); off unless the caller says otherwise. */
+  /** The run's judge option (R143); off unless the caller says otherwise. */
   judge: Readonly<EvalJudgeSetting> = JUDGE_OFF,
 ): Promise<AssistantEvalCaseResult> {
   const startedAt = Date.now();
@@ -718,7 +718,7 @@ export async function runAssistantEvalCase(
 
     // LLM-judge (Feature 2) — for cases where a regex/text check on the
     // final answer would be too brittle. Not called, and not scored, when
-    // the run's judge option leaves this case out (R101).
+    // the run's judge option leaves this case out (R144).
     const judgeCheck = await judgeCheckFor(evalCase, judge, answer, toolCalls);
     if (judgeCheck) checkResults.push(judgeCheck);
 

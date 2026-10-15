@@ -225,7 +225,7 @@ const FINANCE: SampleFixture = {
     'Synthetic retail bank and wealth manager, 2024 and 2025 — customers, ' +
     'accounts, transactions, loans, portfolios, holdings, fees and fiscal ' +
     'periods; money in cents.',
-  seedFile: '006_finance.sql',
+  seedFile: '007_finance.sql',
   schema: 'finance',
   defaults: domainDefaults('finance'),
   datasourceName: 'Finance PostgreSQL',
@@ -257,7 +257,7 @@ const HEALTH_INSURANCE: SampleFixture = {
   description:
     'Synthetic health insurer, claims of 2024 and 2025 — members, plans, ' +
     'providers, claims, claim lines and denials; money in cents.',
-  seedFile: '003_health_insurance.sql',
+  seedFile: '004_health_insurance.sql',
   schema: 'health_insurance',
   defaults: domainDefaults('health_insurance'),
   datasourceName: 'Health Insurance PostgreSQL',
@@ -285,7 +285,7 @@ const GENOMICS: SampleFixture = {
     'Synthetic clinical-genomics cohort, samples of 2023 and 2024 — ' +
     'subjects, samples, genes, variants, variant calls, expression and ' +
     'phenotypes. Invented data, never for clinical use.',
-  seedFile: '004_genomics.sql',
+  seedFile: '005_genomics.sql',
   schema: 'genomics',
   defaults: domainDefaults('genomics'),
   datasourceName: 'Genomics PostgreSQL',
@@ -314,7 +314,7 @@ const SUPPLY_CHAIN: SampleFixture = {
     'Synthetic industrial distributor, purchase orders of 2024 and 2025 — ' +
     'suppliers, products, warehouses, purchase orders, shipments, receipts ' +
     'and inventory; money in cents.',
-  seedFile: '005_supply_chain.sql',
+  seedFile: '006_supply_chain.sql',
   schema: 'supply_chain',
   defaults: domainDefaults('supply_chain'),
   datasourceName: 'Supply Chain PostgreSQL',
@@ -344,7 +344,7 @@ const MARKETING_ANALYTICS: SampleFixture = {
     'Synthetic market-insight product for six insurance carriers, 2024 and ' +
     '2025 — policy sales by quarter, revenue by period, campaigns and a ' +
     'benchmark with masked competitors; money in cents.',
-  seedFile: '007_marketing_analytics.sql',
+  seedFile: '008_marketing_analytics.sql',
   schema: 'marketing_analytics',
   defaults: domainDefaults('marketing_analytics'),
   datasourceName: 'Marketing Analytics PostgreSQL',
@@ -443,7 +443,7 @@ const WORLD_CUP_REST_CONNECTOR: SampleFixture = {
  * one their reference queries name in the set files
  * (`` `evals`.world_cup.matches ``). A sample loaded into another catalog
  * still runs: the references are rewritten to the catalog of the selected
- * datasets when they run (agents-evals R148).
+ * datasets when they run (agents-evals R191).
  */
 export const DATABRICKS_FIXTURE_CATALOG = 'evals';
 

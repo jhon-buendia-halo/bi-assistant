@@ -39,7 +39,7 @@ const CODE_NAMES: readonly [RegExp, string][] = [
   [/\b[a-z_][a-z0-9_]+(?:\.[a-z_][a-z0-9_]+)+\b/, 'dotted table name'],
 ];
 
-/** Why one call's rationale breaks R72, or undefined when it holds. */
+/** Why one call's rationale breaks R115, or undefined when it holds. */
 export function rationaleProblem(call: CheckToolCall): string | undefined {
   const rationale = call.args.rationale;
   if (typeof rationale !== 'string' || !rationale.trim()) {
@@ -59,7 +59,7 @@ export function rationaleProblem(call: CheckToolCall): string | undefined {
 }
 
 /**
- * `rationaleOk` (agents-evals R72, criterion I3): every SQL and sampling step
+ * `rationaleOk` (agents-evals R115, criterion I3): every SQL and sampling step
  * says why in one or two business sentences, with no SQL syntax or column
  * names. Whether the sentence explains the step rather than restating the
  * question is the judge's part (research 2.3).

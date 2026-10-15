@@ -17,7 +17,7 @@ jest.mock('../tool-services', () => ({
   getDatasetToolServices: () => ({ getDatasets: () => Promise.resolve([]) }),
 }));
 // `@mastra/core/evals` and `@mastra/evals/checks` pull in ESM-only packages
-// Jest cannot require (see eval-sets.spec.ts); the cases here are built by
+// Jest cannot require (see eval-set-files.spec.ts); the cases here are built by
 // hand, so the suite's own sets are not needed.
 jest.mock('@mastra/core/evals', () => ({ runEvals: jest.fn() }));
 jest.mock('./eval-check-scorers', () => ({ toAssistantEvalSets: () => [] }));
@@ -83,7 +83,7 @@ beforeEach(() => {
   });
 });
 
-describe('runAssistantEvalCase judge option (agents-evals R100 to R103)', () => {
+describe('runAssistantEvalCase judge option (agents-evals R143 to R146)', () => {
   it('makes no judge call with the judge off, the default, and records the judge check as not scored', async () => {
     const result = await runAssistantEvalCase(evalCase('out-of-scope'), [
       'World Cup',

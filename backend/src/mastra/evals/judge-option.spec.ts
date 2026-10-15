@@ -1,4 +1,4 @@
-import { EVAL_CATEGORIES } from './eval-sets';
+import { EVAL_CATEGORIES } from './eval-set-files';
 import {
   JUDGE_OFF,
   judgeCriterion,
@@ -8,7 +8,7 @@ import {
   shouldJudge,
 } from './judge-option';
 
-describe('parseJudgeSetting (agents-evals R100)', () => {
+describe('parseJudgeSetting (agents-evals R143)', () => {
   it('defaults to off when no option is given', () => {
     expect(parseJudgeSetting(undefined, undefined)).toEqual({
       setting: { mode: 'off' },
@@ -69,7 +69,7 @@ describe('parseJudgeSetting (agents-evals R100)', () => {
   });
 });
 
-describe('judgeSettingFromEnv (agents-evals R110)', () => {
+describe('judgeSettingFromEnv (agents-evals R153)', () => {
   it('reads EVAL_JUDGE, off when unset or blank', () => {
     expect(judgeSettingFromEnv({})).toEqual({ setting: { mode: 'off' } });
     expect(judgeSettingFromEnv({ EVAL_JUDGE: '  ' })).toEqual({
@@ -101,7 +101,7 @@ describe('judgeSettingFromEnv (agents-evals R110)', () => {
   });
 });
 
-describe('shouldJudge (agents-evals R101)', () => {
+describe('shouldJudge (agents-evals R144)', () => {
   it('never judges with the option off or absent', () => {
     expect(shouldJudge({ mode: 'off' }, 'ambiguous')).toBe(false);
     expect(shouldJudge(undefined, 'ambiguous')).toBe(false);
@@ -123,7 +123,7 @@ describe('shouldJudge (agents-evals R101)', () => {
   });
 });
 
-describe('judgeCriterion (agents-evals R102)', () => {
+describe('judgeCriterion (agents-evals R145)', () => {
   it.each([
     ['ambiguous', 'I5'],
     ['out-of-scope', 'G2'],
@@ -140,7 +140,7 @@ describe('judgeCriterion (agents-evals R102)', () => {
   });
 });
 
-describe('judgeLabel (agents-evals R109)', () => {
+describe('judgeLabel (agents-evals R152)', () => {
   it('names the option as the report prints it', () => {
     expect(judgeLabel({ mode: 'off' })).toBe('off');
     expect(judgeLabel({ mode: 'on' })).toBe('on');

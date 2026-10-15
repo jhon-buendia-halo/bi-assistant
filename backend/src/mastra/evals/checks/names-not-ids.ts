@@ -41,7 +41,7 @@ export function bareIdentifierPattern(
 }
 
 /**
- * `namesNotIds` (agents-evals R70, criterion I1): the answer names things,
+ * `namesNotIds` (agents-evals R113, criterion I1): the answer names things,
  * it does not hand the reader "Team ID 5". It does not look the id up: every
  * entity in the samples has a name, so any bare id is a failure.
  */

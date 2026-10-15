@@ -460,10 +460,10 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Errors (Style B): `404 "Agent \"<key>\" not found"`. `:key` is resolved as a registry key first, then as a user-agent id.
 
 #### 35. `GET /agents/:key/evals`
-- Response `200`: `{ sets: AgentEvalSet[] }`. Only `assistant` has sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, category: string, split: 'dev'|'held-out', checks: { id, name, description }[] }[] }`. The sets are those of [agents-evals](../capabilities/agents-evals/spec.md) R11, one per variant of the question bank files ([data-model.md](data-model.md) 4.8). `category` is one of the eighteen of data-model 4.8 (agents-evals R106; added 2026-10-13, BA-184). A case's notes and reference queries are not part of the response, and `checks` lists the case's scorer checks only (not the result-set match or the judge).
+- Response `200`: `{ sets: AgentEvalSet[] }`. Only `assistant` has sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, category: string, split: 'dev'|'held-out', checks: { id, name, description }[] }[] }`. The sets are those of [agents-evals](../capabilities/agents-evals/spec.md) R11, one per variant of the question bank files ([data-model.md](data-model.md) 4.9). `category` is one of the eighteen of data-model 4.9 (agents-evals R149; added 2026-10-13, BA-184). A case's notes and reference queries are not part of the response, and `checks` lists the case's scorer checks only (not the result-set match or the judge).
 
 #### 36. `POST /agents/:key/evals/run`
-- Body: `{ datasourceId: string; caseIds?: string[]; judge?: 'off'|'on'|'categories'; judgeCategories?: string[] }`. `caseIds` omitted = all questions. `judge` omitted (or `null`) = `'off'`: no judge call, judge checks recorded as not scored ([agents-evals](../capabilities/agents-evals/spec.md) R100, R101). `judgeCategories` is read only with `judge: 'categories'`, where it is required and non-empty, each entry one of the eighteen categories of [data-model.md](data-model.md) 4.8; with `'off'` or `'on'` it is ignored. The UI sends `'off'` or `'on'` (R105).
+- Body: `{ datasourceId: string; caseIds?: string[]; judge?: 'off'|'on'|'categories'; judgeCategories?: string[] }`. `caseIds` omitted = all questions. `judge` omitted (or `null`) = `'off'`: no judge call, judge checks recorded as not scored ([agents-evals](../capabilities/agents-evals/spec.md) R143, R144). `judgeCategories` is read only with `judge: 'categories'`, where it is required and non-empty, each entry one of the eighteen categories of [data-model.md](data-model.md) 4.9; with `'off'` or `'on'` it is ignored. The UI sends `'off'` or `'on'` (R148).
 - Success: `{ ok:true, message:"Eval run started", jobId }`. Returns immediately; the run is long-running (see [3.3](#33-eval-runs)).
 - Failures (Style A, `ok:false`), in the order of R19: `"Agent \"<key>\" has no evals to run"` (non-assistant); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need); then the judge option: `"Unknown judge option \"<value>\""`; `"Pick at least one category to judge"` (`'categories'` with no or an empty `judgeCategories`); `"Unknown judge category \"<value>\". Known categories: <the eighteen, comma-separated>."`.
 - Side effects: persists an initial run record; spawns the run (one throwaway session is created for the run to host visual tools and deleted afterwards).
@@ -475,7 +475,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Response `200`: `{ ok:true, message:<status>, ...EvalRunView }`; unknown job: `{ ok:false, message:"Eval run \"<jobId>\" not found" }` (HTTP 200). `:key` is ignored by the lookup.
 
 #### 39. `GET /agents/:key/evals/runs/:jobId/download`
-- Response `200`: `text/markdown; charset=utf-8`, `Content-Disposition: attachment; filename="eval-run-<agentKey>-<YYYY-MM-DD-HH-mm-ss>-<first 8 of jobId>.md"`. Body: the judge line, the By category and By criterion tables, summary, failures, traces, answers, and the regression comparison when present; the datasource is shown by name. Format: [agents-evals](../capabilities/agents-evals/spec.md) R38, R41 and R109.
+- Response `200`: `text/markdown; charset=utf-8`, `Content-Disposition: attachment; filename="eval-run-<agentKey>-<YYYY-MM-DD-HH-mm-ss>-<first 8 of jobId>.md"`. Body: the judge line, the By category and By criterion tables, summary, failures, traces, answers, and the regression comparison when present; the datasource is shown by name. Format: [agents-evals](../capabilities/agents-evals/spec.md) R38, R41 and R152.
 - Errors (Style B): `404 "Eval run \"<jobId>\" not found"`.
 
 #### 40. `DELETE /agents/:key/evals/runs/:jobId`
@@ -517,8 +517,8 @@ interface EvalRunView {
   currentQuestion?: string; error?: string;
   startedAt: string; finishedAt?: string;
   comparison?: { previousRunId: string; regressions: {id,question}[]; improvements: {id,question}[]; unchanged: {id,question}[] };
-  judge: { mode: 'off' | 'on' | 'categories'; categories?: string[] };   // the run option (R100); { mode: 'on' } on runs saved before it
-  summary: EvalRunSummary;              // from the finished results, live while running (R104)
+  judge: { mode: 'off' | 'on' | 'categories'; categories?: string[] };   // the run option (R143); { mode: 'on' } on runs saved before it
+  summary: EvalRunSummary;              // from the finished results, live while running (R147)
 }
 type EvalStatus = 'passed' | 'failed' | 'not-scored';
 interface AssistantEvalCaseResult {
@@ -527,12 +527,12 @@ interface AssistantEvalCaseResult {
   scores: Record<string, number>;                     // per scorer id, 0..1
   checkResults: {
     id: string; description: string; score: number; passed: boolean; reason?: string;
-    status: EvalStatus;                               // 'not-scored' only for a judge check the run did not call (R101, R102)
-    criterion?: string;                               // D1…C4 (R102)
+    status: EvalStatus;                               // 'not-scored' only for a judge check the run did not call (R144, R145)
+    criterion?: string;                               // D1…C4 (R145)
   }[];
   answer: string;
   toolCalls: { name: string; input?: string; output?: string; error?: string }[];   // JSON-encoded, truncated to ~2000 chars each
-  status: EvalStatus;                                 // R103
+  status: EvalStatus;                                 // R146
   passed: boolean;                                    // status === 'passed'
   error?: string; durationMs: number;
 }
@@ -543,7 +543,7 @@ interface EvalRunSummary {
 }
 ```
 
-Runs saved before 2026-10-13 (BA-184) are served with the defaults of [agents-evals](../capabilities/agents-evals/spec.md) R100, R103 and R104: `judge` `{ mode: 'on' }`, every `status` from its `passed` flag, no `category` (counted under `uncategorised`) and no `criterion`, and a `summary` computed on read. `status` and `summary` are always present on the wire.
+Runs saved before 2026-10-13 (BA-184) are served with the defaults of [agents-evals](../capabilities/agents-evals/spec.md) R143, R146 and R147: `judge` `{ mode: 'on' }`, every `status` from its `passed` flag, no `category` (counted under `uncategorised`) and no `criterion`, and a `summary` computed on read. `status` and `summary` are always present on the wire.
 
 ### 2.7 Deep analysis
 
@@ -645,7 +645,7 @@ interface PostgresConnection { host: string; port: number; database: string; use
 - Body: `{ host, port, database, user, password?, ssl? }` (all coerced from untyped JSON). Required: non-empty `host`, `database`, `user`; `port` an integer 1..65535; `database` must not contain `"`. `password` defaults to `''`; `ssl` true only for `true` or `"true"`.
 - Response `200` (Style A): `{ ok, message, datasourceId?, datasetName?, entityCount?, createdDatabase?, seeded? }`.
   - Success messages: seedable `"Seeded <schema> on <host:port> and loaded <n> entities into dataset \"<name>\"[ — created the database]"`; register-only `"Registered <host:port>/<db> and loaded <n> entities into dataset \"<name>\" — the <name> sample ships no seed SQL, so nothing was written to the database"`.
-  - Failure messages: unknown fixture (`Unknown sample fixture "<id>"`), REST- and Databricks-kind fixtures (registered by a script, not here: [testing-data](../capabilities/testing-data/spec.md) R9, R22), field validation, connection failure, missing database that cannot be created, seed failure, and `"Missing entities after seeding|registering: <list>. ..."` (returns `ok:false` but still includes `datasourceId`, `createdDatabase`, `seeded`).
+  - Failure messages: unknown fixture (`Unknown sample fixture "<id>"`), REST- and Databricks-kind fixtures (registered by a script, not here: [testing-data](../capabilities/testing-data/spec.md) R9, R23), field validation, connection failure, missing database that cannot be created, seed failure, and `"Missing entities after seeding|registering: <list>. ..."` (returns `ok:false` but still includes `datasourceId`, `createdDatabase`, `seeded`).
 - Side effects (seedable): connects (8 s timeout); if the database is absent, creates it from the `postgres` maintenance database; **drops and recreates the sample's schema** (`DROP SCHEMA IF EXISTS "<schema>" CASCADE`) and runs the bundled SQL in batches (120 s statement timeout); upserts a datasource named after the fixture (reusing the existing id when present); forces an inventory refresh; saves the fixture's dataset (with sampled values and join graph, same as `POST /datasets`). Register-only fixtures skip the seed and require the data to exist already.
 
 #### 57. `DELETE /testing-data/:fixtureId`
@@ -1224,9 +1224,9 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
 | `ORG_SCIM_TOKEN` | org server config | The SCIM bearer token given to the identity provider. At least 32 characters (shorter is a startup error). Required for org server mode. Never logged. | unset |
 | `ORG_BOOTSTRAP_ADMINS` | org server config | Comma-separated user names that always hold Platform admin (admin R18), matched against the directory `userName`: for Entra ID the UPN (`preferred_username`, SCIM `userName`), which usually looks like an email. Never matched against the email. Optional; blanks ignored, case-insensitive. | unset |
 | `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` and `mastra/evals/validate-eval-sets.ts` (CLI eval scripts only) | Comma-separated dataset names to run the assistant evals, or validate a set's reference queries, against. Required by both scripts. | none |
-| `EVAL_SET` | the same two scripts | The id of one eval set ([agents-evals](../capabilities/agents-evals/spec.md) R11). Required by the validator (R66); optional for the run, which without it selects every set (R67). | unset |
-| `EVAL_JUDGE` | `mastra/evals/run-assistant-evals.ts` | The run's judge option ([agents-evals](../capabilities/agents-evals/spec.md) R100, R110): `off`, `on` or `categories`. Any other value is refused before the backend boots. | `off` |
-| `EVAL_JUDGE_CATEGORIES` | the same script | With `EVAL_JUDGE=categories`, the categories to judge, comma-separated (blanks ignored), each one of the eighteen of [data-model.md](data-model.md) 4.8. Required and non-empty then; ignored otherwise. | unset |
+| `EVAL_SET` | the same two scripts | The id of one eval set ([agents-evals](../capabilities/agents-evals/spec.md) R11). Required by the validator (R109); optional for the run, which without it selects every set (R110). | unset |
+| `EVAL_JUDGE` | `mastra/evals/run-assistant-evals.ts` | The run's judge option ([agents-evals](../capabilities/agents-evals/spec.md) R143, R153): `off`, `on` or `categories`. Any other value is refused before the backend boots. | `off` |
+| `EVAL_JUDGE_CATEGORIES` | the same script | With `EVAL_JUDGE=categories`, the categories to judge, comma-separated (blanks ignored), each one of the eighteen of [data-model.md](data-model.md) 4.9. Required and non-empty then; ignored otherwise. | unset |
 
 ### 6.2 CLI-only
 

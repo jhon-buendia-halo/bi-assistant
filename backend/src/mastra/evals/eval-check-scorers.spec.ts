@@ -1,5 +1,5 @@
 // `@mastra/evals/checks` and `@mastra/core/evals` pull in ESM-only packages
-// Jest cannot require (see eval-sets.spec.ts). These stand-ins build a scorer
+// Jest cannot require (see eval-set-files.spec.ts). These stand-ins build a scorer
 // per check with the builder chain; only the criteria are under test here.
 jest.mock('@mastra/evals/checks', () => ({
   checks: new Proxy(
@@ -23,10 +23,10 @@ jest.mock('@mastra/core/evals', () => ({
   },
 }));
 
-import { loadEvalSets } from './eval-sets';
+import { loadEvalSets } from './eval-set-files';
 import { toAssistantEvalSets } from './eval-check-scorers';
 
-describe('toAssistantEvalSets criteria (agents-evals R102)', () => {
+describe('toAssistantEvalSets criteria (agents-evals R145)', () => {
   const definitions = loadEvalSets();
   const sets = toAssistantEvalSets(definitions);
 

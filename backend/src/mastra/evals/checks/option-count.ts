@@ -3,7 +3,7 @@ import type { DeterministicCheck } from './check';
 import { callsOf } from './turn';
 
 /**
- * `optionCount` (agents-evals R76, criterion I5): at most one clarification,
+ * `optionCount` (agents-evals R119, criterion I5): at most one clarification,
  * and that one offers 2 to 4 distinct options ("one short question with 2-4
  * concrete options"). Whether the options are grounded in the data is the
  * judge's part (research 2.3); whether the turn had to ask is `calledTool`'s.

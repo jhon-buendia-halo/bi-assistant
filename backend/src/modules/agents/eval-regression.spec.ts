@@ -95,7 +95,7 @@ describe('computeRegressionDiff', () => {
     ]);
   });
 
-  it('skips a question not scored in either run (R40, R103)', () => {
+  it('skips a question not scored in either run (R40, R146)', () => {
     const notScored = (id: string): ComparableCaseResult => ({
       id,
       question: `question ${id}`,

@@ -10,8 +10,8 @@ import {
   requiredEntities,
   SAMPLE_FIXTURES,
 } from '../../modules/testing-data/fixtures/registry';
-import { loadEvalSets } from './eval-sets';
-import type { EvalSetDefinition } from './eval-sets';
+import { loadEvalSets } from './eval-set-files';
+import type { EvalSetDefinition } from './eval-set-files';
 import { RESULT_SET_ROW_LIMIT, runReferenceSql } from './result-set-check';
 import {
   referenceOutsideDatasets,
@@ -148,7 +148,7 @@ describe('eval:validate', () => {
     expect(run.mock.calls[0][0]).toContain('FROM api.world_cup.tournaments');
   });
 
-  describe('references read only dataset entities (R66, BA-183)', () => {
+  describe('references read only dataset entities (R109, BA-183)', () => {
     const GOLDEN = loadEvalSets().find((set) => set.id === 'world-cup-golden')!;
 
     it('fails a reference reading a table the datasets lack, without running it', async () => {
@@ -236,7 +236,7 @@ describe('eval:validate', () => {
   });
 });
 
-describe('eval:validate on a Databricks set (agents-evals R148)', () => {
+describe('eval:validate on a Databricks set (agents-evals R191)', () => {
   const DBX_ONLY = loadEvalSets().find(
     (set) => set.id === 'world-cup-databricks-only',
   )!;

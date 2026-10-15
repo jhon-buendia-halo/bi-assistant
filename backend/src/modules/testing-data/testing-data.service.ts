@@ -206,7 +206,7 @@ export class TestingDataService {
     }
     if (fixture.datasourceKind === 'databricks') {
       // The panel is a PostgreSQL client; a Databricks sample is loaded into
-      // Unity Catalog and registered by its own script (testing-data R22).
+      // Unity Catalog and registered by its own script (testing-data R23).
       const source = databricksSource(fixture)?.id ?? fixture.id;
       return {
         ok: false,

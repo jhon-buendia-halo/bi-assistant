@@ -1,7 +1,7 @@
 /**
  * Generator for the `supply_chain` synthetic eval fixture.
  *
- * Writes `backend/src/modules/testing-data/fixtures/005_supply_chain.sql`, the Testing Data
+ * Writes `backend/src/modules/testing-data/fixtures/006_supply_chain.sql`, the Testing Data
  * seed (`docker/postgres/init/006_supply_chain.sql` on feat/engine-eval-loop) from one hard-coded seed,
  * so the output is byte-identical on every run and every hand-verified
  * `expectedSql` in the eval set stays valid. Every random draw comes from the
@@ -37,7 +37,7 @@ const OUTPUT_PATH = join(
   __dirname,
   '..', '..', '..',
   'backend', 'src', 'modules', 'testing-data', 'fixtures',
-  '005_supply_chain.sql',
+  '006_supply_chain.sql',
 );
 
 const WINDOW_START = '2024-01-01';

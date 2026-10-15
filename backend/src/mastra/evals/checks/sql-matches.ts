@@ -3,7 +3,7 @@ import type { DeterministicCheck, PatternArgs } from './check';
 import { executedStatements, quote } from './turn';
 
 /**
- * `sqlMatches` (agents-evals R78, no default criterion): a pattern the SQL
+ * `sqlMatches` (agents-evals R121, no default criterion): a pattern the SQL
  * that ran must contain, such as the column a fact is encoded in or a
  * default filter's predicate. The file names the criterion it serves.
  */

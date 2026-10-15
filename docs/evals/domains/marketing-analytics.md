@@ -6,7 +6,7 @@ A synthetic eval domain shaped on the marketing-insight product (BA-9 plan [3.4]
 |---|---|
 | Fixture and set id | `marketing-analytics` |
 | Schema and database | `marketing_analytics`, in its own database `marketing_analytics` on the shared server |
-| Seed | `backend/src/modules/testing-data/fixtures/007_marketing_analytics.sql` (about 0.66 MB) |
+| Seed | `backend/src/modules/testing-data/fixtures/008_marketing_analytics.sql` (about 0.66 MB) |
 | Generator | `docker/postgres/generate/marketing-analytics.ts`, seed 20261013 |
 | Planted facts | `backend/scripts/fixtures/marketing-analytics/facts.json` |
 | JSON dump | `backend/scripts/fixtures/marketing-analytics/data/`: 14 relations, gzipped, 0.16 MB, the input of the Databricks loader and the REST server ([evidence](../../../evidence/1.1.7/dump-marketing-analytics.txt)) |

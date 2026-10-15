@@ -2,11 +2,11 @@ import { findFixture } from '../../modules/testing-data/fixtures/registry';
 import { dialectProblem } from './checks/dialect';
 import { tableReferences, tokenizeSql } from './checks/sql-text';
 import { referenceInCatalog, REFERENCE_CATALOG } from './databricks-catalog';
-import { loadEvalSets, type EvalSetDefinition } from './eval-sets';
+import { loadEvalSets, type EvalSetDefinition } from './eval-set-files';
 
 /**
  * PostgreSQL constructs a Databricks reference must not carry, beyond what
- * the `dialect` check (agents-evals R74) already refuses: `::` (Databricks
+ * the `dialect` check (agents-evals R117) already refuses: `::` (Databricks
  * accepts it, but `::numeric` is DECIMAL(10,0) there and drops the fraction)
  * and functions Databricks does not have.
  */
@@ -20,11 +20,11 @@ const POSTGRES_ONLY: readonly [RegExp, string][] = [
 
 /**
  * Why a Databricks reference would not run on the loaded sample, read
- * without a warehouse (agents-evals R144): a construct of another dialect, or
+ * without a warehouse (agents-evals R187): a construct of another dialect, or
  * a table reference that is not `` `<catalog>`.<schema>.<table> `` with the
  * catalog backticked and the table one the sample loads. The catalog is the
  * canonical `evals` of the set files, or the one a reference was rewritten
- * to (R148).
+ * to (R191).
  */
 function databricksReferenceProblem(
   sql: string,
@@ -66,7 +66,7 @@ function databricksReferenceProblem(
 const SETS = loadEvalSets();
 const DATABRICKS_SETS = SETS.filter((set) => set.dialect === 'databricks');
 
-/** The set's references, as written or rewritten to `catalog` (R148). */
+/** The set's references, as written or rewritten to `catalog` (R191). */
 function problems(
   set: EvalSetDefinition,
   catalog: string = REFERENCE_CATALOG,
@@ -85,7 +85,7 @@ function problems(
   });
 }
 
-describe('the static check of a Databricks reference (agents-evals R144)', () => {
+describe('the static check of a Databricks reference (agents-evals R187)', () => {
   const TABLES = ['matches', 'tournaments'];
   it('passes a backticked three-part reference in Databricks SQL', () => {
     expect(
@@ -147,7 +147,7 @@ describe('the static check of a Databricks reference (agents-evals R144)', () =>
   });
 });
 
-describe('the Databricks-only World Cup set (agents-evals R145 to R147)', () => {
+describe('the Databricks-only World Cup set (agents-evals R188 to R190)', () => {
   const set = SETS.find(
     (candidate) => candidate.id === 'world-cup-databricks-only',
   );
@@ -244,7 +244,7 @@ describe('the Databricks-only World Cup set (agents-evals R145 to R147)', () => 
 });
 
 describe('every Databricks reference of every set', () => {
-  it('runs in another catalog once rewritten: every table then names that catalog, backticked (R148)', () => {
+  it('runs in another catalog once rewritten: every table then names that catalog, backticked (R191)', () => {
     for (const catalog of ['dev_sandbox', 'team-data']) {
       expect(
         DATABRICKS_SETS.flatMap((set) =>

@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { loadEvalSets } from '../eval-sets';
-import type { EvalCaseDefinition, EvalSetDefinition } from '../eval-sets';
+import { loadEvalSets } from '../eval-set-files';
+import type { EvalCaseDefinition, EvalSetDefinition } from '../eval-set-files';
 import {
   DETERMINISTIC_CHECKS,
   isDeterministicCheckType,
@@ -12,7 +12,7 @@ import type { CheckVerdict } from './check';
 /**
  * The checks on real traces: the six run records of the baseline on main
  * (evidence/1.1.2/baseline, gpt-4o-mini, 2026-10-13), scored offline with
- * the checks the set files attach (agents-evals R82). The records keep tool
+ * the checks the set files attach (agents-evals R125). The records keep tool
  * inputs and outputs clipped at 2,000 characters (R33), which the turn model
  * reads as far as the clip allows.
  */

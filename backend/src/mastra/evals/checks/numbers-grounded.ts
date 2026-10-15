@@ -32,7 +32,7 @@ function escape(text: string): string {
 }
 
 /**
- * The numbers an answer states (R71): fenced code, inline code, ordered-list
+ * The numbers an answer states (R114): fenced code, inline code, ordered-list
  * markers and the `ignore` phrases removed first; signs ignored.
  */
 export function statedNumbers(
@@ -161,7 +161,7 @@ function near(a: number, b: number, tolerance: number): boolean {
   return Math.abs(a - b) <= tolerance;
 }
 
-/** Is one stated number grounded (R71)? */
+/** Is one stated number grounded (R114)? */
 export function isGrounded(
   stated: StatedNumber,
   questionNumbers: number[],
@@ -190,7 +190,7 @@ export function isGrounded(
 }
 
 /**
- * `numbersGrounded` (agents-evals R71, criterion G1): every number in the
+ * `numbersGrounded` (agents-evals R114, criterion G1): every number in the
  * answer is in the question or follows from what a tool returned this turn.
  * It catches an invented figure; it cannot catch a real figure given to the
  * wrong subject (research 2.3).

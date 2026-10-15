@@ -1,7 +1,7 @@
 /**
  * Generator for the synthetic clinical-genomics fixture (`genomics` schema).
  *
- * Writes `backend/src/modules/testing-data/fixtures/004_genomics.sql`, the Testing Data
+ * Writes `backend/src/modules/testing-data/fixtures/005_genomics.sql`, the Testing Data
  * seed (`docker/postgres/init/003_genomics.sql` on feat/engine-eval-loop). Every random draw comes from a
  * single seeded `Rng`, so the SQL is byte-identical on every run and a
  * hand-verified `expectedSql` in the eval set stays valid across regenerations.
@@ -29,7 +29,7 @@ const OUTPUT_PATH = join(
   __dirname,
   '..', '..', '..',
   'backend', 'src', 'modules', 'testing-data', 'fixtures',
-  '004_genomics.sql',
+  '005_genomics.sql',
 );
 
 const SUBJECT_TOTAL = 120;

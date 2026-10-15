@@ -28,7 +28,7 @@ export function evaluateRun(
  * runner's `checkReason()` turns a known `preprocessStepResult` shape into a
  * sentence and falls back to the scorer's `reason` only when there is none,
  * so leaving `preprocess` empty makes the reported reason exactly the one
- * the check wrote (agents-evals R68).
+ * the check wrote (agents-evals R111).
  */
 export function checkScorer(
   check: DeterministicCheck<any>,

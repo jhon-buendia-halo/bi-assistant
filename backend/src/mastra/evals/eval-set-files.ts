@@ -29,7 +29,7 @@
  * - `databricks` reads `<catalog>.<schema>.<table>`, written with the
  *   canonical catalog backticked (`` `evals`.world_cup.matches ``); where it
  *   runs, `databricks-catalog.ts` rewrites `` `evals`. `` to the selected
- *   datasets' catalog (agents-evals R148).
+ *   datasets' catalog (agents-evals R191).
  */
 import { SAMPLE_FIXTURES } from '../../modules/testing-data/fixtures/registry';
 import type { ResultSetCheckOptions } from './result-set-check';
@@ -115,7 +115,7 @@ export type EvalCriterion = (typeof EVAL_CRITERIA)[number];
  * Check types: the six `@mastra/evals/checks` functions of the same name, so
  * their scorer ids and descriptions are the ones the Evals tab and stored
  * runs already show, then the deterministic checks of `./checks/`
- * (agents-evals R68 to R80). `eval-check-scorers.ts` builds both.
+ * (agents-evals R111 to R123). `eval-check-scorers.ts` builds both.
  */
 export const EVAL_CHECK_TYPES = [
   'includes',
@@ -569,7 +569,7 @@ function parseCase(
   const expectedSql = parseExpectedSql(file, where, raw.expectedSql, dialects);
   checks.forEach((check, index) => {
     if (!isDeterministicCheckType(check.type)) return;
-    // `usesEntities` without entities reads them from the reference (R81).
+    // `usesEntities` without entities reads them from the reference (R124).
     const problem = DETERMINISTIC_CHECKS[check.type].validateCase?.(
       (check.args ?? {}) as Json,
       expectedSql,
@@ -646,7 +646,7 @@ function parseChecks(
       );
     }
     // A deterministic check measures its own criterion unless the file says
-    // otherwise (R81); the Mastra helpers have none.
+    // otherwise (R124); the Mastra helpers have none.
     const criterion =
       stated ??
       (isDeterministicCheckType(type)

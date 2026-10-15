@@ -74,7 +74,7 @@ export function runVerdict(run: EvalRunView): EvalStatus | 'running' {
 }
 
 /**
- * A run's tables by category and criterion (agents-evals R104, R108): its
+ * A run's tables by category and criterion (agents-evals R147, R151): its
  * summary once a question has finished, which the backend keeps current
  * while the run goes and recomputes on every read. Null before the first
  * question finishes, or if a summary is missing.

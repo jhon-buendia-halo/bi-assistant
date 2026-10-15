@@ -114,7 +114,7 @@ describe('eval regression baseline scope', () => {
   });
 });
 
-describe('runs saved before BA-184 are read with defaults (R100, R103, R104)', () => {
+describe('runs saved before BA-184 are read with defaults (R143, R146, R147)', () => {
   const old = {
     jobId: 'old',
     agentKey: 'assistant',

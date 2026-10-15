@@ -1,4 +1,4 @@
-import type { EvalDialect } from '../eval-sets';
+import type { EvalDialect } from '../eval-set-files';
 import { fail, PASS } from './check';
 import type { DeterministicCheck } from './check';
 import { withoutLiterals } from './sql-text';
@@ -12,7 +12,7 @@ export const DIALECT_NAMES: Readonly<Record<EvalDialect, string>> = {
 };
 
 /**
- * Constructs each dialect cannot run (agents-evals R74), matched on the
+ * Constructs each dialect cannot run (agents-evals R117), matched on the
  * statement with comments removed and string literals emptied. The SQLite
  * list is pinned against the engine the REST connector bundles
  * (`better-sqlite3`) by `dialect.spec.ts`: each one fails to prepare there.
@@ -62,7 +62,7 @@ export function dialectProblem(
 }
 
 /**
- * `dialect` (agents-evals R74, criterion I6): every statement the assistant
+ * `dialect` (agents-evals R117, criterion I6): every statement the assistant
  * wrote fits the set's dialect, so the same question is held to SQLite on
  * the REST set and to PostgreSQL on the World Cup set.
  */

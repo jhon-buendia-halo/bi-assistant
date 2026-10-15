@@ -1,17 +1,17 @@
 /**
- * What every deterministic check is (agents-evals R68): a pure function of a
+ * What every deterministic check is (agents-evals R111): a pure function of a
  * recorded turn with a fixed id, name and default criterion, the arguments a
  * question bank file may give it, and a description built from them. The
  * Mastra scorer around it is `check-scorer.ts`; the registry is `index.ts`.
  *
  * Pure module: types and small helpers only.
  */
-import type { EvalCriterion, EvalDialect } from '../eval-sets';
+import type { EvalCriterion, EvalDialect } from '../eval-set-files';
 import type { CheckTurn } from './turn';
 
 /** What a check knows besides the turn: bound when the set is built. */
 export interface CheckContext {
-  /** The set's dialect (R63), for `dialect` and `qualifiedNames`. */
+  /** The set's dialect (R106), for `dialect` and `qualifiedNames`. */
   dialect: EvalDialect;
   /** The case's reference query in that dialect, for `usesEntities`. */
   expectedSql?: string;

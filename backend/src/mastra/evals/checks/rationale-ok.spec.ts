@@ -28,7 +28,7 @@ const turn = (...toolCalls: CheckToolCall[]): CheckTurn => ({
 
 const verdict = (t: CheckTurn) => rationaleOk.evaluate(t, {}, context);
 
-describe('rationaleOk (R72, I3)', () => {
+describe('rationaleOk (R115, I3)', () => {
   it('passes one or two business sentences on every SQL and sampling call', () => {
     // Rationales the baseline recorded.
     expect(

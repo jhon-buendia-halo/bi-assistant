@@ -1,7 +1,7 @@
 /**
  * Loads a sample fixture's JSON dump into a Databricks Unity Catalog schema,
  * checks the row counts, and registers the sample's datasource and dataset in
- * a RUNNING backend (BA-9 Step 2, BA-186; testing-data R22 to R24). Runbook:
+ * a RUNNING backend (BA-9 Step 2, BA-186; testing-data R23 to R25). Runbook:
  * docs/evals/databricks-vdi.md.
  *
  *   npm run fixture:databricks -- --fixture world-cup --dry-run
@@ -130,7 +130,7 @@ function targetFor(fixture: SampleFixture): LoadTarget {
     schema: process.env['DATABRICKS_SCHEMA']?.trim() || fixture.schema,
   };
   // Any catalog works: the references run in the dataset's catalog
-  // (agents-evals R148). The schema does not: the preflight and the
+  // (agents-evals R191). The schema does not: the preflight and the
   // references name the sample's own schema.
   if (target.schema !== fixture.schema) {
     console.warn(

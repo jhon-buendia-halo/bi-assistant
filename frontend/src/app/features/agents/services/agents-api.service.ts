@@ -68,7 +68,7 @@ export interface AgentEvalCheck {
   description: string;
 }
 
-/** Which half of a set a question belongs to (data-model 4.8). */
+/** Which half of a set a question belongs to (data-model 4.9). */
 export type AgentEvalSplit = 'dev' | 'held-out';
 
 export interface AgentEvalCase {

@@ -1,6 +1,6 @@
 /**
- * The deterministic checks (agents-evals R68 to R80), by the `type` a
- * question bank file names. Pure: the loader (`eval-sets.ts`) reads the arg
+ * The deterministic checks (agents-evals R111 to R123), by the `type` a
+ * question bank file names. Pure: the loader (`eval-set-files.ts`) reads the arg
  * keys and default criteria from here, and `eval-check-scorers.ts` wraps
  * each in a Mastra scorer through `check-scorer.ts`.
  */

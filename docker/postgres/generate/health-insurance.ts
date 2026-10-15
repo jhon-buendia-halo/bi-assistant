@@ -1,7 +1,7 @@
 /**
  * Generator for the `health_insurance` synthetic eval fixture.
  *
- * Writes `backend/src/modules/testing-data/fixtures/003_health_insurance.sql`, the Testing Data
+ * Writes `backend/src/modules/testing-data/fixtures/004_health_insurance.sql`, the Testing Data
  * seed (`docker/postgres/init/002_health_insurance.sql` on feat/engine-eval-loop) from one hard-coded
  * seed, so the output is byte-identical on every run and every hand-verified
  * `expectedSql` in the eval set stays valid. Every random draw comes from the
@@ -33,7 +33,7 @@ const OUTPUT_PATH = join(
   __dirname,
   '..', '..', '..',
   'backend', 'src', 'modules', 'testing-data', 'fixtures',
-  '003_health_insurance.sql',
+  '004_health_insurance.sql',
 );
 
 const TOTAL_CLAIMS = 1200;

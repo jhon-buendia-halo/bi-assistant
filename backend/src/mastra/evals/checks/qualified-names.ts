@@ -1,11 +1,11 @@
-import type { EvalDialect } from '../eval-sets';
+import type { EvalDialect } from '../eval-set-files';
 import { fail, PASS } from './check';
 import type { DeterministicCheck } from './check';
 import { tableReferences } from './sql-text';
 import { quote, writtenStatements } from './turn';
 
 /**
- * Name parts a table reference needs per dialect (agents-evals R75). On
+ * Name parts a table reference needs per dialect (agents-evals R118). On
  * PostgreSQL the catalog is the database, which the prompt lets the
  * assistant leave out; the REST connector only resolves `api.<schema>.<table>`.
  */
@@ -18,7 +18,7 @@ export const QUALIFIED_PARTS: Readonly<
 };
 
 /**
- * `qualifiedNames` (agents-evals R75, criterion I6): "Always use
+ * `qualifiedNames` (agents-evals R118, criterion I6): "Always use
  * fully-qualified catalog.schema.table names", read on every statement the
  * assistant wrote.
  */

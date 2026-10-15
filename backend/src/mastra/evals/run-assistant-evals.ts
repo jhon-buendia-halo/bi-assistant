@@ -8,7 +8,7 @@ import { SessionsService } from '../../modules/sessions/sessions.service';
 import { KnowledgeService } from '../../modules/knowledge/knowledge.service';
 import { ASSISTANT_EVAL_SETS, runAssistantEvals } from './assistant.evals';
 import type { AssistantEvalCaseResult } from './assistant.evals';
-import { caseIdsForSet } from './eval-sets';
+import { caseIdsForSet } from './eval-set-files';
 import { judgeLabel, judgeSettingFromEnv } from './judge-option';
 import type { EvalJudgeSetting } from './judge-option';
 import { renderSummaryMarkdown, summarizeEvalResults } from './eval-summary';
@@ -30,7 +30,7 @@ import type { EvalStatus } from './eval-summary';
  * one-sample rule refuses while the sets span several samples.
  *
  * `EVAL_JUDGE` (`off` by default, `on` or `categories`) and
- * `EVAL_JUDGE_CATEGORIES` set the judge option (agents-evals R110). With it
+ * `EVAL_JUDGE_CATEGORIES` set the judge option (agents-evals R153). With it
  * off, judge checks are not scored and no judge call is made.
  */
 async function main(): Promise<void> {
@@ -125,7 +125,7 @@ const PROGRESS_MARK: Readonly<Record<EvalStatus, string>> = {
 };
 
 /**
- * 0 only when no question failed and at least one passed (R110): a
+ * 0 only when no question failed and at least one passed (R153): a
  * judge-only question left unscored is a gap that does not fail the run, and
  * a run with nothing scored does not pass.
  */

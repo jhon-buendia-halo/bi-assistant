@@ -274,7 +274,7 @@ describe('AgentDetail evals', () => {
     ).toContain('Not scored');
   });
 
-  it('keeps a listed run current while it goes (R108)', () => {
+  it('keeps a listed run current while it goes (R151)', () => {
     const going: EvalRunView = {
       ...FINISHED_RUN,
       status: 'running',

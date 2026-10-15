@@ -79,8 +79,8 @@ import {
   evalSetById,
   loadEvalSets,
   parseEvalSetFile,
-} from './eval-sets';
-import type { EvalSetFileSource } from './eval-sets';
+} from './eval-set-files';
+import type { EvalSetFileSource } from './eval-set-files';
 
 /**
  * The 30 cases as `assistant.evals.ts` built them in TypeScript, captured from
@@ -122,7 +122,7 @@ describe('eval set files', () => {
   it('keep every question, reference and check the TypeScript defined (a superset since BA-183)', () => {
     type SnapshotSet = ReturnType<typeof snapshotOf>[number];
     const before = BEFORE.sets as SnapshotSet[];
-    // The sets the snapshot holds, by id: variants added since (R160) sit
+    // The sets the snapshot holds, by id: variants added since (R203) sit
     // between them in the suite order.
     const snapshotIds = before.map((set) => set.id);
     const inSnapshot = sets.filter((set) => snapshotIds.includes(set.id));
@@ -142,7 +142,7 @@ describe('eval set files', () => {
         expect(evalCase).toEqual(beforeCase);
         // Every check of the snapshot is still there, with the same id and
         // the same arguments (the description carries them); BA-183 only
-        // added checks (agents-evals R82).
+        // added checks (agents-evals R125).
         expect([evalCase.id, scorers]).toEqual([
           evalCase.id,
           expect.arrayContaining(beforeScorers),
@@ -189,7 +189,7 @@ describe('eval set files', () => {
     expect(golden.cases).toHaveLength(11);
     for (const evalCase of golden.cases) {
       // The two checks it moved with, now with their criteria, then the
-      // deterministic checks of its category (R65, R82).
+      // deterministic checks of its category (R108, R125).
       expect(evalCase.checks.slice(0, 2)).toEqual([
         {
           type: 'calledTool',
@@ -229,7 +229,7 @@ describe('eval set files', () => {
     }
   });
 
-  it('holds out about 30% of every synthetic domain set, each bank on PostgreSQL first (agents-evals R90, R160)', () => {
+  it('holds out about 30% of every synthetic domain set, each bank on PostgreSQL first (agents-evals R133, R203)', () => {
     const DOMAIN_FILES = [
       'finance.json',
       'health-insurance.json',
@@ -249,7 +249,7 @@ describe('eval set files', () => {
       expect([set.id, share >= 0.25 && share <= 0.4]).toEqual([set.id, true]);
     }
     // A bank's first variant is its PostgreSQL set; a REST or Databricks
-    // variant repeats its questions on the same rows (R160).
+    // variant repeats its questions on the same rows (R203).
     for (const file of DOMAIN_FILES) {
       const first = domains.find((set) => set.file === file);
       expect([file, first?.id, first?.dialect]).toEqual([
@@ -268,7 +268,7 @@ describe('eval set files', () => {
   });
 });
 
-describe('the deterministic checks on the moved sets (agents-evals R82)', () => {
+describe('the deterministic checks on the moved sets (agents-evals R125)', () => {
   const MOVED = ['world-cup.json', 'formula-1.json', 'world-cup-golden.json'];
   const moved = loadEvalSets().filter((set) => MOVED.includes(set.file));
   const ANSWER = [
@@ -608,7 +608,7 @@ describe('the set loader expands variants', () => {
   });
 });
 
-describe('the deterministic checks in a set file (R68, R81)', () => {
+describe('the deterministic checks in a set file (R111, R124)', () => {
   const withCheck = (check: unknown, fields: Record<string, unknown> = {}) =>
     parseEvalSetFile(
       file({ cases: [evalCase({ checks: [check], ...fields })] }),
@@ -721,7 +721,7 @@ describe('choosing one set by id (EVAL_SET)', () => {
   });
 });
 
-describe('the REST-only set (agents-evals R120 to R124, BA-187)', () => {
+describe('the REST-only set (agents-evals R163 to R167, BA-187)', () => {
   const set = evalSetById(loadEvalSets(), 'world-cup-rest-connector');
 
   it('holds twelve dev questions on the World Cup REST sample, in SQLite', () => {
@@ -753,7 +753,7 @@ describe('the REST-only set (agents-evals R120 to R124, BA-187)', () => {
   it('gives every question but the refused one a SQLite reference over api.world_cup, and names a criterion on every check', () => {
     for (const evalCase of set.cases) {
       if (evalCase.tags.includes('rest:down')) {
-        // R123: it could never run on the variant it needs.
+        // R166: it could never run on the variant it needs.
         expect(evalCase.expectedSql).toBeUndefined();
         expect(evalCase.checks.map((check) => check.type)).not.toContain(
           'noToolErrors',

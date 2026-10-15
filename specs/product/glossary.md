@@ -78,7 +78,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Interpretation.** A one-line, deterministic summary of how an answer was produced (which entities, what kind of query), built by the system at save time. Never model output.
 
-**Judge option.** Whether an *eval run* calls the LLM judge: `off` (the default), `on`, or `categories`, which judges only the questions of the listed categories. A judge check the run does not call is *not scored*. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R100.
+**Judge option.** Whether an *eval run* calls the LLM judge: `off` (the default), `on`, or `categories`, which judges only the questions of the listed categories. A judge check the run does not call is *not scored*. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R143.
 
 **Knowledge entry.** A curated piece of business knowledge the assistant treats as authoritative. Three kinds: `term` (glossary definition, with optional synonyms and entity bindings), `instruction` (a standing rule) and `default_filter`. Scoped globally, to a dataset or to a datasource. Only enabled entries reach the assistant, within a size budget per turn. Source is `user` or `mined` (drafted by the bootstrap agent, saved disabled for review). The UI says "Knowledge". Code and Jira call these *snippets*.
 
@@ -104,7 +104,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Mined entry.** A *knowledge entry* with source `mined`.
 
-**Not scored.** The verdict of an eval check that was not run because the *judge option* was off for its question, and of an eval question none of whose checks was scored. It is never counted as a pass. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R101 to R103.
+**Not scored.** The verdict of an eval check that was not run because the *judge option* was off for its question, and of an eval question none of whose checks was scored. It is never counted as a pass. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R144 to R146.
 
 **Official agent.** The app's own *assistant*, shown in the agent hub as the Official agent. It is the only built-in agent that can start a chat.
 

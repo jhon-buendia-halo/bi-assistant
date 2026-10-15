@@ -24,7 +24,7 @@ const turn = (...toolCalls: CheckToolCall[]): CheckTurn => ({
   toolCalls,
 });
 
-describe('sqlMatches (R78)', () => {
+describe('sqlMatches (R121)', () => {
   it('passes when one successful query matches', () => {
     expect(
       sqlMatches.evaluate(

@@ -1,13 +1,13 @@
 /**
  * Question and check statuses, and a run's summary by status, category and
- * criterion (agents-evals R102 to R104, R109). A not-scored check (the judge
+ * criterion (agents-evals R145 to R147, R152). A not-scored check (the judge
  * was off for its question) is a gap: it never makes a question pass, and a
  * question with no scored check is not scored rather than passed.
  *
  * Pure module: no Nest, no Mastra, no model. The runner, the run service, the
  * report and the command line all read it.
  */
-import { EVAL_CATEGORIES, EVAL_CRITERIA } from './eval-sets';
+import { EVAL_CATEGORIES, EVAL_CRITERIA } from './eval-set-files';
 // Type-only: erased at compile time, so no runtime edge to the agent stack.
 import type {
   AssistantEvalCaseResult,
@@ -62,7 +62,7 @@ export function resultStatusOf(result: HasStatus): EvalStatus {
 }
 
 /**
- * A question's status from its checks (R103): failed when its run threw;
+ * A question's status from its checks (R146): failed when its run threw;
  * not scored when no check was scored; passed when every scored check passed.
  */
 export function questionStatus(
@@ -91,7 +91,7 @@ export type StoredEvalCaseResult = Omit<
   checkResults?: StoredEvalCheckResult[];
 };
 
-/** Fill the statuses a result saved before BA-184 lacks (R103). */
+/** Fill the statuses a result saved before BA-184 lacks (R146). */
 export function withStatusDefaults(
   result: StoredEvalCaseResult,
 ): AssistantEvalCaseResult {
@@ -128,7 +128,7 @@ interface SummarisableResult extends HasStatus {
   checkResults?: readonly (HasStatus & { criterion?: string })[];
 }
 
-/** A run's summary of its finished results (R104). */
+/** A run's summary of its finished results (R147). */
 export function summarizeEvalResults(
   results: readonly SummarisableResult[],
 ): EvalRunSummary {
@@ -189,7 +189,7 @@ function cell(text: string): string {
 
 /**
  * `## By category` and `## By criterion`, as the Markdown report and the
- * command line print them (R109, R110).
+ * command line print them (R152, R153).
  */
 export function renderSummaryMarkdown(summary: EvalRunSummary): string[] {
   const lines = ['## By category', ''];

@@ -1,7 +1,7 @@
 /**
  * Generator for the `finance` synthetic eval fixture (BA-185).
  *
- * Writes `backend/src/modules/testing-data/fixtures/006_finance.sql`, the
+ * Writes `backend/src/modules/testing-data/fixtures/007_finance.sql`, the
  * Testing Data seed, and `backend/scripts/fixtures/finance/facts.json`, the
  * planted truths every reference query is checked against. Every random draw
  * comes from the two seeded `Rng`s below — never `Math.random()`, never
@@ -34,7 +34,7 @@ const OUTPUT_PATH = join(
   __dirname,
   '..', '..', '..',
   'backend', 'src', 'modules', 'testing-data', 'fixtures',
-  '006_finance.sql',
+  '007_finance.sql',
 );
 const FACTS_PATH = join(
   __dirname,

@@ -56,7 +56,7 @@ Priya is a reporting analyst in the bank's finance team. She answers questions f
 
 ## The data
 
-As of 2025-12-31. Schema `finance`, 15 tables and 2 views, written by `docker/postgres/generate/finance.ts` (seeds 20260929 and 20261013) into `backend/src/modules/testing-data/fixtures/006_finance.sql` (about 1.1 MB), with the planted truths in `backend/scripts/fixtures/finance/facts.json`.
+As of 2025-12-31. Schema `finance`, 15 tables and 2 views, written by `docker/postgres/generate/finance.ts` (seeds 20260929 and 20261013) into `backend/src/modules/testing-data/fixtures/007_finance.sql` (about 1.1 MB), with the planted truths in `backend/scripts/fixtures/finance/facts.json`.
 
 - **Retail banking** (the branch's banking domain, row for row): `regions`, `branches`, `customers` (90), `account_types`, `accounts` (200, 6 test), `cards`, `fx_rates` (EUR and GBP by month), `transactions` (5,400 in 2024 and 2025), `loans` (110), `loan_payments`; views `v_accounts`, `v_transactions`.
 - **Wealth management** (new): `fiscal_periods` (36 fiscal months, July 2023 to June 2026), `securities` (28: shares, bonds, funds, a cash sweep), `portfolios` (46, 3 test), `holdings` (quarter-end snapshots from 2024-03-31 to 2025-12-31), `fees` (advisory, custody, performance and trading fees covering January 2024 to December 2025).

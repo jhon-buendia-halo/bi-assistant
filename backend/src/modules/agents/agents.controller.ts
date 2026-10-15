@@ -92,7 +92,7 @@ export class AgentsController {
   /**
    * Start a run against one datasource. Long-running: poll the job below.
    * `judge` (`off` when absent) and `judgeCategories` are checked by the
-   * service, after the dataset preflight (agents-evals R19 step 8, R100).
+   * service, after the dataset preflight (agents-evals R19 step 8, R143).
    */
   @Post(':key/evals/run')
   @RequirePermission('create-agents')

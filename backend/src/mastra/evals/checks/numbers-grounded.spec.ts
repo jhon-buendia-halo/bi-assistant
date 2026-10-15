@@ -26,7 +26,7 @@ function turn(
 const verdict = (t: CheckTurn, args = {}) =>
   numbersGrounded.evaluate(t, args, context);
 
-describe('numbersGrounded (R71, G1)', () => {
+describe('numbersGrounded (R114, G1)', () => {
   const france14 = rows([{ team: 'France', goals: 14 }]);
 
   it('passes when the figure is in the fetched rows, and fails an invented one (plan 3.5 example)', () => {

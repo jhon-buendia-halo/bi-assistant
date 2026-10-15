@@ -10,7 +10,7 @@ import type { ToolDataRecord } from '../../modules/sessions/entities/session.ent
 import { toolDataRecord } from '../../modules/sessions/turn-data';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { loadEvalSets } from './eval-sets';
+import { loadEvalSets } from './eval-set-files';
 
 function stubServices(
   overrides: Partial<DatasetToolServices> = {},
@@ -503,7 +503,7 @@ describe('runResultSetCheck', () => {
   });
 });
 
-describe('the catalog a Databricks reference runs in (agents-evals R148)', () => {
+describe('the catalog a Databricks reference runs in (agents-evals R191)', () => {
   const REFERENCE = loadEvalSets()
     .find((set) => set.id === 'world-cup-databricks-only')
     ?.cases.find((evalCase) => evalCase.id === 'dbx-only-youngest-scorer-2022')

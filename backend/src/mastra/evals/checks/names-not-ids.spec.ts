@@ -8,7 +8,7 @@ const answer = (text: string): CheckTurn => ({
   toolCalls: [],
 });
 
-describe('namesNotIds (R70, I1)', () => {
+describe('namesNotIds (R113, I1)', () => {
   // The shapes `check-answers.ts` pinned from real answers, plus the ones
   // the baseline produced ("represented by ID 2", "Team ID **6**").
   it.each([

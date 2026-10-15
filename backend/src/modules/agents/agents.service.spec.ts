@@ -222,7 +222,7 @@ describe('AgentsService (built-in and user agents)', () => {
     );
   });
 
-  it('lists the eval questions with their category and split (R106)', () => {
+  it('lists the eval questions with their category and split (R149)', () => {
     expect(ctx.service.evalSets('assistant')).toEqual([
       {
         id: 'world-cup',
