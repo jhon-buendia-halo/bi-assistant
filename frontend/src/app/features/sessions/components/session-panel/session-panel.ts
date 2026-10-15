@@ -31,15 +31,7 @@ import { InteractiveVisualPanel } from '../interactive-visual-panel/interactive-
 import { PanelDocumentView } from '../panel-document-view/panel-document-view';
 import { PanelFileView } from '../panel-file-view/panel-file-view';
 import { PanelTableView } from '../panel-table-view/panel-table-view';
-
-function slug(text: string): string {
-  return text
-    .normalize('NFKD')
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toLowerCase()
-    .slice(0, 64);
-}
+import { slug } from '../../services/slug';
 
 export type PanelDownloadFormat = 'pdf' | 'md';
 

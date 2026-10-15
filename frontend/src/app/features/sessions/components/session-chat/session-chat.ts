@@ -59,6 +59,7 @@ import {
 } from '../../../knowledge/models/knowledge.model';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
+import { slug } from '../../services/slug';
 
 /** Human-readable text for a clicked mark: its label when it has one. */
 export function selectionText(selection: DataPointSelection): string {
@@ -756,17 +757,12 @@ export class SessionChat implements OnDestroy {
     this.api.downloadDeepAnalysis(this.session().id, report.jobId).subscribe({
       next: (blob) => {
         this.reportDownloading.set(null);
-        const slug =
-          report.title
-            .normalize('NFKD')
-            .replace(/[^a-zA-Z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '')
-            .toLowerCase()
-            .slice(0, 64) || `deep-analysis-${report.jobId.slice(0, 8)}`;
+        const name =
+          slug(report.title) || `deep-analysis-${report.jobId.slice(0, 8)}`;
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${slug}.md`;
+        link.download = `${name}.md`;
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -800,16 +796,16 @@ export class SessionChat implements OnDestroy {
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
+          // The server's name for the zip (api.md #105): `link.download` wins
+          // over its Content-Disposition, so build the same one here.
           link.download = file
             ? (file.split('/').pop() ?? file)
-            : `${pkg.rfpId}${pkg.draft ? '-draft' : ''}.zip`;
+            : `rfp-${slug(pkg.title) || pkg.rfpId.slice(0, 8)}${pkg.draft ? '-draft' : ''}.zip`;
           document.body.appendChild(link);
           link.click();
           link.remove();
           setTimeout(() => URL.revokeObjectURL(url), 0);
-          this.toast.success(
-            pkg.draft ? 'RFP draft downloaded' : 'RFP package downloaded',
-          );
+          this.toast.success('RFP package downloaded');
         },
         error: (err) => {
           this.rfpDownloading.set(null);
