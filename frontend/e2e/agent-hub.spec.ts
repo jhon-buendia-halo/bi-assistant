@@ -1,3 +1,4 @@
+import path from 'node:path';
 import axe from 'axe-core';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
@@ -12,6 +13,10 @@ import {
 /** Mirrors the Feature "Agent Hub" in specs/capabilities/agents-evals/spec.md. */
 
 const ASSISTANT = 'Questions to Insights Assistant';
+/** The showcase agents in hub order (agents-evals R106). */
+const SHOWCASE_KEYS = ['benchmarking', 'lad-coe', 'strategy', 'survey'];
+const SHOWCASE_REASON = 'Showcase agent: not available to chat yet.';
+const EVIDENCE_1_15_2 = path.resolve(__dirname, '../../evidence/1.15.2');
 const HEALTH = 'Health plan analyst';
 const HEALTH_DESCRIPTION = 'Answers questions about the 2026 health plan';
 const CLAIMS = 'Claims triage';
@@ -169,10 +174,12 @@ test('filters limit the hub to one kind of agent', async ({ page }) => {
   expect(await sectionIds(page)).toEqual(['mine']);
 
   await filter(page, 'Official').click();
-  // The assistant and the RFP Builder are both Official (R1, R2).
+  // The assistant, the RFP Builder and the four showcase agents are
+  // Official; every card shows, showcase agents last (R1-R3, R106).
   await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
-  await expect(cards(page)).toHaveCount(2);
-  expect(await cardKeys(page)).toEqual(['assistant', 'rfp']);
+  await expect(cards(page)).toHaveCount(6);
+  expect(await cardKeys(page)).toEqual(['assistant', 'rfp', ...SHOWCASE_KEYS]);
+  await expect(page.getByTestId('agent-show-more-official')).toHaveCount(0);
   expect(await sectionIds(page)).toEqual(['official']);
 
   await filter(page, 'Pinned').click();
@@ -388,4 +395,73 @@ test('the hub has no detectable accessibility violations in either theme', async
     });
     expect(results.violations, theme).toEqual([]);
   }
+});
+
+test('the showcase agents are Official cards that cannot chat yet', async ({
+  page,
+}) => {
+  await openHub(page);
+  const official = section(page, 'official');
+  await expect(official.getByTestId('agent-card-survey')).toBeVisible();
+  expect(await cardKeys(official)).toEqual([
+    'assistant',
+    'rfp',
+    ...SHOWCASE_KEYS,
+  ]);
+  await expect(page.getByTestId('agent-show-more-official')).toHaveCount(0);
+  for (const key of SHOWCASE_KEYS) {
+    const card = official.getByTestId(`agent-card-${key}`);
+    await expect(card).toContainText('Owner: Official');
+    const chip = card.getByTestId(`agent-showcase-${key}`);
+    await expect(chip).toHaveText('Showcase');
+    await expect(chip).toHaveAttribute('title', SHOWCASE_REASON);
+    const start = card.getByRole('button', { name: /Start chat/ });
+    await expect(start).toBeDisabled();
+    await expect(start).toHaveAttribute('title', SHOWCASE_REASON);
+  }
+  const assistant = official.getByTestId('agent-card-assistant');
+  await expect(
+    assistant.getByRole('button', { name: /Start chat/ }),
+  ).toBeEnabled();
+  await expect(assistant.getByTestId('agent-showcase-assistant')).toHaveCount(
+    0,
+  );
+  await page.screenshot({
+    path: path.join(EVIDENCE_1_15_2, 'hub-showcase-agents.png'),
+    fullPage: true,
+  });
+});
+
+test("a showcase agent's page shows its description and System Prompt", async ({
+  page,
+}) => {
+  await openHub(page);
+  await openAgent(page, 'lad-coe', 'LAD COE Agent');
+  await expect(
+    page.getByText(
+      'The Life, Absence and Disability Center of Excellence: reviews life, disability and leave programs against the market, claims experience and leave rules.',
+    ),
+  ).toBeVisible();
+  const start = page.getByTestId('agent-start-chat');
+  await expect(start).toBeDisabled();
+  await expect(start).toHaveAttribute('title', SHOWCASE_REASON);
+  await expect(page.getByTestId('agent-showcase-reason')).toHaveText(
+    SHOWCASE_REASON,
+  );
+  // No agent-level actions: the only Edit is the System Prompt's (R97).
+  for (const name of ['Publish', 'Delete']) {
+    await expect(button(page, name)).toHaveCount(0);
+  }
+  await expect(button(page, 'Edit')).toHaveCount(1);
+  // No Chat Box: the page opens on the System Prompt (R90, R106).
+  await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
+  await expect(page.getByTestId('agent-tab-prompt')).toHaveClass(
+    /border-border-selected/,
+  );
+  await expect(
+    page.getByText('You are the LAD COE Agent of the US Health Agentic Hub'),
+  ).toBeVisible();
+  await page.screenshot({
+    path: path.join(EVIDENCE_1_15_2, 'showcase-agent-page.png'),
+  });
 });

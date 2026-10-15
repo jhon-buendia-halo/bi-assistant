@@ -556,10 +556,10 @@ Feature: Agent Hub
     And I see "The Life, Absence and Disability Center of Excellence: reviews life, disability and leave programs against the market, claims experience and leave rules."
     And "Start chat" is disabled with the title "Showcase agent: not available to chat yet."
     And I see the text "Showcase agent: not available to chat yet." beside it
-    And I see none of "Edit", "Publish" or "Delete"
+    And I see neither "Publish" nor "Delete"
     And there is no "Chat Box" tab and the "System Prompt" tab is open
     And I see the chip "Built-in" and the prompt starting "You are the LAD COE Agent of the US Health Agentic Hub"
-    And I see the button "Edit"
+    And the only "Edit" button is the System Prompt's
 
   Scenario: The hub has no detectable accessibility violations in either theme
     When I click "Agents"
