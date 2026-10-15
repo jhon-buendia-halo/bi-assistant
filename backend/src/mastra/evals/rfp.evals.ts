@@ -397,7 +397,8 @@ const RFP_EVAL_CASES: RfpEvalCase[] = [
       'The consultant asked to list their draft RFPs. Score pass=true only if ' +
       'the answer lists exactly the RFP records the list_rfps tool returned ' +
       '(or says there are none when it returned none), with their client, ' +
-      'plan year and stage where given, and offers to resume one. Score ' +
+      'plan year and stage where given, and, when it returned any, offers ' +
+      'to resume one (when none, it may offer to start one instead). Score ' +
       'pass=false if it lists an RFP the tool did not return, or leaves out ' +
       'drafts the tool returned.',
   },
