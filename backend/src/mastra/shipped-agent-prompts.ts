@@ -9,6 +9,7 @@ import {
   VISUALIZATION_PROMPT,
 } from './agents/system-prompts';
 import {
+  BENCHMARKING_PROMPT,
   LAD_COE_PROMPT,
   STRATEGY_PROMPT,
   SURVEY_PROMPT,
@@ -28,6 +29,7 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'knowledge-bootstrap': KNOWLEDGE_BOOTSTRAP_PROMPT,
   'assistant-eval-judge': EVAL_JUDGE_PROMPT,
   rfp: RFP_PROMPT,
+  benchmarking: BENCHMARKING_PROMPT,
   survey: SURVEY_PROMPT,
   'lad-coe': LAD_COE_PROMPT,
   strategy: STRATEGY_PROMPT,

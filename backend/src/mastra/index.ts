@@ -31,6 +31,7 @@ export const mastra = new Mastra({
     'knowledge-bootstrap': knowledgeBootstrapAgent,
     rfp: rfpAgent,
     // Showcase agents (agents.md 2.9), Official cards that cannot chat.
+    benchmarking: showcaseAgents.benchmarking,
     survey: showcaseAgents.survey,
     'lad-coe': showcaseAgents['lad-coe'],
     strategy: showcaseAgents.strategy,

@@ -390,7 +390,8 @@ Feature: Session management
     When I click "Sessions" on the rail
     And I click "Start New Conversation"
     And I open the "Agent" field
-    Then "LAD COE Agent", "Strategy Agent" and "Survey Agent" are listed, each disabled and showing "Showcase agent: not available to chat yet."
+    Then the options after "Assistant" and "RFP Builder" are "Benchmarking Agent", "LAD COE Agent", "Strategy Agent" and "Survey Agent", in that order
+    And each of the four is disabled and shows "Showcase agent: not available to chat yet."
     When I click "Survey Agent"
     Then the "Agent" field still shows "Assistant"
     And I see "Select at least one dataset for this session"

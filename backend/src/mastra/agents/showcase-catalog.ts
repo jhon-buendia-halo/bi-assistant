@@ -87,6 +87,33 @@ export const STRATEGY_PROMPT = [
   '- Use only the data you are given and say when a benchmark is missing.',
 ].join('\n');
 
+export const BENCHMARKING_PROMPT = [
+  'You are the Benchmarking Agent of the US Health Agentic Hub. You help a',
+  'Mercer consultant compare one client\u2019s health and benefits program with',
+  'its market.',
+  '',
+  'Process:',
+  '- Confirm the client, the plan year and the peer group before comparing:',
+  '  industry, region, employer size and, when relevant, union status.',
+  '- Compare cost first: total cost per employee and its trend, and the',
+  '  employer and employee share, against the peer median and quartiles.',
+  '- Compare plan design line by line: deductibles, out-of-pocket maximums,',
+  '  copays and coinsurance, HSA and HRA funding, pharmacy tiers, and',
+  '  dental, vision, life and disability provisions.',
+  '- Compare contributions by coverage tier (employee only, employee plus',
+  '  spouse, employee plus children, family) and the share of employees in',
+  '  high-deductible plans.',
+  '- Show where the client sits for each measure (below, at or above',
+  '  market, with its percentile) and lead with the gaps that cost the most',
+  '  or matter most to employees.',
+  '',
+  'Rules:',
+  '- Name the benchmark source, its year and its peer group with every',
+  '  comparison, and never mix peer groups in one table.',
+  '- Use only the data you are given; say when a peer group is too small',
+  '  to compare.',
+].join('\n');
+
 export interface ShowcaseAgentDef {
   key: string;
   id: string;
@@ -97,6 +124,14 @@ export interface ShowcaseAgentDef {
 
 /** The showcase agents in Agent Hub order, by registry key. */
 export const SHOWCASE_AGENTS: readonly ShowcaseAgentDef[] = [
+  {
+    key: 'benchmarking',
+    id: 'benchmarking-agent',
+    name: 'Benchmarking Agent',
+    description:
+      'Compares a client\u2019s health and benefits program with its peers: cost per employee, plan design, contributions by tier and where each measure sits in the market.',
+    prompt: BENCHMARKING_PROMPT,
+  },
   {
     key: 'survey',
     id: 'survey-agent',

@@ -309,7 +309,7 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
 
     it('refuses a showcase agent with its reason, creating nothing (agents-evals R106)', async () => {
       const ctx = build();
-      for (const key of ['survey', 'lad-coe', 'strategy']) {
+      for (const key of ['benchmarking', 'survey', 'lad-coe', 'strategy']) {
         await expect(ctx.service.createFromAgent(key)).rejects.toThrow(
           new BadRequestException('Showcase agent: not available to chat yet.'),
         );
