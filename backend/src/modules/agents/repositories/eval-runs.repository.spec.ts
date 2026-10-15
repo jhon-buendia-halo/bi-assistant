@@ -17,7 +17,7 @@ describe('eval regression baseline scope', () => {
       { jobId: 'partial', datasets: ['Core'], caseIds: ['q1'] },
       { jobId: 'baseline', datasets: ['Stats', 'Core'], caseIds: ['q1'] },
     ]);
-    const repository = new EvalRunsRepository({ find } as any);
+    const repository = new EvalRunsRepository({ find } as never);
     const baseline = await repository.mostRecentCompleted(
       'assistant',
       'current',
@@ -39,7 +39,7 @@ describe('eval regression baseline scope', () => {
         .mockResolvedValue([
           { jobId: 'other', datasets: ['F1'], caseIds: ['q1'] },
         ]),
-    } as any);
+    } as never);
     expect(
       await repository.mostRecentCompleted(
         'assistant',

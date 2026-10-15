@@ -1,8 +1,9 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
-import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
 import { BuiltinAgentPinsRepository } from './repositories/builtin-agent-pins.repository';
+import { SkillsRepository } from '../skills/repositories/skills.repository';
+import type { SkillDoc } from '../skills/entities/skill.entity';
 import { UserAgentsRepository } from './repositories/user-agents.repository';
 import {
   hasUnpublishedChanges,
@@ -24,13 +25,14 @@ function build(datasetNames: string[] = ['World Cup Core']) {
   const datasets = {
     list: jest.fn().mockResolvedValue(datasetNames.map((name) => ({ name }))),
   } as unknown as DatasetsRepository;
-  const users = new CurrentUserService();
+  const skills = new SqliteDocStore<SkillDoc>(db, 'skills');
   const service = new UserAgentsService(
     new UserAgentsRepository(agents),
-    new BuiltinAgentPinsRepository(settings, users),
+    new BuiltinAgentPinsRepository(settings),
     datasets,
+    new SkillsRepository(skills),
   );
-  return { db, service, settings, users };
+  return { db, service, settings, skills };
 }
 
 describe('normalizeAgentConfig', () => {
@@ -89,6 +91,16 @@ describe('normalizeAgentConfig', () => {
     expect(config).not.toHaveProperty('model');
     expect(config).not.toHaveProperty('reasoningEffort');
   });
+
+  it('ignores the tools and skills of the request (derived from the links, ADR-0024)', () => {
+    const config = normalizeAgentConfig({
+      name: 'A',
+      tools: ['visuals'],
+      skills: ['a'],
+    });
+    expect(config).not.toHaveProperty('tools');
+    expect(config).not.toHaveProperty('skills');
+  });
 });
 
 describe('hasUnpublishedChanges / missingDatasets', () => {
@@ -103,6 +115,22 @@ describe('hasUnpublishedChanges / missingDatasets', () => {
     expect(
       hasUnpublishedChanges({
         draft: { ...draft, instructions: 'new' },
+        live: draft,
+      }),
+    ).toBe(true);
+  });
+
+  it('compares tool selections, reading an absent list as every tool', () => {
+    const all = ['sample_rows', 'ask_clarification', 'visuals'] as const;
+    expect(
+      hasUnpublishedChanges({
+        draft: { ...draft, tools: [...all] },
+        live: draft,
+      }),
+    ).toBe(false);
+    expect(
+      hasUnpublishedChanges({
+        draft: { ...draft, tools: ['sample_rows'] },
         live: draft,
       }),
     ).toBe(true);
@@ -191,6 +219,34 @@ describe('UserAgentsService', () => {
     expect(republished.live?.instructions).toBe('v2');
   });
 
+  it('derives the tool selection from the instructions and publishes it with the rest', async () => {
+    const agent = await ctx.service.create({
+      name: 'Analyst',
+      datasets: ['World Cup Core'],
+      instructions:
+        'Try [[tool:create_visual]], [[tool:sample_rows]], [[tool:update_visual]], [[tool:run_readonly_sql]].',
+      // Ignored: the links decide.
+      tools: ['ask_clarification'],
+    });
+    expect(agent.draft.tools).toEqual(['sample_rows', 'visuals']);
+    expect(agent.draft.skills).toEqual([]);
+    const published = await ctx.service.publish(agent.id);
+    expect(published.live?.tools).toEqual(['sample_rows', 'visuals']);
+    const edited = await ctx.service.saveDraft(agent.id, {
+      name: 'Analyst',
+      datasets: ['World Cup Core'],
+    });
+    expect(edited.draft.tools).toEqual([]);
+    expect(edited.live?.tools).toEqual(['sample_rows', 'visuals']);
+    await expect(
+      ctx.service.saveDraft(agent.id, {
+        name: 'Analyst',
+        instructions: '[[tool:charts]]',
+      }),
+    ).rejects.toThrow('Unknown tool "charts"');
+    expect((await ctx.service.get(agent.id))?.draft.tools).toEqual([]);
+  });
+
   it('refuses to publish without a dataset', async () => {
     const agent = await ctx.service.create({ name: 'Analyst' });
     await expect(ctx.service.publish(agent.id)).rejects.toThrow(
@@ -219,11 +275,6 @@ describe('UserAgentsService', () => {
   });
 
   it('stores built-in pins in one settings document without touching the LLM one', async () => {
-    await ctx.users.runAs(LOCAL_USER, () => pinsAsDemoUser());
-  });
-
-  /** As Demo User: outside a request nobody is signed in (ADR-0012). */
-  async function pinsAsDemoUser() {
     await ctx.settings.insert({ key: 'llm' } as never);
     expect(await ctx.service.builtinPins()).toEqual([]);
     await ctx.service.setBuiltinPin('assistant', true);
@@ -234,14 +285,206 @@ describe('UserAgentsService', () => {
     expect(await ctx.service.builtinPins()).toEqual(['sql-fixer']);
     const docs = await ctx.settings.find();
     expect(docs.map((doc) => doc.key).sort()).toEqual([
-      'builtin-agent-pins:local',
+      'builtin-agent-pins',
       'llm',
     ]);
-  }
+  });
 
   it('reports the dataset names that exist', async () => {
     expect(await ctx.service.datasetNames()).toEqual(
       new Set(['World Cup Core']),
     );
+  });
+});
+
+describe('user agent skills (ADR-0022; R43, R44, R60)', () => {
+  let ctx: ReturnType<typeof build>;
+  const skill = (id: string, body = 'Body.'): SkillDoc => ({
+    id,
+    name: `skill-${id}`,
+    description: 'Use when needed.',
+    body,
+    files: [{ path: 'references/a.md', content: 'A' }],
+  });
+
+  beforeEach(async () => {
+    ctx = build();
+    for (const id of ['a', 'b']) await ctx.skills.insert(skill(id));
+  });
+  afterEach(() => ctx.db.close());
+
+  const base = { name: 'Analyst', datasets: ['World Cup Core'] };
+
+  const link = (...ids: string[]) =>
+    ids.map((id) => `[[skill:skill-${id}]]`).join(' ');
+
+  it('derives skill ids from the links, distinct and in order, ignoring the request', async () => {
+    const agent = await ctx.service.create({
+      ...base,
+      instructions: `${link('b', 'a', 'b')}`,
+      skills: ['zzz'],
+    });
+    expect(agent.draft.skills).toEqual(['b', 'a']);
+  });
+
+  it('accepts a built-in on-demand skill link without counting it as a skill', async () => {
+    const ids = Array.from({ length: 10 }, (_, i) => `s${i}`);
+    for (const id of ids) await ctx.skills.insert(skill(id));
+    const agent = await ctx.service.create({
+      ...base,
+      instructions: `[[skill:curated-knowledge]] ${link(...ids)}`,
+    });
+    expect(agent.draft.skills).toEqual(ids);
+    const only = await ctx.service.create({
+      ...base,
+      name: 'Other',
+      instructions: 'See [[skill:curated-knowledge]].',
+    });
+    expect(only.draft.skills).toEqual([]);
+  });
+
+  it('refuses an unknown skill, more than ten skills, then an unknown tool, by name', async () => {
+    await expect(
+      ctx.service.create({
+        ...base,
+        instructions: `${link('a')} [[skill:zzz]] [[tool:nope]]`,
+      }),
+    ).rejects.toThrow('Unknown skill "zzz"');
+    await expect(
+      ctx.service.create({ ...base, instructions: '[[tool:nope]]' }),
+    ).rejects.toThrow('Unknown tool "nope"');
+    const ids = Array.from({ length: 11 }, (_, i) => `s${i}`);
+    for (const id of ids) await ctx.skills.insert(skill(id));
+    await expect(
+      ctx.service.create({ ...base, instructions: link(...ids) }),
+    ).rejects.toThrow('An agent can have at most 10 skills');
+    const agent = await ctx.service.create({
+      ...base,
+      instructions: link(...ids.slice(0, 10)),
+    });
+    await expect(
+      ctx.service.saveDraft(agent.id, { ...base, instructions: link(...ids) }),
+    ).rejects.toThrow('An agent can have at most 10 skills');
+    await expect(
+      ctx.service.saveDraft(agent.id, {
+        ...base,
+        instructions: '[[skill:nope]]',
+      }),
+    ).rejects.toThrow('Unknown skill "nope"');
+  });
+
+  it('publishes copies of the draft skills into liveSkills, in order', async () => {
+    const agent = await ctx.service.create({
+      ...base,
+      instructions: link('b', 'a'),
+    });
+    expect(agent.liveSkills).toBeUndefined();
+    const published = await ctx.service.publish(agent.id);
+    expect(published.live?.skills).toEqual(['b', 'a']);
+    expect(published.liveSkills).toEqual([
+      {
+        id: 'b',
+        name: 'skill-b',
+        description: 'Use when needed.',
+        body: 'Body.',
+        files: [{ path: 'references/a.md', content: 'A' }],
+      },
+      expect.objectContaining({ id: 'a' }),
+    ]);
+    expect(published.liveSkills![0]).not.toHaveProperty('createdAt');
+  });
+
+  it('publishes no liveSkills for an agent without skills, and an empty list on a republish without', async () => {
+    const plain = await ctx.service.create(base);
+    expect(await ctx.service.publish(plain.id)).not.toHaveProperty(
+      'liveSkills',
+    );
+
+    const agent = await ctx.service.create({
+      ...base,
+      name: 'B',
+      instructions: link('a'),
+    });
+    await ctx.service.publish(agent.id);
+    await ctx.service.saveDraft(agent.id, { ...base, name: 'B' });
+    const republished = await ctx.service.publish(agent.id);
+    expect(republished.liveSkills).toEqual([]);
+    expect(republished.live?.skills).toEqual([]);
+  });
+
+  it('keeps the copies when a skill is edited, until the next publish', async () => {
+    const agent = await ctx.service.create({
+      ...base,
+      instructions: link('a'),
+    });
+    const published = await ctx.service.publish(agent.id);
+    let byId = await ctx.service.skillsById();
+    expect(hasUnpublishedChanges(published, byId)).toBe(false);
+
+    await ctx.skills.update({ id: 'a' }, { body: 'Edited.' });
+    byId = await ctx.service.skillsById();
+    const afterEdit = (await ctx.service.get(agent.id))!;
+    expect(afterEdit.liveSkills![0].body).toBe('Body.');
+    expect(hasUnpublishedChanges(afterEdit, byId)).toBe(true);
+
+    const republished = await ctx.service.publish(agent.id);
+    expect(republished.liveSkills![0].body).toBe('Edited.');
+    expect(hasUnpublishedChanges(republished, byId)).toBe(false);
+  });
+
+  it('has unpublished changes when the skill list differs or a named skill has no copy', async () => {
+    const agent = await ctx.service.create({
+      ...base,
+      instructions: link('a'),
+    });
+    const published = await ctx.service.publish(agent.id);
+    expect(
+      hasUnpublishedChanges({
+        ...published,
+        draft: { ...published.draft, skills: ['a', 'b'] },
+      }),
+    ).toBe(true);
+    // An absent skills list reads as an empty one.
+    const noSkills = normalizeAgentConfig({ name: 'A' });
+    expect(
+      hasUnpublishedChanges({
+        draft: noSkills,
+        live: { ...noSkills, skills: [] },
+      }),
+    ).toBe(false);
+    expect(
+      hasUnpublishedChanges({
+        draft: { ...published.draft },
+        live: { ...published.draft },
+        liveSkills: [],
+      }),
+    ).toBe(true);
+  });
+
+  it('gives a preview the current skills its draft names, skipping deleted ones', async () => {
+    const found = await ctx.service.skillsFor(['b', 'gone', 'a']);
+    expect(found.map((doc) => doc.id)).toEqual(['b', 'a']);
+    expect(await ctx.service.skillsFor(undefined)).toEqual([]);
+  });
+
+  it('names the agents whose draft links a skill, sorted; Live copies do not count', async () => {
+    const one = await ctx.service.create({
+      ...base,
+      name: 'Zed',
+      instructions: link('a'),
+    });
+    await ctx.service.create({
+      ...base,
+      name: 'Amy',
+      instructions: link('a', 'b'),
+    });
+    await ctx.service.publish(one.id);
+    await ctx.service.saveDraft(one.id, { ...base, name: 'Zed' });
+    expect(await ctx.service.draftsLinking('skill-a')).toEqual(['Amy']);
+    expect(await ctx.service.draftsLinking('skill-b')).toEqual(['Amy']);
+    expect(await ctx.service.draftsLinking('other')).toEqual([]);
+    const after = (await ctx.service.get(one.id))!;
+    expect(after.live?.skills).toEqual(['a']);
+    expect(after.liveSkills).toHaveLength(1);
   });
 });

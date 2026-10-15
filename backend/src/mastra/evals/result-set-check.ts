@@ -8,7 +8,7 @@
 // type it borrows from `assistant.evals.ts` (`ScoredCheckResult`) is imported
 // with `import type`, which TypeScript erases entirely, so it adds no runtime
 // edge back to that heavier module.
-import { compareResults } from '../../modules/sessions/result-compare';
+import { compareResults, rowKey } from '../../modules/sessions/result-compare';
 import { getDatasetToolServices } from '../tool-services';
 import type { DatasetSnapshot } from '../tool-services';
 import type { ToolDataRecord } from '../../modules/sessions/entities/session.entity';
@@ -30,35 +30,80 @@ function containsReferenceRow(expected: Row, actual: Row): boolean {
   );
 }
 
+/**
+ * Pair every reference row with a candidate row that contains it, each
+ * candidate used once unless `shared` (distinct facts may sit in one row).
+ * A real matching, so a candidate holding two reference rows cannot strand
+ * one a different pairing would have placed.
+ */
+function pairReferenceRows(
+  expected: Row[],
+  actual: Row[],
+  shared: boolean,
+): Row | undefined {
+  const fits = expected.map((row) =>
+    actual
+      .map((candidate, index) =>
+        containsReferenceRow(row, candidate) ? index : -1,
+      )
+      .filter((index) => index >= 0),
+  );
+  const unmatched = fits.findIndex((options) => options.length === 0);
+  if (unmatched >= 0) return expected[unmatched];
+  if (shared) return undefined;
+  const owner = new Map<number, number>();
+  const place = (row: number, seen: Set<number>): boolean => {
+    for (const candidate of fits[row]) {
+      if (seen.has(candidate)) continue;
+      seen.add(candidate);
+      const current = owner.get(candidate);
+      if (current === undefined || place(current, seen)) {
+        owner.set(candidate, row);
+        return true;
+      }
+    }
+    return false;
+  };
+  const stranded = expected.findIndex(
+    (_row, index) => !place(index, new Set()),
+  );
+  return stranded >= 0 ? expected[stranded] : undefined;
+}
+
+/**
+ * One result is evidence when it holds every reference row, each in a row of
+ * its own (agents-evals R31). Extra rows and extra columns are allowed: the
+ * answer-text checks judge whether the answer states the right fact. An
+ * empty reference still needs an empty result, or any query would pass.
+ */
 function compareEvidence(
   expected: Row[],
   actual: Row[],
   options: ResultSetCheckOptions,
 ): { match: boolean; reason: string } {
-  if (options.distinctRows && expected.length && actual.length) {
-    // Set equality at the reference's grain. Extra columns are context, but
-    // every returned row must still describe one of the expected facts.
-    const match =
-      expected.every((row) =>
-        actual.some((candidate) => containsReferenceRow(row, candidate)),
-      ) &&
-      actual.every((row) =>
-        expected.some((reference) => containsReferenceRow(reference, row)),
-      );
-    return { match, reason: match ? '' : 'the distinct facts differ' };
+  if (!expected.length) {
+    return actual.length
+      ? { match: false, reason: `expected no rows, got ${actual.length}` }
+      : { match: true, reason: '' };
   }
+  const missing = pairReferenceRows(
+    expected,
+    actual,
+    options.distinctRows === true,
+  );
+  if (!missing) return { match: true, reason: '' };
   if (
-    expected.length &&
-    actual.some(
-      (row) => Object.keys(row).length < Object.keys(expected[0]).length,
-    )
+    actual.some((row) => Object.keys(row).length < Object.keys(missing).length)
   ) {
     return {
       match: false,
       reason: 'the result omits required reference values',
     };
   }
-  return compareResults(expected, actual, { widthTolerant: true });
+  return {
+    match: false,
+    reason: `no row holds the reference row [${rowKey(missing)}]`,
+  };
 }
 
 /** Scorer id for the result-set check, shown in the report's checks table. */
@@ -122,8 +167,9 @@ export function lastSuccessfulSqlRecord(
  * `run_readonly_sql` itself uses, then compares against the agent's own
  * captured rows from every successful, complete SQL call. Supporting queries
  * can follow the answer query; their position must not erase valid evidence.
- * One complete result must match all reference facts (extra columns are fine).
- * Rows from different queries are never combined, nor are extra rows ignored.
+ * One complete result must hold every reference row, each in a row of its
+ * own; extra columns and extra rows are fine. Rows from different queries
+ * are never combined.
  *
  * On a Databricks datasource the reference is a Databricks set's (the
  * preflight binds a Databricks set to a Databricks datasource and no other,
@@ -200,9 +246,9 @@ export async function runResultSetCheck(
       // Rows clipped in storage (`rowCount` > rows kept) are not the rows
       // the assistant saw, so they cannot be compared. A result `truncated`
       // only because it reached the query's own row limit holds every row
-      // the assistant saw: it is compared like any other, so it matches only
-      // when it carries every reference fact and no other row (R31; the
-      // baseline's `limit: 1` champion answer was a false negative).
+      // the assistant saw: it is compared like any other, so it matches when
+      // those rows hold every reference row (R31; the baseline's `limit: 1`
+      // champion answer was a false negative).
       if (
         !Array.isArray(candidate.rows) ||
         (candidate.rowCount !== undefined &&

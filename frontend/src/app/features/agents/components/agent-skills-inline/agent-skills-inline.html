@@ -1,0 +1,264 @@
+<div class="flex items-center gap-3">
+  <h3 class="text-[12px] font-medium tracking-wider text-fg-muted uppercase">
+    Skills ({{ count() }})
+  </h3>
+  @if (canChange() && editing() === null) {
+    <button
+      type="button"
+      data-testid="agent-skill-new"
+      (click)="newSkill()"
+      class="btn btn-secondary ml-auto"
+    >
+      <lucide-angular [img]="Plus" [size]="14" />
+      <span>New skill</span>
+    </button>
+  }
+</div>
+<p class="mt-2 text-[13px] text-fg-muted">
+  The agent only gets the skills its instructions link. To link one, edit the
+  System Prompt and type /.
+</p>
+
+@if (editing() !== null) {
+  <div data-testid="agent-skill-form" class="card mt-4 flex flex-col gap-5 p-6">
+    <h4 class="text-[15px] font-medium text-fg-strong">
+      {{ editor.title() }}
+    </h4>
+    @if (editor.loading()) {
+      <div class="flex items-center gap-2.5 text-fg-muted">
+        <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+        <span>Loading skill…</span>
+      </div>
+    } @else if (editor.loadError(); as err) {
+      <p
+        class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+      >
+        {{ err }}
+      </p>
+    } @else {
+      <div class="flex flex-col gap-1.5">
+        <label for="agent-skill-name" class="field-label">Name</label>
+        <input
+          id="agent-skill-name"
+          type="text"
+          [maxLength]="limits.name"
+          [value]="editor.form().name"
+          (input)="onText('name', $event)"
+          class="field font-mono"
+        />
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="agent-skill-description" class="field-label"
+          >Description</label
+        >
+        <textarea
+          id="agent-skill-description"
+          rows="2"
+          [maxLength]="limits.description"
+          [value]="editor.form().description"
+          (input)="onText('description', $event)"
+          class="field resize-y"
+        ></textarea>
+        <div class="flex items-start justify-between gap-4">
+          <p class="text-[12px] text-fg-muted">{{ descriptionHint }}</p>
+          <span class="shrink-0 text-[12px] text-fg-muted"
+            >{{ editor.form().description.length }}/{{
+              limits.description
+            }}</span
+          >
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <span class="field-label">Body</span>
+        <p class="text-[12px] text-fg-muted">{{ bodyHint }}</p>
+        @defer (on immediate) {
+          <app-prompt-editor
+            [value]="editor.form().body"
+            [linkSkills]="false"
+            label="Body"
+            [maxLength]="limits.body"
+            (valueChange)="onBody($event)"
+          />
+        } @placeholder {
+          <p class="text-[13px] text-fg-muted">Loading editor…</p>
+        }
+      </div>
+
+      <fieldset class="flex flex-col gap-3">
+        <legend class="field-label mb-1.5">Reference files</legend>
+        @for (file of editor.form().files; track $index; let i = $index) {
+          <div class="flex items-start gap-2">
+            <div class="flex min-w-0 flex-1 flex-col gap-2">
+              <input
+                type="text"
+                [attr.aria-label]="'Path of reference file ' + (i + 1)"
+                placeholder="references/notes.md"
+                [value]="file.path"
+                (input)="onFile(i, 'path', $event)"
+                class="field font-mono"
+              />
+              <textarea
+                rows="6"
+                [attr.aria-label]="'Content of reference file ' + (i + 1)"
+                [maxLength]="limits.fileContent"
+                [value]="file.content"
+                (input)="onFile(i, 'content', $event)"
+                class="field resize-y font-mono text-[13px]"
+              ></textarea>
+            </div>
+            <button
+              type="button"
+              (click)="editor.removeFile(i)"
+              title="Remove reference file"
+              class="btn-icon shrink-0"
+            >
+              <lucide-angular [img]="X" [size]="14" />
+              <span class="sr-only">Remove reference file {{ i + 1 }}</span>
+            </button>
+          </div>
+        }
+        <button
+          type="button"
+          (click)="editor.addFile()"
+          [disabled]="!editor.canAddFile()"
+          class="btn btn-ghost w-fit"
+        >
+          <lucide-angular [img]="Plus" [size]="14" />
+          <span>Add reference file</span>
+        </button>
+      </fieldset>
+
+      <div class="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          data-testid="agent-skill-cancel"
+          (click)="cancel()"
+          [disabled]="editor.saving()"
+          class="btn btn-ghost"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          data-testid="agent-skill-save"
+          (click)="save()"
+          [disabled]="!editor.canSave()"
+          class="btn btn-primary"
+        >
+          @if (editor.saving()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+            <span>Saving…</span>
+          } @else {
+            <span>Save</span>
+          }
+        </button>
+      </div>
+    }
+  </div>
+}
+
+<div class="mt-4 flex flex-col gap-2">
+  @for (skill of library(); track skill.id) {
+    <div
+      [attr.data-testid]="'agent-skill-row-' + skill.name"
+      class="rounded-xl bg-surface-muted px-4 py-3"
+    >
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="font-mono text-[13px] text-fg-strong">{{
+          skill.name
+        }}</span>
+        @if (linked(skill.name)) {
+          <span
+            [attr.data-testid]="'agent-skill-linked-' + skill.name"
+            class="chip chip-success"
+            >Linked</span
+          >
+        } @else {
+          <span
+            [attr.data-testid]="'agent-skill-linked-' + skill.name"
+            class="chip chip-neutral"
+            >Not linked</span
+          >
+        }
+        @if (canChange()) {
+          <span class="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              [attr.data-testid]="'agent-skill-edit-' + skill.name"
+              (click)="edit(skill)"
+              [disabled]="editing() !== null"
+              class="btn btn-ghost px-2 py-1"
+            >
+              <lucide-angular [img]="Pencil" [size]="13" />
+              <span>Edit</span>
+            </button>
+            <button
+              type="button"
+              [attr.data-testid]="'agent-skill-delete-' + skill.name"
+              (click)="remove(skill)"
+              [disabled]="deleting() !== null || editing() !== null"
+              class="btn btn-ghost px-2 py-1"
+            >
+              <lucide-angular [img]="Trash2" [size]="13" />
+              <span>Delete</span>
+            </button>
+          </span>
+        }
+      </div>
+      <p class="mt-1 text-[13px] text-fg-muted">{{ skill.description }}</p>
+      @if (skill.tools.length) {
+        <p class="mt-2 flex flex-wrap items-center gap-1.5 text-[12px] text-fg-muted">
+          <span>Uses tools:</span>
+          @for (tool of skill.tools; track tool) {
+            <span class="chip chip-neutral">{{ tool }}</span>
+          }
+        </p>
+      }
+    </div>
+  } @empty {
+    <p class="text-[13px] text-fg-muted">
+      No skills yet. Create one, then link it from the System Prompt.
+    </p>
+  }
+</div>
+
+<h3
+  class="mt-8 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+>
+  Built-in · included in every agent
+</h3>
+<div class="mt-2 flex flex-col gap-2">
+  @for (skill of builtIn(); track skill.name) {
+    <div
+      [attr.data-testid]="'agent-builtin-skill-' + skill.name"
+      class="rounded-xl bg-surface-muted px-4 py-3"
+    >
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="font-mono text-[13px] text-fg-strong">{{
+          skill.name
+        }}</span>
+        <span class="chip">{{ loadingLabel(skill.loading) }}</span>
+        @if (skill.modified) {
+          <span class="chip chip-warning">Modified</span>
+        }
+        @if (canEditBuiltIn()) {
+          <button
+            type="button"
+            [attr.data-testid]="'agent-builtin-edit-' + skill.name"
+            (click)="openBuiltIn.emit(skill.name)"
+            class="btn btn-ghost ml-auto px-2 py-1"
+          >
+            <lucide-angular [img]="Pencil" [size]="13" />
+            <span>Edit</span>
+          </button>
+        }
+      </div>
+      <p class="mt-1 text-[13px] text-fg-muted">{{ skill.description }}</p>
+      @if (notice(skill); as drift) {
+        <p class="mt-1 text-[12px] text-on-warning-soft">{{ drift }}</p>
+      }
+    </div>
+  }
+</div>

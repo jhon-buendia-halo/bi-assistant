@@ -1,0 +1,2 @@
+Frontend unit (ng test, ChromeHeadless at 1440x900 via a --window-size wrapper), after the container-query change:
+TOTAL: 311 SUCCESS

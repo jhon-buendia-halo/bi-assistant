@@ -45,6 +45,12 @@ export interface LlmStub {
   probes: StubProbe[];
   /** Decides each agent call's reply; the default answers `STUB_ANSWER`. */
   reply: (request: StubRequest) => StubReply;
+  /**
+   * Optional: a promise the stub awaits before answering `request` (the
+   * request is recorded at once). Lets a test hold a turn open, e.g. to check
+   * what the app shows while it still streams. Unset answers at once.
+   */
+  hold?: (request: StubRequest) => Promise<void> | undefined;
   close(): Promise<void>;
 }
 
@@ -97,9 +103,13 @@ function chunk(delta: Record<string, unknown>, finish: string | null): string {
   })}\n\n`;
 }
 
+/** Real providers give every call its own id; reusing one merges them. */
+let toolCallCount = 0;
+
 function toolCall(name: string, args: Record<string, unknown>) {
+  toolCallCount += 1;
   return {
-    id: 'call_stub_1',
+    id: `call_stub_${toolCallCount}`,
     type: 'function',
     function: { name, arguments: JSON.stringify(args) },
   };
@@ -202,6 +212,14 @@ export async function startLlmStub(): Promise<LlmStub> {
         reasoningEffort: body.reasoning_effort,
       };
       stub.requests.push(request);
+      const held = stub.hold?.(request);
+      if (held) {
+        void held.then(
+          () => respond(res, request.stream, stub.reply(request)),
+          () => res.destroy(),
+        );
+        return;
+      }
       respond(res, request.stream, stub.reply(request));
     });
   });

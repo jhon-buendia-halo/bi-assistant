@@ -1,0 +1,26 @@
+Command (frontend/, 2026-10-15, branch feat/BA-213-agent-tools-skills, backend/dist + backend/public built from HEAD):
+  npx tsc -p e2e/tsconfig.json && E2E_EVIDENCE_DIR=$PWD/../evidence E2E_SKIP_DOCKER=1 npx playwright test --project=web --reporter=list \
+    e2e/agent-editor.spec.ts e2e/skill-library.spec.ts e2e/builtin-agent-prompts.spec.ts e2e/agent-hub.spec.ts e2e/agent-skills.spec.ts \
+    e2e/agents.spec.ts e2e/agent-sessions.spec.ts e2e/assistant-skills.spec.ts e2e/designer-skills.spec.ts e2e/chat-clarification.spec.ts \
+    e2e/chat-and-visuals.spec.ts e2e/world-cup-workflow.spec.ts
+Whole run: 82 passed (6.8m), 0 failed, 0 skipped. Desktop not run (no desktopOnly() scenario in these files).
+Below: the lines of the spec files this feature's impact analysis lists.
+
+  ✓  41 [web] › e2e/agent-skills.spec.ts:48:5 › shows the designer's built-in skill and the content of its files (3.8s)
+  ✓  42 [web] › e2e/agent-skills.spec.ts:75:5 › an agent without skills says so (3.7s)
+  ✓  43 [web] › e2e/agent-skills.spec.ts:83:5 › the assistant gets only its built-in skills, and an old skills folder is ignored (3.9s)
+  ✓  44 [web] › e2e/agent-skills.spec.ts:115:5 › a user agent's Skills tab is its inline library, not the read-only list (4.0s)
+  ✓  54 [web] › e2e/assistant-skills.spec.ts:94:5 › the assistant is offered only its own skills (4.1s)
+  ✓  55 [web] › e2e/assistant-skills.spec.ts:126:5 › a turn without curated knowledge carries no knowledge rules (4.3s)
+  ✓  56 [web] › e2e/assistant-skills.spec.ts:140:5 › a turn with curated knowledge carries the block, and the rules stay on demand (4.2s)
+  ✓  57 [web] › e2e/assistant-skills.spec.ts:231:5 › a skills folder left in the data dir by an older version is ignored (5.5s)
+  ✓  58 [web] › e2e/assistant-skills.spec.ts:259:5 › the assistant loads a skill with the skill tool (4.0s)
+  ✓  72 [web] › e2e/skill-library.spec.ts:155:5 › creates, edits and deletes a skill (4.4s)
+  ✓  73 [web] › e2e/skill-library.spec.ts:206:5 › refuses a bad name or description (3.9s)
+  ✓  74 [web] › e2e/skill-library.spec.ts:234:5 › a skill that an agent links can't be deleted or renamed (3.9s)
+  ✓  75 [web] › e2e/skill-library.spec.ts:268:5 › the skill editor links tools only (3.6s)
+  ✓  76 [web] › e2e/skill-library.spec.ts:294:5 › the library and the skill editor have no detectable accessibility violations in either theme (6.5s)
+  ✓  77 [web] › e2e/skill-library.spec.ts:324:7 › built-in skills › I edit a built-in skill, and Reset restores it (9.4s)
+  ✓  78 [web] › e2e/skill-library.spec.ts:390:7 › built-in skills › an override that drops a placeholder is refused (4.4s)
+
+16 of these passed.

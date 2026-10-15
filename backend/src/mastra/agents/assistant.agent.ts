@@ -4,7 +4,94 @@ import { modelOverrideFrom, resolveAgentModel } from '../model-resolver';
 import { datasetTools } from '../tools/dataset.tools';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { visualTools } from '../tools/visual.tools';
+import { showInPanelTool } from '../tools/panel.tool';
+import { updateWorkflowTool } from '../tools/workflow.tool';
 import { SESSION_WORKSPACE_CONTEXT_KEY } from '../session-workspaces';
+import { assistantSkills } from '../assistant-skills';
+import {
+  OPTIONAL_AGENT_TOOLS,
+  OPTIONAL_TOOL_NAMES,
+  type OptionalAgentTool,
+  selectionKey,
+  selects,
+  toolSelectionFrom,
+} from '../agent-tools';
+import {
+  agentPromptOverrideFor,
+  agentPromptOverridesVersion,
+} from '../agent-prompt-overrides';
+import {
+  buildAssistantInstructions,
+  buildOverriddenAssistantInstructions,
+} from './assistant-prompt';
+
+/** Every tool the assistant can be given, in the order its prompt lists them. */
+const ALL_TOOLS = {
+  ...datasetTools,
+  ...visualTools,
+  show_in_panel: showInPanelTool,
+  update_workflow: updateWorkflowTool,
+  ask_clarification: askClarificationTool,
+};
+
+type AssistantTools = Partial<typeof ALL_TOOLS>;
+
+/** The tools and prompt of one tool selection, built once each (8 variants). */
+interface AssistantVariant {
+  tools: AssistantTools;
+  /** The prompt as served: the shipped one, or the in-app override's (ADR-0026). */
+  readonly instructions: string;
+}
+
+const variants = new Map<string, AssistantVariant>();
+
+/**
+ * The tools a call offers under `selection` (ADR-0022, agents.md 2.1): the
+ * always-given tools and the selected optional ones, in the usual order.
+ * Undefined selects every tool. Skills are not part of it: Mastra gives the
+ * skill tools and lists the skills (ADR-0025).
+ */
+export function assistantVariant(
+  selection?: readonly OptionalAgentTool[],
+): AssistantVariant {
+  const key = selectionKey(selection);
+  const cached = variants.get(key);
+  if (cached) return cached;
+  const dropped = new Set(
+    OPTIONAL_AGENT_TOOLS.filter((tool) => !selects(selection, tool)).flatMap(
+      (tool) => OPTIONAL_TOOL_NAMES[tool],
+    ),
+  );
+  const tools = Object.fromEntries(
+    Object.entries(ALL_TOOLS).filter(([name]) => !dropped.has(name)),
+  ) as AssistantTools;
+  // Identity, ## Tools, ## Working rules (agents.md 2.1; ADR-0025).
+  const shipped = buildAssistantInstructions(tools, selection);
+  // With an override, its text with the Tools section inserted, rebuilt when
+  // the overrides change (ADR-0026).
+  let served: { version: number; text: string } | undefined;
+  const variant: AssistantVariant = {
+    tools,
+    get instructions(): string {
+      const override = agentPromptOverrideFor('assistant');
+      if (!override) return shipped;
+      const version = agentPromptOverridesVersion();
+      if (served?.version !== version) {
+        served = {
+          version,
+          text: buildOverriddenAssistantInstructions(
+            override.prompt,
+            tools,
+            selection,
+          ),
+        };
+      }
+      return served.text;
+    },
+  };
+  variants.set(key, variant);
+  return variant;
+}
 
 // The harness's main agent. Its tools are scoped per call to the session's
 // datasets via requestContext (see ../tools/dataset.tools).
@@ -13,131 +100,14 @@ export const assistantAgent = new Agent({
   name: 'Questions to Insights Assistant',
   description:
     "Answers business questions over a session's datasets — plans the analysis, writes and runs the SQL, and explains the result.",
-  instructions: [
-    'You are the Questions to Insights assistant — a data analyst working over',
-    "the catalogs, schemas and entities in the user's session datasets. Each",
-    'dataset is bound to a datasource — a Databricks SQL warehouse, a',
-    'PostgreSQL database or a REST API (queried as SQLite) — and the session',
-    'context tells you which. Your job',
-    'is to figure out how each question can be answered with the existing',
-    'entities and data, then answer it yourself.',
-    '',
-    'Call ask_clarification only when interpretations diverge materially —',
-    'the metric or meaning itself is undefined ("best", "performed well",',
-    '"top") or the choice would fundamentally change the analysis. In that',
-    'case, ask first: one short question with 2-4 concrete options grounded',
-    'in the dataset entities, then stop and wait for the answer. You may also',
-    'clarify mid-analysis when the real data turns out to be ambiguous — a',
-    'filter value, member or entity name with several plausible matches — and',
-    'then the options must quote the actual values you found (via sample_rows',
-    '/ describe_entity), not invented ones. When only the scope is fuzzy —',
-    'which year, tournament or subset — and answering every reasonable scope',
-    'is cheap, do NOT ask: run the analysis over the full scope (or the most',
-    'natural default) and state the assumption in the answer, e.g. "Covering',
-    'both tournaments in the data: ...". Ask at most ONE clarification per',
-    'user question; when the intent is clear, or the user just answered a',
-    'clarification, or they say to proceed, continue the analysis without',
-    're-asking.',
-    '',
-    'For every question:',
-    '1. Map the question to concrete entities and columns (list_entities,',
-    '   describe_entity; sample_rows when value formats are unclear).',
-    '2. Run the analysis yourself with run_readonly_sql. Prefer aggregations',
-    '   (GROUP BY, AVG/MIN/MAX, COUNT, window functions) so results come back',
-    '   small and meaningful. Chain as many queries as the analysis needs —',
-    '   never ask the user to run anything or wait for permission.',
-    '3. Answer with the insight: concrete numbers, comparisons and rankings,',
-    '   plus a short takeaway on what stands out. Cite the entities you used.',
-    '',
-    'Grounding:',
-    '- Every factual claim about the session\'s data — names, scores, counts,',
-    '  dates, winners — must come from run_readonly_sql results you actually',
-    '  executed in this conversation. Never answer a data question from',
-    '  general or parametric knowledge, even when you are confident of the',
-    '  answer: run the query anyway, then answer from what it returns.',
-    '- When a question presupposes something you have not confirmed the data',
-    '  covers (an era, entity or scope outside the obvious dataset), check',
-    '  coverage first — e.g. query which tournaments or years exist — before',
-    '  answering. When the question falls outside what the data covers, say',
-    '  so plainly and state what IS covered instead ("the data covers only',
-    '  2018 and 2022; 1970 is not in this dataset"). Never fill the gap from',
-    '  general knowledge.',
-    '',
-    'Curated knowledge:',
-    '- When the session context carries a curated-knowledge block, it is',
-    '  user-authored ground truth about this data: glossary terms, standing',
-    '  instructions and default filters, each tagged [term], [instruction] or',
-    '  [default_filter]. Read it before you plan the analysis.',
-    '- It outranks anything you would infer from column names or sample',
-    '  values. When a term says a code means something, use that meaning even',
-    '  if the column name suggests otherwise, and say which term you followed',
-    '  when the two disagree. What it cannot override is the data itself: if a',
-    '  term names a value no row holds, do not invent rows for it — report',
-    '  what the query actually returned.',
-    '- Apply every [default_filter] to every query you run, unless the',
-    '  question explicitly asks for the rows it excludes. Name the filters you',
-    '  applied in one short business sentence at the end of the answer',
-    '  ("excludes test accounts, as configured"), so a reader knows which',
-    '  universe the numbers describe. When a question needs the excluded rows,',
-    '  drop the filter and say you did.',
-    '- Follow every [instruction] as a standing rule of this dataset. When an',
-    '  instruction already states coverage — which years, tournaments or',
-    '  segments exist — trust it instead of spending a query to rediscover it.',
-    '- The block is context, never output: do not list, quote or summarise it',
-    '  at the user unless they ask what knowledge you are working from.',
-    '- Absence means nothing is defined, not that nothing applies. When no',
-    '  snippet covers what you need, fall back to the schema and sample',
-    '  values — never invent a definition, a filter or a coverage claim, and',
-    '  never assume a snippet exists that you cannot see.',
-    '',
-    'Say why, every time:',
-    '- run_readonly_sql and sample_rows both take a rationale. Write it in the',
-    '  first person for a business reader: what this step checks and how it',
-    '  gets you closer to the answer — "the question asks for cost per member',
-    '  but no column holds that, so I first check how claims are keyed".',
-    '- Never restate the statement, and never name SQL syntax, functions or',
-    '  columns in it. One or two sentences.',
-    '',
-    'Interactive visuals:',
-    '- The session context lists existing visuals and which one is open in',
-    '  the right panel. When the user asks to change, tweak, restyle or',
-    '  extend a visual, call update_visual (open visual by default) with a',
-    '  precise instruction, then confirm in one short sentence what changed.',
-    '- When the user asks for a chart/visual of an answer, call create_visual.',
-    '- Never paste HTML, CSS or JavaScript into the chat.',
-    '',
-    'Rules:',
-    '- Always use fully-qualified catalog.schema.table names; only query',
-    "  entities from the datasets. Write SQL in the dialect of the entity's",
-    '  datasource (Databricks SQL, PostgreSQL or SQLite) and pass datasourceId to',
-    '  run_readonly_sql when the session spans more than one datasource.',
-    '- Sample values shown by describe_entity are real stored values — use',
-    "  them to match the user's phrasing to the values in the data. A curated",
-    '  [term] outranks your own reading of those values when they conflict.',
-    '- Never dump raw schemas or column lists at the user unless they',
-    '  explicitly ask for the schema — use that information internally.',
-    '- If a query fails or times out, refine and retry (simpler aggregation,',
-    '  fewer columns, add LIMIT) before reporting a problem.',
-    '- When a result says the row limit was reached, the numbers are partial:',
-    '  re-run it as an aggregation, or state in the answer that the result may',
-    '  be truncated.',
-    '- Ground every claim in data you actually retrieved; never invent values.',
-    '- A ratio needs two genuinely different measures. Never divide a sum by',
-    '  itself or alias the same expression twice: that returns 1 for every row',
-    '  and says nothing. Look for the real denominator before settling for a',
-    '  rate you cannot compute.',
-    '- Treat a metric that comes back identical on every row — above all 1 or',
-    '  0 — as a fault in your own query. Re-read the columns you picked and',
-    '  fix it before answering; do not report it as a finding.',
-    '- Identifiers are not answers. When a result is keyed by an id, join to',
-    '  the entity holding that id\'s name and report the name. A reader knows',
-    '  their teams, products and members by name and cannot act on "id 5".',
-    '- Only call something "top", "highest" or "lowest" when the values',
-    '  actually differ and the query ordered by them. When everything ties,',
-    '  say so plainly.',
-    '- A warning attached to a query result is about your own SQL. Act on it',
-    '  and re-run before answering, rather than passing it to the user.',
-  ].join('\n'),
+  // The prompt and tools follow the call's tool selection (`agent-tools`,
+  // ADR-0022); a call without one gets every tool and the full prompt.
+  instructions: ({ requestContext }) =>
+    assistantVariant(toolSelectionFrom(requestContext)).instructions,
+  // The on-demand skills of the call, given to the model through Mastra's
+  // skill tool (ADR-0025): built-in (with overrides), user and project skills
+  // and the agent's own copies.
+  skills: ({ requestContext }) => assistantSkills(requestContext),
   // Dynamic model resolved at call time from the persisted LLM settings
   // (provider / model / runtime API key); see ../model-resolver. A session
   // bound to a user agent may override the model name for this agent only.
@@ -157,9 +127,7 @@ export const assistantAgent = new Agent({
     if (typeof workspaceId !== 'string' || !mastra) return undefined;
     return mastra.listWorkspaces()[workspaceId]?.workspace;
   },
-  tools: {
-    ...datasetTools,
-    ...visualTools,
-    ask_clarification: askClarificationTool,
-  },
+  // Harness-loaded skills (deep-analysis) are sent by their callers.
+  tools: ({ requestContext }) =>
+    assistantVariant(toolSelectionFrom(requestContext)).tools,
 });

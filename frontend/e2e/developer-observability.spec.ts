@@ -1,9 +1,6 @@
 import { Page } from '@playwright/test';
 import { test, expect, RunningApp } from './fixtures/app.fixture';
-import {
-  createWorldCupWorkspace,
-  openSessions,
-} from './helpers/app-actions';
+import { createWorldCupWorkspace, openSessions } from './helpers/app-actions';
 import { OtlpReceiver, startOtlpReceiver } from './helpers/otlp-receiver';
 
 // Mirrors the "Developer observability export" Feature in

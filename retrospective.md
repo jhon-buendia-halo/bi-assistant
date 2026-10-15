@@ -14,6 +14,242 @@ Entry template:
 
 ---
 
+## 2026-10-15 — Merge of `main` (v0.34.0) into the BA-9 branch
+
+### What went well
+- Renumbering the branch's own ids in a commit *before* the merge (`58abf47`) kept them unambiguous: a rule like R70 could still only be ours, so a script restricted to the lines the branch added could shift 328 lines safely. After the merge the same script could not have told main's R70 from ours.
+- Renaming our `eval-sets.ts` to `eval-set-files.ts` before the merge turned an add/add conflict between two unrelated modules into no conflict at all.
+- Four resolvers, each owning a disjoint list of files and forbidden from writing to the git index, finished 27 files with no clashes; the merge was staged once, at the end.
+- A script comparing main's code-defined World Cup and Formula 1 cases with what the JSON loader produces proved the two sets match (12/12, 12/12, 10/10), instead of eyeballing JSON.
+
+### What went wrong
+- A file that merged cleanly was broken: `databricks/register.ts` still signed in through `POST /auth/local/sign-in`, which BA-232 removed on main. Its unit test mocked the sign-in, so it stayed green. The spec resolver found it by reading, not a test.
+- `frontend/e2e/agents.spec.ts` imported a helper main had deleted (`helpers/local-auth`); `ng build` doesn't compile `e2e/`, so the frontend resolver reported green.
+- The spec resolver ran at the same time as the code resolvers, so its "code problems" list was half stale by the time it arrived, and it had to be sent a second round with the other resolvers' notes.
+- I mapped one rule number twice in my own notes (the category-checks rule is R125 after the shift, not R168); the spec resolver caught it against the spec.
+- Main's new welcome page added two more buttons named "Agents", and two of our E2E scenarios clicked the first match on the page; they only failed after the merge.
+
+### What to do differently
+- When main removes a feature (an API, a route, a helper), grep both sides' *added* code for its names after the merge, not only the conflicted files: `git diff <base> HEAD -U0 | grep '^+' | grep -E '<removed names>'`.
+- After resolving E2E files, compile them with `npx playwright test --list <spec>` and `npx tsc --noEmit -p e2e/tsconfig.json`; `ng build` does not cover `e2e/`.
+- Run the spec resolver after the code resolvers, or hand it their notes files up front, so it describes the merged code rather than one side.
+- In E2E, open top-level pages through the navigation rail (`getByRole('complementary', { name: 'Navigation rail' })`), never by a page-wide button name.
+- Before merging main, renumber the branch's ids past main's and rename clashing modules in a separate commit, applied only to lines the branch added; keep the old→new map in the evidence.
+
+## 2026-10-15 — 1.14.2 to 1.14.19 acceptance gate and merge of epic BA-213
+
+### What went well
+- Splitting the gate across four E2E agents by spec-file ownership, each running Playwright on the one shared build with its own `--output` folder, finished 18 stories' E2E in about 25 minutes with no build clash. The final full suite (164 passed) proved the fixes broke nothing.
+- Telling the agents not to touch production code made every app bug come back with a diagnosis: three package-card bugs, R75 and two prompt gaps were fixed once, centrally, then re-run.
+- A frontend unit test caught my first R75 fix, which filtered the built-in skills at the source and hid the RFP Builder's own stage skills from its Graph.
+
+### What went wrong
+- About 330 files sat uncommitted across four stories before anyone asked; the per-story commits had to be split by whole file, so a file touched by several stories sits in one of their commits.
+- The eval gate ran on a saved model whose OpenAI credits ran out mid-run, and parallel RFP eval runs shared one database and saw each other's drafts (a false failure). The epic merged with the evals deferred.
+- Two agents created the same new spec file (`session-management.spec.ts`) at the same time, and two shared one scratch file name; one overwrote the other's first version.
+- `gh` was active on the personal account, so the first PR creation failed; Karma had no Chrome until `CHROME_BIN` pointed at Playwright's Chromium.
+
+### What to do differently
+- Commit each story when its fast loop is green; never let a second story start on top of uncommitted work.
+- Before an eval gate, check the provider has credit for about 3 × (cases) × 2 turns and run the RFP set's runs one after another (they share `intellify_mercer_demo`).
+- When fanning out E2E agents, assign every new Feature's spec file to exactly one agent up front (a Feature shared by two stories goes to one of them) and give each agent its own scratch subfolder.
+- Create PRs with `GH_TOKEN=$(gh auth token --user jhon-buendia-halo)` and run frontend unit tests with `CHROME_BIN` set to Playwright's Chromium (both recorded in memory).
+
+## 2026-10-14 — 1.14.1 ADR, epic spec and roadmap for agent tools and skills (BA-214)
+
+### What went well
+- Searching Jira for open issues on skills before creating the epic found BA-211 (remove the user and project skill folders), which contradicted the plan's "pick existing folder skills". One question settled it before any issue was created, and the stories were reordered around it.
+- Measuring the prompt from the compiled agent (`assistantAgent.getInstructions()`), not from the spec text, gave exact numbers per section. It showed the `## Skills` section is already sent on every call, which made the cost of assigning skills small and easy to argue.
+
+### What went wrong
+- My first suggestion said the first user skill would add about 1,045 characters to every turn. I took that from agents.md 7.4 ("No built-in skill is on demand"), which is stale: `curated-knowledge` has been on demand since ADR-0020, so the section was already there.
+- I proposed reusing folder skills without first checking Jira for open work on skills. BA-211, created the same morning, removed them.
+- Jira from the worktree took three tries: no `.env` there, a blocked attempt to copy the credentials, and a create refused over `$'…'` quoting. `JIRA_CONFIG_FILE` was in the script all along.
+
+### What to do differently
+- Before proposing a design for a subsystem, search Jira for open issues about it (`project = BA AND summary ~ "<area>" AND statusCategory != Done`) and read any created in the last two weeks.
+- Take prompt sizes from the compiled agent, never from spec prose. Keep `evidence/1.14.1/measure-prompt.cjs` as the way to do it.
+- In a worktree, run `jira.sh` with `JIRA_CONFIG_FILE=<main checkout>/.env`, pass plain double-quoted one-line descriptions, and never copy the `.env`.
+
+## 2026-10-14 — 1.1.2 Intellify sample as a Testing Data fixture (BA-212)
+
+### What went well
+- Building the database by hand first (generator in the scratchpad, loaded and registered through the API) settled the model conversion before any repo change. Turning it into a fixture then took one catalogue entry plus the generator moved into `scripts/`.
+- The generator is deterministic (seeded RNG, gzip with `mtime=0`), so "recreate it later" holds both through Load in the app and by regenerating the file. Evidence shows the same hash twice.
+- The new catalogue test checks every bundled seed against its required tables, which covers World Cup and Formula 1 too. Before, a seed missing a table only showed up on a real load.
+- The E2E loads into its own database name and drops it afterwards, so it exercises "created the database" without touching the shared `intellify` database.
+
+### What went wrong
+- The first request ("create a data source") was done outside the repo; the follow-up ("add it as seed") then needed the epic gate, a Jira story and a branch. Asking up front where the result should live would have saved a round trip.
+- The dataset I registered by hand carried column descriptions; the fixture's dataset doesn't, because the Postgres connector ignores column comments. That gap surfaced only when the descriptions moved into the seed.
+- A wait loop used `pgrep -f "npm --prefix backend ci"` and matched its own command line, so it never ended (10-minute timeout). That's the same trap as the `pkill -f` lesson.
+- `npm ci` in `frontend/` fails on `main`: `package-lock.json` is out of sync with `package.json` (electron-builder packages). I worked around it with `npm install --package-lock=false`.
+- The Jira script couldn't run from the worktree until the gitignored `.env` was available there.
+
+### What to do differently
+- When a request could become a repo change, ask whether the result should live in the repo (a fixture or seed) or only on this machine before building it.
+- Never wait on a process with `pgrep -f "<its own command>"`. Wait on the background task's notification, or on a file the process writes.
+- For worktree sessions, set the Jira config from the main checkout's `.env` before the first `jira.sh` call, instead of discovering the gap at the epic gate.
+
+## 2026-10-14 — 1.13.13 Built-in skills only: remove user and project skill levels (BA-211)
+
+### What went well
+- Fixing the API shape and the UI removals in the prompt let the specs agent and the code agent work in parallel; the specs matched the code on the first `check-specs.py` run.
+- Hashing `assistantAgent.getInstructions()` before and after proved the prompt byte-identical, which settled that the evals didn't need to run.
+- The E2E agent ran the updated specs against a base-commit build, so the three BA-211 scenarios are shown to fail on base for the intended reasons.
+- Running the one failing frontend unit test on a `git archive` copy of the base proved it fails on `main` too, without stashing or touching another worktree.
+
+### What went wrong
+- The frontend lock file is out of sync with `package.json` (electron-builder's Windows deps), so `npm ci` fails in a fresh worktree; I had to install with `--no-package-lock` to keep tracked files clean.
+- My brief to the specs agent named the file endpoint `…/files`; it is `…/file`. The agent caught it, but a contract in a brief should be copied from api.md, not from memory.
+- The first E2E run showed "an agent without skills says so" failing in a scenario planned as re-run-as-is: a shared helper waited on copy the change removed. Step 6 looked at scenarios, not at helpers.
+- The updated read_file scenario passes on base too: it only dropped its dependency on user skills, so it does not prove BA-211.
+- Several compound shell commands (`git` after `cd &&`, `$(…)` around `jira.sh`) were refused in the isolated worktree and had to be split.
+
+### What to do differently
+- In step 6, grep the impacted spec files' helpers for the copy and test ids the change removes, and list those helpers with the scenarios.
+- When a brief states an endpoint or shape, copy it from api.md.
+- Run `npm install` in `frontend/` and commit the lock file in a separate change, so `npm ci` works in new worktrees.
+- In an isolated worktree, run `git` and `jira.sh` as plain commands from the worktree root, and pass JSON bodies inline in single quotes.
+
+## 2026-10-14 — 1.13.9 to 1.13.12: sectioned assistant prompt, own skill catalog, lint clean, eval checks, assistant reliability (BA-207 to BA-210)
+
+### What went well
+- Generating Appendix A from the code (`assistantAgent.getInstructions()`) after every prompt change kept the spec byte-identical to what the model receives, and caught nothing drifting.
+- Reading each failed eval case's tool calls before changing anything split the failures cleanly: four were the result-set check rejecting correct answers, the rest were real assistant defects (no clarification on an undefined measure, `create_visual({})`, malformed clarification options, names looked up in a second query, the designer losing the chart's data).
+- The malformed-clarification investigation found a user-facing bug the evals only hinted at: a malformed first call became a card with no options.
+- Lint went to zero in a parallel subagent in its own worktree while the prompt work went on; the cherry-pick had no conflicts.
+
+### What went wrong
+- I described "curated-knowledge on demand" to the user before checking which built-ins could be on demand; the clarification that followed (deep-analysis' phase templates, the designer without tools) should have been in the first question.
+- The 100% bar took five rounds of 3 eval runs (9b4e0c2, 306f361, 9c29efa, c948702, f30bca2), each before the last surfacing a new rare failure; two rounds were stopped half-way once a run had failed.
+- Two E2E tests failed on my own test code (`.card` matched `<main class="card">`; a turn matcher that looked at the whole history) before they tested anything.
+- A plain `nest build` in the worktree wiped the web UI the running app served (`deleteOutDir`).
+- I first answered an out-of-band workflow question with a status report on another topic.
+- The gate took five rounds of 3 eval runs; the fourth (c948702) ended the night at 9, 10, 10 and the merge waited a day. The fifth (f30bca2, rule A12) passed 10, 10, 10.
+
+### What to do differently
+- For an eval failure, read `toolCalls[].input/output` and decide model fault vs check fault before touching code; stop a 3-run round as soon as one run fails and fix first.
+- Give model-facing tool parameters scalar types (a string with one item per line) instead of arrays of objects: models serialize arrays wrongly now and then, and every validation error fails `check-no-tool-errors`.
+- In E2E stubs, decide "which turn" from the request's last user message, never from any user message in the history.
+- After `npm run build` in a worktree that serves an app, run `npm run build:web` and check an asset returns 200.
+
+## 2026-10-14 — Workflow: fast loop, then acceptance gate (CLAUDE.md)
+
+### What went well
+- The user's manual test now comes right after the code, so a change he rejects no longer costs an impact analysis, E2E edits, a full suite, evidence and a retrospective.
+
+### What went wrong
+- For every change he requested, the whole eleven-step workflow ran from scratch, including two full E2E suites (web and org, about 10 minutes) and evidence, before he could try it. Several of those changes were then reworked, and the evidence was redone.
+- The first answer to his question about the workflow went unanswered behind a status report on an unrelated check.
+
+### What to do differently
+- After step 8 and the quick checks, hand over the running app and stop. Start steps 6, 7, 9, 10 and 11 only once the user says the change is accepted.
+- In step 9, run the spec files step 6 lists, not the suite. When an agent's prompt, skills, tools, context or model routing changed, run its evals on the base commit and on the branch, and re-run any flipped case until each build has 3+ runs.
+- Answer an out-of-band question in the very next reply, before any status update.
+
+## 2026-10-14 — 1.13.8 Agent page Skills tab (BA-206)
+
+### What went well
+- Writing api.md 34a/34b before any code let the frontend worker and the backend run in parallel against one contract. The two halves met on the first integrated run, with no shape mismatch.
+- The screenshot with the Details panel open caught the side-by-side file view collapsing to about 200 px of content, a defect no E2E assertion could see. A container query (`@2xl:flex-row`, as admin-overview uses) fixed it.
+
+### What went wrong
+- My own E2E helper raced the hub render: `if (await showMore.isVisible())` read "not yet rendered" as "not needed", so one scenario failed in the full suite. Earlier it had passed by luck.
+- The spec named a `danger` text colour that has no token, and said the skills load "when the tab is first opened". The tab label needs the count first, so both were corrected after review.
+
+### What to do differently
+- Never branch on `isVisible()` in an E2E helper to decide whether to click: it doesn't wait. Click the control the flow needs unconditionally, or `await expect(...).toBeVisible()` first.
+- Before writing UI copy and colours into ui.md, grep `tokens.css` for each token named, and check where any count in a label comes from.
+
+## 2026-10-14 — 1.13.7 Skill levels: built-in, user and project skills (BA-205)
+
+### What went well
+- Overrides are checked generically against the built-in's own files: every `phases/` and `reference/` file, with the same `{{placeholders}}`. There's no per-skill table to keep in sync, and an override that would break deep analysis's placeholder fill is skipped at startup instead of failing in a background job.
+- The red-first E2E reused the recording stub, so "a user skill reaches the catalog" and "an override reaches the turn" are proved on the real request, not inferred from the loader.
+- `resolveSkills(builtIn, roots, warn)` is pure apart from reading files, so every precedence and skip rule has a temp-dir unit test without the process-wide cache.
+
+### What went wrong
+- The Kanban tracking cards were created `ready`, the state the dispatcher picks up. A worker it auto-assigned pushed the branch and opened PR #74 without approval, and it had to be closed.
+- The first design draft let any agent be named in `agents:`. Only reading `visualization.agent.ts` showed the designer has no tools, so it could never load an on-demand skill.
+
+### What to do differently
+- Create Kanban tracking cards blocked or done, never ready, and confirm the state with `hermes kanban list` straight after creating them.
+- Before letting configuration name an agent for on-demand skills, check that the agent runs with tools and passes `skills:`. Keep that list in code (`ON_DEMAND_AGENTS`).
+
+## 2026-10-13 — 1.13.6 Fix: `npm run evals:assistant` always refuses (BA-204)
+
+### What went well
+- I looked for the root cause of the second suspect, `result-set-match` rejecting correct answers, before fixing it. It behaves as specified: the model's `stage LIKE '%final%'` returned 4 to 11 rows where the reference has 1. Loosening the check would have let "list every team" pass "who won", so it stayed as it is.
+- The selection is a pure function checked before the backend boots, so a bad selection costs nothing. The unit test needs no Nest, Mastra or ESM mocks.
+- The real CLI run was built in a scratch checkout, so the app Jhon was testing from this worktree's `dist/` never changed under him.
+
+### What went wrong
+- The bug shipped because nothing ever ran the CLI. The in-app runner passes case ids, so its tests stayed green while the documented script couldn't run at all.
+- "Fix all the issues in this PR" was ambiguous: there was no PR yet, and two of the issues I'd listed weren't defects. It took an interruption to settle it.
+
+### What to do differently
+- For every documented npm script that wraps app code, keep one cheap test that runs the real entry point's refusal path (no model call).
+- When a report lists "issues", tag each one *bug*, *behaves as specified* or *decision for you*, so "fix all the issues" has one meaning.
+
+## 2026-10-13 — 1.13.5 Split interactive-visuals into spec-mode and freeform references (BA-203)
+
+### What went well
+- The references were cut verbatim from line ranges of the old file, and a diff against `f3ef18e` proved it. So the visual rules that are a contract (agents.md §7.2) cannot have drifted, and the only change the model sees is which half arrives.
+- The recording-stub E2E drives the real designer pipeline end to end. Every earlier visual E2E mocked the designer route, so the designer's request had never been asserted.
+
+### What went wrong
+- Both this story and 1.13.2 added an `appSkillBody` to `app-skills.ts` in parallel worktrees, with different trimming. The brief warned about the name but not the semantics. The cherry-pick conflicted, and one test had to change to the trimmed form.
+- The after-epic eval run flipped `champion-2022`, and it took six extra runs to show the case is flaky on both builds (2/4 before, 1/4 after). A single run before and a single run after can't tell a 50% case from a 25% one.
+
+### What to do differently
+- When two parallel briefs might add the same helper, specify its exact behaviour in both briefs (signature *and* output, e.g. "trimmed at both ends"), or have one unit own it and the other import it after the merge.
+- For a behaviour-preserving prompt change, run each eval case at least 3 times per build before comparing. A single run is a sample of one from a flaky distribution.
+
+## 2026-10-13 — 1.13.4 Phased deep-analysis skill (BA-202)
+
+### What went well
+- The golden tests were captured from the code *before* the refactor and kept unchanged after it. That proves the model receives byte-identical prompts, which is stronger and cheaper than a stub E2E of a multi-call background job.
+- Placeholder filling is one-pass and never re-scans inserted text, so a user question containing `{{…}}` reaches the model unchanged. It fails loudly on an unfilled or missing placeholder.
+
+### What went wrong
+- Nothing user-visible. The subagent's report needed the agents.md text rewritten: it lives in a protected file I edit myself, and the proposal text wasn't in the part of the transcript I could read.
+
+### What to do differently
+- Ask subagents to write their spec-text proposals to a file in their worktree (`proposals/agents-md.md`), not only in the final report, so the text survives a truncated transcript.
+
+## 2026-10-13 — 1.13.2 Slim assistant core prompt: curated-knowledge skill, harness-loaded (BA-200)
+
+### What went well
+- One helper, `knowledgeContext(block)`, is the only way to send Block 3, so the chat turn, the grounding pass, deep analysis and the eval suite cannot drift apart.
+- Checking agents.md Appendix A against the prompt the code builds, and Appendix B against the skill body, gave an exact equality check instead of a read-through.
+
+### What went wrong
+- The re-scope (cut `visual-tailoring`, merge BA-201) came after the epic spec was confirmed. That is already recorded under 1.13.1, and it is the same lesson.
+- Jira has no "Won't do" transition in project BA, so BA-201 stays "To Do" with an explanatory comment. It shows as open work on the board.
+
+### What to do differently
+- When a story is cut, ask the user how to close it in Jira (which transition, or delete) at the moment of the cut, instead of leaving it open with a comment.
+
+## 2026-10-13 — 1.13.1 ADR, epic spec and skill loader for app-owned skills (BA-199)
+
+### What went well
+- Reading Mastra 1.66's own code (the skills processor, `createSkillTools`, the agent-level `skills` option) before writing the spec gave a design that uses the framework rather than working around it. Each agent declares its skills, and workspaces carry none.
+- A throwaway probe spec recorded what the assistant's request really carried before any change: the designer's skill in its catalog, three skill tools and seven workspace file tools. That turned a guess into the story's failing E2E, and it closed an open question in agents.md.
+- Measuring the prompt section by section (curated knowledge 1,683 chars; visuals 427; catalog plus usage note 1,045) settled the scope with numbers. Two confirmed skills were cut before any code was written for them.
+- The startup check was proven on the built CLI with a broken skill in `dist/`, and the upgrade path with a session created by the previous build.
+
+### What went wrong
+- The first eval baseline used the `gpt-4o-mini` fallback and scored 0/10. The model passes `limit: 1`, so every result-set check fails, and that cost a run before a real model was chosen. The shipped `npm run evals:assistant` can't run at all: it passes no case ids, so the one-fixture preflight always refuses.
+- The epic spec was confirmed with `visual-tailoring` and `sql-dialects` in it. Neither survived contact with the code: the first costs more tokens than it saves, and the second had no existing text to move. I measured after confirmation instead of before.
+- The first old-session check proved nothing: the old build looks its skill up relative to `cwd`, my spawn didn't set it, and no copy was seeded. I caught it only because the script reported `workspaceSkillCopyExistedBeforeUpgrade: false`.
+- The designer unit test was written after the service change, not before it.
+
+### What to do differently
+- Before proposing a skill split, measure every prompt section and the framework's per-turn catalog overhead, and grep for the content each skill would hold. Put the numbers in the epic spec, so a skill with nothing to move or a net token cost never reaches confirmation.
+- Pick the eval model with the user before the first eval run, and check that its key is set (`awk -F= '/^[A-Z_]+=/{print $1, length($2)}' .env.llm.local`). Never use the env fallback model as a regression baseline.
+- When a check script compares an old build with a new one, make it assert its own preconditions (the state the old build should leave) and fail when they don't hold. Start each build with the `cwd` the real launcher uses.
+
 ## 2026-10-13 — 1.1.5 to 1.1.9 Checks, report and judge, domains, Databricks and REST (BA-183 to BA-187)
 
 ### What went well

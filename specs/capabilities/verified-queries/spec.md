@@ -35,7 +35,7 @@ Migration
 - R16. Verified queries stored under the former source-project field SHALL be rewritten to the source-session field on startup, so they are still found for dedupe and not duplicated by the next thumbs-up.
 
 Ownership
-- R17. In both modes a verified query SHALL belong to the owner of the session it came from. Only that user's verified queries SHALL be retrieved into their turns, mark their answers as Verified or be offered as their metric drafts. Rules: [../admin/spec.md](../admin/spec.md) R29.
+- R17. Verified queries SHALL be kept for the one user (the built-in super admin; the stored `ownerId` is a legacy attribute, [data-model.md](../../system/data-model.md)): every verified query SHALL be retrieved into turns, mark answers as Verified and be offered as metric drafts.
 
 ## Edge cases and errors
 

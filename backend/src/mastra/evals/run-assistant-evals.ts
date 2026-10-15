@@ -1,14 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
-import {
-  CurrentUserService,
-  LOCAL_USER,
-} from '../../modules/auth/current-user.service';
 import { SessionsService } from '../../modules/sessions/sessions.service';
 import { KnowledgeService } from '../../modules/knowledge/knowledge.service';
-import { ASSISTANT_EVAL_SETS, runAssistantEvals } from './assistant.evals';
+import { randomUUID } from 'crypto';
+import { writeFileSync } from 'fs';
+import { runAssistantEvals } from './assistant.evals';
 import type { AssistantEvalCaseResult } from './assistant.evals';
-import { caseIdsForSet } from './eval-set-files';
+import { selectCliEvalCases } from './eval-cli-selection';
+import { EVAL_SETS, agentForCases, evalTargetFor } from './eval-sets';
 import { judgeLabel, judgeSettingFromEnv } from './judge-option';
 import type { EvalJudgeSetting } from './judge-option';
 import { renderSummaryMarkdown, summarizeEvalResults } from './eval-summary';
@@ -22,12 +21,9 @@ import type { EvalStatus } from './eval-summary';
  * resolver. Booting an application context gives the eval run the same wiring
  * the app has, without opening an HTTP port.
  *
- * Outside a request nobody is signed in (ADR-0012), so the run is explicitly
- * Demo User's: its throwaway sessions and knowledge are Demo User's own.
- *
- * `EVAL_SET` names one set (`world-cup`, `world-cup-rest`, …) and runs only
- * its questions. Without it every set is selected, as before, which the
- * one-sample rule refuses while the sets span several samples.
+ * `EVAL_SET` names one set (`world-cup`, `world-cup-rest`, …) or
+ * `EVAL_CASES` lists case ids; a run needs exactly one of them (agents.md
+ * 8.5).
  *
  * `EVAL_JUDGE` (`off` by default, `on` or `categories`) and
  * `EVAL_JUDGE_CATEGORIES` set the judge option (agents-evals R153). With it
@@ -42,21 +38,28 @@ async function main(): Promise<void> {
   if (datasets.length === 0) {
     console.error(
       'Set EVAL_DATASETS to a comma-separated list of saved dataset names, ' +
-        'e.g. EVAL_SET=world-cup EVAL_DATASETS="World Cup" npm run evals:assistant',
+        'e.g. EVAL_DATASETS="World Cup Core" EVAL_SET=world-cup npm run evals:assistant',
     );
     process.exitCode = 1;
     return;
   }
-
-  // Resolved before the app boots, so a mistyped set costs nothing.
-  let caseIds: string[] | undefined;
-  try {
-    caseIds = caseIdsForSet(ASSISTANT_EVAL_SETS, process.env['EVAL_SET']);
-  } catch (err) {
-    console.error(err instanceof Error ? err.message : String(err));
+  // Pick the questions before booting anything: with no selection every set
+  // would run, and the one-fixture preflight refuses that (agents.md 8.5).
+  const selection = selectCliEvalCases(process.env, EVAL_SETS);
+  if ('error' in selection) {
+    console.error(selection.error);
     process.exitCode = 1;
     return;
   }
+  // The agent the questions run on: the assistant, or the RFP Builder for
+  // EVAL_SET=rfp (agents.md 8.1).
+  const agent = agentForCases(selection.caseIds);
+  if ('error' in agent) {
+    console.error(agent.error);
+    process.exitCode = 1;
+    return;
+  }
+  // The judge option, checked before the app boots too (R153).
   const judge = judgeSettingFromEnv(process.env);
   if ('error' in judge) {
     console.error(judge.error);
@@ -69,20 +72,23 @@ async function main(): Promise<void> {
   });
 
   try {
-    await app
-      .get(CurrentUserService)
-      .runAs(LOCAL_USER, () =>
-        runAsDemoUser(app, datasets, caseIds, judge.setting),
-      );
+    await runEvals(
+      app,
+      datasets,
+      selection.caseIds,
+      agent.agentKey,
+      judge.setting,
+    );
   } finally {
     await app.close();
   }
 }
 
-async function runAsDemoUser(
+async function runEvals(
   app: Awaited<ReturnType<typeof NestFactory.createApplicationContext>>,
   datasets: string[],
-  caseIds: string[] | undefined,
+  caseIds: string[],
+  agentKey: string,
   judge: EvalJudgeSetting,
 ): Promise<void> {
   // Same Nest app the eval-runs.service in-app runner uses, so a throwaway
@@ -101,15 +107,23 @@ async function runAsDemoUser(
       const mark = PROGRESS_MARK[result.status];
       console.log(`${mark}  ${result.id}  (${result.durationMs}ms)`);
       if (result.error) console.log(`      error: ${result.error}`);
-      for (const [id, score] of Object.entries(result.scores)) {
-        console.log(`      ${id}: ${score}`);
+      // Every check, built-in, custom or judge, with why a failed one failed.
+      for (const check of result.checkResults) {
+        console.log(
+          `      ${CHECK_MARK[check.status]} ${check.id}: ${check.description.slice(0, 120)}` +
+            (check.reason ? `\n           ↳ ${check.reason}` : ''),
+        );
       }
     },
     caseIds,
     sessions,
     knowledgeBlock,
+    evalTargetFor(agentKey, randomUUID()),
     judge,
   );
+  // The whole run (answers and tool calls included) for reading failures.
+  const resultsFile = process.env['EVAL_RESULTS_FILE'];
+  if (resultsFile) writeFileSync(resultsFile, JSON.stringify(results, null, 2));
   const summary = summarizeEvalResults(results);
   console.log(`\n${summary.passed}/${results.length} questions passed`);
   if (summary.notScored > 0) console.log(`Not scored: ${summary.notScored}`);
@@ -122,6 +136,13 @@ const PROGRESS_MARK: Readonly<Record<EvalStatus, string>> = {
   passed: 'PASS',
   failed: 'FAIL',
   'not-scored': 'NOT SCORED',
+};
+
+/** Each check's line under its question. */
+const CHECK_MARK: Readonly<Record<EvalStatus, string>> = {
+  passed: 'pass',
+  failed: 'FAIL',
+  'not-scored': 'not scored',
 };
 
 /**

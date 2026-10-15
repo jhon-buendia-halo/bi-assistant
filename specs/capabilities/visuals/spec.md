@@ -30,7 +30,8 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
   - the instruction, if any;
   - the current visual when tailoring;
   - a bounded data block: up to the 3 largest successful result sets in run order, sharing a budget of about 100 rows (never below 20 per set), shrunk until the block is under 40,000 characters;
-  - a deterministic recommended-form block computed from the same rows.
+  - a deterministic recommended-form block computed from the same rows;
+  - the `interactive-visuals` skill for the mode it runs: the router with the spec-mode reference for a spec, with the freeform reference for the fallback, never both ([agents.md](../../system/agents.md) section 7.2).
 
   When rows were cut, the prompt says so.
 - R6. When there are rows, the designer SHALL first produce a visual spec, unless it is tailoring a freeform visual (see R9). A spec has:
@@ -74,8 +75,8 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
   - the version control is highlighted.
 - R17. Reverting SHALL only move the current-version pointer to an existing version. No files change. An unknown version is rejected with "Version <N> does not exist".
 - R18. Creating (button), tailoring (panel) and reverting SHALL each add a visual event card to the chat, persisted as an assistant message: `Created|Updated|Reverted interactive visual "<title>" (v<N>).` A chat turn that created or updated a visual carries the same card on its answer message. Refreshing and auto-repair SHALL NOT add chat messages.
-- R19. When a chat turn creates or updates a visual, the panel SHALL switch to that visual at the new version while the turn is still streaming, without disturbing the turn (see [sessions-chat](../sessions-chat/spec.md) R21).
-- R20. Opening a session SHALL load into the panel the visual that changed most recently, at its current version.
+- R19. When a chat turn creates or updates a visual, the panel SHALL switch to that visual at the new version while the turn is still streaming, without disturbing the turn (see [sessions-chat](../sessions-chat/spec.md) R21). The visual becomes the latest item of the session's panel history ([agent-panel](../agent-panel/spec.md) R10).
+- R20. Opening a session SHALL load into the panel the latest item the agent or the user showed, at its current version when that is a visual: the visual that changed most recently when nothing else was shown after it ([agent-panel](../agent-panel/spec.md) R12). Every visual of the session is also an item of the unified shown-items history ([agent-panel](../agent-panel/spec.md) R10); an agent can bring a visual back with `show_in_panel` ([agent-panel](../agent-panel/spec.md) R6).
 
 ### Refresh data in place
 
@@ -127,6 +128,32 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
 - R31. The designer's styles SHALL be confined to the visual's own area so they cannot restyle the frame. Style imports SHALL be stripped.
 - R32. The visual SHALL read its rows from the embedded data at runtime, never from values baked into its code. The same embedded data feeds the frame, so a refresh updates both.
 - R33. A frame generated or refreshed at a given time SHALL show that time. Otherwise it shows the version's last refresh time, or failing that its creation time.
+
+- R40. The frame SHALL follow the app's Light or Dark theme (BA-230), numbered after R39 because it was added later. It defines its colours as CSS custom properties, each with a Light and a Dark value, on the document root:
+
+  | Token | Use | Light | Dark |
+  |---|---|---|---|
+  | `--qti-bg` | page | `#ffffff` | `#12233a` |
+  | `--qti-fg` | body text | `rgb(0 0 0 / 0.85)` | `#d5dfec` |
+  | `--qti-fg-strong` | titles, takeaway emphasis | `#001f52` | `#eef4fc` |
+  | `--qti-fg-muted` | labels, captions, footer | `rgb(0 0 0 / 0.6)` | `#93a6bf` |
+  | `--qti-surface` | subtle fills: chips, cards, code, KPI tiles | `#f8fafc` | `#16294a` |
+  | `--qti-border` | card, table and divider lines | `rgb(0 0 0 / 0.1)` | `#24384f` |
+  | `--qti-link` | links | `#0b41ad` | `#5b95ff` |
+  | `--qti-focus` | focus rings | `#0b41ad` | `#7fb0ff` |
+  | `--qti-cat-1` … `--qti-cat-8` | series palette | sky `#0284c7`, amber `#d97706`, emerald `#059669`, violet `#7c3aed`, rose `#e11d48`, cyan `#0891b2`, lime `#65a30d`, orange `#ea580c` (the -600 shades, 3:1 on white) | the -400 shades |
+  | `--qti-on-cat` | text on a filled series colour (pie slices, dense heatmap cells) | `#ffffff` | `#0b1626` |
+  | `--qti-pos` / `--qti-neg` | positive and negative values | `#059669` / `#dc2626` | `#34d399` / `#f87171` |
+  | `--qti-grid` | gridlines | `rgb(0 0 0 / 0.08)` | `rgb(255 255 255 / 0.08)` |
+  | `--qti-axis` | axis labels | `rgb(0 0 0 / 0.6)` | `#93a6bf` |
+  | `--qti-tooltip-bg` | tooltips | `#ffffff` | `#1a3357` |
+
+  The Light values mirror the app's Light tokens and the Dark values its Dark tokens ([ui.md](../../system/ui.md) 6.0).
+  - The document root carries `data-theme="light|dark"`. The visual panel writes the app's resolved theme into the document before it loads. When the theme changes while a visual is open, the panel sends the frame `{type: 'qti-theme', theme}` and the frame bridge switches the attribute in place, so the visual is not reloaded and its state, hover and filters survive. This message goes host to frame only; R35 is unchanged.
+  - A document with no `data-theme`, such as the `index.html` of R37 opened on its own, follows the operating system's `prefers-color-scheme`.
+  - The chart runtime's text colours (axis, value and pie labels, the legend and the detail table's summary) use these tokens, so spec visuals follow the theme. A heatmap cell's value is `--qti-on-cat` when the cell is more than 55% opaque, `--qti-fg-strong` otherwise.
+  - The panel rebuilds each document from the stored bundle on every load, so every existing visual is themed when opened; nothing is migrated.
+  - The designer takes every colour from the tokens ([agents.md](../../system/agents.md) 6.4). A freeform visual whose CSS hardcodes colours keeps them (known limitation).
 
 ### Sandboxing
 
@@ -220,7 +247,7 @@ Placement in the shell's right "Details panel" is in [ui.md](../../system/ui.md)
   - "Tailor" (title "Tailor this visual"), which opens a form with "Chart type", "Sort", "Top N (3–50, optional)" (placeholder "All items"), the instruction preview, the error line, and "Cancel" / "Apply".
   - "Refresh data" (title "Refresh data (re-run the stored query)").
   - "Download bundle" (title "Download bundle (HTML, CSS, JS, answer.md, data.json)").
-  - When the session has visuals, a gallery button (title "Saved visuals in this session", with a count). It lists each visual, most recently changed first, with its title and `v<N> · <date>`. Clicking one opens it at its current version.
+  - There is no saved-visuals menu here: the session's visuals are switched through the Session panel's "Shown in this session" menu (agent-panel), which lists every visual, newest first.
 
   Every action shows a spinner while busy.
 - **Panel body states**:
@@ -248,7 +275,7 @@ The scenario "Renders a deterministic interactive visualization and its version 
 
 ### Feature: Visual tailoring
 
-E2E: none yet.
+E2E: `frontend/e2e/visual-tailoring.spec.ts` covers "The visual follows the app's theme" (the theme is switched through System and the operating system setting, so the chat and its panel stay open) and "An older visual opens in the current theme" (the stored visual is rewritten on disk as a legacy bundle whose own styles hardcode the old dark frame); the other scenarios have none yet.
 
 ```gherkin
 Feature: Visual tailoring
@@ -329,8 +356,8 @@ Feature: Visual tailoring
 
   Scenario: Switching between saved visuals
     Given the session also has a "Goals per tournament" visual
-    When I click "Saved visuals in this session"
-    Then I see "World Cup champions" and "Goals per tournament" with their versions
+    When I click "Shown in this session"
+    Then I see "World Cup champions" and "Goals per tournament"
     When I click "Goals per tournament"
     Then the panel shows "Goals per tournament"
 
@@ -346,6 +373,53 @@ Feature: Visual tailoring
   Scenario: The readable frame explains the visual
     Then the "Interactive visualization" frame shows, in order, the title, "Question", the visual, "Takeaway", "Analysis", "How this was worked out" and "Data used (1 query)"
     And its footer shows "Session: World Cup analysis · Version 1"
+
+  Scenario: The visual follows the app's theme
+    Given the app is in the Light theme
+    And a visual is open in the panel
+    Then the frame and its chart are light
+    When I switch Appearance to Dark
+    Then the open visual turns dark without reloading
+    And its state, hover and filters are kept
+
+  Scenario: An older visual opens in the current theme
+    Given a visual made before the themed frame existed
+    And the app is in the Dark theme
+    When I open the visual
+    Then the frame and its chart are dark
+```
+
+### Feature: Skills the designer is given
+
+E2E: `frontend/e2e/designer-skills.spec.ts`
+
+What the visual designer is told, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent" in [sessions-chat](../sessions-chat/spec.md#feature-sessions-started-from-an-agent); here it also runs one query for the answer and returns a valid spec for the designer's call. Which parts of the `interactive-visuals` skill reach the designer: [agents.md](../../system/agents.md) sections 6.4 and 7.2; decision ADR-0018.
+
+```gherkin
+Feature: Skills the designer is given
+
+  Background:
+    Given a "World Cup Core" dataset exists
+    And the model is the recording stub
+
+  Scenario: A spec visual is designed with the spec-mode instructions only
+    Given a session over "World Cup Core"
+    When I send "How many matches were played at each stage?"
+    And the model runs a query counting the matches per stage, then answers
+    Then I see the answer with "Data used (1 query)"
+    When I click "Generate interactive visuals"
+    Then I see the toast "Interactive visual generated"
+    And the panel shows the visual "Matches by stage"
+    And the designer received the interactive-visuals router and its spec-mode reference
+    And the designer received nothing of the freeform reference
+
+  Scenario: A chart asked for in the chat is designed from my request when the model gives no instruction
+    Given a session over "World Cup Core"
+    And I sent "How many matches were played at each stage?" and the model answered from one query
+    When I send "Chart the matches per stage as bars."
+    And the model calls create_visual with no instruction, then answers
+    Then the panel shows the visual "Matches by stage"
+    And the designer received "Chart the matches per stage as bars." as its instruction
 ```
 
 ## Acceptance
@@ -360,4 +434,4 @@ Feature: Visual tailoring
   - **Repair data source.** Repair regenerates from the source answer's data, not from the current version's stored (possibly refreshed or merged) data. A repaired tailored visual can lose the rows a chat turn added.
   - **Default source answer.** When the assistant creates a visual without naming an answer, "latest completed answer" can be a previous visual event card rather than the current turn's answer, which is not persisted yet.
 
-<!-- sources: backend/src/modules/sessions/visualization.service.ts, visualization-document.ts, visual-spec.ts, visual-runtime.ts, chart-heuristic.ts, zip-archive.ts, sessions.service.ts (generate/tailor/revert/refresh/repair/saveVisualMetadata), sessions.controller.ts; backend/src/mastra/agents/visualization.agent.ts, tools/visual.tools.ts; frontend/src/app/features/sessions/components/interactive-visual-panel/*, session-chat/session-chat.html|ts (visual cards, follow-up chips), services/sessions-api.service.ts; frontend/src/app/app.ts (showVisualization, revert, download, generate, loadLatestVisualization); frontend/e2e/chat-and-visuals.spec.ts -->
+<!-- sources: backend/src/modules/sessions/visualization.service.ts, visualization-document.ts, visual-spec.ts, visual-runtime.ts, chart-heuristic.ts, zip-archive.ts, sessions.service.ts (generate/tailor/revert/refresh/repair/saveVisualMetadata), sessions.controller.ts; backend/src/mastra/agents/visualization.agent.ts, tools/visual.tools.ts; frontend/src/app/features/sessions/components/interactive-visual-panel/*, session-chat/session-chat.html|ts (visual cards, follow-up chips), services/sessions-api.service.ts; frontend/src/app/app.ts (showVisualization, revert, download, generate, loadLatestVisualization); frontend/e2e/chat-and-visuals.spec.ts, designer-skills.spec.ts; the frame tokens and theme bridge in visualization-document.ts, visual-runtime.ts and the interactive-visual-panel -->

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { OWNED_EVAL_RUNS_STORE } from '../../../infrastructure/database/doc-store';
+import { EVAL_RUNS_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
 import type { EvalRunView } from '../eval-runs.service';
 import { LEGACY_JUDGE_SETTING } from '../../../mastra/evals/judge-option';
@@ -37,11 +37,11 @@ export function withEvalRunDefaults(run: StoredEvalRun): EvalRunView {
   };
 }
 
-/** Past and in-flight eval runs, newest first; owner-scoped (data-model 3.15). */
+/** Past and in-flight eval runs, newest first. */
 @Injectable()
 export class EvalRunsRepository {
   constructor(
-    @Inject(OWNED_EVAL_RUNS_STORE)
+    @Inject(EVAL_RUNS_STORE)
     private readonly store: DocStore<EvalRunView>,
   ) {}
 

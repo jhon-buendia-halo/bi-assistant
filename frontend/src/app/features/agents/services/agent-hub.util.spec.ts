@@ -6,7 +6,9 @@ import {
   canStartChat,
   hubEmptyMessage,
   matchesQuery,
+  newSessionAgentOptions,
   startChatBlockedReason,
+  startsInComposer,
   visibleCards,
 } from './agent-hub.util';
 
@@ -237,5 +239,70 @@ describe('startChatBlockedReason', () => {
 
   it('never blocks the Official agent, which has no datasets', () => {
     expect(startChatBlockedReason(assistant)).toBeNull();
+  });
+});
+
+describe('RFP Builder start chat', () => {
+  const rfp: Agent = {
+    ...agent('rfp', 'RFP Builder', 'official'),
+    datasets: ['Intellify RFP API'],
+    chatRequirement: 'Load the sample first',
+  };
+
+  it('is blocked with the requirement while its dataset is missing', () => {
+    expect(
+      startChatBlockedReason({
+        ...rfp,
+        missingDatasets: ['Intellify RFP API'],
+      }),
+    ).toBe('Load the sample first');
+    expect(startChatBlockedReason(rfp)).toBeNull();
+  });
+
+  it('creates the session from the agent; the assistant opens the composer', () => {
+    expect(startsInComposer(rfp)).toBe(false);
+    expect(startsInComposer(agent('assistant', 'A', 'official'))).toBe(true);
+  });
+});
+
+describe('newSessionAgentOptions (New conversation Agent picker)', () => {
+  const rfp: Agent = {
+    ...agent('rfp', 'RFP Builder', 'official'),
+    datasets: ['Intellify RFP API'],
+    chatRequirement: 'Load the sample first',
+  };
+  const live = (name: string, extra: Partial<Agent> = {}): Agent => ({
+    ...agent(name.toLowerCase(), name, 'user'),
+    status: 'live',
+    datasets: ['Core'],
+    ...extra,
+  });
+
+  it('lists the Official agents with a dataset, then Live agents, alphabetical', () => {
+    const options = newSessionAgentOptions([
+      live('Zeta'),
+      agent('assistant', 'Assistant', 'official'),
+      live('Alpha'),
+      agent('planner', 'Planner', 'system'),
+      { ...live('Draft one'), status: 'draft' },
+      rfp,
+    ]);
+    expect(options.map((o) => o.agent.name)).toEqual([
+      'RFP Builder',
+      'Alpha',
+      'Zeta',
+    ]);
+    expect(options.every((o) => o.disabledReason === null)).toBe(true);
+  });
+
+  it('keeps an agent that cannot start listed, with its reason', () => {
+    const options = newSessionAgentOptions([
+      { ...rfp, missingDatasets: ['Intellify RFP API'] },
+      live('Scratch', { missingDatasets: ['Core'] }),
+    ]);
+    expect(options.map((o) => o.disabledReason)).toEqual([
+      'Load the sample first',
+      NO_DATASETS_LEFT,
+    ]);
   });
 });

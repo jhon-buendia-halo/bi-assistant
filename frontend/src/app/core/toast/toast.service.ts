@@ -1,5 +1,4 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { PERMISSION_DENIED_MESSAGE } from '../auth/auth.models';
 import { DiagnosticsService } from '../diagnostics/diagnostics.service';
 
 export type ToastKind = 'success' | 'error' | 'info';
@@ -25,14 +24,6 @@ export class ToastService {
   }
 
   error(message: string): void {
-    // A 403 is toasted by the HTTP interceptor and often again by the view
-    // that made the call; the permission toast shows once (ui.md 1.6).
-    if (
-      message === PERMISSION_DENIED_MESSAGE &&
-      this.toasts().some((t) => t.kind === 'error' && t.message === message)
-    ) {
-      return;
-    }
     this.diagnostics.record('error', 'user-visible', message);
     this.show('error', message, ERROR_DURATION_MS);
   }

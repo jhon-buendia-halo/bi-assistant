@@ -372,14 +372,8 @@
       "category": "discovery",
       "question": "What data do I have available to analyse?",
       "intent": "Pure discovery — must inspect the session datasets rather than invent entities or run SQL.",
+      "notes": "The session context already lists the entities, so calling list_entities is not required (BA-209).",
       "checks": [
-        {
-          "type": "calledTool",
-          "args": {
-            "tool": "list_entities"
-          },
-          "criterion": "D2"
-        },
         {
           "type": "includes",
           "args": {
@@ -625,6 +619,66 @@
         }
       ],
       "judgeRubric": "The user asked for a chart of goals scored by each team in the 2022 World Cup knockout stage. Score pass=true only if a create_visual (or update_visual) tool call succeeded and its title/description plausibly describes a chart of goals per team for the 2022 knockout matches (not an unrelated metric, an unrelated tournament/year, or a chart that clearly covers something else). Score pass=false if no visual tool call succeeded, or the visual it produced does not match this request."
+    },
+    {
+      "id": "no-clarification-best-team",
+      "category": "fuzzy-scope",
+      "tags": ["tool-selection"],
+      "question": "Which team performed best?",
+      "intent": "The ambiguous question again, for an agent without ask_clarification — it must pick a reading, answer it and state the assumption.",
+      "notes": "The ambiguous-best-team question for an agent without ask_clarification (BA-217). Filed under fuzzy-scope rather than ambiguous: with no way to ask, the expected behaviour is that category's, to answer and name the measure it took as best. It keeps the checks it came with.",
+      "agentTools": ["sample_rows", "visuals"],
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "ask_clarification"
+          },
+          "criterion": "D5"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "judgeRubric": "The question (\"Which team performed best?\") does not say what \"best\" means, and this assistant cannot ask the user a question back, so it must pick a reading itself and answer it. Score pass=true only if the final answer explicitly names the measure it took as \"best\" (e.g. matches won, final placing, goals scored) and gives figures for that measure that come from the queries it ran, naming the team or teams that come out on top. Covering several measures is fine as long as each is named and backed by figures. Score pass=false if the answer asks the user which measure they mean instead of answering, gives no figures, does not say which measure it used, or states figures the tool calls do not support."
+    },
+    {
+      "id": "no-visuals-chart-request",
+      "category": "visual",
+      "tags": ["tool-selection"],
+      "question": "Show me a chart of goals scored per World Cup tournament.",
+      "intent": "A chart request for an agent without visuals — it must say it cannot draw one here and give the numbers instead.",
+      "notes": "A chart request for an agent without visuals (BA-217): create_visual must not be called and the figures must still arrive; the judge grades the wording and the totals. It keeps the checks it came with: the visual category's visualKeywords check needs a chart this agent cannot draw.",
+      "agentTools": ["sample_rows", "ask_clarification"],
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G4"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "judgeRubric": "The user asked for a chart of goals scored per World Cup tournament, but this assistant cannot create visuals. In this dataset the knockout matches of 2018 have 23 goals and those of 2022 have 24 (penalty shootouts not counted). Score pass=true only if the final answer says, briefly, that it cannot draw a chart or visual here AND gives the goals per tournament with figures consistent with 23 for 2018 and 24 for 2022 (a table or list is fine; shootout penalties shown separately are fine). Score pass=false if it claims to have created a chart, pastes HTML, CSS or JavaScript, gives no figures, or states totals that contradict 23 and 24."
     }
   ]
 }

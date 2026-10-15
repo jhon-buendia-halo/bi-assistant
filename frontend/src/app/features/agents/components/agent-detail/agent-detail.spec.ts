@@ -1,3 +1,5 @@
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import {
@@ -9,7 +11,6 @@ import {
 } from '../../services/agents-api.service';
 import { DatasourcesApiService } from '../../../datasources/services/datasources-api.service';
 import { Datasource } from '../../../datasources/models/datasource.model';
-import { AuthService } from '../../../../core/auth/auth.service';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { AgentDetail } from './agent-detail';
 
@@ -151,8 +152,10 @@ describe('AgentDetail evals', () => {
       'startEvalRun',
       'getEvalRun',
       'listEvalRuns',
+      'skills',
     ]);
     api.getAgent.and.returnValue(of(ASSISTANT));
+    api.skills.and.returnValue(of({ skills: [] }));
     api.getAgentEvals.and.returnValue(of({ sets: [WORLD_CUP] }));
     api.startEvalRun.and.returnValue(
       of({ ok: true, message: 'Eval run started', jobId: 'job-1' }),
@@ -165,12 +168,13 @@ describe('AgentDetail evals', () => {
     await TestBed.configureTestingModule({
       imports: [AgentDetail],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
         { provide: AgentsApiService, useValue: api },
         {
           provide: DatasourcesApiService,
           useValue: { list: () => of({ datasources: [DATASOURCE] }) },
         },
-        { provide: AuthService, useValue: { can: () => true } },
         {
           provide: ToastService,
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),

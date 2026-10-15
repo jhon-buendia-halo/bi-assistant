@@ -1,0 +1,151 @@
+<nav
+  aria-label="Sessions"
+  data-testid="sessions-list"
+  class="mx-auto flex w-full max-w-[960px] flex-col gap-3"
+>
+  <div class="relative">
+    <lucide-angular
+      [img]="Search"
+      [size]="15"
+      class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-fg-muted"
+    />
+    <input
+      type="search"
+      data-testid="sessions-search"
+      placeholder="Search sessions by name or ID…"
+      aria-label="Search sessions"
+      [value]="query()"
+      (input)="onSearch($event)"
+      class="field pl-10"
+    />
+  </div>
+
+  @if (loading() && sessions().length === 0) {
+    <div class="mt-6 flex items-center justify-center gap-2.5 text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading sessions…</span>
+    </div>
+  } @else if (sessions().length === 0) {
+    <div
+      class="flex flex-col items-center gap-4 py-10 text-center text-[13px] text-fg-muted"
+    >
+      <p>No sessions yet. Start a new conversation or open an agent.</p>
+      <button
+        type="button"
+        (click)="newConversation.emit()"
+        class="btn btn-secondary"
+      >
+        <lucide-angular [img]="SquarePen" [size]="20" />
+        <span>Start New Conversation</span>
+      </button>
+    </div>
+  } @else if (visible().length === 0) {
+    <p class="py-10 text-center text-[13px] text-fg-muted">
+      No sessions match "{{ query().trim() }}".
+    </p>
+  } @else {
+    <ul class="card divide-y divide-border">
+      @for (session of pageRows(); track session.id) {
+        <li
+          [attr.data-testid]="'session-' + session.id"
+          class="list-row group relative flex items-center gap-3 rounded-none border-0 p-0 first:rounded-t-xl last:rounded-b-xl"
+          [class.list-row-selected]="activeId() === session.id"
+        >
+          <button
+            type="button"
+            (click)="openSession.emit(session)"
+            [disabled]="deletingId() === session.id"
+            class="flex min-w-0 flex-1 flex-col px-3 py-2 text-left disabled:opacity-50"
+          >
+            <span class="truncate text-[13px] font-medium text-fg-strong">{{
+              session.name
+            }}</span>
+            @if (subtitle(session); as line) {
+              <span class="truncate text-[12px] text-fg-muted">{{ line }}</span>
+            }
+          </button>
+          <span
+            data-testid="row-session-agent"
+            class="chip min-w-0 max-w-48 shrink-0"
+            [class.chip-neutral]="!session.agent?.deleted"
+            [class.chip-warning]="!!session.agent?.deleted"
+            [attr.title]="'Agent: ' + agentName(session)"
+          >
+            <lucide-angular [img]="Sparkles" [size]="12" class="shrink-0" />
+            <span class="truncate">{{ agentName(session) }}</span>
+          </span>
+          <button
+            type="button"
+            data-testid="row-session-id"
+            class="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px] text-fg-muted hover:bg-surface-selected hover:text-fg"
+            [title]="'Session ID ' + session.id + ' (click to copy)'"
+            [attr.aria-label]="'Copy session ID ' + session.id"
+            (click)="copyId(session.id)"
+          >
+            <span>ID {{ session.id.slice(0, 8) }}</span>
+            <lucide-angular [img]="Copy" [size]="12" />
+          </button>
+          @if (activity(session); as when) {
+            <span
+              class="shrink-0 text-[12px] text-fg-muted"
+              [attr.title]="fullDate(session)"
+              >{{ when }}</span
+            >
+          }
+          <button
+            type="button"
+            title="Session options"
+            [attr.aria-label]="'Options for ' + session.name"
+            (click)="toggleMenu(session.id)"
+            [disabled]="deletingId() === session.id"
+            class="btn-icon mr-2"
+          >
+            <lucide-angular [img]="EllipsisVertical" [size]="14" />
+          </button>
+          @if (menuOpen() === session.id) {
+            <div class="fixed inset-0 z-20" (click)="menuOpen.set(null)"></div>
+            <div class="menu absolute top-full right-2 z-30 mt-1 w-44">
+              <button
+                type="button"
+                (click)="delete(session)"
+                class="menu-item text-on-danger-soft"
+              >
+                <lucide-angular [img]="Trash2" [size]="14" />
+                <span>Delete session</span>
+              </button>
+            </div>
+          }
+        </li>
+      }
+    </ul>
+    <div
+      class="flex items-center justify-end gap-2 text-[12px] text-fg-muted"
+      data-testid="sessions-pagination"
+    >
+      <span aria-live="polite">{{ range() }}</span>
+      @if (pageCount() > 1) {
+        <button
+          type="button"
+          class="btn-icon"
+          title="Previous page"
+          aria-label="Previous page"
+          [disabled]="page() === 1"
+          (click)="goTo(page() - 1)"
+        >
+          <lucide-angular [img]="ChevronLeft" [size]="16" />
+        </button>
+        <span>Page {{ page() }} of {{ pageCount() }}</span>
+        <button
+          type="button"
+          class="btn-icon"
+          title="Next page"
+          aria-label="Next page"
+          [disabled]="page() === pageCount()"
+          (click)="goTo(page() + 1)"
+        >
+          <lucide-angular [img]="ChevronRight" [size]="16" />
+        </button>
+      }
+    </div>
+  }
+</nav>

@@ -1,6 +1,5 @@
 import type { RestEndpointDef } from '../src/modules/datasources/entities/datasource.entity';
 import {
-  backendAuthHeaders,
   CONNECTOR_DEFAULT_MAX_ROWS,
   parseMaxRows,
   parseSetupArgs,
@@ -9,114 +8,13 @@ import {
   SetupError,
   snapshotEntities,
   variantNames,
-  type FetchLike,
 } from './setup-fixture-rest';
 
-function response(status: number, body?: unknown): Response {
-  return new Response(body === undefined ? null : JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
-/** A fetch that answers by "METHOD path" and records every call. */
-function fakeFetch(answers: Record<string, () => Response>) {
-  const calls: { method: string; url: string; init?: RequestInit }[] = [];
-  const fn: FetchLike = (url, init) => {
-    const method = init?.method ?? 'GET';
-    calls.push({ method, url, init });
-    const answer = answers[`${method} ${new URL(url).pathname}`];
-    if (!answer) return Promise.reject(new TypeError('fetch failed'));
-    return Promise.resolve(answer());
-  };
-  return { fn, calls };
-}
-
-const BACKEND = {
-  backendUrl: 'http://127.0.0.1:3000',
-  userId: 'local',
-};
-
 describe('setup-fixture-rest (BA-187)', () => {
-  describe('signing in to the backend', () => {
-    it('signs in as the local persona when the backend answers 401, and sends the token as a bearer', async () => {
-      const { fn, calls } = fakeFetch({
-        'GET /datasources': () => response(401, { message: 'Unauthorized' }),
-        'POST /auth/local/sign-in': () =>
-          response(200, { ok: true, token: 'tok-123' }),
-      });
-      await expect(backendAuthHeaders(BACKEND, fn)).resolves.toEqual({
-        authorization: 'Bearer tok-123',
-      });
-      const signIn = calls.find((call) => call.method === 'POST');
-      expect(signIn?.url).toBe('http://127.0.0.1:3000/auth/local/sign-in');
-      expect(JSON.parse(signIn?.init?.body as string)).toEqual({
-        userId: 'local',
-      });
-    });
-
-    it('signs in as the persona --user names', async () => {
-      const { fn, calls } = fakeFetch({
-        'GET /datasources': () => response(401),
-        'POST /auth/local/sign-in': () => response(200, { token: 't' }),
-      });
-      await backendAuthHeaders({ ...BACKEND, userId: 'local-dana' }, fn);
-      expect(JSON.parse(calls[1].init?.body as string)).toEqual({
-        userId: 'local-dana',
-      });
-    });
-
-    it('sends nothing to a backend that needs no sign-in', async () => {
-      const { fn, calls } = fakeFetch({
-        'GET /datasources': () => response(200, { datasources: [] }),
-      });
-      await expect(backendAuthHeaders(BACKEND, fn)).resolves.toEqual({});
-      expect(calls).toHaveLength(1);
-    });
-
-    it('uses a given token without signing in: bearer, the org server cookie and its Origin', async () => {
-      const { fn, calls } = fakeFetch({});
-      await expect(
-        backendAuthHeaders(
-          {
-            ...BACKEND,
-            backendUrl: 'https://bi.example.com',
-            backendToken: 'org-tok',
-          },
-          fn,
-        ),
-      ).resolves.toEqual({
-        authorization: 'Bearer org-tok',
-        cookie: 'qti_session=org-tok',
-        origin: 'https://bi.example.com',
-      });
-      expect(calls).toHaveLength(0);
-    });
-
-    it('explains an org server (no local sign-in) instead of failing with 401', async () => {
-      const { fn } = fakeFetch({
-        'GET /datasources': () => response(401),
-        'POST /auth/local/sign-in': () =>
-          response(404, { message: 'Not Found' }),
-      });
-      await expect(backendAuthHeaders(BACKEND, fn)).rejects.toThrow(
-        /needs a sign-in[\s\S]*BACKEND_TOKEN/,
-      );
-    });
-
-    it('says the backend is unreachable when nothing answers', async () => {
-      const { fn } = fakeFetch({});
-      await expect(backendAuthHeaders(BACKEND, fn)).rejects.toThrow(
-        /Backend unreachable at http:\/\/127\.0\.0\.1:3000/,
-      );
-    });
-  });
-
   describe('parseSetupArgs', () => {
-    it('keeps the old defaults: World Cup API on 55080, backend on 3000, persona local', () => {
+    it('keeps the old defaults: World Cup API on 55080, backend on 3000', () => {
       expect(parseSetupArgs([], {})).toEqual({
         backendUrl: 'http://127.0.0.1:3000',
-        userId: 'local',
         apiUrl: 'http://127.0.0.1:55080',
         maxRows: {},
         allowUnavailable: false,
@@ -149,20 +47,15 @@ describe('setup-fixture-rest (BA-187)', () => {
             'goals=10',
             '--max-rows=teams=3,players=7',
             '--allow-unavailable',
-            '--user',
-            'local-mark',
           ],
           {
             REST_API_URL: 'http://ignored',
             REST_API_TOKEN: 'api-tok',
             BACKEND_URL: 'http://127.0.0.1:55099/',
-            BACKEND_TOKEN: 'be-tok',
           },
         ),
       ).toEqual({
         backendUrl: 'http://127.0.0.1:55099',
-        backendToken: 'be-tok',
-        userId: 'local-mark',
         apiUrl: 'http://127.0.0.1:55092',
         apiToken: 'api-tok',
         variant: 'cursor',

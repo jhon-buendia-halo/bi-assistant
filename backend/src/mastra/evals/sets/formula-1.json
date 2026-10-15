@@ -366,14 +366,8 @@
       "category": "discovery",
       "question": "What Formula 1 data do I have available to analyse?",
       "intent": "Pure discovery — must inspect the session datasets rather than invent entities or run SQL.",
+      "notes": "The session context already lists the entities, so calling list_entities is not required (BA-209).",
       "checks": [
-        {
-          "type": "calledTool",
-          "args": {
-            "tool": "list_entities"
-          },
-          "criterion": "D2"
-        },
         {
           "type": "includes",
           "args": {

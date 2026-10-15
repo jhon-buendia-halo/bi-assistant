@@ -69,12 +69,12 @@ describe('eval:validate', () => {
     // Cases with no reference query have nothing to validate: no line.
     expect(lines.join('\n')).not.toContain('schema-discovery');
     expect(lines.at(-1)).toBe(
-      '\nworld-cup: 5 of 5 reference queries passed; 5 cases have no reference query.',
+      '\nworld-cup: 5 of 5 reference queries passed; 7 cases have no reference query.',
     );
     expect(result).toEqual({
       ran: 5,
       failed: 0,
-      withoutReference: 5,
+      withoutReference: 7,
       exitCode: 0,
     });
   });

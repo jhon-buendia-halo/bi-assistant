@@ -28,7 +28,6 @@
  *   DATABRICKS_SCHEMA       default the sample's schema (world_cup, finance,
  *                           marketing_analytics), the schema the eval preflight needs
  *   BACKEND_URL             default http://127.0.0.1:3000 (local mode)
- *   BACKEND_USER            the local persona to sign in as, default `local`
  *
  * Idempotent: CREATE SCHEMA IF NOT EXISTS and CREATE OR REPLACE TABLE, then
  * the datasource is upserted by name and the dataset replaced by name.
@@ -260,7 +259,6 @@ async function main(): Promise<void> {
       fixture,
       connection,
       target,
-      userId: process.env['BACKEND_USER']?.trim() || undefined,
       log: (line) => console.log(line),
     });
     const sets =

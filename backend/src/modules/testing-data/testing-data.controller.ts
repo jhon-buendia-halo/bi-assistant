@@ -1,4 +1,3 @@
-import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import {
   Body,
   Controller,
@@ -17,7 +16,6 @@ import {
 import type { LoadTestingDataDto } from './dto/testing-data.dto';
 
 @Controller('testing-data')
-@RequirePermission('manage-datasources')
 export class TestingDataController {
   private readonly logger = new Logger(TestingDataController.name);
 

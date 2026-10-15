@@ -32,6 +32,8 @@
  *   datasets' catalog (agents-evals R191).
  */
 import { SAMPLE_FIXTURES } from '../../modules/testing-data/fixtures/registry';
+import { OPTIONAL_AGENT_TOOLS } from '../agent-tools';
+import type { OptionalAgentTool } from '../agent-tools';
 import type { ResultSetCheckOptions } from './result-set-check';
 import {
   DETERMINISTIC_CHECK_TYPES,
@@ -166,6 +168,12 @@ export interface EvalCaseDefinition {
   intent: string;
   /** Why the case exists and what it guards; for people, never graded. */
   notes?: string;
+  /**
+   * The tool selection the case runs with, as a session bound to a user
+   * agent would (agents.md 4.2): ids from `OPTIONAL_AGENT_TOOLS`. Absent
+   * means every tool.
+   */
+  agentTools?: OptionalAgentTool[];
   checks: EvalCheckSpec[];
   /** The reference query in the variant's dialect, when the case has one. */
   expectedSql?: string;
@@ -232,6 +240,7 @@ const CASE_KEYS = [
   'question',
   'intent',
   'notes',
+  'agentTools',
   'checks',
   'expectedSql',
   'resultSetOptions',
@@ -564,6 +573,7 @@ function parseCase(
   const question = requireString(file, where, raw, 'question');
   const intent = requireString(file, where, raw, 'intent');
   const notes = optionalString(file, where, raw, 'notes');
+  const agentTools = parseAgentTools(file, where, raw.agentTools);
   const judgeRubric = optionalString(file, where, raw, 'judgeRubric');
   const checks = parseChecks(file, where, raw.checks);
   const expectedSql = parseExpectedSql(file, where, raw.expectedSql, dialects);
@@ -591,11 +601,51 @@ function parseCase(
     question,
     intent,
     ...(notes !== undefined ? { notes } : {}),
+    ...(agentTools ? { agentTools } : {}),
     checks,
     ...(expectedSql ? { expectedSql } : {}),
     ...(resultSetOptions ? { resultSetOptions } : {}),
     ...(judgeRubric !== undefined ? { judgeRubric } : {}),
   };
+}
+
+/**
+ * A case's tool selection: distinct optional tool ids (`sample_rows`,
+ * `ask_clarification`, `visuals`); an empty list keeps only the always-on
+ * tools. Those are never listed, so an unknown id is refused, not ignored.
+ */
+function parseAgentTools(
+  file: string,
+  where: string,
+  raw: unknown,
+): OptionalAgentTool[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new EvalSetError(
+      file,
+      where,
+      `"agentTools" must be an array of tool ids (${oneOf(OPTIONAL_AGENT_TOOLS)}); leave it out for every tool`,
+    );
+  }
+  const seen = new Set<string>();
+  for (const tool of raw as unknown[]) {
+    if (!OPTIONAL_AGENT_TOOLS.includes(tool as OptionalAgentTool)) {
+      throw new EvalSetError(
+        file,
+        where,
+        `agentTools has an unknown tool ${JSON.stringify(tool)}; known: ${oneOf(OPTIONAL_AGENT_TOOLS)}`,
+      );
+    }
+    if (seen.has(tool as string)) {
+      throw new EvalSetError(
+        file,
+        where,
+        `agentTools lists "${tool as string}" twice`,
+      );
+    }
+    seen.add(tool as string);
+  }
+  return raw as OptionalAgentTool[];
 }
 
 function parseChecks(
@@ -814,16 +864,4 @@ export function evalSetById<T extends { id: string }>(
     );
   }
   return set;
-}
-
-/**
- * The case ids an `EVAL_SET` value selects for a run: that set's cases, or
- * `undefined` (every case, as before) when no set is named.
- */
-export function caseIdsForSet(
-  sets: readonly { id: string; cases: readonly { id: string }[] }[],
-  setId: string | undefined,
-): string[] | undefined {
-  if (setId === undefined || setId.trim() === '') return undefined;
-  return evalSetById(sets, setId).cases.map((evalCase) => evalCase.id);
 }

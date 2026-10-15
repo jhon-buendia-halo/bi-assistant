@@ -17,6 +17,7 @@ import {
   Upload,
   X,
 } from 'lucide-angular';
+import { PromptEditor } from '../prompt-editor/prompt-editor';
 import { AgentEditorService } from '../../services/agent-editor.service';
 import {
   AGENT_FIELD_LIMITS,
@@ -32,7 +33,7 @@ import {
  */
 @Component({
   selector: 'app-agent-editor',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, PromptEditor],
   templateUrl: './agent-editor.html',
 })
 export class AgentEditor implements OnInit, OnDestroy {
@@ -47,7 +48,11 @@ export class AgentEditor implements OnInit, OnDestroy {
   readonly limits = AGENT_FIELD_LIMITS;
   readonly efforts = REASONING_EFFORT_CHOICES;
   readonly instructionsHint =
-    "Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply.";
+    "Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply. Type / to link a skill or a tool.";
+  readonly linksHint =
+    'Linked skills and tools decide what the agent gets. Every agent also gets the built-in skills and can always list, describe and query its datasets.';
+  readonly legacyNotice =
+    'Links were added for what this agent had. Save to keep them.';
 
   readonly editor = inject(AgentEditorService);
 
@@ -75,8 +80,12 @@ export class AgentEditor implements OnInit, OnDestroy {
     this.editor.close();
   }
 
+  onInstructions(value: string): void {
+    this.editor.update({ instructions: value });
+  }
+
   onText(
-    field: 'name' | 'description' | 'instructions' | 'model',
+    field: 'name' | 'description' | 'model',
     event: Event,
   ): void {
     this.editor.update({ [field]: (event.target as HTMLInputElement).value });

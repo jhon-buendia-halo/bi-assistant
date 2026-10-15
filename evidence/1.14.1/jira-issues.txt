@@ -1,0 +1,5 @@
+BA-213	Epic	To Do	Medium	unassigned	2026-10-14	Agent Hub: tools and skills per agent
+BA-214	Story	To Do	Medium	unassigned	2026-10-14	ADR, epic spec and roadmap for agent tools and skills
+BA-215	Story	To Do	Medium	unassigned	2026-10-14	Write skills in the app
+BA-216	Story	To Do	Medium	unassigned	2026-10-14	Assign skills to an agent
+BA-217	Story	To Do	Medium	unassigned	2026-10-14	Choose an agent’s tools

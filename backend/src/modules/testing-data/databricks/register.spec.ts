@@ -41,15 +41,13 @@ interface Call {
   method: string;
   path: string;
   body?: Record<string, unknown>;
-  authorization?: string;
 }
 
-/** A backend in local mode: answers by route, records every call. */
+/** A backend: answers by route, records every call. */
 function fakeBackend(
   options: {
     existing?: { id: string; name: string }[];
     catalogs?: unknown[];
-    signIn?: { status: number; body: unknown };
   } = {},
 ) {
   const calls: Call[] = [];
@@ -57,7 +55,6 @@ function fakeBackend(
     Promise.resolve(new Response(JSON.stringify(body), { status }));
   const fetchImpl = ((url: string, init?: RequestInit) => {
     const path = url.replace('http://127.0.0.1:3000', '');
-    const headers = (init?.headers ?? {}) as Record<string, string>;
     calls.push({
       method: init?.method ?? 'GET',
       path,
@@ -66,15 +63,7 @@ function fakeBackend(
         typeof init?.body === 'string'
           ? (JSON.parse(init.body) as Record<string, unknown>)
           : undefined,
-      authorization: headers['authorization'],
     });
-    if (path === '/auth/local/sign-in') {
-      const signIn = options.signIn ?? {
-        status: 200,
-        body: { ok: true, message: 'Signed in', token: 'session-token' },
-      };
-      return answer(signIn.status, signIn.body);
-    }
     if (path === '/datasources' && init?.method === 'GET') {
       return answer(200, { datasources: options.existing ?? [] });
     }
@@ -117,33 +106,25 @@ function register(backend: ReturnType<typeof fakeBackend>, log?: string[]) {
 }
 
 describe('registering a loaded Databricks sample', () => {
-  it('signs in, creates the datasource, reads the inventory and saves the required entities', async () => {
+  it('creates the datasource, reads the inventory and saves the required entities', async () => {
     const backend = fakeBackend();
     const log: string[] = [];
 
     const result = await register(backend, log);
 
     expect(backend.calls.map((c) => `${c.method} ${c.path}`)).toEqual([
-      'POST /auth/local/sign-in',
       'GET /datasources',
       'POST /datasources',
       'GET /datasources/new-id/inventory?refresh=true',
       'POST /datasets',
     ]);
-    expect(backend.calls[0]).toMatchObject({
-      body: { userId: 'local' },
-      authorization: undefined,
-    });
-    for (const call of backend.calls.slice(1)) {
-      expect(call.authorization).toBe('Bearer session-token');
-    }
-    expect(backend.calls[2].body).toEqual({
+    expect(backend.calls[1].body).toEqual({
       name: 'World Cup Databricks',
       kind: 'databricks',
       config: CONNECTION,
     });
     const keys = WORLD_CUP.requiredTables.map((t) => `evals.world_cup.${t}`);
-    expect(backend.calls[4].body).toMatchObject({
+    expect(backend.calls[3].body).toMatchObject({
       name: 'World Cup (Databricks)',
       tables: keys,
       datasourceId: 'new-id',
@@ -166,29 +147,14 @@ describe('registering a loaded Databricks sample', () => {
 
     const result = await register(backend);
 
-    expect(backend.calls[2].body).toMatchObject({
+    expect(backend.calls[1].body).toMatchObject({
       id: 'dbx-1',
       name: 'World Cup Databricks',
     });
-    expect(backend.calls[3].path).toBe(
+    expect(backend.calls[2].path).toBe(
       '/datasources/dbx-1/inventory?refresh=true',
     );
     expect(result.created).toBe(false);
-  });
-
-  it('refuses an org server backend, where it cannot sign in', async () => {
-    const backend = fakeBackend({
-      signIn: {
-        status: 404,
-        body: {
-          statusCode: 404,
-          message: 'Not available in org server mode',
-          error: 'Not Found',
-        },
-      },
-    });
-    await expect(register(backend)).rejects.toThrow('runs in org server mode');
-    expect(backend.calls).toHaveLength(1);
   });
 
   it('reports an unreachable backend with how to start it', async () => {
@@ -203,7 +169,7 @@ describe('registering a loaded Databricks sample', () => {
         fetch: down,
       }),
     ).rejects.toThrow(
-      'the backend at http://127.0.0.1:3000 did not answer POST /auth/local/sign-in (fetch failed)',
+      'the backend at http://127.0.0.1:3000 did not answer GET /datasources (fetch failed)',
     );
   });
 

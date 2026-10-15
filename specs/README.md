@@ -43,7 +43,8 @@ specs/
 | [metrics](capabilities/metrics/spec.md) | Metric definitions and the metrics panel | — |
 | [deep-analysis](capabilities/deep-analysis/spec.md) | Multi-step deep analysis runs | — |
 | [agents-evals](capabilities/agents-evals/spec.md) | Agent Hub, agent catalogue and user agents, eval sets, eval runs and reports | Agents (`agents.spec.ts`), Agent Hub (`agent-hub.spec.ts`) |
-| [admin](capabilities/admin/spec.md) | Local and org server modes, local personas and sign-in, sign-in with Entra ID, SCIM directory, roles and permissions, enforcement, data ownership, the Admin area (Overview, Users & groups, Edit a user, Roles & permissions) | Sign in to local mode (`local-sign-in.spec.ts`, Playwright `web` project); Sign in to an org server (`org-sign-in.spec.ts`), Permissions in the app (`org-permissions.spec.ts`), Private and shared data (`org-isolation.spec.ts`), Admin overview (`org-admin-overview.spec.ts`), Users and groups (`org-admin-users.spec.ts`), Edit a user (`org-admin-edit-user.spec.ts`), Roles and permissions (`org-admin-roles.spec.ts`), all in the Playwright `org` project |
+| [rfp](capabilities/rfp/spec.md) | The RFP Builder agent, the Intellify RFP API, RFP records and the RFP package | RFP builder (E2E: none yet), Intellify RFP API (API-level) |
+| [agent-panel](capabilities/agent-panel/spec.md) | `show_in_panel`: what an agent shows in the right panel (file, document, table, visual), the workflow bar and its Details, its history and download | Agent panel (E2E: none yet) |
 
 A Gherkin Feature that spans capabilities lives in the capability that owns its main outcome; the others link to it.
 
@@ -66,6 +67,8 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-159 LLM configuration | [epics/BA-159](epics/BA-159/spec.md) |
 | BA-161 Admin Panel | [epics/BA-161](epics/BA-161/spec.md) |
 | BA-169 Claude Code workflow mod | [epics/BA-169](epics/BA-169/spec.md) |
+| BA-198 Assistant skills: progressive-disclosure agent structure | [epics/BA-198](epics/BA-198/spec.md) |
+| BA-213 Agent Hub: tools and skills per agent | [epics/BA-213](epics/BA-213/spec.md) |
 
 ## Stack neutrality
 

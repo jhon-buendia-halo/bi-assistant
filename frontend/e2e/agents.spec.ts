@@ -1,6 +1,8 @@
 import axe from 'axe-core';
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
+import { saveLenaiSettings } from './helpers/agents-api';
+import { startLlmStub } from './helpers/llm-stub';
 import {
   WORLD_CUP_DATASET,
   WORLD_CUP_DATASOURCE,
@@ -8,7 +10,7 @@ import {
   createWorldCupDataset,
   followOsTheme,
 } from './helpers/app-actions';
-import { LOCAL_USERS, appSql } from './helpers/local-auth';
+import { appSql } from './helpers/app-db';
 
 /**
  * The questions tab opens on the set list — a set has to be clicked before its
@@ -75,9 +77,8 @@ function seededResult(
 const SEEDED_RUN = 'seeded-judge-off';
 
 /**
- * Stores a finished run of the world-cup set with the judge off, owned by the
- * signed-in Demo User, straight in the app's database: a run that reaches its
- * end needs a model, which the suite does not have. It is stored without a
+ * Stores a finished run of the world-cup set with the judge off, straight in
+ * the app's database: a run that reaches its end needs a model, which the suite does not have. It is stored without a
  * summary, which the backend computes whenever a run is read (R147). One
  * question passed (lookup), one failed (join), and one, whose only check is
  * the judge, was not scored (out-of-scope).
@@ -158,7 +159,6 @@ function seedFinishedRun(appDataDir: string): void {
         ],
       ),
     ],
-    ownerId: LOCAL_USERS.demo,
     createdAt: '2026-10-01T09:00:00.000Z',
     updatedAt: '2026-10-01T09:01:00.000Z',
   };
@@ -208,7 +208,14 @@ const WORLD_CUP_EVAL_TABLES = [
 test('opens an agent from the Agents list and switches between its tabs', async ({
   page,
 }) => {
-  await page.getByRole('button', { name: 'Agents' }).click();
+  // The LLM Config tab shows a provider only once settings are saved; no
+  // model call is made here.
+  const stub = await startLlmStub();
+  await saveLenaiSettings(page, stub.baseUrl);
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
 
   // The hub lists the harness registry in sections; the System section
   // shows its first row of 3 until "Show more" (R3).
@@ -228,14 +235,21 @@ test('opens an agent from the Agents list and switches between its tabs', async 
     page.getByRole('heading', { name: 'Questions to Insights Assistant' }),
   ).toBeVisible();
 
-  // Prompt is the default tab.
-  await expect(page.locator('pre')).toContainText(
+  // The Chat Box is the first tab, with Start chat (R90).
+  await expect(page.getByTestId('agent-chat-start')).toBeVisible();
+
+  await page.getByTestId('agent-tab-prompt').click();
+  await expect(page.getByTestId('agent-prompt-view')).toContainText(
     'You are the Questions to Insights assistant',
   );
 
   await page.getByTestId('agent-tab-tools').click();
-  await expect(page.getByText('run_readonly_sql')).toBeVisible();
-  await expect(page.getByText('ask_clarification')).toBeVisible();
+  await expect(
+    page.getByText('run_readonly_sql').locator('visible=true').first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText('ask_clarification').locator('visible=true').first(),
+  ).toBeVisible();
 
   await page.getByTestId('agent-tab-memory').click();
   await expect(page.getByText('Recent messages replayed')).toBeVisible();
@@ -247,7 +261,7 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   await page.getByTestId('agent-tab-evals').click();
   // The tab opens on the set list, with every question still hidden.
   await expect(page.getByTestId('eval-set-world-cup')).toContainText(
-    '10 questions',
+    '12 questions',
   );
   await expect(page.locator(CASE_ROWS)).toHaveCount(0);
   await expect(page.getByTestId('eval-run')).toBeHidden();
@@ -267,10 +281,10 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   await expect(page.getByTestId('eval-case-category-out-of-scope')).toHaveText(
     'out-of-scope',
   );
-  await expect(page.locator(CASE_ROWS)).toHaveCount(10);
+  await expect(page.locator(CASE_ROWS)).toHaveCount(12);
   await expect(
     page.locator('[data-testid^="eval-case-category-"]'),
-  ).toHaveCount(10);
+  ).toHaveCount(12);
 
   // Clicking the open set again collapses it.
   await page.getByTestId('eval-set-world-cup').click();
@@ -282,10 +296,14 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   await expect(
     page.getByTestId('agent-section-system').getByTestId('agent-sql-verifier'),
   ).toBeVisible();
+  await stub.close();
 });
 
 test('shows the stateless, no-tool agents accurately', async ({ page }) => {
-  await page.getByRole('button', { name: 'Agents' }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await page.getByTestId('agent-show-more-system').click();
   await page.getByTestId('agent-sql-fixer').click();
 
@@ -312,7 +330,10 @@ test('offers the configured datasources and starts a run from the evals tab', as
   await createWorldCupDatasource(page);
   await createWorldCupDataset(page, WORLD_CUP_EVAL_TABLES);
 
-  await page.getByRole('button', { name: 'Agents' }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
   await openWorldCupSet(page);
@@ -322,13 +343,13 @@ test('offers the configured datasources and starts a run from the evals tab', as
   await expect(picker).toContainText('PostgreSQL');
 
   // Every question is ticked by default.
-  await expect(page.getByTestId('eval-run')).toContainText('Run 10 selected');
+  await expect(page.getByTestId('eval-run')).toContainText('Run 12 selected');
 
   // Starting the run is enough to assert here: completing it means live model
   // calls, which the suite must not make.
   await page.getByTestId('eval-run').click();
   await expect(page.getByTestId('eval-run')).toContainText('Running…');
-  await expect(page.getByText(/0\/10 done/)).toBeVisible();
+  await expect(page.getByText(/0\/12 done/)).toBeVisible();
 });
 
 test('runs only the ticked questions', async ({ page }) => {
@@ -336,20 +357,23 @@ test('runs only the ticked questions', async ({ page }) => {
   // assertions below are about the ticks, not the dropdown.
   await createWorldCupDatasource(page);
 
-  await page.getByRole('button', { name: 'Agents' }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
   await openWorldCupSet(page);
 
   const run = page.getByTestId('eval-run');
-  await expect(run).toContainText('Run 10 selected');
+  await expect(run).toContainText('Run 12 selected');
 
   // Untick one, then clear the rest via select-all.
   await page.getByTestId('eval-select-champion-2022').uncheck();
-  await expect(run).toContainText('Run 9 selected');
+  await expect(run).toContainText('Run 11 selected');
 
   await page.getByTestId('eval-select-all').click();
-  await expect(run).toContainText('Run 10 selected');
+  await expect(run).toContainText('Run 12 selected');
   await page.getByTestId('eval-select-all').click();
   await expect(run).toContainText('Run 0 selected');
   await expect(run).toBeDisabled();
@@ -365,7 +389,10 @@ test('refuses to run against a datasource with no datasets', async ({
 }) => {
   await createWorldCupDatasource(page);
 
-  await page.getByRole('button', { name: 'Agents' }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
   await openWorldCupSet(page);
@@ -379,7 +406,10 @@ test('explains an incomplete eval dataset without starting a run', async ({
 }) => {
   await createWorldCupDatasource(page);
   await createWorldCupDataset(page);
-  await page.getByRole('button', { name: 'Agents' }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
   await openWorldCupSet(page);
@@ -394,7 +424,10 @@ test('explains an incomplete eval dataset without starting a run', async ({
 test('opens a question in the right panel with what it is scored on', async ({
   page,
 }) => {
-  await page.getByRole('button', { name: 'Agents' }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
   await openWorldCupSet(page);
@@ -421,13 +454,16 @@ test('separates the question suite from past executions', async ({ page }) => {
   await createWorldCupDatasource(page);
   await createWorldCupDataset(page, WORLD_CUP_EVAL_TABLES);
 
-  await page.getByRole('button', { name: 'Agents' }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
   await openWorldCupSet(page);
 
   // Questions is the default sub-tab.
-  await expect(page.locator(CASE_ROWS)).toHaveCount(10);
+  await expect(page.locator(CASE_ROWS)).toHaveCount(12);
 
   await page.getByTestId('eval-subtab-runs').click();
   await expect(page.getByText(/No eval runs yet/)).toBeVisible();
@@ -440,17 +476,20 @@ test('separates the question suite from past executions', async ({ page }) => {
   await page.getByTestId('eval-subtab-runs').click();
   await expect(
     page.locator('[data-testid^="eval-run-"]').first(),
-  ).toContainText('0/10 passed');
+  ).toContainText('0/12 passed');
 
   await page.getByTestId('eval-subtab-questions').click();
-  await expect(page.locator(CASE_ROWS)).toHaveCount(10);
+  await expect(page.locator(CASE_ROWS)).toHaveCount(12);
 });
 
 test('downloads an execution as a Markdown report', async ({ page }) => {
   await createWorldCupDatasource(page);
   await createWorldCupDataset(page, WORLD_CUP_EVAL_TABLES);
 
-  await page.getByRole('button', { name: 'Agents' }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
   await openWorldCupSet(page);
@@ -494,9 +533,9 @@ test('downloads an execution as a Markdown report', async ({ page }) => {
  */
 const EVAL_SETS: ReadonlyArray<[id: string, name: string, questions: number]> =
   [
-    ['world-cup', 'World Cup', 10],
-    ['world-cup-rest', 'World Cup (REST API)', 10],
-    ['world-cup-databricks', 'World Cup (Databricks)', 10],
+    ['world-cup', 'World Cup', 12],
+    ['world-cup-rest', 'World Cup (REST API)', 12],
+    ['world-cup-databricks', 'World Cup (Databricks)', 12],
     ['formula-1', 'Formula 1', 10],
     ['world-cup-golden', 'World Cup (golden set)', 11],
     ['world-cup-golden-rest', 'World Cup (golden set, REST API)', 11],
@@ -517,7 +556,10 @@ const EVAL_SETS: ReadonlyArray<[id: string, name: string, questions: number]> =
 test('lists every question set, the golden set among them', async ({
   page,
 }) => {
-  await page.getByRole('button', { name: 'Agents' }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
 
@@ -562,7 +604,10 @@ test('starts a run of the golden set on the World Cup datasource', async ({
   await createWorldCupDatasource(page);
   await createWorldCupDataset(page, WORLD_CUP_EVAL_TABLES);
 
-  await page.getByRole('button', { name: 'Agents' }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
   await page.getByTestId('eval-set-world-cup-golden').click();
@@ -581,7 +626,10 @@ test('runs with the judge off by default', async ({ page, appDataDir }) => {
   await createWorldCupDataset(page, WORLD_CUP_EVAL_TABLES);
   seedFinishedRun(appDataDir);
 
-  await page.getByRole('button', { name: 'Agents' }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
   await openWorldCupSet(page);
@@ -635,7 +683,10 @@ test('reports pass rate by category', async ({ page, appDataDir }) => {
   seedFinishedRun(appDataDir);
   await page.addScriptTag({ content: axe.source });
 
-  await page.getByRole('button', { name: 'Agents' }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
   await page.getByTestId('eval-subtab-runs').click();

@@ -8,6 +8,9 @@ export type AgentKind = 'official' | 'system' | 'user';
 export type AgentStatus = 'builtin' | 'draft' | 'live';
 export type AgentOwner = 'Official' | 'System' | 'You';
 
+/** The tools an agent's author can switch on or off (agents-evals R55). */
+export type AgentToolId = 'sample_rows' | 'ask_clarification' | 'visuals';
+
 /** A user agent's stored configuration (draft or Live version). */
 export interface AgentConfig {
   name: string;
@@ -15,6 +18,10 @@ export interface AgentConfig {
   instructions: string;
   datasets: string[];
   starterQuestions: string[];
+  /** Absent on a draft saved before tools could be chosen: all three. */
+  tools?: AgentToolId[];
+  /** Ids of the in-app skills the agent uses (R43); absent: none. */
+  skills?: string[];
   model?: string;
   reasoningEffort?: 'low' | 'medium' | 'high';
 }
@@ -34,6 +41,8 @@ export interface Agent {
   /** Dataset names in the effective configuration that no longer exist. */
   missingDatasets?: string[];
   datasets?: string[];
+  /** Official agents with a dataset: what must exist before Start chat. */
+  chatRequirement?: string;
   starterQuestions?: string[];
 }
 
@@ -51,7 +60,44 @@ export interface AgentMemoryDetail {
   generateTitle: boolean;
 }
 
+/** Where a library tool is linked from, for a user agent (api.md 34). */
+export type ToolLinkStatus = 'always-on' | 'linked' | 'not-linked';
+
+export interface AgentToolLink {
+  name: string;
+  status: ToolLinkStatus;
+  linkedVia: { instructions: boolean; skills: string[] };
+}
+
+/** The LLM the agent runs on; the key is never sent, only whether it is set. */
+export interface AgentLlm {
+  provider: string | null;
+  providerName: string | null;
+  model: string | null;
+  apiKeyConfigured: boolean;
+  maxOutputTokens: number | null;
+  reasoningEffort: string | null;
+}
+
+/** A built-in agent's editable system prompt (api.md 34, BA-224). */
+export interface AgentPromptView {
+  /** As served: the override, else the shipped text. */
+  editable: string;
+  shipped: string;
+  modified: boolean;
+  builtInChanged: boolean;
+  /** True for the assistant: `[[tool:…]]` links are allowed. */
+  linksAllowed: boolean;
+  updatedAt: string | null;
+}
+
 export interface AgentDetail extends Agent {
+  /** Built-in agents only: the editable system prompt and its override state. */
+  prompt?: AgentPromptView;
+  /** User agents only: each library tool with its link status. */
+  toolLinks?: AgentToolLink[];
+  /** The LLM configuration the agent uses (LLM Config tab). */
+  llm?: AgentLlm;
   /** User agents only: the working copy and the published copy. */
   draft?: AgentConfig;
   live?: AgentConfig;
@@ -184,6 +230,37 @@ export interface EvalRunView {
   summary?: EvalRunSummary;
 }
 
+export interface AgentSkillFileEntry {
+  /** Relative to the skill's folder, '/'-separated. */
+  path: string;
+  size: number;
+}
+
+export interface AgentSkill {
+  name: string;
+  description: string;
+  loading: 'on-demand' | 'harness';
+  /** Every file in the folder, `SKILL.md` first, then sorted. */
+  files: AgentSkillFileEntry[];
+  /** `in-app` only for a user agent's own skills (api.md 34a). */
+  level: 'built-in' | 'in-app';
+  /** A built-in skill replaced by an app-wide override (R63). */
+  modified?: boolean;
+}
+
+/** `GET /agents/:key/skills` (api.md 34a). */
+export interface AgentSkillsView {
+  skills: AgentSkill[];
+}
+
+/** `GET /agents/:key/skills/:name/file` (api.md 34b). */
+export interface AgentSkillFile {
+  path: string;
+  size: number;
+  /** Null when the file is larger than 256 KB or isn't text. */
+  content: string | null;
+}
+
 /** Body of `POST /agents` and `PUT /agents/:id/draft` (api.md 41, 42). */
 export type SaveAgentInput = Partial<AgentConfig> & { name: string };
 
@@ -192,6 +269,13 @@ export interface AgentMutationResult {
   ok: boolean;
   message: string;
   agent?: Agent;
+}
+
+/** Answer of `PUT`/`DELETE /agents/:key/prompt` (api.md 103, 104). */
+export interface AgentPromptResult {
+  ok: boolean;
+  message: string;
+  agent?: AgentDetail;
 }
 
 export interface EvalRunStartResult {
@@ -250,6 +334,39 @@ export class AgentsApiService {
     return this.http.put<AgentMutationResult>(
       `${API_BASE_URL}/agents/${encodeURIComponent(key)}/pin`,
       { pinned },
+    );
+  }
+
+  /** Save a built-in agent's shared system prompt (`edit-policies`). */
+  savePrompt(key: string, prompt: string): Observable<AgentPromptResult> {
+    return this.http.put<AgentPromptResult>(
+      `${API_BASE_URL}/agents/${encodeURIComponent(key)}/prompt`,
+      { prompt },
+    );
+  }
+
+  /** Restore a built-in agent's shipped system prompt. */
+  resetPrompt(key: string): Observable<AgentPromptResult> {
+    return this.http.delete<AgentPromptResult>(
+      `${API_BASE_URL}/agents/${encodeURIComponent(key)}/prompt`,
+    );
+  }
+
+  /** The skills the agent gets; a user agent answers with the assistant's. */
+  skills(key: string): Observable<AgentSkillsView> {
+    return this.http.get<AgentSkillsView>(
+      `${API_BASE_URL}/agents/${encodeURIComponent(key)}/skills`,
+    );
+  }
+
+  /** One file of a skill; `path` is relative to the skill's folder. */
+  skillFile(
+    key: string,
+    name: string,
+    path: string,
+  ): Observable<AgentSkillFile> {
+    return this.http.get<AgentSkillFile>(
+      `${API_BASE_URL}/agents/${encodeURIComponent(key)}/skills/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}`,
     );
   }
 

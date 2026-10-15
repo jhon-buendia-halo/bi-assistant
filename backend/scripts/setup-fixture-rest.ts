@@ -26,11 +26,6 @@
  *   --allow-unavailable  register endpoints the inventory cannot read, instead
  *                        of failing (the refused ones are always expected)
  *   --backend-url <url>  BACKEND_URL, default http://127.0.0.1:3000
- *   --backend-token <t>  BACKEND_TOKEN: a session token to call the backend
- *                        with (an org server's `qti_session`); without one the
- *                        script signs in as a local persona when it must
- *   --user <id>          BACKEND_USER, the local persona, default `local`
- *                        (Demo User)
  *
  * The endpoints come from the backend's OpenAPI discovery (the Discover button),
  * as a user would get them; the script only adds row caps. Idempotent: the
@@ -54,9 +49,6 @@ const INVENTORY_TIMEOUT_MS = 180_000;
 
 export interface SetupOptions {
   backendUrl: string;
-  backendToken?: string;
-  backendOrigin?: string;
-  userId: string;
   apiUrl: string;
   apiToken?: string;
   /** A fixture id the API must serve (`world-cup`, `finance`, …). */
@@ -113,7 +105,7 @@ export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 const USAGE =
   'Usage: setup-fixture-rest.ts [--fixture <id>] [--api-url <url>] [--variant <label>] ' +
   '[--api-token <t>] [--max-rows <endpoint>=<n>] [--allow-unavailable] ' +
-  '[--backend-url <url>] [--backend-token <t>] [--user <id>]';
+  '[--backend-url <url>]';
 
 const VALUE_FLAGS = [
   'api-url',
@@ -122,8 +114,6 @@ const VALUE_FLAGS = [
   'api-token',
   'max-rows',
   'backend-url',
-  'backend-token',
-  'user',
 ];
 
 function trimUrl(url: string): string {
@@ -210,13 +200,6 @@ export function parseSetupArgs(
         nonEmpty(env.BACKEND_URL) ??
         'http://127.0.0.1:3000',
     ),
-    ...((one('backend-token') ?? nonEmpty(env.BACKEND_TOKEN))
-      ? { backendToken: one('backend-token') ?? nonEmpty(env.BACKEND_TOKEN) }
-      : {}),
-    ...(nonEmpty(env.BACKEND_ORIGIN)
-      ? { backendOrigin: trimUrl(env.BACKEND_ORIGIN as string) }
-      : {}),
-    userId: one('user') ?? nonEmpty(env.BACKEND_USER) ?? 'local',
     apiUrl: trimUrl(
       one('api-url') ??
         (sourceId
@@ -263,61 +246,6 @@ export function restFixtureFor(fixtureId: string): SampleFixture {
     );
   }
   return fixture;
-}
-
-/**
- * The headers that authenticate this script to the backend:
- * - a given token goes as the local-mode bearer and as the org server's
- *   `qti_session` cookie, with the `Origin` an org server checks on writes;
- * - otherwise, when the backend answers 401, the script signs in as a local
- *   persona (`POST /auth/local/sign-in`, admin R69 to R73) and sends the
- *   token it gets as `Authorization: Bearer`;
- * - a backend that needs no sign-in gets no header.
- */
-export async function backendAuthHeaders(
-  options: Pick<
-    SetupOptions,
-    'backendUrl' | 'backendToken' | 'backendOrigin' | 'userId'
-  >,
-  fetchFn: FetchLike = fetch,
-): Promise<Record<string, string>> {
-  const { backendUrl } = options;
-  if (options.backendToken) {
-    return {
-      authorization: `Bearer ${options.backendToken}`,
-      cookie: `qti_session=${options.backendToken}`,
-      origin: options.backendOrigin ?? new URL(backendUrl).origin,
-    };
-  }
-  let probe: Response;
-  try {
-    probe = await fetchFn(`${backendUrl}/datasources`, {
-      headers: { accept: 'application/json' },
-      signal: AbortSignal.timeout(10_000),
-    });
-  } catch (err) {
-    throw new SetupError(
-      `Backend unreachable at ${backendUrl} (${describe(err)}).\n` +
-        '  Start the app or the backend first (e.g. npm run start:dev in backend/).',
-    );
-  }
-  if (probe.status !== 401) return {};
-  const res = await fetchFn(`${backendUrl}/auth/local/sign-in`, {
-    method: 'POST',
-    headers: { accept: 'application/json', 'content-type': 'application/json' },
-    body: JSON.stringify({ userId: options.userId }),
-    signal: AbortSignal.timeout(10_000),
-  });
-  const body = (await res.json().catch(() => undefined)) as
-    { token?: unknown } | undefined;
-  if (!res.ok || typeof body?.token !== 'string' || !body.token) {
-    throw new SetupError(
-      `The backend at ${backendUrl} needs a sign-in, and signing in as the local persona "${options.userId}" failed (HTTP ${res.status}).\n` +
-        '  On an org server, sign in in the browser and pass the qti_session cookie value as BACKEND_TOKEN; ' +
-        'in local mode, check the persona id (--user, default "local").',
-    );
-  }
-  return { authorization: `Bearer ${body.token}` };
 }
 
 /**
@@ -406,7 +334,6 @@ function describe(err: unknown): string {
 class Client {
   constructor(
     private readonly baseUrl: string,
-    private readonly headers: Record<string, string>,
     private readonly fetchFn: FetchLike = fetch,
   ) {}
 
@@ -422,7 +349,6 @@ class Client {
       headers: {
         accept: 'application/json',
         ...(init.body ? { 'content-type': 'application/json' } : {}),
-        ...this.headers,
       },
     });
     const text = await res.text();
@@ -603,20 +529,24 @@ export async function main(
     `✔ API reachable: ${fixtureId}, switches ${JSON.stringify(index.switches ?? {})}`,
   );
 
-  const backend = new Client(
-    options.backendUrl,
-    await backendAuthHeaders(options, fetchFn),
-    fetchFn,
-  );
-  const listed = await backend.json<{
-    datasources?: { id: string; name: string }[];
-  }>('/datasources');
+  const backend = new Client(options.backendUrl, fetchFn);
+  type Listed = { datasources?: { id: string; name: string }[] };
+  let listed: { status: number; body: Listed };
+  try {
+    listed = await backend.json<Listed>('/datasources');
+  } catch (err) {
+    if (err instanceof SetupError) throw err;
+    throw new SetupError(
+      `Backend unreachable at ${options.backendUrl} (${describe(err)}).\n` +
+        '  Start the app or the backend first (e.g. npm run start:dev in backend/).',
+    );
+  }
   if (listed.status >= 400 || !Array.isArray(listed.body?.datasources)) {
     throw new SetupError(
       `Backend answered HTTP ${listed.status} at ${options.backendUrl}/datasources`,
     );
   }
-  console.log('✔ backend reachable and signed in');
+  console.log('✔ backend reachable');
 
   const { datasourceName, datasetName } = variantNames(
     fixture,

@@ -45,7 +45,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 - R18. If a turn ends with no answer text and no visual, the system SHALL run one extra tool-free pass that writes an answer from the data already collected. If that also yields nothing, the answer is the fixed text "I completed the data analysis but could not produce a final response. Please retry your question."
 - R19. If a turn produced a non-empty answer without calling any tool, the system SHALL run one corrective pass, tools allowed, at most once per turn. That pass tells the model to re-answer data claims from executed queries, or to say the data does not cover the question. Its answer replaces the original. Any queries it runs join the answer's data records. The pass does not write to the session's memory thread.
 - R20. A turn that only created or tailored a visual and wrote no text SHALL be persisted with the text `Created interactive visual "<title>" (v<N>).` or `Updated interactive visual "<title>" (v<N>).`.
-- R21. A same-session refresh of the session data, for example after a visual changed or a rating was saved, SHALL NOT abort or disturb an in-flight turn. While a turn is in flight such a refresh does not replace the transcript. Only switching to a *different* session aborts the in-flight turn and resets the chat (draft, careful mode, clarification input, turn state).
+- R21. A same-session refresh of the session data, for example after a visual changed or a rating was saved, SHALL NOT abort or disturb an in-flight turn. While a turn is in flight such a refresh does not replace the transcript. Only switching to a *different* session aborts the in-flight turn and resets the chat (draft, careful mode, clarification input, turn state). The same holds when an agent shows a panel item during a turn: the session is refreshed without disturbing the turn ([agent-panel](../agent-panel/spec.md) R12).
 
 ### Grounding and tools
 
@@ -56,6 +56,8 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - run one read-only `SELECT`/`WITH` statement (default limit 100, max 500).
 
   Tools that need a datasource SHALL ask the model to name one when several datasources are in scope, and refuse when none is bound.
+
+  Every agent also has `show_in_panel`, which shows a file, a document, a query result, a visual or its workflow in the right panel ([agent-panel](../agent-panel/spec.md) R1).
 - R23. Every row-sampling or SQL tool call SHALL carry a rationale: one or two plain business sentences saying why the step is taken. It is stored flattened and clipped to 400 characters.
 - R24. Each turn's context SHALL give the assistant:
   - the session's dataset and entity orientation;
@@ -143,7 +145,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 ### Clarification
 
 - R41. The assistant SHALL ask at most one clarifying question per user question, with 2–4 options. It asks only when interpretations diverge materially, or when real data values are ambiguous. In that case the options quote the actual values.
-- R42. A clarification SHALL end the turn immediately: the model stops. The question is persisted as an assistant message carrying the options and any data records, entities, reasoning and knowledge gathered before it, and `done` is sent.
+- R42. A clarification SHALL end the turn immediately: the model stops. A clarification the model sends malformed SHALL NOT be shown: the model is told and asks again, so a card always has its options. The question is persisted as an assistant message carrying the options and any data records, entities, reasoning and knowledge gathered before it, and `done` is sent.
 - R43. Only the latest clarification card SHALL be actionable. Its controls:
   - Each option is numbered, and picking it sends the option label as the next user message.
   - "Something else" opens a "Type your own answer…" field with "Send custom answer". It toggles to "Cancel custom answer".
@@ -182,22 +184,28 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decision ADR-0008 in [architecture.md](../../system/architecture.md).
 
-- R52. **Start chat** on a Live user agent SHALL create a session at once, with no form: named after the agent's Live name, over the agent's Live datasets that still exist (missing ones are dropped), and bound to the agent. It SHALL show the toast `Session "<name>" created` and open the session on its welcome block. Several sessions may share a name. The system SHALL refuse, creating nothing: an unknown agent with `Agent "<id>" not found`; an agent with no Live version with `Publish "<name>" before starting a chat`; an agent none of whose Live datasets exist with `None of this agent's datasets exist`. **Start chat** on the Official agent (the assistant) SHALL open the new-session screen instead, since the assistant has no datasets of its own.
+- R52. **Start chat** on a Live user agent SHALL create a session at once, with no form: named after the agent's Live name, over the agent's Live datasets that still exist (missing ones are dropped), and bound to the agent. It SHALL show the toast `Session "<name>" created` and open the session on its welcome block. Several sessions may share a name. The system SHALL refuse, creating nothing: an unknown agent with `Agent "<id>" not found`; an agent with no Live version with `Publish "<name>" before starting a chat`; an agent none of whose Live datasets exist with `None of this agent's datasets exist`. **Start chat** on the Official agent (the assistant) SHALL open the new-session screen instead, since the assistant has no datasets of its own. **Start chat** on the RFP Builder (an Official agent that declares the dataset `Intellify RFP API`) SHALL create a session at once, named `RFP Builder`, over that dataset and bound to the agent (R61), with the same toast; while the dataset does not exist it SHALL refuse, creating nothing, with `Load the "Intellify RFP API" sample in Settings → Testing Data first`.
 - R53. A session started from an agent SHALL keep the datasets it was created with (R5). Republishing the agent with other datasets SHALL NOT change them.
-- R54. Every assistant call made for a session bound to an agent that still exists (chat turns, the grounding pass and deep-analysis calls) SHALL apply the agent's **current Live version**:
+- R54. Every assistant call made for a session bound to a user agent that still exists (chat turns, the grounding pass and deep-analysis calls) SHALL apply the agent's **current Live version**:
   - its instructions, when not empty, as a system context block labelled as user-supplied, after every other context block (R24; the block is in [agents.md](../../system/agents.md) section 4.1, and only the grounding pass's own nudge follows it);
-  - its model override and reasoning-effort override, when set (R56).
+  - its model override and reasoning-effort override, when set (R56);
+  - its tool selection: only the tools it selects are offered, and the prompt's tool list and working rules match them ([agents.md](../../system/agents.md) 2.1);
+  - its skills: the copies taken when it was published, given to the model through the framework's skill catalog and skill tool, from those copies ([agents.md](../../system/agents.md) 7.3).
 
   Publishing a new version SHALL change the next turn of every session bound to the agent. A draft SHALL never apply to a session. The only exception is the agent editor's preview chat, an in-memory session that runs the draft (agents-evals R60, R61).
 - R55. An agent's instructions SHALL NOT relax any rule enforced in code: the read-only SQL guard, dataset scoping (R22), SQL repair (R25-R28), the grounding pass (R19) and the result-quality warnings hold whatever the instructions say. A write statement attempted under an agent's instructions SHALL be rejected by the read-only guard and shown as a failed tool call.
 - R56. A model override SHALL name a model or deployment of the configured provider. It SHALL replace the configured model for the assistant's calls only. The SQL fixer, SQL verifier, visual designer, knowledge bootstrap and eval judge keep the configured model and their own efforts. A reasoning-effort override SHALL replace the user's setting for the same assistant calls. With no LLM settings saved, the model override SHALL be ignored and the fallback model applies. A model the provider rejects SHALL fail the turn with the provider's error, like any model error (R45).
-- R57. A session bound to an agent SHALL show the agent's name in the page header's session context (`Agent` and a chip with the name, before the datasources) and in its row of the session list, in place of the dataset line: `<agent name> · <datasets>`. The name SHALL be the agent's current Live name.
+- R57. A session bound to an agent SHALL show the agent's name in the page header's session context (`Agent` and a chip with the name, before the datasources) and in its row of the Sessions page list (R63), as the row's agent chip. The name SHALL be the agent's current Live name.
 - R58. The welcome block (R50) of a session bound to an agent SHALL use the agent's Live description as its one-line description when that is not empty, and the agent's Live starter questions (up to 5, in order) as the starter prompts when there are any. Otherwise R50's text and prompts apply. Clicking a starter question SHALL fill the composer and SHALL NOT send it.
-- R59. When the agent is deleted, its sessions SHALL keep their transcript, memory and datasets and continue with the plain assistant: no instructions block and no overrides. The page header chip and the list row SHALL read `<agent name> · agent deleted`, using the name the agent last had for the session, and the welcome block falls back to R50.
+- R59. When the agent is deleted, its sessions SHALL keep their transcript, memory and datasets and continue with the plain assistant: no instructions block and no overrides. The page header chip and the list row's agent chip SHALL read `<agent name> · agent deleted`, using the name the agent last had for the session, and the welcome block falls back to R50.
+- R61. A session bound to a built-in agent (today only the RFP Builder, R52) SHALL run that agent on every turn, not the assistant: its own prompt, tools, skill and per-turn context ([agents.md](../../system/agents.md) 2.8, 4.1, 5.1). The assistant-only passes (the grounding pass R19, careful mode and the result-quality warnings) SHALL NOT apply to it. R54-R56 and R59 do not apply; R57 and R58 do, with the built-in agent's name, description and starter questions. Its behaviour is specified in [../rfp/spec.md](../rfp/spec.md).
+- R64. The new-session screen SHALL have an **Agent** field above the session name, with **Assistant** preselected on every visit (never remembered). It is a dropdown (a listbox, keyboard-operable) that lists, each with its name and its description, Assistant, then the Official agents that bring their own dataset (today the RFP Builder), then the user's Live agents, each group alphabetical; System agents, draft-only agents and the assistant's own Start chat entry are not listed. An agent that cannot start a chat now (R52) is listed muted and cannot be chosen, with its reason in place of its description (`Load the "Intellify RFP API" sample in Settings → Testing Data first`, `None of this agent's datasets exist`). The selected agent's description shows under the field (Assistant: `Answers questions over the datasets you pick.`). With Assistant selected the screen behaves as R1 says. With another agent selected the dataset picker is replaced by that agent's datasets as read-only chips, a session name is optional, and **Create** starts a session bound to the agent exactly as **Start chat** does (R52, R61), named with the typed name when there is one, else the agent's default name. The model and reasoning-effort chips stay (they are global settings).
+- R62. While a chat is open, the page header's session context SHALL end with the session's id: `ID <first 8 characters>` in monospace, with the full id as its tooltip and a copy icon. Clicking it copies the full id and shows the toast "Session ID copied" ("Copy failed" when the browser refuses). A user shares the id so a session can be found and diagnosed in the app's data (BA-231).
+- R63. With no session open, the **Sessions** page (app-shell R46) SHALL list every session of the user in the middle of the page card, newest activity first as the backend returns them, under a "Search sessions by name or ID…" field that filters by name or session id, ignoring case, **ten sessions per page**. A row SHALL show the name, its datasets, the agent it uses as a chip (the bound agent's name, R57, or `<agent name> · agent deleted`, R59, or `Assistant` for a session bound to no agent; full name as tooltip `Agent: <name>`), the session id as `ID <first 8 characters>` (full id as tooltip; a click copies it and toasts "Session ID copied", as R62), the last activity (`updatedAt`, else `createdAt`) as `just now`, `<n> min ago`, `<n> h ago`, `yesterday` or a short date with the full date as tooltip, and an options menu with **Delete session**. Clicking a row SHALL open the session. The list SHALL read "Loading sessions…" until the first answer, "No sessions yet. Start a new conversation or open an agent." when empty (with **Start New Conversation**) and `No sessions match "<query>".` when the search finds none. Under the list SHALL be `<first>–<last> of <total>` and, when there is more than one page, **Previous page** and **Next page** buttons with `Page <n> of <pages>`; a new search returns to page 1, and a deletion that empties the last page moves to the page before.
 
 ### Ownership
 
-- R60. In both modes a session, with its transcript, visuals, reports, workspace files and agent memory, SHALL belong to the user who created it. Only that user SHALL see it in the session list or open, chat in, rate, tailor, refresh, download, analyse or delete it; for anyone else it SHALL answer as not found. Every session action needs the Use agents permission. Rules: [../admin/spec.md](../admin/spec.md) R29, R30, R32.
+- R60. A session, with its transcript, visuals, reports, workspace files and agent memory, SHALL belong to the one user (the built-in super admin; the stored `ownerId` is a legacy attribute, [data-model.md](../../system/data-model.md)). The user SHALL see every session in the session list and open, chat in, rate, tailor, refresh, download, analyse or delete it. Every session action is available.
 
 ## Edge cases and errors
 
@@ -245,16 +253,17 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 
 Shell placement and tokens are in [ui.md](../../system/ui.md).
 
-- **Sessions list in the navigation drawer, "Sessions navigation"** (the **Sessions** rail item opens the drawer, app-shell R46 and R48):
-  - A "Sessions" heading with a "+" button (title "New conversation") that opens the new-session screen.
-  - Below it, one entry per session, showing its name and marked when active. Under the name: its datasets, or for a session bound to an agent `<agent name> · <datasets>` (R57), or `<agent name> · agent deleted` (R59).
+- **Sessions page list, "Sessions"** (the **Sessions** rail item opens the page, also from an open chat; app-shell R3, R46):
+  - A "Search sessions by name or ID…" field above the list, filtering by name or session id, ignoring case; ten sessions per page with `<first>–<last> of <total>` and Previous / Next page buttons (R63).
+  - One entry per session, newest activity first, showing its name and marked when it is the session last opened. Under the name: its datasets. Beside it, the agent the session uses as a chip with a sparkles icon: the bound agent's name (R57), `<agent name> · agent deleted` (R59, warning style), or `Assistant` for a session bound to no agent. At the right, the last activity as a relative time (`2 h ago`, `yesterday`, else a short date), with the full date as tooltip.
   - Each entry has an options button (title "Session options", label "Options for <name>") whose menu holds "Delete session". The confirm dialog reads: `Delete “<name>”?` / `This permanently removes its conversation, agent memory, and workspace files.`
   - An entry is disabled while it is being deleted.
+  - Empty: "No sessions yet. Start a new conversation or open an agent." with a **Start New Conversation** button. No match: `No sessions match "<query>".` Loading: "Loading sessions…".
 - **New-session screen**:
-  - A "Session name" field (placeholder "My new session").
+  - An "Agent" dropdown (`new-session-agent`, a listbox showing each agent's name and description: Assistant, the Official agents that bring a dataset, the Live agents; an unavailable one is disabled and shows its reason; the description of the picked one under it), then a "Session name" field (placeholder "My new session").
   - A model chip (configured model, or "No model configured") and a reasoning-effort chip (title "Reasoning effort", choices low / medium / high, saved globally).
   - A "Create" button that shows "Creating…" while saving (title "Name the session and select at least one dataset").
-  - "Select at least one dataset for this session", followed by dataset cards (name, "<N> entities", a check when selected) that toggle selection.
+  - "Select at least one dataset for this session", followed by dataset cards (name, "<N> entities", a check when selected) that toggle selection. With an agent picked (R64) a "Datasets" caption and the agent's dataset names as chips replace them.
 - **Session header**: "Datasource" followed by one chip per bound datasource (name and kind label, summary tooltip), a loading placeholder, or "Unavailable".
 - **Page header** (app-shell R49): the session's name as the title, the session context under it (for a session bound to an agent, `Agent` and the agent chip first, R57 and R59, then the datasources), and **Start New Conversation**.
 - **Disclaimer** under the chat input: `Responses are generated by AI (Powered by LenAI) and may be inaccurate or incomplete. Please verify against source data before sharing.`
@@ -316,7 +325,7 @@ Feature: Chat and visuals
 
 ### Feature: Session management
 
-E2E: none yet. Session creation with real data and reopening after a reload are covered by the "Datasources, datasets, and sessions (World Cup database)" Feature in [datasources](../datasources/spec.md).
+E2E: `frontend/e2e/session-management.spec.ts` covers every scenario below except "The conversation and its history survive a restart" (none yet; the "I start an RFP Builder session" test saves a dataset named "Intellify RFP API" in place of loading the sample). Session creation with real data and reopening after a reload are covered by the "Datasources, datasets, and sessions (World Cup database)" Feature in [datasources](../datasources/spec.md).
 
 ```gherkin
 Feature: Session management
@@ -325,7 +334,8 @@ Feature: Session management
     Given a "World Cup Core" dataset exists
 
   Scenario: Create stays disabled until the session has a name and a dataset
-    When I click "New conversation"
+    When I click "Sessions" on the rail
+    And I click "Start New Conversation"
     Then I see the "My new session" field
     And I see "Select at least one dataset for this session"
     And "Create" is disabled
@@ -338,21 +348,43 @@ Feature: Session management
 
   Scenario: Shows guidance when there are no datasets
     Given no datasets exist
-    When I click "New conversation"
+    When I click "Sessions" on the rail
+    And I click "Start New Conversation"
     Then I see "No datasets yet — create one in Datasets first."
 
   Scenario: A new session opens on its welcome block
-    When I click "New conversation"
+    When I click "Sessions" on the rail
+    And I click "Start New Conversation"
     And I type "World Cup analysis" into "My new session"
     And I click the "World Cup Core" dataset card
     And I click "Create"
     Then I see the toast 'Session "World Cup analysis" created'
-    And the "World Cup analysis" session is listed and active in "Sessions navigation"
+    And I see the "World Cup analysis" chat open
     And I see "World Cup analysis is ready"
     And I see "Connected to World Cup Core."
     When I click "What data is available here? Summarise the tables and the key metrics."
     Then the "Ask a follow-up question…" box contains that question
     And no message has been sent
+
+  Scenario: I start an RFP Builder session from New conversation
+    Given the "Intellify RFP API" sample is loaded
+    When I click "Sessions" on the rail
+    And I click "Start New Conversation"
+    Then the "Agent" field shows "Assistant" and "Answers questions over the datasets you pick."
+    And I see "Select at least one dataset for this session"
+    When I choose "RFP Builder" in the "Agent" field
+    Then I see the dataset "Intellify RFP API" as a chip and no dataset cards
+    And "Create" is enabled
+    When I click "Create"
+    Then I see the toast 'Session "RFP Builder" created'
+    And the page header shows the agent "RFP Builder"
+    And the "Sessions" list shows it with "Intellify RFP API" under its name and the agent chip "RFP Builder"
+
+  Scenario: The Agent field disables an agent that cannot start
+    Given the "Intellify RFP API" sample is not loaded
+    When I click "Sessions" on the rail
+    And I click "Start New Conversation"
+    Then "RFP Builder" in the "Agent" field is disabled and shows 'Load the "Intellify RFP API" sample in Settings → Testing Data first'
 
   Scenario: Deletes a session after confirmation
     Given a "World Cup analysis" session exists and is open
@@ -361,15 +393,14 @@ Feature: Session management
     Then I am asked to confirm 'Delete “World Cup analysis”?'
     When I confirm
     Then I see the toast 'Session "World Cup analysis" deleted'
-    And "World Cup analysis" is no longer listed in "Sessions navigation"
-    And the main area shows the home view
+    And the main area shows the "Sessions" page and "World Cup analysis" is no longer listed
 
   Scenario: Cancelling the delete confirmation keeps the session
     Given a "World Cup analysis" session exists
     When I click "Options for World Cup analysis"
     And I click "Delete session"
     And I dismiss the confirmation
-    Then "World Cup analysis" is still listed in "Sessions navigation"
+    Then "World Cup analysis" is still listed in the "Sessions" list
 
   Scenario: The conversation and its history survive a restart
     Given the "World Cup analysis" session has the question "Who won in 2022?" and its answer
@@ -377,11 +408,33 @@ Feature: Session management
     And I click "World Cup analysis"
     Then I see "Who won in 2022?" and its answer
     And hovering the history strip lists "Who won in 2022?"
+
+  Scenario: I copy the session id to share it
+    Given a "World Cup analysis" session exists and is open
+    Then the page header shows "ID" and the first 8 characters of the session id, with the tooltip "Session ID <id> (click to copy)"
+    When I click the session id
+    Then I see the toast "Session ID copied"
+    And the clipboard holds the full session id
+
+  Scenario: The Sessions page finds a session by name or ID
+    Given 12 sessions exist, the newest named "Cup history"
+    When I click "Sessions" on the rail
+    Then I see 10 sessions, "Cup history" first, and "1–10 of 12" with "Page 1 of 2"
+    When I click "Next page"
+    Then I see 2 sessions and "11–12 of 12"
+    When I type "cup HISTORY" into "Search sessions by name or ID…"
+    Then I see only "Cup history", with "World Cup Core" under its name, the agent chip "Assistant" and "ID" with the first 8 characters of its id
+    When I type the first 8 characters of its id in capitals
+    Then I see only "Cup history"
+    When I type "nothing like this"
+    Then I see 'No sessions match "nothing like this".'
+    When I clear the search and click "Cup history"
+    Then I see the "Cup history" chat open
 ```
 
 ### Feature: Chat answers and reliability signals
 
-E2E: none yet.
+E2E: `frontend/e2e/chat-clarification.spec.ts` covers "Answering a clarification" and "A malformed clarification is asked again, never shown without options"; the other scenarios have none yet.
 
 ```gherkin
 Feature: Chat answers and reliability signals
@@ -421,6 +474,12 @@ Feature: Chat answers and reliability signals
     When I click "Highest win rate"
     Then "Highest win rate" is sent as my next message
     And the assistant continues the analysis without asking again
+
+  Scenario: A malformed clarification is asked again, never shown without options
+    Given the assistant first asks "Which measure of best do you mean?" with options it sends malformed
+    And then asks it again with options "Most titles" and "Highest win rate"
+    When I ask "Which team performed best?"
+    Then I see one clarification card with "1 Most titles" and "2 Highest win rate"
 
   Scenario: Typing my own clarification answer or skipping it
     Given the latest message is a clarification card
@@ -492,7 +551,7 @@ Feature: Sessions started from an agent
     When I click "Agents"
     And I click "Start chat with Cup historian"
     Then I see the toast 'Session "Cup historian" created'
-    And the "Cup historian" session is listed and active in "Sessions navigation", with "Cup historian · World Cup Core" under its name
+    And the "Cup historian" chat is open, and the "Sessions" list shows it with "World Cup Core" under its name and the agent chip "Cup historian"
     And the page header shows the agent "Cup historian"
     And I see "Answers questions about World Cup history"
     And I see the starter questions "Who won in 2014?" and "Which country hosted in 2002?"
@@ -541,11 +600,81 @@ Feature: Sessions started from an agent
   Scenario: Deleting the agent keeps its sessions on the plain assistant
     Given I started a chat with "Cup historian" and asked "Who won in 2014?"
     When I open "Cup historian" in "Agents", click "Delete" and confirm
-    And I click the "Cup historian" session in "Sessions navigation"
+    And I click "Sessions" on the rail and then the "Cup historian" session in the "Sessions" list
     Then I see "Who won in 2014?" and its answer
     And the page header shows "Cup historian · agent deleted"
     When I send "And in 2010?"
     Then the model received no agent instructions
+
+  Scenario: The agent's tool selection and skills apply to every turn
+    Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
+    And a Live user agent "Finance helper" over "World Cup Core" that offers only "Sample rows" and has the skill "fiscal-calendar"
+    And I started a chat with "Finance helper"
+    When I send "Who won in 2014?"
+    Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
+    And the model's skill catalog lists "fiscal-calendar"
+    When I send "And in 2010?"
+    Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
+    And the model's skill catalog lists "fiscal-calendar"
+```
+
+### Feature: Skills the assistant is given
+
+E2E: `frontend/e2e/assistant-skills.spec.ts`
+
+What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0021 and ADR-0025; the prompt's sections are in agents.md 2.1, and the framework's catalog and skill tools in agents.md 3.9 and 7.5. The plain assistant gets only the skills that ship with the app. The old skills folder is written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([knowledge](../knowledge/spec.md) R15-R19).
+
+```gherkin
+Feature: Skills the assistant is given
+
+  Background:
+    Given a "World Cup Core" dataset exists
+    And the model is the recording stub
+
+  Scenario: The assistant is offered only its own skills
+    Given a session over "World Cup Core"
+    When I send "Who won the 2022 World Cup?"
+    Then I see the stub's answer
+    And the assistant's prompt has "## Tools" and "## Working rules", in that order, and no "## Skills"
+    And the "## Tools" section lists "run_readonly_sql" and "ask_clarification" and no "read_file"
+    And the model's skill catalog lists only "curated-knowledge"
+    And the model received nothing of the "interactive-visuals" or "deep-analysis" skills
+    And the model is offered the framework's skill tool and neither "read_file" nor "run_skill_script"
+
+  Scenario: A turn without curated knowledge carries no knowledge rules
+    Given a session over "World Cup Core"
+    And no curated knowledge applies to "World Cup Core"
+    When I send "Who won the 2022 World Cup?"
+    Then I see the stub's answer
+    And the model received no curated-knowledge block
+    And the model received none of the curated-knowledge rules
+
+  Scenario: A turn with curated knowledge carries the block, and the rules stay on demand
+    Given an enabled curated-knowledge instruction for "World Cup Core"
+    And a session over "World Cup Core"
+    When I send "Who won the 2022 World Cup?"
+    Then I see the stub's answer
+    And the model received the curated-knowledge block with that instruction
+    And the model received none of the curated-knowledge rules unless it read them
+    And the model's skill catalog lists "curated-knowledge"
+
+  Scenario: A skills folder left in the data dir by an older version is ignored
+    Given the data dir holds a skills folder from an older version, with a skill "sql-style" described "Use when writing SQL for the World Cup data."
+    And a session over "World Cup Core"
+    When I send "Who won the 2022 World Cup?"
+    Then I see the stub's answer
+    And the assistant's prompt has no "## Skills" section
+    And the model's skill catalog lists only "curated-knowledge"
+    And the model received nothing of the "sql-style" skill
+    And the model is offered the framework's skill tool
+
+  Scenario: The assistant loads a skill with the skill tool
+    Given the model will load "curated-knowledge" with the skill tool
+    And an enabled curated-knowledge instruction for "World Cup Core"
+    And a session over "World Cup Core"
+    When I send "Who won the 2022 World Cup?"
+    Then I see the stub's answer
+    And the model got the instructions of "curated-knowledge" back from the skill tool
 ```
 
 ## Acceptance

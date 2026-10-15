@@ -1,0 +1,6 @@
+# Frontend unit tests (ng test, ChromeHeadless)
+Chrome Headless 153.0.0.0 (Mac OS 10.15.7) PromptEditor inserts the chosen link as [[kind:name]] FAILED
+TOTAL: 1 FAILED, 341 SUCCESS
+
+PromptEditor spec alone, three runs:
+TOTAL: 9 SUCCESS (x3)

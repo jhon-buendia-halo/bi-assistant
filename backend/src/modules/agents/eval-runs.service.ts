@@ -20,8 +20,8 @@ import {
   runAssistantEvalCase,
   selectEvalCases,
 } from '../../mastra/evals/assistant.evals';
+import { evalSetsFor, evalTargetFor } from '../../mastra/evals/eval-sets';
 import type { SampleFixture } from '../testing-data/fixtures/registry';
-import { CurrentUserService } from '../auth/current-user.service';
 import { parseJudgeSetting } from '../../mastra/evals/judge-option';
 import type { EvalJudgeSetting } from '../../mastra/evals/judge-option';
 import { summarizeEvalResults } from '../../mastra/evals/eval-summary';
@@ -55,7 +55,7 @@ export interface EvalRunView {
    * before this field existed; callers must treat it as optional.
    */
   comparison?: EvalRegressionSummary;
-  /** The owning user's id in org server mode, on stored runs (data-model 3.15). */
+  /** Legacy attribute: stored runs carry the super admin's id (data-model 3.15). */
   ownerId?: string;
   /**
    * The run's judge option (agents-evals R143). Runs saved before it read as
@@ -77,20 +77,14 @@ export interface EvalRunJudgeInput {
  * follow the same start/poll shape as deep analysis rather than blocking an
  * HTTP request. Runs are in-memory: a backend restart forgets them.
  *
- * A run belongs to the user who started it (admin R30, R32): the in-memory
- * maps record the owner, lookups filter by it, and the run itself executes
- * as that user, so the throwaway session and the stored run are theirs.
  */
 @Injectable()
 export class EvalRunsService {
   private readonly logger = new Logger(EvalRunsService.name);
-  private readonly runs = new Map<
-    string,
-    { view: EvalRunView; ownerId: string }
-  >();
+  private readonly runs = new Map<string, EvalRunView>();
   /**
-   * One running job per agent and owner, so a double-click cannot
-   * double-spend. Keyed by `activeKey`.
+   * One running job per agent, so a double-click cannot double-spend. Keyed
+   * by agent key.
    */
   private readonly active = new Map<string, string>();
 
@@ -100,20 +94,7 @@ export class EvalRunsService {
     private readonly datasources: DatasourcesService,
     private readonly sessions: SessionsService,
     private readonly knowledge: KnowledgeService,
-    private readonly currentUser: CurrentUserService,
   ) {}
-
-  /** The current user's in-memory run with this id, if any. */
-  private ownRun(jobId: string): EvalRunView | undefined {
-    const entry = this.runs.get(jobId);
-    return entry && entry.ownerId === this.currentUser.ownerKey()
-      ? entry.view
-      : undefined;
-  }
-
-  private activeKey(agentKey: string, ownerId: string): string {
-    return `${ownerId}/${agentKey}`;
-  }
 
   /** Display name for a datasource id, falling back to the id itself. */
   async datasourceName(id: string): Promise<string> {
@@ -129,11 +110,11 @@ export class EvalRunsService {
   async list(agentKey: string): Promise<EvalRunView[]> {
     const stored = await this.repository.list(agentKey);
     // In-flight runs are authoritative in memory; the store lags by a question.
-    return stored.map((run) => this.ownRun(run.jobId) ?? run);
+    return stored.map((run) => this.runs.get(run.jobId) ?? run);
   }
 
   async remove(jobId: string): Promise<boolean> {
-    const own = this.ownRun(jobId);
+    const own = this.runs.get(jobId);
     if (own?.status === 'running') return false;
     if (own) this.runs.delete(jobId);
     return (await this.repository.delete(jobId)) > 0;
@@ -149,11 +130,12 @@ export class EvalRunsService {
     caseIds?: string[],
     judgeInput: EvalRunJudgeInput = {},
   ): Promise<{ jobId: string } | { conflictWith: string } | { error: string }> {
-    if (agentKey !== 'assistant') {
+    // The agent's own sets: those whose `agentKey` (default `assistant`) is it.
+    const sets = evalSetsFor(agentKey);
+    if (sets.length === 0) {
       return { error: `Agent "${agentKey}" has no evals to run` };
     }
-    const ownerId = this.currentUser.ownerKey();
-    const running = this.active.get(this.activeKey(agentKey, ownerId));
+    const running = this.active.get(agentKey);
     if (running) return { conflictWith: running };
 
     if (!datasourceId) return { error: 'Pick a datasource to run against' };
@@ -167,7 +149,7 @@ export class EvalRunsService {
       };
     }
 
-    const cases = selectEvalCases(caseIds);
+    const cases = selectEvalCases(caseIds, sets);
     if (cases.length === 0) {
       return { error: 'Pick at least one question to run' };
     }
@@ -177,7 +159,7 @@ export class EvalRunsService {
     // fixture the registry no longer has must fail the start, not run blind.
     let fixture: SampleFixture;
     try {
-      fixture = fixtureForCases(caseIds);
+      fixture = fixtureForCases(caseIds, sets);
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }
@@ -211,31 +193,37 @@ export class EvalRunsService {
       judge: judge.setting,
       summary: summarizeEvalResults([]),
     };
-    this.runs.set(jobId, { view, ownerId });
-    this.active.set(this.activeKey(agentKey, ownerId), jobId);
+    this.runs.set(jobId, view);
+    this.active.set(agentKey, jobId);
     await this.repository.insert(view);
 
-    // Outlives the request: runs as the user who started it (admin R32).
-    void this.currentUser.bind(() => this.run(view, cases, ownerId))();
+    // Outlives the request.
+    void this.run(view, cases);
     return { jobId };
   }
 
   async status(jobId: string): Promise<EvalRunView | null> {
-    return this.ownRun(jobId) ?? (await this.repository.get(jobId));
+    return this.runs.get(jobId) ?? (await this.repository.get(jobId));
   }
 
   private async run(
     view: EvalRunView,
     cases: AssistantEvalCase[],
-    ownerId: string,
   ): Promise<void> {
+    // The agent the cases run on, with its context and clean-up (agents.md
+    // 8.1); the RFP Builder tags its drafts with this run.
+    const target = evalTargetFor(view.agentKey, view.jobId);
     // A throwaway session so create_visual/update_visual behave the way they
     // do in a real chat turn (see assistant.evals.ts). Best-effort: a run
     // still measures the agent without one, just with visual-tool support
     // degraded to "No session in context".
     let evalSession: EvalSession | undefined;
     try {
-      evalSession = await createEvalSession(this.sessions, view.datasets);
+      evalSession = await createEvalSession(
+        this.sessions,
+        view.datasets,
+        target.sessionAgentKey,
+      );
     } catch (err) {
       this.logger.warn(
         `Could not create a throwaway session for eval run ${view.jobId}: ${
@@ -255,6 +243,7 @@ export class EvalRunsService {
           view.datasets,
           evalSession?.id,
           knowledgeBlock,
+          target,
           view.judge,
         );
         view.results.push(result);
@@ -273,8 +262,10 @@ export class EvalRunsService {
     } finally {
       view.currentQuestion = undefined;
       view.finishedAt = new Date().toISOString();
-      this.active.delete(this.activeKey(view.agentKey, ownerId));
+      this.active.delete(view.agentKey);
       await this.repository.save(view);
+      // The agent's own clean-up: the RFP Builder's drafts of this run.
+      await target.finish?.(view.datasets);
       await cleanupEvalSession(this.sessions, evalSession);
     }
   }

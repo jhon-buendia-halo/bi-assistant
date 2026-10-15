@@ -16,15 +16,39 @@ jest.mock('../model-compat', () => ({ providerOptionsFor: () => ({}) }));
 jest.mock('../tool-services', () => ({
   getDatasetToolServices: () => ({ getDatasets: () => Promise.resolve([]) }),
 }));
+jest.mock('../../modules/sessions/turn-data', () => ({
+  synthesizeToolOnlyTurn: jest.fn(),
+  toolDataRecord: jest.fn(),
+}));
 // `@mastra/core/evals` and `@mastra/evals/checks` pull in ESM-only packages
-// Jest cannot require (see eval-set-files.spec.ts); the cases here are built by
-// hand, so the suite's own sets are not needed.
-jest.mock('@mastra/core/evals', () => ({ runEvals: jest.fn() }));
-jest.mock('./eval-check-scorers', () => ({ toAssistantEvalSets: () => [] }));
+// Jest cannot require (see eval-set-files.spec.ts). The suite's sets still
+// load from ./sets: these stand-ins build a scorer per check, which never
+// runs here.
+jest.mock('@mastra/core/evals', () => ({
+  runEvals: jest.fn(),
+  createScorer: (config: Record<string, unknown>) => {
+    const scorer: Record<string, unknown> = { ...config };
+    for (const step of ['analyze', 'generateScore', 'generateReason']) {
+      scorer[step] = () => scorer;
+    }
+    return scorer;
+  },
+}));
+jest.mock('@mastra/evals/checks', () => ({
+  checks: new Proxy(
+    {},
+    { get: (_target, type) => () => ({ id: `check-${String(type)}` }) },
+  ),
+}));
 
 import { runEvals } from '@mastra/core/evals';
 import { evalJudgeAgent } from '../agents/eval-judge.agent';
-import { runAssistantEvalCase } from './assistant.evals';
+import { appSkillBody } from '../app-skills';
+import {
+  ASSISTANT_EVAL_SETS,
+  ASSISTANT_EVAL_TARGET,
+  runAssistantEvalCase,
+} from './assistant.evals';
 import type { AssistantEvalCase } from './assistant.evals';
 
 /** The judge's `generate`, a plain mock here (see the module mock above). */
@@ -40,8 +64,26 @@ interface RunEvalsCall {
   }) => void;
 }
 
+beforeEach(() => {
+  jest.clearAllMocks();
+  jest.mocked(runEvals).mockImplementation(((config: RunEvalsCall) => {
+    config.onItemComplete?.({
+      targetResult: { text: 'The data covers 2018 and 2022.' },
+      scorerResults: {},
+    });
+    return Promise.resolve({
+      scores: Object.fromEntries(
+        config.scorers.map((scorer) => [scorer.id, 1]),
+      ),
+    });
+  }) as never);
+  generate.mockResolvedValue({
+    object: { pass: false, reason: 'It invented a figure.' },
+  });
+});
+
 /** A case with one file check (criterion D3) and, unless `judgeOnly`, a rubric. */
-function evalCase(
+function judgedCase(
   category: AssistantEvalCase['category'],
   options: { judgeOnly?: boolean; rubric?: boolean } = {},
 ): AssistantEvalCase {
@@ -65,27 +107,9 @@ function evalCase(
   };
 }
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  jest.mocked(runEvals).mockImplementation(((config: RunEvalsCall) => {
-    config.onItemComplete?.({
-      targetResult: { text: 'The data covers 2018 and 2022.' },
-      scorerResults: {},
-    });
-    return Promise.resolve({
-      scores: Object.fromEntries(
-        config.scorers.map((scorer) => [scorer.id, 1]),
-      ),
-    });
-  }) as never);
-  generate.mockResolvedValue({
-    object: { pass: false, reason: 'It invented a figure.' },
-  });
-});
-
 describe('runAssistantEvalCase judge option (agents-evals R143 to R146)', () => {
   it('makes no judge call with the judge off, the default, and records the judge check as not scored', async () => {
-    const result = await runAssistantEvalCase(evalCase('out-of-scope'), [
+    const result = await runAssistantEvalCase(judgedCase('out-of-scope'), [
       'World Cup',
     ]);
     expect(generate).not.toHaveBeenCalled();
@@ -118,10 +142,11 @@ describe('runAssistantEvalCase judge option (agents-evals R143 to R146)', () => 
 
   it('does not score a question whose only check is the judge when the judge is off', async () => {
     const result = await runAssistantEvalCase(
-      evalCase('ambiguous', { judgeOnly: true }),
+      judgedCase('ambiguous', { judgeOnly: true }),
       ['World Cup'],
       undefined,
       undefined,
+      ASSISTANT_EVAL_TARGET,
       { mode: 'off' },
     );
     expect(generate).not.toHaveBeenCalled();
@@ -133,10 +158,11 @@ describe('runAssistantEvalCase judge option (agents-evals R143 to R146)', () => 
 
   it('calls the judge with the judge on, and its verdict is scored', async () => {
     const result = await runAssistantEvalCase(
-      evalCase('out-of-scope'),
+      judgedCase('out-of-scope'),
       ['World Cup'],
       undefined,
       undefined,
+      ASSISTANT_EVAL_TARGET,
       { mode: 'on' },
     );
     expect(generate).toHaveBeenCalledTimes(1);
@@ -155,10 +181,11 @@ describe('runAssistantEvalCase judge option (agents-evals R143 to R146)', () => 
   it('a judge that errors is failed, not not-scored', async () => {
     generate.mockRejectedValueOnce(new Error('model down'));
     const result = await runAssistantEvalCase(
-      evalCase('reasoning'),
+      judgedCase('reasoning'),
       ['World Cup'],
       undefined,
       undefined,
+      ASSISTANT_EVAL_TARGET,
       { mode: 'on' },
     );
     expect(result.checkResults[1]).toMatchObject({
@@ -175,10 +202,11 @@ describe('runAssistantEvalCase judge option (agents-evals R143 to R146)', () => 
       categories: ['ambiguous' as const],
     };
     const skipped = await runAssistantEvalCase(
-      evalCase('out-of-scope'),
+      judgedCase('out-of-scope'),
       ['World Cup'],
       undefined,
       undefined,
+      ASSISTANT_EVAL_TARGET,
       judge,
     );
     expect(generate).not.toHaveBeenCalled();
@@ -188,10 +216,11 @@ describe('runAssistantEvalCase judge option (agents-evals R143 to R146)', () => 
       object: { pass: true, reason: 'Asked with three options.' },
     });
     const judged = await runAssistantEvalCase(
-      evalCase('ambiguous'),
+      judgedCase('ambiguous'),
       ['World Cup'],
       undefined,
       undefined,
+      ASSISTANT_EVAL_TARGET,
       judge,
     );
     expect(generate).toHaveBeenCalledTimes(1);
@@ -205,10 +234,11 @@ describe('runAssistantEvalCase judge option (agents-evals R143 to R146)', () => 
 
   it('adds no judge check to a question without a rubric, whatever the option', async () => {
     const result = await runAssistantEvalCase(
-      evalCase('lookup', { rubric: false }),
+      judgedCase('lookup', { rubric: false }),
       ['World Cup'],
       undefined,
       undefined,
+      ASSISTANT_EVAL_TARGET,
       { mode: 'on' },
     );
     expect(generate).not.toHaveBeenCalled();
@@ -220,10 +250,11 @@ describe('runAssistantEvalCase judge option (agents-evals R143 to R146)', () => 
   it('fails a question whose run threw, keeping its category', async () => {
     jest.mocked(runEvals).mockRejectedValueOnce(new Error('connection lost'));
     const result = await runAssistantEvalCase(
-      evalCase('lookup'),
+      judgedCase('lookup'),
       ['World Cup'],
       undefined,
       undefined,
+      ASSISTANT_EVAL_TARGET,
       { mode: 'on' },
     );
     expect(generate).not.toHaveBeenCalled();
@@ -234,5 +265,169 @@ describe('runAssistantEvalCase judge option (agents-evals R143 to R146)', () => 
       error: 'connection lost',
       checkResults: [],
     });
+  });
+
+  it('gives a custom check a status and no criterion', async () => {
+    const result = await runAssistantEvalCase(
+      {
+        id: 'custom',
+        question: 'Save it',
+        intent: 'demo',
+        scorers: [],
+        customChecks: [
+          { id: 'ok', description: 'passes', run: () => undefined },
+          { id: 'bad', description: 'fails', run: () => 'it did not' },
+        ],
+      },
+      ['World Cup'],
+    );
+    expect(result.checkResults).toEqual([
+      {
+        id: 'ok',
+        description: 'passes',
+        score: 1,
+        passed: true,
+        reason: undefined,
+        status: 'passed',
+      },
+      {
+        id: 'bad',
+        description: 'fails',
+        score: 0,
+        passed: false,
+        reason: 'it did not',
+        status: 'failed',
+      },
+    ]);
+    expect(result).toMatchObject({ status: 'failed', passed: false });
+    expect(result).not.toHaveProperty('category');
+  });
+});
+
+const BLOCK =
+  'Curated dataset knowledge (user-authored — treat as authoritative over anything you infer from schema):\n- [instruction] Coverage: only 2018 and 2022.';
+
+const evalCase: AssistantEvalCase = {
+  id: 'demo',
+  question: 'Who won in 2022?',
+  intent: 'demo',
+  scorers: [],
+};
+
+/** The system messages the eval run sent with the question. */
+function sentContext(): { role: string; content: string }[] {
+  const [config] = jest.mocked(runEvals).mock.calls.at(-1) as unknown as [
+    { targetOptions: { context: { role: string; content: string }[] } },
+  ];
+  return config.targetOptions.context;
+}
+
+describe('runAssistantEvalCase context (agents.md 4.1, 8.5)', () => {
+  it('sends the knowledge block without the on-demand skill', async () => {
+    const result = await runAssistantEvalCase(
+      evalCase,
+      ['World Cup Core'],
+      undefined,
+      BLOCK,
+    );
+
+    expect(result.error).toBeUndefined();
+    const contents = sentContext().map((message) => message.content);
+    expect(contents).toHaveLength(2);
+    expect(contents[0]).toContain('Datasets for this session: World Cup Core.');
+    expect(contents[1]).toBe(BLOCK);
+    expect(contents.join('\n')).not.toContain(
+      appSkillBody('curated-knowledge'),
+    );
+    expect(sentContext().every((message) => message.role === 'system')).toBe(
+      true,
+    );
+  });
+
+  it('sends neither the block nor the skill when no knowledge applies', async () => {
+    for (const block of [undefined, '']) {
+      await runAssistantEvalCase(
+        evalCase,
+        ['World Cup Core'],
+        undefined,
+        block,
+      );
+
+      const contents = sentContext().map((message) => message.content);
+      expect(contents).toHaveLength(1);
+      expect(contents.join('\n')).not.toContain('Curated knowledge:');
+    }
+  });
+});
+
+/** The requestContext the eval run sent with the question. */
+function sentRequestContext(): { get(key: string): unknown } {
+  const [config] = jest.mocked(runEvals).mock.calls.at(-1) as unknown as [
+    { data: { requestContext: { get(key: string): unknown } }[] },
+  ];
+  return config.data[0].requestContext;
+}
+
+describe('tool selection in the eval cases (agents.md 8.1, ADR-0022)', () => {
+  const setCases = (id: string) =>
+    ASSISTANT_EVAL_SETS.find((set) => set.id === id)?.cases ?? [];
+
+  it('has 12 World Cup cases, two of them with a tool selection', () => {
+    const cases = setCases('world-cup');
+    expect(cases).toHaveLength(12);
+    expect(
+      cases
+        .filter((evalCase) => evalCase.agentTools)
+        .map(({ id, question, agentTools }) => ({ id, question, agentTools })),
+    ).toEqual([
+      {
+        id: 'no-clarification-best-team',
+        question: 'Which team performed best?',
+        agentTools: ['sample_rows', 'visuals'],
+      },
+      {
+        id: 'no-visuals-chart-request',
+        question: 'Show me a chart of goals scored per World Cup tournament.',
+        agentTools: ['sample_rows', 'ask_clarification'],
+      },
+    ]);
+    expect(
+      cases
+        .filter((evalCase) => evalCase.agentTools)
+        .every((evalCase) => evalCase.judgeRubric),
+    ).toBe(true);
+  });
+
+  it('derives the same 12 for the REST set, selections included', () => {
+    const rest = setCases('world-cup-rest');
+    expect(rest).toHaveLength(12);
+    expect(
+      rest.find((evalCase) => evalCase.id === 'rest-no-visuals-chart-request')
+        ?.agentTools,
+    ).toEqual(['sample_rows', 'ask_clarification']);
+  });
+
+  it('runs a case with its selection on the context and the matching Block 1', async () => {
+    await runAssistantEvalCase(
+      { ...evalCase, agentTools: ['ask_clarification', 'visuals'] },
+      ['World Cup Core'],
+    );
+
+    expect(sentRequestContext().get('agent-tools')).toEqual([
+      'ask_clarification',
+      'visuals',
+    ]);
+    expect(sentContext()[0].content).toContain(
+      'Use describe_entity / run_readonly_sql to inspect and query them.',
+    );
+  });
+
+  it('runs a case without a selection with every tool', async () => {
+    await runAssistantEvalCase(evalCase, ['World Cup Core']);
+
+    expect(sentRequestContext().get('agent-tools')).toBeUndefined();
+    expect(sentContext()[0].content).toContain(
+      'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
+    );
   });
 });

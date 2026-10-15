@@ -3,7 +3,9 @@ import { SqliteDocStore } from '../../../infrastructure/database/sqlite-doc-stor
 import { KnowledgeRepository } from './knowledge.repository';
 import type { KnowledgeSnippet } from '../entities/knowledge-snippet.entity';
 
-const snippet = (overrides: Partial<KnowledgeSnippet> = {}): KnowledgeSnippet => ({
+const snippet = (
+  overrides: Partial<KnowledgeSnippet> = {},
+): KnowledgeSnippet => ({
   id: 'snippet-1',
   kind: 'term',
   scope: { datasetId: 'World Cup' },

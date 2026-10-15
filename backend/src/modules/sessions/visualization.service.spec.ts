@@ -62,11 +62,13 @@ import { getDatasetToolServices } from '../../mastra/tool-services';
 import { resolveVisualizationModel } from '../../mastra/agents/visualization.agent';
 import { setAgentModelResolver } from '../../mastra/model-resolver';
 import { createZip } from './zip-archive';
+import { appSkillBody, appSkillFile } from '../../mastra/app-skills';
 import {
   isSchemaEnvelopeError,
   unwrapSchemaEnvelope,
   VisualizationService,
   visualizationData,
+  focusRecords,
 } from './visualization.service';
 import type {
   SessionDoc,
@@ -89,7 +91,12 @@ const specOutput = {
   spec: {
     spec: 1,
     kpis: [
-      { label: 'Total claims', select: ['month', 'n'], column: 'n', agg: 'sum' },
+      {
+        label: 'Total claims',
+        select: ['month', 'n'],
+        column: 'n',
+        agg: 'sum',
+      },
     ],
     chart: { form: 'line', select: ['month', 'n'], x: 'month', y: 'n' },
     table: { select: ['month', 'n'], columns: ['month', 'n'], collapsed: true },
@@ -130,11 +137,14 @@ function sessionWithRows(stored: number, rowCount: number): SessionDoc {
 function build() {
   const filesystem = {
     // Freeform visuals have no spec.json — a real filesystem throws for it.
-    readFile: jest.fn(async (path: string) => {
-      if (String(path).endsWith('spec.json')) throw new Error('ENOENT');
-      return '# skill';
+    readFile: jest.fn((path: string) => {
+      if (String(path).endsWith('spec.json'))
+        return Promise.reject(new Error('ENOENT'));
+      return Promise.resolve('# skill');
     }),
-    writeFile: jest.fn().mockResolvedValue(undefined),
+    writeFile: jest
+      .fn<Promise<void>, [path: string, data: unknown]>()
+      .mockResolvedValue(undefined),
   };
   const agent = { generate: jest.fn().mockResolvedValue({ object: bundle }) };
   const mastra = {
@@ -237,6 +247,83 @@ describe('visualizationData', () => {
     expect(block.shown).toBe(99);
     // The dropped record's rows count as truncation, not as silent loss.
     expect(block.truncatedFrom).toBe(155);
+  });
+});
+
+describe('VisualizationService skill', () => {
+  const SPEC_MODE = appSkillFile(
+    'interactive-visuals',
+    'reference/spec-mode.md',
+  ).trimEnd();
+  const FREEFORM = appSkillFile(
+    'interactive-visuals',
+    'reference/freeform.md',
+  ).trimEnd();
+  /** The system message the designer gets for one mode (agents.md 6.4, 7.2). */
+  const skillMessage = (reference: string) => ({
+    role: 'system',
+    content: [
+      '<interactive-visuals-skill>',
+      appSkillBody('interactive-visuals').trimEnd(),
+      '',
+      reference,
+      '</interactive-visuals-skill>',
+    ].join('\n'),
+  });
+  const contextAt = (agent: { generate: jest.Mock }, call: number) =>
+    (
+      (agent.generate.mock.calls as unknown[][])[call][1] as {
+        context: { role: string; content: string }[];
+      }
+    ).context;
+  const workspaceSkillReads = (filesystem: { readFile: jest.Mock }) =>
+    (filesystem.readFile.mock.calls as unknown[][])
+      .map(([path]) => String(path))
+      .filter((path) => path.includes('.agents'));
+
+  it('sends a spec-mode call the router and the spec-mode reference only', async () => {
+    const { service, agent, filesystem } = build();
+    agent.generate.mockResolvedValue({ object: specOutput });
+
+    await service.create(sessionWithRows(3, 3), undefined);
+
+    expect(agent.generate).toHaveBeenCalledTimes(1);
+    const context = contextAt(agent, 0);
+    expect(context).toEqual([skillMessage(SPEC_MODE)]);
+    expect(context[0].content).toContain(SPEC_MODE);
+    expect(context[0].content).not.toContain(FREEFORM);
+    expect(context[0].content).not.toContain('## Fallback: freeform');
+    expect(context[0].content).not.toContain('name: interactive-visuals');
+    expect(workspaceSkillReads(filesystem)).toEqual([]);
+  });
+
+  it('sends a freeform call the router and the freeform reference only', async () => {
+    const { service, agent, filesystem } = build();
+    const session = sessionWithRows(3, 3);
+    // No rows: the spec attempt is skipped and the freeform designer runs.
+    delete session.messages[1].data;
+
+    await service.create(session, undefined);
+
+    expect(agent.generate).toHaveBeenCalledTimes(1);
+    const context = contextAt(agent, 0);
+    expect(context).toEqual([skillMessage(FREEFORM)]);
+    expect(context[0].content).toContain(FREEFORM);
+    expect(context[0].content).not.toContain(SPEC_MODE);
+    expect(context[0].content).not.toContain('## The spec');
+    expect(workspaceSkillReads(filesystem)).toEqual([]);
+  });
+
+  it('switches to the freeform reference when the spec attempts fail', async () => {
+    const { service, agent } = build();
+    // The stub returns the freeform bundle for every call, so both spec
+    // attempts fail and the third call is the freeform fallback.
+    await service.create(sessionWithRows(20, 20), undefined);
+
+    expect(agent.generate).toHaveBeenCalledTimes(3);
+    expect(contextAt(agent, 0)).toEqual([skillMessage(SPEC_MODE)]);
+    expect(contextAt(agent, 1)).toEqual([skillMessage(SPEC_MODE)]);
+    expect(contextAt(agent, 2)).toEqual([skillMessage(FREEFORM)]);
   });
 });
 
@@ -380,7 +467,7 @@ describe('VisualizationService.download answer.md reasoning section', () => {
 
     await service.download(withVisual(session), 'visual-1');
 
-    const files = (createZip as jest.Mock).mock.calls[0][0] as {
+    const files = jest.mocked(createZip).mock.calls[0][0] as {
       name: string;
       data: string;
     }[];
@@ -399,7 +486,7 @@ describe('VisualizationService.download answer.md reasoning section', () => {
 
     await service.download(withVisual(sessionWithRows(20, 20)), 'visual-1');
 
-    const files = (createZip as jest.Mock).mock.calls[0][0] as {
+    const files = jest.mocked(createZip).mock.calls[0][0] as {
       name: string;
       data: string;
     }[];
@@ -719,9 +806,13 @@ describe('VisualizationService spec pipeline', () => {
       '<div id="qti-chart-root"></div>',
     );
     expect(files.get('visuals/<id>/v1/styles.css')).toBe('');
-    expect(files.get('visuals/<id>/v1/script.js')).toBe('window.qtiChart.mount();');
+    expect(files.get('visuals/<id>/v1/script.js')).toBe(
+      'window.qtiChart.mount();',
+    );
     expect(files.get('visuals/<id>/v1/qti-chart.js')).toBe('/* runtime */');
-    expect(files.get('visuals/<id>/v1/qti-frame.js')).toBe('/* frame bridge */');
+    expect(files.get('visuals/<id>/v1/qti-frame.js')).toBe(
+      '/* frame bridge */',
+    );
     expect(
       JSON.parse(files.get('visuals/<id>/v1/manifest.json')!) as {
         renderer: string;
@@ -775,7 +866,9 @@ describe('VisualizationService spec pipeline', () => {
     await service.create(sessionWithRows(20, 20), undefined);
 
     expect(agent.generate).toHaveBeenCalledTimes(3);
-    expect(promptAt(agent, 2)).toContain('HTML, CSS, and JavaScript bundle below');
+    expect(promptAt(agent, 2)).toContain(
+      'HTML, CSS, and JavaScript bundle below',
+    );
   });
 
   it('skips the spec attempt entirely when the answer carries no rows', async () => {
@@ -786,7 +879,9 @@ describe('VisualizationService spec pipeline', () => {
     await service.create(session, undefined);
 
     expect(agent.generate).toHaveBeenCalledTimes(1);
-    expect(promptAt(agent, 0)).toContain('HTML, CSS, and JavaScript bundle below');
+    expect(promptAt(agent, 0)).toContain(
+      'HTML, CSS, and JavaScript bundle below',
+    );
   });
 
   describe('tailoring a spec visual', () => {
@@ -794,9 +889,10 @@ describe('VisualizationService spec pipeline', () => {
     function buildWithStoredSpec() {
       const built = build();
       (built.filesystem.readFile as jest.Mock).mockImplementation(
-        async (path: string) => {
-          if (path.endsWith('spec.json')) return JSON.stringify(specOutput.spec);
-          return '# skill';
+        (path: string) => {
+          if (path.endsWith('spec.json'))
+            return Promise.resolve(JSON.stringify(specOutput.spec));
+          return Promise.resolve('# skill');
         },
       );
       return built;
@@ -903,7 +999,7 @@ describe('VisualizationService spec pipeline', () => {
         specOutput.spec,
       );
       expect(
-        (filesystem.writeFile as jest.Mock).mock.calls.some(
+        filesystem.writeFile.mock.calls.some(
           (call) => call[0] === 'visuals/visual-1/v1/index.html',
         ),
       ).toBe(true);
@@ -915,7 +1011,7 @@ describe('VisualizationService spec pipeline', () => {
 
       await service.download(withVisual(sessionWithRows(20, 20)), 'visual-1');
 
-      const files = (createZip as jest.Mock).mock.calls[0][0] as {
+      const files = jest.mocked(createZip).mock.calls[0][0] as {
         name: string;
         data: string;
       }[];
@@ -1101,7 +1197,7 @@ describe('VisualizationService.refreshData', () => {
     expect(metadata.versions).toHaveLength(1);
     expect(metadata.versions?.[0]?.refreshedAt).toEqual(expect.any(String));
 
-    const dataWrite = (filesystem.writeFile as jest.Mock).mock.calls.find(
+    const dataWrite = filesystem.writeFile.mock.calls.find(
       (call) => call[0] === 'visuals/visual-1/v1/data.json',
     );
     expect(dataWrite).toBeDefined();
@@ -1116,7 +1212,7 @@ describe('VisualizationService.refreshData', () => {
       expect.any(String),
     );
     expect(
-      (filesystem.writeFile as jest.Mock).mock.calls.some((call) =>
+      filesystem.writeFile.mock.calls.some((call) =>
         String(call[0]).includes('/v2/'),
       ),
     ).toBe(false);
@@ -1133,7 +1229,7 @@ describe('VisualizationService.refreshData', () => {
     const session = withVisual(sessionWithRows(20, 20));
     await service.refreshData(session, 'visual-1');
 
-    const dataWrite = (filesystem.writeFile as jest.Mock).mock.calls.find(
+    const dataWrite = filesystem.writeFile.mock.calls.find(
       (call) => call[0] === 'visuals/visual-1/v1/data.json',
     );
     const written = JSON.parse(dataWrite![1] as string) as ToolDataRecord[];
@@ -1159,7 +1255,7 @@ describe('VisualizationService.refreshData', () => {
     await service.refreshData(session, 'visual-1');
 
     expect(runReadOnlySql).not.toHaveBeenCalled();
-    const dataWrite = (filesystem.writeFile as jest.Mock).mock.calls.find(
+    const dataWrite = filesystem.writeFile.mock.calls.find(
       (call) => call[0] === 'visuals/visual-1/v1/data.json',
     );
     const written = JSON.parse(dataWrite![1] as string) as ToolDataRecord[];
@@ -1175,15 +1271,14 @@ describe('VisualizationService.refreshData', () => {
       rows: [{ month: 99, n: 999 }],
       rowCount: 1,
     };
-    (filesystem.readFile as jest.Mock).mockImplementation(
-      async (path: string) => {
-        if (path.endsWith('spec.json')) throw new Error('ENOENT');
-        if (path.endsWith('data.json')) {
-          return JSON.stringify([refreshedRecord]);
-        }
-        return '# skill';
-      },
-    );
+    (filesystem.readFile as jest.Mock).mockImplementation((path: string) => {
+      if (path.endsWith('spec.json'))
+        return Promise.reject(new Error('ENOENT'));
+      if (path.endsWith('data.json')) {
+        return Promise.resolve(JSON.stringify([refreshedRecord]));
+      }
+      return Promise.resolve('# skill');
+    });
 
     await service.load(withVisual(sessionWithRows(20, 20)), 'visual-1', 1);
 
@@ -1205,7 +1300,9 @@ describe('VisualizationService turnRecords merge', () => {
     const call = (filesystem.writeFile.mock.calls as unknown[][]).find(
       (c) => c[0] === path,
     );
-    return call ? (JSON.parse(call[1] as string) as ToolDataRecord[]) : undefined;
+    return call
+      ? (JSON.parse(call[1] as string) as ToolDataRecord[])
+      : undefined;
   };
   /** Same as `writtenDataJson`, matching by suffix — `create()` mints a random visual id. */
   const writtenDataJsonBySuffix = (
@@ -1215,13 +1312,15 @@ describe('VisualizationService turnRecords merge', () => {
     const call = (filesystem.writeFile.mock.calls as unknown[][]).find((c) =>
       String(c[0]).endsWith(suffix),
     );
-    return call ? (JSON.parse(call[1] as string) as ToolDataRecord[]) : undefined;
+    return call
+      ? (JSON.parse(call[1] as string) as ToolDataRecord[])
+      : undefined;
   };
   const promptOf = (agent: { generate: jest.Mock }) =>
     (agent.generate.mock.calls as unknown[][])[0][0] as string;
 
   describe('update()', () => {
-    it('merges the turn\'s records onto the current version\'s stored data, deduping by SQL (fresh wins)', async () => {
+    it("merges the turn's records onto the current version's stored data, deduping by SQL (fresh wins)", async () => {
       const { service, agent, filesystem } = build();
       const session = withVisual(sessionWithRows(20, 20));
       const turnRecords: ToolDataRecord[] = [
@@ -1258,7 +1357,10 @@ describe('VisualizationService turnRecords merge', () => {
 
       // The new version's data.json is the deduped merge, not the answer's
       // original rows and not a duplicate of the re-run query.
-      const written = writtenDataJson(filesystem, 'visuals/visual-1/v2/data.json');
+      const written = writtenDataJson(
+        filesystem,
+        'visuals/visual-1/v2/data.json',
+      );
       expect(written).toHaveLength(2);
       const stale = written!.find((r) => r.input === STALE_SQL);
       expect(stale?.rows).toEqual([{ month: 1, n: 111 }]);
@@ -1284,9 +1386,17 @@ describe('VisualizationService turnRecords merge', () => {
         },
       ];
 
-      await service.update(session, 'visual-1', 'retry the stage split', turnRecords);
+      await service.update(
+        session,
+        'visual-1',
+        'retry the stage split',
+        turnRecords,
+      );
 
-      const written = writtenDataJson(filesystem, 'visuals/visual-1/v2/data.json');
+      const written = writtenDataJson(
+        filesystem,
+        'visuals/visual-1/v2/data.json',
+      );
       const matches = written!.filter((r) => r.input === STAGE_SQL);
       expect(matches).toHaveLength(1);
       expect(matches[0].rows).toEqual([{ stage: 'A', n: 2 }]);
@@ -1300,14 +1410,17 @@ describe('VisualizationService turnRecords merge', () => {
 
       const prompt = promptOf(agent);
       expect(prompt).toContain('"n": 19');
-      const written = writtenDataJson(filesystem, 'visuals/visual-1/v2/data.json');
+      const written = writtenDataJson(
+        filesystem,
+        'visuals/visual-1/v2/data.json',
+      );
       expect(written).toHaveLength(1);
       expect(written![0].input).toBe(STALE_SQL);
     });
   });
 
   describe('create()', () => {
-    it('merges turn records onto the source answer\'s data for a brand-new visual', async () => {
+    it("merges turn records onto the source answer's data for a brand-new visual", async () => {
       const { service, agent, filesystem } = build();
       const session = sessionWithRows(20, 20);
       const turnRecords: ToolDataRecord[] = [
@@ -1477,5 +1590,110 @@ describe('isSchemaEnvelopeError', () => {
         'chart.y: column "amount" is not in the selected result set',
       ),
     ).toBe(false);
+  });
+});
+
+function focusSql(
+  input: string,
+  columns: string[],
+  rows: Record<string, unknown>[],
+): ToolDataRecord {
+  return { tool: 'run_readonly_sql', input, columns, rows };
+}
+
+/** The five result sets of the turn that lost its chart data (2026-10-14). */
+const stages = focusSql(
+  'stages',
+  ['stage'],
+  [
+    { stage: 'final' },
+    { stage: 'semi_final' },
+    { stage: 'quarter_final' },
+    { stage: 'third_place' },
+  ],
+);
+const stageCounts = focusSql(
+  'stage counts',
+  ['tournament_year', 'stage', 'count'],
+  Array.from({ length: 8 }, (_, n) => ({
+    tournament_year: 2018 + 4 * (n % 2),
+    stage: 'final',
+    count: n,
+  })),
+);
+const perTeam = focusSql(
+  'per team',
+  ['team', 'goals_scored'],
+  [
+    { team: 'Argentina', goals_scored: '8' },
+    { team: 'France', goals_scored: '7' },
+    { team: 'Croatia', goals_scored: '3' },
+    { team: 'Morocco', goals_scored: '2' },
+  ],
+);
+const teams = focusSql(
+  'teams',
+  ['common_name'],
+  Array.from({ length: 8 }, (_, n) => ({ common_name: `Team ${n}` })),
+);
+const matches = focusSql(
+  'matches',
+  ['stage', 'home', 'home_goals', 'away', 'away_goals'],
+  Array.from({ length: 8 }, (_, n) => ({
+    stage: 'quarter_final',
+    home: `Home ${n}`,
+    home_goals: 1,
+    away: `Away ${n}`,
+    away_goals: 0,
+  })),
+);
+const turn = [stages, stageCounts, perTeam, teams, matches];
+
+describe('focusRecords (agents.md 6.2)', () => {
+  it('keeps the result sets a chart request is about, even when smaller', () => {
+    const kept = focusRecords(
+      turn,
+      'Bar chart showing goals scored by each team in the 2022 World Cup knockout stage: Argentina 8, France 7, Croatia 3.',
+    );
+    expect(kept).toContain(perTeam);
+    expect(kept).toHaveLength(3);
+    // Run order is kept.
+    expect(kept!.map((r) => r.input)).toEqual(
+      turn.filter((r) => kept!.includes(r)).map((r) => r.input),
+    );
+  });
+
+  it("keeps the chart's data from the user's own words as well", () => {
+    const kept = focusRecords(
+      turn,
+      'Chart the goals scored by each team in the 2022 knockout stage.',
+    );
+    expect(kept).toContain(perTeam);
+  });
+
+  it('changes nothing without an instruction or within the cap', () => {
+    expect(focusRecords(turn, undefined)).toBe(turn);
+    expect(focusRecords(turn, '   ')).toBe(turn);
+    const three = [stages, perTeam, matches];
+    expect(focusRecords(three, 'goals by team')).toBe(three);
+    expect(focusRecords(undefined, 'goals by team')).toBeUndefined();
+  });
+
+  it('keeps failed and empty records, which the designer skips anyway', () => {
+    const failed: ToolDataRecord = {
+      tool: 'run_readonly_sql',
+      input: 'bad',
+      error: 'boom',
+    };
+    const empty = focusSql('empty', ['x'], []);
+    const kept = focusRecords([failed, ...turn, empty], 'goals by team');
+    expect(kept).toContain(failed);
+    expect(kept).toContain(empty);
+    expect(kept!.filter((r) => r.rows?.length)).toHaveLength(3);
+  });
+
+  it('falls back to size, then run order, when nothing matches', () => {
+    const kept = focusRecords(turn, 'zzz qqq');
+    expect(kept).toEqual([stageCounts, teams, matches]);
   });
 });

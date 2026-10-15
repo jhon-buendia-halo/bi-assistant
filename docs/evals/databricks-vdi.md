@@ -47,7 +47,7 @@ npm --prefix backend run fixture:databricks -- --fixture finance             | t
 npm --prefix backend run fixture:databricks -- --fixture marketing-analytics | tee loader-marketing-analytics.txt
 ```
 
-Each ends with `✔ row counts match the dump for all <n> relations`, then `Done.` with the datasource (`World Cup Databricks`, `Finance Databricks`, `Marketing Analytics Databricks`) and the dataset (`World Cup (Databricks)`, `Finance (Databricks)`, `Marketing Analytics (Databricks)`). Running it again is safe: it replaces the tables and updates the same records.
+The loader registers each sample by calling the app's HTTP API at `BACKEND_URL` directly: the app has one built-in user, so there is no sign-in and no token to pass. Each ends with `✔ row counts match the dump for all <n> relations`, then `Done.` with the datasource (`World Cup Databricks`, `Finance Databricks`, `Marketing Analytics Databricks`) and the dataset (`World Cup (Databricks)`, `Finance (Databricks)`, `Marketing Analytics (Databricks)`). Running it again is safe: it replaces the tables and updates the same records.
 
 **4. Optional: the browse-only table** for `dbx-only-browse-only-player-contracts`. A workspace admin, not the eval principal, creates a table the eval token can see but not read:
 

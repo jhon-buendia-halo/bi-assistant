@@ -1,0 +1,250 @@
+import { provideHttpClient } from '@angular/common/http';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { API_BASE_URL } from '../../../../core/config/api.config';
+import { ToastService } from '../../../../core/toast/toast.service';
+import { AgentPageState } from '../../services/agent-page-state.service';
+import {
+  AgentDetail,
+  AgentPromptView,
+} from '../../services/agents-api.service';
+import { AgentSystemPrompt } from './agent-system-prompt';
+
+function builtIn(
+  key: string,
+  prompt: Partial<AgentPromptView> = {},
+): AgentDetail {
+  return {
+    key,
+    id: key,
+    name: key === 'assistant' ? 'Assistant' : 'SQL fixer',
+    description: '',
+    tools: [],
+    kind: key === 'assistant' ? 'official' : 'system',
+    status: 'builtin',
+    instructions: 'SERVED PROMPT',
+    toolDetails: [],
+    memory: null,
+    model: null,
+    prompt: {
+      editable: 'SHIPPED',
+      shipped: 'SHIPPED',
+      modified: false,
+      builtInChanged: false,
+      linksAllowed: key === 'assistant',
+      updatedAt: null,
+      ...prompt,
+    },
+  } as unknown as AgentDetail;
+}
+
+describe('AgentSystemPrompt (built-in agents)', () => {
+  let fixture: ComponentFixture<AgentSystemPrompt>;
+  let http: HttpTestingController;
+  let component: AgentSystemPrompt;
+  let toast: ToastService;
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [AgentSystemPrompt],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
+    toast = TestBed.inject(ToastService);
+  });
+
+  afterEach(() => http.verify());
+
+  function render(agent: AgentDetail): void {
+    fixture = TestBed.createComponent(AgentSystemPrompt);
+    component = fixture.componentInstance;
+    fixture.componentRef.setInput('agent', agent);
+    fixture.detectChanges();
+  }
+  const el = () => fixture.nativeElement as HTMLElement;
+  const byId = (id: string) =>
+    el().querySelector<HTMLButtonElement>(`[data-testid="${id}"]`);
+
+  it('shows the prompt as served with a Built-in chip and Edit', () => {
+    render(builtIn('sql-fixer'));
+    expect(el().textContent).toContain('Built-in');
+    expect(byId('agent-prompt-view')?.textContent).toContain('SERVED PROMPT');
+    expect(byId('agent-prompt-edit')).not.toBeNull();
+    expect(byId('agent-prompt-reset')).toBeNull();
+    expect(byId('agent-prompt-modified')).toBeNull();
+  });
+
+  it('edits a System agent in a textarea, saves and toasts', () => {
+    const success = spyOn(toast, 'success');
+    render(builtIn('sql-fixer'));
+    const saved = jasmine.createSpy('saved');
+    component.saved.subscribe(saved);
+    byId('agent-prompt-edit')!.click();
+    fixture.detectChanges();
+    expect(byId('agent-prompt-banner')?.textContent).toContain(
+      'Changes apply to every session and agent as soon as you save.',
+    );
+    const area = el().querySelector<HTMLTextAreaElement>(
+      '[data-testid="agent-prompt-textarea"]',
+    )!;
+    expect(area.value).toBe('SHIPPED');
+    expect(el().querySelector('app-prompt-editor')).toBeNull();
+    expect(byId('agent-prompt-save')!.disabled).toBeTrue();
+    expect(byId('agent-prompt-count')?.textContent).toContain('7/20,000');
+
+    area.value = 'NEW TEXT';
+    area.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(byId('agent-prompt-save')!.disabled).toBeFalse();
+    byId('agent-prompt-save')!.click();
+    const put = http.expectOne(`${API_BASE_URL}/agents/sql-fixer/prompt`);
+    expect(put.request.method).toBe('PUT');
+    expect(put.request.body).toEqual({ prompt: 'NEW TEXT' });
+    put.flush({ ok: true, message: 'System prompt of "SQL fixer" saved' });
+    expect(success).toHaveBeenCalledWith('System prompt of "SQL fixer" saved');
+    expect(saved).toHaveBeenCalled();
+    fixture.detectChanges();
+    expect(byId('agent-prompt-save')).toBeNull();
+  });
+
+  it('disables Save for an empty prompt and Cancel discards', () => {
+    render(builtIn('sql-fixer'));
+    byId('agent-prompt-edit')!.click();
+    component.draft.set('   ');
+    fixture.detectChanges();
+    expect(byId('agent-prompt-save')!.disabled).toBeTrue();
+    byId('agent-prompt-cancel')!.click();
+    fixture.detectChanges();
+    expect(byId('agent-prompt-editing')).toBeNull();
+    expect(byId('agent-prompt-view')).not.toBeNull();
+  });
+
+  it('uses the link editor and the Tools note for the assistant', async () => {
+    render(builtIn('assistant'));
+    byId('agent-prompt-edit')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el().querySelector('app-prompt-editor')).not.toBeNull();
+    expect(el().querySelector('textarea')).toBeNull();
+    expect(byId('agent-prompt-tools-note')?.textContent).toContain(
+      'The ## Tools list is generated',
+    );
+  });
+
+  it("shows the RFP Builder's links as chips, known against its own tools and skills", () => {
+    const rfp = {
+      ...builtIn('rfp', {
+        editable:
+          'You are the RFP Builder. Load [[skill:rfp-client-renewal]], call [[tool:list_clients]] and not [[tool:run_readonly_sql]].',
+        linksAllowed: true,
+      }),
+      name: 'RFP Builder',
+      kind: 'official',
+      toolDetails: [
+        {
+          name: 'list_clients',
+          description: 'List the clients. More text.',
+          inputs: [],
+        },
+      ],
+    } as AgentDetail;
+    fixture = TestBed.createComponent(AgentSystemPrompt);
+    component = fixture.componentInstance;
+    fixture.componentRef.setInput('agent', rfp);
+    fixture.componentRef.setInput('builtInSkills', [
+      {
+        name: 'rfp-client-renewal',
+        description: 'Stage 1.',
+        loading: 'on-demand',
+        agents: ['rfp'],
+        modified: false,
+        builtInChanged: false,
+        updatedAt: null,
+      },
+      {
+        name: 'curated-knowledge',
+        description: 'Curated.',
+        loading: 'on-demand',
+        agents: ['assistant'],
+        modified: false,
+        builtInChanged: false,
+        updatedAt: null,
+      },
+    ]);
+    fixture.detectChanges();
+    const view = byId('agent-prompt-view')!;
+    expect(view.textContent).not.toContain('[[');
+    const chip = (name: string) =>
+      [...view.querySelectorAll('span')].find(
+        (span) => span.textContent?.trim() === name,
+      );
+    expect(chip('rfp-client-renewal')?.className).toContain('chip-info');
+    expect(chip('list_clients')?.className).toContain('chip-neutral');
+    // An assistant-only tool is not one of the RFP Builder's.
+    expect(chip('run_readonly_sql')?.className).toContain('chip-danger');
+    expect(byId('agent-prompt-tools-note')?.textContent).toContain(
+      '## Tools — generated from the tools the RFP Builder gets',
+    );
+    expect(component.officialTools().map((tool) => tool.name)).toEqual([
+      'list_clients',
+    ]);
+    expect(component.officialSkills().map((skill) => skill.name)).toEqual([
+      'rfp-client-renewal',
+    ]);
+  });
+
+  it('marks the page dirty while an edit is unsaved', () => {
+    render(builtIn('sql-fixer'));
+    const state = TestBed.inject(AgentPageState);
+    byId('agent-prompt-edit')!.click();
+    fixture.detectChanges();
+    expect(state.promptDirty()).toBeFalse();
+    component.draft.set('changed');
+    fixture.detectChanges();
+    expect(state.promptDirty()).toBeTrue();
+  });
+
+  it('resets after the confirm, and not when it is declined', () => {
+    const success = spyOn(toast, 'success');
+    render(builtIn('sql-fixer', { modified: true }));
+    expect(byId('agent-prompt-modified')).not.toBeNull();
+    const saved = jasmine.createSpy('saved');
+    component.saved.subscribe(saved);
+
+    const confirm = spyOn(window, 'confirm').and.returnValue(false);
+    byId('agent-prompt-reset')!.click();
+    http.expectNone(`${API_BASE_URL}/agents/sql-fixer/prompt`);
+
+    confirm.and.returnValue(true);
+    byId('agent-prompt-reset')!.click();
+    expect(confirm).toHaveBeenCalledWith(
+      'Reset the system prompt of "SQL fixer" to the built-in version?',
+    );
+    const del = http.expectOne(`${API_BASE_URL}/agents/sql-fixer/prompt`);
+    expect(del.request.method).toBe('DELETE');
+    del.flush({ ok: true, message: 'System prompt of "SQL fixer" reset' });
+    expect(success).toHaveBeenCalledWith('System prompt of "SQL fixer" reset');
+    expect(saved).toHaveBeenCalled();
+  });
+
+  it('shows the drift notice and the shipped version on request', () => {
+    render(
+      builtIn('sql-fixer', {
+        modified: true,
+        builtInChanged: true,
+        editable: 'MINE',
+        shipped: 'NEW SHIPPED',
+      }),
+    );
+    expect(byId('agent-prompt-drift')?.textContent).toContain(
+      "The app's built-in version changed since this was edited.",
+    );
+    expect(byId('agent-prompt-shipped')).toBeNull();
+    byId('agent-prompt-show-shipped')!.click();
+    fixture.detectChanges();
+    expect(byId('agent-prompt-shipped')?.textContent).toContain('NEW SHIPPED');
+  });
+});

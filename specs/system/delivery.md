@@ -32,6 +32,7 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 | `APP_DATA_DIR` | Electron's `userData` directory. The profile name tracks the app name; if only the pre-rename directory (`Questions to Insights`) exists on an existing install, that one is kept. On **Windows**, backend data (`app.sqlite`, `mastra.sqlite`, `workspaces`) is moved once from the roaming profile to `%LOCALAPPDATA%\Halo BI Assistant`, with rollback and a diagnostics entry on failure, because roaming profiles are often synced or locked. |
 | `QUESTIONS_TO_INSIGHTS_USER_DATA_DIR` | Overrides `userData` entirely and disables the Windows redirect. Used by the Playwright fixture so tests never touch a real profile; also the way to run an isolated desktop instance from a worktree. |
 | `APP_SECRET` | The backend derives the AES-256-GCM key that encrypts stored API keys from it. Taken from the `APP_SECRET` environment variable if set; otherwise read from `<APP_DATA_DIR>/.app-secret`, or generated (32 random bytes, hex) and written there with mode 0600. It must stay stable across launches. Back up `.app-secret` with the data; without it stored keys cannot be decrypted. The backend itself, run bare without `APP_SECRET`, reads or creates `.app-secret` in its own data dir the same way. |
+| `.intellify-api-key` | The key of the embedded Intellify RFP API (ADR-0027). Taken from `INTELLIFY_API_KEY` if set; otherwise read from `<APP_DATA_DIR>/.intellify-api-key`, or generated (32 random bytes, hex) and written there with mode 0600, as `.app-secret` is. The Testing Data registration stores it on the "Intellify RFP API" datasource, so a lost file only means registering the sample again. |
 | Other files in the profile | `logs/system.ndjson` (diagnostics, rotated to `system.previous.ndjson` above 5 MB; the last 2,000 entries are kept in memory). |
 
 ### Dev and branding helpers
@@ -53,11 +54,10 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 | `test` | `ng test` | Karma + Jasmine unit tests. |
 | `test:e2e:prepare` | `tsc -p e2e/tsconfig.json && npm --prefix ../backend run build:all` | Type-check the e2e code, build the backend and the web UI into `backend/public/`. |
 | `test:e2e:prepare:desktop` | `tsc -p e2e/tsconfig.json && npm --prefix ../backend run build && ng build --base-href ./` | Type-check the e2e code, build the backend, build the Angular app for Electron. |
-| `test:e2e` | prepare + `playwright test --project=web` | The full Playwright suite against the web app (the default target), in local mode. Each test signs in as Demo User through the app fixture, except `local-sign-in.spec.ts`, which starts signed out ([tech-stack.md](tech-stack.md)). |
+| `test:e2e` | prepare + `playwright test --project=web` | The full Playwright suite against the web app (the default target). The app has one built-in user and no sign-in, so the fixture only starts the app ([tech-stack.md](tech-stack.md)). |
 | `test:e2e:ui` | prepare + `playwright test --project=web --ui` | Same, in Playwright's UI mode. |
 | `test:e2e:update` | prepare + `playwright test --project=web --update-snapshots` | Regenerate the web visual baselines; only for an intended visual change. |
-| `test:e2e:org` | prepare + `playwright test --project=org` | The org server Features (`e2e/org-*.spec.ts`) against the web app in org server mode, with the OIDC stub and the SCIM client ([tech-stack.md](tech-stack.md)). Needs no Entra ID tenant. |
-| `test:e2e:desktop` | desktop prepare + `playwright test --project=desktop` | The same suite against the real Electron app, signed in as Demo User the same way. Run only when a desktop run is requested. |
+| `test:e2e:desktop` | desktop prepare + `playwright test --project=desktop` | The same suite against the real Electron app. Run only when a desktop run is requested. |
 | `test:e2e:desktop:update` | desktop prepare + `playwright test --project=desktop --update-snapshots` | Regenerate the desktop visual baselines. |
 | `brand:electron` | `bash scripts/brand-electron.sh` | See above. |
 | `electron` | `brand:electron`, backend build, `ng build --base-href ./`, `electron .` | Production-style run: builds everything, opens the app. |
@@ -80,15 +80,16 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 | `test`, `test:watch`, `test:cov`, `test:debug` | Jest | Unit tests (`src/**/*.spec.ts`, and `scripts/**/*.spec.ts` since BA-187: Jest's `roots` take both), watch, coverage, debugger. |
 | `test:e2e` | `jest --config ./test/jest-e2e.json` | API-level e2e specs in `test/`; the live-data specs skip without the World Cup Postgres. |
 | `check:answers` | `ts-node scripts/check-answers.ts` | Opt-in live answer-quality gate over the World Cup fixture; costs real model calls and needs `OPENAI_API_KEY`. Tunable by `CHECK_TRIALS`, `CHECK_ARM`, `CHECK_MODEL`, `CHECK_TIMEOUT_MS`. |
-| `evals:assistant` | `nest build && node dist/mastra/evals/run-assistant-evals.js` | The assistant eval suite from the command line, same suite the Agents screen runs. Needs `EVAL_DATASETS` (comma-separated saved dataset names). `EVAL_SET` (a set id, such as `world-cup-golden`) runs that set only; without it the run is refused, as [agents-evals](../capabilities/agents-evals/spec.md) R110 explains. `EVAL_JUDGE` (`off` by default, `on` or `categories`, with `EVAL_JUDGE_CATEGORIES`) sets the judge option (R153); with it off, judge checks are not scored and cost nothing. Costs model calls. |
+| `evals:assistant` | `nest build && node dist/mastra/evals/run-assistant-evals.js` | The assistant eval suite from the command line, same suite the Agents screen runs. Needs `EVAL_DATASETS` (comma-separated saved dataset names) and one of `EVAL_SET` (a set id, such as `world-cup-golden`, or `rfp` for the RFP Builder) or `EVAL_CASES` (comma-separated case ids); with neither or both it runs nothing, as [agents-evals](../capabilities/agents-evals/spec.md) R110 explains. Optional `EVAL_RESULTS_FILE` (a path: the run's full results, answers and tool calls included, written there as JSON). `EVAL_JUDGE` (`off` by default, `on` or `categories`, with `EVAL_JUDGE_CATEGORIES`) sets the judge option (R153); with it off, judge checks are not scored and cost nothing. It prints every check of each question, passed or failed with its reason. Example: `EVAL_DATASETS="World Cup" EVAL_SET=world-cup npm run evals:assistant`. Costs model calls. |
 | `eval:validate` | `nest build && node dist/mastra/evals/validate-eval-sets.js` | The eval-set validator: checks one set's reference queries on its datasource with no model call; what it runs, prints and exits with is [agents-evals](../capabilities/agents-evals/spec.md) R109. Needs `EVAL_DATASETS` (comma-separated saved dataset names) and `EVAL_SET` (the set id). Boots the backend without an HTTP port, like `evals:assistant`. Both rebuild `dist/` first (`nest build` clears it), so neither should run while the E2E suite or a long eval run uses that build. |
 | `worldcup:api:dump` | `ts-node scripts/worldcup-rest-api/dump.ts` | Snapshot the World Cup Postgres into JSON files for the test REST API (`WORLD_CUP_DB_*` env). |
 | `fixtures:<domain>` (`fixtures:finance`, `fixtures:health-insurance`, `fixtures:genomics`, `fixtures:supply-chain`, `fixtures:marketing-analytics`) | `ts-node ../docker/postgres/generate/<domain>.ts` | Regenerate a synthetic domain sample's seed SQL (and its planted facts, for the domains written for BA-9) from its fixed seed; byte-identical on every run, and it fails when a planted trap drifts. Files: [data-model.md](data-model.md) 4.10. |
 | `fixture:dump` | `ts-node scripts/dump-fixture.ts --fixture <id> [--database <db>] [--host …] [--port …] [--user …] [--password …]` | Export a loaded PostgreSQL sample to `scripts/fixtures/<id>/data/` (one gzipped compact JSON file, `<relation>.json.gz`, per required table and view, plus a plain `_meta.json`), the source of the REST server and the Databricks loader. Connects with the sample's default coordinates unless overridden. Format: [data-model.md](data-model.md) 4.10. |
-| `fixture:databricks` | `ts-node scripts/setup-fixture-databricks.ts --fixture <world-cup\|finance\|marketing-analytics> [--dry-run [--full]] [--no-register \| --register-only] [--batch-rows <n>]` | Load a sample's JSON dump into a Databricks Unity Catalog schema (`evals.<schema>` by default), check its row counts, and register its datasource and dataset in a running local-mode backend; what it runs and checks is [testing-data](../capabilities/testing-data/spec.md) R23 to R25. Environment: `DATABRICKS_HOST`; `DATABRICKS_HTTP_PATH` (the SQL warehouse's `/sql/1.0/warehouses/<id>`) or `DATABRICKS_WAREHOUSE_ID`; `DATABRICKS_TOKEN` (a token that can create schemas and tables in the catalog); `DATABRICKS_CATALOG` (default `evals`; any catalog works, since the references run in the dataset's catalog, [agents-evals](../capabilities/agents-evals/spec.md) R191); `DATABRICKS_SCHEMA` (default the sample's schema); `BACKEND_URL` (default `http://127.0.0.1:3000`); `BACKEND_USER` (the local persona it signs in as, default `local`). `--dry-run` needs none of them and connects to nothing. Idempotent. Run with a warehouse in the VDI: [docs/evals/databricks-vdi.md](../../docs/evals/databricks-vdi.md). |
+| `fixture:databricks` | `ts-node scripts/setup-fixture-databricks.ts --fixture <world-cup\|finance\|marketing-analytics> [--dry-run [--full]] [--no-register \| --register-only] [--batch-rows <n>]` | Load a sample's JSON dump into a Databricks Unity Catalog schema (`evals.<schema>` by default), check its row counts, and register its datasource and dataset in a running backend, calling its HTTP API directly with no sign-in and no token; what it runs and checks is [testing-data](../capabilities/testing-data/spec.md) R23 to R25. Environment: `DATABRICKS_HOST`; `DATABRICKS_HTTP_PATH` (the SQL warehouse's `/sql/1.0/warehouses/<id>`) or `DATABRICKS_WAREHOUSE_ID`; `DATABRICKS_TOKEN` (a token that can create schemas and tables in the catalog); `DATABRICKS_CATALOG` (default `evals`; any catalog works, since the references run in the dataset's catalog, [agents-evals](../capabilities/agents-evals/spec.md) R191); `DATABRICKS_SCHEMA` (default the sample's schema); `BACKEND_URL` (default `http://127.0.0.1:3000`), the backend it registers in. `--dry-run` needs none of them and connects to nothing. Idempotent. Run with a warehouse in the VDI: [docs/evals/databricks-vdi.md](../../docs/evals/databricks-vdi.md). |
 | `worldcup:api`, `finance:api`, `marketing-analytics:api` | `ts-node scripts/worldcup-rest-api/serve.ts [--fixture finance\|marketing-analytics]` | Zero-dependency REST + OpenAPI server over a sample's JSON dump, for exercising the REST connector: World Cup on `127.0.0.1:55080` (the snapshot above), finance on 55081 and marketing analytics on 55082 (their `fixture:dump` files). With no switch it answers as it always did; the switches are under *The fixture REST API* below. |
+| `intellify-api` | `node dist/intellify-api/main.js` | Run the Intellify RFP API alone (ADR-0027; needs `build` first), configured only by environment: `INTELLIFY_API_KEY` (required), `INTELLIFY_API_HOST`, `INTELLIFY_API_PORT` (3100), `INTELLIFY_DB_*` ([api.md](api.md) 6.1). Not needed for local runs: the app starts the API embedded unless `INTELLIFY_API=off`. |
 | `worldcup:rest:setup` | `ts-node scripts/setup-worldcup-rest.ts` | `fixture:rest:setup` with its World Cup defaults, kept for existing docs (`WORLD_CUP_API_URL` still works). |
-| `fixture:rest:setup`, `finance:rest:setup`, `marketing-analytics:rest:setup` | `ts-node scripts/setup-fixture-rest.ts [--fixture <id>] [flags]` | Registers a running fixture REST API as a `rest` datasource and a dataset in a running backend through its HTTP API, signing in by itself in local mode; one datasource per server variant; idempotent. Flags under *The fixture REST API* below. |
+| `fixture:rest:setup`, `finance:rest:setup`, `marketing-analytics:rest:setup` | `ts-node scripts/setup-fixture-rest.ts [--fixture <id>] [flags]` | Registers a running fixture REST API as a `rest` datasource and a dataset in a running backend through its HTTP API, called directly with no sign-in and no token; one datasource per server variant; idempotent. Flags under *The fixture REST API* below. |
 | `build:web` | `npm --prefix ../frontend run build:web && node scripts/copy-web.js` | Build the UI and copy it to `backend/public/` (gitignored). `copy-web.js` fails if the frontend build has no `index.html`. |
 | `build:all` | `build` then `build:web` | Everything the npm package needs. |
 | `prepack` | `build:all` | `npm pack` / `npm publish` always ship a fresh UI. |
@@ -129,7 +130,7 @@ npm run finance:rest:setup
 npm run marketing-analytics:rest:setup
 ```
 
-`scripts/setup-fixture-rest.ts` (tests: `setup-fixture-rest.spec.ts`) reads the API's `/`, checks its token with one request, signs in to the backend, takes the endpoints from the backend's OpenAPI discovery (`POST /datasources/rest/discover`, what the Discover button calls), adds row caps, saves the datasource, refreshes its inventory and saves a dataset of every endpoint. It upserts both by name.
+`scripts/setup-fixture-rest.ts` (tests: `setup-fixture-rest.spec.ts`) reads the API's `/`, checks its token with one request, then calls the backend directly, with no sign-in and no token: it takes the endpoints from the backend's OpenAPI discovery (`POST /datasources/rest/discover`, what the Discover button calls), adds row caps, saves the datasource, refreshes its inventory and saves a dataset of every endpoint. It upserts both by name.
 
 | Flag | Variable | Default | Meaning |
 |---|---|---|---|
@@ -140,8 +141,6 @@ npm run marketing-analytics:rest:setup
 | `--max-rows <endpoint>=<n>` | | the profile's caps | Repeatable or comma-separated: the endpoint's `maxRows` on the datasource. |
 | `--allow-unavailable` | | off | Keeps endpoints the inventory cannot read (the `next-url` variant) instead of failing. Refused endpoints are always expected unreadable and kept with no columns; a refused endpoint the inventory could read fails the setup. |
 | `--backend-url` | `BACKEND_URL` | `http://127.0.0.1:3000` | |
-| `--backend-token` | `BACKEND_TOKEN` | none | A session token, sent as `Authorization: Bearer` (local mode) and as the `qti_session` cookie with an `Origin` of the backend URL, or `BACKEND_ORIGIN` (org server). |
-| `--user` | `BACKEND_USER` | `local` | Without a token, the script calls `GET /datasources`; on a 401 it signs in as this local persona (`POST /auth/local/sign-in`, [api.md](api.md)) and sends the token it gets. On an org server that sign-in does not exist, and the message asks for `BACKEND_TOKEN`. |
 
 Besides the caps asked for, the setup gives an endpoint with more rows than the connector's default cap (10,000) a `maxRows` of its row count, and gives a page or offset endpoint whose rows need more than the connector's 50 pages a bigger page, up to the server's maximum: marketing analytics `policy_sales` (10,822 rows) gets `maxRows` 10,822 and pages of 217. What still cannot be read whole is printed as a warning.
 
@@ -161,8 +160,8 @@ cd backend && npm run build:all && npm run start:web # web mode from the working
 
 | Where | Commands |
 |---|---|
-| `frontend/` | `npm test`, `npm run build`, `npm run test:e2e` (in local mode, signed in as Demo User through the fixture, plus the local sign-in Feature), and `npm run test:e2e:org` when a change touches sign-in, roles, permissions, ownership or the Admin area |
-| `backend/` | `npm test`, `npm run build`, lint on the files you touched, and `npm run test:e2e` (includes the org server API tests) |
+| `frontend/` | `npm test`, `npm run build`, `npm run test:e2e` |
+| `backend/` | `npm test`, `npm run build`, lint on the files you touched, and `npm run test:e2e` |
 
 `test:e2e` builds the backend with the web UI and drives the web app; its global setup starts the World Cup Postgres itself (see section 6). The desktop target (`test:e2e:desktop`) runs only when a desktop run is requested, and refuses to launch the app if port 3000 is taken. Which target to test, and how skipped desktop-only scenarios are reported, is the *Test target convention* in [CLAUDE.md](../../CLAUDE.md).
 
@@ -220,12 +219,12 @@ The second, explicit `node_modules` mapping is required: electron-builder silent
 | Flag | Default | Notes |
 |---|---|---|
 | `--port <n>` | 3000 | Falls back to a free port when the default is busy. An explicit busy port prints an error and exits 1. `0` lets the OS pick. Valid range 0 to 65535. |
-| `--host <h>` | `127.0.0.1` | Interface to bind. |
+| `--host <h>` | `127.0.0.1` | Interface to bind. The web CLI binds loopback by default, so only the machine itself reaches it. `--host 0.0.0.0` exposes it to the network with no sign-in (see *Security boundary* below). |
 | `--data-dir <path>` | `$QTI_DATA_DIR`, else `$APP_DATA_DIR`, else `~/.questions-to-insights` | Deliberately separate from the Electron `userData` dir so desktop and web can run together without SQLite lock fights. |
 | `--no-open` | | Do not open the browser. |
 | `-h`, `--help` / `-v`, `--version` | | Print and exit. |
 
-Startup order matters: the CLI creates the data directory, sets `APP_DATA_DIR`, resolves and sets `APP_SECRET` (read or create `<data-dir>/.app-secret`, mode 0600, same semantics as the Electron main process) and **only then** dynamically imports the app, because `database.module.ts` and `mastra/storage.ts` read `APP_DATA_DIR` at import time. It prints the URL and data dir, opens the default browser (best effort: `open`, `cmd /c start`, `xdg-open`), and on SIGINT/SIGTERM closes the app (forced exit after 5 s). It warns when no web UI build is found. CORS is off in this mode (same origin); the Electron entry `main.ts` keeps it on.
+Startup order matters: the CLI creates the data directory, sets `APP_DATA_DIR`, resolves and sets `APP_SECRET` (read or create `<data-dir>/.app-secret`, mode 0600, same semantics as the Electron main process) and **only then** dynamically imports the app, because `database.module.ts` and `mastra/storage.ts` read `APP_DATA_DIR` at import time. It prints the URL and data dir (no mode line: there is one mode), opens the default browser (best effort: `open`, `cmd /c start`, `xdg-open`), and on SIGINT/SIGTERM closes the app (forced exit after 5 s). It warns when no web UI build is found. CORS is off in this mode (same origin); the Electron entry `main.ts` keeps it on.
 
 **Bootstrap** (`backend/src/app-bootstrap.ts`, `createApp()`, shared by `main.ts` and the CLI): when `<webRoot>/index.html` exists, it serves the static files and installs a SPA fallback. `webRoot` is the `WEB_ROOT` env, else `backend/public/` (next to `dist/`). The fallback is a filter on Nest's not-found path, so API controllers always win: only an unmatched `GET`/`HEAD` with `Accept: text/html` and no file extension receives `index.html`; everything else keeps Nest's 404. With no `index.html`, the app serves the API only (the Electron-staged backend has no `public/`).
 
@@ -233,42 +232,11 @@ Startup order matters: the CLI creates the data directory, sets `APP_DATA_DIR`, 
 
 **Build and pack:** in `backend/`, `npm run build:web` (frontend build then `scripts/copy-web.js` into `public/`), `npm run build:all`, and `prepack` runs `build:all`. To test locally: `npm pack`, then `npm i <tarball>` in a scratch directory and run the bin.
 
-**Data layout the CLI creates** under the data dir: `app.sqlite`, `mastra.sqlite`, `observability.duckdb`, `workspaces/`, `.app-secret` (see [data-model.md](data-model.md)). The native modules (better-sqlite3, DuckDB, LibSQL) arrive as prebuilt binaries; if npm starts compiling them, the Node version is unsupported or a toolchain is missing.
+**Data layout the CLI creates** under the data dir: `app.sqlite`, `mastra.sqlite`, `observability.duckdb`, `workspaces/`, `.app-secret`, `.intellify-api-key` (see [data-model.md](data-model.md) and section 1). The native modules (better-sqlite3, DuckDB, LibSQL) arrive as prebuilt binaries; if npm starts compiling them, the Node version is unsupported or a toolchain is missing.
+
+**Security boundary.** The app has no sign-in: whoever reaches the port acts as the one built-in super admin and has full access, including the stored LLM key and the developer settings ([product/non-functional.md](../product/non-functional.md), ADR-0030). The web CLI therefore binds `127.0.0.1` by default. The desktop backend keeps listening on all interfaces (the Port row in section 1), by the user's choice, so anyone on the network who can reach its port has full access; `--host 0.0.0.0` on the CLI exposes it the same way. Put the app behind your own network controls when exposing it.
 
 First run needs an LLM provider in Settings (or `OPENAI_API_KEY` in the environment, which makes the backend fall back to `openai/gpt-4o-mini` when no settings are saved).
-
-### 4.1 Running an org server
-
-An org server is the same npm package started with the `ORG_*` configuration (ADR-0010, [api.md](api.md) 1.9 and 6.1). Rules: [admin](../capabilities/admin/spec.md). The desktop app never runs as an org server.
-
-1. **Register the app in Entra ID** (Microsoft Entra admin center → App registrations → New registration):
-   - Supported account types: this organisation only.
-   - Redirect URI, platform **Web**: `<public base URL>/auth/callback`, for example `https://insights.contoso.com/auth/callback`.
-   - Front-channel logout URL: none needed. Add `<public base URL>/` as an allowed post-logout redirect URI.
-   - Certificates & secrets → new client secret. Note the **Application (client) id**, the **Directory (tenant) id** and the secret.
-   - API permissions: the default `openid`, `profile`, `email` (Microsoft Graph delegated). No Graph application permission is needed.
-2. **Set up provisioning** (Enterprise applications → the app → Provisioning → Automatic):
-   - Tenant URL: `<public base URL>/scim/v2`.
-   - Secret token: the value of `ORG_SCIM_TOKEN` (a long random string, at least 32 characters, for example `openssl rand -hex 32`).
-   - Test the connection, map users and groups (the default attribute mappings work: `userPrincipalName` → `userName`, `mail` → `emails[type eq "work"].value`, `displayName`, `givenName`, `surname`, `objectId` → `externalId`), assign the users and groups in scope, and start provisioning. Entra ID then pushes changes on its own cycle (about every 40 minutes).
-3. **Put a TLS reverse proxy in front** (nginx, Caddy, a cloud load balancer) that serves the public hostname over HTTPS and forwards to the app with `X-Forwarded-Proto`, `X-Forwarded-For` and `X-Forwarded-Host`. The app trusts one proxy hop. Streaming responses (`text/event-stream`) must not be buffered.
-4. **Start the server** on the machine behind the proxy:
-
-   ```bash
-   export ORG_OIDC_ISSUER=https://login.microsoftonline.com/<tenant id>/v2.0
-   export ORG_OIDC_CLIENT_ID=<application id>
-   export ORG_OIDC_CLIENT_SECRET=<client secret>
-   export ORG_PUBLIC_BASE_URL=https://insights.contoso.com
-   export ORG_SCIM_TOKEN=<the provisioning secret token>
-   export ORG_BOOTSTRAP_ADMINS=alice@contoso.com,bob@contoso.com   # optional: UPNs, not emails
-   questions-to-insights --host 0.0.0.0 --port 3000 --data-dir /srv/questions-to-insights --no-open
-   ```
-
-   Bind only the interface the proxy reaches (`0.0.0.0` when the proxy is on another host, `127.0.0.1` when it is on the same one), and keep the port closed to everyone but the proxy. The banner prints `Mode: org server, <public base URL>`. A missing variable stops startup with an error naming it. The issuer must carry your tenant id: the shared `common`, `organizations` and `consumers` endpoints are refused at startup. `ORG_BOOTSTRAP_ADMINS` lists user principal names (UPNs), the sign-in names Entra ID sends as `preferred_username` and SCIM as `userName`; a person's email is never used to recognise them.
-5. **First sign-in.** A bootstrap admin signs in at the public URL and holds Platform admin at once. Other people hold the User role until they get more roles (in the Admin area's Users & groups tab, or through group mappings on Roles & permissions).
-6. **Secrets and backups.** Keep `ORG_OIDC_CLIENT_SECRET` and `ORG_SCIM_TOKEN` out of the data directory and out of logs (an environment file readable only by the service account). Back up the data directory with its `.app-secret`, as in local mode. Rotating `ORG_SCIM_TOKEN` means updating it in Entra ID and restarting the server.
-
-For development and the E2E suite, `ORG_PUBLIC_BASE_URL` may be `http://127.0.0.1:<port>` and the issuer a local stub; cookies then drop `Secure`. `npm run test:e2e:org` in `frontend/` does this for you.
 
 ## 5. Versioning and releases
 
@@ -419,11 +387,11 @@ Defaults are shared state: the desktop app uses Electron's `userData` directory 
 | Web (CLI) port | 3000 (falls back to a free port) | `--port` |
 | Bare backend (`start:dev`) data dir and port | `<cwd>/data`, `PORT` or 3000 | `APP_DATA_DIR`, `PORT` |
 | Secret | persisted `.app-secret` in the data dir | `APP_SECRET` |
+| Intellify API port | 3100 (the embedded Intellify RFP API) | `--intellify-api-port <n>` (CLI) or `INTELLIFY_API_PORT`; `0` picks a free port, printed on the CLI banner (`Intellify API: http://127.0.0.1:<port>`); the E2E fixture sets `0`. `--no-intellify-api` or `INTELLIFY_API=off` skips it |
 | Sample Postgres | project `questions-to-insights-world-cup`, port 55432 | `docker compose -p <name>` plus `WORLD_CUP_DB_PORT=<port>`; the e2e fixtures read the same variable (and `WORLD_CUP_DB_HOST`) |
 | Fixture REST APIs | 55080 (World Cup), 55081 (finance), 55082 (marketing analytics) | `REST_API_PORT` or `--port`; the eval variants use 55090 and up, and the setup script's `--api-url` points at them (section 2, *The fixture REST API*) |
 | Observability profile | same project; ports 6006, 3001, 4317, 4318 | `docker compose -p <name>` plus `PHOENIX_PORT`, `GRAFANA_PORT`, `OTLP_GRPC_PORT`, `OTLP_HTTP_PORT` (see *Observability profile* above) |
 | Playwright | needs port 3000 free | one e2e run at a time per machine; each test already gets its own temp profile |
-| Org server (CLI) | the CLI's data dir and port | same as the CLI, plus its own `ORG_*` variables; the E2E `org` project picks free ports for the app and the OIDC stub |
 
 The project rule: when work happens in a worktree, ask which target (shared or isolated) before starting the app or the Compose stack. See *Worktree deploy convention* in [CLAUDE.md](../../CLAUDE.md).
 

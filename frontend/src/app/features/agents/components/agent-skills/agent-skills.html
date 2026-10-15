@@ -1,0 +1,110 @@
+<div class="flex flex-col gap-4">
+  @if (userAgent()) {
+    <p class="text-[12px] text-fg-muted">
+      This agent runs on the assistant, so it uses the assistant's skills.
+    </p>
+  }
+
+  <div>
+    @if (skills().length === 0) {
+      <p class="text-[13px] text-fg-muted">This agent has no skills.</p>
+    } @else {
+      <div class="flex flex-col gap-2">
+        @for (skill of skills(); track skill.name) {
+          <div
+            [attr.data-testid]="'agent-skill-' + skill.name"
+            class="@container rounded-xl border border-border"
+          >
+            <button
+              type="button"
+              (click)="toggle(skill)"
+              [attr.aria-expanded]="isOpen(skill.name)"
+              class="flex w-full flex-col items-start gap-1.5 px-4 py-3 text-left"
+            >
+              <span class="flex flex-wrap items-center gap-2">
+                <span class="font-mono text-[13px] text-fg-strong">{{
+                  skill.name
+                }}</span>
+                <span
+                  class="rounded-md border border-border px-2 py-0.5 text-[11px] text-fg-muted"
+                  >{{ loadingLabel(skill) }}</span
+                >
+                <span
+                  class="rounded-md border border-border px-2 py-0.5 text-[11px] text-fg-muted"
+                  >{{ skill.level === "in-app" ? "In-app" : "Built-in" }}</span
+                >
+                @if (skill.modified) {
+                  <span class="chip chip-warning">Modified</span>
+                }
+              </span>
+              @if (skill.description) {
+                <span
+                  class="block max-w-[80ch] text-[12px] leading-relaxed text-fg-muted"
+                  >{{ skill.description }}</span
+                >
+              }
+            </button>
+
+            @if (open()[skill.name]; as state) {
+              <!-- Stacked in a narrow row (Details panel open); side by side from 42rem. -->
+              <div
+                class="flex flex-col gap-4 border-t border-border px-4 py-3 @2xl:flex-row"
+              >
+                <div class="flex w-full shrink-0 flex-col gap-0.5 @2xl:w-56">
+                  @for (file of skill.files; track file.path) {
+                    <button
+                      type="button"
+                      [attr.data-testid]="'skill-file-' + file.path"
+                      (click)="selectFile(skill.name, file.path)"
+                      [style.padding-left.px]="8 + depth(file.path) * 12"
+                      class="rounded-md py-1 pr-2 text-left font-mono text-[12px] break-all"
+                      [class.bg-surface-muted]="state.path === file.path"
+                      [class.text-fg-strong]="state.path === file.path"
+                      [class.text-fg-muted]="state.path !== file.path"
+                      [class.hover:text-fg]="state.path !== file.path"
+                    >
+                      {{ file.path }}
+                    </button>
+                  }
+                </div>
+                <div class="min-w-0 flex-1">
+                  @if (state.loading) {
+                    <lucide-angular
+                      [img]="Loader2"
+                      [size]="14"
+                      class="animate-spin text-fg-muted"
+                    />
+                  } @else if (state.error) {
+                    <p class="text-[13px] text-on-danger-soft">
+                      {{ state.error }}
+                    </p>
+                  } @else if (state.file; as file) {
+                    @if (file.content === null) {
+                      <p class="text-[13px] text-fg-muted">
+                        This file isn't shown: it is larger than 256 KB or isn't
+                        text.
+                      </p>
+                    } @else {
+                      @if (skill.level === "in-app") {
+                        <!-- An in-app skill's tool links show as chips. -->
+                        <pre
+                          data-testid="skill-file-content"
+                          class="max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
+                        ><app-linked-text [text]="file.content" [known]="knownLinks" /></pre>
+                      } @else {
+                        <pre
+                          data-testid="skill-file-content"
+                          class="max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
+                          >{{ file.content }}</pre>
+                      }
+                    }
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { LlmModule } from '../llm/llm.module';
 import { MastraModule } from '../../mastra/mastra.module';
 import { DatasetsModule } from '../datasets/datasets.module';
 import { DatasourcesModule } from '../datasources/datasources.module';
@@ -6,8 +7,10 @@ import { SessionsModule } from '../sessions/sessions.module';
 import { KnowledgeModule } from '../knowledge/knowledge.module';
 import { UserAgentsModule } from '../user-agents/user-agents.module';
 import { AgentsController } from './agents.controller';
+import { AgentPromptsService } from './agent-prompts.service';
 import { AgentsService } from './agents.service';
 import { EvalRunsService } from './eval-runs.service';
+import { AgentPromptOverridesRepository } from './repositories/agent-prompt-overrides.repository';
 import { EvalRunsRepository } from './repositories/eval-runs.repository';
 
 @Module({
@@ -22,8 +25,15 @@ import { EvalRunsRepository } from './repositories/eval-runs.repository';
     SessionsModule,
     KnowledgeModule,
     UserAgentsModule,
+    LlmModule,
   ],
   controllers: [AgentsController],
-  providers: [AgentsService, EvalRunsService, EvalRunsRepository],
+  providers: [
+    AgentsService,
+    AgentPromptsService,
+    AgentPromptOverridesRepository,
+    EvalRunsService,
+    EvalRunsRepository,
+  ],
 })
 export class AgentsModule {}

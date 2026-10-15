@@ -1,6 +1,6 @@
 import { expect, Page } from '@playwright/test';
 import { WORLD_CUP_DATASET, WORLD_CUP_DATASOURCE } from './app-actions';
-import { apiBaseOf, authHeaders } from './local-auth';
+import { apiBaseOf } from './api';
 import { WORLD_CUP_DB, worldCupKey } from './world-cup-db';
 
 /**
@@ -27,8 +27,6 @@ async function call<T extends StyleA>(
   const response = await page.request.fetch(`${apiBase(page)}${path}`, {
     method,
     data,
-    // The page's local auth session (admin R71).
-    headers: await authHeaders(page),
   });
   expect(response.ok(), `${method} ${path} → HTTP ${response.status()}`).toBe(
     true,
@@ -133,4 +131,67 @@ export async function saveAgentDraft(
 /** Publishes a user agent's draft. */
 export async function publishAgent(page: Page, id: string): Promise<void> {
   await call(page, 'POST', `/agents/${encodeURIComponent(id)}/publish`);
+}
+
+export interface KnowledgeSnippetInput {
+  kind: 'instruction' | 'term' | 'default_filter';
+  title: string;
+  body: string;
+  /** The dataset's name; omit for a global snippet. */
+  datasetId?: string;
+  enabled?: boolean;
+}
+
+/**
+ * Saves a curated knowledge snippet (`POST /knowledge`, api.md 50) and
+ * returns its id. The knowledge routes answer bare bodies with real status
+ * codes (Style B), so this does not go through `call`.
+ */
+export async function createKnowledgeSnippet(
+  page: Page,
+  input: KnowledgeSnippetInput,
+): Promise<string> {
+  const { datasetId, ...snippet } = input;
+  const response = await page.request.fetch(`${apiBase(page)}/knowledge`, {
+    method: 'POST',
+    data: { ...snippet, scope: datasetId ? { datasetId } : null },
+  });
+  expect(response.status(), `POST /knowledge → HTTP ${response.status()}`).toBe(
+    201,
+  );
+  return ((await response.json()) as { id: string }).id;
+}
+
+export interface SkillInput {
+  name: string;
+  description: string;
+  body: string;
+  /** Reference files, each `{ path, content }` (data-model 3.10.1). */
+  files?: { path: string; content: string }[];
+}
+
+/** Creates an in-app skill (`POST /skills`, api.md 96) and returns its id. */
+export async function createSkill(
+  page: Page,
+  input: SkillInput,
+): Promise<string> {
+  const { skill } = await call<StyleA & { skill: { id: string } }>(
+    page,
+    'POST',
+    '/skills',
+    { files: [], ...input },
+  );
+  return skill.id;
+}
+
+/** Saves an in-app skill (`PUT /skills/:id`, api.md 97). */
+export async function updateSkill(
+  page: Page,
+  id: string,
+  input: SkillInput,
+): Promise<void> {
+  await call(page, 'PUT', `/skills/${encodeURIComponent(id)}`, {
+    files: [],
+    ...input,
+  });
 }

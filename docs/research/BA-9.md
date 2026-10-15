@@ -683,7 +683,7 @@ The baseline is action 3 in [3.0](../plans/BA-9.md#30-start-here-what-to-do-firs
   - **`gpt-4o-mini` passes the datasource as `"postgres <id>"`** (the kind and the id together) instead of the bare id, and `run_readonly_sql` refuses the call with `Datasource "postgres <id>" is not used by this session's datasets`. The same query with no datasource argument runs. This is most of the `check-no-tool-errors` failures.
 - **The model is the weakest the app can resolve to.** `gpt-4o-mini` is the fallback when nothing is saved in LLM Settings. A baseline on the model the team uses in practice is the more useful reference; it is a repeat of the same six runs with that model saved in Settings.
 - **REST is slower and fails tool calls more** (3 of 29 calls free of errors against 12 of 30), with one run spending 344 seconds on one question.
-- **The setup script for the REST datasource fails on `main` since local sign-in (BA-161)**: `npm run worldcup:rest:setup` sends no sign-in token and gets HTTP 401. The baseline registered the datasource by adding the token from outside the repository.
+- **The setup script for the REST datasource fails on `main` since local sign-in (BA-161)**: `npm run worldcup:rest:setup` sends no sign-in token and gets HTTP 401. The baseline registered the datasource by adding the token from outside the repository. (Update 2026-10-15: `main` removed sign-in with BA-232, and since that merge the setup scripts call the backend directly, with no sign-in and no token.)
 
 ## Sources
 

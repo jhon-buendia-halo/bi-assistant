@@ -1,0 +1,24 @@
+$ E2E_SKIP_DOCKER=1 npx playwright test --project=web --reporter=list e2e/agent-panel.spec.ts e2e/session-management.spec.ts -g "agent-panel|copy the session id"
+# 2026-10-15T08:08:56-05:00 on 7669c9a (feat/BA-213-agent-tools-skills, working tree: new spec files uncommitted); backend/dist + backend/public built from HEAD; World Cup PostgreSQL 127.0.0.1:55432; model = LLM stub
+
+Running 17 tests using 1 worker
+
+  ✓   1 [web] › e2e/agent-panel.spec.ts:365:5 › a composed document opens in the panel and downloads as PDF (4.9s)
+  ✓   2 [web] › e2e/agent-panel.spec.ts:425:5 › a query result shows as a sortable table (4.7s)
+  ✓   3 [web] › e2e/agent-panel.spec.ts:483:5 › a workspace file opens in the panel with a download (4.6s)
+  ✓   4 [web] › e2e/agent-panel.spec.ts:542:5 › an invalid path is refused and the panel does not change (5.0s)
+  ✓   5 [web] › e2e/agent-panel.spec.ts:587:5 › the agent brings an existing visual back (5.3s)
+  ✓   6 [web] › e2e/agent-panel.spec.ts:645:5 › the workflow never appears in the right panel (4.7s)
+  ✓   7 [web] › e2e/agent-panel.spec.ts:677:5 › the agent guides me through the current phase (4.2s)
+  ✓   8 [web] › e2e/agent-panel.spec.ts:719:5 › details lists every step and closes on Escape, outside click and its button (4.8s)
+  ✓   9 [web] › e2e/agent-panel.spec.ts:765:5 › every session shows the workflow bar, empty until there is a workflow (4.2s)
+  ✓  10 [web] › e2e/agent-panel.spec.ts:778:5 › the workflow bar shows my agent's steps from the first turn (4.0s)
+  ✓  11 [web] › e2e/agent-panel.spec.ts:818:5 › the agent moves the workflow bar as we go (4.2s)
+  ✓  12 [web] › e2e/agent-panel.spec.ts:881:5 › every open step says what needs to be done (4.3s)
+  ✓  13 [web] › e2e/agent-panel.spec.ts:909:5 › an agent without a Workflow section creates its own steps (4.3s)
+  ✓  14 [web] › e2e/agent-panel.spec.ts:936:5 › the agent can't rename prompt-defined steps (4.0s)
+  ✓  15 [web] › e2e/agent-panel.spec.ts:955:5 › I can fold the workflow bar (4.7s)
+  ✓  16 [web] › e2e/agent-panel.spec.ts:979:5 › shown items survive reopening the session (5.3s)
+  ✓  17 [web] › e2e/session-management.spec.ts:327:5 › I copy the session id to share it (3.9s)
+
+  17 passed (1.3m)

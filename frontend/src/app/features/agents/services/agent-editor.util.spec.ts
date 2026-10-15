@@ -7,6 +7,7 @@ import {
   datasetOptions,
   emptyAgentForm,
   hasExistingDataset,
+  legacyInstructions,
   modelPlaceholder,
   showAgentPublish,
 } from './agent-editor.util';
@@ -82,7 +83,11 @@ describe('agent editor: save', () => {
       canSaveAgent({ form: form(), changed: true, saving: false }),
     ).toBeTrue();
     expect(
-      canSaveAgent({ form: form({ name: '  ' }), changed: true, saving: false }),
+      canSaveAgent({
+        form: form({ name: '  ' }),
+        changed: true,
+        saving: false,
+      }),
     ).toBeFalse();
     expect(
       canSaveAgent({ form: form(), changed: false, saving: false }),
@@ -108,6 +113,10 @@ describe('agent editor: save', () => {
       datasets: ['A'],
       starterQuestions: ['Who won?'],
     });
+    // The links in the instructions decide tools and skills: none is sent.
+    const input = agentSaveInput(form());
+    expect('tools' in input).toBeFalse();
+    expect('skills' in input).toBeFalse();
     expect(
       agentSaveInput(form({ model: ' gpt-4.1 ', reasoningEffort: 'high' })),
     ).toEqual(
@@ -143,10 +152,11 @@ describe('agent editor: Publish visibility (R57)', () => {
 describe('agent editor: datasets', () => {
   it('lists existing datasets, then the saved ones that are missing', () => {
     expect(
-      datasetOptions(['World Cup Core', 'Claims'], ['World Cup Core', 'Gone'], [
-        'World Cup Core',
-        'Gone',
-      ]),
+      datasetOptions(
+        ['World Cup Core', 'Claims'],
+        ['World Cup Core', 'Gone'],
+        ['World Cup Core', 'Gone'],
+      ),
     ).toEqual([
       { name: 'World Cup Core', missing: false, checked: true },
       { name: 'Claims', missing: false, checked: false },
@@ -174,5 +184,56 @@ describe('agent editor: Model placeholder (R55)', () => {
   it('names the configured model, or just Default', () => {
     expect(modelPlaceholder('gpt-4.1')).toBe('Default (gpt-4.1)');
     expect(modelPlaceholder(null)).toBe('Default');
+  });
+});
+
+describe('agent editor: legacy drafts', () => {
+  const base = {
+    name: 'A',
+    description: '',
+    instructions: 'Answer briefly.',
+    datasets: [],
+    starterQuestions: [],
+  };
+  const library = [
+    { id: 'id-1', name: 'planner' },
+    { id: 'id-2', name: 'other' },
+  ];
+
+  it('a draft without tools gets a last line with sample_rows, ask_clarification and create_visual', () => {
+    expect(legacyInstructions(base, library)).toBe(
+      'Answer briefly.\nTools and skills: [[tool:sample_rows]] [[tool:ask_clarification]] [[tool:create_visual]]',
+    );
+  });
+
+  it('adds the stored skills by name, then only the tools not linked yet', () => {
+    expect(
+      legacyInstructions(
+        {
+          ...base,
+          instructions: 'Use [[tool:sample_rows]].',
+          tools: ['sample_rows', 'ask_clarification'],
+          skills: ['id-1', 'gone'],
+        },
+        library,
+      ),
+    ).toBe(
+      'Use [[tool:sample_rows]].\nTools and skills: [[skill:planner]] [[tool:ask_clarification]]',
+    );
+  });
+
+  it('is null when the instructions already link everything', () => {
+    expect(
+      legacyInstructions(
+        {
+          ...base,
+          instructions: '[[skill:planner]] [[tool:update_visual]]',
+          tools: ['visuals'],
+          skills: ['id-1'],
+        },
+        library,
+      ),
+    ).toBeNull();
+    expect(legacyInstructions({ ...base, tools: [] }, library)).toBeNull();
   });
 });

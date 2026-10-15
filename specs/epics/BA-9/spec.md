@@ -25,7 +25,7 @@ Know, with numbers, whether a change made answers better or worse, on every data
 - An agent that proposes changes from the scores (automating the improvement loop); approval by more than one reviewer; export as a Genie benchmark; evals on documents an agent reads.
 
 ## Stories
-The two process stories come first; five stories cover the plan's steps.
+The two process stories come first; five stories cover the plan's steps. [BA-212](https://halo-powered.atlassian.net/browse/BA-212), the Intellify sample, was built under this epic on its own branch and shipped on `main` in PR #77 (roadmap 1.1.19, Done); it came onto this branch when `main` was merged in on 2026-10-15.
 
 | Story | Summary | Roadmap features |
 |---|---|---|
@@ -36,11 +36,12 @@ The two process stories come first; five stories cover the plan's steps.
 | [BA-188](https://halo-powered.atlassian.net/browse/BA-188) | More questions and numbers you can trust (Steps 4-5) | 1.1.10-1.1.11 |
 | [BA-190](https://halo-powered.atlassian.net/browse/BA-190) | Judge validation, arms and component checks (Steps 6-8, after the beta) | 1.1.12-1.1.14 |
 | [BA-193](https://halo-powered.atlassian.net/browse/BA-193) | Evals on the user's own data (Steps 9-12, after the beta) | 1.1.15-1.1.18 |
+| [BA-212](https://halo-powered.atlassian.net/browse/BA-212) | Intellify sample as a Testing Data fixture (Done; shipped on `main` in PR #77) | 1.1.19 |
 
 The 15 step stories created on 2026-10-13 (BA-182 to BA-196) were compacted to these five the same day at the user's request; the ten merged issues (BA-183, BA-184, BA-185, BA-187, BA-189, BA-191, BA-192, BA-194, BA-195, BA-196) are closed as duplicates of their story and taken out of the epic. Record: [evidence/1.1.3/jira-compaction.tsv](../../../evidence/1.1.3/jira-compaction.tsv).
 
 ## Specs touched
-- **Capabilities:** [agents-evals](../../capabilities/agents-evals/spec.md) (criteria and categories, run options `judge`, `repeats` and `arm`, reports by category and criterion, user sets, Gherkin); [testing-data](../../capabilities/testing-data/spec.md) (the Databricks fixture, register-only kinds); [sessions-chat](../../capabilities/sessions-chat/spec.md) (verified queries and corrections becoming cases, Step 9).
+- **Capabilities:** [agents-evals](../../capabilities/agents-evals/spec.md) (criteria and categories, run options `judge`, `repeats` and `arm`, reports by category and criterion, user sets, Gherkin); [testing-data](../../capabilities/testing-data/spec.md) (the Databricks fixture, register-only kinds; the Intellify sample, BA-212); [sessions-chat](../../capabilities/sessions-chat/spec.md) (verified queries and corrections becoming cases, Step 9).
 - **System:** [data-model](../../system/data-model.md) (the case shape; `eval_runs` gains repeats, arm, judge settings, human verdict, usage and tool-call count; the `eval_sets` collection in Step 9); [api](../../system/api.md) (run options; user set endpoints); [agents](../../system/agents.md) (judge rubric versioning; the Databricks dialect note; the eval-bootstrap agent in Step 11); [ui](../../system/ui.md) (category chip and summary, the Pass / Fail control, "Your sets"); [delivery](../../system/delivery.md) (REST server switches, `eval:validate`, the nightly workflow); [architecture](../../system/architecture.md) (ADR-0015).
 
 ## Acceptance
@@ -57,5 +58,5 @@ The 15 step stories created on 2026-10-13 (BA-182 to BA-196) were compacted to t
 - **The baseline on `main`** (six runs, action 3 in plan 3.0) is taken before any change; every later step compares with it.
 - **Time:** with the two domains, the minimum is about 19 to 24 days of work against the 14 working days from 2026-10-13, so it fits only if Claude runs the domain work in parallel with the other steps. What moves after the beta, and in which order, is in plan 3.0.
 - **Cost:** real numbers need an LLM key and spend tokens; the judge is off by default, Databricks runs are on demand.
-- **ADR number:** ADR-0013 and ADR-0014 are claimed on other branches; re-check that 0015 is free when this branch merges.
+- **ADR number:** ADR-0013 and ADR-0014 are claimed on other branches; re-check that 0015 is free when this branch merges. Re-checked on 2026-10-15, when `main` (v0.34.0) was merged in: `main` has ADR-0001 to ADR-0012 and ADR-0018 to ADR-0030, so 0015 is still free.
 - The Phase 1 plan's golden-set item ([phase-1-answer-reliability](../../../docs/plans/phase-1-answer-reliability.md), Workstream C) is covered by Steps 1a and 5.

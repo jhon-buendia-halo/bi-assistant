@@ -54,8 +54,8 @@ Exporting logs (active setting on)
 - R25. A log line written while a request or agent run is being traced SHALL carry that trace's id and span id, so it can be followed from the trace and back.
 - R26. Console output SHALL stay exactly as it is with the setting off, whether the setting is on or off, so the desktop system-logs panel reads it unchanged. With the setting off, no log exporter is loaded.
 
-Permissions
-- R27. In both modes reading and changing developer settings SHALL need Edit policies and templates, because the setting applies to the whole server; the Developer section is hidden without it. Rules: [../admin/spec.md](../admin/spec.md) R21, R25.
+Availability
+- R27. Reading and changing developer settings SHALL be available to the user, and the Developer section is always shown. The setting applies to the whole server.
 
 ## Edge cases and errors
 

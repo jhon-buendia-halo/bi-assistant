@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { DatasetsModule } from '../datasets/datasets.module';
+import { SkillsRepository } from '../skills/repositories/skills.repository';
 import { BuiltinAgentPinsRepository } from './repositories/builtin-agent-pins.repository';
 import { UserAgentsRepository } from './repositories/user-agents.repository';
 import { UserAgentsService } from './user-agents.service';
@@ -15,7 +16,10 @@ import { UserAgentsService } from './user-agents.service';
     UserAgentsService,
     UserAgentsRepository,
     BuiltinAgentPinsRepository,
+    // The owner-scoped skills store, read to validate, copy and preview an
+    // agent's skills; `SkillsModule` (which imports this one) reuses it.
+    SkillsRepository,
   ],
-  exports: [UserAgentsService],
+  exports: [UserAgentsService, UserAgentsRepository, SkillsRepository],
 })
 export class UserAgentsModule {}

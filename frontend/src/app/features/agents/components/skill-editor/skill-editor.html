@@ -1,0 +1,183 @@
+<div class="flex flex-col">
+  <button type="button" (click)="back.emit()" class="btn btn-ghost w-fit">
+    <lucide-angular [img]="ArrowLeft" [size]="15" />
+    <span>Back</span>
+  </button>
+
+  <div class="mt-4 flex flex-wrap items-center gap-3">
+    <h2
+      class="min-w-0 truncate text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
+    >
+      {{ editor.title() }}
+    </h2>
+          <div class="ml-auto flex shrink-0 items-center gap-2">
+        @if (editor.skillId() !== null) {
+          <button
+            type="button"
+            data-testid="skill-delete"
+            (click)="remove()"
+            [disabled]="editor.deleting() || editor.loading()"
+            class="btn btn-danger"
+          >
+            <lucide-angular [img]="Trash2" [size]="14" />
+            <span>Delete</span>
+          </button>
+        }
+        <button
+          type="button"
+          data-testid="skill-save"
+          (click)="save()"
+          [disabled]="!editor.canSave()"
+          class="btn btn-primary"
+        >
+          @if (editor.saving()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+            <span>Saving…</span>
+          } @else {
+            <lucide-angular [img]="Save" [size]="14" />
+            <span>Save</span>
+          }
+        </button>
+      </div>
+    
+  </div>
+
+  @if (editor.loading()) {
+    <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading skill…</span>
+    </div>
+  } @else if (editor.loadError(); as err) {
+    <p
+      class="mt-8 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  } @else {
+    <div class="card mt-6 flex flex-col gap-5 p-6">
+      <div class="flex flex-col gap-1.5">
+        <label for="skill-editor-name" class="field-label">Name</label>
+        <input
+          id="skill-editor-name"
+          type="text"
+          [maxLength]="limits.name"
+          [value]="editor.form().name"
+          (input)="onText('name', $event)"
+          class="field font-mono"
+        />
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="skill-editor-description" class="field-label"
+          >Description</label
+        >
+        <textarea
+          id="skill-editor-description"
+          rows="2"
+          [maxLength]="limits.description"
+          [value]="editor.form().description"
+          (input)="onText('description', $event)"
+          aria-describedby="skill-editor-description-hint"
+          class="field resize-y"
+        ></textarea>
+        <div class="flex items-start justify-between gap-4">
+          <p
+            id="skill-editor-description-hint"
+            class="text-[12px] text-fg-muted"
+          >
+            {{ descriptionHint }}
+          </p>
+          <span
+            data-testid="skill-description-count"
+            class="shrink-0 text-[12px] text-fg-muted"
+            >{{ editor.form().description.length }}/{{
+              limits.description
+            }}</span
+          >
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <h3
+          class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+        >
+          What the agent sees
+        </h3>
+        <div
+          data-testid="skill-catalog-preview"
+          class="rounded-lg bg-surface-muted p-3 font-mono text-[12px] text-fg"
+        >
+          <div>{{ editor.form().name.trim() }}</div>
+          <div class="text-fg-muted">
+            {{ editor.form().description.trim() }}
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <span id="skill-editor-body-label" class="field-label">Body</span>
+        <p id="skill-editor-body-hint" class="text-[12px] text-fg-muted">
+          {{ bodyHint }}
+        </p>
+        <!-- Tiptap loads on its own, so it stays out of the first paint. -->
+        @defer (on immediate) {
+          <app-prompt-editor
+            [value]="editor.form().body"
+            [linkSkills]="false"
+            label="Body"
+            [maxLength]="limits.body"
+            countTestId="skill-body-count"
+            (valueChange)="onBody($event)"
+          />
+        } @placeholder {
+          <p class="text-[13px] text-fg-muted">Loading editor…</p>
+        }
+      </div>
+
+      <fieldset class="flex flex-col gap-3">
+        <legend class="field-label mb-1.5">Reference files</legend>
+        @for (file of editor.form().files; track $index; let i = $index) {
+          <div class="flex items-start gap-2">
+            <div class="flex min-w-0 flex-1 flex-col gap-2">
+              <input
+                type="text"
+                [attr.aria-label]="'Path of reference file ' + (i + 1)"
+                placeholder="references/notes.md"
+                [value]="file.path"
+                (input)="onFile(i, 'path', $event)"
+                class="field font-mono"
+              />
+              <textarea
+                rows="6"
+                [attr.aria-label]="'Content of reference file ' + (i + 1)"
+                [maxLength]="limits.fileContent"
+                [value]="file.content"
+                (input)="onFile(i, 'content', $event)"
+                class="field resize-y font-mono text-[13px]"
+              ></textarea>
+            </div>
+            <button
+              type="button"
+              (click)="editor.removeFile(i)"
+              title="Remove reference file"
+              class="btn-icon shrink-0"
+            >
+              <lucide-angular [img]="X" [size]="14" />
+              <span class="sr-only">Remove reference file {{ i + 1 }}</span>
+            </button>
+          </div>
+        }
+        <button
+          type="button"
+          data-testid="skill-add-file"
+          (click)="editor.addFile()"
+          [disabled]="!editor.canAddFile()"
+          class="btn btn-ghost w-fit"
+        >
+          <lucide-angular [img]="Plus" [size]="14" />
+          <span>Add reference file</span>
+        </button>
+      </fieldset>
+    </div>
+  }
+</div>

@@ -1,4 +1,9 @@
-import { AgentConfig, AgentStatus, SaveAgentInput } from './agents-api.service';
+import {
+  AgentConfig,
+  AgentStatus,
+  SaveAgentInput,
+} from './agents-api.service';
+import { linkedNames, withLegacyLinks } from './prompt-links';
 
 /** The R43 limits the editor's fields enforce as the user types (R55). */
 export const AGENT_FIELD_LIMITS = {
@@ -88,6 +93,31 @@ export function agentFormChanged(form: AgentForm, saved: AgentForm): boolean {
     a.model !== b.model ||
     a.reasoningEffort !== b.reasoningEffort
   );
+}
+
+/**
+ * A legacy draft's instructions with links added for what it had: a draft
+ * saved with the BA-216/217 checkboxes holds `tools` and `skills` that its
+ * instructions do not link (an absent `tools` meant sample_rows,
+ * ask_clarification and the visuals). Null when nothing is missing.
+ */
+export function legacyInstructions(
+  config: AgentConfig,
+  library: { id: string; name: string }[],
+): string | null {
+  const instructions = config.instructions ?? '';
+  const tools = config.tools ?? ['sample_rows', 'ask_clarification', 'visuals'];
+  const visualsLinked =
+    linkedNames(instructions, 'tool').includes('create_visual') ||
+    linkedNames(instructions, 'tool').includes('update_visual');
+  const toolNames = tools
+    .filter((id) => id !== 'visuals' || !visualsLinked)
+    .map((id) => (id === 'visuals' ? 'create_visual' : id));
+  const byId = new Map(library.map((skill) => [skill.id, skill.name]));
+  const skillNames = [...new Set(config.skills ?? [])]
+    .map((id) => byId.get(id))
+    .filter((name): name is string => !!name);
+  return withLegacyLinks(instructions, toolNames, skillNames);
 }
 
 /** The body of `POST /agents` and `PUT /agents/:id/draft`. */

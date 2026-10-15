@@ -2,6 +2,83 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-15
+
+### Changed
+- **`main` (v0.34.0) merged into the BA-9 branch** (epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)). The branch now carries `main`'s skills (BA-198), agent tools and skills, the RFP Builder and the Intellify RFP API (BA-213), and the single-user app (BA-232, ADR-0030); both sides' specs are kept. Where both sides changed the same behaviour, the specs now state both changes:
+  - **Result-set match** (agents-evals R31, agents.md 8.3): a wider correct query passes (BA-209), and a result truncated at its own row limit is compared like any other (BA-183).
+  - **Discovery questions** no longer require `list_entities` (BA-209); the criterion list of the deterministic checks follows.
+  - **Eval command line** (agents-evals R110, agents.md 8.5, api.md 6.1, delivery.md): exactly one of `EVAL_SET` or `EVAL_CASES` (BA-204), plus the judge option `EVAL_JUDGE` (BA-184).
+  - **Eval sets** (agents-evals R10 and R11, agents.md 8.1, api.md 35): the RFP Builder's `rfp` set, defined in code, sits beside the assistant's question bank files, and the `world-cup` bank has `main`'s two tool-selection questions (12 questions).
+  - **Set files** (data-model 4.9; agents-evals R106, R107, R125): `main`'s per-case tool selection is the optional case field `agentTools`, and the two tool-selection questions keep only their own checks, not their category's. `caseIdPrefix` is now documented as required, as the loader always enforced.
+  - **The `rfp` set's cases** (agents-evals R12, R144 to R149; api.md 35; agents.md 8.1) have no category or split: they are served as `uncategorised` and `dev`, and with the judge off, the default, their rubric checks are not scored.
+  - **Single user**: the BA-9 scripts that register the REST and Databricks samples call the backend directly, with no sign-in and no token (testing-data R25, delivery.md, api.md 6.4, docs/evals/databricks-vdi.md); leftover "hidden without …" permission wording is gone from ui.md.
+  - Evidence: [evidence/merge-main-2026-10-15/](evidence/merge-main-2026-10-15/).
+- **BA-9's ids renumbered past `main`'s** (commit `58abf47`, before the merge; epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)): agents-evals rules R63-R164 → R106-R207 (+43; `main` ends at R105); testing-data rules R21-R24 → R22-R25 (`main` took R21); data-model sections 4.8 and 4.9 → 4.9 and 4.10 (`main` took 4.8); seeds `003_health_insurance.sql` to `007_marketing_analytics.sql` → `004_health_insurance.sql` to `008_marketing_analytics.sql` (`main` took `003_intellify.sql.gz`); the set-file loader `mastra/evals/eval-sets.ts` → `eval-set-files.ts` (`main` added its own `eval-sets.ts`, the per-agent registry of eval sets). BA-9's past changelog, retrospective and evidence entries keep the ids they were written with, so read them through this mapping. Evidence: [evidence/merge-main-2026-10-15/](evidence/merge-main-2026-10-15/).
+- **The Intellify sample is roadmap 1.1.19** ([BA-212](https://halo-powered.atlassian.net/browse/BA-212), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)): it shipped on `main` as 1.1.2 (PR #77), which on this branch is the research (BA-127). It moves to the end of milestone 1.1, and its evidence from `evidence/1.1.2/` to [evidence/1.1.19/](evidence/1.1.19/); its 2026-10-14 entry below points there.
+- **Sectioned assistant prompt and the app's own skill catalog** (roadmap 1.13.9, [BA-207](https://halo-powered.atlassian.net/browse/BA-207), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198), ADR-0020):
+  - **Prompt.** Identity, then `## Tools` (generated from the tools), `## Working rules`, then `## Skills` with an `<available_skills>` catalog the app renders (name, description, `SKILL.md` path).
+  - **Tools.** `read_file` reads only listed skills' files, and replaces the framework's `skill`/`skill_search`/`skill_read`. `run_skill_script` runs a built-in skill's Node scripts with no shell, a minimal environment and a timeout; none ships yet.
+  - **`curated-knowledge` on demand.** The knowledge block travels without its rules, and the model reads them with `read_file`.
+  - **Descriptions.** A `SKILL.md` description may wrap.
+  - Specs: agents.md 2.1, 3.9, 3.10, 7.3-7.5 and Appendix A; sessions-chat "Skills the assistant is given". Evidence: [evidence/1.13.9/](evidence/1.13.9/).
+- **Eval checks** (roadmap 1.13.11, [BA-209](https://halo-powered.atlassian.net/browse/BA-209)). `result-set-match` passes a single complete query that holds every reference row, with extra rows and columns allowed. `schema-discovery` and `f1-schema-discovery` no longer require `list_entities`. Specs: agents-evals R31, agents.md 8. Evidence: [evidence/1.13.11/](evidence/1.13.11/).
+- **Workflow eval bar** ([CLAUDE.md](CLAUDE.md) step 9). The evals must pass at 100%: every case in 3 runs out of 3.
+
+### Added
+- **Agent tools and skills, the RFP Builder, the agent panel and a single-user app** (epic [BA-213](https://halo-powered.atlassian.net/browse/BA-213), roadmap 1.14.2 to 1.14.19, PR #78; ADR-0022, ADR-0024, ADR-0026 to ADR-0030). Merged with E2E green and the **eval gate deferred** by the user's decision: stories whose acceptance needs the evals (1.14.2, 1.14.4, 1.14.5, 1.14.6, 1.14.10, 1.14.11, 1.14.15, 1.14.17, 1.14.18) stay `🚧 In progress` until world-cup, formula-1 and rfp pass at 100% over 3 runs; a first, partial pass (cut short when the OpenAI credits ran out) is in [evidence/1.14.15/eval-partial-2026-10-15.md](evidence/1.14.15/eval-partial-2026-10-15.md).
+  - **Tools and skills** (1.14.2 [BA-217](https://halo-powered.atlassian.net/browse/BA-217), 1.14.3 [BA-215](https://halo-powered.atlassian.net/browse/BA-215), 1.14.4 [BA-216](https://halo-powered.atlassian.net/browse/BA-216), 1.14.5 [BA-218](https://halo-powered.atlassian.net/browse/BA-218), 1.14.6 [BA-219](https://halo-powered.atlassian.net/browse/BA-219), 1.14.7 [BA-220](https://halo-powered.atlassian.net/browse/BA-220)): an agent gets only the tools and skills its instructions link (`[[tool:…]]`, `[[skill:…]]`), skills are written in the app and link tools, built-in skills can be edited and reset. The skills library and a user agent's Skills tab list only the built-in skills every agent gets (R75 fix). Evidence: [evidence/1.14.2/](evidence/1.14.2/) to [evidence/1.14.7/](evidence/1.14.7/).
+  - **Agent page** (1.14.8 [BA-221](https://halo-powered.atlassian.net/browse/BA-221), 1.14.9 [BA-222](https://halo-powered.atlassian.net/browse/BA-222), 1.14.10 [BA-223](https://halo-powered.atlassian.net/browse/BA-223), 1.14.11 [BA-224](https://halo-powered.atlassian.net/browse/BA-224)): Tools library, Graph and LLM Config tabs; Chat Box, editable System Prompt and Skills tabs; skills reach the model through Mastra's skill tool; every agent's System Prompt is editable, built-in ones included. Evidence: [evidence/1.14.8/](evidence/1.14.8/) to [evidence/1.14.11/](evidence/1.14.11/).
+  - **RFP Builder and the Intellify RFP API** (1.14.12 [BA-225](https://halo-powered.atlassian.net/browse/BA-225) to 1.14.16 [BA-229](https://halo-powered.atlassian.net/browse/BA-229)): the Official RFP Builder agent with seven stage skills over the embedded Intellify RFP API (`X-API-Key`), RFP records, the package and a DRAFT export from the chat. The package card downloads `rfp-<title>.zip`, links no `manifest.json` and toasts "RFP package downloaded" (gate fixes). The RFP Builder keeps stage tables in its reply and says when it can't run SQL (agents.md R16, R17). Evidence: [evidence/1.14.12/](evidence/1.14.12/) to [evidence/1.14.16/](evidence/1.14.16/).
+  - **Theme-aware visuals and shell** (1.14.17 [BA-230](https://halo-powered.atlassian.net/browse/BA-230)): visuals follow Light and Dark in place; a welcome page, the Sessions page, the New conversation Agent picker, compact chrome and 14/22 px chat text; the `application-shell` baseline updated. Evidence: [evidence/1.14.17/](evidence/1.14.17/).
+  - **Agent panel and workflow bar** (1.14.18 [BA-231](https://halo-powered.atlassian.net/browse/BA-231), ADR-0029): `show_in_panel` and `update_workflow`, panel items saved per session, the workflow bar with Details and the next step. Evidence: [evidence/1.14.18/](evidence/1.14.18/).
+
+### Removed
+- **Authentication and authorization** (1.14.19 [BA-232](https://halo-powered.atlassian.net/browse/BA-232), ADR-0030): one built-in super admin; no sign-in, roles, permissions, org server mode, SCIM, Admin area or sharing; migration M14 moves every owned document to `local` and drops the identity collections. Final run of the whole web suite: 164 passed, 2 desktop-only skipped (desktop not run); backend API e2e 66/66. Evidence: [evidence/1.14.19/](evidence/1.14.19/).
+
+### Fixed
+- **Assistant reliability** (roadmap 1.13.12, [BA-210](https://halo-powered.atlassian.net/browse/BA-210)):
+  - **Rules.** A4: asks when "best" has no measure. A12: adds nothing from general knowledge about what the data doesn't cover. A32: joins names in the same query. A35: answers "what data do I have" without a query.
+  - **`create_visual`.** With no instruction it uses the user's request (`turn-question`).
+  - **Designer data.** The designer is shown the result sets the instruction is about, not the largest.
+  - **`ask_clarification`.** It takes one string with one option per line, and a malformed call is retried instead of shown as a card with no options.
+  - Specs: agents.md 2.1, 3.5, 3.6, 4.2, 5.1, 6.2; sessions-chat R42 and a new scenario; visuals "Skills the designer is given". World-cup evals at 10/10 in 3 of 3 runs. Evidence: [evidence/1.13.12/](evidence/1.13.12/).
+- **Backend lint, format and types** (roadmap 1.13.10, [BA-208](https://halo-powered.atlassian.net/browse/BA-208)). ESLint went from 217 errors to 0, Prettier is clean and `tsc` reports 0 errors, with no behaviour change. Evidence: [evidence/1.13.10/](evidence/1.13.10/).
+
+## 2026-10-14
+
+### Removed
+- **User and project skill levels** (roadmap 1.13.13, [BA-211](https://halo-powered.atlassian.net/browse/BA-211), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198), ADR-0021 superseding ADR-0019). Agents use only the skills that ship with the app:
+  - **Backend.** Skills load only from the bundle. `<data dir>/skills/` is ignored (not read, not deleted) and `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` is gone, with no overrides, skipped skills or warnings. A broken built-in skill still stops startup.
+  - **API.** `GET /agents/:key/skills` answers `{ skills: [{ name, description, loading, files }] }`.
+  - **Skills tab.** Drops "Where skills come from", the level badges, "Overrides …", the warnings, the Skipped section and the "Restart the app" line.
+  - The assistant's prompt, catalog and tools are unchanged (byte-identical prompt).
+  - Specs: architecture ADR-0021; agents.md 2.2, 7.2-7.4; api.md 34a and environment table; ui.md 4.5; data-model.md 4.8; glossary *Skill*; agents-evals R63-R67 and "Agent skills"; sessions-chat "Skills the assistant is given"; BA-198 epic spec. Evidence: [evidence/1.13.13/](evidence/1.13.13/).
+
+### Added
+- **Agent tools and skills planned** (roadmap 1.14.1, [BA-214](https://halo-powered.atlassian.net/browse/BA-214), epic [BA-213](https://halo-powered.atlassian.net/browse/BA-213)):
+  - **ADR-0022.** User agents choose their tools from the assistant's own set (`list_entities`, `describe_entity` and `run_readonly_sql` always on), and get skills written in the app, stored per user and copied into the Live version on publish. The assistant's prompt and tools are to be built per call. ADR-0008's status notes the narrowing.
+  - **Epic spec** [specs/epics/BA-213/spec.md](specs/epics/BA-213/spec.md), confirmed with five decisions: a Skills button in the Agent Hub header, Visuals as one switch, no in-app skills for the plain assistant, size limits, and skill copies on agent transfer. It records the prompt measured section by section (8,729 characters; `## Skills` 904; about 160 per catalog entry).
+  - **Roadmap.** Milestone 1.14 with features 1.14.1 to 1.14.4; the epic row in [specs/README.md](specs/README.md). Evidence: [evidence/1.14.1/](evidence/1.14.1/).
+- **Intellify sample in Testing Data** (roadmap 1.1.19, [BA-212](https://halo-powered.atlassian.net/browse/BA-212), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)). Settings → Testing Data lists a fourth sample, "Intellify": one click creates the `intellify` database on the sample server, seeds schema `intellify` and registers datasource "Intellify PostgreSQL" and dataset "Intellify" (`49/49 entities`, 52 declared joins).
+  - **Model.** The Halo × Marsh Intellify ERD and data dictionary (49 entities, 243 attributes) converted to PostgreSQL: snake_case columns, `char(24)` ObjectIds, `jsonb` embedded objects, every table and column commented with its source field and description. All rows are synthetic (40 clients, 355 plan designs, 306 coverages with premiums, census 2024–2026, credits, fees, surveys, events).
+  - **Seed.** `fixtures/003_intellify.sql.gz` is written by `scripts/generate-intellify-seed.py`, deterministically: rerunning it reproduces the file byte for byte.
+  - **Tests.** `fixtures/registry.spec.ts` checks every bundled seed creates its required tables; `frontend/e2e/testing-data.spec.ts` automates two scenarios of the Testing data Feature. Specs: [testing-data](specs/capabilities/testing-data/spec.md) R2–R4, Flows and Acceptance; glossary; [BA-9 epic spec](specs/epics/BA-9/spec.md). Evidence: [evidence/1.1.19/](evidence/1.1.19/).
+- **Skill levels** (roadmap 1.13.7, [BA-205](https://halo-powered.atlassian.net/browse/BA-205), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198), ADR-0019). Agents read skills from three levels, and a later level overrides an earlier one by name:
+  - **Levels.** Built-in (the bundle) < user (`<data dir>/skills/`) < project (the folder `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` names).
+  - **Targeting.** A new user or project skill is on demand for the agents its `agents:` key names (default `assistant`). An override keeps the agents and loading mode of the skill it replaces.
+  - **Broken skills.** A broken user or project skill is skipped and logged, and the backend keeps running; a broken built-in still stops startup.
+  - **Override checks.** An override of a harness-loaded skill must keep its phase and reference files and their placeholders.
+  - **Text only.** User and project skills are never run as scripts. `interactive-visuals/references/` became `reference/`.
+  - Specs: agents.md §7.3-7.4, api.md environment table, data-model.md §4.8. Evidence: [evidence/1.13.7/](evidence/1.13.7/).
+- **Skills tab on the agent page** (roadmap 1.13.8, [BA-206](https://halo-powered.atlassian.net/browse/BA-206)). It's read-only:
+  - **What it shows.** Where each level's skills come from, the agent's skills (level, loading, what each overrides, description, warnings), each skill's files and their content, and the skipped skills with their problems.
+  - **API.** New routes `GET /agents/:key/skills` and `GET /agents/:key/skills/:name/file`. A user agent shows the assistant's skills.
+  - Specs: api.md 34a/34b, ui.md §4.5, agents-evals R63-R67 and the Feature "Agent skills". Evidence: [evidence/1.13.8/](evidence/1.13.8/).
+
+### Changed
+- **Workflow: fast loop, then acceptance gate** ([CLAUDE.md](CLAUDE.md) *Workflow*). A requested change now goes through steps 1–5 and 8 plus quick checks, and the running app is handed over for a manual test. Steps 6, 7, 9, 10 and 11 run once the user has accepted the change, once per story. Step 9 runs only the impacted E2E specs, and the evals must pass (no case regresses against the base commit) whenever an agent's prompt, skills, tools, context or model routing changes. The *E2E test convention* follows suit. Evidence: process change, no app behaviour change; `check-specs` passes and the `workflow-steps` mod still reads all eleven steps.
+
 ## 2026-10-13
 
 ### Added
@@ -21,9 +98,45 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 - **Baseline on `main` taken; the research is done** (roadmap 1.1.2 ✅ Done, [BA-127](https://halo-powered.atlassian.net/browse/BA-127), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)): the World Cup set on PostgreSQL and on REST, three runs each, on the app's default model `gpt-4o-mini` with the team's OpenAI key, from an empty data directory and a separate copy of the World Cup database. PostgreSQL passed 1, 0 and 0 of 10; REST 0 of 10 three times. The answers often hold the right facts (the text checks pass about three times in four) but the result-set match almost never passes: a correct one-row answer is refused as "truncated" when the model asks for exactly one row, and `gpt-4o-mini` passes the datasource as `"postgres <id>"`, which `run_readonly_sql` refuses (64 of the PostgreSQL and 86 of the REST tool errors). Also found: `npm run worldcup:rest:setup` gets HTTP 401 on `main` since BA-161. Summary in [docs/research/BA-9.md](docs/research/BA-9.md) ("Baseline on main"). Evidence: [evidence/1.1.2/baseline/](evidence/1.1.2/baseline/) — six Markdown reports and run records; no code change.
 - **BA-9 epic spec confirmed and the step stories created** (roadmap 1.1.3 ✅ Done, [BA-128](https://halo-powered.atlassian.net/browse/BA-128), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)): the user confirmed [specs/epics/BA-9/spec.md](specs/epics/BA-9/spec.md) on 2026-10-13 and ADR-0015 is Accepted. Fifteen stories, BA-182 to BA-196, were created under BA-9, one per roadmap feature 1.1.4 to 1.1.18, and their keys are on the roadmap, the plan's story map and the epic spec. Also recorded the same day: Databricks is validated later in the team's VDI, and the finance and marketing-analytics domains are synthetic, written by Claude with no business review. BA-128 is Done; BA-127 stays In Progress until the baseline on `main` is in. Evidence: [evidence/1.1.3/jira-issues.tsv](evidence/1.1.3/jira-issues.tsv), [evidence/1.1.3/decisions.md](evidence/1.1.3/decisions.md); spec check green; no code or UI change.
 
+### Fixed
+- **`npm run evals:assistant` runs again** (roadmap 1.13.6, [BA-204](https://halo-powered.atlassian.net/browse/BA-204), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198)):
+  - The CLI passed no case ids, so every set was selected and the one-fixture preflight always refused.
+  - It now takes `EVAL_SET` (a set id) or `EVAL_CASES` (case ids). With neither, both or an unknown id, it exits 1 before booting or calling a model.
+  - Specs: agents.md §8.5, api.md environment table, delivery.md scripts table.
+  - Test: `eval-cli-selection.spec.ts`.
+  - Evidence: [evidence/1.13.6/](evidence/1.13.6/).
+
 ### Changed
+- **The designer reads only the instructions for the mode it runs** (roadmap 1.13.5, [BA-203](https://halo-powered.atlassian.net/browse/BA-203), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198)):
+  - `interactive-visuals/SKILL.md` is now a 918-character router. The spec rules are in `references/spec-mode.md` and the freeform fallback in `references/freeform.md`, both moved verbatim.
+  - A spec call carries the router plus `spec-mode.md`, about 4.1k characters instead of the whole 12k skill. A freeform call, including the fallback after two failed spec attempts, carries the router plus `freeform.md`.
+  - Specs: agents.md §2.2, §6.4, §7.2 and §7.4; visuals R5 and the Feature "Skills the designer is given".
+  - Tests: `frontend/e2e/designer-skills.spec.ts` (recording stub) and `visualization.service.spec.ts`.
+  - Evidence: [evidence/1.13.5/](evidence/1.13.5/), including the epic's before and after evals.
+- **Deep-analysis prompts live in a phased skill** (roadmap 1.13.4, [BA-202](https://halo-powered.atlassian.net/browse/BA-202)):
+  - `skills/deep-analysis/` holds a phase map plus `phases/1-plan.md`, `2-investigate.md` and `3-report.md`.
+  - The service loads one phase per call and fills its `{{placeholders}}`. A placeholder left unfilled fails the call.
+  - Golden tests prove that the prompts sent to the model are byte-identical to before.
+  - Specs: agents.md §2.7 and §7.4.
+  - Evidence: [evidence/1.13.4/](evidence/1.13.4/).
+- **Curated-knowledge rules reach the model only with the knowledge they govern** (roadmap 1.13.2, [BA-200](https://halo-powered.atlassian.net/browse/BA-200)):
+  - The assistant's base prompt drops its "Curated knowledge:" section, going from 7,380 to 5,694 characters.
+  - The section is now the `curated-knowledge` skill. `knowledgeContext()` sends it right after the knowledge block on every call that carries one: chat turn, grounding pass, deep analysis and evals.
+  - Specs: agents.md §2.1, §4.1, Appendix A and the new Appendix B; knowledge R19; two scenarios in sessions-chat "Skills the assistant is given".
+  - Evidence: [evidence/1.13.2/](evidence/1.13.2/).
+- **Each agent gets only its own skills, from the app bundle, checked at startup** (roadmap 1.13.1, [BA-199](https://halo-powered.atlassian.net/browse/BA-199), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198)):
+  - Session workspaces no longer seed or discover skills. Before, every session got a copy of `interactive-visuals`, so the assistant's catalog listed the designer's skill and it was offered the `skill`, `skill_search` and `skill_read` tools. Now the assistant gets no catalog and none of those tools.
+  - The designer reads `interactive-visuals/SKILL.md` from the bundle. Its description now starts with "Use when".
+  - New `mastra/app-skills.ts` loads `skills/<name>/`. Each agent declares its on-demand skills in one table, which is empty for now. Every skill is validated when the backend starts: front matter, name equal to its folder, a "Use when" description and every linked `phases/` / `references/` file. A broken skill stops the backend with `Invalid app skills:`.
+  - Workspace copies left by earlier versions stay on disk and are never read.
+  - Specs: ADR-0018; agents.md §2.1, §2.2, §3.8 (the workspace tools the assistant is really offered, closing an open question), §7.1–§7.4; data-model §4.1 and §4.6; sessions-chat Feature "Skills the assistant is given"; the BA-198 epic spec and Milestone 1.13. The epic was re-scoped with the user: `visual-tailoring` and `sql-dialects` are cut, and 1.13.3 is merged into 1.13.2.
+  - Tests: `frontend/e2e/assistant-skills.spec.ts`, `mastra/app-skills.spec.ts`, a designer skill test in `visualization.service.spec.ts`.
+  - Evidence: [evidence/1.13.1/](evidence/1.13.1/).
 - **BA-9's Jira stories compacted from 15 to 5** (epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9), at the user's request): [BA-182](https://halo-powered.atlassian.net/browse/BA-182) Foundation, Steps 1a-1d (Done); [BA-186](https://halo-powered.atlassian.net/browse/BA-186) Databricks and REST, Steps 2-3 (In Progress); [BA-188](https://halo-powered.atlassian.net/browse/BA-188) more questions and numbers you can trust, Steps 4-5; [BA-190](https://halo-powered.atlassian.net/browse/BA-190) judge validation, arms and component checks, Steps 6-8; [BA-193](https://halo-powered.atlassian.net/browse/BA-193) evals on the user's own data, Steps 9-12 (all To Do, assigned to Sergio). The user's Jira account cannot delete issues, so the ten merged issues (BA-183, BA-184, BA-185, BA-187, BA-189, BA-191, BA-192, BA-194, BA-195, BA-196) each got a comment, a "duplicates" link to their story, Done, and no parent. The roadmap features keep their numbers and evidence and now name the shared story; the epic spec's story table and the plan's story map follow. Evidence: [evidence/1.1.3/jira-compaction.tsv](evidence/1.1.3/jira-compaction.tsv).
 - **BA-9 plan: the two decisions due this week, taken** (roadmap 1.1.3, [BA-128](https://halo-powered.atlassian.net/browse/BA-128), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)), by Claude on the user's delegation: the branch work comes over by copying the data by path and rebuilding the wiring on `main`; the fixtures are World Cup, **finance** (the branch's banking domain extended) and **marketing analytics** (new), each on PostgreSQL, Databricks and REST, loaded from one PostgreSQL source through a JSON dump so the rows match on every kind, with `samples.tpch` as a Databricks smoke set. Health insurance moves to Databricks after the beta. Applied to [docs/plans/BA-9.md](docs/plans/BA-9.md) (3.0, 3.4, Steps 1d to 4, story map), the [epic spec](specs/epics/BA-9/spec.md) (still Draft), roadmap 1.1.7 to 1.1.10 and ADR-0015 (still Proposed). The minimum by the beta now includes Step 1d and is estimated at 19 to 24 days of work against 14 working days. Evidence: [evidence/1.1.3/decisions.md](evidence/1.1.3/decisions.md); spec check and link check green; no code or UI change.
+
+### Cut
+- **1.13.3 curated-knowledge and sql-dialects skills** ([BA-201](https://halo-powered.atlassian.net/browse/BA-201)): curated-knowledge was merged into 1.13.2. sql-dialects was dropped because the app has no dialect guidance to move. The on-demand `visual-tailoring` skill planned in 1.13.2 was also cut: its 427 characters of rules would have cost a catalog and usage note of about 1,045 characters on every turn. Both were decided with the user on 2026-10-13.
 
 ## 2026-10-12
 

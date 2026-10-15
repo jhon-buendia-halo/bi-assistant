@@ -1,5 +1,5 @@
 <div class="flex flex-col">
-  <h2 class="text-[24px] leading-8 font-light tracking-[0.12px] text-fg-strong">
+  <h2 class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong">
     Datasets
   </h2>
 
@@ -33,15 +33,14 @@
       >
         <lucide-angular [img]="LayoutGrid" [size]="16" />
       </button>
-      @if (auth.can("manage-datasources")) {
-        <button
+              <button
           (click)="newDataset.emit()"
           class="btn btn-primary"
         >
           <lucide-angular [img]="Plus" [size]="14" />
           <span>New dataset</span>
         </button>
-      }
+      
     </div>
   </div>
 
@@ -89,9 +88,7 @@
                 <span>{{ editedLabel(item) }}</span>
               </span>
             </button>
-            <!-- Its only item is Delete dataset (ui.md 1.6) -->
-            @if (auth.can("manage-datasources")) {
-              <div class="relative">
+                          <div class="relative">
                 <button
                   type="button"
                   (click)="toggleMenu(item.name)"
@@ -120,7 +117,7 @@
                   </div>
                 }
               </div>
-            }
+            
           </div>
         }
       </div>

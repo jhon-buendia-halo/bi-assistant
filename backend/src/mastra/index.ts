@@ -4,12 +4,18 @@ import { MastraStorageExporter, Observability } from '@mastra/observability';
 import { assistantAgent } from './agents/assistant.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
+import { rfpAgent } from './agents/rfp.agent';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
 import { sqlVerifierAgent } from './agents/sql-verifier.agent';
 import { visualizationAgent } from './agents/visualization.agent';
 import { developerTraceExporters } from './developer-exporters';
 import { mastraStorage } from './storage';
 import { watchSessionWorkspaceRegistry } from './session-workspaces';
+import { appSkills } from './app-skills';
+
+// Validate every bundled skill before anything is served: a broken skill
+// stops the backend here (agents.md 7.3).
+appSkills();
 
 // Canonical Mastra entry point — the backbone of the agentic harness. Agents
 // (and later tools/workflows) are registered here; the NestJS MastraService
@@ -22,6 +28,7 @@ export const mastra = new Mastra({
     'sql-verifier': sqlVerifierAgent,
     'assistant-eval-judge': evalJudgeAgent,
     'knowledge-bootstrap': knowledgeBootstrapAgent,
+    rfp: rfpAgent,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

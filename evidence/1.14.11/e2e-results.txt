@@ -1,0 +1,39 @@
+Command (frontend/, 2026-10-15, branch feat/BA-213-agent-tools-skills, backend/dist + backend/public built from HEAD):
+  npx tsc -p e2e/tsconfig.json && E2E_EVIDENCE_DIR=$PWD/../evidence E2E_SKIP_DOCKER=1 npx playwright test --project=web --reporter=list \
+    e2e/agent-editor.spec.ts e2e/skill-library.spec.ts e2e/builtin-agent-prompts.spec.ts e2e/agent-hub.spec.ts e2e/agent-skills.spec.ts \
+    e2e/agents.spec.ts e2e/agent-sessions.spec.ts e2e/assistant-skills.spec.ts e2e/designer-skills.spec.ts e2e/chat-clarification.spec.ts \
+    e2e/chat-and-visuals.spec.ts e2e/world-cup-workflow.spec.ts
+Whole run: 82 passed (6.8m), 0 failed, 0 skipped. Desktop not run (no desktopOnly() scenario in these files).
+Below: the lines of the spec files this feature's impact analysis lists.
+
+  ✓  45 [web] › e2e/agents.spec.ts:31:5 › opens an agent from the Agents list and switches between its tabs (5.0s)
+  ✓  46 [web] › e2e/agents.spec.ts:115:5 › shows the stateless, no-tool agents accurately (4.3s)
+  ✓  47 [web] › e2e/agents.spec.ts:139:5 › offers the configured datasources and starts a run from the evals tab (7.3s)
+  ✓  48 [web] › e2e/agents.spec.ts:168:5 › runs only the ticked questions (5.0s)
+  ✓  49 [web] › e2e/agents.spec.ts:200:5 › refuses to run against a datasource with no datasets (4.7s)
+  ✓  50 [web] › e2e/agents.spec.ts:217:5 › explains an incomplete eval dataset without starting a run (5.9s)
+  ✓  51 [web] › e2e/agents.spec.ts:237:5 › opens a question in the right panel with what it is scored on (3.9s)
+  ✓  52 [web] › e2e/agents.spec.ts:266:5 › separates the question suite from past executions (7.4s)
+  ✓  53 [web] › e2e/agents.spec.ts:298:5 › downloads an execution as a Markdown report (7.7s)
+  ✓  54 [web] › e2e/assistant-skills.spec.ts:94:5 › the assistant is offered only its own skills (4.1s)
+  ✓  55 [web] › e2e/assistant-skills.spec.ts:126:5 › a turn without curated knowledge carries no knowledge rules (4.3s)
+  ✓  56 [web] › e2e/assistant-skills.spec.ts:140:5 › a turn with curated knowledge carries the block, and the rules stay on demand (4.2s)
+  ✓  57 [web] › e2e/assistant-skills.spec.ts:231:5 › a skills folder left in the data dir by an older version is ignored (5.5s)
+  ✓  58 [web] › e2e/assistant-skills.spec.ts:259:5 › the assistant loads a skill with the skill tool (4.0s)
+  ✓  59 [web] › e2e/builtin-agent-prompts.spec.ts:154:5 › I edit the assistant's prompt, and Reset restores it (13.4s)
+  ✓  60 [web] › e2e/builtin-agent-prompts.spec.ts:211:5 › a System agent's prompt is edited in a text area, with no link menu (4.0s)
+  ✓  61 [web] › e2e/builtin-agent-prompts.spec.ts:236:5 › a skill link in the assistant's prompt is refused (4.6s)
+  ✓  62 [web] › e2e/builtin-agent-prompts.spec.ts:252:5 › the shipped assistant prompt shows its tools and skill as chips and the model reads plain mentions (5.2s)
+  ✓  63 [web] › e2e/builtin-agent-prompts.spec.ts:287:5 › a built-in skill link in the assistant's prompt is accepted (4.5s)
+  ✓  64 [web] › e2e/builtin-agent-prompts.spec.ts:302:5 › the shipped RFP Builder prompt shows its tools and skill as chips and in the Graph tab (4.7s)
+  ✓  65 [web] › e2e/builtin-agent-prompts.spec.ts:351:5 › the RFP Builder's prompt links only its own tools and skill (13.3s)
+  ✓  66 [web] › e2e/chat-and-visuals.spec.ts:141:5 › renders streamed reasoning, tool activity, final Markdown, and supports stopping (7.5s)
+  ✓  67 [web] › e2e/chat-and-visuals.spec.ts:170:5 › renders a deterministic interactive visualization and its version controls (7.5s)
+  ✓  68 [web] › e2e/chat-clarification.spec.ts:53:5 › answering a clarification (4.4s)
+  ✓  69 [web] › e2e/chat-clarification.spec.ts:95:5 › a malformed clarification is asked again, never shown without options (4.1s)
+  ✓  79 [web] › e2e/world-cup-workflow.spec.ts:15:5 › creates a PostgreSQL datasource, dataset, and session using the real World Cup database (5.9s)
+  ✓  80 [web] › e2e/world-cup-workflow.spec.ts:44:5 › preserves masked credentials when editing and supports datasource deletion (4.5s)
+  ✓  81 [web] › e2e/world-cup-workflow.spec.ts:70:5 › surfaces a failed connection in both the form and system diagnostics (5.0s)
+  ✓  82 [web] › e2e/world-cup-workflow.spec.ts:98:5 › shows the real catalog schema and column metadata before a dataset is saved (5.3s)
+
+29 of these passed.

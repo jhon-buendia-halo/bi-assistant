@@ -8,7 +8,6 @@ import {
 import { randomUUID } from 'crypto';
 import { MastraService } from '../../mastra/mastra.service';
 import { SessionsService } from '../sessions/sessions.service';
-import { CurrentUserService } from '../auth/current-user.service';
 import type { SessionDoc } from '../sessions/entities/session.entity';
 import {
   analysisPlanSchema,
@@ -16,6 +15,7 @@ import {
   type AnalysisPlan,
   type AnalysisReportOutput,
 } from './deep-analysis.schemas';
+import { phasePrompt } from './deep-analysis.phases';
 import {
   AnalysisAngle,
   AngleFinding,
@@ -48,7 +48,6 @@ export class DeepAnalysisService implements OnModuleDestroy {
   constructor(
     private readonly sessions: SessionsService,
     private readonly mastra: MastraService,
-    private readonly currentUser: CurrentUserService,
   ) {}
 
   onModuleDestroy(): void {
@@ -74,7 +73,6 @@ export class DeepAnalysisService implements OnModuleDestroy {
     const job: DeepAnalysisJob = {
       id: randomUUID(),
       sessionId,
-      ownerId: this.currentUser.ownerKey(),
       question: trimmed,
       status: 'planning',
       progress: 'Planning the investigation',
@@ -86,12 +84,8 @@ export class DeepAnalysisService implements OnModuleDestroy {
 
     const abort = new AbortController();
     this.aborts.set(job.id, abort);
-    // Deliberately not awaited: the HTTP call returns while the job runs, as
-    // the user who started it (admin R32).
-    const run = this.currentUser.bind(() =>
-      this.run(job, session, abort.signal),
-    );
-    void run().finally(() => {
+    // Deliberately not awaited: the HTTP call returns while the job runs.
+    void this.run(job, session, abort.signal).finally(() => {
       this.running.delete(sessionId);
       this.aborts.delete(job.id);
       job.finishedAt = new Date().toISOString();
@@ -102,11 +96,7 @@ export class DeepAnalysisService implements OnModuleDestroy {
   /** Poll one job. */
   status(sessionId: string, jobId: string): DeepAnalysisView {
     const job = this.jobs.get(jobId);
-    if (
-      !job ||
-      job.sessionId !== sessionId ||
-      job.ownerId !== this.currentUser.ownerKey()
-    ) {
+    if (!job || job.sessionId !== sessionId) {
       throw new NotFoundException(`Deep analysis ${jobId} not found`);
     }
     return {
@@ -146,8 +136,7 @@ export class DeepAnalysisService implements OnModuleDestroy {
       throw new NotFoundException(`No deep analysis report for ${jobId}`);
     }
     const job = this.jobs.get(jobId);
-    const title =
-      job?.ownerId === this.currentUser.ownerKey() ? job.title : undefined;
+    const title = job?.title;
     return {
       filename: `${slug(title) || `deep-analysis-${jobId.slice(0, 8)}`}.md`,
       markdown,
@@ -251,36 +240,21 @@ export class DeepAnalysisService implements OnModuleDestroy {
     question: string,
     abortSignal: AbortSignal,
   ): Promise<AnalysisPlan> {
+    const prompt = phasePrompt('plan', { question });
     const options = await this.sessions.backgroundAgentOptions(
       session,
       question,
       abortSignal,
     );
-    const generated = await this.mastra
-      .getAgent('assistant')
-      .generate(
-        [
-          'Plan a deep analysis of the question below.',
-          'Produce between 3 and 5 investigation angles: distinct, answerable',
-          'sub-questions over the entities listed in the session context —',
-          'different dimensions, comparisons, time windows or drivers, never',
-          'restatements of one another.',
-          'Plan only: run no queries, ask no clarifying questions.',
-          '',
-          '<question>',
-          question,
-          '</question>',
-        ].join('\n'),
-        {
-          ...options,
-          maxSteps: 1,
-          toolChoice: 'none',
-          structuredOutput: {
-            schema: analysisPlanSchema,
-            jsonPromptInjection: 'inline' as const,
-          },
-        },
-      );
+    const generated = await this.mastra.getAgent('assistant').generate(prompt, {
+      ...options,
+      maxSteps: 1,
+      toolChoice: 'none',
+      structuredOutput: {
+        schema: analysisPlanSchema,
+        jsonPromptInjection: 'inline' as const,
+      },
+    });
     const parsed = analysisPlanSchema.safeParse(
       generated.object ?? parseJsonObject(generated.text),
     );
@@ -299,6 +273,14 @@ export class DeepAnalysisService implements OnModuleDestroy {
     total: number,
     abortSignal: AbortSignal,
   ): Promise<AngleFinding> {
+    // Built outside the try: a broken phase file fails the job, not one angle.
+    const prompt = phasePrompt('investigate', {
+      angleIndex: String(index + 1),
+      angleTotal: String(total),
+      angleTitle: angle.title,
+      question,
+      angleQuestion: angle.question,
+    });
     const options = await this.sessions.backgroundAgentOptions(
       session,
       angle.question,
@@ -307,34 +289,7 @@ export class DeepAnalysisService implements OnModuleDestroy {
     try {
       const result = await this.mastra
         .getAgent('assistant')
-        .generate(
-          [
-            `Deep analysis — angle ${index + 1} of ${total}: ${angle.title}`,
-            '',
-            'Investigate this angle with SQL over the session entities and',
-            'report what you found. This is one section of a longer report, so',
-            'stay on this angle.',
-            '',
-            '<overall-question>',
-            question,
-            '</overall-question>',
-            '',
-            '<angle>',
-            angle.question,
-            '</angle>',
-            '',
-            'Rules:',
-            '- Run the queries yourself. Never ask the user anything and never',
-            '  call ask_clarification; when something is ambiguous pick the most',
-            '  reasonable reading and state the assumption.',
-            '- Do not create or update visuals.',
-            '- Report concrete numbers — values, counts, shares, deltas — and',
-            '  name the entities behind them. Flag anomalies you notice.',
-            '- Finish with a "SQL used" section listing every statement you ran,',
-            '  each in its own ```sql fenced block.',
-          ].join('\n'),
-          { ...options, maxSteps: 15 },
-        );
+        .generate(prompt, { ...options, maxSteps: 15 });
       const text = (result.text ?? '').trim();
       return {
         ...angle,
@@ -363,52 +318,33 @@ export class DeepAnalysisService implements OnModuleDestroy {
     findings: AngleFinding[],
     abortSignal: AbortSignal,
   ): Promise<AnalysisReportOutput> {
+    const prompt = phasePrompt('report', {
+      question,
+      findings: findings
+        .map((finding, index) =>
+          [
+            `### Angle ${index + 1}: ${finding.title}`,
+            finding.question,
+            '',
+            finding.findings,
+          ].join('\n'),
+        )
+        .join('\n\n'),
+    });
     const options = await this.sessions.backgroundAgentOptions(
       session,
       question,
       abortSignal,
     );
-    const result = await this.mastra
-      .getAgent('assistant')
-      .generate(
-        [
-          'Write the deep-analysis report for the question below from the',
-          'investigation findings that follow. Use only what the findings',
-          'contain — never invent numbers.',
-          '',
-          'The body must start at "## Findings by angle" (one subsection per',
-          'angle, with its numbers), then "## Anomalies and drivers", then',
-          '"## Recommendations" (concrete next actions). Do not write an',
-          'executive summary or a data appendix in the body — those are added',
-          'around it.',
-          '',
-          '<question>',
-          question,
-          '</question>',
-          '',
-          '<findings>',
-          findings
-            .map((finding, index) =>
-              [
-                `### Angle ${index + 1}: ${finding.title}`,
-                finding.question,
-                '',
-                finding.findings,
-              ].join('\n'),
-            )
-            .join('\n\n'),
-          '</findings>',
-        ].join('\n'),
-        {
-          ...options,
-          maxSteps: 1,
-          toolChoice: 'none',
-          structuredOutput: {
-            schema: analysisReportSchema,
-            jsonPromptInjection: 'inline' as const,
-          },
-        },
-      );
+    const result = await this.mastra.getAgent('assistant').generate(prompt, {
+      ...options,
+      maxSteps: 1,
+      toolChoice: 'none',
+      structuredOutput: {
+        schema: analysisReportSchema,
+        jsonPromptInjection: 'inline' as const,
+      },
+    });
     const parsed = analysisReportSchema.safeParse(
       result.object ?? parseJsonObject(result.text),
     );

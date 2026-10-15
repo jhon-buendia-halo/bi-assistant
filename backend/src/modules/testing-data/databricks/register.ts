@@ -1,13 +1,11 @@
 /**
  * Registering a loaded Databricks sample in a running backend, through the
- * same HTTP API the app uses (BA-186): sign in as a local persona, upsert the
+ * same HTTP API the app uses (BA-186): upsert the
  * sample's datasource by name, read its inventory live, and save its dataset
  * with the sample's required entities. Idempotent: a second run updates the
  * same datasource and replaces the same dataset.
  *
- * Local mode only: on an org server the sign-in route answers 404 and the
- * datasource and dataset are created from the app instead. `fetch` is
- * injected so the unit test runs without a backend.
+ * `fetch` is injected so the unit test runs without a backend.
  */
 import type { SampleFixture } from '../fixtures/registry';
 import type { LoadTarget } from './fixture-load';
@@ -24,8 +22,6 @@ export interface RegisterInput {
   fixture: SampleFixture;
   connection: DatabricksConnection;
   target: LoadTarget;
-  /** The local persona to sign in as; `local` (Demo User) by default. */
-  userId?: string;
   fetch?: typeof fetch;
   log?: (line: string) => void;
   /** A live inventory walks every catalog the token sees; on a cold warehouse that takes minutes. */
@@ -187,15 +183,13 @@ export function datasetEntities(
   return entities;
 }
 
-/** Sign in, upsert the datasource, read the inventory, save the dataset. */
+/** Upsert the datasource, read the inventory, save the dataset. */
 export async function registerDatabricksFixture(
   input: RegisterInput,
 ): Promise<RegisterResult> {
   const fetchImpl = input.fetch ?? fetch;
   const log = input.log ?? (() => undefined);
   const base = input.backendUrl.replace(/\/+$/, '');
-  // The bearer token of the sign-in below; every later request carries it.
-  const session: { token?: string } = {};
 
   const request = async <T>(
     method: 'GET' | 'POST',
@@ -211,9 +205,6 @@ export async function registerDatabricksFixture(
         headers: {
           accept: 'application/json',
           ...(body === undefined ? {} : { 'content-type': 'application/json' }),
-          ...(session.token
-            ? { authorization: `Bearer ${session.token}` }
-            : {}),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
@@ -247,26 +238,6 @@ export async function registerDatabricksFixture(
     }
     return answer.body;
   };
-
-  const userId = input.userId ?? 'local';
-  const signIn = await request<Ok & { token?: string }>(
-    'POST',
-    '/auth/local/sign-in',
-    { userId },
-  );
-  if (
-    signIn.status === 404 &&
-    /org server mode/i.test(signIn.body?.message ?? '')
-  ) {
-    throw new RegisterError(
-      `the backend at ${base} runs in org server mode, where this script cannot sign in. ` +
-        'Create the datasource and dataset from the app, or register against a local-mode backend.',
-    );
-  }
-  session.token = checked(`Signing in as "${userId}"`, signIn).token;
-  if (!session.token)
-    throw new RegisterError('the sign-in answered without a token');
-  log(`✔ signed in to ${base} as ${userId}`);
 
   const listed = checked(
     'Listing the datasources',

@@ -13,4 +13,8 @@ export class SaveAgentDto {
   starterQuestions?: string[];
   model?: string;
   reasoningEffort?: ReasoningEffort;
+  /** Any of `sample_rows`, `ask_clarification`, `visuals`; omitted = all. */
+  tools?: string[];
+  /** Ids of the caller's in-app skills, at most 10; omitted = none. */
+  skills?: string[];
 }

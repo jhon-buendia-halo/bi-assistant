@@ -30,6 +30,10 @@ Options:
   --data-dir <path>  Where app data is stored (default: $QTI_DATA_DIR,
                      $APP_DATA_DIR, or ~/.questions-to-insights)
   --no-open          Do not open the browser
+  --intellify-api-port <n>
+                     Port of the embedded Intellify RFP API (default 3100,
+                     $INTELLIFY_API_PORT; 0 = a free port)
+  --no-intellify-api Do not start the embedded Intellify RFP API
   -h, --help         Show this help
   -v, --version      Show the version
 `;
@@ -111,6 +115,8 @@ async function main(): Promise<void> {
     host?: string;
     'data-dir'?: string;
     open?: boolean;
+    'intellify-api-port'?: string;
+    'intellify-api'?: boolean;
     help?: boolean;
     version?: boolean;
   };
@@ -122,6 +128,9 @@ async function main(): Promise<void> {
         'data-dir': { type: 'string' },
         // `--no-open` via allowNegative.
         open: { type: 'boolean' },
+        'intellify-api-port': { type: 'string' },
+        // `--no-intellify-api` via allowNegative.
+        'intellify-api': { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
         version: { type: 'boolean', short: 'v' },
       },
@@ -156,6 +165,17 @@ async function main(): Promise<void> {
     port = 0;
   }
   const shouldOpen = values.open !== false;
+  const intellifyPort = values['intellify-api-port'];
+  if (intellifyPort !== undefined) {
+    const n = Number(intellifyPort);
+    if (!Number.isInteger(n) || n < 0 || n > 65535) {
+      fail(
+        `invalid --intellify-api-port "${intellifyPort}" (expected 0-65535)`,
+      );
+    }
+    process.env.INTELLIFY_API_PORT = String(n);
+  }
+  if (values['intellify-api'] === false) process.env.INTELLIFY_API = 'off';
 
   const dataDir = resolve(
     values['data-dir'] ??
@@ -185,7 +205,7 @@ async function main(): Promise<void> {
     );
   }
 
-  const { app, url, orgPublicBaseUrl } = await createApp({
+  const { app, url, intellifyApiUrl } = await createApp({
     port,
     host,
     webRoot,
@@ -195,8 +215,8 @@ async function main(): Promise<void> {
   console.log(`  Questions to Insights ${readVersion()}`);
   console.log(`  URL:      ${url}`);
   console.log(`  Data dir: ${dataDir}`);
-  if (orgPublicBaseUrl) {
-    console.log(`  Mode:     org server, ${orgPublicBaseUrl}`);
+  if (intellifyApiUrl) {
+    console.log(`  Intellify API: ${intellifyApiUrl}`);
   }
   console.log('  Press Ctrl+C to stop.');
   console.log('');

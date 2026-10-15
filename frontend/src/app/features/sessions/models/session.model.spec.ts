@@ -2,6 +2,7 @@ import {
   Session,
   SessionAgent,
   sessionAgentLabel,
+  sessionListAgent,
   sessionListSubtitle,
 } from './session.model';
 
@@ -38,15 +39,24 @@ describe('sessionListSubtitle', () => {
     expect(sessionListSubtitle(session({ datasets: [] }))).toBe('');
   });
 
-  it("leads with the agent's name for a session bound to an agent (R57)", () => {
+  it('lists only the datasets for a session bound to an agent (R63)', () => {
     expect(sessionListSubtitle(session({ agentId: agent.id, agent }))).toBe(
-      'Cup historian · World Cup Core · Players',
+      'World Cup Core · Players',
     );
+  });
+});
+
+describe('sessionListAgent', () => {
+  it('names the bound agent, or the assistant for a plain session (R63)', () => {
+    expect(sessionListAgent(session({ agentId: agent.id, agent }))).toBe(
+      'Cup historian',
+    );
+    expect(sessionListAgent(session())).toBe('Assistant');
   });
 
   it('reads "<name> · agent deleted" once the agent is gone (R59)', () => {
     expect(
-      sessionListSubtitle(
+      sessionListAgent(
         session({ agentId: agent.id, agent: { ...agent, deleted: true } }),
       ),
     ).toBe('Cup historian · agent deleted');

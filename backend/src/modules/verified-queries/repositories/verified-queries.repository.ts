@@ -1,23 +1,16 @@
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
-import {
-  OWNED_VERIFIED_QUERIES_STORE,
-  VERIFIED_QUERIES_STORE,
-} from '../../../infrastructure/database/doc-store';
+import { VERIFIED_QUERIES_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
 import type { VerifiedQueryDoc } from '../entities/verified-query.entity';
 
 /**
  * Approved question → SQL pairs, keyed by the answer they came from.
- * Owner-scoped (data-model 3.15); only the startup migration reads across
- * owners, through the raw store, since no user is signed in at boot.
  */
 @Injectable()
 export class VerifiedQueriesRepository implements OnModuleInit {
   constructor(
-    @Inject(OWNED_VERIFIED_QUERIES_STORE)
-    private readonly store: DocStore<VerifiedQueryDoc>,
     @Inject(VERIFIED_QUERIES_STORE)
-    private readonly allOwners: DocStore<VerifiedQueryDoc>,
+    private readonly store: DocStore<VerifiedQueryDoc>,
   ) {}
 
   /**
@@ -27,7 +20,7 @@ export class VerifiedQueriesRepository implements OnModuleInit {
    * again — and would fork on the next thumbs-up.
    */
   async onModuleInit(): Promise<void> {
-    const legacy = (await this.allOwners.find({})) as (VerifiedQueryDoc & {
+    const legacy = (await this.store.find({})) as (VerifiedQueryDoc & {
       sourceProjectId?: string;
     })[];
     for (const doc of legacy) {
@@ -35,13 +28,13 @@ export class VerifiedQueriesRepository implements OnModuleInit {
       // Both writes stamp `updatedAt`, so migrated entries land together at
       // the top of the library's recency ordering. Harmless: retrieval is by
       // lexical similarity, not recency.
-      await this.allOwners.update(
+      await this.store.update(
         { id: doc.id },
         {
           sourceSessionId: doc.sourceProjectId,
         },
       );
-      await this.allOwners.unset({ id: doc.id }, 'sourceProjectId');
+      await this.store.unset({ id: doc.id }, 'sourceProjectId');
     }
   }
 

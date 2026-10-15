@@ -76,6 +76,8 @@ export function toAssistantEvalSets(
       ...(evalCase.judgeRubric !== undefined
         ? { judgeRubric: evalCase.judgeRubric }
         : {}),
+      // The case's tool selection, put on its requestContext by the runner.
+      ...(evalCase.agentTools ? { agentTools: evalCase.agentTools } : {}),
       category: evalCase.category,
       split: evalCase.split,
       tags: evalCase.tags,

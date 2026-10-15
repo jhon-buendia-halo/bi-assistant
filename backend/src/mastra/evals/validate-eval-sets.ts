@@ -1,9 +1,5 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
-import {
-  CurrentUserService,
-  LOCAL_USER,
-} from '../../modules/auth/current-user.service';
 import { DatasourcesService } from '../../modules/datasources/datasources.service';
 import { setAgentModelResolver } from '../model-resolver';
 import { getDatasetToolServices } from '../tool-services';
@@ -21,8 +17,8 @@ import { catalogOfEntities, referenceInCatalog } from './databricks-catalog';
  *
  *   EVAL_SET=world-cup EVAL_DATASETS="World Cup" npm run eval:validate
  *
- * Same inputs as `npm run evals:assistant`, except that `EVAL_SET` is
- * required. It boots the application context as Demo User the way
+ * Same inputs as `npm run evals:assistant`, except that it takes one
+ * `EVAL_SET` and no `EVAL_CASES`. It boots the application context the way
  * `run-assistant-evals.ts` does, runs the set's dataset preflight, then each
  * reference query on the datasource's connector under the result-set check's
  * row limit and truncation rule (`runReferenceSql`). It deliberately skips the
@@ -219,10 +215,8 @@ async function main(): Promise<void> {
     Promise.reject(new Error('eval:validate never calls a model')),
   );
   try {
-    await app.get(CurrentUserService).runAs(LOCAL_USER, async () => {
-      const result = await validateOnApp(app, set, datasets);
-      process.exitCode = result.exitCode;
-    });
+    const result = await validateOnApp(app, set, datasets);
+    process.exitCode = result.exitCode;
   } finally {
     await app.close();
   }

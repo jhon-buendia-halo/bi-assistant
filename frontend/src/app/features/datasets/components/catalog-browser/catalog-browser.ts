@@ -40,7 +40,6 @@ import {
 import { Dataset, DatasetsApiService } from '../../services/datasets-api.service';
 import { MetricsPanel } from '../metrics-panel/metrics-panel';
 import { ToastService } from '../../../../core/toast/toast.service';
-import { AuthService } from '../../../../core/auth/auth.service';
 
 @Component({
   selector: 'app-catalog-browser',
@@ -67,9 +66,6 @@ export class CatalogBrowser implements OnInit, OnDestroy {
   private readonly inclusionService = inject(DatasetInclusionService);
   private readonly datasetApi = inject(DatasetsApiService);
   private readonly toast = inject(ToastService);
-  /** Naming and saving a dataset need Manage datasources (ui.md 1.6). */
-  readonly auth = inject(AuthService);
-
   readonly loading = signal(true);
   /**
    * A datasource is picked but its inventory has not been requested yet. The

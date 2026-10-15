@@ -1,0 +1,133 @@
+svg {
+  font-family: inherit;
+}
+
+.edge {
+  fill: none;
+  stroke: var(--qti-primary);
+  stroke-width: 2;
+  transition: opacity 0.15s;
+
+  &.inactive {
+    stroke: var(--qti-border-strong);
+    stroke-dasharray: 5 5;
+  }
+}
+
+.arrow {
+  fill: var(--qti-primary);
+
+  &.inactive {
+    fill: var(--qti-border-strong);
+  }
+}
+
+.node {
+  transition: opacity 0.15s;
+
+  rect {
+    fill: var(--qti-surface);
+    stroke: var(--qti-border-strong);
+    stroke-width: 1.5;
+  }
+
+  .name {
+    fill: var(--qti-fg-strong);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .subtitle {
+    fill: var(--qti-fg-muted);
+    font-size: 12px;
+  }
+
+  &.prompt rect {
+    fill: var(--qti-surface-muted);
+    stroke: var(--qti-fg-strong);
+    stroke-width: 2;
+  }
+
+  &.skill rect {
+    fill: var(--qti-info-soft);
+    stroke: var(--qti-on-info-soft);
+  }
+
+  &.tool rect {
+    fill: var(--qti-neutral-soft);
+    stroke: var(--qti-on-neutral-soft);
+  }
+
+  &.tool.always-on rect {
+    fill: var(--qti-success-soft);
+    stroke: var(--qti-on-success-soft);
+  }
+
+  &.inactive:not(.always-on) rect {
+    fill: var(--qti-surface);
+    stroke: var(--qti-border-strong);
+    stroke-dasharray: 5 4;
+  }
+
+  &.missing rect {
+    fill: var(--qti-danger-soft);
+    stroke: var(--qti-on-danger-soft);
+    stroke-dasharray: 5 4;
+  }
+
+  &:focus-visible {
+    outline: none;
+
+    rect {
+      stroke: var(--qti-focus);
+      stroke-width: 3;
+    }
+  }
+}
+
+.dim {
+  opacity: 0.2;
+}
+
+.legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--qti-fg-muted);
+  font-size: 12px;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+.swatch {
+  flex: none;
+  width: 16px;
+  height: 12px;
+  border: 1.5px solid;
+  border-radius: 4px;
+
+  &.prompt {
+    background: var(--qti-surface-muted);
+    border-color: var(--qti-fg-strong);
+  }
+
+  &.skill {
+    background: var(--qti-info-soft);
+    border-color: var(--qti-on-info-soft);
+  }
+
+  &.tool {
+    background: var(--qti-neutral-soft);
+    border-color: var(--qti-on-neutral-soft);
+  }
+
+  &.always-on {
+    background: var(--qti-success-soft);
+    border-color: var(--qti-on-success-soft);
+  }
+}

@@ -1,0 +1,168 @@
+
+> frontend@0.31.0 test:e2e
+> npm run test:e2e:prepare && playwright test --project=web --reporter=line
+
+
+> frontend@0.31.0 test:e2e:prepare
+> tsc -p e2e/tsconfig.json && npm --prefix ../backend run build:all
+
+
+> @jhon-buendia-halo/questions-to-insights@0.31.0 build:all
+> npm run build && npm run build:web
+
+
+> @jhon-buendia-halo/questions-to-insights@0.31.0 build
+> nest build
+
+
+> @jhon-buendia-halo/questions-to-insights@0.31.0 build:web
+> npm --prefix ../frontend run build:web && node scripts/copy-web.js
+
+
+> frontend@0.31.0 build:web
+> ng build
+
+❯ Building...
+✔ Building...
+Initial chunk files   | Names         |  Raw size | Estimated transfer size
+main-HZPLFH2L.js      | main          | 780.02 kB |               176.76 kB
+styles-7TPFLYTC.css   | styles        |  42.75 kB |                 7.63 kB
+polyfills-7RSNIJ6J.js | polyfills     |  34.59 kB |                11.33 kB
+
+                      | Initial total | 857.35 kB |               195.73 kB
+
+Application bundle generation complete. [7.472 seconds] - 2026-10-14T04:18:46.891Z
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/agents/components/agent-detail/agent-detail.html:711:38:
+[37m      711 │ ...                        >{{ [32mresult.scores[check.id] ?? 0[37m }}</span
+          ╵                                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component AgentDetail.
+
+    src/app/features/agents/components/agent-detail/agent-detail.ts:60:15:
+[37m      60 │   templateUrl: [32m'./agent-detail.html'[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mDeprecation[0m [1m[35m[plugin angular-sass][0m
+
+    src/styles.scss:1:8:
+[37m      1 │ @import [32m[37m"tailwindcss";
+        ╵         [32m^[0m
+
+
+  Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+  
+  More info and automated migrator: [4mhttps://sass-lang.com/d/import[0m
+
+  The plugin "angular-sass" was triggered by this import
+
+    angular:styles/global:styles:5:8:
+[37m      5 │ @import [32m'src/styles.scss'[37m;
+        ╵         [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mbundle initial exceeded maximum budget. Budget 500.00 kB was not met by 357.35 kB with a total of 857.35 kB.[0m
+
+
+Output location: /home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-198-assistant-skills/frontend/dist/frontend
+
+copy-web: copied /home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-198-assistant-skills/frontend/dist/frontend/browser -> /home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-198-assistant-skills/backend/public
+
+Running 91 tests using 1 worker
+
+[1/91] [web] › e2e/agent-editor.spec.ts:129:5 › creates an agent, previews it, publishes it and deletes it
+[2/91] [web] › e2e/agent-editor.spec.ts:178:5 › editing a Live agent keeps its sessions on the Live version until republished
+[3/91] [web] › e2e/agent-editor.spec.ts:232:5 › sending in the preview saves the form first
+[4/91] [web] › e2e/agent-editor.spec.ts:251:5 › reset and leaving the editor discard the preview
+[5/91] [web] › e2e/agent-editor.spec.ts:280:5 › preview needs a dataset, and names must be unique
+[6/91] [web] › e2e/agent-editor.spec.ts:302:5 › leaving with unsaved changes asks first
+[7/91] [web] › e2e/agent-editor.spec.ts:325:5 › a dataset that no longer exists stays visible in the editor
+[8/91] [web] › e2e/agent-editor.spec.ts:347:5 › the editor has no detectable accessibility violations in either theme
+[9/91] [web] › e2e/agent-hub.spec.ts:92:5 › shows the built-in agents and mine in sections
+[10/91] [web] › e2e/agent-hub.spec.ts:143:5 › search narrows the agents by name or description
+[11/91] [web] › e2e/agent-hub.spec.ts:159:5 › filters limit the hub to one kind of agent
+[12/91] [web] › e2e/agent-hub.spec.ts:181:5 › pinned agents come first in their own section and survive a restart
+[13/91] [web] › e2e/agent-hub.spec.ts:241:5 › flags an agent whose dataset no longer exists
+[14/91] [web] › e2e/agent-hub.spec.ts:258:5 › a card opens the agent's detail view with its actions
+[15/91] [web] › e2e/agent-hub.spec.ts:284:5 › publishing a draft makes it Live
+[16/91] [web] › e2e/agent-hub.spec.ts:310:5 › deleting an agent asks first
+[17/91] [web] › e2e/agent-hub.spec.ts:338:5 › the hub has no detectable accessibility violations in either theme
+[18/91] [web] › e2e/agent-sessions.spec.ts:128:5 › start chat on an agent card opens a session bound to the agent
+[19/91] [web] › e2e/agent-sessions.spec.ts:154:5 › only Live agents and the Official agent offer Start chat
+[20/91] [web] › e2e/agent-sessions.spec.ts:188:5 › start chat is unavailable when none of the agent's datasets exist
+[21/91] [web] › e2e/agent-sessions.spec.ts:208:5 › the agent's Live instructions and model shape every turn
+[22/91] [web] › e2e/agent-sessions.spec.ts:262:5 › instructions can't switch off the read-only guard
+[23/91] [web] › e2e/agent-sessions.spec.ts:302:5 › deleting the agent keeps its sessions on the plain assistant
+[24/91] [web] › e2e/agents.spec.ts:29:5 › opens an agent from the Agents list and switches between its tabs
+[25/91] [web] › e2e/agents.spec.ts:98:5 › shows the stateless, no-tool agents accurately
+[26/91] [web] › e2e/agents.spec.ts:119:5 › offers the configured datasources and starts a run from the evals tab
+[27/91] [web] › e2e/agents.spec.ts:145:5 › runs only the ticked questions
+[28/91] [web] › e2e/agents.spec.ts:174:5 › refuses to run against a datasource with no datasets
+[29/91] [web] › e2e/agents.spec.ts:188:5 › explains an incomplete eval dataset without starting a run
+[30/91] [web] › e2e/agents.spec.ts:205:5 › opens a question in the right panel with what it is scored on
+[31/91] [web] › e2e/agents.spec.ts:231:5 › separates the question suite from past executions
+[32/91] [web] › e2e/agents.spec.ts:260:5 › downloads an execution as a Markdown report
+[33/91] [web] › e2e/appearance.spec.ts:73:5 › opens in the light theme by default
+[34/91] [web] › e2e/appearance.spec.ts:83:5 › follows the operating system theme when System is chosen
+[35/91] [web] › e2e/appearance.spec.ts:103:5 › forces a theme regardless of the operating system
+[36/91] [web] › e2e/appearance.spec.ts:123:5 › remembers the chosen theme after a restart
+[37/91] [web] › e2e/appearance.spec.ts:152:5 › keeps the chosen theme in the database
+[38/91] [web] › e2e/appearance.spec.ts:169:5 › moves a theme chosen before the database stored it
+[39/91] [web] › e2e/appearance.spec.ts:191:5 › has no automatically detectable accessibility violations in either theme
+[40/91] [web] › e2e/assistant-skills.spec.ts:75:5 › the assistant is offered only its own skills
+[41/91] [web] › e2e/assistant-skills.spec.ts:89:5 › a turn without curated knowledge carries no knowledge rules
+[42/91] [web] › e2e/assistant-skills.spec.ts:103:5 › a turn with curated knowledge carries the rules right after the block
+[43/91] [web] › e2e/chat-and-visuals.spec.ts:141:5 › renders streamed reasoning, tool activity, final Markdown, and supports stopping
+[44/91] [web] › e2e/chat-and-visuals.spec.ts:170:5 › renders a deterministic interactive visualization and its version controls
+[45/91] [web] › e2e/designer-skills.spec.ts:93:5 › a spec-mode designer call carries only the spec-mode reference
+[46/91] [web] › e2e/developer-observability.spec.ts:82:5 › backend traces reach the OTLP endpoint when observability is on
+[47/91] [web] › e2e/developer-observability.spec.ts:100:5 › agent runs reach Phoenix when observability is on
+[48/91] [web] › e2e/developer-observability.spec.ts:121:5 › backend logs reach the OTLP endpoint when observability is on
+[49/91] [web] › e2e/developer-observability.spec.ts:136:5 › nothing is exported when observability is off
+[50/91] [web] › e2e/developer-settings.spec.ts:36:5 › developer observability is off by default
+[51/91] [web] › e2e/developer-settings.spec.ts:70:5 › turning observability on asks for a restart
+[52/91] [web] › e2e/developer-settings.spec.ts:94:7 › desktop app › the desktop app offers to restart the backend, and restarting applies it
+[53/91] [web] › e2e/developer-settings.spec.ts:115:7 › browser › in a browser, the notice asks me to restart the CLI
+[54/91] [web] › e2e/developer-settings.spec.ts:125:7 › browser › restarting the CLI applies the saved setting
+[55/91] [web] › e2e/developer-settings.spec.ts:140:5 › turning it back off before restarting needs no restart
+[56/91] [web] › e2e/developer-settings.spec.ts:157:5 › rejects an endpoint that is not a URL
+[57/91] [web] › e2e/developer-settings.spec.ts:167:5 › tests an endpoint that accepts OTLP traces
+[58/91] [web] › e2e/developer-settings.spec.ts:193:5 › tests an endpoint that is not listening
+[59/91] [web] › e2e/diagnostics.spec.ts:8:7 › desktop shell › captures live renderer failures, filters issues, and exports a redacted LLM-readable report
+[60/91] [web] › e2e/diagnostics.spec.ts:90:5 › replaces the help icon and supports log refresh, follow mode, and dismissal
+[61/91] [web] › e2e/layout-accessibility.spec.ts:9:5 › supports keyboard layout controls and persists the right-panel width
+[62/91] [web] › e2e/layout-accessibility.spec.ts:38:5 › has no automatically detectable accessibility violations in the application shell
+[63/91] [web] › e2e/layout-accessibility.spec.ts:48:5 › has no automatically detectable accessibility violations on any screen in either theme
+[64/91] [web] › e2e/layout-accessibility.spec.ts:133:5 › matches the stable application-shell visual baseline
+[65/91] [web] › e2e/llm-settings.spec.ts:93:5 › LenAI needs a deployment name and a base URL
+[66/91] [web] › e2e/llm-settings.spec.ts:106:5 › never shows the stored key
+[67/91] [web] › e2e/llm-settings.spec.ts:125:5 › keeps a key saved under the former development secret
+[68/91] [web] › e2e/llm-settings.spec.ts:154:5 › asks for the key again when the app secret changed
+[69/91] [web] › e2e/llm-settings.spec.ts:189:5 › offers the effort levels of the chosen model
+[70/91] [web] › e2e/llm-settings.spec.ts:229:5 › tests a reasoning model at its lowest effort
+[71/91] [web] › e2e/llm-settings.spec.ts:241:5 › saves the chosen effort and uses it on the next turn
+[72/91] [web] › e2e/local-sign-in.spec.ts:64:5 › The app opens on the sign-in page listing the personas
+[73/91] [web] › e2e/local-sign-in.spec.ts:104:5 › Signing in as Demo User opens the shell
+[74/91] [web] › e2e/local-sign-in.spec.ts:124:5 › Uma User sees no maker, data or admin controls
+[75/91] [web] › e2e/local-sign-in.spec.ts:143:5 › Mark Maker's agents are private
+[76/91] [web] › e2e/local-sign-in.spec.ts:172:5 › Signing out returns to the sign-in page
+[77/91] [web] › e2e/local-sign-in.spec.ts:199:5 › A role change in Admin persists
+[78/91] [web] › e2e/local-sign-in.spec.ts:224:5 › Dana Data Owner owns every datasource
+[79/91] [web] › e2e/local-sign-in.spec.ts:245:5 › Data from before sign-in belongs to Demo User
+[80/91] [web] › e2e/navigation.spec.ts:15:5 › moves between areas from the rail
+[81/91] [web] › e2e/navigation.spec.ts:46:5 › opens with the navigation drawer expanded
+[82/91] [web] › e2e/navigation.spec.ts:57:5 › remembers a collapsed drawer after a restart
+[83/91] [web] › e2e/navigation.spec.ts:82:5 › expands the rail into a drawer with labels and sessions
+[84/91] [web] › e2e/navigation.spec.ts:117:5 › shows the details panel only on demand
+[85/91] [web] › e2e/navigation.spec.ts:126:5 › opens Settings as an area with a section list
+[86/91] [web] › e2e/navigation.spec.ts:154:5 › shows the product name
+[87/91] [web] › e2e/navigation.spec.ts:166:5 › local mode signs in as Demo User
+[88/91] [web] › e2e/world-cup-workflow.spec.ts:15:5 › creates a PostgreSQL datasource, dataset, and session using the real World Cup database
+[89/91] [web] › e2e/world-cup-workflow.spec.ts:44:5 › preserves masked credentials when editing and supports datasource deletion
+[90/91] [web] › e2e/world-cup-workflow.spec.ts:70:5 › surfaces a failed connection in both the form and system diagnostics
+[91/91] [web] › e2e/world-cup-workflow.spec.ts:98:5 › shows the real catalog schema and column metadata before a dataset is saved
+  2 skipped
+  89 passed (10.5m)

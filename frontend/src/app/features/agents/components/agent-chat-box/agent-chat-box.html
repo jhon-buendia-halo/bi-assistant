@@ -1,0 +1,91 @@
+@if (isUserAgent()) {
+  <div class="flex items-center gap-3 pb-3">
+    <h3 class="text-[12px] font-medium tracking-wider text-fg-muted uppercase">
+      Chat with the draft
+    </h3>
+    <button
+      type="button"
+      data-testid="agent-chat-new"
+      (click)="newChat()"
+      [disabled]="state().kind === 'starting'"
+      class="btn btn-ghost ml-auto"
+    >
+      <lucide-angular [img]="RotateCcw" [size]="14" />
+      <span>New chat</span>
+    </button>
+  </div>
+  <div class="flex min-h-0 flex-1 flex-col rounded-xl border border-border">
+    @switch (state().kind) {
+      @case ("ready") {
+        @if (state(); as current) {
+          @if (current.kind === "ready") {
+            <app-session-chat
+              class="min-h-0 flex-1"
+              [session]="current.session"
+              (sessionUpdated)="sessionUpdated($event)"
+            />
+          }
+        }
+      }
+      @case ("no-dataset") {
+        <p
+          data-testid="agent-chat-no-dataset"
+          class="px-6 py-6 text-[13px] text-fg-muted"
+        >
+          Add a dataset to this agent to chat with it.
+          <button
+            type="button"
+            data-testid="agent-chat-edit"
+            (click)="edit.emit(agent())"
+            class="underline hover:text-fg"
+          >
+            Edit
+          </button>
+        </p>
+      }
+      @case ("error") {
+        @if (state(); as current) {
+          @if (current.kind === "error") {
+            <p
+              class="mx-6 my-6 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+            >
+              {{ current.message }}
+            </p>
+          }
+        }
+      }
+      @default {
+        <div class="flex items-center gap-2.5 px-6 py-6 text-fg-muted">
+          <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+          <span>Starting chat…</span>
+        </div>
+      }
+    }
+  </div>
+} @else {
+  <div class="flex flex-col items-start gap-4">
+    <p class="text-[13px] text-fg-muted">
+      @if (agent().key === "rfp") {
+        Chats with the RFP Builder run over the "Intellify RFP API" dataset.
+      } @else {
+        Chats with the assistant run over datasets you choose.
+      }
+    </p>
+    <button
+      type="button"
+      data-testid="agent-chat-start"
+      (click)="startChat.emit(agent())"
+      [disabled]="starting() || !!startBlockedReason()"
+      [attr.title]="startBlockedReason()"
+      class="btn btn-primary"
+    >
+      @if (starting()) {
+        <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+        <span>Starting…</span>
+      } @else {
+        <lucide-angular [img]="MessageSquarePlus" [size]="14" />
+        <span>Start chat</span>
+      }
+    </button>
+  </div>
+}

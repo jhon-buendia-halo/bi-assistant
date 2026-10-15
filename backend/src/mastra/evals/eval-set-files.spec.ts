@@ -71,7 +71,6 @@ import { join } from 'path';
 import { toAssistantEvalSets } from './eval-check-scorers';
 import { isDeterministicCheckType } from './checks';
 import {
-  caseIdsForSet,
   EVAL_CATEGORIES,
   EVAL_SET_FILES,
   EVAL_SPLITS,
@@ -92,6 +91,24 @@ const BEFORE = JSON.parse(
     'utf8',
   ),
 ) as { caseIds: string[]; sets: unknown[] };
+
+/**
+ * What main changed in the snapshot's sets after it was taken: BA-209
+ * dropped the `list_entities` check of the discovery cases (the session
+ * context lists the entities), and BA-217 added two World Cup cases with a
+ * tool selection, which the REST variant repeats.
+ */
+const DROPPED_ON_MAIN: Readonly<Record<string, string[]>> = {
+  'schema-discovery': ['Checks that "list_entities" was called'],
+  'rest-schema-discovery': ['Checks that "list_entities" was called'],
+  'f1-schema-discovery': ['Checks that "list_entities" was called'],
+};
+const ADDED_ON_MAIN = [
+  'no-clarification-best-team',
+  'no-visuals-chart-request',
+  'rest-no-clarification-best-team',
+  'rest-no-visuals-chart-request',
+];
 
 /** The snapshot's shape: what the Evals tab, the runner and the report read. */
 function snapshotOf(sets: ReturnType<typeof toAssistantEvalSets>) {
@@ -125,7 +142,20 @@ describe('eval set files', () => {
     // The sets the snapshot holds, by id: variants added since (R203) sit
     // between them in the suite order.
     const snapshotIds = before.map((set) => set.id);
-    const inSnapshot = sets.filter((set) => snapshotIds.includes(set.id));
+    const current = sets.filter((set) => snapshotIds.includes(set.id));
+    // The cases main added since sit after the moved ones (BA-217).
+    expect(
+      current
+        .flatMap((set) => set.cases)
+        .map((evalCase) => evalCase.id)
+        .filter((id) => !BEFORE.caseIds.includes(id)),
+    ).toEqual(ADDED_ON_MAIN);
+    const inSnapshot = current.map((set) => ({
+      ...set,
+      cases: set.cases.filter(
+        (evalCase) => !ADDED_ON_MAIN.includes(evalCase.id),
+      ),
+    }));
     const moved = snapshotOf(inSnapshot);
     expect(moved.map((set) => set.id)).toEqual(before.map((set) => set.id));
     // Field by field, so a failure names the set, case and field that drifted.
@@ -142,11 +172,19 @@ describe('eval set files', () => {
         expect(evalCase).toEqual(beforeCase);
         // Every check of the snapshot is still there, with the same id and
         // the same arguments (the description carries them); BA-183 only
-        // added checks (agents-evals R125).
+        // added checks (agents-evals R125). The ones main dropped are gone.
+        const dropped = DROPPED_ON_MAIN[evalCase.id] ?? [];
         expect([evalCase.id, scorers]).toEqual([
           evalCase.id,
-          expect.arrayContaining(beforeScorers),
+          expect.arrayContaining(
+            beforeScorers.filter(
+              (scorer) => !dropped.includes(scorer.description),
+            ),
+          ),
         ]);
+        expect(
+          scorers.filter((scorer) => dropped.includes(scorer.description)),
+        ).toEqual([]);
       });
     });
     expect(
@@ -305,9 +343,11 @@ describe('the deterministic checks on the moved sets (agents-evals R125)', () =>
         const deterministic = evalCase.checks
           .map((check) => check.type)
           .filter(isDeterministicCheckType);
+        // A case with a tool selection came from main (BA-217) after the
+        // checks were attached, and keeps the checks it came with.
         expect([evalCase.id, deterministic]).toEqual([
           evalCase.id,
-          BY_CATEGORY[evalCase.category] ?? ANSWER,
+          evalCase.agentTools ? [] : (BY_CATEGORY[evalCase.category] ?? ANSWER),
         ]);
       }
     }
@@ -553,6 +593,20 @@ describe('the set loader refuses an incomplete or inconsistent file', () => {
     ).toThrow(/does not match fixture "world-cup-rest"/);
   });
 
+  it('a tool selection that is not a list of distinct optional tools', () => {
+    const withTools = (agentTools: unknown) => () =>
+      parseEvalSetFile(file({ cases: [evalCase({ agentTools })] }));
+    expect(withTools('visuals')).toThrow(
+      'Eval set file test-set.json, case "c1": "agentTools" must be an array of tool ids (sample_rows, ask_clarification, visuals); leave it out for every tool',
+    );
+    expect(withTools(['visuals', 'run_readonly_sql'])).toThrow(
+      'Eval set file test-set.json, case "c1": agentTools has an unknown tool "run_readonly_sql"; known: sample_rows, ask_clarification, visuals',
+    );
+    expect(withTools(['visuals', 'visuals'])).toThrow(
+      'Eval set file test-set.json, case "c1": agentTools lists "visuals" twice',
+    );
+  });
+
   it('an unknown field, or a variant without its case-id prefix', () => {
     expect(() =>
       parseEvalSetFile(file({ cases: [evalCase({ judgeRubrc: 'x' })] })),
@@ -605,6 +659,67 @@ describe('the set loader expands variants', () => {
       split: 'dev',
       tags: ['rest:dialect'],
     });
+  });
+});
+
+describe('a case tool selection (agents.md 4.2, 8.1)', () => {
+  it('keeps it on every variant, in the order written, and adds none when absent', () => {
+    const [postgres, rest] = parseEvalSetFile(
+      file({
+        variants: [
+          variant(),
+          variant({
+            id: 'test-rest',
+            fixtureId: 'world-cup-rest',
+            dialect: 'sqlite',
+            caseIdPrefix: 'rest-',
+          }),
+        ],
+        cases: [
+          evalCase({ agentTools: ['visuals', 'sample_rows'] }),
+          evalCase({ id: 'c2', agentTools: [] }),
+          evalCase({ id: 'c3' }),
+        ],
+      }),
+    );
+    for (const set of [postgres, rest]) {
+      expect(set.cases.map((c) => c.agentTools)).toEqual([
+        ['visuals', 'sample_rows'],
+        [],
+        undefined,
+      ]);
+      expect(set.cases[2]).not.toHaveProperty('agentTools');
+    }
+  });
+
+  it("reaches the suite's cases: the World Cup file's two selections, on each variant", () => {
+    const prefixes: Record<string, string> = {
+      'world-cup': '',
+      'world-cup-rest': 'rest-',
+      'world-cup-databricks': 'dbx-',
+    };
+    const sets = toAssistantEvalSets(loadEvalSets());
+    for (const [setId, prefix] of Object.entries(prefixes)) {
+      const cases = sets.find((set) => set.id === setId)?.cases ?? [];
+      expect(
+        cases
+          .filter((evalCase) => evalCase.agentTools)
+          .map(({ id, agentTools }) => [id, agentTools]),
+      ).toEqual([
+        [`${prefix}no-clarification-best-team`, ['sample_rows', 'visuals']],
+        [
+          `${prefix}no-visuals-chart-request`,
+          ['sample_rows', 'ask_clarification'],
+        ],
+      ]);
+    }
+    // Every other set file runs its cases with every tool.
+    expect(
+      sets
+        .filter((set) => !(set.id in prefixes))
+        .flatMap((set) => set.cases)
+        .some((evalCase) => evalCase.agentTools),
+    ).toBe(false);
   });
 });
 
@@ -694,19 +809,16 @@ describe('the deterministic checks in a set file (R111, R124)', () => {
   });
 });
 
-describe('choosing one set by id (EVAL_SET)', () => {
+describe('choosing one set by id (EVAL_SET of eval:validate)', () => {
   const sets = loadEvalSets();
 
-  it('selects every case when no set is named, as before', () => {
-    expect(caseIdsForSet(sets, undefined)).toBeUndefined();
-    expect(caseIdsForSet(sets, '  ')).toBeUndefined();
-  });
-
-  it("selects only the named set's case ids", () => {
-    const golden = caseIdsForSet(sets, 'world-cup-golden');
-    expect(golden).toHaveLength(11);
-    expect(golden).toContain('teams-tied-on-four-goals');
-    expect(caseIdsForSet(sets, ' world-cup-rest ')?.[0]).toBe(
+  it('finds the named set, its id trimmed', () => {
+    const golden = evalSetById(sets, 'world-cup-golden');
+    expect(golden.cases).toHaveLength(11);
+    expect(golden.cases.map((evalCase) => evalCase.id)).toContain(
+      'teams-tied-on-four-goals',
+    );
+    expect(evalSetById(sets, ' world-cup-rest ').cases[0].id).toBe(
       'rest-champion-2022',
     );
   });
@@ -716,7 +828,6 @@ describe('choosing one set by id (EVAL_SET)', () => {
     expect(message).toContain(
       'Known sets: world-cup, world-cup-rest, world-cup-databricks, formula-1, world-cup-golden, ',
     );
-    expect(() => caseIdsForSet(sets, 'world-cop')).toThrow(message);
     expect(() => evalSetById(sets, 'world-cop')).toThrow(message);
   });
 });

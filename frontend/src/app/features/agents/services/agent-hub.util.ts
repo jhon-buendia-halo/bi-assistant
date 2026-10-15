@@ -145,10 +145,57 @@ export const NO_DATASETS_LEFT = "None of this agent's datasets exist";
  * run: a user agent none of whose datasets still exist (R53).
  */
 export function startChatBlockedReason(agent: Agent): string | null {
-  if (agentKind(agent) !== 'user') return null;
+  const kind = agentKind(agent);
+  if (kind === 'official') {
+    // An Official agent with a dataset (the RFP Builder) waits for it.
+    return agent.chatRequirement && (agent.missingDatasets ?? []).length > 0
+      ? agent.chatRequirement
+      : null;
+  }
+  if (kind !== 'user') return null;
   const datasets = agent.datasets ?? [];
   const missing = agent.missingDatasets ?? [];
   return datasets.length > 0 && missing.length >= datasets.length
     ? NO_DATASETS_LEFT
     : null;
+}
+
+/**
+ * Whether Start chat opens the New-session composer (the Official agent with
+ * no dataset of its own) rather than creating the session from the agent.
+ */
+export function startsInComposer(agent: Agent): boolean {
+  return agentKind(agent) === 'official' && (agent.datasets ?? []).length === 0;
+}
+
+/** The assistant's entry in the New conversation screen's Agent picker. */
+export const ASSISTANT_PICKER_KEY = 'assistant';
+export const ASSISTANT_PICKER_DESCRIPTION =
+  'Answers questions over the datasets you pick.';
+
+export interface NewSessionAgentOption {
+  agent: Agent;
+  /** Why it cannot start a chat now, or null when it can. */
+  disabledReason: string | null;
+}
+
+/**
+ * The agents the New conversation screen offers besides the assistant
+ * (sessions-chat R64): Official agents that bring their own dataset (today the
+ * RFP Builder), then Live user agents, each group alphabetical. System agents,
+ * drafts and the assistant itself are left out; one that cannot start a chat
+ * now stays listed with its reason.
+ */
+export function newSessionAgentOptions(
+  agents: Agent[],
+): NewSessionAgentOption[] {
+  const startable = agents.filter(
+    (agent) => canStartChat(agent) && !startsInComposer(agent),
+  );
+  const group = (kind: AgentKind) =>
+    startable.filter((agent) => agentKind(agent) === kind).sort(byName);
+  return [...group('official'), ...group('user')].map((agent) => ({
+    agent,
+    disabledReason: startChatBlockedReason(agent),
+  }));
 }
