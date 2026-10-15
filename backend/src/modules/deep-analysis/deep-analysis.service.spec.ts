@@ -9,7 +9,6 @@ import {
   reportMarkdown,
 } from './deep-analysis.service';
 import type { ChatMessage } from '../sessions/entities/session.entity';
-import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
 import * as appSkills from '../../mastra/app-skills';
 
 const SESSION = {
@@ -44,14 +43,11 @@ function finding(n: number) {
   };
 }
 
-/** Who the tests run as; nobody is signed in outside `runAs` (ADR-0012). */
-const users = new CurrentUserService();
-
-/** A test body run as Demo User, as a signed-in request would. */
+/** A test body, kept as a wrapper so the cases read as before. */
 const asDemoUser =
   <T>(fn: () => Promise<T>) =>
   (): Promise<T> =>
-    users.runAs(LOCAL_USER, fn);
+    fn();
 
 /** A service wired to one job, with the agent and the workspace stubbed. */
 function build(responses: unknown[], options: { plannerFails?: boolean } = {}) {
@@ -86,12 +82,8 @@ function build(responses: unknown[], options: { plannerFails?: boolean } = {}) {
         return Promise.resolve(SESSION);
       }),
   };
-  const service = new DeepAnalysisService(
-    sessions as never,
-    mastra as never,
-    users,
-  );
-  return { service, generate, filesystem, sessions, appended, users };
+  const service = new DeepAnalysisService(sessions as never, mastra as never);
+  return { service, generate, filesystem, sessions, appended };
 }
 
 /** Let the in-process job run to completion (or failure). */
@@ -114,35 +106,20 @@ async function startJob(service: DeepAnalysisService): Promise<string> {
 }
 
 describe('DeepAnalysisService', () => {
-  it('keeps a job private to the user who started it, and runs it as them (admin R30, R32)', async () => {
-    const { service, sessions, users } = build([
+  it("answers not found for an unknown job and for another session's job", async () => {
+    const { service } = build([
       PLAN,
       finding(1),
       finding(2),
       finding(3),
       REPORT,
     ]);
-    const ada = { ...LOCAL_USER, id: 'ada' };
-    const bob = { ...LOCAL_USER, id: 'bob' };
-    const seenBy: (string | undefined)[] = [];
-    sessions.backgroundAgentOptions.mockImplementation(() => {
-      seenBy.push(users.current()?.id);
-      return Promise.resolve({ maxSteps: 15, context: [], requestContext: {} });
-    });
+    const jobId = await startJob(service);
 
-    const jobId = await users.runAs(ada, () => startJob(service));
-
-    expect(() =>
-      users.runAs(bob, () => service.status(SESSION.id, jobId)),
-    ).toThrow('not found');
-    // Demo User is scoped like anyone; outside a request nobody is signed in.
-    expect(() =>
-      users.runAs(LOCAL_USER, () => service.status(SESSION.id, jobId)),
-    ).toThrow('not found');
-    expect(() => service.status(SESSION.id, jobId)).toThrow('Sign in required');
-    await users.runAs(ada, () => settle(service, jobId));
-    expect(seenBy).toHaveLength(5);
-    expect(new Set(seenBy)).toEqual(new Set(['ada']));
+    expect(() => service.status(SESSION.id, 'nope')).toThrow('not found');
+    expect(() => service.status('other-session', jobId)).toThrow('not found');
+    await settle(service, jobId);
+    expect(service.status(SESSION.id, jobId).status).toBe('done');
   });
 
   it(

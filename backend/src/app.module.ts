@@ -14,14 +14,11 @@ import { DeepAnalysisModule } from './modules/deep-analysis/deep-analysis.module
 import { TestingDataModule } from './modules/testing-data/testing-data.module';
 import { DeveloperSettingsModule } from './modules/developer-settings/developer-settings.module';
 import { UiPreferencesModule } from './modules/ui-preferences/ui-preferences.module';
-import { AuthModule } from './modules/auth/auth.module';
-import { AdminModule } from './modules/admin/admin.module';
 import { SkillsModule } from './modules/skills/skills.module';
 
 @Module({
   imports: [
     DatabaseModule,
-    AuthModule,
     DatasourcesModule,
     LlmModule,
     DatasetsModule,
@@ -37,7 +34,6 @@ import { SkillsModule } from './modules/skills/skills.module';
     TestingDataModule,
     DeveloperSettingsModule,
     UiPreferencesModule,
-    AdminModule,
   ],
   controllers: [],
   providers: [],

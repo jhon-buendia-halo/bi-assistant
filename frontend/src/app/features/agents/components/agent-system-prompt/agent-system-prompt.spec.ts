@@ -6,7 +6,6 @@ import {
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { API_BASE_URL } from '../../../../core/config/api.config';
 import { ToastService } from '../../../../core/toast/toast.service';
-import { AuthService } from '../../../../core/auth/auth.service';
 import { AgentPageState } from '../../services/agent-page-state.service';
 import { AgentDetail } from '../../services/agents-api.service';
 import { SkillSummary } from '../../services/skills-api.service';
@@ -51,7 +50,6 @@ describe('AgentSystemPrompt', () => {
     }).compileComponents();
     http = TestBed.inject(HttpTestingController);
     toast = TestBed.inject(ToastService);
-    spyOn(TestBed.inject(AuthService), 'can').and.returnValue(true);
     fixture = TestBed.createComponent(AgentSystemPrompt);
     component = fixture.componentInstance;
     fixture.componentRef.setInput('agent', agent);

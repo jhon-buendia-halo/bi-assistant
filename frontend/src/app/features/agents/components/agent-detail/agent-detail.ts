@@ -47,7 +47,6 @@ import {
   startChatBlockedReason,
 } from '../../services/agent-hub.util';
 import { ToastService } from '../../../../core/toast/toast.service';
-import { AuthService } from '../../../../core/auth/auth.service';
 import {
   Datasource,
   kindLabel,
@@ -127,7 +126,6 @@ export class AgentDetail implements OnDestroy {
   private readonly datasourcesApi = inject(DatasourcesApiService);
   private readonly evalSelection = inject(EvalSelectionService);
   private readonly toast = inject(ToastService);
-  private readonly auth = inject(AuthService);
   private readonly pageState = inject(AgentPageState);
 
   readonly selectedEvalCaseId = computed(
@@ -370,7 +368,7 @@ export class AgentDetail implements OnDestroy {
    * Create agents (admin R25; ui.md 1.6): Edit, Publish and Delete, and in
    * the Evals tab running questions and the Executions sub-tab.
    */
-  readonly canCreateAgents = computed(() => this.auth.can('create-agents'));
+  readonly canCreateAgents = computed(() => true);
 
   /** Edit and Delete on a user agent. */
   readonly canChange = computed(

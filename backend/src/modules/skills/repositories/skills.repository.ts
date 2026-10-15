@@ -1,16 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { OWNED_SKILLS_STORE } from '../../../infrastructure/database/doc-store';
+import { SKILLS_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
 import type { SkillDoc } from '../entities/skill.entity';
 
 /**
- * In-app skills (the `skills` collection), by name. Owner-scoped: each user
- * sees only their own (data-model 3.15).
+ * In-app skills (the `skills` collection), by name.
  */
 @Injectable()
 export class SkillsRepository {
   constructor(
-    @Inject(OWNED_SKILLS_STORE) private readonly store: DocStore<SkillDoc>,
+    @Inject(SKILLS_STORE) private readonly store: DocStore<SkillDoc>,
   ) {}
 
   list(): Promise<SkillDoc[]> {

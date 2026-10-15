@@ -12,12 +12,6 @@ import { createConnection } from 'node:net';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {
-  LOCAL_SESSION_KEY,
-  LOCAL_USERS,
-  localUserSelect,
-  signInLocally,
-} from '../helpers/local-auth';
 
 /**
  * Which app the suite drives. `web` (the default, see the Test target
@@ -37,14 +31,6 @@ export interface RunningApp {
    * and reloads the page (the browser equivalent of "Restart backend").
    */
   restartCli(): Promise<void>;
-  /**
-   * Local mode: signs in as the persona `userId` through the API (admin
-   * R71), stores the token where the app keeps it, reloads and waits for
-   * the shell. Replaces whoever was signed in.
-   */
-  signInAs(userId: string): Promise<void>;
-  /** Signs out through the account menu and waits for the sign-in page. */
-  signOut(): Promise<void>;
   close(): Promise<void>;
   /** Everything the app process wrote, for failure attachments. */
   output(): { stdout: string; stderr: string };
@@ -57,15 +43,7 @@ export interface RunningApp {
 
 export type Env = Record<string, string | undefined>;
 
-/** How `launchApp` signs in (local mode, admin R70-R71). */
-export interface SignInOptions {
-  /** Sign in before the test starts; default true. */
-  autoSignIn: boolean;
-  /** The persona to sign in as; default Demo User (`local`). */
-  autoSignInAs: string;
-}
-
-interface AppFixtures extends SignInOptions {
+interface AppFixtures {
   appDataDir: string;
   app: RunningApp;
   page: Page;
@@ -104,44 +82,21 @@ async function waitForShell(page: Page): Promise<void> {
   await expect(page.getByLabel('Open system logs')).toBeVisible();
 }
 
-/** Waits until the app shows the shell or the local sign-in page. */
-async function waitForShellOrSignIn(page: Page): Promise<void> {
-  await page.waitForLoadState('domcontentloaded');
-  await expect(
-    page.getByLabel('Open system logs').or(localUserSelect(page)),
-  ).toBeVisible();
-}
-
-/** Stores `token` as the app's local auth session and reloads. */
-async function storeTokenAndReload(page: Page, token: string): Promise<void> {
-  await page.evaluate(
-    ([key, value]) => localStorage.setItem(key, value),
-    [LOCAL_SESSION_KEY, token] as const,
-  );
-  await page.reload();
-  await waitForShell(page);
-}
-
-/** Signs out through the account menu (admin R10, R71). */
-async function signOutThroughMenu(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Account menu', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click();
-  await expect(localUserSelect(page)).toBeVisible();
-}
-
-/** Resolves once the desktop backend on port 3000 answers `GET /me`. */
+/** Resolves once the desktop backend on port 3000 answers `GET /sessions`. */
 async function waitForDesktopBackend(): Promise<void> {
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
     try {
-      const res = await fetch('http://localhost:3000/me');
-      if (res.status === 200 || res.status === 401) return;
+      const res = await fetch('http://localhost:3000/sessions');
+      if (res.status === 200) return;
     } catch {
       // Not listening yet.
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  throw new Error('The desktop backend did not answer GET /me within 90 s');
+  throw new Error(
+    'The desktop backend did not answer GET /sessions within 90 s',
+  );
 }
 
 /** True when something accepts connections on `port`. */
@@ -165,7 +120,6 @@ function portIsOpen(port: number): Promise<boolean> {
 async function launchDesktop(
   appDataDir: string,
   env: Env,
-  signIn: SignInOptions,
 ): Promise<RunningApp> {
   // The desktop app's backend always listens on 3000.
   if (await portIsOpen(3000)) {
@@ -187,13 +141,8 @@ async function launchDesktop(
   electronApp.process().stdout?.on('data', (c) => stdout.push(String(c)));
   electronApp.process().stderr?.on('data', (c) => stderr.push(String(c)));
   const page = await electronApp.firstWindow();
-  const signInAs = async (userId: string) => {
-    await waitForDesktopBackend();
-    const token = await signInLocally('http://localhost:3000', userId);
-    await storeTokenAndReload(page, token);
-  };
-  await waitForShellOrSignIn(page);
-  if (signIn.autoSignIn) await signInAs(signIn.autoSignInAs);
+  await waitForDesktopBackend();
+  await waitForShell(page);
   return {
     target: 'desktop',
     page,
@@ -202,8 +151,6 @@ async function launchDesktop(
       Promise.reject(
         new Error('restartCli() is web only; click "Restart backend" instead'),
       ),
-    signInAs,
-    signOut: () => signOutThroughMenu(page),
     close: () => electronApp.close(),
     output: () => ({ stdout: stdout.join(''), stderr: stderr.join('') }),
   };
@@ -295,34 +242,14 @@ async function launchWeb(
   browser: Browser,
   appDataDir: string,
   env: Env,
-  signIn: SignInOptions,
 ): Promise<RunningApp> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   let cli = await startCli(appDataDir, env, 0, stdout, stderr);
   const context = await browser.newContext({ viewport: WINDOW_SIZE });
-  if (signIn.autoSignIn) {
-    const token = await signInLocally(cli.url, signIn.autoSignInAs);
-    // Stored before the app's first load, once per tab: a later sign-out or
-    // sign-in in the test is not undone by a reload.
-    await context.addInitScript(
-      ({ key, value, origin }) => {
-        try {
-          if (window.location.origin !== origin) return;
-          if (sessionStorage.getItem('e2e:local-session-seeded')) return;
-          localStorage.setItem(key, value);
-          sessionStorage.setItem('e2e:local-session-seeded', '1');
-        } catch {
-          // No storage on this document (about:blank).
-        }
-      },
-      { key: LOCAL_SESSION_KEY, value: token, origin: new URL(cli.url).origin },
-    );
-  }
   const page = await context.newPage();
   await page.goto(cli.url);
-  if (signIn.autoSignIn) await waitForShell(page);
-  else await waitForShellOrSignIn(page);
+  await waitForShell(page);
   return {
     target: 'web',
     page,
@@ -330,12 +257,8 @@ async function launchWeb(
       await stopCli(cli.child);
       cli = await startCli(appDataDir, env, cli.port, stdout, stderr);
       await page.reload();
-      await waitForShellOrSignIn(page);
+      await waitForShell(page);
     },
-    async signInAs(userId) {
-      await storeTokenAndReload(page, await signInLocally(cli.url, userId));
-    },
-    signOut: () => signOutThroughMenu(page),
     async close() {
       await context.close();
       await stopCli(cli.child);
@@ -369,8 +292,6 @@ async function attachOutput(
 
 export const test = base.extend<AppFixtures, WorkerFixtures>({
   target: ['web', { option: true, scope: 'worker' }],
-  autoSignIn: [true, { option: true }],
-  autoSignInAs: [LOCAL_USERS.demo, { option: true }],
 
   webBrowser: [
     async ({ playwright }, use) => {
@@ -397,18 +318,13 @@ export const test = base.extend<AppFixtures, WorkerFixtures>({
     fs.rmSync(directory, { recursive: true, force: true });
   },
 
-  launchApp: async (
-    { target, webBrowser, autoSignIn, autoSignInAs },
-    use,
-    testInfo,
-  ) => {
+  launchApp: async ({ target, webBrowser }, use, testInfo) => {
     const launched: RunningApp[] = [];
-    const signIn: SignInOptions = { autoSignIn, autoSignInAs };
     await use(async (appDataDir, env = {}) => {
       const app =
         target === 'desktop'
-          ? await launchDesktop(appDataDir, env, signIn)
-          : await launchWeb(await webBrowser(), appDataDir, env, signIn);
+          ? await launchDesktop(appDataDir, env)
+          : await launchWeb(await webBrowser(), appDataDir, env);
       launched.push(app);
       return app;
     });

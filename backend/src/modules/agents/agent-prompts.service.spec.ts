@@ -19,7 +19,6 @@ jest.mock('@mastra/core/agent', () => ({ Agent: class {} }));
 
 import { RequestMethod } from '@nestjs/common';
 import BetterSqlite3 from 'better-sqlite3';
-import { AUTH_REQUIREMENT_KEY } from '../../common/decorators/auth-requirement.decorators';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import {
   agentPromptOverrideFor,
@@ -30,7 +29,6 @@ import {
   agentPromptHash,
   shippedAgentPrompt,
 } from '../../mastra/shipped-agent-prompts';
-import { CurrentUserService } from '../auth/current-user.service';
 import type { UserAgentsService } from '../user-agents/user-agents.service';
 import { AgentPromptsService } from './agent-prompts.service';
 import { AgentsController } from './agents.controller';
@@ -55,7 +53,6 @@ function build() {
   );
   const service = new AgentPromptsService(
     new AgentPromptOverridesRepository(store),
-    new CurrentUserService(),
     { listAgents: () => REGISTRY } as unknown as MastraService,
     {
       get: (id: string) => Promise.resolve(id === 'user-1' ? { id } : null),
@@ -87,7 +84,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
     });
     // Its detail shows the links as written, for the chips and the Graph tab.
     expect((await service.view('rfp'))?.editable).toContain(
-      '1 client and renewal — [[skill:rfp-client-renewal]]',
+      '1. Client and renewal — [[skill:rfp-client-renewal]]',
     );
     expect((await service.view('rfp'))?.editable).toContain('[[tool:get_rfp]]');
     expect(await service.view('user-1')).toBeUndefined();
@@ -296,12 +293,6 @@ describe('AgentPromptsService (ADR-0026)', () => {
 });
 
 describe('AgentsController prompt routes (api.md 103-104)', () => {
-  const requirement = (method: keyof AgentsController) =>
-    Reflect.getMetadata(
-      AUTH_REQUIREMENT_KEY,
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      AgentsController.prototype[method],
-    ) as unknown;
   const route = (method: keyof AgentsController) => ({
     path: Reflect.getMetadata(
       'path',
@@ -313,13 +304,6 @@ describe('AgentsController prompt routes (api.md 103-104)', () => {
       // eslint-disable-next-line @typescript-eslint/unbound-method
       AgentsController.prototype[method],
     ) as unknown,
-  });
-
-  it('needs edit-policies to save or reset, and keeps reading on use-agents', () => {
-    const need = (permission: string) => ({ kind: 'permission', permission });
-    expect(requirement('savePrompt')).toEqual(need('edit-policies'));
-    expect(requirement('resetPrompt')).toEqual(need('edit-policies'));
-    expect(requirement('get')).toEqual(need('use-agents'));
   });
 
   it('declares PUT and DELETE :key/prompt', () => {

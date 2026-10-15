@@ -6,12 +6,11 @@
 
   <div class="mt-4 flex flex-wrap items-center gap-3">
     <h2
-      class="min-w-0 truncate text-[24px] leading-8 font-light tracking-[0.12px] text-fg-strong"
+      class="min-w-0 truncate text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
     >
       {{ editor.title() }}
     </h2>
-    @if (auth.can("create-agents")) {
-      <div class="ml-auto flex shrink-0 items-center gap-2">
+          <div class="ml-auto flex shrink-0 items-center gap-2">
         @if (editor.skillId() !== null) {
           <button
             type="button"
@@ -40,7 +39,7 @@
           }
         </button>
       </div>
-    }
+    
   </div>
 
   @if (editor.loading()) {

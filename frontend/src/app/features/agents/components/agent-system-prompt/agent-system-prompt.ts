@@ -15,7 +15,6 @@ import {
   Pencil,
   RotateCcw,
 } from 'lucide-angular';
-import { AuthService } from '../../../../core/auth/auth.service';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { AGENT_FIELD_LIMITS } from '../../services/agent-editor.util';
 import { AgentPageState } from '../../services/agent-page-state.service';
@@ -34,7 +33,10 @@ import {
   knownLinks,
   linkableBuiltInSkills,
 } from '../../services/prompt-links';
-import { BuiltInSkillSummary, SkillSummary } from '../../services/skills-api.service';
+import {
+  BuiltInSkillSummary,
+  SkillSummary,
+} from '../../services/skills-api.service';
 import {
   officialLinkSkills,
   officialLinkTools,
@@ -62,8 +64,6 @@ export class AgentSystemPrompt implements OnDestroy {
   private readonly api = inject(AgentsApiService);
   private readonly toast = inject(ToastService);
   private readonly pageState = inject(AgentPageState);
-  readonly auth = inject(AuthService);
-
   readonly agent = input.required<AgentDetail>();
   /** The owner's skills; null while loading, which disables Edit. */
   readonly library = input<SkillSummary[] | null>(null);
@@ -96,16 +96,12 @@ export class AgentSystemPrompt implements OnDestroy {
 
   private readonly agentKey = computed(() => this.agent().key);
   readonly isUserAgent = computed(() => this.agent().kind === 'user');
-  readonly canEdit = computed(
-    () => this.isUserAgent() && this.auth.can('create-agents'),
-  );
+  readonly canEdit = computed(() => this.isUserAgent() && true);
   /** A built-in agent's shared prompt (BA-224); the backend sends `prompt`. */
   readonly builtIn = computed(() =>
     this.isUserAgent() ? null : (this.agent().prompt ?? null),
   );
-  readonly canEditBuiltIn = computed(
-    () => this.builtIn() !== null && this.auth.can('edit-policies'),
-  );
+  readonly canEditBuiltIn = computed(() => this.builtIn() !== null && true);
   /** The built-in on-demand skills a prompt can link, as `/` menu entries. */
   readonly linkableSkills = computed(() =>
     linkableBuiltInSkills(this.builtInSkills()),
@@ -239,22 +235,24 @@ export class AgentSystemPrompt implements OnDestroy {
     const config = agent.draft ?? agent.live;
     if (!config || !this.canSave()) return;
     this.saving.set(true);
-    this.api.saveDraft(agent.key, promptSaveInput(config, this.draft())).subscribe({
-      next: (res) => {
-        this.saving.set(false);
-        if (!res.ok) {
-          this.toast.error(res.message);
-          return;
-        }
-        this.toast.success('Draft saved');
-        this.stop();
-        this.saved.emit();
-      },
-      error: (err) => {
-        this.saving.set(false);
-        this.toast.error(err?.error?.message ?? 'Backend unreachable');
-      },
-    });
+    this.api
+      .saveDraft(agent.key, promptSaveInput(config, this.draft()))
+      .subscribe({
+        next: (res) => {
+          this.saving.set(false);
+          if (!res.ok) {
+            this.toast.error(res.message);
+            return;
+          }
+          this.toast.success('Draft saved');
+          this.stop();
+          this.saved.emit();
+        },
+        error: (err) => {
+          this.saving.set(false);
+          this.toast.error(err?.error?.message ?? 'Backend unreachable');
+        },
+      });
   }
 
   ngOnDestroy(): void {

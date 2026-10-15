@@ -2,7 +2,6 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
-import { AuthService } from '../../../core/auth/auth.service';
 import {
   KnowledgeSnippet,
   KnowledgeSnippetInput,
@@ -31,7 +30,6 @@ export interface KnowledgeBootstrapProgress {
 @Injectable({ providedIn: 'root' })
 export class KnowledgeApiService {
   private readonly http = inject(HttpClient);
-  private readonly auth = inject(AuthService);
 
   list(query: KnowledgeQuery = {}): Observable<KnowledgeSnippet[]> {
     let params = new HttpParams();
@@ -92,7 +90,6 @@ export class KnowledgeApiService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...this.auth.authHeaders(),
         },
         body: JSON.stringify({ datasetId }),
         signal,
@@ -108,11 +105,7 @@ export class KnowledgeApiService {
       return;
     }
     if (!res.ok || !res.body) {
-      // A streamed fetch bypasses the HTTP interceptor (401, 403: ui.md 1.6).
-      handlers.onError?.(
-        this.auth.refusalOf(res.status) ??
-          `Could not generate suggestions (${res.status})`,
-      );
+      handlers.onError?.(`Could not generate suggestions (${res.status})`);
       return;
     }
     const reader = res.body.getReader();

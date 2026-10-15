@@ -1,6 +1,6 @@
 import { expect, Page } from '@playwright/test';
 import { WORLD_CUP_DATASET, WORLD_CUP_DATASOURCE } from './app-actions';
-import { apiBaseOf, authHeaders } from './local-auth';
+import { apiBaseOf } from './api';
 import { WORLD_CUP_DB, worldCupKey } from './world-cup-db';
 
 /**
@@ -27,8 +27,6 @@ async function call<T extends StyleA>(
   const response = await page.request.fetch(`${apiBase(page)}${path}`, {
     method,
     data,
-    // The page's local auth session (admin R71).
-    headers: await authHeaders(page),
   });
   expect(response.ok(), `${method} ${path} → HTTP ${response.status()}`).toBe(
     true,
@@ -157,7 +155,6 @@ export async function createKnowledgeSnippet(
   const response = await page.request.fetch(`${apiBase(page)}/knowledge`, {
     method: 'POST',
     data: { ...snippet, scope: datasetId ? { datasetId } : null },
-    headers: await authHeaders(page),
   });
   expect(response.status(), `POST /knowledge → HTTP ${response.status()}`).toBe(
     201,

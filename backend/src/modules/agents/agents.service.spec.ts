@@ -13,7 +13,6 @@ import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
-import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
 import { BuiltinAgentPinsRepository } from '../user-agents/repositories/builtin-agent-pins.repository';
 import type { SkillDoc } from '../skills/entities/skill.entity';
 import { SkillsRepository } from '../skills/repositories/skills.repository';
@@ -59,21 +58,18 @@ function fakeAgent(name: string, tools: string[], instructions = '') {
   };
 }
 
-/** Who the tests run as; nobody is signed in outside `runAs` (ADR-0012). */
-const users = new CurrentUserService();
-
-/** A test body run as Demo User, as a signed-in request would. */
+/** A test body, kept as a wrapper so the cases read as before. */
 const asDemoUser =
   <T>(fn: () => Promise<T>) =>
   (): Promise<T> =>
-    users.runAs(LOCAL_USER, fn);
+    fn();
 
 function build() {
   const db = new BetterSqlite3(':memory:');
   const skills = new SqliteDocStore<SkillDoc>(db, 'skills');
   const userAgents = new UserAgentsService(
     new UserAgentsRepository(new SqliteDocStore(db, 'agents')),
-    new BuiltinAgentPinsRepository(new SqliteDocStore(db, 'settings'), users),
+    new BuiltinAgentPinsRepository(new SqliteDocStore(db, 'settings')),
     {
       list: jest.fn().mockResolvedValue([{ name: 'World Cup Core' }]),
     } as unknown as DatasetsRepository,
@@ -509,7 +505,9 @@ describe('AgentsService (built-in and user agents)', () => {
           'list_entities',
           'run_readonly_sql',
           'sample_rows',
+          'show_in_panel',
           'update_visual',
+          'update_workflow',
         ]);
         expect(link(detail, 'sample_rows')).toEqual({
           name: 'sample_rows',
@@ -585,10 +583,7 @@ describe('AgentsService (built-in and user agents)', () => {
         { listAgents: () => registry } as unknown as MastraService,
         new UserAgentsService(
           new UserAgentsRepository(new SqliteDocStore(db, 'agents')),
-          new BuiltinAgentPinsRepository(
-            new SqliteDocStore(db, 'settings'),
-            users,
-          ),
+          new BuiltinAgentPinsRepository(new SqliteDocStore(db, 'settings')),
           {
             list: jest.fn().mockResolvedValue([{ name: 'World Cup Core' }]),
           } as unknown as DatasetsRepository,
@@ -596,7 +591,7 @@ describe('AgentsService (built-in and user agents)', () => {
         ),
         llm as never,
       );
-      await users.runAs(LOCAL_USER, async () => {
+      {
         expect((await service.get('assistant'))?.llm).toEqual({
           provider: 'openai',
           providerName: 'OpenAI',
@@ -633,7 +628,7 @@ describe('AgentsService (built-in and user agents)', () => {
           maxOutputTokens: null,
           reasoningEffort: null,
         });
-      });
+      }
       db.close();
     });
   });

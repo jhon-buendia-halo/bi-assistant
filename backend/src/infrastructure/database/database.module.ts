@@ -1,16 +1,10 @@
 import { Global, Module, Provider } from '@nestjs/common';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
-import { loadOrgServerConfig } from '../../config/org-server.config';
+import { SUPER_ADMIN } from '../../common/super-admin';
+import { resolveSkillLinkNames } from '../../mastra/agent-links';
 import {
-  ACTIVITY_EVENTS_STORE,
   AGENTS_STORE,
-  AUTH_SESSIONS_STORE,
-  GROUP_MEMBERS_STORE,
-  GROUP_ROLE_MAPPINGS_STORE,
-  GROUPS_STORE,
-  ROLE_ASSIGNMENTS_STORE,
-  USERS_STORE,
   CONNECTIONS_STORE,
   DATASOURCE_INVENTORIES_STORE,
   DOC_STORE_TRANSACTIONS,
@@ -19,7 +13,6 @@ import {
   KNOWLEDGE_STORE,
   SESSIONS_STORE,
   DATASETS_STORE,
-  PRIVATE_COLLECTIONS,
   SETTINGS_STORE,
   SKILLS_STORE,
   AGENT_PROMPT_OVERRIDES_STORE,
@@ -54,13 +47,6 @@ const COLLECTIONS = [
   { token: SKILLS_STORE, table: 'skills' },
   { token: SKILL_OVERRIDES_STORE, table: 'skill_overrides' },
   { token: AGENT_PROMPT_OVERRIDES_STORE, table: 'agent_prompt_overrides' },
-  { token: USERS_STORE, table: 'users' },
-  { token: GROUPS_STORE, table: 'groups' },
-  { token: GROUP_MEMBERS_STORE, table: 'group_members' },
-  { token: ROLE_ASSIGNMENTS_STORE, table: 'role_assignments' },
-  { token: GROUP_ROLE_MAPPINGS_STORE, table: 'group_role_mappings' },
-  { token: AUTH_SESSIONS_STORE, table: 'auth_sessions' },
-  { token: ACTIVITY_EVENTS_STORE, table: 'activity_events' },
 ];
 
 const sqliteDbProvider: Provider = {
@@ -73,7 +59,7 @@ const sqliteDbProvider: Provider = {
     const db = new BetterSqlite3(join(DATA_DIR, 'app.sqlite'));
     renameLegacyTables(db);
     renameLegacyFields(db);
-    if (isLocalMode()) backfillLocalOwners(db);
+    consolidateOwners(db);
     return db;
   },
 };
@@ -137,52 +123,71 @@ export function renameLegacyFields(
   }
 }
 
+/** The collections whose documents carry an `ownerId` (data-model 3.15). */
+const PRIVATE_TABLES = [
+  'sessions',
+  'verified_queries',
+  'metrics',
+  'eval_runs',
+  'knowledge_snippets',
+  'agents',
+  'skills',
+];
+
+/** The per-user `settings` keys, kept as one bare-key document each. */
+const PER_USER_SETTINGS_KEYS = ['ui-preferences', 'builtin-agent-pins'];
+
+/** The identity and access tables of the removed org / local-persona modes. */
+const IDENTITY_TABLES = [
+  'users',
+  'groups',
+  'group_members',
+  'role_assignments',
+  'group_role_mappings',
+  'auth_sessions',
+  'activity_events',
+];
+
+const SKILL_NAME_MAX = 64;
+
+type Db = import('better-sqlite3').Database;
+
 /**
- * Local mode only: no org server configuration. A partial configuration is
- * the auth module's startup error to report, so it counts as org here and
- * M13 never runs on what may be an org server's data.
+ * M14 (data-model 6; ADR-0030): one built-in super admin owns everything.
+ * Replaces M13. Raw SQL, so `updatedAt` is not restamped; idempotent; one
+ * transaction.
+ *
+ * 1. A skill whose name another owner already holds under `local` is renamed
+ *    `<name>-2`, `-3`... (names are unique per collection now), and
+ *    `[[skill:<old>]]` links in the draft and live instructions of its former
+ *    owner's agents (and the name in their Live skill copies) follow it.
+ * 2. Every document of the private collections gets `ownerId: "local"`.
+ * 3. `ui-preferences:local` / `builtin-agent-pins:local` become the bare keys
+ *    when the bare key is absent; every other user's copy is deleted.
+ * 4. The seven identity tables are dropped.
  */
-function isLocalMode(): boolean {
-  try {
-    return loadOrgServerConfig() === null;
-  } catch {
-    return false;
-  }
+export function consolidateOwners(db: Db): void {
+  db.transaction(() => {
+    renameClashingSkills(db);
+    for (const table of PRIVATE_TABLES) {
+      if (!tableExists(db, table)) continue;
+      db.prepare(
+        `UPDATE "${table}"
+            SET doc = json_set(doc, '$.ownerId', ?)
+          WHERE json_extract(doc, '$.ownerId') IS NULL
+             OR json_extract(doc, '$.ownerId') != ?`,
+      ).run(SUPER_ADMIN.id, SUPER_ADMIN.id);
+    }
+    consolidateSettings(db);
+    for (const table of IDENTITY_TABLES) {
+      db.prepare(`DROP TABLE IF EXISTS "${table}"`).run();
+    }
+  })();
 }
 
-/** The private collections' tables (data-model 3.15), for M13. */
-const PRIVATE_TABLES: string[] = PRIVATE_COLLECTIONS.map(
-  (p) => COLLECTIONS.find((c) => c.token === p.raw)!.table,
-);
-
-/** Demo User's id: local data from before sign-in becomes theirs (M13). */
-const DEMO_USER_ID = 'local';
-
-/** The per-user `settings` keys local mode stored without a user suffix. */
-const LEGACY_SETTINGS_KEYS = ['ui-preferences', 'builtin-agent-pins'];
-
-/**
- * M13 (data-model 6; ADR-0012): local data stored before local mode had
- * sign-in belongs to Demo User. Gives every ownerless document of the
- * private collections `ownerId: "local"`, and renames the bare per-user
- * settings keys to Demo User's, each only when the suffixed key is absent.
- * Raw SQL, so `updatedAt` is not restamped; idempotent. Run in local mode
- * only, so ownerless documents on an org server stay invisible (3.15).
- */
-export function backfillLocalOwners(
-  db: import('better-sqlite3').Database,
-): void {
-  for (const table of PRIVATE_TABLES) {
-    if (!tableExists(db, table)) continue;
-    db.prepare(
-      `UPDATE "${table}"
-          SET doc = json_set(doc, '$.ownerId', ?)
-        WHERE json_extract(doc, '$.ownerId') IS NULL`,
-    ).run(DEMO_USER_ID);
-  }
+function consolidateSettings(db: Db): void {
   if (!tableExists(db, 'settings')) return;
-  for (const key of LEGACY_SETTINGS_KEYS) {
-    const suffixed = `${key}:${DEMO_USER_ID}`;
+  for (const key of PER_USER_SETTINGS_KEYS) {
     db.prepare(
       `UPDATE settings
           SET doc = json_set(doc, '$.key', ?)
@@ -190,7 +195,96 @@ export function backfillLocalOwners(
           AND NOT EXISTS (
             SELECT 1 FROM settings WHERE json_extract(doc, '$.key') = ?
           )`,
-    ).run(suffixed, key, suffixed);
+    ).run(key, `${key}:${SUPER_ADMIN.id}`, key);
+    db.prepare(
+      `DELETE FROM settings WHERE json_extract(doc, '$.key') LIKE ? ESCAPE '\\'`,
+    ).run(`${key}:%`);
+  }
+}
+
+function renameClashingSkills(db: Db): void {
+  if (!tableExists(db, 'skills')) return;
+  const rows = db
+    .prepare(
+      `SELECT rid,
+              json_extract(doc, '$.id') AS id,
+              json_extract(doc, '$.name') AS name,
+              json_extract(doc, '$.ownerId') AS owner
+         FROM skills
+        ORDER BY json_extract(doc, '$.createdAt'), rid`,
+    )
+    .all() as {
+    rid: number;
+    id: string;
+    name: string;
+    owner: string | null;
+  }[];
+  const taken = new Set<string>();
+  for (const row of rows) {
+    if (typeof row.name !== 'string') continue;
+    if (row.owner === null || row.owner === SUPER_ADMIN.id) {
+      taken.add(row.name);
+    }
+  }
+  // Former owner -> old name -> new name.
+  const renames = new Map<string, Map<string, string>>();
+  const renamedIds = new Map<string, string>();
+  for (const row of rows) {
+    if (typeof row.name !== 'string') continue;
+    if (row.owner === null || row.owner === SUPER_ADMIN.id) continue;
+    if (!taken.has(row.name)) {
+      taken.add(row.name);
+      continue;
+    }
+    let next = row.name;
+    for (let n = 2; taken.has(next) || next === row.name; n++) {
+      const suffix = `-${n}`;
+      next = row.name.slice(0, SKILL_NAME_MAX - suffix.length) + suffix;
+    }
+    taken.add(next);
+    db.prepare(
+      `UPDATE skills SET doc = json_set(doc, '$.name', ?) WHERE rid = ?`,
+    ).run(next, row.rid);
+    if (!renames.has(row.owner)) renames.set(row.owner, new Map());
+    renames.get(row.owner)!.set(row.name, next);
+    renamedIds.set(`${row.owner}/${row.id}`, next);
+  }
+  if (!renames.size || !tableExists(db, 'agents')) return;
+  const agents = db.prepare(`SELECT rid, doc FROM agents`).all() as {
+    rid: number;
+    doc: string;
+  }[];
+  for (const { rid, doc } of agents) {
+    const agent = JSON.parse(doc) as {
+      ownerId?: string;
+      draft?: { instructions?: string };
+      live?: { instructions?: string };
+      liveSkills?: { id: string; name: string }[];
+    };
+    const renamed = agent.ownerId ? renames.get(agent.ownerId) : undefined;
+    if (!renamed) continue;
+    let changed = false;
+    for (const config of [agent.draft, agent.live]) {
+      if (typeof config?.instructions !== 'string') continue;
+      const text = resolveSkillLinkNames(config.instructions, renamed);
+      if (text !== config.instructions) {
+        config.instructions = text;
+        changed = true;
+      }
+    }
+    for (const copy of agent.liveSkills ?? []) {
+      const next = renamedIds.get(`${agent.ownerId}/${copy.id}`);
+      if (next && copy.name !== next) {
+        copy.name = next;
+        changed = true;
+      }
+    }
+    if (changed) {
+      db.prepare(`UPDATE agents SET doc = ? WHERE rid = ?`).run(
+        JSON.stringify(agent),
+        rid,
+      );
+    }
   }
 }
 

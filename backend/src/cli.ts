@@ -205,7 +205,7 @@ async function main(): Promise<void> {
     );
   }
 
-  const { app, url, orgPublicBaseUrl, intellifyApiUrl } = await createApp({
+  const { app, url, intellifyApiUrl } = await createApp({
     port,
     host,
     webRoot,
@@ -217,9 +217,6 @@ async function main(): Promise<void> {
   console.log(`  Data dir: ${dataDir}`);
   if (intellifyApiUrl) {
     console.log(`  Intellify API: ${intellifyApiUrl}`);
-  }
-  if (orgPublicBaseUrl) {
-    console.log(`  Mode:     org server, ${orgPublicBaseUrl}`);
   }
   console.log('  Press Ctrl+C to stop.');
   console.log('');

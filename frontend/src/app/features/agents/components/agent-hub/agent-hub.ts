@@ -26,7 +26,6 @@ import {
   visibleCards,
 } from '../../services/agent-hub.util';
 import { ToastService } from '../../../../core/toast/toast.service';
-import { AuthService } from '../../../../core/auth/auth.service';
 import { AgentCard } from '../agent-card/agent-card';
 
 /**
@@ -51,9 +50,6 @@ export class AgentHub implements OnInit {
 
   private readonly api = inject(AgentsApiService);
   private readonly toast = inject(ToastService);
-  /** New agent needs Create agents (ui.md 1.6). */
-  readonly auth = inject(AuthService);
-
   readonly openAgent = output<Agent>();
   /** New agent; the shell opens the agent editor (R54). */
   readonly newAgent = output<void>();

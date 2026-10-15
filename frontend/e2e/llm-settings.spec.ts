@@ -268,6 +268,8 @@ test('saves the chosen effort and uses it on the next turn', async ({
   const question = 'How many matches were played in 2022?';
   await page.getByPlaceholder('Ask a follow-up question…').fill(question);
   await page.getByLabel('Send message').click();
-  await expect.poll(() => turnRequests(stub, question).length).toBeGreaterThan(0);
+  await expect
+    .poll(() => turnRequests(stub, question).length)
+    .toBeGreaterThan(0);
   expect(turnRequests(stub, question)[0].reasoningEffort).toBe('medium');
 });

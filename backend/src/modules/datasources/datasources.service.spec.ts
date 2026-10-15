@@ -139,36 +139,3 @@ describe('DatasourcesService.cachedInventory', () => {
     expect(inventoryCache.save).not.toHaveBeenCalled();
   });
 });
-
-describe('DatasourcesService.save in local mode (admin R72)', () => {
-  it('tells the local directory each saved datasource, so Dana owns it', async () => {
-    const repository = {
-      get: jest.fn().mockResolvedValue(null),
-      save: jest.fn().mockResolvedValue({ ...datasource, id: 'ds-new' }),
-    };
-    const databricks = {
-      summary: jest.fn().mockReturnValue(''),
-      mask: jest.fn().mockReturnValue({}),
-    };
-    const localDirectory = {
-      onDatasourceCreated: jest.fn().mockResolvedValue(undefined),
-    };
-    const service = new DatasourcesService(
-      repository as never,
-      {} as never,
-      databricks as never,
-      {} as never,
-      {} as never,
-      localDirectory as never,
-    );
-
-    const view = await service.save({
-      name: 'Databricks',
-      kind: 'databricks',
-      config: datasource.config,
-    });
-
-    expect(view.id).toBe('ds-new');
-    expect(localDirectory.onDatasourceCreated).toHaveBeenCalledWith('ds-new');
-  });
-});

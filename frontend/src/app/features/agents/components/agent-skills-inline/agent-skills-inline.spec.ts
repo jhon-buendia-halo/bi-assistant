@@ -5,7 +5,6 @@ import {
 } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { API_BASE_URL } from '../../../../core/config/api.config';
-import { AuthService } from '../../../../core/auth/auth.service';
 import {
   BuiltInSkillSummary,
   SkillSummary,
@@ -52,7 +51,6 @@ describe('AgentSkillsInline', () => {
       providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
     http = TestBed.inject(HttpTestingController);
-    spyOn(TestBed.inject(AuthService), 'can').and.returnValue(true);
     fixture = TestBed.createComponent(AgentSkillsInline);
     component = fixture.componentInstance;
     fixture.componentRef.setInput('agentKey', 'a1');

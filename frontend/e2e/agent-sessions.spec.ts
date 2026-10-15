@@ -69,7 +69,10 @@ test.afterEach(async () => {
 });
 
 async function openHub(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Agents', exact: true }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents', exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'Agents', exact: true }),
   ).toBeVisible();
@@ -115,7 +118,7 @@ function firstTurnRequest(question: string): StubRequest {
 
 function sessionRow(page: Page, name: string): Locator {
   return page
-    .getByRole('navigation', { name: 'Sessions navigation' })
+    .getByRole('navigation', { name: 'Sessions', exact: true })
     .locator('[data-testid^="session-"]')
     .filter({ hasText: name });
 }
@@ -147,7 +150,8 @@ test('start chat on an agent card opens a session bound to the agent', async ({
 
   await openSessions(page);
   const row = sessionRow(page, HISTORIAN);
-  await expect(row).toContainText(`${HISTORIAN} · ${WORLD_CUP_DATASET}`);
+  await expect(row.getByTestId('row-session-agent')).toHaveText(HISTORIAN);
+  await expect(row).toContainText(WORLD_CUP_DATASET);
   await expect(row).toHaveClass(/list-row-selected/);
 });
 
@@ -319,9 +323,11 @@ test('deleting the agent keeps its sessions on the plain assistant', async ({
   await expect(page.getByTestId('session-agent')).toHaveText(
     `${HISTORIAN} · agent deleted`,
   );
-  await expect(sessionRow(page, HISTORIAN)).toContainText(
-    `${HISTORIAN} · agent deleted`,
-  );
+  await openSessions(page);
+  await expect(
+    sessionRow(page, HISTORIAN).getByTestId('row-session-agent'),
+  ).toHaveText(`${HISTORIAN} · agent deleted`);
+  await sessionRow(page, HISTORIAN).click();
 
   await send(page, 'And in 2010?');
   await expectAnswered(page, 2);

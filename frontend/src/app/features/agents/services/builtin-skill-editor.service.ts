@@ -1,6 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { AuthService } from '../../../core/auth/auth.service';
 import { ToastService } from '../../../core/toast/toast.service';
 import {
   BuiltInSkillForm,
@@ -21,8 +20,6 @@ import { BuiltInSkill, SkillsApiService } from './skills-api.service';
 export class BuiltInSkillEditorService {
   private readonly api = inject(SkillsApiService);
   private readonly toast = inject(ToastService);
-  private readonly auth = inject(AuthService);
-
   readonly name = signal<string | null>(null);
   readonly loading = signal(false);
   readonly loadError = signal<string | null>(null);
@@ -34,7 +31,7 @@ export class BuiltInSkillEditorService {
   readonly showShipped = signal(false);
 
   /** Saving and resetting need Edit policies and templates (R80). */
-  readonly canEdit = computed(() => this.auth.can('edit-policies'));
+  readonly canEdit = computed(() => true);
   readonly changed = computed(() =>
     builtInFormChanged(this.form(), this.saved()),
   );

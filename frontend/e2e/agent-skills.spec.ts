@@ -10,7 +10,10 @@ import { test, expect } from './fixtures/app.fixture';
  */
 
 async function openAgent(page: Page, key: string): Promise<void> {
-  await page.getByRole('button', { name: 'Agents' }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
   // The System section shows its first row until "Show more" (agents-evals R3).
   if (key !== 'assistant') {
     await page.getByTestId('agent-show-more-system').click();

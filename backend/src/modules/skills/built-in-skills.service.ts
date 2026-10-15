@@ -7,7 +7,7 @@ import {
 } from '../../mastra/app-skills';
 import { parseLinks } from '../../mastra/agent-links';
 import { setSkillOverrides } from '../../mastra/skill-overrides';
-import { CurrentUserService } from '../auth/current-user.service';
+import { SUPER_ADMIN } from '../../common/super-admin';
 import { validateOverride } from './built-in-skill-rules';
 import type {
   BuiltInSkill,
@@ -25,10 +25,7 @@ import { SkillOverridesRepository } from './repositories/skill-overrides.reposit
  */
 @Injectable()
 export class BuiltInSkillsService implements OnModuleInit {
-  constructor(
-    private readonly repository: SkillOverridesRepository,
-    private readonly users: CurrentUserService,
-  ) {}
+  constructor(private readonly repository: SkillOverridesRepository) {}
 
   async onModuleInit(): Promise<void> {
     await this.refresh();
@@ -58,7 +55,7 @@ export class BuiltInSkillsService implements OnModuleInit {
       name,
       ...fields,
       baseHash: builtInHash(shipped),
-      updatedBy: this.users.current()?.id ?? 'local',
+      updatedBy: SUPER_ADMIN.id,
     });
     await this.refresh();
     return this.full(name, doc);

@@ -15,7 +15,6 @@ import {
   Trash2,
   X,
 } from 'lucide-angular';
-import { AuthService } from '../../../../core/auth/auth.service';
 import { PromptEditor } from '../prompt-editor/prompt-editor';
 import { SkillEditorService } from '../../services/skill-editor.service';
 import { SKILL_FIELD_LIMITS } from '../../services/skill-editor.util';
@@ -45,9 +44,6 @@ export class SkillEditor implements OnInit, OnDestroy {
     'Start with "Use when…". The agent reads the skill only when a question matches it.';
 
   readonly editor = inject(SkillEditorService);
-  /** Save and Delete need Create agents (ui.md 1.6). */
-  readonly auth = inject(AuthService);
-
   /** The skill to edit; null opens an empty editor for a new one. */
   readonly skillId = input<string | null>(null);
   /** Back; the shell asks first when there are unsaved changes (R71). */

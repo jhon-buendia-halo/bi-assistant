@@ -15,7 +15,6 @@ import {
   saveLenaiSettings,
   seedWorldCupDataset,
 } from './helpers/agents-api';
-import { authHeaders } from './helpers/local-auth';
 import {
   LlmStub,
   STUB_ANSWER,
@@ -51,7 +50,10 @@ function button(page: Page | Locator, name: string): Locator {
 }
 
 async function openHub(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Agents', exact: true }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents', exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'Agents', exact: true }),
   ).toBeVisible();
@@ -111,9 +113,7 @@ function systemsFor(question: string): string {
 }
 
 async function listedSessions(page: Page): Promise<string[]> {
-  const response = await page.request.get(`${apiBase(page)}/sessions`, {
-    headers: await authHeaders(page),
-  });
+  const response = await page.request.get(`${apiBase(page)}/sessions`);
   const body = (await response.json()) as { sessions: { name: string }[] };
   return body.sessions.map((session) => session.name);
 }
@@ -200,7 +200,7 @@ test('editing a Live agent keeps its sessions on the Live version until republis
   const openSession = async () => {
     await openSessions(page);
     await page
-      .getByRole('navigation', { name: 'Sessions navigation' })
+      .getByRole('navigation', { name: 'Sessions', exact: true })
       .locator('[data-testid^="session-"]')
       .filter({ hasText: HISTORIAN })
       .click();
@@ -273,6 +273,9 @@ test('reset and leaving the editor discard the preview', async ({
   await expect(
     page.getByRole('heading', { name: HISTORIAN, exact: true }),
   ).toBeVisible();
+  // The agent page's Chat Box holds a preview of its own (R90); leaving the
+  // agent page discards it too.
+  await button(page, 'All agents').click();
   await expect.poll(() => previewWorkspaces(appDataDir)).toEqual([]);
   expect(await listedSessions(page)).toEqual([]);
 });

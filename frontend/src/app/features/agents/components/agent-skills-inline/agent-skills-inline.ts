@@ -18,13 +18,9 @@ import {
   X,
 } from 'lucide-angular';
 import { firstValueFrom } from 'rxjs';
-import { AuthService } from '../../../../core/auth/auth.service';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { AgentPageState } from '../../services/agent-page-state.service';
-import {
-  skillLinked,
-  skillsCount,
-} from '../../services/agent-page.util';
+import { skillLinked, skillsCount } from '../../services/agent-page.util';
 import {
   builtInRowNotice,
   loadingChipLabel,
@@ -63,7 +59,6 @@ export class AgentSkillsInline implements OnDestroy {
   private readonly skillsApi = inject(SkillsApiService);
   private readonly toast = inject(ToastService);
   private readonly pageState = inject(AgentPageState);
-  private readonly auth = inject(AuthService);
   readonly editor = inject(SkillEditorService);
 
   readonly limits = SKILL_FIELD_LIMITS;
@@ -87,8 +82,8 @@ export class AgentSkillsInline implements OnDestroy {
   /** `null` closed, `'new'`, or the skill id being edited. */
   readonly editing = signal<string | null>(null);
 
-  readonly canChange = computed(() => this.auth.can('create-agents'));
-  readonly canEditBuiltIn = computed(() => this.auth.can('edit-policies'));
+  readonly canChange = computed(() => true);
+  readonly canEditBuiltIn = computed(() => true);
   readonly count = computed(() =>
     skillsCount(this.instructions(), this.library(), this.builtIn().length),
   );

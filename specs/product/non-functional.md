@@ -6,7 +6,7 @@ Platforms, storage, security, privacy, limits, accessibility, reliability and ob
 
 - N1. The product SHALL ship as a desktop app for macOS arm64, macOS x64 and Windows x64.
 - N2. The product SHALL also run in a browser through an npm package with one command, on Node.js 22.13.0 or later. It serves the same UI and API from one origin.
-- N3. The web server SHALL bind to `127.0.0.1` by default and listen on port 3000. If port 3000 is busy and no port was requested, it SHALL fall back to a free port. If an explicitly requested port is busy, it SHALL exit with code 1. An org server (N67) MAY bind another interface, chosen explicitly, so the organisation's reverse proxy can reach it.
+- N3. The web server SHALL bind to `127.0.0.1` by default and listen on port 3000. If port 3000 is busy and no port was requested, it SHALL fall back to a free port. If an explicitly requested port is busy, it SHALL exit with code 1. Another interface MAY be bound only by an explicit choice (`--host`, N67).
 - N4. The desktop window SHALL open at 1440 x 900 and SHALL NOT shrink below 960 x 600.
 - N5. The desktop app SHALL run its own backend as a child process and stop it when the app quits. No system Node.js is needed.
 - N6. Desktop and web mode SHALL use different data directories by default, so both can run at the same time.
@@ -20,7 +20,7 @@ Build, packaging and versioning detail is in [../system/delivery.md](../system/d
 
 ## 2. Local-first data
 
-- N8. All application data SHALL be stored on the user's machine in one data directory (in org server mode, on the organisation's server, N67). It contains:
+- N8. All application data SHALL be stored on the user's machine in one data directory. It contains:
   - the application database (settings, datasources, datasets, sessions, metrics, knowledge, verified queries, eval runs, schema inventory cache),
   - agent memory,
   - agent observability data (traces, metrics, logs),
@@ -46,22 +46,13 @@ Build, packaging and versioning detail is in [../system/delivery.md](../system/d
 
 Open question (discrepancy): the README says the application database stores datasource credentials "encrypted". The code encrypts only the LLM API key. Datasource credentials (Databricks token, PostgreSQL password, REST tokens and passwords) are stored as plain JSON in the application database and are only masked in API responses. Decide: encrypt them (preferred) or correct the documentation.
 
-### Org server mode
+### Security boundary
 
-These apply only in org server mode ([../capabilities/admin/spec.md](../capabilities/admin/spec.md)), except where a statement says otherwise. Local mode keeps every statement above and below, and adds N78.
+The app has one built-in user, the super admin, and no sign-in ([glossary.md](glossary.md), ADR-0030). Access control is the host's: whoever can reach the backend's port acts as the super admin.
 
-- N67. An org server SHALL be self-hosted by the organisation: the npm package on a machine it runs, behind its own TLS reverse proxy. People SHALL reach it only over HTTPS at its public base URL; plain `http://` is allowed for development and automated tests only. The server SHALL trust only the first proxy hop's forwarded headers.
-- N68. Every API request SHALL need a valid auth session, except sign-in, the current-user check and SCIM. Without one the server SHALL answer 401 and return no data.
-- N69. The auth-session cookie SHALL be `HttpOnly`, `SameSite=Lax` and `Secure` (except over `http://` in development). It SHALL hold only a random 32-byte token; the server SHALL store only the token's SHA-256. The browser SHALL hold no identity-provider token.
-- N70. An auth session SHALL end after 8 hours without a request or 7 days after sign-in, whichever comes first, and at once when the user signs out or is deactivated.
-- N71. Every request that can change data SHALL pass an Origin check against the public base URL (CSRF); a failing request SHALL be refused with 403 and change nothing.
-- N72. The sign-in round trip SHALL use the authorization code flow with PKCE, a one-time `state` and a `nonce`, and SHALL validate the ID token's signature, issuer, audience, expiry and nonce.
-- N73. The SCIM bearer token and the OIDC client secret SHALL come from the server's environment, SHALL be at least 32 characters (the SCIM token), SHALL be compared in constant time (the SCIM token), and SHALL NEVER be stored in the data directory, logged, or returned by any API.
-- N74. Every API route SHALL declare the permission it needs, and the server SHALL refuse to start if one does not. A missing permission SHALL answer 403 and change nothing.
-- N75. In both modes, one user's private data (sessions with their visuals, reports, workspace files and agent memory; agents; knowledge; verified queries; metrics; eval runs; pins) SHALL NEVER be returned to, changed by or deleted by another user. A request for another user's item SHALL look exactly like a request for one that does not exist. An automated test SHALL prove this for each private collection with two users.
-- N76. The LLM API key SHALL be shared org-wide and SHALL be readable by no user, not even masked, unless they hold Manage LLM configuration.
-- N77. Sign-in SHALL identify a person only by the identity provider's subject or their sign-in name (for Entra ID the UPN), NEVER by the email claim, which an identity provider can send unverified; the bootstrap admin list SHALL be matched the same way. The server SHALL accept one tenant only: the issuer SHALL name it (Entra ID's shared `common`, `organizations` and `consumers` endpoints are a startup error), and an ID token from another tenant SHALL fail sign-in. A sign-in name already bound to another subject SHALL fail sign-in, and a user name the identity provider gives to a different person (another external id) SHALL get a new directory user, so one person's private data never passes to another.
-- N78. Local mode's sign-in (admin R69-R71) is NOT a security boundary: it asks for no password, and anyone who can reach the local backend can sign in as any *local persona*, Demo User included. Its roles and ownership show what each role can do on an org server; they don't protect data on the machine. The auth-session token (32 random bytes, of which the server stores only the SHA-256) SHALL be sent only as an `Authorization: Bearer` header, never in a URL, and SHALL end at sign-out or 30 days after sign-in. ADR-0012.
+- N67. The app SHALL NOT authenticate or authorise requests: there are no accounts, sessions, cookies, roles or permission checks, and every request runs as the super admin. The security boundary is the machine and its network: anyone who can reach the backend's port has full access to the app and its data, including the stored LLM key and the developer settings. The web command binds `127.0.0.1` by default for that reason; the desktop backend listens on all interfaces by the user's choice, and `--host 0.0.0.0` on the web command does the same, so on those the network is the only control. Exposing either to a network the user does not trust is the user's decision and risk.
+- N68. The LLM API key SHALL be returned only masked by every API response, to every caller (N18).
+- N69. The Intellify RFP API ([../capabilities/rfp/spec.md](../capabilities/rfp/spec.md)) keeps its own `X-API-Key` (N16b): it is a separate service, not covered by N67.
 
 ### Read-only access to data
 
@@ -91,7 +82,7 @@ Open question: PostgreSQL connections with SSL turned on do not verify the serve
 - N28. Diagnostics SHALL be redacted before they are stored or exported (see section 7).
 - N29. The Databricks driver's own telemetry SHALL be turned off.
 
-Open question: in local mode the backend has no real authentication, only the password-less persona sign-in (N78; org server mode has N67-N77). On desktop it listens without a host restriction (all interfaces) on port 3000 with cross-origin access open; only the web command binds to `127.0.0.1` by default. Anyone who can reach the port can read data and use the stored LLM key. Confirm the intended boundary (bind desktop to `127.0.0.1`, add a per-launch token, or accept) before the beta.
+Accepted: the host is the security boundary (N67). The decision to leave the desktop backend listening on all interfaces, with cross-origin access open, was the user's (ADR-0030); a bind to `127.0.0.1` or a per-launch token would close it and is not planned.
 
 Open question: the desktop main window has no explicit restriction on navigation or on opening new windows. Confirm.
 
@@ -102,7 +93,6 @@ Open question: the desktop main window has no explicit restriction on navigation
   - queries and metadata reads against the user's configured datasources (Databricks workspace and Unity Catalog API, PostgreSQL, REST API),
   - for REST datasources, fetching the optional OpenAPI spec URL the user typed,
   - for the REST/OpenAPI discovery, nothing else,
-  - in org server mode only, the identity provider (sign-in discovery, token exchange and signing keys). SCIM traffic comes in from the identity provider; the server makes no directory calls.
 - N31. The product SHALL NOT send analytics, usage telemetry or crash reports to Halo or any third party, and SHALL NOT auto-update itself. Installers are fetched manually from the release page.
 - N32. Data sent to the LLM provider includes: the user's questions and chat history; schema names and column types; sample values (up to 5 distinct values per column, 40 characters each) captured when a dataset is saved; sample rows (up to 5 per entity) for knowledge bootstrap; and result rows of queries the assistant ran (up to the row caps in section 5). Users SHOULD be told that data returned by their queries is shared with their LLM provider.
 - N33. Agent observability data (traces, which include prompts and tool results, plus metrics and logs) SHALL stay in the local data directory.
@@ -227,7 +217,7 @@ Open question (gap): in web mode there is no desktop bridge. Diagnostics hold on
 ## 8. Accessibility
 
 - N58. The application shell SHALL have no automatically detectable accessibility violations (checked with axe in the end-to-end suite).
-- N59. Landmark regions SHALL have labels ("Navigation rail", "Workspace navigation", "Sessions navigation", "Settings navigation", "Details panel"). The page SHALL have one level-one heading (the "Agentic Hub" banner).
+- N59. Landmark regions SHALL have labels ("Navigation rail", "Workspace navigation", "Sessions" (the list on the Sessions page), "Settings navigation", "Details panel"). The page SHALL have one level-one heading (the "Agentic Hub" banner).
 - N60. Icon-only buttons SHALL have an accessible name or title (the rail buttons, collapse and expand right panel, open system logs, session options, careful mode, deep analysis).
 - N61. The right-panel divider SHALL be a keyboard-operable separator named "Resize right panel", with its current width exposed. Arrow keys SHALL change it by 24 px, Home SHALL set the minimum (360 px), End SHALL set the maximum (960 px, less room kept for the main content, at least 240 px), and a double-click SHALL reset it to 572 px. The width SHALL be remembered.
 - N62. Toggle controls SHALL expose their state (careful mode uses `aria-pressed`).

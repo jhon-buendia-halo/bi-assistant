@@ -1,8 +1,5 @@
 import BetterSqlite3 from 'better-sqlite3';
-import { OwnedDocStore } from '../../infrastructure/database/owned-doc-store';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
-import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
-import type { CurrentUser } from '../auth/entities/current-user.entity';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import type { UserAgentDoc } from '../user-agents/entities/user-agent.entity';
 import { BuiltinAgentPinsRepository } from '../user-agents/repositories/builtin-agent-pins.repository';
@@ -12,34 +9,15 @@ import type { SkillDoc } from './entities/skill.entity';
 import { SkillsRepository } from './repositories/skills.repository';
 import { SkillsService } from './skills.service';
 
-const user = (id: string): CurrentUser => ({
-  id,
-  displayName: id,
-  email: `${id}@contoso.test`,
-  initials: id.slice(0, 1).toUpperCase(),
-  roles: [{ role: 'user', source: 'implicit' }],
-  permissions: ['use-agents', 'create-agents'],
-});
-const ADA = user('ada');
-const BOB = user('bob');
-
-/** The real owner-scoped stores over in-memory SQLite, users switched by `as`. */
+/** The real stores over in-memory SQLite. */
 function build() {
   const db = new BetterSqlite3(':memory:');
-  const users = new CurrentUserService();
-  const scope = () => users.ownerScope();
-  const skillsStore = new OwnedDocStore(
+  const skills = new SkillsRepository(
     new SqliteDocStore<SkillDoc>(db, 'skills'),
-    scope,
   );
-  const agentsStore = new OwnedDocStore(
-    new SqliteDocStore<UserAgentDoc>(db, 'agents'),
-    scope,
-  );
-  const skills = new SkillsRepository(skillsStore);
   const userAgents = new UserAgentsService(
-    new UserAgentsRepository(agentsStore),
-    new BuiltinAgentPinsRepository(new SqliteDocStore(db, 'settings'), users),
+    new UserAgentsRepository(new SqliteDocStore<UserAgentDoc>(db, 'agents')),
+    new BuiltinAgentPinsRepository(new SqliteDocStore(db, 'settings')),
     {
       list: jest.fn().mockResolvedValue([{ name: 'World Cup Core' }]),
     } as unknown as DatasetsRepository,
@@ -49,7 +27,6 @@ function build() {
     db,
     userAgents,
     service: new SkillsService(skills, userAgents),
-    as: <T>(who: CurrentUser, fn: () => Promise<T>) => users.runAs(who, fn),
   };
 }
 
@@ -66,7 +43,8 @@ describe('SkillsService (api.md 94-98; agents-evals R68-R74)', () => {
   });
   afterEach(() => t.db.close());
 
-  const asAda = <T>(fn: () => Promise<T>) => t.as(ADA, fn);
+  /** A test body, kept as a wrapper so the cases read as before. */
+  const asAda = <T>(fn: () => Promise<T>) => fn();
 
   describe('create', () => {
     it('stores a skill, trimming name and description, and answers it in full', () =>
@@ -230,17 +208,12 @@ describe('SkillsService (api.md 94-98; agents-evals R68-R74)', () => {
         ).rejects.toThrow('The description must start with "Use when"');
       }));
 
-    it('refuses a name the caller already has, but not one another user has', () =>
+    it('refuses a name that already exists', () =>
       asAda(async () => {
         await t.service.create(valid);
         await expect(t.service.create(valid)).rejects.toThrow(
           'A skill named "fiscal-calendar" already exists',
         );
-        await t.as(BOB, async () => {
-          await expect(t.service.create(valid)).resolves.toMatchObject({
-            name: 'fiscal-calendar',
-          });
-        });
       }));
   });
 
@@ -291,37 +264,6 @@ describe('SkillsService (api.md 94-98; agents-evals R68-R74)', () => {
           'A skill named "fiscal-calendar" already exists',
         );
       }));
-  });
-
-  describe('ownership (data-model 3.15)', () => {
-    it("answers another user's skill as not found for every operation, and lists only the caller's", async () => {
-      const ada = await asAda(() => t.service.create(valid));
-      await t.as(BOB, async () => {
-        expect(await t.service.list()).toEqual([]);
-        await expect(t.service.get(ada.id)).rejects.toThrow(
-          `Skill "${ada.id}" not found`,
-        );
-        await expect(t.service.save(ada.id, valid)).rejects.toThrow(
-          'not found',
-        );
-        await expect(t.service.delete(ada.id)).rejects.toThrow('not found');
-      });
-      expect(await asAda(() => t.service.get(ada.id))).toMatchObject({
-        body: valid.body,
-      });
-    });
-
-    it("refuses another user's skill id in an agent", async () => {
-      await asAda(() => t.service.create(valid));
-      await t.as(BOB, async () => {
-        await expect(
-          t.userAgents.create({
-            name: 'Mine',
-            instructions: '[[skill:fiscal-calendar]]',
-          }),
-        ).rejects.toThrow('Unknown skill "fiscal-calendar"');
-      });
-    });
   });
 
   describe('list', () => {
@@ -403,23 +345,5 @@ describe('SkillsService (api.md 94-98; agents-evals R68-R74)', () => {
         ]);
         await expect(t.service.get(skill.id)).rejects.toThrow('not found');
       }));
-
-    it("does not touch another user's agents", async () => {
-      const ada = await asAda(() => t.service.create(valid));
-      const bobAgent = await t.as(BOB, () =>
-        t.userAgents.create({ name: 'Bobs' }),
-      );
-      await asAda(() => t.service.delete(ada.id));
-      expect(
-        (await t.as(BOB, () => t.userAgents.get(bobAgent.id)))?.draft,
-      ).toMatchObject({ name: 'Bobs' });
-    });
-  });
-
-  it('runs as the local persona too (ADR-0012)', async () => {
-    const skill = await t.as(LOCAL_USER, () => t.service.create(valid));
-    await expect(
-      t.as(LOCAL_USER, () => t.service.get(skill.id)),
-    ).resolves.toMatchObject({ name: 'fiscal-calendar' });
   });
 });

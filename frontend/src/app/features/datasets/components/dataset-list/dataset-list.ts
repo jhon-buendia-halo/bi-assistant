@@ -10,9 +10,11 @@ import {
   Trash2,
   Workflow,
 } from 'lucide-angular';
-import { Dataset, DatasetsApiService } from '../../services/datasets-api.service';
+import {
+  Dataset,
+  DatasetsApiService,
+} from '../../services/datasets-api.service';
 import { ToastService } from '../../../../core/toast/toast.service';
-import { AuthService } from '../../../../core/auth/auth.service';
 
 interface DatasetSection {
   label: string;
@@ -37,10 +39,7 @@ export class DatasetList implements OnInit {
 
   private readonly api = inject(DatasetsApiService);
   private readonly toast = inject(ToastService);
-  /** New dataset and Delete dataset need Manage datasources (ui.md 1.6). */
-  readonly auth = inject(AuthService);
-
-  readonly filters = ['All', 'Pinned', 'Yours', 'Shared with you'];
+  readonly filters = ['All', 'Pinned'];
   readonly activeFilter = signal('All');
   readonly newDataset = output<void>();
   readonly openDataset = output<Dataset>();

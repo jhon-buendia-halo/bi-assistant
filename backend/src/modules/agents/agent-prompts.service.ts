@@ -16,7 +16,7 @@ import {
   agentPromptHash,
   shippedAgentPrompt,
 } from '../../mastra/shipped-agent-prompts';
-import { CurrentUserService } from '../auth/current-user.service';
+import { SUPER_ADMIN } from '../../common/super-admin';
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import type {
   AgentPromptOverrideDoc,
@@ -62,7 +62,6 @@ const ANY_LINK = /\[\[.*?\]\]/;
 export class AgentPromptsService implements OnModuleInit {
   constructor(
     private readonly repository: AgentPromptOverridesRepository,
-    private readonly users: CurrentUserService,
     private readonly mastra: MastraService,
     private readonly userAgents: UserAgentsService,
   ) {}
@@ -89,7 +88,7 @@ export class AgentPromptsService implements OnModuleInit {
       key,
       prompt,
       baseHash: agentPromptHash(shipped),
-      updatedBy: this.users.current()?.id ?? 'local',
+      updatedBy: SUPER_ADMIN.id,
     });
     await this.refresh();
     return this.nameOf(key);

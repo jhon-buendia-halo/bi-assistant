@@ -1,4 +1,3 @@
-import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { DatasetsService } from './datasets.service';
 import type { DatasetDoc } from './repositories/datasets.repository';
@@ -9,13 +8,11 @@ export class DatasetsController {
   constructor(private readonly datasets: DatasetsService) {}
 
   @Get()
-  @RequirePermission('use-agents')
   async list(): Promise<{ datasets: DatasetDoc[] }> {
     return { datasets: await this.datasets.list() };
   }
 
   @Post()
-  @RequirePermission('manage-datasources')
   async create(
     @Body()
     body: {
@@ -54,7 +51,6 @@ export class DatasetsController {
   }
 
   @Delete(':name')
-  @RequirePermission('manage-datasources')
   async remove(
     @Param('name') name: string,
   ): Promise<{ ok: boolean; message: string }> {

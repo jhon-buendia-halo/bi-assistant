@@ -7,7 +7,6 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import type { Skill, SkillInput, SkillSummary } from './entities/skill.entity';
 import type {
   BuiltInSkill,
@@ -33,26 +32,22 @@ export class SkillsController {
   ) {}
 
   @Get()
-  @RequirePermission('use-agents')
   async list(): Promise<{ skills: SkillSummary[] }> {
     return { skills: await this.skills.list() };
   }
 
   // The `built-in` routes come before `:id` so the name is not read as an id.
   @Get('built-in')
-  @RequirePermission('use-agents')
   async listBuiltIn(): Promise<{ skills: BuiltInSkillSummary[] }> {
     return { skills: await this.builtIns.list() };
   }
 
   @Get('built-in/:name')
-  @RequirePermission('use-agents')
   getBuiltIn(@Param('name') name: string): Promise<BuiltInSkill> {
     return this.builtIns.get(name);
   }
 
   @Put('built-in/:name')
-  @RequirePermission('edit-policies')
   saveBuiltIn(
     @Param('name') name: string,
     @Body() body: BuiltInSkillInput,
@@ -64,7 +59,6 @@ export class SkillsController {
   }
 
   @Delete('built-in/:name')
-  @RequirePermission('edit-policies')
   resetBuiltIn(
     @Param('name') name: string,
   ): Promise<SkillResult<BuiltInSkill>> {
@@ -75,13 +69,11 @@ export class SkillsController {
   }
 
   @Get(':id')
-  @RequirePermission('use-agents')
   get(@Param('id') id: string): Promise<Skill> {
     return this.skills.get(id);
   }
 
   @Post()
-  @RequirePermission('create-agents')
   create(@Body() body: SkillInput): Promise<SkillResult> {
     return styleA(async () => {
       const skill = await this.skills.create(body);
@@ -90,7 +82,6 @@ export class SkillsController {
   }
 
   @Put(':id')
-  @RequirePermission('create-agents')
   save(
     @Param('id') id: string,
     @Body() body: SkillInput,
@@ -102,7 +93,6 @@ export class SkillsController {
   }
 
   @Delete(':id')
-  @RequirePermission('create-agents')
   remove(@Param('id') id: string): Promise<SkillResult> {
     return styleA(async () => {
       const skill = await this.skills.delete(id);

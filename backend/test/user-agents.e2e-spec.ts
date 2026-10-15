@@ -18,13 +18,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
-import {
-  type Backend,
-  bearer,
-  boot as bootIn,
-  signInLocally,
-  stop,
-} from './backend-process';
+import { type Backend, boot as bootIn, stop } from './backend-process';
 
 const boot = () => bootIn(dataDir);
 const dataDir = mkdtempSync(join(tmpdir(), 'qti-user-agents-'));
@@ -62,10 +56,8 @@ const answer = (res: { body: unknown }) => res.body as Answer;
 describe('Agent definitions (API)', () => {
   let backend: Backend | undefined;
   let agentId = '';
-  /** Demo User's local auth session; it survives the restart (admin R71). */
-  let token = '';
 
-  const http = () => request.agent(backend!.url).set(bearer(token));
+  const http = () => request.agent(backend!.url);
   const listAgents = async (): Promise<AgentView[]> =>
     ((await http().get('/agents').expect(200)).body as { agents: AgentView[] })
       .agents;
@@ -76,7 +68,6 @@ describe('Agent definitions (API)', () => {
 
   beforeAll(async () => {
     backend = await boot();
-    token = await signInLocally(backend.url);
   });
 
   afterAll(async () => {
@@ -265,15 +256,39 @@ describe('Agent definitions (API)', () => {
   it("A user agent's detail reports the assistant's tools with its draft and Live version", async () => {
     const assistant = await detailOf('assistant');
     const detail = await detailOf(agentId);
+    // R49: memory and model are the assistant's; the tools and prompt are the
+    // ones the agent's tool selection gives it (ADR-0024). This agent's
+    // instructions link no tool, so it gets only the always-on tools and none
+    // of the optional groups (sample_rows, ask_clarification, visuals).
     expect(detail).toMatchObject({
       key: agentId,
       kind: 'user',
       owner: 'You',
-      instructions: assistant.instructions,
-      toolDetails: assistant.toolDetails,
       memory: assistant.memory,
     });
-    expect(detail.tools).toEqual(assistant.tools);
+    const alwaysOn = [
+      'describe_entity',
+      'list_entities',
+      'run_readonly_sql',
+      'show_in_panel',
+      'update_workflow',
+    ];
+    expect([...detail.tools].sort()).toEqual(alwaysOn);
+    expect(assistant.tools).toEqual(expect.arrayContaining(alwaysOn));
+    for (const optional of [
+      'sample_rows',
+      'ask_clarification',
+      'create_visual',
+      'update_visual',
+    ]) {
+      expect(assistant.tools).toContain(optional);
+      expect(detail.tools).not.toContain(optional);
+    }
+    expect(
+      (detail.toolDetails as { name: string }[]).map((tool) => tool.name),
+    ).toEqual(expect.arrayContaining(alwaysOn));
+    expect(detail.toolDetails).toHaveLength(alwaysOn.length);
+    expect(detail.instructions).not.toBe(assistant.instructions);
     expect(detail.draft.name).toBe('Health plan analyst');
     expect(detail.live.name).toBe('Health plan analyst');
 

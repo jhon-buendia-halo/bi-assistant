@@ -8,7 +8,6 @@ import {
 import { randomUUID } from 'crypto';
 import { MastraService } from '../../mastra/mastra.service';
 import { SessionsService } from '../sessions/sessions.service';
-import { CurrentUserService } from '../auth/current-user.service';
 import type { SessionDoc } from '../sessions/entities/session.entity';
 import {
   analysisPlanSchema,
@@ -49,7 +48,6 @@ export class DeepAnalysisService implements OnModuleDestroy {
   constructor(
     private readonly sessions: SessionsService,
     private readonly mastra: MastraService,
-    private readonly currentUser: CurrentUserService,
   ) {}
 
   onModuleDestroy(): void {
@@ -75,7 +73,6 @@ export class DeepAnalysisService implements OnModuleDestroy {
     const job: DeepAnalysisJob = {
       id: randomUUID(),
       sessionId,
-      ownerId: this.currentUser.ownerKey(),
       question: trimmed,
       status: 'planning',
       progress: 'Planning the investigation',
@@ -87,12 +84,8 @@ export class DeepAnalysisService implements OnModuleDestroy {
 
     const abort = new AbortController();
     this.aborts.set(job.id, abort);
-    // Deliberately not awaited: the HTTP call returns while the job runs, as
-    // the user who started it (admin R32).
-    const run = this.currentUser.bind(() =>
-      this.run(job, session, abort.signal),
-    );
-    void run().finally(() => {
+    // Deliberately not awaited: the HTTP call returns while the job runs.
+    void this.run(job, session, abort.signal).finally(() => {
       this.running.delete(sessionId);
       this.aborts.delete(job.id);
       job.finishedAt = new Date().toISOString();
@@ -103,11 +96,7 @@ export class DeepAnalysisService implements OnModuleDestroy {
   /** Poll one job. */
   status(sessionId: string, jobId: string): DeepAnalysisView {
     const job = this.jobs.get(jobId);
-    if (
-      !job ||
-      job.sessionId !== sessionId ||
-      job.ownerId !== this.currentUser.ownerKey()
-    ) {
+    if (!job || job.sessionId !== sessionId) {
       throw new NotFoundException(`Deep analysis ${jobId} not found`);
     }
     return {
@@ -147,8 +136,7 @@ export class DeepAnalysisService implements OnModuleDestroy {
       throw new NotFoundException(`No deep analysis report for ${jobId}`);
     }
     const job = this.jobs.get(jobId);
-    const title =
-      job?.ownerId === this.currentUser.ownerKey() ? job.title : undefined;
+    const title = job?.title;
     return {
       filename: `${slug(title) || `deep-analysis-${jobId.slice(0, 8)}`}.md`,
       markdown,

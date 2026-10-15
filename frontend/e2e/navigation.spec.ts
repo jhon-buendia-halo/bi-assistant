@@ -1,9 +1,12 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.fixture';
-import { apiFetch } from './helpers/local-auth';
 
 const rail = (page: Page) =>
   page.getByRole('complementary', { name: 'Navigation rail' });
+
+/** The session list in the middle of the Sessions page. */
+const sessionsList = (page: Page) =>
+  page.getByRole('navigation', { name: 'Sessions', exact: true });
 
 const railItem = (page: Page, name: string) =>
   rail(page).getByRole('button', { name, exact: true });
@@ -20,9 +23,7 @@ test('moves between areas from the rail', async ({ page }) => {
   await railItem(page, 'Agents').click();
   await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
   await expectCurrent(page, 'Agents');
-  await expect(railItem(page, 'Datasets')).not.toHaveAttribute(
-    'aria-current',
-  );
+  await expect(railItem(page, 'Datasets')).not.toHaveAttribute('aria-current');
 
   await railItem(page, 'Agents').click();
   await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
@@ -33,14 +34,33 @@ test('moves between areas from the rail', async ({ page }) => {
 
   await railItem(page, 'Sessions').click();
   await expectCurrent(page, 'Sessions');
-  const sessionsNav = page.getByRole('navigation', {
-    name: 'Sessions navigation',
-  });
-  await expect(sessionsNav).toBeVisible();
-  await expect(page.getByTitle('New conversation')).toBeVisible();
+  await expect(sessionsList(page)).toBeVisible();
   await expect(
-    page.getByText('Select a session or start a new conversation.'),
+    page
+      .locator('header')
+      .getByRole('button', { name: 'Start New Conversation' }),
   ).toBeVisible();
+  // The drawer does not list sessions.
+  await expect(
+    page.getByRole('navigation', { name: 'Sessions navigation' }),
+  ).toHaveCount(0);
+});
+
+test('the start page explains how the product works', async ({ page }) => {
+  await expect(
+    page.getByRole('heading', { name: 'Welcome to Agentic Hub' }),
+  ).toBeVisible();
+  const steps = [
+    'Pick your data',
+    'Ask a question',
+    'Work with an agent',
+    'Read, refine, download',
+  ];
+  for (const [index, step] of steps.entries()) {
+    await expect(page.getByTestId(`welcome-step-${index + 1}`)).toContainText(
+      step,
+    );
+  }
 });
 
 test('opens with the navigation drawer expanded', async ({ page }) => {
@@ -79,15 +99,9 @@ test('remembers a collapsed drawer after a restart', async ({
   ).toHaveAttribute('aria-expanded', 'true');
 });
 
-test('expands the rail into a drawer with labels and sessions', async ({
-  page,
-}) => {
-  const sessionsNav = page.getByRole('navigation', {
-    name: 'Sessions navigation',
-  });
+test('expands the rail into a drawer with labels', async ({ page }) => {
   // Given the navigation drawer is collapsed
   await page.getByRole('button', { name: 'Collapse navigation' }).click();
-  await expect(sessionsNav).toHaveCount(0);
   const menu = page.getByRole('button', { name: 'Expand navigation' });
   await expect(menu).toHaveAttribute('aria-expanded', 'false');
 
@@ -98,20 +112,23 @@ test('expands the rail into a drawer with labels and sessions', async ({
   for (const label of ['Datasets', 'Agents', 'Knowledge', 'Sessions']) {
     await expect(workspace.getByText(label, { exact: true })).toBeVisible();
   }
-  await expect(sessionsNav).toBeVisible();
-  await expect(page.getByTitle('New conversation')).toBeVisible();
+  await expect(
+    page.getByRole('navigation', { name: 'Sessions navigation' }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: 'Collapse navigation' }),
   ).toHaveAttribute('aria-expanded', 'true');
 
   await page.getByRole('button', { name: 'Collapse navigation' }).click();
-  await expect(sessionsNav).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Expand navigation' }),
+  ).toHaveAttribute('aria-expanded', 'false');
 
   await railItem(page, 'Sessions').click();
-  await expect(sessionsNav).toBeVisible();
+  await expect(sessionsList(page)).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Collapse navigation' }),
-  ).toBeVisible();
+    page.getByRole('button', { name: 'Expand navigation' }),
+  ).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('shows the details panel only on demand', async ({ page }) => {
@@ -163,33 +180,11 @@ test('shows the product name', async ({ page }) => {
   );
 });
 
-test('local mode signs in as Demo User', async ({ page }) => {
-  // The fixture signed in as Demo User through the local sign-in (admin
-  // R70, R71); local mode never offers the Microsoft sign-in.
+test('the app opens straight into the shell', async ({ page }) => {
   await expect(rail(page)).toBeVisible();
+  await expect(page.getByLabel('Open system logs')).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Sign in with Microsoft' }),
+    page.getByRole('button', { name: 'Account menu', exact: true }),
   ).toHaveCount(0);
-
-  const avatar = page.getByRole('button', { name: 'Account menu', exact: true });
-  await expect(avatar).toHaveText('DU');
-  await expect(avatar).toHaveAttribute('title', 'Demo User');
-  // Demo User is always a Platform admin (admin R18, R34, R69).
-  await expect(railItem(page, 'Admin')).toBeVisible();
-
-  const me = await apiFetch(page, 'GET', '/me');
-  expect(me.status()).toBe(200);
-  expect(await me.json()).toMatchObject({
-    mode: 'local',
-    user: {
-      id: 'local',
-      displayName: 'Demo User',
-      email: 'demo@local.test',
-      initials: 'DU',
-    },
-    roles: [
-      { role: 'user', source: 'implicit' },
-      { role: 'platform-admin', source: 'bootstrap' },
-    ],
-  });
+  await expect(railItem(page, 'Admin')).toHaveCount(0);
 });

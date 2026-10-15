@@ -1,35 +1,24 @@
 import { Inject, Injectable } from '@nestjs/common';
-import {
-  OWNED_SESSIONS_STORE,
-  SESSIONS_STORE,
-} from '../../../infrastructure/database/doc-store';
+import { SESSIONS_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
 import { SessionDoc } from '../entities/session.entity';
 
-/**
- * Sessions, owner-scoped (data-model 3.15): every method but the two
- * `…AnyOwner` ones sees only the current user's sessions.
- */
+/** Sessions (data-model 3.5). */
 @Injectable()
 export class SessionsRepository {
   constructor(
-    @Inject(OWNED_SESSIONS_STORE)
-    private readonly store: DocStore<SessionDoc>,
     @Inject(SESSIONS_STORE)
-    private readonly allOwners: DocStore<SessionDoc>,
+    private readonly store: DocStore<SessionDoc>,
   ) {}
 
-  /** Every owner's sessions, for startup work only (the workspace backfill). */
-  listAllOwners(): Promise<SessionDoc[]> {
-    return this.allOwners.find({});
+  /** Every session, for startup work (the workspace backfill). */
+  listAll(): Promise<SessionDoc[]> {
+    return this.store.find({});
   }
 
-  /** Startup work only: record a session's workspace, whoever owns it. */
-  setWorkspaceIdAnyOwner(
-    id: string,
-    workspaceId: string,
-  ): Promise<SessionDoc | null> {
-    return this.allOwners.update({ id }, { workspaceId });
+  /** Startup work: record a session's workspace. */
+  setWorkspaceId(id: string, workspaceId: string): Promise<SessionDoc | null> {
+    return this.store.update({ id }, { workspaceId });
   }
 
   list(): Promise<SessionDoc[]> {

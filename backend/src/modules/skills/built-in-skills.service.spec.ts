@@ -1,5 +1,4 @@
 import BetterSqlite3 from 'better-sqlite3';
-import { AUTH_REQUIREMENT_KEY } from '../../common/decorators/auth-requirement.decorators';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import {
   agentSkillFile,
@@ -12,7 +11,6 @@ import {
 } from '../../mastra/app-skills';
 import { setSkillOverrides } from '../../mastra/skill-overrides';
 import { assistantSkillSources } from '../../mastra/assistant-skills';
-import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
 import { phasePrompt } from '../deep-analysis/deep-analysis.phases';
 import { BuiltInSkillsService } from './built-in-skills.service';
 import type { SkillOverrideDoc } from './entities/skill-override.entity';
@@ -22,14 +20,9 @@ import { SkillsController } from './skills.controller';
 function build() {
   const db = new BetterSqlite3(':memory:');
   const store = new SqliteDocStore<SkillOverrideDoc>(db, 'skill_overrides');
-  const users = new CurrentUserService();
   return {
     store,
-    service: new BuiltInSkillsService(
-      new SkillOverridesRepository(store),
-      users,
-    ),
-    asAdmin: <T>(fn: () => Promise<T>) => users.runAs(LOCAL_USER, fn),
+    service: new BuiltInSkillsService(new SkillOverridesRepository(store)),
   };
 }
 
@@ -88,6 +81,7 @@ describe('BuiltInSkillsService', () => {
         'get_client_commercials',
         'set_rfp_carriers',
         'update_rfp',
+        'update_workflow',
       ],
     });
     for (const name of [
@@ -203,11 +197,11 @@ describe('BuiltInSkillsService', () => {
   });
 
   it('serves a saved override on the next call, and keeps the built-in layout', async () => {
-    const { service, asAdmin, store } = build();
+    const { service, store } = build();
     const input = edited('deep-analysis');
     const before = catalogSkills('assistant').map((skill) => skill.description);
 
-    const saved = await asAdmin(() => service.save('deep-analysis', input));
+    const saved = await service.save('deep-analysis', input);
     expect(saved).toMatchObject({
       name: 'deep-analysis',
       modified: true,
@@ -346,21 +340,6 @@ describe('BuiltInSkillsService', () => {
 });
 
 describe('SkillsController built-in routes', () => {
-  const requirement = (method: keyof SkillsController) =>
-    Reflect.getMetadata(
-      AUTH_REQUIREMENT_KEY,
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      SkillsController.prototype[method],
-    ) as unknown;
-
-  it('needs use-agents to read and edit-policies to change', () => {
-    const need = (permission: string) => ({ kind: 'permission', permission });
-    expect(requirement('listBuiltIn')).toEqual(need('use-agents'));
-    expect(requirement('getBuiltIn')).toEqual(need('use-agents'));
-    expect(requirement('saveBuiltIn')).toEqual(need('edit-policies'));
-    expect(requirement('resetBuiltIn')).toEqual(need('edit-policies'));
-  });
-
   it('declares the built-in routes before /skills/:id', () => {
     const order = Object.getOwnPropertyNames(SkillsController.prototype);
     expect(order.indexOf('getBuiltIn')).toBeLessThan(order.indexOf('get'));

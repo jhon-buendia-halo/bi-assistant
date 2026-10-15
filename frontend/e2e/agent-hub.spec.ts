@@ -37,7 +37,10 @@ test.beforeEach(async ({ page }) => {
 });
 
 async function openHub(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Agents', exact: true }).click();
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents', exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'Agents', exact: true }),
   ).toBeVisible();
@@ -166,8 +169,10 @@ test('filters limit the hub to one kind of agent', async ({ page }) => {
   expect(await sectionIds(page)).toEqual(['mine']);
 
   await filter(page, 'Official').click();
-  await expect(cards(page)).toHaveCount(1);
-  expect(await cardKeys(page)).toEqual(['assistant']);
+  // The assistant and the RFP Builder are both Official (R1, R2).
+  await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
+  await expect(cards(page)).toHaveCount(2);
+  expect(await cardKeys(page)).toEqual(['assistant', 'rfp']);
   expect(await sectionIds(page)).toEqual(['official']);
 
   await filter(page, 'Pinned').click();
@@ -261,22 +266,22 @@ test("a card opens the agent's detail view with its actions", async ({
   await openHub(page);
 
   await openAgent(page, claimsId, CLAIMS);
-  await expect(button(page, 'Edit')).toBeVisible();
+  await expect(page.getByTestId('agent-edit')).toBeVisible();
   await expect(button(page, 'Publish')).toBeVisible();
   await expect(button(page, 'Delete')).toBeVisible();
-  await expect(button(page, 'Start chat')).toHaveCount(0);
+  await expect(page.getByTestId('agent-start-chat')).toHaveCount(0);
 
   await button(page, 'All agents').click();
   await openAgent(page, healthId, HEALTH);
-  await expect(button(page, 'Start chat')).toBeVisible();
-  await expect(button(page, 'Edit')).toBeVisible();
+  await expect(page.getByTestId('agent-start-chat')).toBeVisible();
+  await expect(page.getByTestId('agent-edit')).toBeVisible();
   await expect(button(page, 'Delete')).toBeVisible();
   await expect(button(page, 'Publish')).toHaveCount(0);
 
   await button(page, 'All agents').click();
   await openAgent(page, 'assistant', ASSISTANT);
-  await expect(button(page, 'Start chat')).toBeVisible();
-  await expect(button(page, 'Edit')).toHaveCount(0);
+  await expect(page.getByTestId('agent-start-chat')).toBeVisible();
+  await expect(page.getByTestId('agent-edit')).toHaveCount(0);
   await expect(button(page, 'Publish')).toHaveCount(0);
   await expect(button(page, 'Delete')).toHaveCount(0);
 });

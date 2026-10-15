@@ -14,7 +14,6 @@
     "test:e2e": "npm run test:e2e:prepare && playwright test --project=web",
     "test:e2e:ui": "npm run test:e2e:prepare && playwright test --project=web --ui",
     "test:e2e:update": "npm run test:e2e:prepare && playwright test --project=web --update-snapshots",
-    "test:e2e:org": "npm run test:e2e:prepare && playwright test --project=org",
     "test:e2e:desktop": "npm run test:e2e:prepare:desktop && playwright test --project=desktop",
     "test:e2e:desktop:update": "npm run test:e2e:prepare:desktop && playwright test --project=desktop --update-snapshots",
     "brand:electron": "bash scripts/brand-electron.sh",

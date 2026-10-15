@@ -72,40 +72,6 @@ export const SKILLS_STORE = 'DOC_STORE_skills';
 export const SKILL_OVERRIDES_STORE = 'DOC_STORE_skill_overrides';
 export const AGENT_PROMPT_OVERRIDES_STORE = 'DOC_STORE_agent_prompt_overrides';
 
-/** Identity and access collections, org server mode only (data-model 3.14). */
-export const USERS_STORE = 'DOC_STORE_users';
-export const GROUPS_STORE = 'DOC_STORE_groups';
-export const GROUP_MEMBERS_STORE = 'DOC_STORE_group_members';
-export const ROLE_ASSIGNMENTS_STORE = 'DOC_STORE_role_assignments';
-export const GROUP_ROLE_MAPPINGS_STORE = 'DOC_STORE_group_role_mappings';
-export const AUTH_SESSIONS_STORE = 'DOC_STORE_auth_sessions';
-export const ACTIVITY_EVENTS_STORE = 'DOC_STORE_activity_events';
-
-/**
- * Owner-scoped views of the private collections (data-model 3.15): an
- * `OwnedDocStore` over the raw store, provided by the auth module.
- * Repositories of private collections inject these; the raw tokens above
- * stay for startup work that walks every owner's documents.
- */
-export const OWNED_SESSIONS_STORE = 'OWNED_DOC_STORE_sessions';
-export const OWNED_VERIFIED_QUERIES_STORE = 'OWNED_DOC_STORE_verified_queries';
-export const OWNED_METRICS_STORE = 'OWNED_DOC_STORE_metrics';
-export const OWNED_EVAL_RUNS_STORE = 'OWNED_DOC_STORE_eval_runs';
-export const OWNED_KNOWLEDGE_STORE = 'OWNED_DOC_STORE_knowledge';
-export const OWNED_AGENTS_STORE = 'OWNED_DOC_STORE_agents';
-export const OWNED_SKILLS_STORE = 'OWNED_DOC_STORE_skills';
-
-/** Each private collection's owned token and the raw store it wraps. */
-export const PRIVATE_COLLECTIONS: { owned: string; raw: string }[] = [
-  { owned: OWNED_SESSIONS_STORE, raw: SESSIONS_STORE },
-  { owned: OWNED_VERIFIED_QUERIES_STORE, raw: VERIFIED_QUERIES_STORE },
-  { owned: OWNED_METRICS_STORE, raw: METRICS_STORE },
-  { owned: OWNED_EVAL_RUNS_STORE, raw: EVAL_RUNS_STORE },
-  { owned: OWNED_KNOWLEDGE_STORE, raw: KNOWLEDGE_STORE },
-  { owned: OWNED_AGENTS_STORE, raw: AGENTS_STORE },
-  { owned: OWNED_SKILLS_STORE, raw: SKILLS_STORE },
-];
-
 export function isExistsCondition(v: FilterValue): v is ExistsCondition {
   return typeof v === 'object' && v !== null && '$exists' in v;
 }

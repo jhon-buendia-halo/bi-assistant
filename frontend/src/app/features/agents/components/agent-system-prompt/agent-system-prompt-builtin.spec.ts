@@ -5,7 +5,6 @@ import {
 } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { API_BASE_URL } from '../../../../core/config/api.config';
-import { AuthService } from '../../../../core/auth/auth.service';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { AgentPageState } from '../../services/agent-page-state.service';
 import {
@@ -47,19 +46,13 @@ describe('AgentSystemPrompt (built-in agents)', () => {
   let http: HttpTestingController;
   let component: AgentSystemPrompt;
   let toast: ToastService;
-  let allowed: boolean;
-
   beforeEach(async () => {
-    allowed = true;
     await TestBed.configureTestingModule({
       imports: [AgentSystemPrompt],
       providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
     http = TestBed.inject(HttpTestingController);
     toast = TestBed.inject(ToastService);
-    spyOn(TestBed.inject(AuthService), 'can').and.callFake(
-      (p) => allowed && p === 'edit-policies',
-    );
   });
 
   afterEach(() => http.verify());
@@ -81,14 +74,6 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     expect(byId('agent-prompt-edit')).not.toBeNull();
     expect(byId('agent-prompt-reset')).toBeNull();
     expect(byId('agent-prompt-modified')).toBeNull();
-  });
-
-  it('is read-only without edit-policies', () => {
-    allowed = false;
-    render(builtIn('sql-fixer', { modified: true }));
-    expect(byId('agent-prompt-edit')).toBeNull();
-    expect(byId('agent-prompt-reset')).toBeNull();
-    expect(byId('agent-prompt-modified')?.textContent).toContain('Modified');
   });
 
   it('edits a System agent in a textarea, saves and toasts', () => {

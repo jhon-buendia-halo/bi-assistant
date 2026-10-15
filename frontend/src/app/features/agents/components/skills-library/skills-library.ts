@@ -1,7 +1,6 @@
 import { Component, OnInit, inject, output, signal } from '@angular/core';
 import { forkJoin } from 'rxjs';
 import { ArrowLeft, Loader2, LucideAngularModule, Plus } from 'lucide-angular';
-import { AuthService } from '../../../../core/auth/auth.service';
 import {
   builtInRowNotice,
   loadingChipLabel,
@@ -28,9 +27,6 @@ export class SkillsLibrary implements OnInit {
   readonly Plus = Plus;
 
   private readonly api = inject(SkillsApiService);
-  /** New skill needs Create agents (ui.md 1.6). */
-  readonly auth = inject(AuthService);
-
   readonly back = output<void>();
   /** A row, or New skill (null); the shell opens the skill editor. */
   readonly openSkill = output<SkillSummary | null>();

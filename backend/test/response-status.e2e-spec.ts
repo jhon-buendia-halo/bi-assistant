@@ -3,23 +3,15 @@
  * POST routes that do not answer the framework's default 201 (section 1.4):
  * the two streams answer 200 once they start, even when the stream carries
  * an `error` event (3.1, 3.4), and the developer endpoint test (55) and the
- * testing-data load (56) answer 200 with a Style A body. `POST /auth/logout`
- * (63) and `POST /admin/agents/transfer` (86) are org server routes, proven
- * in `org-auth.e2e-spec.ts` and `org-admin.e2e-spec.ts`.
+ * testing-data load (56) answer 200 with a Style A body.
  *
- * It drives the BUILT backend (`npm run build` first) in local mode with a
+ * It drives the BUILT backend (`npm run build` first) with a
  * fresh `APP_DATA_DIR`. Needs no Postgres and no LLM.
  */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  type Backend,
-  bearer,
-  boot,
-  signInLocally,
-  stop,
-} from './backend-process';
+import { type Backend, boot, stop } from './backend-process';
 
 const dataDir = mkdtempSync(join(tmpdir(), 'qti-response-status-'));
 
@@ -27,13 +19,11 @@ jest.setTimeout(120_000);
 
 describe('POST routes the spec answers with 200 (api.md 1.4)', () => {
   let backend: Backend | undefined;
-  /** Demo User's local auth session (admin R71). */
-  let token = '';
 
   const post = (path: string, body: unknown) =>
     fetch(`${backend!.url}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...bearer(token) },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
   /** The `data:` frames of a stream (api.md 3.1). */
@@ -52,7 +42,6 @@ describe('POST routes the spec answers with 200 (api.md 1.4)', () => {
 
   beforeAll(async () => {
     backend = await boot(dataDir);
-    token = await signInLocally(backend.url);
   });
 
   afterAll(async () => {
