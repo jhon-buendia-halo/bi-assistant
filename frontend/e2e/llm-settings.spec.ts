@@ -5,8 +5,9 @@ import { test, expect } from './fixtures/app.fixture';
 import {
   WORLD_CUP_SESSION,
   createWorldCupSession,
+  openSessions,
 } from './helpers/app-actions';
-import { seedWorldCupDataset } from './helpers/agents-api';
+import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import { LlmStub, startLlmStub, turnRequests } from './helpers/llm-stub';
 
 // Mirrors the "LLM settings" Feature in specs/capabilities/llm-settings/spec.md
@@ -272,4 +273,37 @@ test('saves the chosen effort and uses it on the next turn', async ({
     .poll(() => turnRequests(stub, question).length)
     .toBeGreaterThan(0);
   expect(turnRequests(stub, question)[0].reasoningEffort).toBe('medium');
+});
+
+/** Opens the New conversation screen from the Sessions page. */
+async function openComposer(page: Page): Promise<void> {
+  await openSessions(page);
+  await page
+    .locator('header')
+    .getByRole('button', { name: 'Start New Conversation' })
+    .click();
+  await expect(page.getByPlaceholder('My new session')).toBeVisible();
+}
+
+test('sets the reasoning effort from the new-session composer', async ({
+  page,
+}) => {
+  await saveLenaiSettings(page, stub.baseUrl, DEPLOYMENT);
+  await page.reload();
+  await openComposer(page);
+
+  // The model and the effort chip are always shown (R8, R43; BA-232).
+  await expect(page.getByText(DEPLOYMENT, { exact: true })).toBeVisible();
+  const effortChip = page.getByTitle('Reasoning effort');
+  await expect(effortChip).toHaveText('high');
+
+  await effortChip.click();
+  await page.getByRole('button', { name: 'low', exact: true }).click();
+  await expect(page.getByText('Reasoning effort set to low')).toBeVisible();
+  await expect(effortChip).toHaveText('low');
+});
+
+test('shows that no model is configured', async ({ page }) => {
+  await openComposer(page);
+  await expect(page.getByText('No model configured')).toBeVisible();
 });

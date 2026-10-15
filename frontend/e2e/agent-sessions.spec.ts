@@ -3,6 +3,7 @@ import { test, expect } from './fixtures/app.fixture';
 import { WORLD_CUP_DATASET, openSessions } from './helpers/app-actions';
 import {
   UserAgentInput,
+  createSkill,
   createUserAgent,
   deleteDataset,
   publishAgent,
@@ -337,4 +338,50 @@ test('deleting the agent keeps its sessions on the plain assistant', async ({
   expect(firstTurnRequest('And in 2010?').path).toContain(
     '/deployments/stub-deployment/',
   );
+});
+
+/** Skill names in the `<available_skills>` catalog of a request. */
+function catalogSkills(request: StubRequest): string[] {
+  const catalog = systemTexts(request)
+    .join('\n')
+    .match(/<available_skills>[\s\S]*?<\/available_skills>/);
+  if (!catalog) return [];
+  return [...catalog[0].matchAll(/<name>([^<]+)<\/name>/g)].map((m) => m[1]);
+}
+
+test("the agent's tool selection and skills apply to every turn", async ({
+  page,
+}) => {
+  await createSkill(page, {
+    name: 'fiscal-calendar',
+    description: 'Use when a question names a fiscal year.',
+    body: 'Our fiscal year starts on 1 July.',
+  });
+  // "Offers only Sample rows and has the skill": both are links (ADR-0024).
+  const financeId = await createUserAgent(page, {
+    name: 'Finance helper',
+    instructions:
+      'Use [[skill:fiscal-calendar]] for dates and [[tool:sample_rows]] to peek at data.',
+    datasets: [WORLD_CUP_DATASET],
+  });
+  await publishAgent(page, financeId);
+  await startChatFromCard(page, 'Finance helper');
+
+  for (const [index, question] of [
+    'Who won in 2014?',
+    'And in 2010?',
+  ].entries()) {
+    await send(page, question);
+    await expectAnswered(page, index + 1);
+    const request = firstTurnRequest(question);
+    expect(request.tools).toContain('sample_rows');
+    for (const tool of [
+      'ask_clarification',
+      'create_visual',
+      'update_visual',
+    ]) {
+      expect(request.tools, `${question}: ${tool}`).not.toContain(tool);
+    }
+    expect(catalogSkills(request)).toContain('fiscal-calendar');
+  }
 });

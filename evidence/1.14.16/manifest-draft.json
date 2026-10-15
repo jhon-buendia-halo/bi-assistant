@@ -1,0 +1,16 @@
+{
+  "rfpId": "bc63a021-e3a2-468d-9e2d-a9633bbe2ad6",
+  "title": "Orchard Manufacturing — 2027 benefits RFP",
+  "generatedAt": "2026-10-15T13:06:21Z",
+  "files": [
+    "rfp.md",
+    "rfp.pdf",
+    "exhibits/exhibit-a-census.csv",
+    "exhibits/exhibit-b-plan-designs.csv",
+    "exhibits/exhibit-c-financials.csv",
+    "exhibits/exhibit-d-carriers.csv",
+    "manifest.json"
+  ],
+  "draft": true,
+  "stage": 3
+}

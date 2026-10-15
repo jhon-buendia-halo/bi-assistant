@@ -102,7 +102,7 @@ Settings area, **LLM Configuration** ([../app-shell/spec.md](../app-shell/spec.m
 
 ## Flows
 
-E2E: `frontend/e2e/llm-settings.spec.ts` covers "LenAI needs a deployment name and a base URL", "Never shows the stored key", "Keeps a key saved under the former development secret", "Asks for the key again when the app secret changed", "Offers the effort levels of the chosen model", "Tests a reasoning model at its lowest effort" and "Saves the chosen effort and uses it on the next turn", against a local stub of the LenAI gateway. The other scenarios need a real provider and are not automated yet.
+E2E: `frontend/e2e/llm-settings.spec.ts` covers "LenAI needs a deployment name and a base URL", "Never shows the stored key", "Keeps a key saved under the former development secret", "Asks for the key again when the app secret changed", "Offers the effort levels of the chosen model", "Tests a reasoning model at its lowest effort", "Saves the chosen effort and uses it on the next turn", "Sets the reasoning effort from the new-session composer" and "Shows that no model is configured", against a local stub of the LenAI gateway. The other scenarios need a real provider and are not automated yet.
 
 ```gherkin
 Feature: LLM settings

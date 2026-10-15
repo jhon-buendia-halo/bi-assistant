@@ -1,0 +1,9 @@
+Command (from frontend/): E2E_SKIP_DOCKER=1 npx playwright test --project=web --reporter=list --output=<scratch> e2e/testing-data.spec.ts (part of the run with e2e/rfp-builder.spec.ts)
+Target: web, built backend/dist at HEAD 7669c9a. Desktop not run (no desktopOnly() scenario in this file).
+Run: 2026-10-15
+
+  ✓  11 [web] › e2e/testing-data.spec.ts:58:5 › lists the bundled samples and what is loaded (5.0s)
+  ✓  12 [web] › e2e/testing-data.spec.ts:91:7 › loads the Intellify sample into a new database › seeds it, registers it and reports 49/49 (6.1s)
+  ✓  13 [web] › e2e/testing-data.spec.ts:144:5 › registers the Intellify RFP API (4.7s)
+
+  3 passed (testing-data.spec.ts)

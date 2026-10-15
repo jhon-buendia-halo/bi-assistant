@@ -192,7 +192,7 @@ In-app skills: know-how a user writes in the app and assigns to their agents (AD
 
 The built-in skills, edited in the app as overrides (ADR-0023; [data-model.md](../../system/data-model.md) 3.10.2; [agents.md](../../system/agents.md) 7.3).
 
-- R75. The skills library SHALL show two sections: **Your skills** (R69) and **Built-in · included in every agent**, listing `curated-knowledge`, `deep-analysis` and `interactive-visuals` with their loading mode (`On demand` or `Loaded by the app`), their description as served, and a **Modified** chip when overridden. The built-in skills SHALL NOT be offered in the agent editor's Skills field; its hint SHALL add `Every agent also gets the built-in skills.`
+- R75. The skills library SHALL show two sections: **Your skills** (R69) and **Built-in · included in every agent**, listing only the built-in skills of the agents every user agent builds on (the assistant and the visual designer: `curated-knowledge`, `deep-analysis` and `interactive-visuals`; an Official agent's own skills, such as the RFP Builder's stage skills, show only on that agent's Skills tab) with their loading mode (`On demand` or `Loaded by the app`), their description as served, and a **Modified** chip when overridden. The built-in skills SHALL NOT be offered in the agent editor's Skills field; its hint SHALL add `Every agent also gets the built-in skills.`
 - R76. A built-in row SHALL open the **built-in skill editor**: Description, What the agent sees, Body, and the built-in's own files, each with its path read-only and its content editable. Files SHALL NOT be added or removed. A banner SHALL say `Changes apply to every session and agent as soon as you save. Run the evals to check them.`
 - R77. **Save** SHALL store the override and show `Built-in skill "<name>" saved`. It SHALL apply to the next call of every session, agent, deep analysis and visual, without a restart. A refusal SHALL show the backend's message as an error toast and change nothing ([api.md](../../system/api.md) 101); an override that drops a placeholder the app fills SHALL be refused.
 - R78. **Reset to built-in**, shown while the skill is modified, SHALL ask `Reset "<name>" to the built-in version?`, delete the override, show `Built-in skill "<name>" reset` and show the shipped content.
@@ -746,7 +746,7 @@ Feature: Agent editor
     Given a draft user agent "Cup historian" over "World Cup Core" whose instructions contain "[[skill:gone]]"
     When I open "Cup historian" from "Agents" and click "Edit"
     Then the chip "gone" is shown as not found
-    When I click "Save"
+    When I change "Description" and click "Save"
     Then I see the error toast 'Unknown skill "gone"'
 
   Scenario: An agent saved before links gets a links line
@@ -827,7 +827,7 @@ Feature: Agent editor
     When I click "Edit"
     Then I see the hint "Type / to link a skill or tool. The agent only gets the skills and tools its instructions link."
     And "Save prompt" is disabled
-    When I type "/fis" in the instructions and pick "fiscal-calendar"
+    When I type " /fis" after the instructions' text and pick "fiscal-calendar"
     Then the "Linked:" row shows the chip "fiscal-calendar"
     When I click "Save prompt"
     Then I see the toast "Draft saved"
@@ -897,7 +897,7 @@ Feature: Agent editor
     And the axe scan reports no violations in the Dark theme
 ```
 
-E2E: none yet for the Feature below.
+E2E: `frontend/e2e/skill-library.spec.ts`
 
 ### Feature: Skill library
 
@@ -992,7 +992,7 @@ Feature: Skill library
 
 ```
 
-E2E: none yet
+E2E: `frontend/e2e/builtin-agent-prompts.spec.ts`
 
 ### Feature: Built-in agent prompts
 
@@ -1071,7 +1071,11 @@ Feature: Built-in agent prompts
   Scenario: The RFP Builder's prompt links only its own tools and skill
     Given I am editing the System Prompt of "RFP Builder"
     When I type "/" in the prompt
-    Then the menu offers "list_clients" and "rfp-carriers" and not "run_readonly_sql"
+    Then the menu offers "rfp-carriers" and not "run_readonly_sql"
+    When I continue with "list_cl"
+    Then the menu offers "list_clients"
+    When I type "/run_readonly" instead
+    Then the menu offers nothing named "run_readonly_sql"
     When I append "[[tool:run_readonly_sql]]" to the prompt
     And I click "Save prompt"
     Then I see the error toast 'Unknown tool "run_readonly_sql"'
@@ -1082,7 +1086,7 @@ Feature: Built-in agent prompts
 
 ```
 
-E2E: none yet
+E2E: `backend/test/user-agents.e2e-spec.ts`
 
 The Feature below is API-level. It is covered by the backend e2e `backend/test/user-agents.e2e-spec.ts`, not by Playwright.
 

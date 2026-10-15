@@ -611,6 +611,106 @@ describeLive('Intellify RFP API (live database)', () => {
       expect(del.body.code).toBe('conflict');
     });
 
+    it('exports a draft package marked DRAFT with its stage (draft=true)', async () => {
+      const id = (
+        await send('post', '/v1/rfps', {
+          clientOneCode: 'IC100100',
+          planYear: 2027,
+          createdBy: CREATED_BY,
+        }).expect(201)
+      ).body.id as string;
+      const rfp = (
+        await send('patch', `/v1/rfps/${id}`, { stage: 3 }).expect(200)
+      ).body;
+      /** Entries of a stored zip with their bytes. */
+      const entries = (zip: Buffer): Map<string, Buffer> => {
+        const out = new Map<string, Buffer>();
+        let at = 0;
+        while (at + 30 <= zip.length && zip.readUInt32LE(at) === 0x04034b50) {
+          const size = zip.readUInt32LE(at + 18);
+          const nameLength = zip.readUInt16LE(at + 26);
+          const extra = zip.readUInt16LE(at + 28);
+          const start = at + 30 + nameLength + extra;
+          out.set(
+            zip.subarray(at + 30, at + 30 + nameLength).toString(),
+            zip.subarray(start, start + size),
+          );
+          at = start + size;
+        }
+        return out;
+      };
+
+      const draft = await get(`/v1/rfps/${id}/package.zip?draft=true`)
+        .buffer(true)
+        .parse(binary)
+        .expect(200);
+      const files = entries(draft.body as Buffer);
+      expect([...files.keys()]).toEqual([
+        'rfp.md',
+        'rfp.pdf',
+        'exhibits/exhibit-a-census.csv',
+        'exhibits/exhibit-b-plan-designs.csv',
+        'exhibits/exhibit-c-financials.csv',
+        'exhibits/exhibit-d-carriers.csv',
+        'manifest.json',
+      ]);
+      const md = files.get('rfp.md')!.toString().split('\n');
+      expect(md[0]).toBe(`# DRAFT — ${rfp.title}`);
+      expect(md.slice(1, 3).join('\n')).toMatch(
+        /Draft exported \d{4}-\d{2}-\d{2} at stage 3 of 7 — not for release to carriers\./,
+      );
+      expect(JSON.parse(files.get('manifest.json')!.toString())).toMatchObject({
+        rfpId: id,
+        draft: true,
+        stage: 3,
+      });
+      // DRAFT in each PDF page header is proven by pdf.spec.ts.
+      expect(files.get('rfp.pdf')!.subarray(0, 5).toString()).toBe('%PDF-');
+
+      // Without the query nothing changes.
+      const final = await get(`/v1/rfps/${id}/package.zip`)
+        .buffer(true)
+        .parse(binary)
+        .expect(200);
+      const finalFiles = entries(final.body as Buffer);
+      expect(finalFiles.get('rfp.md')!.toString().split('\n')[0]).toBe(
+        `# ${rfp.title}`,
+      );
+      expect(finalFiles.get('rfp.md')!.toString()).not.toContain(
+        'Draft exported',
+      );
+      const manifest = JSON.parse(finalFiles.get('manifest.json')!.toString());
+      expect(manifest).not.toHaveProperty('draft');
+      expect(manifest).not.toHaveProperty('stage');
+    });
+
+    it("bulk-deletes every record of an eval run's tag, whatever its status", async () => {
+      const evalTag = `eval:e2e-${Date.now().toString(36)}`;
+      const ready = (
+        await send('post', '/v1/rfps', {
+          clientOneCode: 'IC100100',
+          planYear: 2027,
+          createdBy: evalTag,
+        }).expect(201)
+      ).body.id as string;
+      await send('patch', `/v1/rfps/${ready}`, { status: 'ready' }).expect(200);
+      const draft = (
+        await send('post', '/v1/rfps', {
+          clientOneCode: 'IC100100',
+          planYear: 2028,
+          createdBy: evalTag,
+        }).expect(201)
+      ).body.id as string;
+
+      const res = await send(
+        'delete',
+        `/v1/rfps?createdBy=${encodeURIComponent(evalTag)}`,
+      ).expect(200);
+      expect(res.body.deleted).toBe(2);
+      await get(`/v1/rfps/${ready}`).expect(404);
+      await get(`/v1/rfps/${draft}`).expect(404);
+    });
+
     it('takes createdBy from X-Qti-User and bulk-deletes the drafts', async () => {
       const draft = await send('post', '/v1/rfps', {
         clientOneCode: 'IC100100',

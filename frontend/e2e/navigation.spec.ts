@@ -1,5 +1,11 @@
+import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.fixture';
+import { apiFetch } from './helpers/api';
+
+/** Evidence screenshots of the claimed state (CLAUDE.md Evidence convention). */
+const evidence = (feature: string, name: string) =>
+  path.resolve(__dirname, '../../evidence', feature, name);
 
 const rail = (page: Page) =>
   page.getByRole('complementary', { name: 'Navigation rail' });
@@ -61,6 +67,32 @@ test('the start page explains how the product works', async ({ page }) => {
       step,
     );
   }
+  // The fourth step names a place but opens nothing.
+  await expect(
+    page.getByTestId('welcome-step-4').getByRole('button'),
+  ).toHaveCount(0);
+  await page.screenshot({ path: evidence('1.14.17', 'welcome-page.png') });
+
+  // Each step opens the place it names (app-shell R51).
+  const step = (n: number) => page.getByTestId(`welcome-step-${n}`);
+  await step(1).getByRole('button', { name: 'Datasets' }).click();
+  await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
+  await expectCurrent(page, 'Datasets');
+
+  await page.goto(page.url());
+  await step(2).getByRole('button', { name: 'Start a conversation' }).click();
+  await expect(page.getByPlaceholder('My new session')).toBeVisible();
+  await expectCurrent(page, 'Sessions');
+
+  await page.goto(page.url());
+  await step(3).getByRole('button', { name: 'Agents' }).click();
+  await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
+  await expectCurrent(page, 'Agents');
+
+  await page.goto(page.url());
+  await page.getByRole('button', { name: 'Explore agents' }).click();
+  await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
+  await expectCurrent(page, 'Agents');
 });
 
 test('opens with the navigation drawer expanded', async ({ page }) => {
@@ -181,10 +213,58 @@ test('shows the product name', async ({ page }) => {
 });
 
 test('the app opens straight into the shell', async ({ page }) => {
+  // The fixture only waits for the shell; it never signs in (BA-232).
   await expect(rail(page)).toBeVisible();
   await expect(page.getByLabel('Open system logs')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Welcome to Agentic Hub' }),
+  ).toBeVisible();
+  // No sign-in page.
+  await expect(page.getByRole('button', { name: /sign in/i })).toHaveCount(0);
+  await expect(page.getByText(/sign in/i)).toHaveCount(0);
+  // No account avatar or account menu, and no Admin item.
   await expect(
     page.getByRole('button', { name: 'Account menu', exact: true }),
   ).toHaveCount(0);
   await expect(railItem(page, 'Admin')).toHaveCount(0);
+  await expect(rail(page).getByText('Admin', { exact: true })).toHaveCount(0);
+  await page.screenshot({
+    path: evidence('1.14.19', 'opens-without-sign-in.png'),
+  });
+
+  // The identity and admin routes are gone (api.md; ADR-0030).
+  for (const route of ['/me', '/admin/overview', '/auth/local/personas']) {
+    expect((await apiFetch(page, 'GET', route)).status(), route).toBe(404);
+  }
+
+  // Every area is reachable (app-shell R3, R50).
+  for (const area of ['Datasets', 'Agents', 'Knowledge']) {
+    await railItem(page, area).click();
+    await expect(page.getByRole('heading', { name: area })).toBeVisible();
+    await expectCurrent(page, area);
+  }
+  await railItem(page, 'Sessions').click();
+  await expect(sessionsList(page)).toBeVisible();
+
+  // Every Settings section is reachable, LLM Configuration with its
+  // Reasoning effort (llm-settings R37, R43).
+  await railItem(page, 'Settings').click();
+  const sections = page.getByRole('navigation', {
+    name: 'Settings navigation',
+  });
+  for (const section of [
+    'Datasource Configuration',
+    'LLM Configuration',
+    'Testing Data',
+    'Developer',
+    'Appearance',
+  ]) {
+    await sections.getByRole('button', { name: section }).click();
+    await expect(
+      page.getByRole('heading', { name: section, exact: true }),
+    ).toBeVisible();
+    if (section === 'LLM Configuration') {
+      await expect(page.getByLabel('Reasoning effort')).toBeVisible();
+    }
+  }
 });

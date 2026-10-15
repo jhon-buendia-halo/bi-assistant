@@ -275,7 +275,7 @@ The scenario "Renders a deterministic interactive visualization and its version 
 
 ### Feature: Visual tailoring
 
-E2E: none yet.
+E2E: `frontend/e2e/visual-tailoring.spec.ts` covers "The visual follows the app's theme" (the theme is switched through System and the operating system setting, so the chat and its panel stay open) and "An older visual opens in the current theme" (the stored visual is rewritten on disk as a legacy bundle whose own styles hardcode the old dark frame); the other scenarios have none yet.
 
 ```gherkin
 Feature: Visual tailoring

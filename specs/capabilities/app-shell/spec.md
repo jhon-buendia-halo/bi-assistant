@@ -68,7 +68,7 @@ Sessions area
 - R51. The home view (R2) SHALL welcome the user and explain how the product works (asked by the user on 2026-10-14; BA-230): the heading "Welcome to Agentic Hub", the line "Ask questions about your data in plain English, or let an agent walk you through a process step by step.", and four numbered steps, each opening the place it names: 1 "Pick your data" (button "Datasets", opens the Datasets area), 2 "Ask a question" (button "Start a conversation", opens the New conversation composer), 3 "Work with an agent" (button "Agents", opens the Agents area), 4 "Read, refine, download" (no button). Below the steps, a primary "Explore agents" button opens the Agents area. It replaces the earlier decorative empty composer box.
 
 Single user
-- R50. The shell SHALL appear at once on launch, with no sign-in page, and every control SHALL be shown: the Settings area offers **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** and **Appearance** to the one user (the built-in super admin).
+- R52. The shell SHALL appear at once on launch, with no sign-in page, and every control SHALL be shown: the Settings area offers **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** and **Appearance** to the one user (the built-in super admin).
 
 Appearance
 - R39. The Appearance section SHALL offer a single choice labelled **Theme** with three options: **System**, **Light** and **Dark**. Exactly one is selected. The default, when nothing has been chosen, is Light.

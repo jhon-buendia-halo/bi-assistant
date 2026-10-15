@@ -161,3 +161,37 @@ export async function createKnowledgeSnippet(
   );
   return ((await response.json()) as { id: string }).id;
 }
+
+export interface SkillInput {
+  name: string;
+  description: string;
+  body: string;
+  /** Reference files, each `{ path, content }` (data-model 3.10.1). */
+  files?: { path: string; content: string }[];
+}
+
+/** Creates an in-app skill (`POST /skills`, api.md 96) and returns its id. */
+export async function createSkill(
+  page: Page,
+  input: SkillInput,
+): Promise<string> {
+  const { skill } = await call<StyleA & { skill: { id: string } }>(
+    page,
+    'POST',
+    '/skills',
+    { files: [], ...input },
+  );
+  return skill.id;
+}
+
+/** Saves an in-app skill (`PUT /skills/:id`, api.md 97). */
+export async function updateSkill(
+  page: Page,
+  id: string,
+  input: SkillInput,
+): Promise<void> {
+  await call(page, 'PUT', `/skills/${encodeURIComponent(id)}`, {
+    files: [],
+    ...input,
+  });
+}

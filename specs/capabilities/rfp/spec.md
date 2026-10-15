@@ -83,7 +83,7 @@ See [ui.md](../../system/ui.md).
 
 ### Feature: RFP builder
 
-E2E: none yet (planned: `frontend/e2e/rfp-builder.spec.ts`, roadmap 1.14.16).
+E2E: `frontend/e2e/rfp-builder.spec.ts`
 
 ```gherkin
 Feature: RFP builder
@@ -139,6 +139,23 @@ Feature: RFP builder
     Then the answer shows "RFP package (draft) · 7 files" with a "Draft" chip and "Download draft (.zip)"
     And the document's title starts with "DRAFT — "
 
+  Scenario: A draft never replaces the final package
+    Given a draft RFP exists for "Orchard Manufacturing" with one line and one carrier
+    And the stub answers "Build the final package" by calling "export_rfp_package" for that RFP
+    And it answers "Now export a draft too" by calling "export_rfp_draft" for that RFP
+    When I send "Build the final package" and then "Now export a draft too"
+    Then the chat shows the card "RFP package · 7 files" and the card "RFP package (draft) · 7 files"
+    When I click "Download package (.zip)" on the first card
+    Then its "rfp.md" starts with "# Orchard Manufacturing — 2027 benefits RFP" and its manifest has no "draft"
+    When I click "rfp.md" on the draft card
+    Then the file starts with "# DRAFT — Orchard Manufacturing — 2027 benefits RFP"
+
+  Scenario: An RFP Builder chat hides the assistant's controls
+    When I click "Start chat with RFP Builder"
+    Then the composer offers no "Careful" and no "Deep analysis" toggle
+    When I send "Which of my clients renew on 1 January 2027?" and the stub answers with text
+    Then the answer offers no "Generate interactive visuals"
+
   Scenario: The System Prompt tab shows the RFP Builder's prompt
     When I open the "RFP Builder" agent and its "System Prompt" tab
     Then the prompt starts with "You are the RFP Builder"
@@ -147,7 +164,7 @@ Feature: RFP builder
 
 ### Feature: Intellify RFP API
 
-E2E: none yet (API-level: the backend end-to-end test of the Intellify RFP API covers it, and is skipped visibly when the sample database is not available).
+E2E: none in Playwright (API-level: the backend end-to-end tests `backend/test/intellify-api.e2e-spec.ts` and, for the reseed, `backend/test/intellify-api-reseed.e2e-spec.ts` cover it; each is skipped visibly when the sample database is not available).
 
 ```gherkin
 Feature: Intellify RFP API
@@ -178,6 +195,25 @@ Feature: Intellify RFP API
   Scenario: Reads cannot write
     When a read route is made to run a statement that writes (test hook)
     Then PostgreSQL rejects it with "cannot execute ... in a read-only transaction"
+
+  Scenario: A draft package is marked DRAFT and carries its stage
+    Given an RFP at stage 3
+    When I call GET /v1/rfps/{id}/package.zip?draft=true
+    Then the zip holds the same seven files as the final package
+    And its rfp.md starts with "# DRAFT — <title>" followed by "Draft exported <date> at stage 3 of 7 — not for release to carriers."
+    And its manifest.json has "draft": true and "stage": 3
+    And GET /v1/rfps/{id}/package.zip without the query is unchanged
+
+  Scenario: An eval run's records are deleted whatever their status
+    Given an eval run's tag created a "ready" RFP and a "draft" RFP
+    When I call DELETE /v1/rfps?createdBy=<that tag>
+    Then the answer is { "deleted": 2 } and both records are gone
+
+  Scenario: RFP records survive a reseed of the Intellify sample
+    Given the API reads a database of its own, seeded with the Intellify sample
+    And a draft RFP with one line and one carrier
+    When the Intellify sample is loaded into that database again
+    Then GET /v1/rfps/{id} returns the draft with its line and carrier and no "clientMissing"
 ```
 
 ## Acceptance

@@ -101,7 +101,7 @@ Settings → **Testing Data** (see [ui.md](../../system/ui.md)). Heading "Testin
 
 ### Feature: Testing data
 
-E2E: `frontend/e2e/testing-data.spec.ts` for "Lists the bundled samples and what is loaded" and "Loads the Intellify sample into a new database"; the other scenarios are not automated yet.
+E2E: `frontend/e2e/testing-data.spec.ts` for "Lists the bundled samples and what is loaded", "Loads the Intellify sample into a new database" and "Registers the Intellify RFP API"; the other scenarios are not automated yet.
 
 ```gherkin
 Feature: Testing data

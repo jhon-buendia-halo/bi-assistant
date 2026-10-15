@@ -100,7 +100,7 @@ See [ui.md](../../system/ui.md), section 4.13 (Session panel) and 4.12.1 (Workfl
 
 ### Feature: Agent panel
 
-E2E: none yet (planned: `frontend/e2e/agent-panel.spec.ts`, roadmap 1.14.18).
+E2E: `frontend/e2e/agent-panel.spec.ts`
 
 ```gherkin
 Feature: Agent panel
@@ -140,7 +140,7 @@ Feature: Agent panel
     And the stub answers by calling "show_in_panel" with kind "file" and path "notes/summary.md"
     When I send "Show me the summary notes"
     Then the panel shows the content of "summary.md" rendered as a document
-    And its Download button has the title "Download file"
+    And its Download button has the title "Download PDF", with "Download as…" offering Markdown
 
   Scenario: An invalid path is refused and the panel does not change
     Given the panel shows the document "Findings"

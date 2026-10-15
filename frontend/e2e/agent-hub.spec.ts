@@ -340,6 +340,35 @@ test('deleting an agent asks first', async ({ page }) => {
   await expect(page.getByTestId(`agent-card-${claimsId}`)).toHaveCount(0);
 });
 
+test('skills opens the skills library and Back returns to the hub', async ({
+  page,
+}) => {
+  await openHub(page);
+  const skills = button(page, 'Skills');
+  await expect(skills).toBeVisible();
+  // Beside "New agent", in the hub's header.
+  const actions = page.getByTestId('agent-new').locator('..');
+  await expect(actions.getByTestId('agent-skills-library')).toBeVisible();
+
+  await skills.click();
+  await expect(
+    page.getByRole('heading', { name: 'Skills', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByTestId('skill-new')).toBeVisible();
+  await expect(
+    page.getByRole('heading', {
+      name: 'Built-in · included in every agent',
+      exact: true,
+    }),
+  ).toBeVisible();
+
+  await button(page, 'Back').click();
+  await expect(
+    page.getByRole('heading', { name: 'Agents', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByTestId(`agent-card-${healthId}`)).toBeVisible();
+});
+
 test('the hub has no detectable accessibility violations in either theme', async ({
   page,
 }) => {

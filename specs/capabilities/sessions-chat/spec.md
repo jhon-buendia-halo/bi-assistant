@@ -325,7 +325,7 @@ Feature: Chat and visuals
 
 ### Feature: Session management
 
-E2E: none yet. Session creation with real data and reopening after a reload are covered by the "Datasources, datasets, and sessions (World Cup database)" Feature in [datasources](../datasources/spec.md).
+E2E: `frontend/e2e/session-management.spec.ts` covers every scenario below except "The conversation and its history survive a restart" (none yet; the "I start an RFP Builder session" test saves a dataset named "Intellify RFP API" in place of loading the sample). Session creation with real data and reopening after a reload are covered by the "Datasources, datasets, and sessions (World Cup database)" Feature in [datasources](../datasources/spec.md).
 
 ```gherkin
 Feature: Session management
@@ -378,7 +378,7 @@ Feature: Session management
     When I click "Create"
     Then I see the toast 'Session "RFP Builder" created'
     And the page header shows the agent "RFP Builder"
-    And the "Sessions" list shows it with "RFP Builder · Intellify RFP API" under its name
+    And the "Sessions" list shows it with "Intellify RFP API" under its name and the agent chip "RFP Builder"
 
   Scenario: The Agent field disables an agent that cannot start
     Given the "Intellify RFP API" sample is not loaded
@@ -408,6 +408,28 @@ Feature: Session management
     And I click "World Cup analysis"
     Then I see "Who won in 2022?" and its answer
     And hovering the history strip lists "Who won in 2022?"
+
+  Scenario: I copy the session id to share it
+    Given a "World Cup analysis" session exists and is open
+    Then the page header shows "ID" and the first 8 characters of the session id, with the tooltip "Session ID <id> (click to copy)"
+    When I click the session id
+    Then I see the toast "Session ID copied"
+    And the clipboard holds the full session id
+
+  Scenario: The Sessions page finds a session by name or ID
+    Given 12 sessions exist, the newest named "Cup history"
+    When I click "Sessions" on the rail
+    Then I see 10 sessions, "Cup history" first, and "1–10 of 12" with "Page 1 of 2"
+    When I click "Next page"
+    Then I see 2 sessions and "11–12 of 12"
+    When I type "cup HISTORY" into "Search sessions by name or ID…"
+    Then I see only "Cup history", with "World Cup Core" under its name, the agent chip "Assistant" and "ID" with the first 8 characters of its id
+    When I type the first 8 characters of its id in capitals
+    Then I see only "Cup history"
+    When I type "nothing like this"
+    Then I see 'No sessions match "nothing like this".'
+    When I clear the search and click "Cup history"
+    Then I see the "Cup history" chat open
 ```
 
 ### Feature: Chat answers and reliability signals
@@ -529,7 +551,7 @@ Feature: Sessions started from an agent
     When I click "Agents"
     And I click "Start chat with Cup historian"
     Then I see the toast 'Session "Cup historian" created'
-    And the "Cup historian" chat is open, and the "Sessions" list shows it with "Cup historian · World Cup Core" under its name
+    And the "Cup historian" chat is open, and the "Sessions" list shows it with "World Cup Core" under its name and the agent chip "Cup historian"
     And the page header shows the agent "Cup historian"
     And I see "Answers questions about World Cup history"
     And I see the starter questions "Who won in 2014?" and "Which country hosted in 2002?"

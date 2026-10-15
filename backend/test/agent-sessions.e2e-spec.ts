@@ -1,7 +1,8 @@
 /**
  * API-level proof of R52 and R57-R59 in specs/capabilities/sessions-chat/spec.md
  * ("Sessions started from an agent"): `POST /sessions` with an `agentId`
- * takes the agent's Live name and existing datasets, refuses unknown,
+ * takes the typed name, else the agent's Live name (R64), and its existing
+ * datasets, refuses unknown,
  * built-in, unpublished and dataset-less agents, and every session read
  * carries the derived `agent` field, including after the agent is deleted
  * and after a backend restart. The turns themselves are proven by the
@@ -144,10 +145,9 @@ describe('Sessions started from an agent (API)', () => {
     });
   });
 
-  it("creates a session from the Live agent, dropping missing datasets and ignoring the body's name and datasets", async () => {
+  it("creates a session from the Live agent, named after it, dropping missing datasets and ignoring the body's datasets", async () => {
     await ok('post', `/agents/${historianId}/publish`);
     const answer = await startFrom(historianId, {
-      name: 'Ignored',
       datasets: ['Scratch'],
     });
     expect(answer).toMatchObject({
@@ -176,6 +176,31 @@ describe('Sessions started from an agent (API)', () => {
       name: 'Cup historian',
       deleted: false,
     });
+  });
+
+  it('a typed name names the session; a blank one takes the Live name (api.md 3; sessions-chat R64)', async () => {
+    const typed = await startFrom(historianId, { name: '  Kickoff notes  ' });
+    expect(typed).toMatchObject({
+      ok: true,
+      message: 'Session "Kickoff notes" created',
+      session: {
+        name: 'Kickoff notes',
+        datasets: ['World Cup Core'],
+        agentId: historianId,
+        agentName: 'Cup historian',
+      },
+    });
+    const long = await startFrom(historianId, { name: 'x'.repeat(80) });
+    expect(long.session?.name).toBe('x'.repeat(64));
+    const blank = await startFrom(historianId, { name: '   ' });
+    expect(blank).toMatchObject({
+      ok: true,
+      message: 'Session "Cup historian" created',
+      session: { name: 'Cup historian', agentId: historianId },
+    });
+    for (const answer of [typed, long, blank]) {
+      await ok('delete', `/sessions/${answer.session!.id}`);
+    }
   });
 
   it('refuses an agent none of whose datasets exist', async () => {

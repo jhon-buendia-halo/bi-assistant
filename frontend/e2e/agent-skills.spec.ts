@@ -2,6 +2,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
+import { WORLD_CUP_DATASET } from './helpers/app-actions';
+import {
+  createSkill,
+  createUserAgent,
+  publishAgent,
+  seedWorldCupDataset,
+} from './helpers/agents-api';
 
 /**
  * Mirrors the Feature "Agent skills" in specs/capabilities/agents-evals/spec.md
@@ -103,4 +110,45 @@ test('the assistant gets only its built-in skills, and an old skills folder is i
   await expect(skill(page, 'deep-analysis')).toContainText('Loaded by the app');
   await expect(skill(page, 'sql-style')).toHaveCount(0);
   await expect(page.getByText('sql-style')).toHaveCount(0);
+});
+
+test("a user agent's Skills tab is its inline library, not the read-only list", async ({
+  app: { page },
+}) => {
+  await seedWorldCupDataset(page);
+  await createSkill(page, {
+    name: 'fiscal-calendar',
+    description: 'Use when a question names a fiscal year.',
+    body: 'Our fiscal year starts on 1 July.',
+  });
+  const id = await createUserAgent(page, {
+    name: 'Finance helper',
+    instructions: 'Use [[skill:fiscal-calendar]] for dates.',
+    datasets: [WORLD_CUP_DATASET],
+  });
+  await publishAgent(page, id);
+
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
+  await page.getByTestId(`agent-${id}`).click();
+  await page.getByTestId('agent-tab-skills').click();
+
+  const row = page.getByTestId('agent-skill-row-fiscal-calendar');
+  await expect(row).toBeVisible();
+  await expect(
+    page.getByTestId('agent-skill-linked-fiscal-calendar'),
+  ).toHaveText('Linked');
+  await expect(
+    row.getByRole('button', { name: 'Edit', exact: true }),
+  ).toBeVisible();
+  await expect(
+    row.getByRole('button', { name: 'Delete', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('Where skills come from')).toHaveCount(0);
+  // Not the built-in agents' read-only list.
+  await expect(page.locator('[data-testid^="agent-skill-fiscal"]')).toHaveCount(
+    0,
+  );
 });

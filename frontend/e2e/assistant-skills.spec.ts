@@ -244,7 +244,9 @@ test('a skills folder left in the data dir by an older version is ignored', asyn
   await createWorldCupSession(page);
   const request = await ask(page, QUESTION);
 
+  expect(systemTexts(request)[0]).not.toContain('\n## Skills\n');
   expect(catalogSkills(request)).toEqual(['curated-knowledge']);
+  expect(request.tools).toContain('skill');
   expect(stub.requests.length).toBeGreaterThan(0);
   for (const sent of stub.requests) {
     const everything = JSON.stringify(sent);
