@@ -1,0 +1,6 @@
+stdio smoke from the worktree (no .env in it), read-only calls; emailAddress and accountId redacted.
+
+initialize -> 2025-06-18 {'name': 'jira', 'version': '1.0.0'}
+tools/list -> [('whoami', 'read'), ('get_project', 'read'), ('search_issues', 'read'), ('get_issue', 'read'), ('list_statuses', 'read'), ('list_transitions', 'read'), ('create_epic', 'write'), ('create_issue', 'write'), ('update_issue', 'write'), ('add_comment', 'write'), ('transition_issue', 'write')]
+whoami -> {'displayName': 'Jhon Buendia', 'configFiles': ['/home/jhonbuendia/projects/bi-assistant/.env']}
+get_issue BA-237 -> {'key': 'BA-237', 'type': 'Story', 'status': 'To Do', 'parent': 'BA-119', 'parentType': 'Epic', 'parentSummary': 'Harness Adjustments', 'summary': 'Jira MCP tool in .claude/tools for epics and stories'}

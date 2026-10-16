@@ -200,7 +200,7 @@ Developer tooling for seeing what the backend and agents are doing: agent and LL
 
 Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the workflow gates, and the project skills and checks that govern how a change is planned, built and shipped. No app behaviour changes. Epic spec: [specs/epics/BA-119/spec.md](specs/epics/BA-119/spec.md).
 
-#### 0.4.1 — Split CLAUDE.md into workflow-stage skills ([BA-236](https://halo-powered.atlassian.net/browse/BA-236))  `🚧 In progress`
+#### 0.4.1 — Split CLAUDE.md into workflow-stage skills ([BA-236](https://halo-powered.atlassian.net/browse/BA-236))  `✅ Done`
 - **Intent:** a Claude Code session loads a workflow stage's conventions when that stage starts, as the RFP Builder loads its stage skills, rather than carrying all of CLAUDE.md on every turn.
 - **Scope:**
   - CLAUDE.md keeps only the always-on core:
@@ -220,9 +220,9 @@ Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the wor
   - A new session lists the nine skills.
   - `check-specs.py` passes.
   - Nothing under `backend/` or `frontend/` changes.
-- **Notes:** branch `feat/BA-119-harness-adjustments`. The user chose one skill per workflow stage, invocable as `/<name>`, on 2026-10-16. One rule change at the user's request, the same day: *Model usage* now says plans are made by Opus 5.5 at high effort (was Fable).
+- **Notes:** branch `feat/BA-119-harness-adjustments`. The user chose one skill per workflow stage, invocable as `/<name>`, on 2026-10-16. One rule change at the user's request, the same day: *Model usage* now says plans are made by Opus 5.5 at high effort (was Fable). Evidence: [evidence/0.4.1/](evidence/0.4.1/).
 
-#### 0.4.2 — Jira MCP tool in `.claude/tools` for epics and stories ([BA-237](https://halo-powered.atlassian.net/browse/BA-237))  `🚧 In progress`
+#### 0.4.2 — Jira MCP tool in `.claude/tools` for epics and stories ([BA-237](https://halo-powered.atlassian.net/browse/BA-237))  `✅ Done`
 - **Intent:** Claude creates and checks epics and stories through typed tools that work from any checkout, instead of a shell script that needs `jq`, careful quoting and a `raw` call to set a parent.
 - **Scope:**
   - `.claude/tools/` as the home of developer tools, each an MCP server or a script, with a README.
@@ -236,7 +236,7 @@ Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the wor
   - A stdio smoke run from a worktree reads the main checkout's `.env` and returns a real issue with its parent's type.
   - In a new session, `/mcp` lists `jira` with its eleven tools.
   - `check-specs.py` passes.
-- **Notes:** same branch `feat/BA-119-harness-adjustments`. The user chose an MCP server over scripts and over the claude.ai Atlassian connector, and chose to replace `jira.sh`, on 2026-10-16. `update_issue` replaces the `raw` calls earlier stories needed to set a parent or edit a description.
+- **Notes:** same branch `feat/BA-119-harness-adjustments`. The user chose an MCP server over scripts and over the claude.ai Atlassian connector, and chose to replace `jira.sh`, on 2026-10-16. `update_issue` replaces the `raw` calls earlier stories needed to set a parent or edit a description. Evidence: [evidence/0.4.2/](evidence/0.4.2/).
 
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 

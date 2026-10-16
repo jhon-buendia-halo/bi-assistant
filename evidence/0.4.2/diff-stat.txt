@@ -1,0 +1,29 @@
+(empty above = no file under backend/ or frontend/ changed)
+ .claude/settings.json                          |  15 +-
+ .claude/skills/jira/SKILL.md                   |  75 ++---
+ .claude/skills/jira/scripts/jira.sh            | 167 ----------
+ .claude/skills/verify/SKILL.md                 |  12 +-
+ .claude/skills/workflow-architecture/SKILL.md  |  18 ++
+ .claude/skills/workflow-e2e/SKILL.md           |  30 ++
+ .claude/skills/workflow-implement/SKILL.md     |  39 +++
+ .claude/skills/workflow-plan/SKILL.md          |  65 ++++
+ .claude/skills/workflow-retrospective/SKILL.md |  22 ++
+ .claude/skills/workflow-ship/SKILL.md          |  43 +++
+ .claude/skills/workflow-specs/SKILL.md         |  22 ++
+ .claude/skills/workflow-understand/SKILL.md    |  13 +
+ .claude/tools/README.md                        |  14 +
+ .claude/tools/jira/README.md                   |  36 +++
+ .claude/tools/jira/lib.mjs                     | 403 +++++++++++++++++++++++++
+ .claude/tools/jira/server.mjs                  |  65 ++++
+ .claude/tools/jira/setup.mjs                   |  64 ++++
+ .claude/tools/jira/tests/jira.test.mjs         | 201 ++++++++++++
+ .env.example                                   |   2 +-
+ .mcp.json                                      |   9 +
+ CLAUDE.md                                      | 200 ++----------
+ roadmap.md                                     |  42 +++
+ scripts/check-specs.py                         |   2 +-
+ specs/README.md                                |   1 +
+ specs/capabilities/diagnostics/spec.md         |   2 +-
+ specs/epics/BA-119/spec.md                     |  79 +++++
+ specs/system/delivery.md                       |  39 ++-
+ 27 files changed, 1290 insertions(+), 390 deletions(-)

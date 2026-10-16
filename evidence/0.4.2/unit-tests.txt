@@ -1,0 +1,21 @@
+✔ ADF round-trips plain text, one paragraph per non-empty line (1.032502ms)
+✔ config: the environment wins, then the first .env that sets a key; only JIRA_* is read (1.141738ms)
+✔ config: a worktree reads its own .env, then the main checkout's; JIRA_CONFIG_FILE replaces both (0.173297ms)
+✔ missing credentials are a tool error that says how to set them up, without calling Jira (3.738095ms)
+✔ get_issue reports the parent and its type, for the Epic gate (24.094328ms)
+✔ create_issue: a Story under an Epic sends the parent and returns the read-back issue (3.365781ms)
+✔ create_issue refuses a Story without an epic, and a parent that is not an Epic, before creating anything (5.494718ms)
+✔ create_epic creates an Epic in the given project (2.866365ms)
+✔ transition_issue matches a name case-insensitively and reports the new status; unknown names list the options (5.523523ms)
+✔ update_issue sends only the given fields and checks a new epic first (7.78936ms)
+✔ Jira error messages reach the tool result (2.34887ms)
+✔ search_issues defaults to the open issues of JIRA_PROJECT (2.667107ms)
+✔ MCP: initialize, tools/list, notifications and unknown methods (0.392136ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 116.325609

@@ -1,0 +1,13 @@
+11 steps
+1 | Understand the goal | restate the request in your own words before touching anything.
+2 | Ask clarifying questions until the goal is 100% understood | scope, behaviour, edge cases, acceptance criteria.
+3 | Update roadmap | find or add the feature in roadmap.md, pass the Epic gate, then work on the epic's branch and worktree.
+4 | Update architecture | if the change involves an architectural decision, record it as an ADR in specs/system/architecture.md before any code is written.
+5 | Update specs | before any test or code, update every spec the change affects.
+6 | Component impact-based analysis on E2E | for every component, page, service or backend module touched, decide per Gherkin scenario: add / update / delete / re-run-as-is.
+7 | Implement / update / delete E2E | apply the step-6 decisions to the Playwright and API-level E2E specs, each asserting what the change introduced.
+8 | Implement changes | production code, built against the Acceptance criteria and the step-5 Gherkin.
+9 | Run E2E and fix until green | the impacted E2E specs, check-specs, unit tests, lint, builds and, when an agent's input changed, its evals at 100%.
+10 | Update changelog with evidence | only after step 9 is green, add a dated changelog entry, capture the evidence and mark the roadmap entry ✅ Done.
+11 | Retrospective | add a dated entry to retrospective.md: what went well, what went wrong, what to do differently.
+first action: Read retrospective.md before doing anything else.
