@@ -61,7 +61,7 @@ Never edit `version` by hand. Conventional Commit subjects drive the automatic b
 
 ## Model usage: plan vs. execute
 
-For planning purposes, Fable creates the plan.
+For planning purposes, Opus 5.5 (`claude-opus-5-5`) at high effort creates the plan.
 
 For execution, do not pin a fixed model. Once the execution plan is well defined, the session LLM picks whichever model version it judges best for the work at hand (capability vs. speed vs. cost for that plan) and runs the plan with it.
 
