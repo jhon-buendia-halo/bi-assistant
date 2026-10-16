@@ -44,6 +44,7 @@ jest.mock('../../mastra/evals/assistant.evals', () => ({
 }));
 
 import { EvalRunsService } from './eval-runs.service';
+import type { EvalRunView } from './eval-runs.service';
 import {
   createEvalSession,
   fixtureForCases,
@@ -119,6 +120,7 @@ describe('EvalRunsService dataset validation', () => {
             'players',
             'goals',
             'match_team_statistics',
+            'disciplinary_events',
             'v_match_results',
             'v_player_goal_totals',
           ].map((table) => `world_cup.world_cup.${table}`),
@@ -128,20 +130,24 @@ describe('EvalRunsService dataset validation', () => {
       const result = await runner.start('assistant', 'wc');
       expect(result).toEqual({ jobId: expect.any(String) as string });
       await new Promise((resolve) => setImmediate(resolve));
+      // No judge option given: the judge is off (R144).
       expect(runAssistantEvalCase).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'champion-2022' }),
         ['Sample'],
         'session',
         '',
         { agentKey: 'assistant' },
+        { mode: 'off' },
       );
       if (!('jobId' in result)) throw new Error('Run did not start');
       expect((await runner.status(result.jobId))?.status).toBe('completed');
+      // R40: the baseline must also share a question with this run.
       expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
         'assistant',
         result.jobId,
         'wc',
         ['Sample'],
+        ['champion-2022'],
       );
     }),
   );
@@ -161,6 +167,7 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
         'players',
         'goals',
         'match_team_statistics',
+        'disciplinary_events',
         'v_match_results',
         'v_player_goal_totals',
       ].map((table) => `world_cup.world_cup.${table}`),
@@ -226,6 +233,7 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
       'session',
       '',
       target,
+      { mode: 'off' },
     );
     expect(target.finish).toHaveBeenCalledWith(['Sample']);
   });
@@ -245,6 +253,7 @@ describe('EvalRunsService one running run per agent', () => {
         'players',
         'goals',
         'match_team_statistics',
+        'disciplinary_events',
         'v_match_results',
         'v_player_goal_totals',
       ].map((table) => `world_cup.world_cup.${table}`),
@@ -294,4 +303,146 @@ describe('EvalRunsService one running run per agent', () => {
       status: 'running',
     });
   });
+});
+
+describe('EvalRunsService judge option and summary (R144, R148)', () => {
+  const sample = [
+    {
+      name: 'Sample',
+      datasourceId: 'wc',
+      datasourceKind: 'postgres',
+      tables: [
+        'tournaments',
+        'teams',
+        'matches',
+        'venues',
+        'players',
+        'goals',
+        'match_team_statistics',
+        'disciplinary_events',
+        'v_match_results',
+        'v_player_goal_totals',
+      ].map((table) => `world_cup.world_cup.${table}`),
+    },
+  ];
+  const repository = {
+    insert: jest.fn(),
+    save: jest.fn(),
+    mostRecentCompleted: jest.fn(),
+  };
+  const service = () =>
+    new EvalRunsService(
+      { list: jest.fn().mockResolvedValue(sample) } as never,
+      repository as never,
+      {} as never,
+      {} as never,
+      { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+    );
+  /** A test body, kept as a wrapper so the cases read as before. */
+  const asDemoUser = <T>(fn: () => Promise<T>): Promise<T> => fn();
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it.each([
+    [{ judge: 'sometimes' }, 'Unknown judge option "sometimes"'],
+    [{ judge: 'categories' }, 'Pick at least one category to judge'],
+    [
+      { judge: 'categories', judgeCategories: ['joins'] },
+      'Unknown judge category "joins". Known categories:',
+    ],
+  ])(
+    'refuses %j without recording a run or calling a model',
+    (options, message) =>
+      asDemoUser(async () => {
+        const result = await service().start(
+          'assistant',
+          'wc',
+          undefined,
+          options,
+        );
+        expect('error' in result ? result.error : '').toContain(message);
+        expect(repository.insert).not.toHaveBeenCalled();
+        expect(runAssistantEvalCase).not.toHaveBeenCalled();
+      }),
+  );
+
+  it('records the judge option and passes it to every question', () =>
+    asDemoUser(async () => {
+      const runner = service();
+      const started = await runner.start('assistant', 'wc', undefined, {
+        judge: 'categories',
+        judgeCategories: ['out-of-scope', 'ambiguous'],
+      });
+      if (!('jobId' in started)) throw new Error('Run did not start');
+      const judge = {
+        mode: 'categories',
+        categories: ['ambiguous', 'out-of-scope'],
+      };
+      expect(repository.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ judge }),
+      );
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(runAssistantEvalCase).toHaveBeenCalledWith(
+        expect.anything(),
+        ['Sample'],
+        'session',
+        '',
+        { agentKey: 'assistant' },
+        judge,
+      );
+    }));
+
+  it('keeps the summary current as questions finish', () =>
+    asDemoUser(async () => {
+      jest.mocked(runAssistantEvalCase).mockResolvedValueOnce({
+        id: 'champion-2022',
+        question: 'Who won the 2022 World Cup?',
+        category: 'out-of-scope',
+        scores: {},
+        checkResults: [
+          {
+            id: 'llm-judge',
+            description: 'LLM judge: …',
+            score: 0,
+            passed: false,
+            status: 'not-scored',
+            reason: 'Judge off for this run',
+            criterion: 'G2',
+          },
+        ],
+        answer: '',
+        toolCalls: [],
+        status: 'not-scored',
+        passed: false,
+        durationMs: 1,
+      });
+      const runner = service();
+      const started = await runner.start('assistant', 'wc');
+      if (!('jobId' in started)) throw new Error('Run did not start');
+      // The run object is updated in place, so only its keys are checked here.
+      const inserted = (repository.insert.mock.calls[0] as [EvalRunView])[0];
+      expect(inserted.judge).toEqual({ mode: 'off' });
+      expect(inserted.summary).toBeDefined();
+      await new Promise((resolve) => setImmediate(resolve));
+      const view = await runner.status(started.jobId);
+      expect(view?.status).toBe('completed');
+      expect(view?.summary).toEqual({
+        passed: 0,
+        failed: 0,
+        notScored: 1,
+        byCategory: [
+          {
+            category: 'out-of-scope',
+            passed: 0,
+            failed: 0,
+            notScored: 1,
+            total: 1,
+          },
+        ],
+        byCriterion: [],
+      });
+      // Persisted with the summary.
+      const saved = (repository.save.mock.calls.at(-1) as [EvalRunView])[0];
+      expect(saved.summary.notScored).toBe(1);
+    }));
 });

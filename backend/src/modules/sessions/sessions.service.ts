@@ -865,7 +865,8 @@ export class SessionsService implements OnModuleInit {
         { widthTolerant: true },
       );
       // Logged so the agree / shape / disagree / error split is measurable
-      // rather than anecdotal — `npm run eval` reports the same verdicts.
+      // rather than anecdotal — the eval suite's result-set check
+      // (`mastra/evals/result-set-check.ts`) grades with the same comparison.
       this.logger.log(
         `Cross-check ${match ? (shapeDiffers ? 'agree (shape differs)' : 'agree') : 'disagree'}${
           match ? '' : `: ${reason}`

@@ -22,6 +22,10 @@ import {
 } from '../../mastra/evals/assistant.evals';
 import { evalSetsFor, evalTargetFor } from '../../mastra/evals/eval-sets';
 import type { SampleFixture } from '../testing-data/fixtures/registry';
+import { parseJudgeSetting } from '../../mastra/evals/judge-option';
+import type { EvalJudgeSetting } from '../../mastra/evals/judge-option';
+import { summarizeEvalResults } from '../../mastra/evals/eval-summary';
+import type { EvalRunSummary } from '../../mastra/evals/eval-summary';
 
 export type EvalRunStatus = 'running' | 'completed' | 'failed';
 
@@ -53,6 +57,19 @@ export interface EvalRunView {
   comparison?: EvalRegressionSummary;
   /** Legacy attribute: stored runs carry the super admin's id (data-model 3.15). */
   ownerId?: string;
+  /**
+   * The run's judge option (agents-evals R144). Runs saved before it read as
+   * `{ mode: 'on' }` (see `EvalRunsRepository`).
+   */
+  judge: EvalJudgeSetting;
+  /** Counts of the finished results, kept current while running (R148). */
+  summary: EvalRunSummary;
+}
+
+/** The judge option as the start request carries it, unchecked. */
+export interface EvalRunJudgeInput {
+  judge?: unknown;
+  judgeCategories?: unknown;
 }
 
 /**
@@ -111,6 +128,7 @@ export class EvalRunsService {
     agentKey: string,
     datasourceId: string,
     caseIds?: string[],
+    judgeInput: EvalRunJudgeInput = {},
   ): Promise<{ jobId: string } | { conflictWith: string } | { error: string }> {
     // The agent's own sets: those whose `agentKey` (default `assistant`) is it.
     const sets = evalSetsFor(agentKey);
@@ -153,6 +171,13 @@ export class EvalRunsService {
     );
     if (datasetError) return { error: datasetError };
 
+    // R19 step 8: the judge option, off when none is given (R144).
+    const judge = parseJudgeSetting(
+      judgeInput.judge,
+      judgeInput.judgeCategories,
+    );
+    if ('error' in judge) return { error: judge.error };
+
     const jobId = randomUUID();
     const view: EvalRunView = {
       jobId,
@@ -165,6 +190,8 @@ export class EvalRunsService {
       totalCases: cases.length,
       currentQuestion: cases[0]?.question,
       startedAt: new Date().toISOString(),
+      judge: judge.setting,
+      summary: summarizeEvalResults([]),
     };
     this.runs.set(jobId, view);
     this.active.set(agentKey, jobId);
@@ -217,8 +244,10 @@ export class EvalRunsService {
           evalSession?.id,
           knowledgeBlock,
           target,
+          view.judge,
         );
         view.results.push(result);
+        view.summary = summarizeEvalResults(view.results);
         view.currentQuestion = cases[index + 1]?.question;
         // Persist as we go so a crash mid-suite still leaves the finished
         // questions on the run.
@@ -243,7 +272,8 @@ export class EvalRunsService {
 
   /**
    * Diff this run's per-case results against the agent's most recent
-   * previous completed run with the same data scope, and attach the outcome to `view.comparison` —
+   * previous completed run with the same data scope and at least one question
+   * in common (agents-evals R40), and attach the outcome to `view.comparison` —
    * best-effort, so a repository hiccup here degrades the report (no
    * comparison section) rather than marking an otherwise-successful run
    * failed.
@@ -255,6 +285,12 @@ export class EvalRunsService {
         view.jobId,
         view.datasourceId,
         view.datasets,
+        Array.from(
+          new Set([
+            ...view.caseIds,
+            ...view.results.map((result) => result.id),
+          ]),
+        ),
       );
       if (!previous) return;
       const diff = computeRegressionDiff(previous.results, view.results);

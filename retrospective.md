@@ -50,6 +50,28 @@ Entry template:
 - When a "move, don't change" story is followed by rule changes on the same branch, record each change in the roadmap notes as it lands, and keep the line check re-runnable against `main`, so the map stays honest.
 - For a harness-only change, verify with a fresh `claude -p` session in the worktree (skills listed, tools loaded, no permission denials), not with the web-app `verify` recipe.
 
+## 2026-10-15 — Merge of `main` (v0.34.0) into the BA-9 branch
+
+### What went well
+- Renumbering the branch's own ids in a commit *before* the merge (`58abf47`) kept them unambiguous: a rule like R70 could still only be ours, so a script restricted to the lines the branch added could shift 328 lines safely. After the merge the same script could not have told main's R70 from ours.
+- Renaming our `eval-sets.ts` to `eval-set-files.ts` before the merge turned an add/add conflict between two unrelated modules into no conflict at all.
+- Four resolvers, each owning a disjoint list of files and forbidden from writing to the git index, finished 27 files with no clashes; the merge was staged once, at the end.
+- A script comparing main's code-defined World Cup and Formula 1 cases with what the JSON loader produces proved the two sets match (12/12, 12/12, 10/10), instead of eyeballing JSON.
+
+### What went wrong
+- A file that merged cleanly was broken: `databricks/register.ts` still signed in through `POST /auth/local/sign-in`, which BA-232 removed on main. Its unit test mocked the sign-in, so it stayed green. The spec resolver found it by reading, not a test.
+- `frontend/e2e/agents.spec.ts` imported a helper main had deleted (`helpers/local-auth`); `ng build` doesn't compile `e2e/`, so the frontend resolver reported green.
+- The spec resolver ran at the same time as the code resolvers, so its "code problems" list was half stale by the time it arrived, and it had to be sent a second round with the other resolvers' notes.
+- I mapped one rule number twice in my own notes (the category-checks rule is R125 after the shift, not R168); the spec resolver caught it against the spec.
+- Main's new welcome page added two more buttons named "Agents", and two of our E2E scenarios clicked the first match on the page; they only failed after the merge.
+
+### What to do differently
+- When main removes a feature (an API, a route, a helper), grep both sides' *added* code for its names after the merge, not only the conflicted files: `git diff <base> HEAD -U0 | grep '^+' | grep -E '<removed names>'`.
+- After resolving E2E files, compile them with `npx playwright test --list <spec>` and `npx tsc --noEmit -p e2e/tsconfig.json`; `ng build` does not cover `e2e/`.
+- Run the spec resolver after the code resolvers, or hand it their notes files up front, so it describes the merged code rather than one side.
+- In E2E, open top-level pages through the navigation rail (`getByRole('complementary', { name: 'Navigation rail' })`), never by a page-wide button name.
+- Before merging main, renumber the branch's ids past main's and rename clashing modules in a separate commit, applied only to lines the branch added; keep the old→new map in the evidence.
+
 ## 2026-10-15 — 1.15.1 and 1.15.2 US Health demo: banner and showcase agents (BA-233)
 
 ### What went well
@@ -281,6 +303,74 @@ Entry template:
 - Before proposing a skill split, measure every prompt section and the framework's per-turn catalog overhead, and grep for the content each skill would hold. Put the numbers in the epic spec, so a skill with nothing to move or a net token cost never reaches confirmation.
 - Pick the eval model with the user before the first eval run, and check that its key is set (`awk -F= '/^[A-Z_]+=/{print $1, length($2)}' .env.llm.local`). Never use the env fallback model as a regression baseline.
 - When a check script compares an old build with a new one, make it assert its own preconditions (the state the old build should leave) and fail when they don't hold. Start each build with the `cwd` the real launcher uses.
+
+## 2026-10-13 — 1.1.5 to 1.1.9 Checks, report and judge, domains, Databricks and REST (BA-183 to BA-187)
+
+### What went well
+- Six agents worked in parallel in one worktree, each owning a list of files and a range of rule numbers (R68-R89, R90-R99, R100-R119, R120-R139, R140-R159, R160-R169). No two agents overwrote each other, and the shared files (`registry.ts`, `eval-sets.ts`, order-list tests) took minimal insertions only.
+- Splitting Steps 2 and 3 by file rather than by step (REST server, Databricks loader, one agent for every dialect reference) meant only one agent ever edited a set file.
+- Every SQLite reference was checked against PostgreSQL rows (117 of 117 equal). Every Databricks reference passed static checks and a DuckDB proxy run, so the VDI run starts from references that are already very likely right.
+- Asking for the catalog to be a parameter before the VDI run removed the most likely way the first Databricks run would have failed (a workspace without an `evals` catalog).
+- The real runs used two personas in parallel. Six sets of 10 to 68 questions finished in 40 minutes.
+
+### What went wrong
+- Stories that ran in parallel on shared files can't be split into one commit per story without rewriting hunks, so 1.1.5 to 1.1.9 land in one commit.
+- The E2E list of sets changed four times (4, 9, 16, 18) as agents added variants. Each agent edited the Gherkin, and the Playwright list waited for me.
+- The REST agent found that its references needed a sample (`world-cup-rest-connector`) that wasn't in the plan, because a Step 1b guard test failed. That was the right call, but the contract hadn't foreseen it.
+- I wrote two durations into the report page before reading them (50 and 40 seconds against the real 48 and 39). I caught it before publishing the final version.
+- The plan estimated about 20 minutes per run. With the judge off, runs took 8 to 17 minutes for 10 to 68 questions.
+
+### What to do differently
+- When parallel agents share a file that lists items (sets, fixtures), give one agent ownership of the list and have the others report their ids, rather than each editing the list.
+- For parallel stories on one branch, either sequence the stories that share files, or accept one commit and say so in the PR. Decide before dispatching, not at commit time.
+- Read every number for a report from the run records with a script; never type one from memory, even a rough one.
+- A question's done-when that needs a model run should name the persona and the data directory, so parallel runs can be planned up front.
+
+## 2026-10-13 — 1.1.2 baseline and 1.1.4 One format and a validator (BA-127, BA-182)
+
+### What went well
+- A snapshot of the old in-code definitions, taken before the move, plus a field-by-field equality test made "no change in behaviour" provable. A one-character regex change made it fail.
+- The baseline ran through the same endpoint the Evals tab calls, from an empty data directory and a separate copy of the World Cup database. It ran in parallel with development and never touched the user's data or the shared `world_cup` database.
+- Reading the traces before reporting "0 of 10" found two concrete causes, rather than "the model is weak": a one-row answer refused as truncated, and the datasource passed as `"<kind> <id>"`. Counting the tool errors across all six runs confirmed the second before it went into the research.
+- The specs agent read the backend agent's files as they appeared and wrote the rules to match them. The backend agent ran the validator for real from a scratch compile while `dist` was frozen.
+
+### What went wrong
+- The plan put the baseline on the user, but the machine had no LLM key in any data dir or in the environment. It also estimated about 20 minutes per run, and real runs took about 5.
+- `npm run worldcup:rest:setup` has been broken on `main` since BA-161: it sends no sign-in token and gets 401. No test covers it.
+- The first full E2E run failed 87 tests because Playwright's Chromium was not installed on this macOS machine, which cost one build cycle.
+- The visual baseline test has no macOS image in the repository, so every fresh macOS run fails it and writes an untracked `application-shell-web-darwin.png`.
+- The Step 1a contract missed that two golden questions read a table outside the World Cup sample's required list. The backend agent found it, and the fix changed the sample from 9 to 10 entities.
+- `tsc --noEmit` with incremental builds wrote `tsbuildinfo` files into the frozen `dist` while the baseline ran. It was harmless, but it broke the rule set for that window.
+- The user mistook the current app for the old one. Their familiar build came from two branches 113 commits behind `main`, and I hadn't said which version and look they would see.
+
+### What to do differently
+- Before planning or promising an eval run, check for a model key (`GET /llm/settings`, `env | grep OPENAI`) and time one run before estimating the rest.
+- On a new macOS machine, run `npx playwright install chromium` before the first E2E run. After a macOS run, move any generated `*-darwin.png` out of the tree; never commit it.
+- When a reference query moves into a set, check that every table it reads is in the fixture's required list. Better: make the validator check that each reference reads only dataset entities (a candidate for Step 1b).
+- When `dist` must not change, type-check with `--tsBuildInfoFile` pointing into the scratchpad.
+- When starting the app for the user, say which commit it runs and that branch builds may look different.
+
+## 2026-10-12 — 1.1.2 and 1.1.3 BA-9 research and execution plan drafted (BA-127, BA-128)
+
+### What went well
+- Two parallel agents converted the artifact into the research and the plan, each given the other doc's exact heading list. The cross-document anchors worked first time: 407 relative links, none broken.
+- Re-checking the artifact against the code found thirteen errors that seven artifact versions had missed. Examples: the REST players endpoint (50 rows) fits in one page, so the paging example tested nothing; three spec rules cited from the wrong capability (R10, R20, R25); and the 3.8 status command counts 23, not 30.
+- Checking every branch for claimed ADR numbers before writing found ADR-0013 (`feat/hindsight-memory`) and ADR-0014 (`feat/BA-2-data-model-dsl`), so the case-format ADR became ADR-0015 with no collision.
+- Staging an intermediate `roadmap.md` (`git hash-object -w` + `git update-index --cacheinfo`), then running the spec check on an export of the index, gave each story its own green commit while both shared the roadmap.
+
+### What went wrong
+- I asked mid-drafting where Steps 9 to 12 belong. The user answered that the task was Step 0 only. The question concerned the epic spec's wording, a Step 0 deliverable the user confirms anyway, so it should have waited for that confirmation.
+- The research agent's link checker resolved anchors in one direction only. Re-running it on the plan reported 23 false failures, and a second checker had to be written.
+- The plan is committed while BA-128 is still To Do in Jira. BA-127 can't be Done until the baseline on `main` is taken, and BA-128 may only start after BA-127 is Done. Status follows that order; drafting did not.
+- A throwaway check ran `cd $T && … | tail -1; rm -rf $T`. The pipe hid the failure, the folder was deleted before the retry, and the shell's working directory reset to the main checkout.
+- My first retrospective insert anchored on yesterday's top entry; a newer one had arrived with `main`, so the anchor matched nothing (the assertion caught it).
+
+### What to do differently
+- When a decision is part of a deliverable the user will confirm (an epic spec, a story list), draft it with the plan's default and raise it at confirmation. Don't ask mid-drafting.
+- When parallel agents write documents that link to each other, give them one shared link checker that resolves anchors in any `.md` file, and run it once both are done.
+- Before keeping a spec rule number cited in a plan (R10, R20, …), grep the cited capability spec for that rule.
+- In throwaway shell checks, use absolute paths and never pipe into `tail` before an `rm` in the same chain.
+- Anchor retrospective and changelog inserts on the first `## ` heading after the template, read at insert time, not on a remembered entry.
 
 ## 2026-10-12 — 1.11.3 Task details in the workflow pane (BA-174)
 

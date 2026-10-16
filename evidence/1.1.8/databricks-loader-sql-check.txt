@@ -1,0 +1,16 @@
+Databricks loader: its SQL checked without a warehouse (BA-186, 2026-10-13)
+
+What ran: the full dry run of each sample (npm run fixture:databricks -- --fixture <id> --dry-run --full,
+the statements the loader would send, INSERTs whole) was
+  1. parsed with sqlglot's Databricks dialect, raising on any error (backticked names, string literals with
+     backslash escapes, DATE'…' and TIMESTAMP'…Z' literals, CREATE OR REPLACE TABLE … NOT NULL,
+     CREATE SCHEMA IF NOT EXISTS, the UNION ALL row-count query), then
+  2. transpiled to DuckDB and run on an in-memory DuckDB with a catalog named evals, and
+  3. the loader's own row-count query compared with the counts in the dump's _meta.json.
+This shows the statements are well-formed Databricks SQL as sqlglot reads it and load exactly the dump's rows.
+It does not show that a warehouse accepts them: that is the VDI run (docs/evals/databricks-vdi.md).
+Script: a throwaway Python script (sqlglot and duckdb in a scratch virtualenv), not committed.
+
+world-cup: 30 statements parsed as Databricks SQL by sqlglot 30.22.0 in 0.0s (15 Create, 14 Insert, 1 Union); run on DuckDB 1.5.6 in catalog evals, schema world_cup; row counts equal _meta.json for all 14 relations (341 rows)
+finance: 66 statements parsed as Databricks SQL by sqlglot 30.22.0 in 1.9s (18 Create, 47 Insert, 1 Union); run on DuckDB 1.5.6 in catalog evals, schema finance; row counts equal _meta.json for all 17 relations (16964 rows)
+marketing-analytics: 52 statements parsed as Databricks SQL by sqlglot 30.22.0 in 1.1s (15 Create, 36 Insert, 1 Union); run on DuckDB 1.5.6 in catalog evals, schema marketing_analytics; row counts equal _meta.json for all 14 relations (12151 rows)

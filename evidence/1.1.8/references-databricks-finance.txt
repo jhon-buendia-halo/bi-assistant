@@ -1,0 +1,71 @@
+Databricks references: finance.json
+Checked 2026-10-13 by the BA-186 dialect work. Every case of the file with a PostgreSQL reference (59).
+The set that grades against them: finance-databricks (fixture finance-databricks).
+None was executed on a Databricks warehouse: that run is the VDI validation of BA-186 (agents-evals R164). Every line below is "not executed — VDI".
+
+How each reference was checked without a warehouse
+- Static: the Step 1b check modules (backend/src/mastra/evals/checks/): dialectProblem(sql, 'databricks') finds nothing (agents-evals R74); every table reference has 3 parts (R75), is `evals`.finance.<table> and a required table of the sample; the reference reads the same tables as the PostgreSQL one. Also no '::' cast and no FILTER clause.
+- Parse: sqlglot 30.22.0 parses it with its Databricks dialect, raising on any error.
+- Proxy run: the parsed statement, transpiled by sqlglot to DuckDB 1.5.6, runs on DuckDB tables in catalog evals, schema finance, created with the PostgreSQL column types and loaded from the same dump (backend/scripts/fixtures/finance/data). DuckDB, like Databricks, divides whole numbers into a fraction. Its rows are compared with the PostgreSQL reference's rows as the result-set match compares them (any row order, 6 significant figures). This shows the translation keeps the meaning; it does not show the warehouse accepts the text.
+
+✓ wealth-client-count  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ aum-fy2025-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ fee-revenue-fy2025-by-type  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 4 rows equal to PostgreSQL; not executed — VDI
+✓ fee-revenue-fy2026-q2  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ average-aum-per-client-fy2025-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ completed-transactions-december-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ portfolios-opened-2024  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ largest-portfolio-2025-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ discretionary-portfolios-open  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ advisory-fees-billed-march-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ positions-held-2024-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ refunded-fees-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ unbilled-fees-2025-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ collected-fees-fy2026-q1  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ advisory-fee-rates  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 6 rows equal to PostgreSQL; not executed — VDI
+✓ bond-holdings-2025-end-millions  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ most-held-securities-fy2025-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 2 rows equal to PostgreSQL; not executed — VDI
+✓ top-three-fee-clients-fy2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ branch-most-assets-2025-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ largest-security-by-value-2025-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ top-equity-sectors-fy2025-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ fee-revenue-by-region-fy2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 4 rows equal to PostgreSQL; not executed — VDI
+✓ aum-by-segment-fy2025-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ aum-by-asset-class-2025-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 4 rows equal to PostgreSQL; not executed — VDI
+✓ open-portfolios-by-region  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 4 rows equal to PostgreSQL; not executed — VDI
+✓ wealth-clients-with-mortgage  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ waived-share-advisory-fy2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ advisory-fee-rate-by-mandate-fy2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ unrealized-gain-percent-fy2025-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ equity-share-by-risk-profile-2025-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ performance-share-fee-revenue-fy2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ quietest-fee-month-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ positions-without-cost-fy2025-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ unrealized-gain-fy2025-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ portfolios-by-base-currency  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ open-portfolios-by-mandate  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ fiscal-2026-q2-months  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ fee-revenue-latest-quarter  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ chart-aum-by-quarter-end  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 8 rows equal to PostgreSQL; not executed — VDI
+✓ wealth-client-count-casual  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ aum-fy2025-end-typo  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ largest-portfolio-2025-end-casual  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ interest-share-of-loan-payments-by-product  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ outstanding-share-of-principal-by-product  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ loans-by-currency  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ transactions-with-merchant-category  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ branches-opened-12-accounts-2024  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 2 rows equal to PostgreSQL; not executed — VDI
+✓ non-performing-loans  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ customer-most-card-purchases-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ net-customer-flow-by-branch-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 8 rows equal to PostgreSQL; not executed — VDI
+✓ transactions-march-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ accounts-opened-by-region-2024  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 4 rows equal to PostgreSQL; not executed — VDI
+✓ deposit-accounts-per-branch  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 8 rows equal to PostgreSQL; not executed — VDI
+✓ customer-deposits-2025-usd  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ euro-deposits-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ card-spend-december-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ customers-per-segment  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ branches-per-region  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 4 rows equal to PostgreSQL; not executed — VDI
+✓ loans-per-product  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+
+finance: 59 of 59 Databricks references pass the static checks, parse as Databricks SQL and return the PostgreSQL rows on the DuckDB proxy; 0 of 59 executed on a warehouse (VDI).

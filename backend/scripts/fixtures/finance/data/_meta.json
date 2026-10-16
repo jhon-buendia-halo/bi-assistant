@@ -1,0 +1,852 @@
+{
+  "dumpedAt": "2026-10-13T20:09:06.380Z",
+  "source": "postgres://world_cup@127.0.0.1:55432/ba9_finance?schema=finance",
+  "fixture": "finance",
+  "schema": "finance",
+  "format": "json.gz",
+  "tables": {
+    "regions": 4,
+    "branches": 8,
+    "customers": 90,
+    "account_types": 5,
+    "accounts": 200,
+    "cards": 150,
+    "fx_rates": 48,
+    "transactions": 5400,
+    "loans": 110,
+    "loan_payments": 1538,
+    "fiscal_periods": 36,
+    "securities": 28,
+    "portfolios": 46,
+    "holdings": 2165,
+    "fees": 1536,
+    "v_accounts": 200,
+    "v_transactions": 5400
+  },
+  "columns": {
+    "regions": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "nullable": false
+      }
+    ],
+    "branches": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "region_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "city",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "state_code",
+        "type": "character",
+        "nullable": false
+      },
+      {
+        "name": "opened_on",
+        "type": "date",
+        "nullable": false
+      }
+    ],
+    "customers": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "customer_number",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "full_name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "date_of_birth",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "segment",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "home_branch_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "joined_on",
+        "type": "date",
+        "nullable": false
+      }
+    ],
+    "account_types": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "category",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "annual_rate_bps",
+        "type": "integer",
+        "nullable": false
+      }
+    ],
+    "accounts": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "account_number",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "customer_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "account_type_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "branch_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "currency",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "opened_on",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "closed_on",
+        "type": "date",
+        "nullable": true
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "current_balance_minor",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "is_test",
+        "type": "boolean",
+        "nullable": false
+      }
+    ],
+    "cards": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "card_number_masked",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "account_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "network",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "card_type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "issued_on",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "expires_on",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "nullable": false
+      }
+    ],
+    "fx_rates": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "currency",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "rate_month",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "usd_per_unit",
+        "type": "numeric",
+        "nullable": false
+      }
+    ],
+    "transactions": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "transaction_ref",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "account_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "card_id",
+        "type": "bigint",
+        "nullable": true
+      },
+      {
+        "name": "booked_on",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "direction",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "channel",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "currency",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "amount_minor",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "amount_usd_minor",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "merchant_category",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "counterparty_account_id",
+        "type": "bigint",
+        "nullable": true
+      }
+    ],
+    "loans": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "loan_number",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "customer_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "branch_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "product",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "currency",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "principal_minor",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "interest_rate_bps",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "term_months",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "originated_on",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "outstanding_minor",
+        "type": "bigint",
+        "nullable": false
+      }
+    ],
+    "loan_payments": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "loan_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "paid_on",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "amount_minor",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "principal_minor",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "interest_minor",
+        "type": "bigint",
+        "nullable": false
+      }
+    ],
+    "fiscal_periods": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "period_code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "fiscal_year",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "fiscal_quarter",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "fiscal_month",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "period_start",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "period_end",
+        "type": "date",
+        "nullable": false
+      }
+    ],
+    "securities": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "symbol",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "asset_class",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "sector",
+        "type": "text",
+        "nullable": true
+      }
+    ],
+    "portfolios": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "portfolio_number",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "customer_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "branch_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "mandate",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "risk_profile",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "base_currency",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "advisory_fee_bps",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "opened_on",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "closed_on",
+        "type": "date",
+        "nullable": true
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "is_test",
+        "type": "boolean",
+        "nullable": false
+      }
+    ],
+    "holdings": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "portfolio_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "security_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "as_of",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "quantity",
+        "type": "numeric",
+        "nullable": false
+      },
+      {
+        "name": "market_value_cents",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "cost_basis_cents",
+        "type": "bigint",
+        "nullable": true
+      }
+    ],
+    "fees": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "fee_ref",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "portfolio_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "fiscal_period_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "fee_type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "amount_cents",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "charged_on",
+        "type": "date",
+        "nullable": true
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "nullable": false
+      }
+    ],
+    "v_accounts": [
+      {
+        "name": "account_id",
+        "type": "bigint",
+        "nullable": true
+      },
+      {
+        "name": "account_number",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "customer_id",
+        "type": "bigint",
+        "nullable": true
+      },
+      {
+        "name": "customer_name",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "segment",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "account_type_code",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "account_type_name",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "account_category",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "branch_id",
+        "type": "bigint",
+        "nullable": true
+      },
+      {
+        "name": "branch_name",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "region_name",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "currency",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "opened_on",
+        "type": "date",
+        "nullable": true
+      },
+      {
+        "name": "closed_on",
+        "type": "date",
+        "nullable": true
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "current_balance_minor",
+        "type": "bigint",
+        "nullable": true
+      },
+      {
+        "name": "is_test",
+        "type": "boolean",
+        "nullable": true
+      }
+    ],
+    "v_transactions": [
+      {
+        "name": "transaction_id",
+        "type": "bigint",
+        "nullable": true
+      },
+      {
+        "name": "transaction_ref",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "booked_on",
+        "type": "date",
+        "nullable": true
+      },
+      {
+        "name": "type",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "direction",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "channel",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "currency",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "amount_minor",
+        "type": "bigint",
+        "nullable": true
+      },
+      {
+        "name": "amount_usd_minor",
+        "type": "bigint",
+        "nullable": true
+      },
+      {
+        "name": "merchant_category",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "card_id",
+        "type": "bigint",
+        "nullable": true
+      },
+      {
+        "name": "counterparty_account_id",
+        "type": "bigint",
+        "nullable": true
+      },
+      {
+        "name": "account_id",
+        "type": "bigint",
+        "nullable": true
+      },
+      {
+        "name": "account_number",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "account_currency",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "account_type_code",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "account_type_name",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "account_category",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "is_test",
+        "type": "boolean",
+        "nullable": true
+      },
+      {
+        "name": "customer_id",
+        "type": "bigint",
+        "nullable": true
+      },
+      {
+        "name": "customer_name",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "segment",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "branch_name",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "name": "region_name",
+        "type": "text",
+        "nullable": true
+      }
+    ]
+  }
+}

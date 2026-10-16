@@ -1,0 +1,1559 @@
+{
+  "variants": [
+    {
+      "id": "genomics",
+      "name": "Genomics",
+      "description": "Questions against the bundled synthetic Genomics sample (subjects, samples of 2023 and 2024, variants, calls and expression; invented data), each guarding a planted trap. Select its PostgreSQL datasource with a saved dataset containing the genomics tables and views; Settings, Testing Data loads both.",
+      "fixtureId": "genomics",
+      "dialect": "postgres",
+      "caseIdPrefix": ""
+    }
+  ],
+  "cases": [
+    {
+      "id": "allele-fraction-by-gene",
+      "category": "ratio",
+      "split": "dev",
+      "tags": [
+        "trap:ratio-trap",
+        "difficulty:hard"
+      ],
+      "question": "Which five genes show the highest average alternate-allele fraction?",
+      "intent": "Rank genes by alt_read_count / total_read_count — two genuinely different measures — rather than by a ratio of a column with its own duplicate.",
+      "notes": "read_depth equals total_read_count on all 5263 calls, so any fraction built from that pair is exactly 1.0000 for every gene and the ranking becomes alphabetical noise. A correct answer divides ALTERNATE reads by TOTAL reads; over the non-control samples the dataset's default filter keeps, all 40 gene means are still distinct, so the top five are unambiguous (MUTYH 0.5325, SCN5A 0.5068, SMAD4 0.5066, TSC2 0.4943, XIST 0.4921) with EGFR sixth on 0.4699 — SCN5A and SMAD4 sit 0.0002 apart but both are inside the five, and the symbol tie-break fixes their order. The reference also applies the allele_fraction metric's qualifiers (PASS calls, depth >= 20), which is part of why this is hard. The fractions are checked by the result set; the text check asks for the top gene. This guards the regression where the engine picked the similarly named column and reported a perfect fraction everywhere. trapSql divides read depth by total reads (the duplicate pair): verified 1.0000 for every gene, so its top five is alphabetical (APC, APOB, ATM, BMPR1A, BRCA1) against the reference MUTYH 0.5325 … XIST 0.4921.\n\nTrap query (must return different rows): SELECT gene.hgnc_symbol AS gene, ROUND(AVG(call.read_depth * 1.0 / call.total_read_count), 4) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY gene.hgnc_symbol ORDER BY mean_allele_fraction DESC, gene.hgnc_symbol LIMIT 5\n\nParaphrases: What are the top five genes by mean alternate-allele fraction? | Rank our genes by average alternate-allele fraction and give me the top five.\n\nMoved from feat/engine-eval-loop (branch category ratio-trap, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "MUTYH"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT gene.hgnc_symbol AS gene, ROUND(AVG(call.alt_read_count::numeric / call.total_read_count), 4) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY gene.hgnc_symbol ORDER BY mean_allele_fraction DESC, gene.hgnc_symbol LIMIT 5"
+      }
+    },
+    {
+      "id": "allele-fraction-by-genotype",
+      "category": "ratio",
+      "split": "held-out",
+      "tags": [
+        "trap:ratio-trap",
+        "difficulty:medium"
+      ],
+      "question": "Across high-confidence calls with at least 20 reads, what is the average alternate-allele fraction for each genotype, to three decimal places?",
+      "intent": "Divide alternate reads by total reads per call and average by genotype — not the duplicate read-depth column by the total, which is 1 everywhere.",
+      "notes": "Verified against the live fixture (default filter applied, controls out; PASS calls with total reads >= 20): 3 rows — 0/0 0.022, 0/1 0.480, 1/1 0.950, the textbook shape (homozygous reference near 0, heterozygous near a half, homozygous alternate near 1), so a wrong column pair is obvious to a reader but not to the engine. Cross-checked with an independent formulation (SUM/COUNT over read_depth as the denominator, the samples filter as an IN subquery, LOW_QUAL excluded by inequality): identical. trapSql divides read depth by total reads, the duplicate pair: verified 1.000 for all three genotypes. The question states the high-confidence and depth qualifiers, so this case isolates the column-pair trap from the metric definition; allele-fraction-by-significance is the variant that leaves them to the metric. Rows are compared by the result set; no text check, because the genotype labels are already in the question.\n\nTrap query (must return different rows): SELECT call.genotype, ROUND(AVG(call.read_depth * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY call.genotype ORDER BY call.genotype\n\nParaphrases: For each genotype, what is the mean fraction of reads supporting the alternate allele on high-confidence calls with a depth of 20 or more? Three decimal places, please. | Looking only at high-confidence calls covered by at least 20 reads, how does the average alternate-allele fraction compare across genotypes, to three decimals?\n\nMoved from feat/engine-eval-loop (branch category ratio-trap, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT call.genotype, ROUND(AVG(call.alt_read_count * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY call.genotype ORDER BY call.genotype"
+      }
+    },
+    {
+      "id": "allele-fraction-by-significance",
+      "category": "ratio",
+      "split": "dev",
+      "tags": [
+        "trap:ratio-trap",
+        "difficulty:hard"
+      ],
+      "question": "What is the average alternate-allele fraction for each pathogenicity class, to three decimal places?",
+      "intent": "The same alt/total ratio on a different grouping that needs the variants join, with the allele_fraction qualifiers left to the metric definition.",
+      "notes": "Verified against the live fixture (controls out; PASS calls with total reads >= 20, per the allele_fraction metric): 5 rows — BENIGN 0.425, LIKELY_BENIGN 0.432, LIKELY_PATHOGENIC 0.423, PATHOGENIC 0.283, VUS 0.416. Cross-checked with an independent formulation (v_variant_calls joined back to variants on chromosome/position/alleles and to samples on sample_code, the metric expression with FILTER and NULLIF): identical. trapSql divides read depth by total reads: verified 1.000 for all five classes. Without the qualifiers the means drop to 0.390, 0.390, 0.386, 0.260, 0.380 — a second, independent way to fail. The question names neither qualifier, so it depends on the metric definition as well as the column pair.\n\nTrap query (must return different rows): SELECT variant.clinical_significance, ROUND(AVG(call.read_depth * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY variant.clinical_significance ORDER BY variant.clinical_significance\n\nParaphrases: For each ACMG pathogenicity classification, what is the mean alternate-allele fraction, to three decimals? | How does the average fraction of alternate-allele reads differ across pathogenicity classes? Three decimal places.\n\nMoved from feat/engine-eval-loop (branch category ratio-trap, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT variant.clinical_significance, ROUND(AVG(call.alt_read_count * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY variant.clinical_significance ORDER BY variant.clinical_significance"
+      }
+    },
+    {
+      "id": "variants-by-assembly",
+      "category": "aggregate",
+      "split": "dev",
+      "tags": [
+        "trap:constant-column",
+        "difficulty:easy"
+      ],
+      "question": "How do our variants break down across genome assemblies?",
+      "intent": "Group by a column that has exactly one value — the answer has to say so instead of presenting 100% as a finding.",
+      "notes": "assembly is 'GRCh38' on all 450 variants (the CHECK constraint allows nothing else). The breakdown is one row, and the useful answer states that every variant is on a single assembly rather than dressing a constant up as a distribution. Guards against reporting a one-row group-by as if it were a comparison. No trapSql, deliberately: the failure is in the prose (presenting the one-row breakdown as a distribution, or inventing GRCh37), and every plausible query returns the same single GRCh38 row, so a trap would be vacuous by construction. The includes check and the judge carry the case.\n\nParaphrases: What is the split of our variants by reference genome build? | How many variants do we have on each genome assembly?\n\nMoved from feat/engine-eval-loop (branch category constant-column, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "GRCh38"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT variant.assembly, COUNT(*) AS variants FROM genomics.variants variant GROUP BY variant.assembly ORDER BY variant.assembly"
+      },
+      "judgeRubric": "The fixture stores only one genome assembly: every one of the 450 variants is GRCh38. The correct answer says that all variants are on GRCh38, so there is no assembly breakdown to compare. Score pass=true only if the final answer states that all variants are on a single assembly (GRCh38) and therefore that there is no breakdown to compare — reporting the count (450) or \"100%\" is fine as long as the answer says the column is constant. Score pass=false if it presents the single value as a meaningful distribution, invents a second assembly (e.g. GRCh37/hg19) or implies a comparison the data cannot support. Close but wrong: an answer that shows \"GRCh38: 450 (100%)\" as a breakdown without saying the column holds a single value, or that says \"mostly GRCh38\" as if other assemblies were present — that must FAIL."
+    },
+    {
+      "id": "pathogenic-variants-by-assembly",
+      "category": "aggregate",
+      "split": "held-out",
+      "tags": [
+        "trap:constant-column",
+        "difficulty:easy"
+      ],
+      "question": "How are our pathogenic variants split across genome builds?",
+      "intent": "Break a filtered set down by a column that holds one value — the answer has to say there is only one build, not present 100% as a split.",
+      "notes": "Verified against the live fixture: 96 pathogenic variants, all on GRCh38 (assembly is GRCh38 on all 450 variants; the CHECK constraint allows nothing else). Cross-checked with an independent formulation (a per-assembly FILTER count summed back up): identical, 96. The reference returns the figure only, not the assembly column: the dataset knowledge tells the agent not to group by assembly, so a correct answer may run a plain count and name GRCh38 in prose — a reference carrying the assembly column would fail that answer as narrower. The build name is checked by the includes check, the behaviour by the judge. No trapSql: the failure is narrative (a one-row split presented as a distribution, or an invented GRCh37 share), and every plausible query returns the same single figure, so a trap would be vacuous by construction. The genomics fixture has exactly one constant column (assembly); this case and pathogenic-share-by-assembly reach it through a filter and a rate, so a fix keyed to the exact wording of variants-by-assembly still fails here.\n\nParaphrases: What is the genome-build breakdown of our pathogenic variants? | Across reference genome assemblies, how many pathogenic variants do we have on each?\n\nMoved from feat/engine-eval-loop (branch category constant-column, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "GRCh38"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS pathogenic_variants FROM genomics.variants variant WHERE variant.clinical_significance = 'PATHOGENIC'"
+      },
+      "judgeRubric": "The fixture stores one genome build: every variant, and so each of the 96 pathogenic variants, is on GRCh38. The correct answer says all 96 pathogenic variants are on GRCh38 and that there is no split across builds to report. Score pass=true only if the final answer states that the pathogenic variants are all on a single build (GRCh38) and that no other build is present — giving the count (96) or \"100%\" is fine as long as the answer says the build never varies. Score pass=false if it presents a split between builds, invents a second build (e.g. GRCh37/hg19) or a lift-over figure, or implies a comparison the data cannot support. Close but wrong: an answer that shows \"GRCh38: 96 (100%)\" as a breakdown table without saying it is the only build, or that says \"mostly GRCh38\" as if other builds were present — that must FAIL."
+    },
+    {
+      "id": "pathogenic-share-by-assembly",
+      "category": "aggregate",
+      "split": "dev",
+      "tags": [
+        "trap:constant-column",
+        "difficulty:medium"
+      ],
+      "question": "Does the share of variants classified as pathogenic differ between genome assemblies? Give the percentage for each assembly to one decimal place.",
+      "intent": "A comparison question over a constant column: the honest answer is that there is only one assembly, so there is nothing to compare.",
+      "notes": "Verified against the live fixture: 21.3% (96 of 450 variants are pathogenic), all on GRCh38 — the only assembly. Cross-checked with an independent formulation (AVG of a 100/0 indicator restricted to assembly = GRCh38): identical, 21.3. The reference returns the percentage only, for the same reason as pathogenic-variants-by-assembly: an answer that computes the share without grouping by the constant column and names GRCh38 in prose is correct. No trapSql — narrative trap, vacuous in SQL by construction (a GROUP BY assembly returns the same single 21.3 row). The question presumes a comparison exists; the judge checks the answer declines it rather than dressing one row up as a finding.\n\nParaphrases: Is the pathogenic share of our variants higher on one genome build than another? Percentage per build, to one decimal place. | Compare the percentage of variants that are pathogenic across reference genome assemblies, to one decimal place.\n\nMoved from feat/engine-eval-loop (branch category constant-column, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "GRCh38"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT ROUND(100.0 * COUNT(CASE WHEN variant.clinical_significance = 'PATHOGENIC' THEN 1 END) / COUNT(*), 1) AS pathogenic_pct FROM genomics.variants variant"
+      },
+      "judgeRubric": "The fixture stores one genome assembly: all 450 variants are GRCh38, and 96 of them (21.3%) are pathogenic. The correct answer says there is only one assembly (GRCh38), so the share cannot differ between assemblies, and gives the pathogenic share on it (21.3%). Score pass=true only if the final answer states that every variant is on GRCh38 (a single assembly) and that no between-assembly comparison is possible — giving the 21.3% figure is fine. Score pass=false if it presents a comparison, invents a figure for another assembly (GRCh37/hg19 or any other), or says the share is the same or different across assemblies as if several were present. Close but wrong: an answer that reports \"GRCh38: 21.3%\" as a per-assembly table without saying it is the only assembly, or that concludes \"the share does not differ between assemblies\" without saying there is only one — that must FAIL."
+    },
+    {
+      "id": "variants-with-rsid",
+      "category": "null",
+      "split": "dev",
+      "tags": [
+        "trap:empty-column",
+        "difficulty:easy"
+      ],
+      "question": "How many of our variants have a dbSNP rsID?",
+      "intent": "Count the populated rows of a mostly-null column instead of grouping by it.",
+      "notes": "rsid is non-null on only 46 of 450 variants (10.2%), so grouping by rsid buries 404 variants under a blank key and a per-rsid breakdown is 47 near-useless groups. The answer must be the count of variants that HAVE an identifier — checked by the result set, not by a text match on 46. Guards against the engine presenting the null group as a finding. trapSql groups by the identifier itself: verified 47 rows, a blank key holding 404 variants plus 46 singletons, against the reference single row of 46.\n\nTrap query (must return different rows): SELECT variant.rsid, COUNT(*) AS variants FROM genomics.variants variant GROUP BY variant.rsid ORDER BY variants DESC, variant.rsid\n\nParaphrases: How many variants are catalogued with a dbSNP identifier? | What number of our variants carry an rs number from dbSNP?\n\nMoved from feat/engine-eval-loop (branch category empty-column, provenance hand).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS variants_with_rsid FROM genomics.variants variant WHERE variant.rsid IS NOT NULL"
+      }
+    },
+    {
+      "id": "rsid-share-by-significance",
+      "category": "null",
+      "split": "held-out",
+      "tags": [
+        "trap:empty-column",
+        "difficulty:medium"
+      ],
+      "question": "Within each pathogenicity class, what percentage of variants have a dbSNP rsID, to one decimal place?",
+      "intent": "Count the populated values of a mostly-null column inside each group; the empty rows stay in the denominator.",
+      "notes": "Verified against the live fixture (46 of 450 variants have an rsID): 5 rows — BENIGN 10.3 (7 of 68), LIKELY_BENIGN 8.1 (6 of 74), LIKELY_PATHOGENIC 9.4 (5 of 53), PATHOGENIC 6.3 (6 of 96), VUS 13.8 (22 of 159). Cross-checked with an independent formulation (per-class totals LEFT JOINed to per-class counts of rsid ~ '^rs'): identical. trapSql filters the empty rows out first and so answers the inverted question (which class the rsID variants fall in): verified BENIGN 15.2, LIKELY_BENIGN 13.0, LIKELY_PATHOGENIC 10.9, PATHOGENIC 13.0, VUS 47.8 — the null rows silently left the denominator. Percentages are compared by the result set.\n\nTrap query (must return different rows): SELECT variant.clinical_significance, ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS pct_with_rsid FROM genomics.variants variant WHERE variant.rsid IS NOT NULL GROUP BY variant.clinical_significance ORDER BY variant.clinical_significance\n\nParaphrases: For each ACMG classification, what share of its variants carry a dbSNP identifier? Percentages to one decimal place. | How well is each pathogenicity class covered by dbSNP — what percentage of its variants have an rs number, to one decimal?\n\nMoved from feat/engine-eval-loop (branch category empty-column, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT variant.clinical_significance, ROUND(100.0 * COUNT(variant.rsid) / COUNT(*), 1) AS pct_with_rsid FROM genomics.variants variant GROUP BY variant.clinical_significance ORDER BY variant.clinical_significance"
+      }
+    },
+    {
+      "id": "genes-most-rsid-variants",
+      "category": "null",
+      "split": "dev",
+      "tags": [
+        "trap:empty-column",
+        "difficulty:easy"
+      ],
+      "question": "Which three genes have the most variants with a dbSNP identifier?",
+      "intent": "Rank genes by the populated values of a mostly-null column, not by all their variants.",
+      "notes": "Verified against the live fixture: 3 rows — BRCA1 6, BRCA2 4, CFTR 4; fourth place is CHEK2 and MLH1 on 3, so the top three is not cut through a tie. Cross-checked with an independent formulation (RANK over counts of non-null rsid per gene_id, joined to symbols): identical. trapSql counts every variant per gene: verified BRCA1 34, TP53 24, MLH1 18 — BRCA1 still leads, so the result set (not the name) catches the empty-column failure; the text check asks for BRCA2 and CFTR, which the trap ranking does not contain.\n\nTrap query (must return different rows): SELECT gene.hgnc_symbol AS gene, COUNT(*) AS variants_with_rsid FROM genomics.variants variant JOIN genomics.genes gene ON gene.id = variant.gene_id GROUP BY gene.hgnc_symbol ORDER BY variants_with_rsid DESC, gene.hgnc_symbol LIMIT 3\n\nParaphrases: Top three genes by number of variants that carry a dbSNP rsID? | Which three genes have the most dbSNP-catalogued variants?\n\nMoved from feat/engine-eval-loop (branch category empty-column, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*\\bBRCA2\\b)(?=[\\s\\S]*\\bCFTR\\b)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT gene.hgnc_symbol AS gene, COUNT(variant.rsid) AS variants_with_rsid FROM genomics.variants variant JOIN genomics.genes gene ON gene.id = variant.gene_id GROUP BY gene.hgnc_symbol ORDER BY variants_with_rsid DESC, gene.hgnc_symbol LIMIT 3"
+      }
+    },
+    {
+      "id": "genes-with-seven-pathogenic",
+      "category": "ranking",
+      "split": "dev",
+      "tags": [
+        "trap:ties",
+        "difficulty:medium"
+      ],
+      "question": "Which genes carry exactly seven pathogenic variants?",
+      "intent": "A HAVING-style question whose answer is a tie, so no arbitrary tie-break can hide.",
+      "notes": "MLH1 and PTEN both carry exactly 7 PATHOGENIC variants; TP53 is the only gene above that, with 11. A 'top genes by pathogenic variants' phrasing would let a LIMIT 1 silently drop one of the tied genes, so the question asks for the tie explicitly and both symbols must appear. Guards against answers that report one arbitrary winner from a tied group. trapSql keeps one row of the tie (LIMIT 1): verified MLH1 7 alone, against the reference MLH1 7 and PTEN 7.\n\nTrap query (must return different rows): SELECT gene.hgnc_symbol AS gene, COUNT(*) AS pathogenic_variants FROM genomics.variants variant JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE variant.clinical_significance = 'PATHOGENIC' GROUP BY gene.hgnc_symbol HAVING COUNT(*) = 7 ORDER BY pathogenic_variants DESC, gene.hgnc_symbol LIMIT 1\n\nParaphrases: Which genes have precisely 7 variants classified as pathogenic? | List every gene with exactly seven pathogenic variants.\n\nMoved from feat/engine-eval-loop (branch category ties, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "MLH1"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\bPTEN\\b"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT gene.hgnc_symbol AS gene, COUNT(*) AS pathogenic_variants FROM genomics.variants variant JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE variant.clinical_significance = 'PATHOGENIC' GROUP BY gene.hgnc_symbol HAVING COUNT(*) = 7 ORDER BY gene.hgnc_symbol"
+      }
+    },
+    {
+      "id": "largest-ancestry-group",
+      "category": "ranking",
+      "split": "held-out",
+      "tags": [
+        "trap:ties",
+        "difficulty:hard"
+      ],
+      "question": "Which ancestry group has the most subjects?",
+      "intent": "A plain \"which is largest\" question whose answer is a three-way tie, so a LIMIT 1 silently drops two correct groups.",
+      "notes": "Verified against the live fixture: three ancestry groups tie on 10 subjects — LWK (Luhya in Webuye, Kenya), PNG (Papuan Highlanders), YRI (Yoruba in Ibadan, Nigeria); JPT is next on 9. Counts are over all 120 subjects (the control flag is on samples, not subjects). Cross-checked with an independent formulation (DENSE_RANK over a LEFT JOIN from ancestry_groups): identical, 3 rows of 10. The reference returns the tied counts only — ancestry groups have both a code and a name and either is a correct way to name them, so the identities are checked by the text pattern (code or name for each of the three) and the result set checks that exactly three groups share the top count. trapSql is the tempting ORDER BY … LIMIT 1: verified one row, Papuan Highlanders 10. Unlike genes-with-seven-pathogenic the question does not ask for the tie, which is what makes it hard.\n\nTrap query (must return different rows): SELECT ancestry.name AS ancestry_group, COUNT(*) AS subjects FROM genomics.subjects subject JOIN genomics.ancestry_groups ancestry ON ancestry.id = subject.ancestry_group_id GROUP BY ancestry.name ORDER BY subjects DESC LIMIT 1\n\nParaphrases: What is our largest ancestry group by number of subjects? | Which ancestry group has the largest number of enrolled subjects?\n\nMoved from feat/engine-eval-loop (branch category ties, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*(?:Luhya|\\bLWK\\b))(?=[\\s\\S]*(?:Yoruba|\\bYRI\\b))(?=[\\s\\S]*(?:Papuan|\\bPNG\\b))"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "WITH per_group AS (SELECT subject.ancestry_group_id, COUNT(*) AS subjects FROM genomics.subjects subject GROUP BY subject.ancestry_group_id) SELECT per_group.subjects FROM per_group WHERE per_group.subjects = (SELECT MAX(subjects) FROM per_group)"
+      }
+    },
+    {
+      "id": "rarest-phenotypes",
+      "category": "ranking",
+      "split": "dev",
+      "tags": [
+        "trap:ties",
+        "difficulty:hard"
+      ],
+      "question": "Which phenotype is recorded for the fewest subjects?",
+      "intent": "A tie at the bottom of a distribution: four phenotypes share the minimum, and an ascending LIMIT 1 reports one of them as \"the\" rarest.",
+      "notes": "Verified against the live fixture: every one of the 25 phenotypes is recorded for at least 3 subjects, and four tie on exactly 3 — Atrial septal defect (HP:0001631), Autosomal dominant inheritance (HP:0000006), Bruising susceptibility (HP:0000978), Respiratory insufficiency (HP:0002093); the next level is 4 subjects. Cross-checked with an independent formulation (RANK over a LEFT JOIN from phenotypes, so a never-recorded term would have shown up as 0): identical, 4 rows of 3. The reference returns the tied counts only; the text pattern accepts the name or the HPO code of each of the four. trapSql is ORDER BY … ASC LIMIT 1: verified one row, Autosomal dominant inheritance 3.\n\nTrap query (must return different rows): SELECT phenotype.name AS phenotype, COUNT(*) AS subjects FROM genomics.subject_phenotypes subject_phenotype JOIN genomics.phenotypes phenotype ON phenotype.id = subject_phenotype.phenotype_id GROUP BY phenotype.name ORDER BY subjects ASC LIMIT 1\n\nParaphrases: What is the least common phenotype among our subjects? | Which phenotype appears in the fewest subjects' records?\n\nMoved from feat/engine-eval-loop (branch category ties, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*(?:atrial septal|HP:0001631))(?=[\\s\\S]*(?:autosomal dominant|HP:0000006))(?=[\\s\\S]*(?:bruising|HP:0000978))(?=[\\s\\S]*(?:respiratory insufficiency|HP:0002093))"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "WITH per_phenotype AS (SELECT subject_phenotype.phenotype_id, COUNT(DISTINCT subject_phenotype.subject_id) AS subjects FROM genomics.subject_phenotypes subject_phenotype GROUP BY subject_phenotype.phenotype_id) SELECT per_phenotype.subjects FROM per_phenotype WHERE per_phenotype.subjects = (SELECT MIN(subjects) FROM per_phenotype)"
+      }
+    },
+    {
+      "id": "damaging-variant-count",
+      "category": "encoding",
+      "split": "dev",
+      "tags": [
+        "trap:value-vocabulary",
+        "difficulty:medium"
+      ],
+      "question": "How many damaging variants did we find?",
+      "intent": "Map a clinician's word onto the enum the column actually stores.",
+      "notes": "There is no 'DAMAGING' value. clinical_significance is PATHOGENIC (96), LIKELY_PATHOGENIC (53), VUS (159), LIKELY_BENIGN (74) or BENIGN (68); 'damaging' is the ACMG pair PATHOGENIC + LIKELY_PATHOGENIC = 149. An answer that matches the literal word returns 0, and one that counts PATHOGENIC alone returns 96. The count is checked by the result set; the likely-pathogenic word check asks the answer to say it folded that class in. Guards against both the empty-filter and the half-filter failures. trapSql is the half filter (PATHOGENIC only): verified 96 against the reference 149.\n\nTrap query (must return different rows): SELECT COUNT(*) AS damaging_variants FROM genomics.variants variant WHERE variant.clinical_significance = 'PATHOGENIC'\n\nParaphrases: How many harmful variants are in our data? | What is the total number of damaging variants we have identified?\n\nMoved from feat/engine-eval-loop (branch category value-vocabulary, provenance hand).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "likely[_ ]pathogenic"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS damaging_variants FROM genomics.variants variant WHERE variant.clinical_significance IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')"
+      }
+    },
+    {
+      "id": "tumour-sample-count",
+      "category": "encoding",
+      "split": "held-out",
+      "tags": [
+        "trap:value-vocabulary",
+        "difficulty:easy"
+      ],
+      "question": "How many tumour samples do we have?",
+      "intent": "Map the British spelling a researcher types onto the stored value (TUMOR); a literal match returns nothing.",
+      "notes": "Verified against the live fixture: 10 tumour samples once the default filter drops controls (2 PANEL + 8 WGS); 12 with the 2 tumour control samples included. Cross-checked with an independent formulation (a CASE sum over tissue ILIKE 'tum%'): identical, 10. trapSql matches the spelling in the question (TUMOUR): verified 0 against the reference 10. The count is checked by the result set; no text check, because any wording of \"tumour\" in the answer would only echo the question.\n\nTrap query (must return different rows): SELECT COUNT(*) AS tumour_samples FROM genomics.samples sample WHERE sample.is_control = false AND sample.tissue = 'TUMOUR'\n\nParaphrases: How many of our samples were taken from tumour tissue? | What is the number of tumour-derived samples we hold?\n\nMoved from feat/engine-eval-loop (branch category value-vocabulary, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS tumour_samples FROM genomics.samples sample WHERE sample.is_control = false AND sample.tissue = 'TUMOR'"
+      }
+    },
+    {
+      "id": "loss-of-function-variant-count",
+      "category": "encoding",
+      "split": "dev",
+      "tags": [
+        "trap:value-vocabulary",
+        "difficulty:hard"
+      ],
+      "question": "How many predicted loss-of-function variants do we have?",
+      "intent": "Map a field term onto four stored consequence values — stop-gained, frameshift, splice donor and splice acceptor — not onto the two obvious ones.",
+      "notes": "Verified against the live fixture: 82 — stop_gained 30, frameshift_variant 26, splice_acceptor_variant 14, splice_donor_variant 12. That is the gnomAD / LOFTEE predicted-LoF class (stop-gained, frameshift and essential splice-site variants); the fixture has no start_lost or stop_lost consequences, so there is no borderline value to argue over, and inframe deletions/insertions and missense variants are not LoF. Cross-checked with an independent formulation (equality plus LIKE prefixes on the consequence strings): identical, 82. trapSql is the half filter that forgets splice sites (stop_gained + frameshift_variant): verified 56 against the reference 82. The count is checked by the result set; the splice check asks the answer to say it folded the splice-site classes in, like damaging-variant-count does for likely pathogenic.\n\nTrap query (must return different rows): SELECT COUNT(*) AS loss_of_function_variants FROM genomics.variants variant WHERE variant.consequence IN ('stop_gained', 'frameshift_variant')\n\nParaphrases: What is our count of putative loss-of-function (LoF) variants? | How many of our variants are predicted to knock out the gene's function?\n\nMoved from feat/engine-eval-loop (branch category value-vocabulary, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "splice"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS loss_of_function_variants FROM genomics.variants variant WHERE variant.consequence IN ('stop_gained', 'frameshift_variant', 'splice_donor_variant', 'splice_acceptor_variant')"
+      }
+    },
+    {
+      "id": "samples-sequenced-2015",
+      "category": "out-of-scope",
+      "split": "dev",
+      "tags": [
+        "trap:out-of-scope",
+        "difficulty:medium"
+      ],
+      "question": "How many samples did we sequence in 2015?",
+      "intent": "The cohort was collected in 2023 and 2024 only — the agent must say so instead of returning a confident zero or inventing a figure.",
+      "notes": "samples.collected_on spans 2023-02-02 to 2024-12-11 (68 samples in 2023, 72 in 2024) and a CHECK constraint forbids anything else. A bare 'zero' is technically true but useless and reads like a finding; the honest answer names the covered window. noToolErrors was retired (no reference SQL, and a coverage probe that errors is not a wrong answer); didNotCall create_visual stays as the one tool check — charting a year with no data is always wrong. Guards against silently answering outside the fixture's coverage.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance hand).",
+      "checks": [
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G2"
+        }
+      ],
+      "judgeRubric": "The question asks about 2015, a year this cohort does not cover: every sample was collected between 2023-02-02 and 2024-12-11. The correct answer says there are no 2015 samples and that the cohort was collected in 2023 and 2024. Score pass=true only if the final answer makes clear there is no 2015 data AND explicitly states the period the data DOES cover (2023 and/or 2024), without inventing any 2015 sample count, sequencing run or statistic. Score pass=false if it reports a 2015 figure as if it were a real measurement, presents a bare '0' with no statement of what the data covers, or fabricates any claim about sequencing done in 2015. Close but wrong: an answer that says \"0 samples were sequenced in 2015\" with no covered period, or one that names the covered years but then presents a 2023 or 2024 count as the answer to the 2015 question — that must FAIL."
+    },
+    {
+      "id": "methylation-by-gene",
+      "category": "out-of-scope",
+      "split": "held-out",
+      "tags": [
+        "trap:out-of-scope",
+        "difficulty:easy"
+      ],
+      "question": "What is the average DNA methylation level of BRCA1 across our samples?",
+      "intent": "The dataset measures variants and expression, not methylation — the agent must say so instead of inventing a level or passing expression off as methylation.",
+      "notes": "There is no methylation entity or column anywhere in the schema: the per-sample measurements are variant calls (genotype, read counts, filter status, genotype quality) and gene expression (raw_count and tpm per gene per sample; BRCA1 averages 98.742 TPM over the non-control samples). The tempting failure is to answer with expression and call it methylation, or to \"infer\" methylation from low expression. didNotCall create_visual is the one tool check (charting a measure that does not exist is always wrong); no reference SQL.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G2"
+        }
+      ],
+      "judgeRubric": "The dataset holds no DNA methylation data: its measurements are variant calls (genotypes, read counts, filter status, genotype quality) and gene expression (raw read counts and TPM per gene per sample). The correct answer says methylation is not measured in this dataset and names what is available instead, for example BRCA1 expression in TPM or its variant calls. Score pass=true only if the final answer clearly states there is no methylation data AND names at least one kind of data the dataset does hold (expression/TPM or variant calls), without giving any methylation value. Score pass=false if it reports a methylation level, beta value or percentage, presents BRCA1 expression as if it were methylation, or fabricates a methylation assay. Close but wrong: an answer that says methylation is not directly available but that BRCA1's average expression \"suggests\" a methylation level, or a bare \"no methylation data\" with no mention of what the dataset does cover — that must FAIL."
+    },
+    {
+      "id": "copy-number-variant-count",
+      "category": "out-of-scope",
+      "split": "dev",
+      "tags": [
+        "trap:out-of-scope",
+        "difficulty:hard"
+      ],
+      "question": "How many copy-number variants did we detect?",
+      "intent": "The variant table holds small variants only; its DELETION class is a few bases, not a copy-number loss — the agent must say CNVs are not captured.",
+      "notes": "Verified against the live fixture: the 450 variants are SNV 371, DELETION 34, INSERTION 30, INDEL 15, and the deletions remove 1 to 5 bases (reference alleles of 2-6 bases, alternate allele of 1), so nothing here is a copy-number or structural variant. The tempting failures are counting the 34 deletions (or 34 + 30 insertions) as copy-number losses/gains, or a bare \"0 CNVs\" that reads like a measured finding. didNotCall create_visual is the tool check; no reference SQL — a count query that confirms the variant types is fine.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G2"
+        }
+      ],
+      "judgeRubric": "The dataset has no copy-number or structural-variant calls. Its 450 variants are small variants only — 371 SNVs, 34 deletions, 30 insertions and 15 indels — and the deletions remove 1 to 5 bases. The correct answer says copy-number variants are not captured in this dataset and describes the small-variant types it does hold. Score pass=true only if the final answer states that there is no copy-number (CNV) data AND names the small-variant types that are present (SNVs and short insertions, deletions or indels), without reporting any count as a number of CNVs. Score pass=false if it reports a figure as the number of copy-number variants, treats the DELETION or INSERTION variants as copy-number losses or gains, or invents CNV calls. Close but wrong: an answer that says \"we detected 34 copy-number deletions\" or \"64 CNVs (34 deletions and 30 insertions)\", or one that answers \"0 CNVs\" without explaining that the dataset only holds small variants — that must FAIL."
+    },
+    {
+      "id": "most-important-gene",
+      "category": "ambiguous",
+      "split": "dev",
+      "tags": [
+        "trap:clarification",
+        "difficulty:medium"
+      ],
+      "question": "Which gene matters most in this cohort?",
+      "intent": "Ambiguous on the metric — total variants, pathogenic variants and call volume each name a different gene, so the agent must ask.",
+      "notes": "Three defensible answers sit in the data: BRCA1 has the most variants (34), TP53 the most pathogenic ones (11), CFTR the most variant calls (566 across the non-control samples). Guessing one of the three looks authoritative and is unfalsifiable to the reader, so the pass condition is that the agent asks which sense of 'matters' is meant. No noToolErrors: a clarification has no reference SQL. Guards against confident single-metric guesses on an under-specified question.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance hand).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "ask_clarification"
+          },
+          "criterion": "D5"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D5"
+        }
+      ],
+      "judgeRubric": "The question (\"Which gene matters most in this cohort?\") is ambiguous: 'matters most' could mean the most variants, the most pathogenic variants, the most variant calls, the most carriers or the highest expression — and these pick different genes (BRCA1 has the most variants, TP53 the most pathogenic ones, CFTR the most calls). The correct answer is a clarifying question such as \"Matters most by which measure: number of variants, number of pathogenic variants, or number of variant calls?\". Score pass=true only if the final answer is itself a clarifying question that offers 2-4 concrete, well-formed options grounded in this genomics dataset (naming real notions such as total variants, pathogenic variants, number of calls, number of carriers or expression level), and that does not name a winning gene or state any figures as if they were the answer. Score pass=false if it picks a gene, invents a metric the data does not hold, or asks a vague open-ended question with no concrete options. Close but wrong: an answer that names a gene for one measure (e.g. \"TP53, by pathogenic variants\") and only then asks whether another measure was meant, or that asks for clarification but offers a single option — that must FAIL."
+    },
+    {
+      "id": "best-quality-sample",
+      "category": "ambiguous",
+      "split": "held-out",
+      "tags": [
+        "trap:clarification",
+        "difficulty:medium"
+      ],
+      "question": "Which sample has the best sequencing quality?",
+      "intent": "Ambiguous on the measure — coverage, share of high-confidence calls and genotype quality each crown a different sample, so the agent must ask.",
+      "notes": "Verified against the live fixture (non-control samples): SMP-0113 has the deepest mean coverage (586.4x, a PANEL sample), SMP-0121 the highest share of high-confidence calls (36 of 37, 97.3%, a 30.5x WGS sample), and SMP-0054 the highest mean genotype quality (68.21, a hair above SMP-0121 on 68.19). Coverage is also not comparable across assays — panels are sequenced an order of magnitude deeper than genomes — so picking it silently is misleading as well as arbitrary. No reference SQL; the pass condition is a clarifying question.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "ask_clarification"
+          },
+          "criterion": "D5"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D5"
+        }
+      ],
+      "judgeRubric": "The question (\"Which sample has the best sequencing quality?\") is ambiguous: best quality could mean the deepest coverage, the highest share of calls that pass quality filtering, or the highest average genotype quality — and these pick different samples (SMP-0113 has the deepest mean coverage, 586.4x, but is a panel sample; SMP-0121 has the highest share of high-confidence calls, 97.3%; SMP-0054 has the highest mean genotype quality). The correct answer is a clarifying question such as \"Best by which measure: mean coverage, share of high-confidence calls, or average genotype quality?\". Score pass=true only if the final answer is itself a clarifying question that offers 2-4 concrete quality measures grounded in this dataset (coverage, high-confidence / PASS call rate, genotype quality, read depth) and does not name a winning sample or state figures as the answer. Score pass=false if it names a sample, invents a quality measure the data does not hold (e.g. Q30, mapping quality, duplication rate), or asks a vague open-ended question with no concrete options. Close but wrong: an answer that names SMP-0113 \"by coverage\" and only then asks whether another measure was meant, or that asks for clarification but offers a single option — that must FAIL."
+    },
+    {
+      "id": "most-affected-superpopulation",
+      "category": "ambiguous",
+      "split": "dev",
+      "tags": [
+        "trap:clarification",
+        "difficulty:hard"
+      ],
+      "question": "Which superpopulation is most affected?",
+      "intent": "Count versus rate: the superpopulation with the most affected subjects is not the one with the highest share affected, so the agent must ask which is meant.",
+      "notes": "Verified against the live fixture (all 120 subjects): African has the most affected subjects (22 of 36, 61.1%), Admixed American the highest share affected (10 of 16, 62.5%), and African also the most subjects carrying a pathogenic variant (17, genotype 0/1 or 1/1, controls excluded). A count and a rate name different superpopulations, and the rate winner leads by 1.4 points on 16 subjects — guessing either is unfalsifiable to the reader. No reference SQL; the pass condition is a clarifying question.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "ask_clarification"
+          },
+          "criterion": "D5"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D5"
+        }
+      ],
+      "judgeRubric": "The question (\"Which superpopulation is most affected?\") is ambiguous: it could mean the largest number of affected subjects (African, 22), the highest share of subjects who are affected (Admixed American, 62.5%, just ahead of African at 61.1%), or the most subjects carrying a pathogenic variant (African, 17). The correct answer is a clarifying question such as \"Most affected by the number of affected subjects, by the share of subjects who are affected, or by carriers of pathogenic variants?\". Score pass=true only if the final answer is itself a clarifying question that offers 2-4 concrete options grounded in this dataset (a count of affected subjects, a proportion affected, pathogenic-variant carriers, or a phenotype-based measure) and does not name a winning superpopulation or state figures as the answer. Score pass=false if it picks a superpopulation, invents a measure the data does not hold (e.g. disease incidence or prevalence per 100,000), or asks a vague open-ended question with no concrete options. Close but wrong: an answer that names African \"by number of affected subjects\" and only then asks whether a rate was meant, or that offers only a single option — that must FAIL."
+    },
+    {
+      "id": "most-called-genes",
+      "category": "ranking",
+      "split": "dev",
+      "tags": [
+        "trap:id-vs-name",
+        "difficulty:hard"
+      ],
+      "question": "Which genes were called most often across our samples? Show the top five.",
+      "intent": "variant_calls has no gene column, so the answer requires two hops and must be reported as HGNC symbols, not ids.",
+      "notes": "The path is variant_calls.variant_id -> variants.gene_id -> genes.hgnc_symbol; a one-hop answer can only report variant ids, and grouping on variant_calls alone answers a different question. Expected, with the dataset's default filter excluding control samples: CFTR 566, TP53 208, XIST 205, MUTYH 201, NF2 187; EGFR is sixth on 163, so the cut-off is not a tie. The counts are checked by the result set; the text check asks for the top symbol. Guards against answers that hand the reader opaque numeric keys instead of gene symbols. trapSql stops one hop short and reports gene ids: verified 6/566, 3/208, 38/205, 25/201, 16/187 — the same counts under opaque keys, which the result set rejects.\n\nTrap query (must return different rows): SELECT variant.gene_id, COUNT(*) AS variant_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id WHERE sample.is_control = false GROUP BY variant.gene_id ORDER BY variant_calls DESC, variant.gene_id LIMIT 5\n\nParaphrases: Which five genes have the most variant calls across our samples? | What are the top five genes by number of variant calls in our samples?\n\nMoved from feat/engine-eval-loop (branch category id-vs-name, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "CFTR"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT gene.hgnc_symbol AS gene, COUNT(*) AS variant_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false GROUP BY gene.hgnc_symbol ORDER BY variant_calls DESC, gene.hgnc_symbol LIMIT 5"
+      }
+    },
+    {
+      "id": "most-common-phenotypes",
+      "category": "ranking",
+      "split": "held-out",
+      "tags": [
+        "trap:id-vs-name",
+        "difficulty:medium"
+      ],
+      "question": "Which three phenotypes are recorded for the most subjects?",
+      "intent": "The subject-phenotype link table carries only numeric ids, so the answer needs the join to the phenotype names.",
+      "notes": "Verified against the live fixture: 3 rows — Anemia 11, Autosomal recessive inheritance 10, Neoplasm 10; the next level is 9 (Chronic lung disease, Intellectual disability, Short stature), so the top three is not cut through a tie. Cross-checked with an independent formulation (DENSE_RANK over COUNT(DISTINCT subject_id) per phenotype_id, joined to names): identical. trapSql stays on the link table and reports phenotype ids: verified 21/11, 2/10, 4/10 — the right counts under opaque keys. The reference projects the phenotype name; an answer that adds the HPO code still passes (wider projection), one that reports only the code does not — the question asks which phenotypes, and HPO codes alone are not names. The counts are checked by the result set; the text check asks for the top phenotype.\n\nTrap query (must return different rows): SELECT subject_phenotype.phenotype_id, COUNT(*) AS subjects FROM genomics.subject_phenotypes subject_phenotype GROUP BY subject_phenotype.phenotype_id ORDER BY subjects DESC, subject_phenotype.phenotype_id LIMIT 3\n\nParaphrases: What are the three most frequently recorded phenotypes across our subjects? | Name the top three phenotypes by how many subjects have them recorded.\n\nMoved from feat/engine-eval-loop (branch category id-vs-name, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Anemia"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT phenotype.name AS phenotype, COUNT(*) AS subjects FROM genomics.subject_phenotypes subject_phenotype JOIN genomics.phenotypes phenotype ON phenotype.id = subject_phenotype.phenotype_id GROUP BY phenotype.name ORDER BY subjects DESC, phenotype.name LIMIT 3"
+      }
+    },
+    {
+      "id": "genes-longest-canonical-transcripts",
+      "category": "ranking",
+      "split": "dev",
+      "tags": [
+        "trap:id-vs-name",
+        "difficulty:medium"
+      ],
+      "question": "Which three genes have the longest canonical transcripts, in base pairs?",
+      "intent": "Transcripts reference their gene by id, so the ranking must be reported as HGNC symbols, not gene ids.",
+      "notes": "Verified against the live fixture (every gene has exactly one canonical transcript): 3 rows — APC 10737 bp, VHL 10114 bp, PMS2 10020 bp; BRCA1 is fourth on 10008, so the cut-off is not a tie. Cross-checked with an independent formulation (MAX canonical length per symbol, HAVING at or above the third-longest length): identical. trapSql reports gene ids from the transcripts table: verified 11/10737, 14/10114, 10/10020. The reference projects the symbol and the length; an answer that also shows the transcript name (APC-201) passes as a wider projection. The lengths are checked by the result set; the text check asks for the longest gene by symbol.\n\nTrap query (must return different rows): SELECT transcript.gene_id, transcript.length_bp FROM genomics.transcripts transcript WHERE transcript.is_canonical = true ORDER BY transcript.length_bp DESC, transcript.gene_id LIMIT 3\n\nParaphrases: Name the three genes whose canonical transcript is longest, with the length in base pairs. | Which genes have the three longest canonical transcripts (in bp)?\n\nMoved from feat/engine-eval-loop (branch category id-vs-name, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\bAPC\\b"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT gene.hgnc_symbol AS gene, transcript.length_bp FROM genomics.transcripts transcript JOIN genomics.genes gene ON gene.id = transcript.gene_id WHERE transcript.is_canonical = true ORDER BY transcript.length_bp DESC, gene.hgnc_symbol LIMIT 3"
+      }
+    },
+    {
+      "id": "mean-allele-fraction",
+      "category": "business-term",
+      "split": "dev",
+      "tags": [
+        "trap:metric-definition",
+        "difficulty:hard"
+      ],
+      "question": "What is our mean allele fraction, and how many calls is it based on?",
+      "intent": "Allele fraction is a defined metric — alt/total on PASS calls at depth 20 or better — not simply the average of a ratio over every row.",
+      "notes": "Applying the definition to the non-control samples the dataset's default filter keeps leaves 3640 of their 4675 calls eligible and gives 0.4158; averaging the ratio over all of those calls gives 0.3795, which looks equally plausible and is wrong. Asking for the denominator as well as the value forces the filter to be visible in the answer — both figures are checked by the result set, not by a text pattern on 0.41. Guards against the engine quietly dropping the PASS / depth >= 20 qualifiers from a named metric. trapSql drops the PASS and depth >= 20 qualifiers: verified 4675 calls at 0.3795, against the reference 3640 calls at 0.4158.\n\nTrap query (must return different rows): SELECT COUNT(*) AS eligible_calls, ROUND(AVG(call.alt_read_count * 1.0 / call.total_read_count), 4) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false\n\nParaphrases: What is the overall mean allele fraction, and how many calls go into it? | Give me the cohort's mean allele fraction together with the number of calls it is computed from.\n\nMoved from feat/engine-eval-loop (branch category metric-definition, provenance hand).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS eligible_calls, ROUND(AVG(call.alt_read_count::numeric / call.total_read_count), 4) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20"
+      }
+    },
+    {
+      "id": "high-confidence-rate-by-sequencer",
+      "category": "business-term",
+      "split": "held-out",
+      "tags": [
+        "trap:metric-definition",
+        "difficulty:medium"
+      ],
+      "question": "What is the high-confidence call rate for each sequencing instrument, as a percentage to two decimal places?",
+      "intent": "Use the dataset's high_confidence_call_rate definition (share of calls with filter status PASS), not a genotype-quality threshold borrowed from elsewhere.",
+      "notes": "Verified against the live fixture (controls out; 100 x PASS / all calls, rounded to 2 as the metric expression does): 4 rows — HiSeq 4000 85.03 (of 862 calls), NextSeq 2000 84.30 (1338), NovaSeq 6000 83.36 (1118), NovaSeq X Plus 84.75 (1357). Cross-checked with an independent formulation (AVG of a 100/0 indicator on PASS and genotype quality >= 35, controls excluded by NOT IN): identical — in this fixture PASS is exactly genotype quality >= 35. trapSql uses the common GQ >= 20 convention instead of the metric: verified 91.88, 92.08, 91.77, 91.67. With controls left in the rates move to 85.40, 84.88, 83.26, 84.91, a second way to fail. The question names the metric, which is the hint that makes this medium rather than hard.\n\nTrap query (must return different rows): SELECT sample.sequencer, ROUND(100.0 * COUNT(CASE WHEN call.genotype_quality >= 20 THEN 1 END) / COUNT(*), 2) AS high_confidence_pct FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY sample.sequencer ORDER BY sample.sequencer\n\nParaphrases: For each sequencing machine, what percentage of variant calls are high-confidence, to two decimal places? | How does the high-confidence call rate compare across our sequencing instruments? Percentages to two decimals.\n\nMoved from feat/engine-eval-loop (branch category metric-definition, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT sample.sequencer, ROUND(100.0 * COUNT(CASE WHEN call.filter_status = 'PASS' THEN 1 END) / COUNT(*), 2) AS high_confidence_pct FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY sample.sequencer ORDER BY sample.sequencer"
+      }
+    },
+    {
+      "id": "allele-fraction-by-tissue",
+      "category": "business-term",
+      "split": "dev",
+      "tags": [
+        "trap:metric-definition",
+        "difficulty:hard"
+      ],
+      "question": "What is the mean allele fraction in each tissue type, to three decimal places?",
+      "intent": "Allele fraction is a defined metric — alt/total on PASS calls with depth >= 20 — and a per-tissue breakdown must keep both qualifiers.",
+      "notes": "Verified against the live fixture (controls out; PASS calls with total reads >= 20): 4 rows — BLOOD 0.414 (2477 eligible calls), BUCCAL 0.435 (406), SALIVA 0.407 (467), TUMOR 0.422 (290). Cross-checked with an independent formulation (the metric expression verbatim — AVG(...) FILTER (WHERE ...) with NULLIF — grouped from samples): identical. trapSql averages the ratio over every call: verified BLOOD 0.377, BUCCAL 0.389, SALIVA 0.380, TUMOR 0.387; keeping PASS but dropping the depth floor gives 0.402, 0.415, 0.398, 0.409 — both wrong, both plausible. The fractions are checked by the result set.\n\nTrap query (must return different rows): SELECT sample.tissue, ROUND(AVG(call.alt_read_count * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY sample.tissue ORDER BY sample.tissue\n\nParaphrases: Break down the mean allele fraction by the tissue each sample came from, to three decimals. | How does the average allele fraction vary between tissue types? Give it to three decimal places.\n\nMoved from feat/engine-eval-loop (branch category metric-definition, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT sample.tissue, ROUND(AVG(call.alt_read_count * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY sample.tissue ORDER BY sample.tissue"
+      }
+    },
+    {
+      "id": "cohort-sample-count",
+      "category": "default-filter",
+      "split": "dev",
+      "tags": [
+        "trap:default-filter",
+        "difficulty:medium"
+      ],
+      "question": "How many samples do we have in the cohort?",
+      "intent": "Control samples are not cohort samples — the default filter has to be applied without being asked for.",
+      "notes": "15 of the 140 samples are flagged is_control, leaving a cohort of 125. Counting the table gives 140, which is off by exactly the controls and is the number a reader would then divide every downstream rate by. The question deliberately says cohort without naming the flag, so the agent has to apply the knowledge entry unprompted. The count is checked by the result set, not by a text match on 125. Guards against denominators that silently include process controls. trapSql counts the whole table: verified 140 against the reference 125.\n\nTrap query (must return different rows): SELECT COUNT(*) AS cohort_samples FROM genomics.samples sample\n\nParaphrases: What is the size of our cohort in samples? | How many cohort samples are there?\n\nMoved from feat/engine-eval-loop (branch category default-filter, provenance hand).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS cohort_samples FROM genomics.samples sample WHERE sample.is_control = false"
+      }
+    },
+    {
+      "id": "cohort-variant-call-total",
+      "category": "default-filter",
+      "split": "held-out",
+      "tags": [
+        "trap:default-filter",
+        "difficulty:medium"
+      ],
+      "question": "How many variant calls do we have?",
+      "intent": "Control samples carry variant calls too; a call total is a variant-call aggregate the default filter applies to.",
+      "notes": "Verified against the live fixture: 4675 calls on non-control samples; the table holds 5263, the other 588 on the 15 control samples. Cross-checked with an independent formulation (v_sample_qc pass counts plus LOW_QUAL counts per non-control sample): identical, 4675. trapSql counts the table: verified 5263. The question says nothing about controls, so the agent has to apply the default-filter knowledge unprompted. The count is checked by the result set.\n\nTrap query (must return different rows): SELECT COUNT(*) AS variant_calls FROM genomics.variant_calls call\n\nParaphrases: What is the total number of variant calls in our data? | How many genotype calls have we made across our samples?\n\nMoved from feat/engine-eval-loop (branch category default-filter, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS variant_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false"
+      }
+    },
+    {
+      "id": "samples-collected-2024",
+      "category": "default-filter",
+      "split": "dev",
+      "tags": [
+        "trap:default-filter",
+        "difficulty:medium"
+      ],
+      "question": "How many samples did we collect in 2024?",
+      "intent": "A dated count over samples: the default filter still applies, and the answer differs from the controls-included control case by exactly the 2024 controls.",
+      "notes": "Verified against the live fixture: 66 non-control samples collected in 2024; 72 with the 6 control samples collected that year. Cross-checked with an independent formulation (EXTRACT(YEAR) FILTER counts, controls subtracted): identical, 66. trapSql drops the default filter: verified 72 — which is exactly the 2024 row of samples-per-collection-year, the control case that asks for controls explicitly. The pair keeps the filter honest in both directions. The count is checked by the result set.\n\nTrap query (must return different rows): SELECT COUNT(*) AS samples FROM genomics.samples sample WHERE sample.collected_on >= DATE '2024-01-01' AND sample.collected_on < DATE '2025-01-01'\n\nParaphrases: What was our sample collection count for 2024? | How many samples were collected during calendar year 2024?\n\nMoved from feat/engine-eval-loop (branch category default-filter, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS samples FROM genomics.samples sample WHERE sample.is_control = false AND sample.collected_on >= DATE '2024-01-01' AND sample.collected_on < DATE '2025-01-01'"
+      }
+    },
+    {
+      "id": "subjects-by-superpopulation",
+      "category": "join",
+      "split": "dev",
+      "tags": [
+        "trap:multi-step-join",
+        "difficulty:hard"
+      ],
+      "question": "How many subjects do we have in each superpopulation?",
+      "intent": "Subjects carry an ancestry group, not a superpopulation — the answer needs the two-hop hierarchy.",
+      "notes": "subjects -> ancestry_groups -> superpopulations. Grouping on ancestry_group_id gives 22 rows of the wrong grain; the correct answer is 8 rows totalling 120 subjects (AFR 36, AMR/EAS/EUR/SAS 16 each, OCE 10, MID 5, OTH 5). The counts are checked by the result set; the text check asks for the largest superpopulation by name. Guards against answers that stop one join short and report the finer grain as if it were the requested one. trapSql stops at the ancestry group: verified 22 rows (LWK, PNG, YRI 10 each at the top) against the reference 8 superpopulation rows.\n\nTrap query (must return different rows): SELECT ancestry.code AS ancestry_code, ancestry.name AS ancestry_group, COUNT(*) AS subjects FROM genomics.subjects subject JOIN genomics.ancestry_groups ancestry ON ancestry.id = subject.ancestry_group_id GROUP BY ancestry.code, ancestry.name ORDER BY subjects DESC, ancestry.code\n\nParaphrases: Break down our subjects by superpopulation. | What is the subject count per superpopulation?\n\nMoved from feat/engine-eval-loop (branch category multi-step-join, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "African"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT superpop.code AS superpopulation_code, superpop.name AS superpopulation, COUNT(*) AS subjects FROM genomics.subjects subject JOIN genomics.ancestry_groups ancestry ON ancestry.id = subject.ancestry_group_id JOIN genomics.superpopulations superpop ON superpop.id = ancestry.superpopulation_id GROUP BY superpop.code, superpop.name ORDER BY subjects DESC, superpop.code"
+      }
+    },
+    {
+      "id": "samples-by-superpopulation",
+      "category": "join",
+      "split": "held-out",
+      "tags": [
+        "trap:multi-step-join",
+        "difficulty:hard"
+      ],
+      "question": "How many samples do we have from each superpopulation?",
+      "intent": "Samples reach a superpopulation through subjects and ancestry groups — three joins — and the default filter still applies.",
+      "notes": "Verified against the live fixture (controls out): 8 rows, 125 samples — African 40, South Asian 17, Admixed American 16, East Asian 16, European 14, Oceanian 11, Other or Unassigned 6, Middle Eastern 5. Cross-checked with an independent formulation (nested IN subqueries from superpopulations down to samples): identical. The reference returns the counts only: superpopulations have a code (AFR) and a name (African), both correct labels, so the result set checks the eight figures and the text check asks for the largest by name. trapSql stops at the ancestry group: verified 22 rows (YRI 12, PNG 11, JPT 10, LWK 10, …). With controls left in the figures become 45, 19, 17, 18, 17, 12, 7, 5 — a second way to fail. Uses the samples path rather than the subjects path of subjects-by-superpopulation, so a fix that only memorises the subject join still has to find one more hop.\n\nTrap query (must return different rows): SELECT ancestry.name AS ancestry_group, COUNT(*) AS samples FROM genomics.samples sample JOIN genomics.subjects subject ON subject.id = sample.subject_id JOIN genomics.ancestry_groups ancestry ON ancestry.id = subject.ancestry_group_id WHERE sample.is_control = false GROUP BY ancestry.name\n\nParaphrases: Break down our samples by the superpopulation of the subject they came from. | For each superpopulation, how many samples have we sequenced?\n\nMoved from feat/engine-eval-loop (branch category multi-step-join, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "African"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS samples FROM genomics.samples sample JOIN genomics.subjects subject ON subject.id = sample.subject_id JOIN genomics.ancestry_groups ancestry ON ancestry.id = subject.ancestry_group_id JOIN genomics.superpopulations superpop ON superpop.id = ancestry.superpopulation_id WHERE sample.is_control = false GROUP BY superpop.id"
+      }
+    },
+    {
+      "id": "neoplasm-subject-samples",
+      "category": "join",
+      "split": "dev",
+      "tags": [
+        "trap:multi-step-join",
+        "difficulty:hard"
+      ],
+      "question": "How many of our samples come from subjects with any kind of neoplasm among their recorded phenotypes?",
+      "intent": "samples -> subjects -> subject_phenotypes -> phenotypes, where a subject with several neoplasm terms fans out: the count must be of distinct samples.",
+      "notes": "Verified against the live fixture (controls out): 22 distinct samples, from 19 subjects, have a phenotype in the NEOPLASM category (Neoplasm, Breast carcinoma, Neoplasm of the colon, Neoplasm of the liver). Cross-checked with an independent formulation (EXISTS on the phenotype link per sample): identical, 22. trapSql counts join rows without DISTINCT: verified 30, because subjects with two neoplasm terms and repeat samples multiply. Matching only the single HPO term named \"Neoplasm\" gives 11, which is why the question says any kind of neoplasm. The count is checked by the result set. A different join path from the superpopulation cases, with a fan-out the superpopulation hierarchy does not have.\n\nTrap query (must return different rows): SELECT COUNT(*) AS samples FROM genomics.samples sample JOIN genomics.subject_phenotypes subject_phenotype ON subject_phenotype.subject_id = sample.subject_id JOIN genomics.phenotypes phenotype ON phenotype.id = subject_phenotype.phenotype_id WHERE sample.is_control = false AND phenotype.category = 'NEOPLASM'\n\nParaphrases: How many samples were taken from subjects who have a neoplasm of any type recorded as a phenotype? | How many samples do we hold from subjects with some form of neoplasm in their phenotype records?\n\nMoved from feat/engine-eval-loop (branch category multi-step-join, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(DISTINCT sample.id) AS samples FROM genomics.samples sample JOIN genomics.subject_phenotypes subject_phenotype ON subject_phenotype.subject_id = sample.subject_id JOIN genomics.phenotypes phenotype ON phenotype.id = subject_phenotype.phenotype_id WHERE sample.is_control = false AND phenotype.category = 'NEOPLASM'"
+      }
+    },
+    {
+      "id": "expression-data-discovery",
+      "category": "discovery",
+      "split": "dev",
+      "tags": [
+        "trap:discovery",
+        "difficulty:easy"
+      ],
+      "question": "What expression data do we have?",
+      "intent": "Pure discovery — must answer from the session datasets rather than run SQL or invent entities.",
+      "notes": "A schema question answered by querying rows is a wrong process even when the prose happens to be right, so this case scores the process and the entity names. The honest answer names gene_expression (raw_count and tpm, one row per gene per sample) and the entities it links to (genes, samples). The entity list is already in the per-turn system block, so the old calledTool list_entities check failed every model on every run and was retired; the matches check requires gene_expression plus one linked entity. Guards against the engine reaching for run_readonly_sql on questions about what exists.\n\nMoved from feat/engine-eval-loop (branch category discovery, provenance hand).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*gene[ _]expression)(?=[\\s\\S]*\\b(?:samples?|genes)\\b)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "I4"
+        }
+      ],
+      "judgeRubric": "The user asks what expression data exists; the correct answer names the relevant entities without running SQL. It names gene_expression — one row per gene per sample, holding raw_count and tpm (transcripts per million) — and the entities it links to: genes (HGNC symbols) and samples (the sequenced samples, some of them process controls). Score pass=true only if the final answer names gene_expression and at least one entity it links to (genes or samples), says which measures it holds (raw counts and/or TPM), and no run_readonly_sql call was made. Score pass=false if it ran SQL against the data, invents an expression entity or measure the dataset does not have (e.g. FPKM/RPKM values, a transcript-level or per-tissue expression table), or answers only in generalities. Close but wrong: an answer that names gene_expression but describes it as transcript-level or as holding FPKM values, or that describes the variant tables instead of expression — that must FAIL."
+    },
+    {
+      "id": "phenotype-data-discovery",
+      "category": "discovery",
+      "split": "held-out",
+      "tags": [
+        "trap:discovery",
+        "difficulty:easy"
+      ],
+      "question": "What phenotype information do we have about our subjects?",
+      "intent": "Pure discovery — answer from the session datasets (the HPO catalogue and the subject link table) rather than run SQL or invent fields.",
+      "notes": "The honest answer names phenotypes (25 HPO terms: hpo_code, name, and a category such as NEUROLOGIC or NEOPLASM) and subject_phenotypes (which subject has which term, the age at onset — onset_age_years, missing on 38 of 161 records — and an is_primary flag), linked to subjects (which also carry affected_status). The matches check requires both entity names; \\bphenotypes\\b does not match inside subject_phenotypes, so the pattern needs the catalogue named on its own. No reference SQL.\n\nMoved from feat/engine-eval-loop (branch category discovery, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*subject[ _]phenotypes)(?=[\\s\\S]*\\bphenotypes\\b)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "I4"
+        }
+      ],
+      "judgeRubric": "The user asks what phenotype information exists; the correct answer names the relevant entities without running SQL. It names phenotypes — the catalogue of HPO terms, each with an HPO code, a name and a category (e.g. NEUROLOGIC, NEOPLASM, CARDIOVASCULAR) — and subject_phenotypes, which links subjects to phenotypes and records the age at onset and whether the phenotype is the subject's primary one. Score pass=true only if the final answer names both phenotypes and subject_phenotypes, describes at least one field of each (for example HPO code or category; onset age or primary flag), and no run_readonly_sql call was made. Score pass=false if it ran SQL against the data, invents a phenotype entity or field the dataset does not have (e.g. severity scores, diagnosis dates, ICD-10 codes, clinician notes), or answers only in generalities. Close but wrong: an answer that names the phenotype catalogue but never explains how phenotypes attach to subjects, or that describes ICD diagnosis codes instead of HPO terms — that must FAIL."
+    },
+    {
+      "id": "sequencing-quality-discovery",
+      "category": "discovery",
+      "split": "dev",
+      "tags": [
+        "trap:discovery",
+        "difficulty:medium"
+      ],
+      "question": "What information do we have about sequencing and call quality?",
+      "intent": "Pure discovery across three entities — sample-level coverage, call-level filter status and genotype quality, and the per-sample QC view.",
+      "notes": "The honest answer names samples (mean_coverage in fold coverage, plus assay and sequencer), variant_calls (filter_status PASS or LOW_QUAL, genotype_quality 0-99, alt and total read counts, and read_depth, which duplicates the total in this fixture) and the v_sample_qc view (per-sample coverage with PASS and non-reference call counts). The matches check requires variant_calls plus samples or v_sample_qc. Tempting inventions are Phred base qualities, Q30 rates, mapping quality and duplication rate, none of which exist. No reference SQL.\n\nMoved from feat/engine-eval-loop (branch category discovery, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*variant[ _]calls)(?=[\\s\\S]*(?:v_sample_qc|\\bsamples\\b))"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "I4"
+        }
+      ],
+      "judgeRubric": "The user asks what sequencing and call-quality information exists; the correct answer names the relevant entities without running SQL. It names samples (mean coverage per sample, with its assay and sequencer), variant_calls (filter status PASS or LOW_QUAL, genotype quality, alternate and total read counts / read depth) and the v_sample_qc view (per-sample coverage with counts of PASS and non-reference calls). Score pass=true only if the final answer names variant_calls and at least one of samples or v_sample_qc, mentions at least two quality measures the data holds (coverage, filter status, genotype quality, read depth), and no run_readonly_sql call was made. Score pass=false if it ran SQL against the data, invents a quality measure the dataset does not have (e.g. Phred base quality, Q30 rate, mapping quality, duplication rate, insert size), or answers only in generalities. Close but wrong: an answer that names only mean coverage and misses the call-level filter status and genotype quality, or one that lists Q30 or mapping quality among the available measures — that must FAIL."
+    },
+    {
+      "id": "pathogenic-carrier-samples",
+      "category": "business-term",
+      "split": "dev",
+      "tags": [
+        "trap:domain-semantics",
+        "difficulty:hard"
+      ],
+      "question": "How many samples carry a pathogenic variant?",
+      "intent": "A variant_calls row is a site that was genotyped, not a variant the sample carries — 0/0 is homozygous reference.",
+      "notes": "Of the non-control samples the dataset's default filter keeps, 97 have a call row at a pathogenic site; only 67 actually carry one (genotype 0/1 or 1/1). 0/0 is 1642 of their 4675 calls, so the wrong answer is 45% too high and reads like a plausible carrier burden. This is the single most important case in the suite: it is wrong not because the SQL is hard but because 'has a row' is not 'carries the variant'. The count is checked by the result set, not by a text match on 67. Guards against counting genotyped sites as carriers. trapSql counts every genotyped pathogenic site, 0/0 included: verified 97 against the reference 67.\n\nTrap query (must return different rows): SELECT COUNT(DISTINCT call.sample_id) AS carrier_samples FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id WHERE sample.is_control = false AND variant.clinical_significance = 'PATHOGENIC'\n\nParaphrases: How many samples are carriers of at least one pathogenic variant? | What number of our samples harbour a pathogenic variant?\n\nMoved from feat/engine-eval-loop (branch category domain-semantics, provenance hand).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(DISTINCT call.sample_id) AS carrier_samples FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id WHERE sample.is_control = false AND variant.clinical_significance = 'PATHOGENIC' AND call.genotype IN ('0/1', '1/1')"
+      }
+    },
+    {
+      "id": "pathogenic-carriers-by-gene",
+      "category": "business-term",
+      "split": "dev",
+      "tags": [
+        "trap:domain-semantics",
+        "difficulty:hard"
+      ],
+      "question": "Which genes have the most subjects carrying a pathogenic variant? Show the top three.",
+      "intent": "The same 0/0 semantics, but on a ranking, so ignoring genotype changes the order and not only the totals.",
+      "notes": "Correct, once the dataset's default filter drops control samples: TP53 13, APC 11, MLH1 11, with PTEN fourth on 7, so the top three is not split by a tie. The question asks for three rather than five because excluding controls leaves BRCA1 and NF2 tied on 6 at fifth place, and a top five would have to cut that tie arbitrarily. Ignoring genotype gives TP53 22, MLH1 19, APC 15 — a different ranking with MLH1 promoted above APC, which is why a fix that only patches the cohort-wide count still fails here. Also needs the samples -> subjects hop so repeat samples from one person are not double counted. trapSql ignores genotype: verified TP53 22, MLH1 19, APC 15 against the reference TP53 13, APC 11, MLH1 11.\n\nTrap query (must return different rows): SELECT gene.hgnc_symbol AS gene, COUNT(DISTINCT sample.subject_id) AS carrier_subjects FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND variant.clinical_significance = 'PATHOGENIC' GROUP BY gene.hgnc_symbol ORDER BY carrier_subjects DESC, gene.hgnc_symbol LIMIT 3\n\nParaphrases: What are the top three genes by number of subjects who carry a pathogenic variant in them? | In which three genes do the most subjects carry a pathogenic variant?\n\nMoved from feat/engine-eval-loop (branch category domain-semantics, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "TP53"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\bAPC\\b"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT gene.hgnc_symbol AS gene, COUNT(DISTINCT sample.subject_id) AS carrier_subjects FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND variant.clinical_significance = 'PATHOGENIC' AND call.genotype IN ('0/1', '1/1') GROUP BY gene.hgnc_symbol ORDER BY carrier_subjects DESC, gene.hgnc_symbol LIMIT 3"
+      }
+    },
+    {
+      "id": "mean-expression-by-gene",
+      "category": "business-term",
+      "split": "held-out",
+      "tags": [
+        "trap:domain-semantics",
+        "difficulty:hard"
+      ],
+      "question": "What is the average expression of BRCA1, TP53, ATM, EGFR and CFTR across our samples?",
+      "intent": "A TPM of 0 is a measured zero, not a missing value — dropping those rows inflates every mean.",
+      "notes": "1049 of the 2720 gene/sample measurements on non-control samples are exactly 0 and none are NULL (raw_count is 0 on exactly those rows), so a zero is real data. Averaging over all 68 samples the dataset's default filter keeps gives ATM 97.106, BRCA1 98.742, CFTR 195.585, EGFR 247.390, TP53 127.665; filtering tpm > 0 gives 183.42, 172.16, 260.78, 357.93 and 289.38 — every gene roughly doubled. The means are checked by the result set, not by a text pattern on 97.1. Guards against the engine treating a zero measurement as missing data. trapSql drops the measured zeros (tpm > 0): verified ATM 183.422, BRCA1 172.165, CFTR 260.780, EGFR 357.926, TP53 289.375 against the reference 97.106 … 127.665.\n\nTrap query (must return different rows): SELECT gene.hgnc_symbol AS gene, ROUND(AVG(expression.tpm), 3) AS mean_tpm FROM genomics.gene_expression expression JOIN genomics.samples sample ON sample.id = expression.sample_id JOIN genomics.genes gene ON gene.id = expression.gene_id WHERE sample.is_control = false AND expression.tpm > 0 AND gene.hgnc_symbol IN ('BRCA1', 'TP53', 'ATM', 'EGFR', 'CFTR') GROUP BY gene.hgnc_symbol ORDER BY gene.hgnc_symbol\n\nParaphrases: What is the mean expression, in transcripts per million, of BRCA1, TP53, ATM, EGFR and CFTR across our samples? | Across our samples, how highly are BRCA1, TP53, ATM, EGFR and CFTR expressed on average?\n\nMoved from feat/engine-eval-loop (branch category domain-semantics, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "ATM"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT gene.hgnc_symbol AS gene, ROUND(AVG(expression.tpm), 3) AS mean_tpm FROM genomics.gene_expression expression JOIN genomics.samples sample ON sample.id = expression.sample_id JOIN genomics.genes gene ON gene.id = expression.gene_id WHERE sample.is_control = false AND gene.hgnc_symbol IN ('BRCA1', 'TP53', 'ATM', 'EGFR', 'CFTR') GROUP BY gene.hgnc_symbol ORDER BY gene.hgnc_symbol"
+      }
+    },
+    {
+      "id": "genes-silent-in-most-samples",
+      "category": "business-term",
+      "split": "dev",
+      "tags": [
+        "trap:domain-semantics",
+        "difficulty:hard"
+      ],
+      "question": "Which genes are silent in more than half of our samples?",
+      "intent": "Zero-inflation read the other way: the zeros are the answer, so an engine that treats them as missing returns nothing.",
+      "notes": "Nine genes have tpm = 0 in more than half of the 68 non-control samples they were measured in, the dataset's default filter having dropped the controls (RET 43, F8 42, MLH1 41, TSC2 40, TP53 38, KRAS 37, PMS2 37, NF2 36, NF1 35); MYBPC3 sits on the boundary at exactly 34 of 68, which is half and not more than half, so the question's wording keeps it out. An engine that reads tpm = 0 as missing filters the evidence away and reports no silent genes; one that uses IS NULL returns zero rows because tpm is NOT NULL. Guards the zero-is-data semantics from the opposite direction to mean-expression-by-gene. trapSql reads silence as a missing value (tpm IS NULL): verified 0 rows against the reference 9, because tpm is never null.\n\nTrap query (must return different rows): SELECT gene.hgnc_symbol AS gene, SUM(CASE WHEN expression.tpm IS NULL THEN 1 ELSE 0 END) AS silent_samples, COUNT(*) AS samples_measured FROM genomics.gene_expression expression JOIN genomics.samples sample ON sample.id = expression.sample_id JOIN genomics.genes gene ON gene.id = expression.gene_id WHERE sample.is_control = false GROUP BY gene.hgnc_symbol HAVING SUM(CASE WHEN expression.tpm IS NULL THEN 1 ELSE 0 END) * 2 > COUNT(*) ORDER BY silent_samples DESC, gene.hgnc_symbol\n\nParaphrases: Which genes show no expression in over half of our samples? | Which genes are not expressed at all in more than 50% of our samples?\n\nMoved from feat/engine-eval-loop (branch category domain-semantics, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "F8"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\bRET\\b"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT gene.hgnc_symbol AS gene, COUNT(*) FILTER (WHERE expression.tpm = 0) AS silent_samples, COUNT(*) AS samples_measured FROM genomics.gene_expression expression JOIN genomics.samples sample ON sample.id = expression.sample_id JOIN genomics.genes gene ON gene.id = expression.gene_id WHERE sample.is_control = false GROUP BY gene.hgnc_symbol HAVING COUNT(*) FILTER (WHERE expression.tpm = 0) * 2 > COUNT(*) ORDER BY silent_samples DESC, gene.hgnc_symbol"
+      }
+    },
+    {
+      "id": "high-confidence-calls",
+      "category": "default-filter",
+      "split": "dev",
+      "tags": [
+        "trap:quality-filter",
+        "difficulty:medium"
+      ],
+      "question": "How many of our variant calls are high-confidence?",
+      "intent": "Requires knowing that confidence lives in filter_status, and that LOW_QUAL calls are a real slice worth naming.",
+      "notes": "3943 of the 4675 calls on non-control samples are PASS (84.34%) and 732 are LOW_QUAL (15.66%); the reference obeys the dataset's default filter and leaves the control samples' 588 calls out. Counting the table gives 5263, and genotype_quality is a tempting but different column. Reporting both statuses keeps the excluded 15% visible instead of leaving the reader to assume the fixture is clean. The counts are checked by the result set; the PASS word check asks the answer to name the status it counted. Guards against quality filters being dropped or invented from the wrong column. trapSql invents confidence from genotype quality >= 20 (a common convention, not this dataset's): verified 4294 high / 381 low against the reference PASS 3943 / LOW_QUAL 732. In this fixture PASS is exactly genotype quality >= 35. The question asks for one number, so the PASS count on its own (3943, verified 2026-09-28) is an equally correct reference (expectedSqlAlternatives): requiring the PASS/LOW_QUAL breakdown failed a correct single-count answer, and the PASS word check still asks the answer to name the status it counted.\n\nTrap query (must return different rows): SELECT CASE WHEN call.genotype_quality >= 20 THEN 'high-confidence' ELSE 'low-confidence' END AS confidence, COUNT(*) AS calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY CASE WHEN call.genotype_quality >= 20 THEN 'high-confidence' ELSE 'low-confidence' END ORDER BY calls DESC\n\nAlternative reference the branch also accepted: SELECT COUNT(*) AS high_confidence_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS'\n\nParaphrases: How many high-confidence variant calls do we have? | What number of our variant calls count as high-confidence?\n\nMoved from feat/engine-eval-loop (branch category quality-filter, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "PASS"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT call.filter_status, COUNT(*) AS calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY call.filter_status ORDER BY calls DESC, call.filter_status"
+      }
+    },
+    {
+      "id": "high-confidence-calls-by-assay",
+      "category": "default-filter",
+      "split": "held-out",
+      "tags": [
+        "trap:quality-filter",
+        "difficulty:medium"
+      ],
+      "question": "How many high-confidence variant calls did each assay type produce?",
+      "intent": "High-confidence means filter status PASS; LOW_QUAL calls are about 15% of every assay and must be left out of the count.",
+      "notes": "Verified against the live fixture (controls out, PASS only): 3 rows — PANEL 741, WES 1702, WGS 1500. Cross-checked with an independent formulation (SUM of v_sample_qc.pass_call_count per assay over non-control samples): identical. trapSql counts every call: verified PANEL 880, WES 2041, WGS 1754. The counts are checked by the result set.\n\nTrap query (must return different rows): SELECT sample.assay, COUNT(*) AS high_confidence_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY sample.assay ORDER BY sample.assay\n\nParaphrases: Break down our high-confidence variant calls by sequencing assay. | For whole-genome, whole-exome and panel sequencing, how many high-confidence variant calls do we have?\n\nMoved from feat/engine-eval-loop (branch category quality-filter, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT sample.assay, COUNT(*) AS high_confidence_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' GROUP BY sample.assay ORDER BY sample.assay"
+      }
+    },
+    {
+      "id": "high-confidence-calls-by-gene",
+      "category": "default-filter",
+      "split": "dev",
+      "tags": [
+        "trap:quality-filter",
+        "difficulty:hard"
+      ],
+      "question": "Which five genes have the most high-confidence variant calls?",
+      "intent": "The quality filter changes the ranking, not only the totals: with LOW_QUAL calls left in, MUTYH drops from second to fourth.",
+      "notes": "Verified against the live fixture (controls out, PASS only): 5 rows — CFTR 477, MUTYH 177, TP53 174, XIST 168, NF2 162; CHEK2 is sixth on 142, so the cut-off is clear. Cross-checked with an independent formulation (RANK over v_variant_calls grouped by gene symbol, controls excluded by sample_code NOT IN): identical. trapSql counts every call: verified CFTR 566, TP53 208, XIST 205, MUTYH 201, NF2 187 — same five genes, different order and figures, which is what most-called-genes returns; a fix that ignores the quality word therefore answers this with that case's numbers. The counts are checked by the result set; the text check asks for the top gene.\n\nTrap query (must return different rows): SELECT gene.hgnc_symbol AS gene, COUNT(*) AS high_confidence_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false GROUP BY gene.hgnc_symbol ORDER BY high_confidence_calls DESC, gene.hgnc_symbol LIMIT 5\n\nParaphrases: What are the top five genes by number of high-confidence calls? | Which genes account for the most high-confidence variant calls? Give the top five.\n\nMoved from feat/engine-eval-loop (branch category quality-filter, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "CFTR"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT gene.hgnc_symbol AS gene, COUNT(*) AS high_confidence_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND call.filter_status = 'PASS' GROUP BY gene.hgnc_symbol ORDER BY high_confidence_calls DESC, gene.hgnc_symbol LIMIT 5"
+      }
+    },
+    {
+      "id": "coverage-by-assay",
+      "category": "encoding",
+      "split": "dev",
+      "tags": [
+        "trap:unit-confusion",
+        "difficulty:medium"
+      ],
+      "question": "What is the average sequencing coverage for each assay type?",
+      "intent": "mean_coverage is a per-sample fold-coverage figure, so it is averaged, never summed, and never reported as a count of anything.",
+      "notes": "samples.mean_coverage is numeric(6,1) and reads like a count: across the non-control samples the dataset's default filter keeps, PANEL samples run 192.3-586.4, WES 59.6-168.0, WGS 24.7-49.4. Averaging gives PANEL 408.4 (23 samples), WES 110.3 (55), WGS 35.8 (47); summing gives five-figure numbers that look like read counts and are meaningless. The ordering is also counter-intuitive — the deepest assay is the narrowest one — so an answer that reasons from assay names rather than the data gets it backwards. The averages are checked by the result set; the text check asks for the deepest assay by name. Guards against summing an average and against describing fold coverage as reads or samples. trapSql sums the per-sample fold coverage: verified PANEL 9393.4, WES 6068.5, WGS 1683.5 against the reference 408.4, 110.3, 35.8.\n\nTrap query (must return different rows): SELECT sample.assay, COUNT(*) AS samples, ROUND(SUM(sample.mean_coverage), 1) AS avg_mean_coverage FROM genomics.samples sample WHERE sample.is_control = false GROUP BY sample.assay ORDER BY sample.assay\n\nParaphrases: How deep, on average, is sequencing coverage for each assay type? | What is the average depth of coverage by assay type?\n\nMoved from feat/engine-eval-loop (branch category unit-confusion, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "PANEL"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT sample.assay, COUNT(*) AS samples, ROUND(AVG(sample.mean_coverage), 1) AS avg_mean_coverage FROM genomics.samples sample WHERE sample.is_control = false GROUP BY sample.assay ORDER BY sample.assay"
+      }
+    },
+    {
+      "id": "dmd-gene-span-mb",
+      "category": "encoding",
+      "split": "held-out",
+      "tags": [
+        "trap:unit-confusion",
+        "difficulty:easy"
+      ],
+      "question": "How many megabases does the DMD gene span, to two decimal places?",
+      "intent": "Gene coordinates are stored in base pairs; the question asks for megabases, so the span has to be converted, not reported raw.",
+      "notes": "Verified against the live fixture: DMD spans 31,097,677-33,339,441 on chromosome X, 2,241,765 bp inclusive = 2.24 Mb (the end - start convention gives 2,241,764 bp, also 2.24 Mb, so the off-by-one question cannot flip the answer). Cross-checked with an independent formulation (looked up by Ensembl id, end - start without the +1, divided by 1e6): identical, 2.24. trapSql reports the raw span: verified 2241765 against the reference 2.24. The figure is checked by the result set.\n\nTrap query (must return different rows): SELECT gene.end_position - gene.start_position + 1 AS span_mb FROM genomics.genes gene WHERE gene.hgnc_symbol = 'DMD'\n\nParaphrases: What is the genomic length of DMD in megabases, to two decimals? | How long is the DMD gene in our annotation, in Mb to two decimal places?\n\nMoved from feat/engine-eval-loop (branch category unit-confusion, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT ROUND((gene.end_position - gene.start_position + 1) / 1000000.0, 2) AS span_mb FROM genomics.genes gene WHERE gene.hgnc_symbol = 'DMD'"
+      }
+    },
+    {
+      "id": "canonical-transcript-length-kb",
+      "category": "encoding",
+      "split": "dev",
+      "tags": [
+        "trap:unit-confusion",
+        "difficulty:medium"
+      ],
+      "question": "What is the average length of a canonical transcript, in kilobases to one decimal place?",
+      "intent": "Transcript lengths are stored in base pairs; the answer must convert to kilobases and average the canonical transcripts only.",
+      "notes": "Verified against the live fixture: 40 canonical transcripts (exactly one per gene) averaging 5947.8 bp = 5.9 kb. Cross-checked with an independent formulation (SUM of lengths over the count of distinct genes, divided by 1000): identical, 5.9. trapSql reports base pairs: verified 5947.8 against the reference 5.9. Averaging all 96 transcripts instead gives 4.3 kb, a second way to fail. The figure is checked by the result set.\n\nTrap query (must return different rows): SELECT ROUND(AVG(transcript.length_bp), 1) AS mean_length_kb FROM genomics.transcripts transcript WHERE transcript.is_canonical = true\n\nParaphrases: On average, how long are our canonical transcripts in kb, to one decimal? | What is the mean canonical transcript length expressed in kilobases, rounded to one decimal place?\n\nMoved from feat/engine-eval-loop (branch category unit-confusion, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT ROUND(AVG(transcript.length_bp) / 1000.0, 1) AS mean_length_kb FROM genomics.transcripts transcript WHERE transcript.is_canonical = true"
+      }
+    },
+    {
+      "id": "variants-by-type",
+      "category": "aggregate",
+      "split": "dev",
+      "tags": [
+        "trap:control",
+        "difficulty:easy"
+      ],
+      "question": "How many variants of each type do we have?",
+      "intent": "Plain categorical breakdown over one table — the healthy baseline for this fixture.",
+      "notes": "SNV 371, DELETION 34, INSERTION 30, INDEL 15. No ratio, no nulls, no semantics: if this fails, the problem is schema linking rather than any planted trap, and no guard may fire on it. The counts are checked by the result set. The reference is portable SQL, so it needs no Databricks override.\n\nParaphrases: What kinds of variants do we have, and how many of each? | What is the count of variants per type (SNV, insertion, deletion and so on)?\n\nMoved from feat/engine-eval-loop (branch category control, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "SNV"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT variant.variant_type, COUNT(*) AS variants FROM genomics.variants variant GROUP BY variant.variant_type ORDER BY variants DESC, variant.variant_type"
+      }
+    },
+    {
+      "id": "samples-per-collection-year",
+      "category": "aggregate",
+      "split": "held-out",
+      "tags": [
+        "trap:control",
+        "difficulty:easy"
+      ],
+      "question": "How many samples did we collect in each year, counting every sample on record, controls included?",
+      "intent": "Healthy aggregate over a date column whose question explicitly asks for controls too, so the default filter must not fire.",
+      "notes": "2023: 68, 2024: 72 — all 140 samples, controls included, because the question explicitly asks for every sample on record, which is the escape hatch the dataset's default-filter knowledge entry names. The counterpart to cohort-sample-count and samples-sequenced-2015: the control filter must NOT be applied here and the coverage caveat must not be volunteered as a problem. The years and counts are checked by the result set (includes \"2023\" and \\b68\\b were number checks and were retired). The Databricks reference swaps the Postgres ::int cast for CAST(... AS INT) and groups by the expression instead of the alias. Guards against a fix for the default-filter or out-of-scope cases over-firing on an ordinary question.\n\nUnverified databricks reference from the branch: SELECT CAST(EXTRACT(YEAR FROM sample.collected_on) AS INT) AS collection_year, COUNT(*) AS samples FROM genomics.samples sample GROUP BY CAST(EXTRACT(YEAR FROM sample.collected_on) AS INT) ORDER BY collection_year\n\nParaphrases: Including control samples, how many samples were collected per year? | Year by year, how many samples of every kind, controls included, did we collect?\n\nMoved from feat/engine-eval-loop (branch category control, provenance hand).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT EXTRACT(YEAR FROM sample.collected_on)::int AS collection_year, COUNT(*) AS samples FROM genomics.samples sample GROUP BY collection_year ORDER BY collection_year"
+      }
+    },
+    {
+      "id": "genes-by-biotype",
+      "category": "aggregate",
+      "split": "dev",
+      "tags": [
+        "trap:control",
+        "difficulty:easy"
+      ],
+      "question": "How many genes of each gene type (such as protein-coding) do we track?",
+      "intent": "Plain categorical breakdown over one small table — a healthy baseline on which no guard may fire.",
+      "notes": "Verified against the live fixture: 2 rows — protein_coding 37, lncRNA 3 (the CHECK constraint also allows pseudogene, which has no rows). Cross-checked with an independent formulation (two FILTER counts in a UNION): identical. No trap, no default filter (genes are not samples), no nulls: if this fails the problem is schema linking. The counts are checked by the result set; the text check accepts the stored lncRNA label or its spelled-out form.\n\nParaphrases: Count the genes we track by gene type — protein-coding, lncRNA and so on. | What is the breakdown of our gene set by gene type?\n\nMoved from feat/engine-eval-loop (branch category control, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "lncRNA|long non-coding"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT gene.biotype, COUNT(*) AS genes FROM genomics.genes gene GROUP BY gene.biotype ORDER BY genes DESC, gene.biotype"
+      }
+    }
+  ]
+}

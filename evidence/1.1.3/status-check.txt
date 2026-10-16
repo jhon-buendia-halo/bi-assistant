@@ -1,0 +1,176 @@
+Status-check re-run of section 3.8 (docs/plans/BA-9.md)
+Date: 2026-10-12 18:24 -05
+Worktree: .claude/worktrees/BA-9-golden-dataset-evals
+Branch: feat/BA-9-golden-dataset-evals  HEAD: f3ef18e (chore(release): v0.31.0)
+main: f3ef18e
+Working tree changes at time of run (git status --short):
+(empty above = clean)
+Platform: macOS (BSD grep). Adaptations are noted per check; the artifact's command is shown first.
+
+== 1. Question count per set ==
+$ grep -c "id: '" backend/src/mastra/evals/assistant.evals.ts
+23
+
+== 2. Fixture kinds ==
+$ grep -n "datasourceKind" backend/src/modules/testing-data/fixtures/registry.ts
+51:  datasourceKind?: 'postgres' | 'rest';
+185:  datasourceKind: 'rest',
+
+== 3. Categories on cases ==
+$ grep -c "category:" backend/src/mastra/evals/assistant.evals.ts
+0
+exit 1
+
+== 4. Usage on results ==
+$ grep -n "usage\|inputTokens" backend/src/mastra/evals/assistant.evals.ts
+exit 1
+Adapted for portability (same meaning): grep -n -e usage -e inputTokens backend/src/mastra/evals/assistant.evals.ts
+exit 1
+
+== 5. Repeats in the suite ==
+$ grep -n "repeats\|trials" backend/src/mastra/evals backend/src/modules/agents
+exit 1
+Adapted: the paths are directories, so -r is needed:
+$ grep -rn -e repeats -e trials backend/src/mastra/evals backend/src/modules/agents
+exit 1
+Context: where 'trials' does appear in backend/scripts:
+backend/scripts/check-answers.ts
+exit 0
+
+== 6. Older harnesses present ==
+$ ls backend/eval backend/scripts/run-eval.ts backend/scripts/check-answers.ts
+backend/scripts/check-answers.ts
+backend/scripts/run-eval.ts
+
+backend/eval:
+README.md
+golden-set.json
+exit 0
+
+== 7. Eval ADRs ==
+$ grep -n "ADR-" specs/system/architecture.md
+8:#### ADR-NNNN — <Title>
+9:- **Status:** Proposed | Accepted | Superseded by ADR-NNNN
+68:The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI), GitHub (releases, GitHub Packages), and in org server mode the identity provider (Microsoft Entra ID, for OpenID Connect sign-in and SCIM 2.0 provisioning). Two modes run the same build (ADR-0010): **local mode**, one machine with five seeded personas to sign in as, without a password (ADR-0012; the desktop app always, the npx web app by default), and **org server mode**, many users of one organisation on a server it hosts.
+138:- **npm CLI** (`backend/src/cli.ts`) — serves the same backend + bundled UI in a browser. With the `ORG_*` configuration it is the **org server** (ADR-0010): no new container, the backend gains an auth module (OIDC sign-in, SCIM, roles, owner scoping; ADR-0011) and is reached through the organisation's reverse proxy. How to run it: [delivery.md](delivery.md) section 4.1.
+140:#### ADR-0001 — Electron desktop app with an Angular renderer and a NestJS child-process backend *(retroactive)*
+147:#### ADR-0002 — Ship the same app as an npm package served in the browser *(retroactive)*
+154:#### ADR-0006 — Opt-in developer observability through OpenTelemetry, Arize Phoenix and Grafana `otel-lgtm`
+175:#### ADR-0010 — Multi-user org server mode with Entra ID sign-in and server-enforced roles
+176:- **Status:** Accepted; local mode amended by ADR-0012
+185:  - The backend already runs as a standalone web server through the npm CLI (ADR-0002) and stores everything behind `DocStore<T>` (ADR-0003). Neither has a notion of a user.
+186:  - ADR-0008 tied a user agent's owner to "this machine" and deferred any sharing that needs a new container or sync format.
+206:  - **Storage stays SQLite (ADR-0003).** New collections hold users, groups, group memberships, role assignments, group-to-role mappings, sign-in sessions and activity events. Activity events feed the admin overview's active-user counts and recent activity.
+208:  - ADR-0008's "owner is this machine" becomes "owner is a user". Agent ownership can be transferred. Sharing agents beyond their owner stays out of scope, for a later Requests/Registry epic.
+215:#### ADR-0011 — Backend-run OIDC with `openid-client`, an opaque session cookie and an Origin check
+219:  - ADR-0010 puts sign-in in the backend, and Entra ID is the first provider.
+226:    - The backend keeps no JWT. A session is an opaque 32-byte random id stored in an `auth_sessions` collection (SQLite, ADR-0003) and sent as an `HttpOnly; SameSite=Lax; Path=/` cookie.
+237:#### ADR-0012 — Local mode signs in as one of five seeded personas, with a bearer-token auth session
+241:  - ADR-0010 kept local mode as "no sign-in, and one implicit local user who holds every permission". So local mode and the desktop app had no roles, no owner scoping and no Admin area: nobody could try what a User, a Maker or an Approver sees without standing up an org server.
+243:  - The desktop renderer is loaded from `file://`, so ADR-0011's `SameSite=Lax` session cookie set by `http://localhost:3000` never reaches the backend on its requests.
+396:#### ADR-0003 — SQLite document store behind a `DocStore<T>` interface *(retroactive)*
+403:#### ADR-0004 — Mastra as the agentic harness *(retroactive)*
+410:#### ADR-0005 — Visuals as versioned conversation participants *(retroactive)*
+417:#### ADR-0007 — Themeable renderer: semantic design tokens, a bundled webfont and a System / Light / Dark preference
+418:- **Status:** Accepted; its *Preference* storage and default superseded by ADR-0009
+435:#### ADR-0008 — User-built agents are stored configurations of the assistant
+440:  - Mastra agents are registered in code at startup (ADR-0004, `src/mastra/index.ts`). Registering an agent per user definition at runtime would mean re-registering on every edit and would bypass the assistant's tools, memory and guards.
+458:#### ADR-0009 — UI preferences live in the backend, with a browser cache for the first paint
+459:- **Status:** Accepted; on an org server the document is per user (ADR-0010, [data-model.md](data-model.md) 3.2.1)
+462:  - ADR-0007 stored the theme choice in the renderer's browser storage, defaulting to System, and the navigation drawer was never remembered (app-shell R2).
+Filter for eval-related ADR titles:
+$ grep -n "^#.*ADR-" specs/system/architecture.md | grep -i -e eval -e golden
+exit 1
+
+== 1 (follow-up). Why check 1 prints 23 and not 30 ==
+$ git show ee558d2:backend/src/mastra/evals/assistant.evals.ts | grep -c "id: '"
+23
+$ git diff --stat ee558d2 f3ef18e -- backend/src/mastra/evals backend/src/modules/testing-data backend/src/modules/agents backend/eval backend/scripts specs/system/architecture.md
+(no output = no change on these paths)
+$ grep -n "id: '" backend/src/mastra/evals/assistant.evals.ts
+99:    id: 'champion-2022',
+114:    id: 'final-score-2018',
+134:    id: 'top-scorer-2022',
+149:    id: 'shootouts',
+166:    id: 'biggest-venue',
+184:    id: 'schema-discovery',
+196:    id: 'ambiguous-best-team',
+222:    id: 'possession-vs-result',
+253:    id: 'out-of-scope',
+272:    id: 'visual-request',
+379:    id: 'f1-champion-2023',
+400:    id: 'f1-british-gp-2023',
+419:    id: 'f1-most-race-wins',
+437:    id: 'f1-most-titles-tie',
+461:    id: 'f1-monaco-2024-podium',
+481:    id: 'f1-schema-discovery',
+493:    id: 'f1-ambiguous-dominant-driver',
+519:    id: 'f1-pole-to-win-2023',
+550:    id: 'f1-out-of-scope-motogp',
+568:    id: 'f1-visual-request',
+597:    id: 'world-cup',
+607:    id: 'world-cup-rest',
+618:    id: 'formula-1',
+Reading: lines 99-272 are the 10 World Cup cases, 379-568 the 10 Formula 1 cases, 597/607/618 the 3 set ids.
+The 10 REST cases are built by restVariants(WORLD_CUP_EVAL_CASES, WORLD_CUP_REST_SQL), which sets id: `rest-${id}`:
+337:function restVariants(
+355:      id: `rest-${id}`,
+361:const WORLD_CUP_REST_EVAL_CASES: AssistantEvalCase[] = restVariants(
+Result: 30 questions (10 + 10 + 10), unchanged since ee558d2; the command counts 20 literal case ids + 3 set ids = 23.
+
+== Commits between the artifact baseline (ee558d2) and the current main (f3ef18e) ==
+$ git log --oneline ee558d2..f3ef18e
+f3ef18e chore(release): v0.31.0
+45d6b54 Merge pull request #72 from jhon-buendia-halo/feat/BA-169-claude-code-workflow-mod
+058ee93 docs(BA-174): retrospective for 1.11.3
+eb501de feat(BA-174): task details in the workflow pane: summary, agents and completion
+
+== 8. Jira stories under BA-9 (read-only calls) ==
+$ .claude/skills/jira/scripts/jira.sh issue BA-9   (summary fields; description and comments omitted here)
+{
+  "key": "BA-9",
+  "type": "Epic",
+  "status": "To Do",
+  "assignee": "Sergio Berrospi",
+  "parent": null,
+  "summary": "Golden Dataset and Evals",
+  "updated": "2026-10-12T19:03:49.396-0400",
+  "comments": 0
+}
+
+$ .claude/skills/jira/scripts/jira.sh search -n 50 'parent = BA-9 ORDER BY key ASC'
+(columns: key, type, status, priority, assignee, updated, summary)
+BA-127	Story	To Do	Medium	unassigned	2026-10-06	Golden Dataset and Evals — Research
+BA-128	Story	To Do	Medium	unassigned	2026-10-06	Golden Dataset and Evals — Execution plan
+exit 0
+
+$ .claude/skills/jira/scripts/jira.sh issue BA-127   (summary fields)
+{
+  "key": "BA-127",
+  "type": "Story",
+  "status": "To Do",
+  "assignee": null,
+  "parent": "BA-9",
+  "summary": "Golden Dataset and Evals — Research",
+  "updated": "2026-10-06T14:27:18.670-0400"
+}
+$ .claude/skills/jira/scripts/jira.sh issue BA-128   (summary fields)
+{
+  "key": "BA-128",
+  "type": "Story",
+  "status": "To Do",
+  "assignee": null,
+  "parent": "BA-9",
+  "summary": "Golden Dataset and Evals — Execution plan",
+  "updated": "2026-10-06T14:27:19.966-0400"
+}
+
+== Summary against the baseline column of 3.8 ==
+1 Question count per set : baseline 30; command prints 23 (also 23 at ee558d2). Count unchanged at 30; the command does not measure it.
+2 Fixture kinds          : 'postgres' | 'rest' - unchanged
+3 Categories on cases    : 0 - unchanged
+4 Usage on results       : no match - unchanged
+5 Repeats in the suite   : no match - unchanged (needs grep -r on folders)
+6 Older harnesses        : all present - unchanged
+7 Eval ADRs              : none for evals (ADR-0001 to ADR-0012) - unchanged
+8 Jira under BA-9        : BA-127, BA-128, both To Do, unassigned - unchanged

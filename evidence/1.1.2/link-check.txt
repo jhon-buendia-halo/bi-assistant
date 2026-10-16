@@ -1,0 +1,2 @@
+Link check, 2026-10-12, after the corrections (script: links_both.py, session scratchpad)
+Checked 268 relative links in docs/research/BA-9.md, specs/system/architecture.md, specs/epics/BA-9/spec.md, roadmap.md: 0 failed (files must exist; anchors into .md files must match a heading slug, GitHub rule). External URLs not re-opened.

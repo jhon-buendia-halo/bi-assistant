@@ -2,8 +2,40 @@ import type { EvalRunView } from './eval-runs.service';
 import type { EvalCaseDelta, EvalRegressionSummary } from './eval-regression';
 import type {
   AssistantEvalCaseResult,
+  EvalCheckResult,
   EvalToolCall,
 } from '../../mastra/evals/assistant.evals';
+import {
+  checkStatusOf,
+  renderSummaryMarkdown,
+  resultStatusOf,
+  summarizeEvalResults,
+} from '../../mastra/evals/eval-summary';
+import type { EvalStatus } from '../../mastra/evals/eval-summary';
+import {
+  judgeLabel,
+  LEGACY_JUDGE_SETTING,
+} from '../../mastra/evals/judge-option';
+
+/** A question's result as the report shows it (R38). */
+const VERDICT: Readonly<Record<EvalStatus, string>> = {
+  passed: '✅ passed',
+  failed: '❌ failed',
+  'not-scored': '➖ not scored',
+};
+
+/** The same, as the summary table's one-character mark. */
+const MARK: Readonly<Record<EvalStatus, string>> = {
+  passed: '✅',
+  failed: '❌',
+  'not-scored': '➖',
+};
+
+function checkScore(check: EvalCheckResult): string {
+  return checkStatusOf(check) === 'not-scored'
+    ? 'not scored'
+    : String(check.score);
+}
 
 /** Fenced blocks must not be broken by fences inside the payload. */
 function fence(body: string, language = ''): string {
@@ -31,7 +63,7 @@ function toolCallSection(call: EvalToolCall, index: number): string {
 }
 
 function caseSection(result: AssistantEvalCaseResult, index: number): string {
-  const verdict = result.passed ? '✅ passed' : '❌ failed';
+  const verdict = VERDICT[resultStatusOf(result)];
   const lines = [
     `### ${index + 1}. ${result.question}`,
     '',
@@ -49,7 +81,7 @@ function caseSection(result: AssistantEvalCaseResult, index: number): string {
         ? ''
         : (check.reason ?? '').replace(/\|/g, '\\|');
       lines.push(
-        `| ${check.description.replace(/\|/g, '\\|')} | ${check.score} | ${why.replace(/\n/g, ' ')} |`,
+        `| ${check.description.replace(/\|/g, '\\|')} | ${checkScore(check)} | ${why.replace(/\n/g, ' ')} |`,
       );
     }
   }
@@ -122,14 +154,24 @@ export function renderEvalRunMarkdown(
   run: EvalRunView,
   datasourceName?: string,
 ): string {
-  const passed = run.results.filter((result) => result.passed).length;
-  const failed = run.results.filter((result) => !result.passed);
+  // From the results, so a run read without a stored summary has one too.
+  const summary = summarizeEvalResults(run.results);
+  const failed = run.results.filter(
+    (result) => resultStatusOf(result) === 'failed',
+  );
 
   const lines = [
     `# Eval run — ${run.agentKey}`,
     '',
-    `**${passed}/${run.totalCases} questions passed**`,
+    `**${summary.passed}/${run.totalCases} questions passed**`,
     '',
+    `Judge: ${judgeLabel(run.judge ?? LEGACY_JUDGE_SETTING)}`,
+    '',
+  ];
+  if (summary.notScored > 0) {
+    lines.push(`Not scored: ${summary.notScored}`, '');
+  }
+  lines.push(
     `- **Started:** ${run.startedAt}`,
     `- **Finished:** ${run.finishedAt ?? '—'}`,
     `- **Duration:** ${runDuration(run)}`,
@@ -137,16 +179,18 @@ export function renderEvalRunMarkdown(
     `- **Datasource:** ${datasourceName ?? run.datasourceId}`,
     `- **Datasets:** ${run.datasets.join(', ') || '—'}`,
     `- **Run id:** \`${run.jobId}\``,
-  ];
+  );
 
   if (run.error) lines.push('', `> **Run error:** ${run.error}`);
+
+  lines.push('', ...renderSummaryMarkdown(summary));
 
   lines.push('', '## Summary', '', '| # | Question | Result | Duration |');
   lines.push('| --- | --- | --- | --- |');
   for (const [index, result] of run.results.entries()) {
     lines.push(
       `| ${index + 1} | ${result.question.replace(/\|/g, '\\|')} | ${
-        result.passed ? '✅' : '❌'
+        MARK[resultStatusOf(result)]
       } | ${durationLabel(result.durationMs)} |`,
     );
   }
@@ -161,7 +205,7 @@ export function renderEvalRunMarkdown(
       const reasons = result.error
         ? [result.error]
         : result.checkResults
-            .filter((check) => !check.passed)
+            .filter((check) => checkStatusOf(check) === 'failed')
             .map((check) =>
               check.reason
                 ? `${check.description} — ${check.reason}`

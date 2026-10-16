@@ -1,0 +1,273 @@
+# health-insurance: every reference query, run before it counts (BA-185, 2026-10-13)
+
+Database: ba9_health_insurance on the shared compose PostgreSQL (127.0.0.1:55432), seeded through TestingDataService.load (the Testing Data panel's path) from backend/src/modules/testing-data/fixtures/ in a throwaway app data dir; validator from a scratch compile of the epic branch (dist untouched).
+
+## 1. The validator: EVAL_SET=health-insurance npm run eval:validate
+
+```
+Validating Health Insurance (health-insurance, postgres) on Health Insurance
+✓ paid-share-by-specialty  postgres  8 rows
+✓ plan-share-of-allowed-by-tier  postgres  4 rows
+✓ claims-by-currency  postgres  1 rows
+✓ claims-with-preauth  postgres  1 rows
+✓ specialties-with-48-claims  postgres  2 rows
+✓ approved-claims-2024  postgres  1 rows
+✓ member-with-most-claims  postgres  1 rows
+✓ net-paid-by-region-2024  postgres  8 rows
+✓ net-paid-after-reversals-2024  postgres  1 rows
+✓ claims-march-2024  postgres  1 rows
+✓ paid-by-country  postgres  2 rows
+✓ avg-paid-per-claim-dollars  postgres  1 rows
+✓ units-cut-by-procedure  postgres  5 rows
+✓ denial-rate  postgres  1 rows
+✓ active-members-by-region  postgres  8 rows
+✓ members-per-plan-tier  postgres  4 rows
+✓ providers-per-specialty  postgres  8 rows
+✓ currency-by-member-country  postgres  2 rows
+✓ canadian-claims-by-currency  postgres  1 rows
+✓ most-common-revenue-code  postgres  1 rows
+✓ specialty-most-preauth  postgres  1 rows
+✓ fewest-claims-specialty  postgres  2 rows
+✓ least-cited-denial-reason  postgres  2 rows
+✓ rejected-claims-2025  postgres  1 rows
+✓ denials-overturned-on-appeal  postgres  1 rows
+✓ provider-most-claims-2025  postgres  1 rows
+✓ plan-with-most-members  postgres  1 rows
+✓ members-with-claims-march-2024  postgres  1 rows
+✓ denied-claims-by-country  postgres  2 rows
+✓ claims-by-member-state-2025  postgres  6 rows
+✓ plan-monthly-premium-dollars  postgres  6 rows
+✓ billed-2025-dollars  postgres  1 rows
+✓ denial-reasons-per-category  postgres  6 rows
+health-insurance: 33 of 33 reference queries passed; 9 cases have no reference query.
+```
+
+## 2. Rows of each reference and its trap query (psql)
+
+
+Summary: 33 references ran, 0 failed, 0 returned 0 rows; trap queries: 30 differ, 0 same or broken, 3 none written
+
+## paid-share-by-specialty  (ratio, dev)
+8 rows: specialty, paid_share_of_billed
+  Family Medicine | 0.4847
+  Dermatology | 0.4309
+  Oncology | 0.3843
+  Cardiology | 0.3216
+  Behavioral Health | 0.2840
+  Radiology | 0.2442
+  Orthopedics | 0.1895
+  Emergency Medicine | 0.1409
+trap: differs (8 rows: Cardiology | 1.0000 ; Behavioral Health | 1.0000 ; Dermatology | 1.0000)
+
+## plan-share-of-allowed-by-tier  (ratio, held-out)
+4 rows: tier, plan_share_of_allowed
+  PLATINUM | 0.8664
+  GOLD | 0.8500
+  SILVER | 0.8039
+  BRONZE | 0.7392
+trap: differs (4 rows: BRONZE | 0.3826 ; GOLD | 0.4317 ; SILVER | 0.3715)
+
+## claims-by-currency  (aggregate, dev)
+1 rows: currency, claims
+  USD | 1164
+trap: differs (2 rows: CAD | 120 ; USD | 1044)
+
+## claims-with-preauth  (null, dev)
+1 rows: claims_with_preauth
+  57
+trap: differs (58 rows: PA-2025-937154 | 1 ; PA-2025-527979 | 1 ; PA-2024-290855 | 1)
+
+## specialties-with-48-claims  (ranking, dev)
+2 rows: specialty, claims
+  Emergency Medicine | 48
+  Oncology | 48
+trap: differs (1 rows: Emergency Medicine | 48)
+
+## approved-claims-2024  (encoding, dev)
+1 rows: approved_claims
+  395
+trap: differs (1 rows: 0)
+
+## member-with-most-claims  (ranking, held-out)
+1 rows: member, claims
+  Naomi Sedgewick | 42
+trap: differs (1 rows: 23 | 42)
+
+## net-paid-by-region-2024  (business-term, dev)
+8 rows: region, net_paid_cents
+  Gulf Coast Texas | 6318595
+  Southern California | 5998841
+  North Texas | 4087904
+  Hudson Valley | 3560707
+  Ohio Valley | 3162873
+  Northern California | 3133870
+  Lower Mainland | 1897657
+  Greater Toronto | 966560
+trap: differs (8 rows: Greater Toronto | 995854 ; Northern California | 3747132 ; Ohio Valley | 4566033)
+
+## net-paid-after-reversals-2024  (business-term, held-out)
+1 rows: net_paid_cents
+  29127007
+trap: differs (1 rows: 35581467)
+
+## claims-march-2024  (default-filter, dev)
+1 rows: claims
+  35
+trap: differs (1 rows: 49)
+
+## paid-by-country  (join, dev)
+2 rows: country, paid_cents
+  United States | 58862147
+  Canada | 6510043
+trap: differs (6 rows: Ohio | 7301153 ; Ontario | 2966894 ; Texas | 21616213)
+
+## avg-paid-per-claim-dollars  (encoding, held-out)
+1 rows: avg_paid_dollars
+  561.62
+trap: differs (1 rows: 56161.68)
+
+## units-cut-by-procedure  (ratio, dev)
+5 rows: procedure_code, units_cut
+  J9299 | 602
+  17110 | 181
+  J1885 | 158
+  97110 | 109
+  97140 | 91
+trap: differs (5 rows: 29881 | 23828162 ; 97140 | 14646810 ; 33249 | 12501782)
+
+## denial-rate  (business-term, dev)
+1 rows: denial_rate_pct
+  19.83
+trap: differs (1 rows: 17.70)
+
+## active-members-by-region  (default-filter, held-out)
+8 rows: region, active_members
+  Gulf Coast Texas | 10
+  North Texas | 9
+  Northern California | 8
+  Ohio Valley | 8
+  Hudson Valley | 6
+  Southern California | 6
+  Greater Toronto | 5
+  Lower Mainland | 3
+trap: differs (8 rows: Lower Mainland | 3 ; Southern California | 8 ; North Texas | 9)
+
+## members-per-plan-tier  (aggregate, held-out)
+4 rows: tier, members
+  BRONZE | 22
+  SILVER | 20
+  GOLD | 11
+  PLATINUM | 7
+trap: none written
+
+## providers-per-specialty  (aggregate, dev)
+8 rows: specialty, providers
+  Family Medicine | 5
+  Cardiology | 4
+  Behavioral Health | 3
+  Dermatology | 3
+  Orthopedics | 3
+  Radiology | 3
+  Emergency Medicine | 2
+  Oncology | 2
+trap: none written
+
+## currency-by-member-country  (aggregate, dev)
+2 rows: country, currency
+  Canada | USD
+  United States | USD
+trap: differs (2 rows: Canada | CAD ; United States | USD)
+
+## canadian-claims-by-currency  (aggregate, held-out)
+1 rows: currency, claims
+  USD | 120
+trap: differs (1 rows: CAD | 120)
+
+## most-common-revenue-code  (null, held-out)
+1 rows: revenue_code, claim_lines
+  0300 | 43
+trap: differs (1 rows:  | 2265)
+
+## specialty-most-preauth  (null, dev)
+1 rows: specialty, claims_with_preauth
+  Cardiology | 14
+trap: differs (1 rows: Family Medicine | 307)
+
+## fewest-claims-specialty  (ranking, dev)
+2 rows: specialty, claims
+  Emergency Medicine | 48
+  Oncology | 48
+trap: differs (1 rows: Emergency Medicine | 48)
+
+## least-cited-denial-reason  (ranking, dev)
+2 rows: denials
+  14
+  14
+trap: differs (1 rows: CO-18 | 14)
+
+## rejected-claims-2025  (encoding, dev)
+1 rows: rejected_claims
+  102
+trap: differs (1 rows: 0)
+
+## denials-overturned-on-appeal  (encoding, dev)
+1 rows: overturned_denials
+  26
+trap: differs (1 rows: 48)
+
+## provider-most-claims-2025  (ranking, held-out)
+1 rows: provider, claims
+  Cedar Hollow Family Practice | 42
+trap: differs (1 rows: 1 | 42)
+
+## plan-with-most-members  (ranking, dev)
+1 rows: plan
+  Bronze Essential 6500
+trap: differs (1 rows: 1 | 18)
+
+## members-with-claims-march-2024  (default-filter, dev)
+1 rows: members
+  25
+trap: differs (1 rows: 31)
+
+## denied-claims-by-country  (join, held-out)
+2 rows: country, denied_claims
+  United States | 196
+  Canada | 10
+trap: differs (6 rows: British Columbia | 6 ; California | 57 ; New York | 28)
+
+## claims-by-member-state-2025  (join, dev)
+6 rows: state, claims
+  Texas | 225
+  California | 151
+  Ohio | 74
+  New York | 51
+  Ontario | 36
+  British Columbia | 35
+trap: differs (8 rows: Greater Toronto | 36 ; Northern California | 61 ; Ohio Valley | 74)
+
+## plan-monthly-premium-dollars  (encoding, held-out)
+6 rows: plan, monthly_premium_dollars
+  Bronze Essential 6500 | 312.0000000000000000
+  Bronze Value HSA 7000 | 289.0000000000000000
+  Gold Preferred 1500 | 615.0000000000000000
+  Platinum Complete 500 | 824.0000000000000000
+  Silver Select Network 3000 | 472.5000000000000000
+  Silver Standard 3500 | 448.0000000000000000
+trap: differs (6 rows: Bronze Essential 6500 | 31200 ; Bronze Value HSA 7000 | 28900 ; Silver Standard 3500 | 44800)
+
+## billed-2025-dollars  (encoding, dev)
+1 rows: billed_dollars
+  1098334.000000000000
+trap: differs (1 rows: 109833400)
+
+## denial-reasons-per-category  (aggregate, dev)
+6 rows: category, denial_reasons
+  COVERAGE | 3
+  AUTHORIZATION | 2
+  CODING | 2
+  DUPLICATE | 1
+  ELIGIBILITY | 1
+  TIMELY_FILING | 1
+trap: none written
+

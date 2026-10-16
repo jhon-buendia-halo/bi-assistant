@@ -1,0 +1,503 @@
+{
+  "dumpedAt": "2026-10-13T20:09:07.015Z",
+  "source": "postgres://world_cup@127.0.0.1:55432/ba9_marketing_analytics?schema=marketing_analytics",
+  "fixture": "marketing-analytics",
+  "schema": "marketing_analytics",
+  "format": "json.gz",
+  "tables": {
+    "regions": 4,
+    "states": 12,
+    "carriers": 6,
+    "lines_of_business": 5,
+    "products": 24,
+    "channels": 4,
+    "periods": 9,
+    "policy_sales": 10822,
+    "revenue_by_period": 191,
+    "campaigns": 26,
+    "campaign_results": 51,
+    "market_benchmarks": 955,
+    "competitor_masks": 30,
+    "analyst_access": 12
+  },
+  "columns": {
+    "regions": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "region_code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "nullable": false
+      }
+    ],
+    "states": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "state_code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "region_id",
+        "type": "bigint",
+        "nullable": false
+      }
+    ],
+    "carriers": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "carrier_code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "segment",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "hq_state_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "subscribed_on",
+        "type": "date",
+        "nullable": false
+      }
+    ],
+    "lines_of_business": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "line_code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "product_family",
+        "type": "text",
+        "nullable": false
+      }
+    ],
+    "products": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "product_code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "carrier_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "line_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "launched_on",
+        "type": "date",
+        "nullable": false
+      }
+    ],
+    "channels": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "channel_code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "is_digital",
+        "type": "boolean",
+        "nullable": false
+      }
+    ],
+    "periods": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "period_code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "calendar_year",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "calendar_quarter",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "fiscal_year",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "fiscal_quarter",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "starts_on",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "ends_on",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "reporting_status",
+        "type": "text",
+        "nullable": false
+      }
+    ],
+    "policy_sales": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "carrier_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "product_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "channel_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "state_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "period_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "sale_status",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "policy_count",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "written_premium_cents",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "currency_code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "is_test",
+        "type": "boolean",
+        "nullable": false
+      }
+    ],
+    "revenue_by_period": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "carrier_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "line_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "period_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "earned_premium_cents",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "fee_income_cents",
+        "type": "bigint",
+        "nullable": false
+      }
+    ],
+    "campaigns": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "campaign_code",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "carrier_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "line_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "channel_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "objective",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "starts_on",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "ends_on",
+        "type": "date",
+        "nullable": false
+      },
+      {
+        "name": "promo_code",
+        "type": "text",
+        "nullable": true
+      }
+    ],
+    "campaign_results": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "campaign_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "period_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "budget_cents",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "spend_cents",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "impressions",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "clicks",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "leads",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "quotes",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "policies_bound",
+        "type": "integer",
+        "nullable": false
+      }
+    ],
+    "market_benchmarks": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "viewer_carrier_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "period_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "line_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "competitor_label",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "policy_count",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "name": "written_premium_cents",
+        "type": "bigint",
+        "nullable": false
+      }
+    ],
+    "competitor_masks": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "viewer_carrier_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "competitor_label",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "competitor_carrier_id",
+        "type": "bigint",
+        "nullable": false
+      }
+    ],
+    "analyst_access": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "email",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "full_name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "carrier_id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "name": "access_role",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "name": "competitor_visibility",
+        "type": "text",
+        "nullable": false
+      }
+    ]
+  }
+}

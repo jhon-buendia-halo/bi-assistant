@@ -456,12 +456,12 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Errors (Style B): `404 "Agent \"<key>\" not found"`; `404 "Agent \"<key>\" has no skill \"<name>\""`; `400 "Invalid skill file path \"<path>\""` for an empty, absolute or `..` path; `404 "Skill \"<name>\" has no file \"<path>\""`.
 
 #### 35. `GET /agents/:key/evals`
-- Response `200`: `{ sets: AgentEvalSet[] }`: the sets whose agent is `:key` (a set's `agentKey`, default `assistant`; [agents.md](agents.md) 8.1). Only `assistant` and `rfp` have sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, checks: { id, name, description }[] }[] }`.
+- Response `200`: `{ sets: AgentEvalSet[] }`: the sets whose agent is `:key` (a set's `agentKey`, default `assistant`; [agents.md](agents.md) 8.1). Only `assistant` and `rfp` have sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, category: string, split: 'dev'|'held-out', checks: { id, name, description }[] }[] }`. The sets are those of [agents-evals](../capabilities/agents-evals/spec.md) R11: the assistant's, one per variant of the question bank files ([data-model.md](data-model.md) 4.9), and the RFP Builder's `rfp`. `category` is one of the eighteen of data-model 4.9, or `uncategorised` for a case with none (every `rfp` case), and `split` defaults to `dev` (agents-evals R150; added 2026-10-13, BA-184). A case's notes and reference queries are not part of the response, and `checks` lists the case's scorer checks only (not the result-set match or the judge).
 
 #### 36. `POST /agents/:key/evals/run`
-- Body: `{ datasourceId: string; caseIds?: string[] }`. `caseIds` omitted = all questions.
+- Body: `{ datasourceId: string; caseIds?: string[]; judge?: 'off'|'on'|'categories'; judgeCategories?: string[] }`. `caseIds` omitted = all questions. `judge` omitted (or `null`) = `'off'`: no judge call, judge checks recorded as not scored ([agents-evals](../capabilities/agents-evals/spec.md) R144, R145). `judgeCategories` is read only with `judge: 'categories'`, where it is required and non-empty, each entry one of the eighteen categories of [data-model.md](data-model.md) 4.9; with `'off'` or `'on'` it is ignored. The UI sends `'off'` or `'on'` (R149).
 - Success: `{ ok:true, message:"Eval run started", jobId }`. Returns immediately; the run is long-running (see [3.3](#33-eval-runs)).
-- Failures (Style A, `ok:false`): `"Agent \"<key>\" has no evals to run"` (an agent with no sets: neither `assistant` nor `rfp`); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need).
+- Failures (Style A, `ok:false`), in the order of R19: `"Agent \"<key>\" has no evals to run"` (an agent with no sets: neither `assistant` nor `rfp`); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need); then the judge option: `"Unknown judge option \"<value>\""`; `"Pick at least one category to judge"` (`'categories'` with no or an empty `judgeCategories`); `"Unknown judge category \"<value>\". Known categories: <the eighteen, comma-separated>."`.
 - Side effects: persists an initial run record; spawns the run (one throwaway session is created for the run to host visual tools and deleted afterwards).
 
 #### 37. `GET /agents/:key/evals/runs`
@@ -471,7 +471,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Response `200`: `{ ok:true, message:<status>, ...EvalRunView }`; unknown job: `{ ok:false, message:"Eval run \"<jobId>\" not found" }` (HTTP 200). `:key` is ignored by the lookup.
 
 #### 39. `GET /agents/:key/evals/runs/:jobId/download`
-- Response `200`: `text/markdown; charset=utf-8`, `Content-Disposition: attachment; filename="eval-run-<agentKey>-<YYYY-MM-DD-HH-mm-ss>-<first 8 of jobId>.md"`. Body: summary, failures, traces, answers, and the regression comparison when present; the datasource is shown by name.
+- Response `200`: `text/markdown; charset=utf-8`, `Content-Disposition: attachment; filename="eval-run-<agentKey>-<YYYY-MM-DD-HH-mm-ss>-<first 8 of jobId>.md"`. Body: the judge line, the By category and By criterion tables, summary, failures, traces, answers, and the regression comparison when present; the datasource is shown by name. Format: [agents-evals](../capabilities/agents-evals/spec.md) R38, R41 and R153.
 - Errors (Style B): `404 "Eval run \"<jobId>\" not found"`.
 
 #### 40. `DELETE /agents/:key/evals/runs/:jobId`
@@ -513,17 +513,33 @@ interface EvalRunView {
   currentQuestion?: string; error?: string;
   startedAt: string; finishedAt?: string;
   comparison?: { previousRunId: string; regressions: {id,question}[]; improvements: {id,question}[]; unchanged: {id,question}[] };
+  judge: { mode: 'off' | 'on' | 'categories'; categories?: string[] };   // the run option (R144); { mode: 'on' } on runs saved before it
+  summary: EvalRunSummary;              // from the finished results, live while running (R148)
 }
+type EvalStatus = 'passed' | 'failed' | 'not-scored';
 interface AssistantEvalCaseResult {
   id: string; question: string;
+  category?: string;                                  // the case's category; absent on runs saved before BA-184
   scores: Record<string, number>;                     // per scorer id, 0..1
-  checkResults: { id: string; description: string; score: number; passed: boolean; reason?: string }[];
+  checkResults: {
+    id: string; description: string; score: number; passed: boolean; reason?: string;
+    status: EvalStatus;                               // 'not-scored' only for a judge check the run did not call (R145, R146)
+    criterion?: string;                               // D1…C4 (R146)
+  }[];
   answer: string;
   toolCalls: { name: string; input?: string; output?: string; error?: string }[];   // JSON-encoded, truncated to ~2000 chars each
-  passed: boolean;                                    // every scorer scored 1
+  status: EvalStatus;                                 // R147
+  passed: boolean;                                    // status === 'passed'
   error?: string; durationMs: number;
 }
+interface EvalRunSummary {
+  passed: number; failed: number; notScored: number;   // questions per status
+  byCategory: { category: string; passed: number; failed: number; notScored: number; total: number }[];
+  byCriterion: { criterion: string; passed: number; failed: number; total: number }[];   // scored checks with a criterion
+}
 ```
+
+Runs saved before 2026-10-13 (BA-184) are served with the defaults of [agents-evals](../capabilities/agents-evals/spec.md) R144, R147 and R148: `judge` `{ mode: 'on' }`, every `status` from its `passed` flag, no `category` (counted under `uncategorised`) and no `criterion`, and a `summary` computed on read. `status` and `summary` are always present on the wire.
 
 ### 2.6.1 Skills
 
@@ -680,7 +696,7 @@ interface SampleFixtureView {
     loaded: boolean;               // datasource AND dataset exist with all required entities
     datasourceId?: string; datasourceName?: string; datasetName?: string;
     entityCount?: number; requiredCount: number;
-    connection?: Omit<PostgresConnection, 'password'>;   // never carries the password
+    connection?: Omit<PostgresConnection, 'password'>;   // never carries the password; PostgreSQL datasources only
   };
 }
 interface PostgresConnection { host: string; port: number; database: string; user: string; password: string; ssl: boolean }
@@ -689,8 +705,8 @@ interface PostgresConnection { host: string; port: number; database: string; use
 #### 56. `POST /testing-data/:fixtureId/load`
 - Body: `{ host, port, database, user, password?, ssl? }` (all coerced from untyped JSON). Required: non-empty `host`, `database`, `user`; `port` an integer 1..65535; `database` must not contain `"`. `password` defaults to `''`; `ssl` true only for `true` or `"true"`.
 - Response `200` (Style A): `{ ok, message, datasourceId?, datasetName?, entityCount?, createdDatabase?, seeded? }`.
-  - Success messages: seedable `"Seeded <schema> on <host:port> and loaded <n> entities into dataset \"<name>\"[ — created the database]"`; register-only `"Registered <host:port>/<db> and loaded <n> entities into dataset \"<name>\" — the <name> sample ships no seed SQL, so nothing was written to the database"`.
-  - Failure messages: unknown fixture (`Unknown sample fixture "<id>"`), REST-kind fixtures other than the self-registering `intellify-api` (registered by a script, not here), field validation, connection failure, missing database that cannot be created, seed failure, and `"Missing entities after seeding|registering: <list>. ..."` (returns `ok:false` but still includes `datasourceId`, `createdDatabase`, `seeded`).
+  - Success messages: seedable `"Seeded <schema> on <host:port> and loaded <n> entities into dataset \"<name>\"[ — created the database][ — added <k> knowledge entries and <m> metrics]"`, the last part only when the sample's knowledge seed created something, or `[ — could not add its knowledge seed: <detail>]` when it failed ([testing-data](../capabilities/testing-data/spec.md) R26); register-only `"Registered <host:port>/<db> and loaded <n> entities into dataset \"<name>\" — the <name> sample ships no seed SQL, so nothing was written to the database"`.
+  - Failure messages: unknown fixture (`Unknown sample fixture "<id>"`), REST-kind fixtures other than the self-registering `intellify-api`, and Databricks-kind fixtures (registered by a script, not here: [testing-data](../capabilities/testing-data/spec.md) R9, R23), field validation, connection failure, missing database that cannot be created, seed failure, and `"Missing entities after seeding|registering: <list>. ..."` (returns `ok:false` but still includes `datasourceId`, `createdDatabase`, `seeded`).
 - **Self-registering REST fixture `intellify-api`** ([testing-data](../capabilities/testing-data/spec.md), [rfp](../capabilities/rfp/spec.md)): the body is ignored and the field validation is skipped. The backend reads the embedded Intellify RFP API's URL and key (`IntellifyApiInfo`; 2.16), checks `GET /health`, discovers the endpoints from `GET /openapi.json` (as `POST /datasources/rest/discover`, #17), keeps the proposed collection endpoints with `group: "intellify"`, saves the datasource `Intellify RFP API` (`kind: "rest"`, `auth: { type: "api-key-header", headerName: "X-API-Key", token: <the API key> }`, reusing an existing record of that name), refreshes the inventory and saves the dataset `Intellify RFP API` with the 10 required entities (`clients`, `products`, `funding_types`, `plan_types`, `carriers`, `plan_designs`, `policies`, `financials`, `census`, `rfps`). No database is written. Success message `"Registered the Intellify RFP API at <url> and loaded 10 entities into dataset \"Intellify RFP API\""`. Failures: `"The Intellify API is not running in this app (INTELLIFY_API=off or it failed to start) — see the system logs."`; `"The Intellify API cannot reach its database at <host:port/db>. Load the \"Intellify\" sample into that database first."`; the missing-entities message. `GET /testing-data` lists it with `seedable: false`. Other REST-kind fixtures (`world-cup-rest`) stay register-only by script.
 - Side effects (seedable): connects (8 s timeout); if the database is absent, creates it from the `postgres` maintenance database; **drops and recreates the sample's schema** (`DROP SCHEMA IF EXISTS "<schema>" CASCADE`) and runs the bundled SQL in batches (120 s statement timeout); upserts a datasource named after the fixture (reusing the existing id when present); forces an inventory refresh; saves the fixture's dataset (with sampled values and join graph, same as `POST /datasets`). Register-only fixtures skip the seed and require the data to exist already.
 
@@ -1155,9 +1171,11 @@ The `Intellify API:` line carries the actual bound port of the embedded API (use
 | `INTELLIFY_DB_PASSWORD` | Intellify API config | Its password. Never logged. | `world_cup_dev` |
 | `INTELLIFY_DB_SSL` | Intellify API config | `true` connects over TLS. | `false` |
 | `INTELLIFY_DB_SCHEMA` | Intellify API config | Schema holding the Intellify data (the `intellify` fixture's). The `rfp` schema's name is fixed. | `intellify` |
-| `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated dataset names to run the assistant evals against. Required by that script. | none |
-| `EVAL_SET` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | The question set to run (`world-cup`, `world-cup-rest`, `formula-1`, `rfp`). That script needs this or `EVAL_CASES`, not both ([agents.md](agents.md) 8.5). | none |
+| `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` and `mastra/evals/validate-eval-sets.ts` (CLI eval scripts only) | Comma-separated dataset names to run the assistant evals, or validate a set's reference queries, against. Required by both scripts. | none |
+| `EVAL_SET` | the same two scripts | The id of one eval set ([agents-evals](../capabilities/agents-evals/spec.md) R11). Required by the validator (R110), which takes only a question bank file's set. The run needs this or `EVAL_CASES`, not both (R111, [agents.md](agents.md) 8.5). | none |
 | `EVAL_CASES` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated eval case ids to run instead of a whole set; all from one set's fixture. | none |
+| `EVAL_JUDGE` | `mastra/evals/run-assistant-evals.ts` | The run's judge option ([agents-evals](../capabilities/agents-evals/spec.md) R144, R154): `off`, `on` or `categories`. Any other value is refused before the backend boots. | `off` |
+| `EVAL_JUDGE_CATEGORIES` | the same script | With `EVAL_JUDGE=categories`, the categories to judge, comma-separated (blanks ignored), each one of the eighteen of [data-model.md](data-model.md) 4.9. Required and non-empty then; ignored otherwise. | unset |
 
 ### 6.2 CLI-only
 
@@ -1178,7 +1196,7 @@ The `Intellify API:` line carries the actual bound port of the embedded API (use
 
 ### 6.4 Developer scripts (not part of the shipped app)
 
-`BACKEND_URL` (default `http://127.0.0.1:3000`) and `WORLD_CUP_API_URL` (`http://127.0.0.1:55080`) for `setup-worldcup-rest.ts`; `WORLD_CUP_API_PORT` (`55080`) for the sample REST server; `WORLD_CUP_DB_HOST|PORT|DATABASE|USER|PASSWORD` (`127.0.0.1|55432|world_cup|world_cup|world_cup_dev`) for the dump script; `EVAL_ROW_LIMIT` (`500`), `EVAL_TIMEOUT_MS` (`300000`) for `run-eval.ts`; `CHECK_TIMEOUT_MS` (`180000`), `CHECK_MODEL` (`gpt-4o-mini`), `CHECK_ARM`, `CHECK_TRIALS` for `check-answers.ts`. `npm run intellify-api` in `backend/` runs the Intellify RFP API standalone (`node dist/intellify-api/main.js`, after a build), configured only by the `INTELLIFY_*` variables of 6.1, with `INTELLIFY_API_KEY` required (2.16).
+`BACKEND_URL` (default `http://127.0.0.1:3000`; the scripts call that backend's HTTP API directly, with no sign-in and no token), `REST_API_URL` or `WORLD_CUP_API_URL` (`http://127.0.0.1:55080`) and `REST_API_TOKEN` for `setup-fixture-rest.ts` and its wrapper `setup-worldcup-rest.ts`; the `REST_API_*` switches and `WORLD_CUP_API_PORT` (`55080`) for the sample REST server ([delivery.md](delivery.md) section 2, *The fixture REST API*); `WORLD_CUP_DB_HOST|PORT|DATABASE|USER|PASSWORD` (`127.0.0.1|55432|world_cup|world_cup|world_cup_dev`) for the dump script; `CHECK_TIMEOUT_MS` (`180000`), `CHECK_MODEL` (`gpt-4o-mini`), `CHECK_ARM`, `CHECK_TRIALS` for `check-answers.ts`. `npm run intellify-api` in `backend/` runs the Intellify RFP API standalone (`node dist/intellify-api/main.js`, after a build), configured only by the `INTELLIFY_*` variables of 6.1, with `INTELLIFY_API_KEY` required (2.16).
 
 ### 6.5 Frontend build/runtime
 

@@ -427,30 +427,42 @@
                       <button
                         type="button"
                         (click)="toggleRun(run.jobId)"
+                        [attr.aria-expanded]="expandedRunId() === run.jobId"
                         class="flex min-w-0 flex-1 items-center gap-3 text-left"
                       >
-                        @if (run.status === "running") {
-                          <lucide-angular
-                            [img]="Loader2"
-                            [size]="14"
-                            class="shrink-0 animate-spin text-fg-muted"
-                          />
-                        } @else if (passedIn(run) === run.totalCases) {
-                          <lucide-angular
-                            [img]="CircleCheck"
-                            [size]="14"
-                            class="shrink-0 text-on-success-soft"
-                          />
-                        } @else {
-                          <lucide-angular
-                            [img]="CircleX"
-                            [size]="14"
-                            class="shrink-0 text-on-danger-soft"
-                          />
+                        @switch (runVerdict(run)) {
+                          @case ("running") {
+                            <lucide-angular
+                              [img]="Loader2"
+                              [size]="14"
+                              class="shrink-0 animate-spin text-fg-muted"
+                            />
+                          }
+                          @case ("passed") {
+                            <lucide-angular
+                              [img]="CircleCheck"
+                              [size]="14"
+                              class="shrink-0 text-on-success-soft"
+                            />
+                          }
+                          @case ("failed") {
+                            <lucide-angular
+                              [img]="CircleX"
+                              [size]="14"
+                              class="shrink-0 text-on-danger-soft"
+                            />
+                          }
+                          @default {
+                            <lucide-angular
+                              [img]="CircleMinus"
+                              [size]="14"
+                              class="shrink-0 text-fg-muted"
+                            />
+                          }
                         }
-                        <span class="text-[13px] text-fg"
-                          >{{ passedIn(run) }}/{{ run.totalCases }} passed</span
-                        >
+                        <span class="shrink-0 text-[13px] text-fg">{{
+                          runHeadline(run.results, run.totalCases)
+                        }}</span>
                         <span class="truncate text-[12px] text-fg-muted">
                           {{ startedLabel(run) }} ·
                           {{ datasourceName(run.datasourceId) }} ·
@@ -494,7 +506,13 @@
                       <p class="mt-2 text-[12px] text-fg-muted">
                         Scoped to {{ run.datasets.join(", ") }}
                       </p>
-                      <div class="mt-2 flex flex-col gap-1">
+                      @if (runSummary(run); as summary) {
+                        <app-eval-run-summary
+                          [summary]="summary"
+                          [jobId]="run.jobId"
+                        />
+                      }
+                      <div class="mt-3 flex flex-col gap-1">
                         @for (result of run.results; track result.id) {
                           <button
                             type="button"
@@ -504,13 +522,32 @@
                             (click)="selectRunResult(result)"
                             class="flex items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-surface-muted"
                           >
-                            <lucide-angular
-                              [img]="result.passed ? CircleCheck : CircleX"
-                              [size]="12"
-                              class="mt-1 shrink-0"
-                              [class.text-on-success-soft]="result.passed"
-                              [class.text-on-danger-soft]="!result.passed"
-                            />
+                            @switch (resultStatus(result)) {
+                              @case ("passed") {
+                                <lucide-angular
+                                  [img]="CircleCheck"
+                                  [size]="12"
+                                  class="mt-1 shrink-0 text-on-success-soft"
+                                />
+                              }
+                              @case ("failed") {
+                                <lucide-angular
+                                  [img]="CircleX"
+                                  [size]="12"
+                                  class="mt-1 shrink-0 text-on-danger-soft"
+                                />
+                              }
+                              @default {
+                                <lucide-angular
+                                  [img]="CircleMinus"
+                                  [size]="12"
+                                  class="mt-1 shrink-0 text-fg-muted"
+                                />
+                                <span class="sr-only">{{
+                                  statusLabels["not-scored"]
+                                }}</span>
+                              }
+                            }
                             <span class="min-w-0 flex-1 text-[12px] text-fg">{{
                               result.question
                             }}</span>
@@ -614,6 +651,23 @@
                       </option>
                     }
                   </select>
+                  <div class="flex items-center gap-1.5">
+                    <label for="eval-judge" class="field-label">Judge</label>
+                    <select
+                      id="eval-judge"
+                      data-testid="eval-judge"
+                      (change)="onJudgeChange($event)"
+                      [disabled]="running() || runStarting()"
+                      class="field w-auto"
+                    >
+                      <option value="off" [selected]="judge() === 'off'">
+                        Off
+                      </option>
+                      <option value="on" [selected]="judge() === 'on'">
+                        On
+                      </option>
+                    </select>
+                  </div>
                   <button
                     data-testid="eval-run"
                     (click)="startRun()"
@@ -641,6 +695,9 @@
                     <span class="text-[12px] text-fg-muted">
                       {{ runResults().length }}/{{ evalCases().length }} done ·
                       {{ passedCount() }} passed
+                      @if (notScoredCount() > 0) {
+                        · {{ notScoredCount() }} not scored
+                      }
                     </span>
                   }
                 </div>
@@ -720,30 +777,61 @@
                             <span class="text-[13px] text-fg">{{
                               evalCase.question
                             }}</span>
+                            @if (evalCase.category; as category) {
+                              <span
+                                [attr.data-testid]="
+                                  'eval-case-category-' + evalCase.id
+                                "
+                                class="chip chip-neutral shrink-0 whitespace-nowrap"
+                                >{{ category }}</span
+                              >
+                            }
                             @if (resultFor(evalCase.id); as result) {
-                              @if (result.passed) {
-                                <span
-                                  [attr.data-testid]="
-                                    'eval-result-' + evalCase.id
-                                  "
-                                  class="flex items-center gap-1 text-[11px] text-on-success-soft"
-                                >
-                                  <lucide-angular
-                                    [img]="CircleCheck"
-                                    [size]="12"
-                                  />
-                                  <span>passed</span>
-                                </span>
-                              } @else {
-                                <span
-                                  [attr.data-testid]="
-                                    'eval-result-' + evalCase.id
-                                  "
-                                  class="flex items-center gap-1 text-[11px] text-on-danger-soft"
-                                >
-                                  <lucide-angular [img]="CircleX" [size]="12" />
-                                  <span>failed</span>
-                                </span>
+                              @switch (resultStatus(result)) {
+                                @case ("passed") {
+                                  <span
+                                    [attr.data-testid]="
+                                      'eval-result-' + evalCase.id
+                                    "
+                                    class="flex shrink-0 items-center gap-1 text-[11px] text-on-success-soft"
+                                  >
+                                    <lucide-angular
+                                      [img]="CircleCheck"
+                                      [size]="12"
+                                    />
+                                    <span>passed</span>
+                                  </span>
+                                }
+                                @case ("failed") {
+                                  <span
+                                    [attr.data-testid]="
+                                      'eval-result-' + evalCase.id
+                                    "
+                                    class="flex shrink-0 items-center gap-1 text-[11px] text-on-danger-soft"
+                                  >
+                                    <lucide-angular
+                                      [img]="CircleX"
+                                      [size]="12"
+                                    />
+                                    <span>failed</span>
+                                  </span>
+                                }
+                                @default {
+                                  <span
+                                    [attr.data-testid]="
+                                      'eval-result-' + evalCase.id
+                                    "
+                                    class="flex shrink-0 items-center gap-1 text-[11px] text-fg-muted"
+                                  >
+                                    <lucide-angular
+                                      [img]="CircleMinus"
+                                      [size]="12"
+                                    />
+                                    <span>{{
+                                      statusLabels["not-scored"]
+                                    }}</span>
+                                  </span>
+                                }
                               }
                             } @else if (
                               runCurrentQuestion() === evalCase.question
@@ -780,15 +868,24 @@
                                 <lucide-angular [img]="Gauge" [size]="11" />
                                 <span>{{ check.description }}</span>
                                 @if (resultFor(evalCase.id); as result) {
-                                  <span
-                                    [class.text-on-success-soft]="
-                                      result.scores[check.id] === 1
-                                    "
-                                    [class.text-on-danger-soft]="
-                                      result.scores[check.id] !== 1
-                                    "
-                                    >{{ result.scores[check.id] ?? 0 }}</span
-                                  >
+                                  @if (
+                                    checkStatusIn(result, check.id) ===
+                                    "not-scored"
+                                  ) {
+                                    <span>{{
+                                      statusLabels["not-scored"]
+                                    }}</span>
+                                  } @else {
+                                    <span
+                                      [class.text-on-success-soft]="
+                                        result.scores[check.id] === 1
+                                      "
+                                      [class.text-on-danger-soft]="
+                                        result.scores[check.id] !== 1
+                                      "
+                                      >{{ result.scores[check.id] ?? 0 }}</span
+                                    >
+                                  }
                                 }
                               </span>
                             }

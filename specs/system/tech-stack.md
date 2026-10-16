@@ -85,7 +85,7 @@ Persistence in one line: SQLite documents (better-sqlite3) for app data, LibSQL 
 frontend/   Angular app (Electron renderer) + Electron main process (electron/main.cjs, preload.cjs)
 backend/    NestJS API, Mastra agents, the CLI (npm package source)
 site/       Static product page and download routes (Cloudflare Pages), see delivery.md
-docker/     World Cup sample Postgres init scripts
+docker/     World Cup sample Postgres init scripts (postgres/init/) and the synthetic domain generators (postgres/generate/)
 .github/    version-on-merge, build-desktop, publish-npm workflows
 specs/      this specification
 ```
@@ -181,7 +181,7 @@ backend/src/intellify-api/
 
 Datastore pattern: a small `DocStore<T>` interface (`infrastructure/database/doc-store.ts`) with a better-sqlite3 adapter (`sqlite-doc-store.ts`): one table per collection, each row one JSON document, filters and sorts evaluated in-process. `DatabaseModule` is `@Global()` and exposes one injection token per collection (for example `CONNECTIONS_STORE`); repositories inject the token, never the db handle. A new collection is a `{ token, table }` entry in `COLLECTIONS` in `database.module.ts` plus a token in `doc-store.ts`. Renames need a migration (see [data-model.md](data-model.md)). Data directory: `APP_DATA_DIR`, else `<cwd>/data`.
 
-Agent harness: `backend/src/mastra/` — `index.ts` builds the standalone Mastra instance and registers agents; `mastra.service.ts` is a thin DI wrapper (`MastraService.getAgent(id)`) so the rest of the backend stays Mastra-agnostic; `model-resolver.ts` and `model-compat.ts` bridge DI-less agents to the persisted LLM settings; `storage.ts` builds the composite store (LibSQL + DuckDB); `session-workspaces.ts` manages per-session filesystem workspaces; `agents/`, `tools/`, `skills/`, `evals/` hold the agents, their tools, the built-in skills (`skills/<name>/SKILL.md` with `phases/` and `reference/`; `app-skills.ts` loads and checks them, agents.md 7.3) and eval suites. A new agent is a file in `mastra/agents/` plus its registration in `index.ts`. What each agent does: [agents.md](agents.md).
+Agent harness: `backend/src/mastra/` — `index.ts` builds the standalone Mastra instance and registers agents; `mastra.service.ts` is a thin DI wrapper (`MastraService.getAgent(id)`) so the rest of the backend stays Mastra-agnostic; `model-resolver.ts` and `model-compat.ts` bridge DI-less agents to the persisted LLM settings; `storage.ts` builds the composite store (LibSQL + DuckDB); `session-workspaces.ts` manages per-session filesystem workspaces; `agents/`, `tools/`, `skills/`, `evals/` hold the agents, their tools, the built-in skills (`skills/<name>/SKILL.md` with `phases/` and `reference/`; `app-skills.ts` loads and checks them, agents.md 7.3) and eval suites. In `evals/`: `sets/` holds the question bank files (one JSON file per bank, [data-model.md](data-model.md) 4.9); `eval-set-files.ts` is their loader, a pure module (no Nest, no model, no database) that imports each file (`resolveJsonModule`, so the compiler emits it into `dist` beside the loader), checks it and expands its variants, and refuses with `EvalSetError`; a new file is registered there in `EVAL_SET_FILES`, and its unit test fails when a file in `sets/` is not registered; `eval-check-scorers.ts` turns each file check into the `@mastra/evals/checks` scorer of the same name; `assistant.evals.ts` runs the cases; `rfp.evals.ts` defines the RFP Builder's `rfp` set in code; `eval-sets.ts` is the registry of every agent's sets (the assistant's, then the RFP Builder's; [agents.md](agents.md) 8.1); `result-set-check.ts` scores the result-set match; `assistant-eval-datasets.ts` holds the dataset preflight; `run-assistant-evals.ts` is the eval CLI and `validate-eval-sets.ts` the validator ([delivery.md](delivery.md)). A new question for the assistant is a change to a file in `sets/`, not to code. A new agent is a file in `mastra/agents/` plus its registration in `index.ts`. What each agent does: [agents.md](agents.md).
 
 ## Test layout
 
@@ -206,7 +206,30 @@ Playwright specifics:
 - Visual baselines, one per target and platform: `e2e/layout-accessibility.spec.ts-snapshots/application-shell-web-linux.png` (web, Linux) and `application-shell-darwin.png` (desktop, macOS). Set by each project's `snapshotPathTemplate`; `maxDiffPixelRatio: 0.01`, animations disabled. Update only with `npm run test:e2e:update` (web) or `test:e2e:desktop:update`, and only for an intended visual change.
 - Before the suite runs, `npm run test:e2e:prepare` compiles the e2e TypeScript and runs the backend's `build:all` (backend plus web UI in `backend/public/`). `test:e2e:prepare:desktop` builds the backend and the Angular app with `--base-href ./` instead. Either way the tests run the *built* app, not the dev server.
 
-Other test-adjacent tooling in `backend/`: a golden-set evaluation harness (`npm run eval`, `eval/golden-set.json`), a live answer-quality gate that costs real model calls (`npm run check:answers`), the assistant eval CLI (`npm run evals:assistant`), and a World Cup REST API fixture for the REST connector. All are documented in [delivery.md](delivery.md).
+Other test-adjacent tooling in `backend/`: a live answer-quality gate that costs real model calls (`npm run check:answers`), the assistant eval CLI (`npm run evals:assistant`), the eval-set validator that runs every reference query with no model call (`npm run eval:validate`), and a World Cup REST API fixture for the REST connector. All are documented in [delivery.md](delivery.md).
+
+Sample fixture data (BA-185; files and formats in [data-model.md](data-model.md) 4.10):
+
+```
+docker/postgres/generate/
+├── lib/rng.ts               the seeded random source and SQL literal helpers every generator uses
+└── <domain>.ts              one generator per synthetic domain: writes the seed SQL (and facts.json)
+backend/src/modules/testing-data/fixtures/
+└── NNN_<schema>.sql[.gz]    the bundled seeds, next to registry.ts (copied into dist)
+backend/src/modules/testing-data/databricks/
+├── fixture-load.ts          dump to Databricks statements: type mapping, batching, row-count check (BA-186)
+└── register.ts              registers a loaded Databricks sample in a running backend
+backend/scripts/
+├── dump-fixture.ts          npm run fixture:dump: a loaded sample to gzipped JSON
+├── setup-fixture-databricks.ts  npm run fixture:databricks: load a dump into a warehouse and register it (BA-186)
+├── setup-fixture-rest.ts    npm run fixture:rest:setup: register a REST variant of a sample (BA-187)
+├── worldcup-rest-api/       the fixture REST API: serve.ts over rest-fixture.ts, with its switches (BA-187)
+└── fixtures/<id>/
+    ├── facts.json           a domain's planted truths
+    └── data/                its dump: <relation>.json.gz and _meta.json
+```
+
+The generators sit outside `backend/` and run with the backend's `ts-node` (`npm run fixtures:<domain>`); they are not part of the build or the package.
 
 ## To rebuild on another stack
 

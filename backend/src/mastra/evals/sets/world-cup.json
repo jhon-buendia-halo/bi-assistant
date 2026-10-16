@@ -1,0 +1,3162 @@
+{
+  "variants": [
+    {
+      "id": "world-cup",
+      "name": "World Cup",
+      "description": "Questions against the bundled World Cup sample (2018 and 2022). Select its PostgreSQL datasource with a saved dataset containing the world_cup tables and views.",
+      "fixtureId": "world-cup",
+      "dialect": "postgres",
+      "caseIdPrefix": ""
+    },
+    {
+      "id": "world-cup-rest",
+      "name": "World Cup (REST API)",
+      "description": "The same World Cup questions against the sample served by a local REST API ('npm run worldcup:api'). Select its REST API datasource with a saved dataset containing the api.world_cup endpoints; reference SQL runs in SQLite over the fetched endpoints.",
+      "fixtureId": "world-cup-rest",
+      "dialect": "sqlite",
+      "caseIdPrefix": "rest-"
+    },
+    {
+      "id": "world-cup-databricks",
+      "name": "World Cup (Databricks)",
+      "description": "The same World Cup questions against the World Cup sample in a Databricks Unity Catalog schema, evals.world_cup ('npm run fixture:databricks -- --fixture world-cup' loads it). Select its Databricks datasource with a saved dataset containing the evals.world_cup tables and views; reference SQL is Databricks SQL.",
+      "fixtureId": "world-cup-databricks",
+      "dialect": "databricks",
+      "caseIdPrefix": "dbx-"
+    }
+  ],
+  "cases": [
+    {
+      "id": "champion-2022",
+      "category": "lookup",
+      "question": "Who won the 2022 World Cup?",
+      "intent": "Single-hop lookup against tournaments — the simplest happy path.",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Argentina"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT champion.common_name AS champion FROM world_cup.tournaments tournament JOIN world_cup.teams champion ON champion.id = tournament.champion_team_id WHERE tournament.tournament_year = 2022",
+        "sqlite": "SELECT champion.common_name AS champion FROM api.world_cup.tournaments tournament JOIN api.world_cup.teams champion ON champion.id = tournament.champion_team_id WHERE tournament.tournament_year = 2022",
+        "databricks": "SELECT champion.common_name AS champion FROM `evals`.world_cup.tournaments tournament JOIN `evals`.world_cup.teams champion ON champion.id = tournament.champion_team_id WHERE tournament.tournament_year = 2022"
+      }
+    },
+    {
+      "id": "final-score-2018",
+      "category": "join",
+      "question": "What was the score of the 2018 World Cup final?",
+      "intent": "Filter matches by stage and tournament, then read both goal columns.",
+      "notes": "The SQLite reference aliases matches as `m`: MATCH is a SQLite operator keyword.",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "4\\s*[-–:]\\s*2"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "includes",
+          "args": {
+            "text": "France"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "usesEntities",
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT home.common_name AS home_team, away.common_name AS away_team, match.home_goals, match.away_goals FROM world_cup.matches match JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id JOIN world_cup.teams home ON home.id = match.home_team_id JOIN world_cup.teams away ON away.id = match.away_team_id WHERE tournament.tournament_year = 2018 AND match.stage = 'final'",
+        "sqlite": "SELECT home.common_name AS home_team, away.common_name AS away_team, m.home_goals, m.away_goals FROM api.world_cup.matches m JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN api.world_cup.teams home ON home.id = m.home_team_id JOIN api.world_cup.teams away ON away.id = m.away_team_id WHERE tournament.tournament_year = 2018 AND m.stage = 'final'",
+        "databricks": "SELECT home.common_name AS home_team, away.common_name AS away_team, m.home_goals, m.away_goals FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN `evals`.world_cup.teams home ON home.id = m.home_team_id JOIN `evals`.world_cup.teams away ON away.id = m.away_team_id WHERE tournament.tournament_year = 2018 AND m.stage = 'final'"
+      }
+    },
+    {
+      "id": "top-scorer-2022",
+      "category": "aggregate",
+      "question": "Who scored the most goals in the 2022 World Cup, and how many?",
+      "intent": "Aggregate over goals joined to players, excluding own goals — the classic GROUP BY question.",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Messi"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\b4\\b"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT player, goals FROM world_cup.v_player_goal_totals WHERE tournament_year = 2022 ORDER BY goals DESC, player LIMIT 1",
+        "sqlite": "SELECT player, goals FROM api.world_cup.v_player_goal_totals WHERE tournament_year = 2022 ORDER BY goals DESC, player LIMIT 1",
+        "databricks": "SELECT player, goals FROM `evals`.world_cup.v_player_goal_totals WHERE tournament_year = 2022 ORDER BY goals DESC, player LIMIT 1"
+      }
+    },
+    {
+      "id": "shootouts",
+      "category": "encoding",
+      "question": "Which knockout matches went to a penalty shootout, and who advanced?",
+      "intent": "Requires noticing that shootouts are encoded as non-null penalty columns, not a flag.",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Croatia"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "Argentina",
+            "flags": "i"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "sqlMatches",
+          "args": {
+            "pattern": "penalt",
+            "flags": "i"
+          },
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT tournament_year, home_team, away_team, winner FROM world_cup.v_match_results WHERE home_penalties IS NOT NULL ORDER BY tournament_year, match_number",
+        "sqlite": "SELECT tournament_year, home_team, away_team, winner FROM api.world_cup.v_match_results WHERE home_penalties IS NOT NULL ORDER BY tournament_year, match_number",
+        "databricks": "SELECT tournament_year, home_team, away_team, winner FROM `evals`.world_cup.v_match_results WHERE home_penalties IS NOT NULL ORDER BY tournament_year, match_number"
+      }
+    },
+    {
+      "id": "biggest-venue",
+      "category": "ranking",
+      "question": "Which stadium hosted the best-attended match, and what was the attendance?",
+      "intent": "Join matches to venues and order by a nullable measure.",
+      "notes": "Several matches can tie at the same venue and attendance. The question asks for the distinct venue and attendance fact, not the number of matches, hence distinctRows.",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Lusail"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "88[,.]?966"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT DISTINCT venue, attendance FROM world_cup.v_match_results WHERE attendance = (SELECT MAX(attendance) FROM world_cup.v_match_results)",
+        "sqlite": "SELECT DISTINCT venue, attendance FROM api.world_cup.v_match_results WHERE attendance = (SELECT MAX(attendance) FROM api.world_cup.v_match_results)",
+        "databricks": "SELECT DISTINCT venue, attendance FROM `evals`.world_cup.v_match_results WHERE attendance = (SELECT MAX(attendance) FROM `evals`.world_cup.v_match_results)"
+      },
+      "resultSetOptions": {
+        "distinctRows": true
+      }
+    },
+    {
+      "id": "schema-discovery",
+      "category": "discovery",
+      "question": "What data do I have available to analyse?",
+      "intent": "Pure discovery — must inspect the session datasets rather than invent entities or run SQL.",
+      "notes": "The session context already lists the entities, so calling list_entities is not required (BA-209).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "matches"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "I4"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        }
+      ]
+    },
+    {
+      "id": "ambiguous-best-team",
+      "category": "ambiguous",
+      "question": "Which team performed best?",
+      "intent": "Ambiguous on both metric and tournament — the agent must ask instead of guessing.",
+      "notes": "A tool check can confirm ask_clarification fired; it cannot judge whether the question itself is well formed, so that quality goes to the judge instead of a brittle text check.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "ask_clarification"
+          },
+          "criterion": "D5"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D5"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "optionCount",
+          "criterion": "I5"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        }
+      ],
+      "judgeRubric": "The question (\"Which team performed best?\") is ambiguous on both the performance metric (goals? wins? possession?) and the scope (which tournament/year). Score pass=true only if the final answer is itself a clarifying question — not an attempt to answer with data — that offers 2-4 concrete, well-formed options grounded in this World Cup dataset (e.g. naming an actual metric like goals/wins/possession, or an actual tournament year in the data such as 2018 or 2022), and that does not state any performance figures as if they were the answer. Score pass=false if it guesses an answer, invents a metric or scope not in the data, or asks a vague open-ended question with no concrete options."
+    },
+    {
+      "id": "possession-vs-result",
+      "category": "reasoning",
+      "question": "In the 2022 knockout rounds, did the team with more possession usually win?",
+      "intent": "Two-table reasoning over match_team_statistics — the answer must be a judgement backed by counts, not a row dump.",
+      "notes": "No expectedSql: the reference answer is two scalar counts, and the result-set check compares row sets positionally, so it cannot tell that a wide reference row ({won: 2, lost: 6}) and the equivalent long aggregate ([{outcome, matches}, …]) state the same fact. A correct agent that grouped by outcome instead of pivoting scored 0 against a reference it agreed with. Both orientations answer the question, so the counts are graded in the rubric instead.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\b(possession|%)\\b",
+            "flags": "i"
+          },
+          "criterion": "G3"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "judgeRubric": "The question asks whether, in the 2022 knockout rounds, the team with more possession usually won. In this dataset the answer is NO: of the 8 knockout matches, the team with higher possession won 2 and lost 6. Score pass=true only if the final answer concludes that more possession did NOT usually win, and backs it with counts or percentages consistent with 2 of 8 won / 6 of 8 lost (equivalently 25% / 75%). Any query shape is acceptable — per-stage breakdowns, per-match tables or a single pivoted row all count, as do minor rewordings. Score pass=false if it concludes more possession usually won, gives no counts at all, or states counts that contradict 2 won / 6 lost."
+    },
+    {
+      "id": "out-of-scope",
+      "category": "out-of-scope",
+      "question": "How many goals did Pelé score in the 1970 World Cup?",
+      "intent": "The fixture only covers 2018 and 2022 — the agent must say so instead of fabricating a number.",
+      "notes": "The regex and excludes text checks this case used to run were brittle: a refusal phrased without any of the listed words failed, and a fabricated answer that avoided the exact phrase \"Pelé scored 4\" passed. A judge reads the actual claim instead of matching words.",
+      "checks": [
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "2018|2022"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "notMatches",
+          "args": {
+            "pattern": "\\b(?!(?:1970|2018|2022)\\b)\\d+(?:[.,]\\d+)*\\b"
+          },
+          "criterion": "G2"
+        }
+      ],
+      "judgeRubric": "The question asks about 1970, a year this dataset does not cover (it only has 2018 and 2022). Score pass=true only if the final answer clearly states it cannot answer for 1970 AND explicitly states what the data DOES cover (2018 and/or 2022), without inventing any goal count, statistic or claim about Pelé or the 1970 tournament. Score pass=false if it states or implies any 1970 statistic, or fails to state what the data actually covers."
+    },
+    {
+      "id": "visual-request",
+      "category": "visual",
+      "question": "Chart the goals scored by each team in the 2022 knockout stage.",
+      "intent": "Answer first, then build a visual — checks the SQL → create_visual ordering.",
+      "checks": [
+        {
+          "type": "toolOrder",
+          "args": {
+            "tools": ["run_readonly_sql", "create_visual"]
+          },
+          "criterion": "G4"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G4"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "visualKeywords",
+          "args": {
+            "keywords": ["goal", "2022", "knockout"]
+          },
+          "criterion": "G4"
+        }
+      ],
+      "judgeRubric": "The user asked for a chart of goals scored by each team in the 2022 World Cup knockout stage. Score pass=true only if a create_visual (or update_visual) tool call succeeded and its title/description plausibly describes a chart of goals per team for the 2022 knockout matches (not an unrelated metric, an unrelated tournament/year, or a chart that clearly covers something else). Score pass=false if no visual tool call succeeded, or the visual it produced does not match this request."
+    },
+    {
+      "id": "no-clarification-best-team",
+      "category": "fuzzy-scope",
+      "tags": ["tool-selection"],
+      "question": "Which team performed best?",
+      "intent": "The ambiguous question again, for an agent without ask_clarification — it must pick a reading, answer it and state the assumption.",
+      "notes": "The ambiguous-best-team question for an agent without ask_clarification (BA-217). Filed under fuzzy-scope rather than ambiguous: with no way to ask, the expected behaviour is that category's, to answer and name the measure it took as best. It keeps the checks it came with.",
+      "agentTools": ["sample_rows", "visuals"],
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "ask_clarification"
+          },
+          "criterion": "D5"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "judgeRubric": "The question (\"Which team performed best?\") does not say what \"best\" means, and this assistant cannot ask the user a question back, so it must pick a reading itself and answer it. Score pass=true only if the final answer explicitly names the measure it took as \"best\" (e.g. matches won, final placing, goals scored) and gives figures for that measure that come from the queries it ran, naming the team or teams that come out on top. Covering several measures is fine as long as each is named and backed by figures. Score pass=false if the answer asks the user which measure they mean instead of answering, gives no figures, does not say which measure it used, or states figures the tool calls do not support."
+    },
+    {
+      "id": "no-visuals-chart-request",
+      "category": "visual",
+      "tags": ["tool-selection"],
+      "question": "Show me a chart of goals scored per World Cup tournament.",
+      "intent": "A chart request for an agent without visuals — it must say it cannot draw one here and give the numbers instead.",
+      "notes": "A chart request for an agent without visuals (BA-217): create_visual must not be called and the figures must still arrive; the judge grades the wording and the totals. It keeps the checks it came with: the visual category's visualKeywords check needs a chart this agent cannot draw.",
+      "agentTools": ["sample_rows", "ask_clarification"],
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G4"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "judgeRubric": "The user asked for a chart of goals scored per World Cup tournament, but this assistant cannot create visuals. In this dataset the knockout matches of 2018 have 23 goals and those of 2022 have 24 (penalty shootouts not counted). Score pass=true only if the final answer says, briefly, that it cannot draw a chart or visual here AND gives the goals per tournament with figures consistent with 23 for 2018 and 24 for 2022 (a table or list is fine; shootout penalties shown separately are fine). Score pass=false if it claims to have created a chart, pastes HTML, CSS or JavaScript, gives no figures, or states totals that contradict 23 and 24."
+    },
+    {
+      "id": "shot-accuracy-by-team-2022",
+      "category": "ratio",
+      "split": "dev",
+      "tags": [
+        "trap:ratio-trap",
+        "difficulty:medium"
+      ],
+      "question": "At the 2022 World Cup, which three teams put the highest share of their shots on target?",
+      "intent": "Shots on target divided by total shots per team, 2022 only — a second column pair so a passes-only fix does not pass it.",
+      "notes": "Derived from eval/golden-set.json (shot-accuracy-by-team), restricted to 2022: across both tournaments the third place is definition-sensitive (ratio of sums: Sweden 0.42857; average of per-match rates: Brazil 0.43498), which would fail a defensible answer. In 2022 both definitions give the same three. Verified 2026-09-23: Brazil 0.52381 (11/21), Argentina 0.51111 (23/45), England 0.50000 (8/16); 4th France 0.40625. Cross-checked with an independent formulation (v_seeded_team_performance 2022 rows, dense_rank on shots_on_target / total_shots): identical. trapSql divides shots by shots: every rate is 1 and the tie-break returns Argentina, Brazil, Croatia.\n\nTrap query (must return different rows): SELECT t.common_name AS team FROM world_cup.match_team_statistics s JOIN world_cup.matches m ON m.id = s.match_id JOIN world_cup.tournaments tr ON tr.id = m.tournament_id JOIN world_cup.teams t ON t.id = s.team_id WHERE tr.tournament_year = 2022 GROUP BY t.common_name ORDER BY SUM(s.shots)::numeric / SUM(s.shots) DESC, t.common_name LIMIT 3\n\nOther paraphrase (the first is the question shot-accuracy-by-team-2022-reworded): In 2022, which three sides got the largest proportion of their attempts on target?\n\nMoved from feat/engine-eval-loop (branch category ratio-trap, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "England"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT t.common_name AS team FROM world_cup.match_team_statistics s JOIN world_cup.matches m ON m.id = s.match_id JOIN world_cup.tournaments tr ON tr.id = m.tournament_id JOIN world_cup.teams t ON t.id = s.team_id WHERE tr.tournament_year = 2022 GROUP BY t.common_name ORDER BY SUM(s.shots_on_target)::numeric / SUM(s.shots) DESC, t.common_name LIMIT 3",
+        "sqlite": "SELECT t.common_name AS team FROM api.world_cup.match_team_statistics s JOIN api.world_cup.matches m ON m.id = s.match_id JOIN api.world_cup.tournaments tr ON tr.id = m.tournament_id JOIN api.world_cup.teams t ON t.id = s.team_id WHERE tr.tournament_year = 2022 GROUP BY t.common_name ORDER BY CAST(SUM(s.shots_on_target) AS REAL) / SUM(s.shots) DESC, t.common_name LIMIT 3",
+        "databricks": "SELECT t.common_name AS team FROM `evals`.world_cup.match_team_statistics s JOIN `evals`.world_cup.matches m ON m.id = s.match_id JOIN `evals`.world_cup.tournaments tr ON tr.id = m.tournament_id JOIN `evals`.world_cup.teams t ON t.id = s.team_id WHERE tr.tournament_year = 2022 GROUP BY t.common_name ORDER BY SUM(s.shots_on_target) / SUM(s.shots) DESC, t.common_name LIMIT 3"
+      }
+    },
+    {
+      "id": "shot-conversion-2022",
+      "category": "ratio",
+      "split": "held-out",
+      "tags": [
+        "trap:ratio-trap",
+        "difficulty:hard"
+      ],
+      "question": "Which team turned the highest share of its shots into goals at the 2022 World Cup?",
+      "intent": "Goals (from the score or goal rows) divided by shots (from team statistics) — two sources, and shots on target is the look-alike numerator.",
+      "notes": "Verified 2026-09-23: Netherlands 2 goals from 6 shots (0.33333), then France 7/32 (0.21875) and Argentina 8/45 (0.17778). Cross-checked with an independent formulation (goal rows by credited team over v_seeded_team_performance total_shots): identical ranking. Robust to definition: the average of per-match rates and goals per shot on target (2/2) also put the Netherlands first. trapSql takes the look-alike numerator, shots on target / shots, and returns Brazil (0.52381).\n\nTrap query (must return different rows): SELECT t.common_name AS team FROM world_cup.match_team_statistics s JOIN world_cup.matches m ON m.id = s.match_id JOIN world_cup.tournaments tr ON tr.id = m.tournament_id JOIN world_cup.teams t ON t.id = s.team_id WHERE tr.tournament_year = 2022 GROUP BY t.common_name ORDER BY SUM(s.shots_on_target)::numeric / SUM(s.shots) DESC, t.common_name LIMIT 1\n\nOther paraphrase (the first is the question shot-conversion-2022-reworded): At the 2022 tournament, which team needed the fewest shots per goal?\n\nMoved from feat/engine-eval-loop (branch category ratio-trap, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Netherlands"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "WITH team_goals AS (SELECT m.id AS match_id, m.home_team_id AS team_id, m.home_goals AS goals FROM world_cup.matches m JOIN world_cup.tournaments tr ON tr.id = m.tournament_id WHERE tr.tournament_year = 2022 UNION ALL SELECT m.id, m.away_team_id, m.away_goals FROM world_cup.matches m JOIN world_cup.tournaments tr ON tr.id = m.tournament_id WHERE tr.tournament_year = 2022) SELECT t.common_name AS team FROM team_goals g JOIN world_cup.match_team_statistics s ON s.match_id = g.match_id AND s.team_id = g.team_id JOIN world_cup.teams t ON t.id = g.team_id GROUP BY t.common_name ORDER BY SUM(g.goals)::numeric / SUM(s.shots) DESC, t.common_name LIMIT 1",
+        "sqlite": "WITH team_goals AS (SELECT m.id AS match_id, m.home_team_id AS team_id, m.home_goals AS goals FROM api.world_cup.matches m JOIN api.world_cup.tournaments tr ON tr.id = m.tournament_id WHERE tr.tournament_year = 2022 UNION ALL SELECT m.id, m.away_team_id, m.away_goals FROM api.world_cup.matches m JOIN api.world_cup.tournaments tr ON tr.id = m.tournament_id WHERE tr.tournament_year = 2022) SELECT t.common_name AS team FROM team_goals g JOIN api.world_cup.match_team_statistics s ON s.match_id = g.match_id AND s.team_id = g.team_id JOIN api.world_cup.teams t ON t.id = g.team_id GROUP BY t.common_name ORDER BY CAST(SUM(g.goals) AS REAL) / SUM(s.shots) DESC, t.common_name LIMIT 1",
+        "databricks": "WITH team_goals AS (SELECT m.id AS match_id, m.home_team_id AS team_id, m.home_goals AS goals FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments tr ON tr.id = m.tournament_id WHERE tr.tournament_year = 2022 UNION ALL SELECT m.id, m.away_team_id, m.away_goals FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments tr ON tr.id = m.tournament_id WHERE tr.tournament_year = 2022) SELECT t.common_name AS team FROM team_goals g JOIN `evals`.world_cup.match_team_statistics s ON s.match_id = g.match_id AND s.team_id = g.team_id JOIN `evals`.world_cup.teams t ON t.id = g.team_id GROUP BY t.common_name ORDER BY SUM(g.goals) / SUM(s.shots) DESC, t.common_name LIMIT 1"
+      }
+    },
+    {
+      "id": "busiest-stadium",
+      "category": "ranking",
+      "split": "dev",
+      "tags": [
+        "trap:ties",
+        "difficulty:medium"
+      ],
+      "question": "Which stadium hosted the most matches?",
+      "intent": "Count matches per venue; two stadiums tie at the top, so both must be named.",
+      "notes": "Verified 2026-09-23: Saint Petersburg Stadium (2018) and Lusail Stadium (2022) both hosted 3 matches; next are Al Bayt, Fisht and Luzhniki on 2. Cross-checked with an independent formulation (rank() over v_match_results grouped by venue): the same two. trapSql breaks the tie with ORDER BY … LIMIT 1 and returns only Lusail Stadium.\n\nTrap query (must return different rows): SELECT venue.name AS venue FROM world_cup.matches match JOIN world_cup.venues venue ON venue.id = match.venue_id GROUP BY venue.name ORDER BY COUNT(*) DESC, venue.name LIMIT 1\n\nThe SQLite reference aliases matches as `m`: MATCH is a SQLite operator keyword.\n\nOther paraphrase (the first is the question busiest-stadium-reworded): What was the busiest stadium in terms of matches played?\n\nMoved from feat/engine-eval-loop (branch category ties, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*(?:Saint|St\\.?)\\s*Petersburg)(?=[\\s\\S]*Lusail)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "WITH per_venue AS (SELECT venue.name AS venue, COUNT(*) AS matches FROM world_cup.matches match JOIN world_cup.venues venue ON venue.id = match.venue_id GROUP BY venue.name) SELECT venue FROM per_venue WHERE matches = (SELECT MAX(matches) FROM per_venue)",
+        "sqlite": "WITH per_venue AS (SELECT venue.name AS venue, COUNT(*) AS matches FROM api.world_cup.matches m JOIN api.world_cup.venues venue ON venue.id = m.venue_id GROUP BY venue.name) SELECT venue FROM per_venue WHERE matches = (SELECT MAX(matches) FROM per_venue)",
+        "databricks": "WITH per_venue AS (SELECT venue.name AS venue, COUNT(*) AS matches FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.venues venue ON venue.id = m.venue_id GROUP BY venue.name) SELECT venue FROM per_venue WHERE matches = (SELECT MAX(matches) FROM per_venue)"
+      }
+    },
+    {
+      "id": "highest-scoring-match",
+      "category": "ranking",
+      "split": "dev",
+      "tags": [
+        "trap:ties",
+        "difficulty:medium"
+      ],
+      "question": "Which match produced the most goals?",
+      "intent": "Rank matches by goals scored; both finals tie on six, so a single answer is wrong.",
+      "notes": "Verified 2026-09-23: the 2018 final (France 4-2 Croatia) and the 2022 final (Argentina 3-3 France) both produced 6 goals; next are Russia 2-2 Croatia and Netherlands 2-2 Argentina on 4. Cross-checked with an independent formulation (goal rows per match, rank()): the same two matches on 6. The reference projects the two team names, which identify each match (neither pairing met twice). trapSql breaks the tie with LIMIT 1 and returns only France v Croatia. A second wrong path — adding shoot-out kicks to the score — returns only Argentina v France (12).\n\nTrap query (must return different rows): SELECT home_team, away_team FROM world_cup.v_match_results ORDER BY home_goals + away_goals DESC, tournament_year LIMIT 1\n\nOther paraphrase (the first is the question highest-scoring-match-reworded): Which fixture had the most goals in it?\n\nMoved from feat/engine-eval-loop (branch category ties, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*Croatia)(?=[\\s\\S]*Argentina)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT home_team, away_team FROM world_cup.v_match_results WHERE home_goals + away_goals = (SELECT MAX(home_goals + away_goals) FROM world_cup.v_match_results)",
+        "sqlite": "SELECT home_team, away_team FROM api.world_cup.v_match_results WHERE home_goals + away_goals = (SELECT MAX(home_goals + away_goals) FROM api.world_cup.v_match_results)",
+        "databricks": "SELECT home_team, away_team FROM `evals`.world_cup.v_match_results WHERE home_goals + away_goals = (SELECT MAX(home_goals + away_goals) FROM `evals`.world_cup.v_match_results)"
+      }
+    },
+    {
+      "id": "top-scorer-both-tournaments",
+      "category": "ranking",
+      "split": "held-out",
+      "tags": [
+        "trap:ties",
+        "difficulty:medium"
+      ],
+      "question": "Who scored the most goals across the 2018 and 2022 World Cups combined?",
+      "intent": "Sum per-player goals over both tournaments (own goals excluded); Messi and Mbappe tie.",
+      "notes": "Verified 2026-09-23: Lionel Messi (4, all 2022) and Kylian Mbappe (1 in 2018 + 3 in 2022) tie on 4; next Griezmann, Perisic, Alvarez, Mandzukic and Weghorst on 2. Cross-checked with an independent formulation (goal rows joined to players, own goals excluded): the same two on 4. Counting own goals does not change the top (Mandzukic reaches 3). trapSql breaks the tie with LIMIT 1 and returns only Kylian Mbappe.\n\nTrap query (must return different rows): SELECT player FROM world_cup.v_player_goal_totals GROUP BY player ORDER BY SUM(goals) DESC, player LIMIT 1\n\nOther paraphrase (the first is the question top-scorer-both-tournaments-reworded): Which player has the most World Cup goals over 2018 and 2022?\n\nMoved from feat/engine-eval-loop (branch category ties, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*Messi)(?=[\\s\\S]*Mbapp)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "WITH totals AS (SELECT player, SUM(goals) AS goals FROM world_cup.v_player_goal_totals GROUP BY player) SELECT player FROM totals WHERE goals = (SELECT MAX(goals) FROM totals)",
+        "sqlite": "WITH totals AS (SELECT player, SUM(goals) AS goals FROM api.world_cup.v_player_goal_totals GROUP BY player) SELECT player FROM totals WHERE goals = (SELECT MAX(goals) FROM totals)",
+        "databricks": "WITH totals AS (SELECT player, SUM(goals) AS goals FROM `evals`.world_cup.v_player_goal_totals GROUP BY player) SELECT player FROM totals WHERE goals = (SELECT MAX(goals) FROM totals)"
+      }
+    },
+    {
+      "id": "semi-final-goals-2022",
+      "category": "encoding",
+      "split": "dev",
+      "tags": [
+        "trap:value-vocabulary",
+        "difficulty:easy"
+      ],
+      "question": "How many goals were scored in the 2022 semi-finals?",
+      "intent": "Map \"semi-finals\" to the stored stage value semi_final, then sum both scores.",
+      "notes": "Verified 2026-09-23: 5 goals (Argentina 3-0 Croatia, France 2-0 Morocco). Cross-checked with an independent formulation (goal rows of the 2022 semi_final matches): 5. trapSql filters on the spelling a person would write, 'semi-final', matches nothing and returns a null sum.\n\nTrap query (must return different rows): SELECT SUM(match.home_goals + match.away_goals) AS goals FROM world_cup.matches match JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id WHERE tournament.tournament_year = 2022 AND match.stage = 'semi-final'\n\nThe SQLite reference aliases matches as `m`: MATCH is a SQLite operator keyword.\n\nOther paraphrase (the first is the question semi-final-goals-2022-reworded): How many goals went in during the semis of the 2022 World Cup?\n\nMoved from feat/engine-eval-loop (branch category value-vocabulary, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "sqlMatches",
+          "args": {
+            "pattern": "semi_final",
+            "flags": "i"
+          },
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT SUM(match.home_goals + match.away_goals) AS goals FROM world_cup.matches match JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id WHERE tournament.tournament_year = 2022 AND match.stage = 'semi_final'",
+        "sqlite": "SELECT SUM(m.home_goals + m.away_goals) AS goals FROM api.world_cup.matches m JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id WHERE tournament.tournament_year = 2022 AND m.stage = 'semi_final'",
+        "databricks": "SELECT SUM(m.home_goals + m.away_goals) AS goals FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments tournament ON tournament.id = m.tournament_id WHERE tournament.tournament_year = 2022 AND m.stage = 'semi_final'"
+      }
+    },
+    {
+      "id": "goals-by-defenders",
+      "category": "encoding",
+      "split": "dev",
+      "tags": [
+        "trap:value-vocabulary",
+        "difficulty:medium"
+      ],
+      "question": "How many goals did defenders score?",
+      "intent": "Map \"defenders\" to the stored position code DF and join goals to players.",
+      "notes": "Verified 2026-09-23: 11 goals by 11 different defenders (Dari, Vida, Maguire, Gvardiol, Trippier, Fernandes, Molina, Varane, Umtiti, Hernandez, Meunier). Neither own goal was scored by a defender (Fernandinho is MF, Mandzukic FW), so the count does not depend on how own goals are treated. Cross-checked with an independent formulation (squad_position = 'DF' via squad_members, summed from v_player_goal_totals): 11. trapSql filters position = 'Defender' and returns 0. No snippet names the position codes — this case leans on sample values or column profiles.\n\nTrap query (must return different rows): SELECT COUNT(*) AS goals FROM world_cup.goals goal JOIN world_cup.players player ON player.id = goal.scorer_player_id WHERE player.position = 'Defender' AND goal.goal_type <> 'own_goal'\n\nOther paraphrase (the first is the question goals-by-defenders-reworded): What is the combined goal tally of the players who play in defence?\n\nMoved from feat/engine-eval-loop (branch category value-vocabulary, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "sqlMatches",
+          "args": {
+            "pattern": "'DF'",
+            "flags": "i"
+          },
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS goals FROM world_cup.goals goal JOIN world_cup.players player ON player.id = goal.scorer_player_id WHERE player.position = 'DF' AND goal.goal_type <> 'own_goal'",
+        "sqlite": "SELECT COUNT(*) AS goals FROM api.world_cup.goals goal JOIN api.world_cup.players player ON player.id = goal.scorer_player_id WHERE player.position = 'DF' AND goal.goal_type <> 'own_goal'",
+        "databricks": "SELECT COUNT(*) AS goals FROM `evals`.world_cup.goals goal JOIN `evals`.world_cup.players player ON player.id = goal.scorer_player_id WHERE player.position = 'DF' AND goal.goal_type <> 'own_goal'"
+      }
+    },
+    {
+      "id": "third-place-2022",
+      "category": "encoding",
+      "split": "held-out",
+      "tags": [
+        "trap:value-vocabulary",
+        "difficulty:easy"
+      ],
+      "question": "Who won the third-place play-off at the 2022 World Cup?",
+      "intent": "Map \"third-place play-off\" to the stored stage value third_place and read the winner.",
+      "notes": "Verified 2026-09-23: Croatia (2-1 against Morocco). Cross-checked with an independent formulation (tournament_teams.final_rank = 3 for 2022): Croatia. trapSql filters stage = 'third place' and returns no rows.\n\nTrap query (must return different rows): SELECT winner.common_name AS team FROM world_cup.matches match JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id JOIN world_cup.teams winner ON winner.id = match.winner_team_id WHERE tournament.tournament_year = 2022 AND match.stage = 'third place'\n\nThe SQLite reference aliases matches as `m`: MATCH is a SQLite operator keyword.\n\nOther paraphrase (the first is the question third-place-2022-reworded): Who took the bronze in 2022?\n\nMoved from feat/engine-eval-loop (branch category value-vocabulary, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Croatia"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "sqlMatches",
+          "args": {
+            "pattern": "third_place",
+            "flags": "i"
+          },
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT winner.common_name AS team FROM world_cup.matches match JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id JOIN world_cup.teams winner ON winner.id = match.winner_team_id WHERE tournament.tournament_year = 2022 AND match.stage = 'third_place'",
+        "sqlite": "SELECT winner.common_name AS team FROM api.world_cup.matches m JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN api.world_cup.teams winner ON winner.id = m.winner_team_id WHERE tournament.tournament_year = 2022 AND m.stage = 'third_place'",
+        "databricks": "SELECT winner.common_name AS team FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN `evals`.world_cup.teams winner ON winner.id = m.winner_team_id WHERE tournament.tournament_year = 2022 AND m.stage = 'third_place'"
+      }
+    },
+    {
+      "id": "most-fouls-team",
+      "category": "ranking",
+      "split": "dev",
+      "tags": [
+        "trap:id-vs-name",
+        "difficulty:medium"
+      ],
+      "question": "Which team committed the most fouls across both tournaments?",
+      "intent": "Team statistics carry only team_id — the answer must join teams for the name.",
+      "notes": "Verified 2026-09-23: Croatia, 97 fouls over 6 matches; next France 79, Argentina 59. No view carries fouls, so the name needs the join to teams. Cross-checked with an independent formulation (correlated per-team sums compared with the MAX of per-team sums): Croatia. trapSql groups by team_id and returns 4 — an id where a name was asked.\n\nTrap query (must return different rows): SELECT stat.team_id FROM world_cup.match_team_statistics stat GROUP BY stat.team_id ORDER BY SUM(stat.fouls_committed) DESC, stat.team_id LIMIT 1\n\nOther paraphrase (the first is the question most-fouls-team-reworded): Across all the matches, which team was penalised for the most fouls?\n\nMoved from feat/engine-eval-loop (branch category id-vs-name, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Croatia"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT team.common_name AS team FROM world_cup.match_team_statistics stat JOIN world_cup.teams team ON team.id = stat.team_id GROUP BY team.common_name ORDER BY SUM(stat.fouls_committed) DESC, team.common_name LIMIT 1",
+        "sqlite": "SELECT team.common_name AS team FROM api.world_cup.match_team_statistics stat JOIN api.world_cup.teams team ON team.id = stat.team_id GROUP BY team.common_name ORDER BY SUM(stat.fouls_committed) DESC, team.common_name LIMIT 1",
+        "databricks": "SELECT team.common_name AS team FROM `evals`.world_cup.match_team_statistics stat JOIN `evals`.world_cup.teams team ON team.id = stat.team_id GROUP BY team.common_name ORDER BY SUM(stat.fouls_committed) DESC, team.common_name LIMIT 1"
+      }
+    },
+    {
+      "id": "booked-in-2022-final",
+      "category": "ranking",
+      "split": "dev",
+      "tags": [
+        "trap:id-vs-name",
+        "difficulty:medium"
+      ],
+      "question": "Which player was booked in the 2022 final?",
+      "intent": "Bookings carry player_id only — resolve it to the player name through players.",
+      "notes": "Verified 2026-09-23: one booking in the 2022 final — Emiliano Martinez (Argentina), 116', yellow, time wasting. Cross-checked with an independent formulation (the 2022 match number 64 by subquery, player name by scalar subquery): Emiliano Martinez. trapSql returns the booking's player_id, 5. The text check accepts the accented spelling (Martínez).\n\nTrap query (must return different rows): SELECT card.player_id FROM world_cup.disciplinary_events card JOIN world_cup.matches match ON match.id = card.match_id JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id WHERE tournament.tournament_year = 2022 AND match.stage = 'final'\n\nThe SQLite reference aliases matches as `m`: MATCH is a SQLite operator keyword.\n\nOther paraphrase (the first is the question booked-in-2022-final-reworded): Which player went into the book during the 2022 final?\n\nMoved from feat/engine-eval-loop (branch category id-vs-name, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "Emiliano|Mart[ií]nez"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT player.full_name AS player FROM world_cup.disciplinary_events card JOIN world_cup.matches match ON match.id = card.match_id JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id JOIN world_cup.players player ON player.id = card.player_id WHERE tournament.tournament_year = 2022 AND match.stage = 'final'",
+        "sqlite": "SELECT player.full_name AS player FROM api.world_cup.disciplinary_events card JOIN api.world_cup.matches m ON m.id = card.match_id JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN api.world_cup.players player ON player.id = card.player_id WHERE tournament.tournament_year = 2022 AND m.stage = 'final'",
+        "databricks": "SELECT player.full_name AS player FROM `evals`.world_cup.disciplinary_events card JOIN `evals`.world_cup.matches m ON m.id = card.match_id JOIN `evals`.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN `evals`.world_cup.players player ON player.id = card.player_id WHERE tournament.tournament_year = 2022 AND m.stage = 'final'"
+      }
+    },
+    {
+      "id": "quickest-goal-scorer",
+      "category": "ranking",
+      "split": "held-out",
+      "tags": [
+        "trap:id-vs-name",
+        "difficulty:easy"
+      ],
+      "question": "Who scored the quickest goal in any match?",
+      "intent": "Goal rows carry scorer_player_id only — the earliest goal must be resolved to a name.",
+      "notes": "Verified 2026-09-23: Thomas Meunier (Belgium), 4th minute of the 2018 third-place play-off; next Theo Hernandez and Kieran Trippier on 5'. Cross-checked with an independent formulation (MIN of v_player_goal_totals.first_goal_minute): Thomas Meunier. trapSql returns the scorer id, 6.\n\nTrap query (must return different rows): SELECT goal.scorer_player_id FROM world_cup.goals goal ORDER BY goal.minute, goal.stoppage_minute LIMIT 1\n\nOther paraphrase (the first is the question quickest-goal-scorer-reworded): Who got the fastest goal across these tournaments?\n\nMoved from feat/engine-eval-loop (branch category id-vs-name, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Meunier"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT player.full_name AS player FROM world_cup.goals goal JOIN world_cup.players player ON player.id = goal.scorer_player_id WHERE goal.minute = (SELECT MIN(minute) FROM world_cup.goals)",
+        "sqlite": "SELECT player.full_name AS player FROM api.world_cup.goals goal JOIN api.world_cup.players player ON player.id = goal.scorer_player_id WHERE goal.minute = (SELECT MIN(minute) FROM api.world_cup.goals)",
+        "databricks": "SELECT player.full_name AS player FROM `evals`.world_cup.goals goal JOIN `evals`.world_cup.players player ON player.id = goal.scorer_player_id WHERE goal.minute = (SELECT MIN(minute) FROM `evals`.world_cup.goals)"
+      }
+    },
+    {
+      "id": "top-assist-provider",
+      "category": "null",
+      "split": "dev",
+      "tags": [
+        "trap:empty-column",
+        "difficulty:medium"
+      ],
+      "question": "Who provided the most assists?",
+      "intent": "Rank assisting players while ignoring the blank key — 45 of 47 goals have no assist recorded.",
+      "notes": "Verified 2026-09-23: Lionel Messi, 2 assists (Molina's and Alvarez's second goal, both 2022) — the only assisting player recorded. Cross-checked with an independent formulation (players with an EXISTS on assisted goals, correlated count): Lionel Messi, 2. trapSql groups the LEFT JOIN by assisting player without dropping the blank key, so the NULL group (45 goals) ranks first.\n\nTrap query (must return different rows): SELECT assister.full_name AS player FROM world_cup.goals goal LEFT JOIN world_cup.players assister ON assister.id = goal.assist_player_id GROUP BY assister.full_name ORDER BY COUNT(*) DESC LIMIT 1\n\nOther paraphrase (the first is the question top-assist-provider-reworded): Who is the leading assist-maker in the data?\n\nMoved from feat/engine-eval-loop (branch category empty-column, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Messi"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "sqlMatches",
+          "args": {
+            "pattern": "assist",
+            "flags": "i"
+          },
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "WITH assists AS (SELECT player.full_name AS player, COUNT(*) AS assists FROM world_cup.goals goal JOIN world_cup.players player ON player.id = goal.assist_player_id GROUP BY player.full_name) SELECT player FROM assists WHERE assists = (SELECT MAX(assists) FROM assists)",
+        "sqlite": "WITH assists AS (SELECT player.full_name AS player, COUNT(*) AS assists FROM api.world_cup.goals goal JOIN api.world_cup.players player ON player.id = goal.assist_player_id GROUP BY player.full_name) SELECT player FROM assists WHERE assists = (SELECT MAX(assists) FROM assists)",
+        "databricks": "WITH assists AS (SELECT player.full_name AS player, COUNT(*) AS assists FROM `evals`.world_cup.goals goal JOIN `evals`.world_cup.players player ON player.id = goal.assist_player_id GROUP BY player.full_name) SELECT player FROM assists WHERE assists = (SELECT MAX(assists) FROM assists)"
+      }
+    },
+    {
+      "id": "mandzukic-goals-2018",
+      "category": "business-term",
+      "split": "dev",
+      "tags": [
+        "trap:domain-semantics",
+        "difficulty:medium"
+      ],
+      "question": "How many goals did Mario Mandzukic score at the 2018 World Cup?",
+      "intent": "An own goal is not a goal for the player who scored it — one of his three goal rows is an own goal credited to France.",
+      "notes": "Verified 2026-09-23: 2 goals (109' against England, 69' in the final); his 18' own goal in the final is credited to France. Cross-checked with two independent formulations: v_player_goal_totals (goals 2, own_goals 1) and goal rows whose credited team is his own national team (2). trapSql counts every goal row with his name on it and returns 3.\n\nTrap query (must return different rows): SELECT COUNT(*) AS goals FROM world_cup.goals goal JOIN world_cup.players player ON player.id = goal.scorer_player_id JOIN world_cup.matches match ON match.id = goal.match_id JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id WHERE player.full_name = 'Mario Mandzukic' AND tournament.tournament_year = 2018\n\nThe SQLite reference aliases matches as `m`: MATCH is a SQLite operator keyword.\n\nOther paraphrase (the first is the question mandzukic-goals-2018-reworded): How many times did Mandzukic score for Croatia in 2018?\n\nMoved from feat/engine-eval-loop (branch category domain-semantics, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS goals FROM world_cup.goals goal JOIN world_cup.players player ON player.id = goal.scorer_player_id JOIN world_cup.matches match ON match.id = goal.match_id JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id WHERE player.full_name = 'Mario Mandzukic' AND tournament.tournament_year = 2018 AND goal.goal_type <> 'own_goal'",
+        "sqlite": "SELECT COUNT(*) AS goals FROM api.world_cup.goals goal JOIN api.world_cup.players player ON player.id = goal.scorer_player_id JOIN api.world_cup.matches m ON m.id = goal.match_id JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id WHERE player.full_name = 'Mario Mandzukic' AND tournament.tournament_year = 2018 AND goal.goal_type <> 'own_goal'",
+        "databricks": "SELECT COUNT(*) AS goals FROM `evals`.world_cup.goals goal JOIN `evals`.world_cup.players player ON player.id = goal.scorer_player_id JOIN `evals`.world_cup.matches m ON m.id = goal.match_id JOIN `evals`.world_cup.tournaments tournament ON tournament.id = m.tournament_id WHERE player.full_name = 'Mario Mandzukic' AND tournament.tournament_year = 2018 AND goal.goal_type <> 'own_goal'"
+      }
+    },
+    {
+      "id": "extra-time-goals",
+      "category": "business-term",
+      "split": "dev",
+      "tags": [
+        "trap:domain-semantics",
+        "difficulty:medium"
+      ],
+      "question": "How many goals were scored in extra time?",
+      "intent": "Extra time is minutes 91–120 — not every goal of a match that went to extra time, and not second-half stoppage time.",
+      "notes": "Verified 2026-09-23: 7 goals after the 90th minute — Vida 101', Fernandes 115', Mandzukic 109' (2018); Neymar 105'+1, Petkovic 117', Messi 108', Mbappe 118' (2022). Weghorst's 90'+11 equaliser is stoppage time, not extra time. Cross-checked with an independent formulation (goals in matches that went to extra time with minute BETWEEN 91 AND 120): 7. trapSql counts every goal of a match that went to extra time and returns 19; adding stoppage minutes to the minute (minute + stoppage > 90) gives 8.\n\nTrap query (must return different rows): SELECT COUNT(*) AS goals FROM world_cup.goals goal JOIN world_cup.matches match ON match.id = goal.match_id WHERE match.went_to_extra_time\n\nOther paraphrase (the first is the question extra-time-goals-reworded): Across all the matches, how many goals came during extra time?\n\nMoved from feat/engine-eval-loop (branch category domain-semantics, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS goals FROM world_cup.goals WHERE minute > 90",
+        "sqlite": "SELECT COUNT(*) AS goals FROM api.world_cup.goals WHERE minute > 90",
+        "databricks": "SELECT COUNT(*) AS goals FROM `evals`.world_cup.goals WHERE minute > 90"
+      }
+    },
+    {
+      "id": "argentina-draws-2022",
+      "category": "business-term",
+      "split": "held-out",
+      "tags": [
+        "trap:domain-semantics",
+        "difficulty:hard"
+      ],
+      "question": "How many matches did Argentina draw at the 2022 World Cup?",
+      "intent": "A match decided on penalties is recorded as a draw — winner_team_id is never empty in a knockout match, so \"no winner\" finds none.",
+      "notes": "Verified 2026-09-23: 2 draws — Netherlands 2-2 Argentina and Argentina 3-3 France, both won on penalties (FIFA and the usual W-D-L tables record a shoot-out match as a draw). Cross-checked with an independent formulation (v_seeded_team_performance draws_after_extra_time for Argentina 2022): 2. trapSql treats a draw as a match with no winner and returns 0, because winner_team_id names the team that advanced in every match.\n\nTrap query (must return different rows): SELECT COUNT(*) AS draws FROM world_cup.matches match JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id JOIN world_cup.teams team ON team.id IN (match.home_team_id, match.away_team_id) WHERE tournament.tournament_year = 2022 AND team.common_name = 'Argentina' AND match.winner_team_id IS NULL\n\nThe SQLite reference aliases matches as `m`: MATCH is a SQLite operator keyword.\n\nOther paraphrase (the first is the question argentina-draws-2022-reworded): In 2022, how many draws did Argentina have?\n\nMoved from feat/engine-eval-loop (branch category domain-semantics, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS draws FROM world_cup.matches match JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id JOIN world_cup.teams team ON team.id IN (match.home_team_id, match.away_team_id) WHERE tournament.tournament_year = 2022 AND team.common_name = 'Argentina' AND match.home_goals = match.away_goals",
+        "sqlite": "SELECT COUNT(*) AS draws FROM api.world_cup.matches m JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN api.world_cup.teams team ON team.id IN (m.home_team_id, m.away_team_id) WHERE tournament.tournament_year = 2022 AND team.common_name = 'Argentina' AND m.home_goals = m.away_goals",
+        "databricks": "SELECT COUNT(*) AS draws FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN `evals`.world_cup.teams team ON team.id IN (m.home_team_id, m.away_team_id) WHERE tournament.tournament_year = 2022 AND team.common_name = 'Argentina' AND m.home_goals = m.away_goals"
+      }
+    },
+    {
+      "id": "south-american-goals",
+      "category": "join",
+      "split": "dev",
+      "tags": [
+        "trap:multi-step-join",
+        "difficulty:medium"
+      ],
+      "question": "How many goals did South American teams score across both tournaments?",
+      "intent": "goals → teams → countries → confederations (CONMEBOL), crediting each goal to the team it counted for.",
+      "notes": "Verified 2026-09-23: 10 goals credited to CONMEBOL teams (Argentina 8, Brazil 2, Uruguay 0); UEFA 35, CAF 2. Cross-checked with an independent formulation (SUM of goals_for in v_seeded_team_performance where confederation = CONMEBOL): 10. trapSql follows the scorer to his national team instead of the credited team, so Fernandinho's own goal for Belgium counts for Brazil: 11.\n\nTrap query (must return different rows): SELECT COUNT(*) AS goals FROM world_cup.goals goal JOIN world_cup.players player ON player.id = goal.scorer_player_id JOIN world_cup.teams team ON team.id = player.national_team_id WHERE team.common_name IN ('Argentina', 'Brazil', 'Uruguay')\n\nReference adapted 2026-10-16: the branch reference reads world_cup.countries and world_cup.confederations, which are not among the World Cup sample's required entities, so they are not in the sample's dataset and the validator and the Databricks check refuse it (agents-evals R110, R188). This one names the three South American teams the data holds (Argentina, Brazil and Uruguay, the CONMEBOL teams by countries.confederation_code) and returns the same 10; the trap query is adapted the same way (11). Without those two tables the answer needs the assistant to know which teams are South American; the trap, crediting the scorer's national team, is unchanged.\n\nBranch reference: SELECT COUNT(*) AS goals FROM world_cup.goals goal JOIN world_cup.teams team ON team.id = goal.scoring_team_id JOIN world_cup.countries country ON country.code = team.country_code JOIN world_cup.confederations confederation ON confederation.code = country.confederation_code WHERE confederation.code = 'CONMEBOL'\n\nBranch trap query: SELECT COUNT(*) AS goals FROM world_cup.goals goal JOIN world_cup.players player ON player.id = goal.scorer_player_id JOIN world_cup.teams team ON team.id = player.national_team_id JOIN world_cup.countries country ON country.code = team.country_code WHERE country.confederation_code = 'CONMEBOL'\n\nOther paraphrase (the first is the question south-american-goals-reworded): How many goals did teams from South America score in total?\n\nMoved from feat/engine-eval-loop (branch category multi-step-join, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "usesEntities",
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS goals FROM world_cup.goals goal JOIN world_cup.teams team ON team.id = goal.scoring_team_id WHERE team.common_name IN ('Argentina', 'Brazil', 'Uruguay')",
+        "sqlite": "SELECT COUNT(*) AS goals FROM api.world_cup.goals goal JOIN api.world_cup.teams team ON team.id = goal.scoring_team_id WHERE team.common_name IN ('Argentina', 'Brazil', 'Uruguay')",
+        "databricks": "SELECT COUNT(*) AS goals FROM `evals`.world_cup.goals goal JOIN `evals`.world_cup.teams team ON team.id = goal.scoring_team_id WHERE team.common_name IN ('Argentina', 'Brazil', 'Uruguay')"
+      }
+    },
+    {
+      "id": "third-placed-team-scorers-2018",
+      "category": "join",
+      "split": "held-out",
+      "tags": [
+        "trap:multi-step-join",
+        "difficulty:hard"
+      ],
+      "question": "Which players scored for the team that finished third at the 2018 World Cup?",
+      "intent": "Final standings → team → its 2018 goals → scorers, leaving out the own goal credited to that team.",
+      "notes": "Verified 2026-09-23: Belgium finished third (final_rank 3, and winners of the third-place play-off); its scorers were Kevin De Bruyne, Thomas Meunier and Eden Hazard. Cross-checked with an independent formulation (the 2018 third-place match winner from v_match_results, then v_player_goal_totals by national team): the same three. trapSql takes every goal credited to Belgium and adds Fernandinho, the Brazilian whose own goal counted for Belgium: 4 rows.\n\nTrap query (must return different rows): SELECT DISTINCT player.full_name AS player FROM world_cup.matches playoff JOIN world_cup.tournaments tournament ON tournament.id = playoff.tournament_id JOIN world_cup.matches match ON match.tournament_id = tournament.id JOIN world_cup.goals goal ON goal.match_id = match.id AND goal.scoring_team_id = playoff.winner_team_id JOIN world_cup.players player ON player.id = goal.scorer_player_id WHERE tournament.tournament_year = 2018 AND playoff.stage = 'third_place'\n\nReference adapted 2026-10-16: the branch reference reads world_cup.tournament_teams (final_rank = 3), which is not one of the World Cup sample's required entities, so it is not in the sample's dataset and the validator and the Databricks check refuse it (agents-evals R110, R188). This one takes the team that finished third as the winner of the 2018 third-place play-off, the branch's own cross-check, and returns the same three players; the trap query is adapted the same way (4 rows, Fernandinho added).\n\nBranch reference: SELECT DISTINCT player.full_name AS player FROM world_cup.tournament_teams entry JOIN world_cup.tournaments tournament ON tournament.id = entry.tournament_id JOIN world_cup.matches match ON match.tournament_id = tournament.id JOIN world_cup.goals goal ON goal.match_id = match.id AND goal.scoring_team_id = entry.team_id JOIN world_cup.players player ON player.id = goal.scorer_player_id WHERE tournament.tournament_year = 2018 AND entry.final_rank = 3 AND goal.goal_type <> 'own_goal'\n\nBranch trap query: SELECT DISTINCT player.full_name AS player FROM world_cup.tournament_teams entry JOIN world_cup.tournaments tournament ON tournament.id = entry.tournament_id JOIN world_cup.matches match ON match.tournament_id = tournament.id JOIN world_cup.goals goal ON goal.match_id = match.id AND goal.scoring_team_id = entry.team_id JOIN world_cup.players player ON player.id = goal.scorer_player_id WHERE tournament.tournament_year = 2018 AND entry.final_rank = 3\n\nThe SQLite reference aliases matches as `m`: MATCH is a SQLite operator keyword.\n\nOther paraphrase (the first is the question third-placed-team-scorers-2018-reworded): List the players who found the net for the team that finished third at the 2018 World Cup.\n\nMoved from feat/engine-eval-loop (branch category multi-step-join, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "De Bruyne"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "usesEntities",
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT DISTINCT player.full_name AS player FROM world_cup.matches playoff JOIN world_cup.tournaments tournament ON tournament.id = playoff.tournament_id JOIN world_cup.matches match ON match.tournament_id = tournament.id JOIN world_cup.goals goal ON goal.match_id = match.id AND goal.scoring_team_id = playoff.winner_team_id JOIN world_cup.players player ON player.id = goal.scorer_player_id WHERE tournament.tournament_year = 2018 AND playoff.stage = 'third_place' AND goal.goal_type <> 'own_goal'",
+        "sqlite": "SELECT DISTINCT player.full_name AS player FROM api.world_cup.matches playoff JOIN api.world_cup.tournaments tournament ON tournament.id = playoff.tournament_id JOIN api.world_cup.matches m ON m.tournament_id = tournament.id JOIN api.world_cup.goals goal ON goal.match_id = m.id AND goal.scoring_team_id = playoff.winner_team_id JOIN api.world_cup.players player ON player.id = goal.scorer_player_id WHERE tournament.tournament_year = 2018 AND playoff.stage = 'third_place' AND goal.goal_type <> 'own_goal'",
+        "databricks": "SELECT DISTINCT player.full_name AS player FROM `evals`.world_cup.matches playoff JOIN `evals`.world_cup.tournaments tournament ON tournament.id = playoff.tournament_id JOIN `evals`.world_cup.matches m ON m.tournament_id = tournament.id JOIN `evals`.world_cup.goals goal ON goal.match_id = m.id AND goal.scoring_team_id = playoff.winner_team_id JOIN `evals`.world_cup.players player ON player.id = goal.scorer_player_id WHERE tournament.tournament_year = 2018 AND playoff.stage = 'third_place' AND goal.goal_type <> 'own_goal'"
+      }
+    },
+    {
+      "id": "player-data-discovery",
+      "category": "discovery",
+      "split": "dev",
+      "tags": [
+        "trap:discovery",
+        "difficulty:easy"
+      ],
+      "question": "What information do we have about individual players?",
+      "intent": "Discovery scoped to one subject — name the player-level entities from the session datasets without running SQL.",
+      "notes": "Scores the process and the entity names, not figures, like schema-discovery. Verified 2026-09-23 against information_schema: player-level data is players (full_name, position, date_of_birth, national_team_id), squad_members (shirt_number, squad_position per tournament squad), goals (scorer_player_id, assist_player_id), disciplinary_events (player_id, reason) and v_player_goal_totals; no club, minutes, appearances or line-up columns exist. The matches check requires \"players\" plus one more player-level entity (squad members, goals, bookings/cards, the goal-totals view) or its plain-English name.\n\nMoved from feat/engine-eval-loop (branch category discovery, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*\\bplayers\\b)(?=[\\s\\S]*\\b(?:squad[ _]members|squads?|goals|disciplinary[ _]events|bookings|cards|v_player_goal_totals|goal[ _]totals)\\b)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "I4"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        }
+      ],
+      "judgeRubric": "The user asks what player-level data is available; the correct answer names the relevant entities without running SQL. In this World Cup dataset (2018 and 2022, quarter-finals onward) player data lives in players (name, position, date of birth, national team), squad_members (each tournament squad, with shirt number and squad position), goals (the scorer and, on a few goals, the assisting player, with minute and goal type), disciplinary_events (bookings, with player, minute and reason) and the view v_player_goal_totals (goals, penalties and own goals per player per tournament). Score pass=true only if the final answer names at least two of these entities (by table/view name or an unambiguous plain-English equivalent such as \"squad lists\", \"bookings\" or \"per-player goal totals\"), says what they hold, and no run_readonly_sql call was made. Score pass=false if it ran SQL against the data, claims player data the dataset does not hold (clubs, market values, minutes played, appearances or line-ups per match, player ratings), or answers only in generalities (\"player stats\") without naming any entity. Close but wrong: an answer that lists the right tables but adds \"minutes played\" or \"current club\" as available player data, or that describes the coverage as every World Cup — that must FAIL."
+    },
+    {
+      "id": "team-match-stats-discovery",
+      "category": "discovery",
+      "split": "held-out",
+      "tags": [
+        "trap:discovery",
+        "difficulty:easy"
+      ],
+      "question": "What statistics are recorded for each team in a match?",
+      "intent": "Discovery of one entity’s measures — describe the per-team match statistics without running SQL or inventing measures.",
+      "notes": "Verified 2026-09-23 against information_schema: match_team_statistics has one row per team per match (32 rows) with possession_pct, shots, shots_on_target, corners, fouls_committed, offsides, passes_completed, passes_attempted and expected_goals; v_seeded_team_performance aggregates them per team per tournament. Goals and scores live in matches/goals and bookings in disciplinary_events. The matches check is a floor: one of possession/shots/passes plus one of corners, offsides, fouls or expected goals; the judge reads the rest.\n\nMoved from feat/engine-eval-loop (branch category discovery, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*(?:possession|shots|pass))(?=[\\s\\S]*(?:corners|offsides|fouls|expected[ _]goals|\\bxg\\b))"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "I4"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        }
+      ],
+      "judgeRubric": "The user asks which per-team, per-match statistics exist; the correct answer describes them without running SQL. The dataset records, for each team in each match (match_team_statistics), possession percentage, shots, shots on target, corners, fouls committed, offsides, passes completed, passes attempted and expected goals (xG); the view v_seeded_team_performance totals them per team per tournament, while goals and scores come from matches and goals, and bookings from disciplinary_events. Score pass=true only if the final answer names at least four of those per-match statistics and no run_readonly_sql call was made. Score pass=false if it ran SQL against the data, lists a statistic the data does not hold as if it were recorded (tackles, saves, crosses, interceptions, distance covered, player ratings), or answers only in generalities (\"match stats\") without naming the measures. Close but wrong: an answer that lists possession and shots correctly but also claims tackles or goalkeeper saves are tracked — that must FAIL."
+    },
+    {
+      "id": "argentina-penalties-2022",
+      "category": "ambiguous",
+      "split": "dev",
+      "tags": [
+        "trap:clarification",
+        "difficulty:medium"
+      ],
+      "question": "How many penalties did Argentina score at the 2022 World Cup?",
+      "intent": "\"Penalties\" means penalty kicks in play or shoot-out kicks — the data holds both and they give different answers, so the answer must surface the ambiguity.",
+      "notes": "Verified 2026-09-23: Argentina scored 3 penalty kicks during play in the matches loaded (all Lionel Messi: 73' v Netherlands, 34' v Croatia, 23' in the final) and converted 8 kicks in two shoot-outs (4 v Netherlands, 4 v France). Unlike ambiguous-best-team, answering both readings with each figure labelled is as good as asking, so there is no calledTool ask_clarification check; the judge decides. The goal-type snippet explains how the data encodes each kind of penalty, which does not tell the assistant which one the user means. didNotCall create_visual is the check-bearing scorer: charting an ambiguous single count is always wrong.\n\nConverted 2026-10-16: the didNotCall create_visual check names D5, the criterion of the ambiguous questions' tool checks.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "D5"
+        },
+        {
+          "type": "optionCount",
+          "criterion": "I5"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        }
+      ],
+      "judgeRubric": "The question is ambiguous: \"penalties\" can mean penalty kicks scored during a match or kicks converted in a penalty shoot-out, and this data records both. In the 2022 matches it holds, Argentina scored 3 penalty kicks during play (all by Lionel Messi) and converted 8 shoot-out kicks (4 against the Netherlands, 4 against France); shoot-out kicks are not goals. The correct answer either asks which kind of penalty the user means, or answers both readings explicitly with each figure labelled. Score pass=true only if the final answer makes the in-match versus shoot-out distinction explicit — by asking about it, or by giving both figures (3 and 8) each clearly labelled — and states no figure that mixes the two. Score pass=false if it gives a single number without saying which kind of penalty it counts, adds the two together (11), or states a figure the data contradicts. Close but wrong: \"Argentina scored 3 penalties, all by Messi\" with no mention of the shoot-outs, or \"Argentina scored 8 penalties\" with no mention of the penalty kicks in play — that must FAIL."
+    },
+    {
+      "id": "best-defence",
+      "category": "ambiguous",
+      "split": "held-out",
+      "tags": [
+        "trap:clarification",
+        "difficulty:medium"
+      ],
+      "question": "Which team had the best defence?",
+      "intent": "Ambiguous on measure (goals conceded, per match, clean sheets) and scope (2018, 2022, both) — and the readings name different teams, so the agent must ask.",
+      "notes": "Verified 2026-09-23 that the readings disagree: fewest goals conceded over both tournaments — Portugal (1, one match played); fewest per match — Belgium (2 in 3, 2018); most clean sheets — France (3); 2018 alone — Belgium and France tie on 2 conceded; 2022 alone — Brazil and Portugal tie on 1 (one match each). Teams played 1 to 6 matches here, so no reading is the obvious default. Same checks as ambiguous-best-team.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "ask_clarification"
+          },
+          "criterion": "D5"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D5"
+        },
+        {
+          "type": "optionCount",
+          "criterion": "I5"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        }
+      ],
+      "judgeRubric": "The question (\"Which team had the best defence?\") is ambiguous on both the measure and the scope, and the readings name different teams: by fewest goals conceded across both tournaments it is Portugal (1, but only one match played), by goals conceded per match it is Belgium (2 in 3 matches), by clean sheets it is France (3), and within 2018 alone Belgium and France both conceded 2. The correct answer is a clarifying question, not data — for example \"Best by which measure: fewest goals conceded, goals conceded per match or clean sheets? And in 2018, 2022 or both?\". Score pass=true only if the final answer is itself a clarifying question that offers 2-4 concrete options grounded in this data (a defensive measure the data supports, such as goals conceded, goals conceded per match or clean sheets, and/or a tournament year it holds, 2018 or 2022) and presents no team as the answer. Score pass=false if it names a team as the best defence, invents a measure the data does not hold (tackles, saves, interceptions, goalkeeper ratings), or asks a vague open-ended question with no concrete options. Close but wrong: an answer that names a team first (\"France kept the most clean sheets — or did you mean goals conceded?\"), or that asks the right question but offers a tournament the data does not hold (e.g. 2014) — that must FAIL."
+    },
+    {
+      "id": "group-stage-goals-2022",
+      "category": "out-of-scope",
+      "split": "dev",
+      "tags": [
+        "trap:out-of-scope",
+        "difficulty:medium"
+      ],
+      "question": "How many goals were scored in the group stage of the 2022 World Cup?",
+      "intent": "The fixture holds only the quarter-finals onward — the agent must say so rather than report 0 or the knockout total.",
+      "notes": "Verified 2026-09-23: matches holds only quarter_final (4 per year), semi_final (2), third_place (1) and final (1) — 16 matches, none at group or round_of_16 stage — and the data holds 24 goals for 2022, all in those knockout matches. A SQL filter on the group stage returns nothing, which an answer can misread as \"no goals\". No expectedSql (nothing correct to compare against); didNotCall create_visual is the check-bearing scorer.\n\nChecks added for agents-evals R126 (2026-10-16): matches (G2) on the rounds the data covers (quarter-finals or knockout), and notMatches (G2) on a group-stage figure the data cannot hold: 120 (the real 2022 group-stage total) or a zero or \"no goals\".\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "quarter[- ]?finals?|knock-?out",
+            "flags": "i"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "notMatches",
+          "args": {
+            "pattern": "\\b120\\b|\\b(?:0|zero|no)\\s+goals\\b",
+            "flags": "i"
+          },
+          "criterion": "G2"
+        }
+      ],
+      "judgeRubric": "The question asks about the 2022 group stage, which this dataset does not hold: it contains only the quarter-finals, semi-finals, third-place play-offs and finals of 2018 and 2022 (16 matches), with no group-stage or round-of-16 matches. The correct answer says it cannot report group-stage goals from this data and states which rounds it does cover. Score pass=true only if the final answer clearly states that the group stage is not in the data AND says what the data does cover (the knockout rounds from the quarter-finals onward, for 2018 and/or 2022), without stating any group-stage goal count. Score pass=false if it gives any group-stage figure — 0, the 24 goals the data holds for the 2022 quarter-finals onward, or a number from general knowledge — or fails to say what the data covers. Close but wrong: an answer that says \"no goals were recorded in the group stage\" or \"0\", that presents the 24 goals from the 2022 knockout matches as the group-stage total, or that says the figure is unavailable without naming the rounds that are covered — that must FAIL."
+    },
+    {
+      "id": "referee-2022-final",
+      "category": "out-of-scope",
+      "split": "held-out",
+      "tags": [
+        "trap:out-of-scope",
+        "difficulty:easy"
+      ],
+      "question": "Who refereed the 2022 World Cup final?",
+      "intent": "No referee or match-official data exists — the agent must say so instead of answering from general knowledge.",
+      "notes": "Verified 2026-09-23 against information_schema: no table or column in world_cup mentions referees, officials, coaches or clubs. The excludes check is a name check: a correct answer never names the real referee (Szymon Marciniak), with or without a caveat. didNotCall create_visual stays as the second check.\n\nChecks added for agents-evals R126 (2026-10-16): matches (G2) on a statement that the data does not record it; the branch's excludes became the notMatches (G2) on the real referee's name.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "not (?:available|recorded|included|tracked|stored|captured|in the data|part of)|no (?:data|information|record|records|referee|referees|official|officials|details?)\\b|(?:doesn[’']t|does not|don[’']t|do not) (?:contain|include|hold|have|record|track|store|list)|(?:isn[’']t|is not|aren[’']t|are not|wasn[’']t|was not) (?:recorded|included|available|tracked|stored|captured|listed)|(?:can[’']t|cannot|unable to) (?:find|see|answer|tell|say|identify)",
+            "flags": "i"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "notMatches",
+          "args": {
+            "pattern": "Marciniak"
+          },
+          "criterion": "G2"
+        }
+      ],
+      "judgeRubric": "The question asks who refereed the 2022 final; this dataset records no referees or match officials at all (it covers tournaments, teams, players, squads, matches, venues, goals, bookings and per-team match statistics). The correct answer says the data does not record who refereed the final, and may offer what it does hold about that match (Argentina 3-3 France after extra time, Argentina won the shoot-out 4-2, at Lusail Stadium). Score pass=true only if the final answer clearly states that referee information is not in the data and names no referee. Score pass=false if it names a referee or official, from general knowledge or otherwise, or presents a person from the data (a player, a booked player) as the referee. Close but wrong: \"The data does not include officials, but the final was refereed by Szymon Marciniak\" — naming the referee from general knowledge, even with a caveat — that must FAIL."
+    },
+    {
+      "id": "shot-accuracy-by-team-2022-reworded",
+      "category": "paraphrase",
+      "split": "dev",
+      "tags": [
+        "trap:ratio-trap",
+        "difficulty:medium"
+      ],
+      "question": "Which three teams had the best shooting accuracy at the 2022 World Cup?",
+      "intent": "Paraphrase of shot-accuracy-by-team-2022: the same question in other words.",
+      "notes": "Shares the reference and the checks of shot-accuracy-by-team-2022.\n\nThe first paraphrase the branch wrote for shot-accuracy-by-team-2022 (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "England"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT t.common_name AS team FROM world_cup.match_team_statistics s JOIN world_cup.matches m ON m.id = s.match_id JOIN world_cup.tournaments tr ON tr.id = m.tournament_id JOIN world_cup.teams t ON t.id = s.team_id WHERE tr.tournament_year = 2022 GROUP BY t.common_name ORDER BY SUM(s.shots_on_target)::numeric / SUM(s.shots) DESC, t.common_name LIMIT 3",
+        "sqlite": "SELECT t.common_name AS team FROM api.world_cup.match_team_statistics s JOIN api.world_cup.matches m ON m.id = s.match_id JOIN api.world_cup.tournaments tr ON tr.id = m.tournament_id JOIN api.world_cup.teams t ON t.id = s.team_id WHERE tr.tournament_year = 2022 GROUP BY t.common_name ORDER BY CAST(SUM(s.shots_on_target) AS REAL) / SUM(s.shots) DESC, t.common_name LIMIT 3",
+        "databricks": "SELECT t.common_name AS team FROM `evals`.world_cup.match_team_statistics s JOIN `evals`.world_cup.matches m ON m.id = s.match_id JOIN `evals`.world_cup.tournaments tr ON tr.id = m.tournament_id JOIN `evals`.world_cup.teams t ON t.id = s.team_id WHERE tr.tournament_year = 2022 GROUP BY t.common_name ORDER BY SUM(s.shots_on_target) / SUM(s.shots) DESC, t.common_name LIMIT 3"
+      }
+    },
+    {
+      "id": "shot-conversion-2022-reworded",
+      "category": "paraphrase",
+      "split": "held-out",
+      "tags": [
+        "trap:ratio-trap",
+        "difficulty:hard"
+      ],
+      "question": "Which side had the best shot conversion rate at the 2022 World Cup?",
+      "intent": "Paraphrase of shot-conversion-2022: the same question in other words.",
+      "notes": "Shares the reference and the checks of shot-conversion-2022.\n\nThe first paraphrase the branch wrote for shot-conversion-2022 (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Netherlands"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "WITH team_goals AS (SELECT m.id AS match_id, m.home_team_id AS team_id, m.home_goals AS goals FROM world_cup.matches m JOIN world_cup.tournaments tr ON tr.id = m.tournament_id WHERE tr.tournament_year = 2022 UNION ALL SELECT m.id, m.away_team_id, m.away_goals FROM world_cup.matches m JOIN world_cup.tournaments tr ON tr.id = m.tournament_id WHERE tr.tournament_year = 2022) SELECT t.common_name AS team FROM team_goals g JOIN world_cup.match_team_statistics s ON s.match_id = g.match_id AND s.team_id = g.team_id JOIN world_cup.teams t ON t.id = g.team_id GROUP BY t.common_name ORDER BY SUM(g.goals)::numeric / SUM(s.shots) DESC, t.common_name LIMIT 1",
+        "sqlite": "WITH team_goals AS (SELECT m.id AS match_id, m.home_team_id AS team_id, m.home_goals AS goals FROM api.world_cup.matches m JOIN api.world_cup.tournaments tr ON tr.id = m.tournament_id WHERE tr.tournament_year = 2022 UNION ALL SELECT m.id, m.away_team_id, m.away_goals FROM api.world_cup.matches m JOIN api.world_cup.tournaments tr ON tr.id = m.tournament_id WHERE tr.tournament_year = 2022) SELECT t.common_name AS team FROM team_goals g JOIN api.world_cup.match_team_statistics s ON s.match_id = g.match_id AND s.team_id = g.team_id JOIN api.world_cup.teams t ON t.id = g.team_id GROUP BY t.common_name ORDER BY CAST(SUM(g.goals) AS REAL) / SUM(s.shots) DESC, t.common_name LIMIT 1",
+        "databricks": "WITH team_goals AS (SELECT m.id AS match_id, m.home_team_id AS team_id, m.home_goals AS goals FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments tr ON tr.id = m.tournament_id WHERE tr.tournament_year = 2022 UNION ALL SELECT m.id, m.away_team_id, m.away_goals FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments tr ON tr.id = m.tournament_id WHERE tr.tournament_year = 2022) SELECT t.common_name AS team FROM team_goals g JOIN `evals`.world_cup.match_team_statistics s ON s.match_id = g.match_id AND s.team_id = g.team_id JOIN `evals`.world_cup.teams t ON t.id = g.team_id GROUP BY t.common_name ORDER BY SUM(g.goals) / SUM(s.shots) DESC, t.common_name LIMIT 1"
+      }
+    },
+    {
+      "id": "busiest-stadium-reworded",
+      "category": "paraphrase",
+      "split": "dev",
+      "tags": [
+        "trap:ties",
+        "difficulty:medium"
+      ],
+      "question": "Which venue staged the most games across the two tournaments?",
+      "intent": "Paraphrase of busiest-stadium: the same question in other words.",
+      "notes": "Shares the reference and the checks of busiest-stadium.\n\nThe first paraphrase the branch wrote for busiest-stadium (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*(?:Saint|St\\.?)\\s*Petersburg)(?=[\\s\\S]*Lusail)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "WITH per_venue AS (SELECT venue.name AS venue, COUNT(*) AS matches FROM world_cup.matches match JOIN world_cup.venues venue ON venue.id = match.venue_id GROUP BY venue.name) SELECT venue FROM per_venue WHERE matches = (SELECT MAX(matches) FROM per_venue)",
+        "sqlite": "WITH per_venue AS (SELECT venue.name AS venue, COUNT(*) AS matches FROM api.world_cup.matches m JOIN api.world_cup.venues venue ON venue.id = m.venue_id GROUP BY venue.name) SELECT venue FROM per_venue WHERE matches = (SELECT MAX(matches) FROM per_venue)",
+        "databricks": "WITH per_venue AS (SELECT venue.name AS venue, COUNT(*) AS matches FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.venues venue ON venue.id = m.venue_id GROUP BY venue.name) SELECT venue FROM per_venue WHERE matches = (SELECT MAX(matches) FROM per_venue)"
+      }
+    },
+    {
+      "id": "highest-scoring-match-reworded",
+      "category": "paraphrase",
+      "split": "dev",
+      "tags": [
+        "trap:ties",
+        "difficulty:medium"
+      ],
+      "question": "What was the highest-scoring game in the data?",
+      "intent": "Paraphrase of highest-scoring-match: the same question in other words.",
+      "notes": "Shares the reference and the checks of highest-scoring-match.\n\nThe first paraphrase the branch wrote for highest-scoring-match (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*Croatia)(?=[\\s\\S]*Argentina)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT home_team, away_team FROM world_cup.v_match_results WHERE home_goals + away_goals = (SELECT MAX(home_goals + away_goals) FROM world_cup.v_match_results)",
+        "sqlite": "SELECT home_team, away_team FROM api.world_cup.v_match_results WHERE home_goals + away_goals = (SELECT MAX(home_goals + away_goals) FROM api.world_cup.v_match_results)",
+        "databricks": "SELECT home_team, away_team FROM `evals`.world_cup.v_match_results WHERE home_goals + away_goals = (SELECT MAX(home_goals + away_goals) FROM `evals`.world_cup.v_match_results)"
+      }
+    },
+    {
+      "id": "top-scorer-both-tournaments-reworded",
+      "category": "paraphrase",
+      "split": "held-out",
+      "tags": [
+        "trap:ties",
+        "difficulty:medium"
+      ],
+      "question": "Adding both tournaments together, who is the leading goalscorer?",
+      "intent": "Paraphrase of top-scorer-both-tournaments: the same question in other words.",
+      "notes": "Shares the reference and the checks of top-scorer-both-tournaments.\n\nThe first paraphrase the branch wrote for top-scorer-both-tournaments (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*Messi)(?=[\\s\\S]*Mbapp)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "WITH totals AS (SELECT player, SUM(goals) AS goals FROM world_cup.v_player_goal_totals GROUP BY player) SELECT player FROM totals WHERE goals = (SELECT MAX(goals) FROM totals)",
+        "sqlite": "WITH totals AS (SELECT player, SUM(goals) AS goals FROM api.world_cup.v_player_goal_totals GROUP BY player) SELECT player FROM totals WHERE goals = (SELECT MAX(goals) FROM totals)",
+        "databricks": "WITH totals AS (SELECT player, SUM(goals) AS goals FROM `evals`.world_cup.v_player_goal_totals GROUP BY player) SELECT player FROM totals WHERE goals = (SELECT MAX(goals) FROM totals)"
+      }
+    },
+    {
+      "id": "semi-final-goals-2022-reworded",
+      "category": "paraphrase",
+      "split": "dev",
+      "tags": [
+        "trap:value-vocabulary",
+        "difficulty:easy"
+      ],
+      "question": "What was the total number of goals across the two 2022 semi-finals?",
+      "intent": "Paraphrase of semi-final-goals-2022: the same question in other words.",
+      "notes": "Shares the reference and the checks of semi-final-goals-2022.\n\nThe first paraphrase the branch wrote for semi-final-goals-2022 (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "sqlMatches",
+          "args": {
+            "pattern": "semi_final",
+            "flags": "i"
+          },
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT SUM(match.home_goals + match.away_goals) AS goals FROM world_cup.matches match JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id WHERE tournament.tournament_year = 2022 AND match.stage = 'semi_final'",
+        "sqlite": "SELECT SUM(m.home_goals + m.away_goals) AS goals FROM api.world_cup.matches m JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id WHERE tournament.tournament_year = 2022 AND m.stage = 'semi_final'",
+        "databricks": "SELECT SUM(m.home_goals + m.away_goals) AS goals FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments tournament ON tournament.id = m.tournament_id WHERE tournament.tournament_year = 2022 AND m.stage = 'semi_final'"
+      }
+    },
+    {
+      "id": "goals-by-defenders-reworded",
+      "category": "paraphrase",
+      "split": "dev",
+      "tags": [
+        "trap:value-vocabulary",
+        "difficulty:medium"
+      ],
+      "question": "How many of the goals came from defenders?",
+      "intent": "Paraphrase of goals-by-defenders: the same question in other words.",
+      "notes": "Shares the reference and the checks of goals-by-defenders.\n\nThe first paraphrase the branch wrote for goals-by-defenders (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "sqlMatches",
+          "args": {
+            "pattern": "'DF'",
+            "flags": "i"
+          },
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS goals FROM world_cup.goals goal JOIN world_cup.players player ON player.id = goal.scorer_player_id WHERE player.position = 'DF' AND goal.goal_type <> 'own_goal'",
+        "sqlite": "SELECT COUNT(*) AS goals FROM api.world_cup.goals goal JOIN api.world_cup.players player ON player.id = goal.scorer_player_id WHERE player.position = 'DF' AND goal.goal_type <> 'own_goal'",
+        "databricks": "SELECT COUNT(*) AS goals FROM `evals`.world_cup.goals goal JOIN `evals`.world_cup.players player ON player.id = goal.scorer_player_id WHERE player.position = 'DF' AND goal.goal_type <> 'own_goal'"
+      }
+    },
+    {
+      "id": "third-place-2022-reworded",
+      "category": "paraphrase",
+      "split": "held-out",
+      "tags": [
+        "trap:value-vocabulary",
+        "difficulty:easy"
+      ],
+      "question": "Which team finished third at the 2022 World Cup?",
+      "intent": "Paraphrase of third-place-2022: the same question in other words.",
+      "notes": "Shares the reference and the checks of third-place-2022.\n\nThe first paraphrase the branch wrote for third-place-2022 (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Croatia"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "sqlMatches",
+          "args": {
+            "pattern": "third_place",
+            "flags": "i"
+          },
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT winner.common_name AS team FROM world_cup.matches match JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id JOIN world_cup.teams winner ON winner.id = match.winner_team_id WHERE tournament.tournament_year = 2022 AND match.stage = 'third_place'",
+        "sqlite": "SELECT winner.common_name AS team FROM api.world_cup.matches m JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN api.world_cup.teams winner ON winner.id = m.winner_team_id WHERE tournament.tournament_year = 2022 AND m.stage = 'third_place'",
+        "databricks": "SELECT winner.common_name AS team FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN `evals`.world_cup.teams winner ON winner.id = m.winner_team_id WHERE tournament.tournament_year = 2022 AND m.stage = 'third_place'"
+      }
+    },
+    {
+      "id": "most-fouls-team-reworded",
+      "category": "paraphrase",
+      "split": "dev",
+      "tags": [
+        "trap:id-vs-name",
+        "difficulty:medium"
+      ],
+      "question": "Which side gave away the most fouls over 2018 and 2022 combined?",
+      "intent": "Paraphrase of most-fouls-team: the same question in other words.",
+      "notes": "Shares the reference and the checks of most-fouls-team.\n\nThe first paraphrase the branch wrote for most-fouls-team (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Croatia"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT team.common_name AS team FROM world_cup.match_team_statistics stat JOIN world_cup.teams team ON team.id = stat.team_id GROUP BY team.common_name ORDER BY SUM(stat.fouls_committed) DESC, team.common_name LIMIT 1",
+        "sqlite": "SELECT team.common_name AS team FROM api.world_cup.match_team_statistics stat JOIN api.world_cup.teams team ON team.id = stat.team_id GROUP BY team.common_name ORDER BY SUM(stat.fouls_committed) DESC, team.common_name LIMIT 1",
+        "databricks": "SELECT team.common_name AS team FROM `evals`.world_cup.match_team_statistics stat JOIN `evals`.world_cup.teams team ON team.id = stat.team_id GROUP BY team.common_name ORDER BY SUM(stat.fouls_committed) DESC, team.common_name LIMIT 1"
+      }
+    },
+    {
+      "id": "booked-in-2022-final-reworded",
+      "category": "paraphrase",
+      "split": "dev",
+      "tags": [
+        "trap:id-vs-name",
+        "difficulty:medium"
+      ],
+      "question": "Who got a yellow card in the 2022 World Cup final?",
+      "intent": "Paraphrase of booked-in-2022-final: the same question in other words.",
+      "notes": "Shares the reference and the checks of booked-in-2022-final.\n\nThe first paraphrase the branch wrote for booked-in-2022-final (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "Emiliano|Mart[ií]nez"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT player.full_name AS player FROM world_cup.disciplinary_events card JOIN world_cup.matches match ON match.id = card.match_id JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id JOIN world_cup.players player ON player.id = card.player_id WHERE tournament.tournament_year = 2022 AND match.stage = 'final'",
+        "sqlite": "SELECT player.full_name AS player FROM api.world_cup.disciplinary_events card JOIN api.world_cup.matches m ON m.id = card.match_id JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN api.world_cup.players player ON player.id = card.player_id WHERE tournament.tournament_year = 2022 AND m.stage = 'final'",
+        "databricks": "SELECT player.full_name AS player FROM `evals`.world_cup.disciplinary_events card JOIN `evals`.world_cup.matches m ON m.id = card.match_id JOIN `evals`.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN `evals`.world_cup.players player ON player.id = card.player_id WHERE tournament.tournament_year = 2022 AND m.stage = 'final'"
+      }
+    },
+    {
+      "id": "quickest-goal-scorer-reworded",
+      "category": "paraphrase",
+      "split": "held-out",
+      "tags": [
+        "trap:id-vs-name",
+        "difficulty:easy"
+      ],
+      "question": "Which player scored the earliest goal of any game?",
+      "intent": "Paraphrase of quickest-goal-scorer: the same question in other words.",
+      "notes": "Shares the reference and the checks of quickest-goal-scorer.\n\nThe first paraphrase the branch wrote for quickest-goal-scorer (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Meunier"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT player.full_name AS player FROM world_cup.goals goal JOIN world_cup.players player ON player.id = goal.scorer_player_id WHERE goal.minute = (SELECT MIN(minute) FROM world_cup.goals)",
+        "sqlite": "SELECT player.full_name AS player FROM api.world_cup.goals goal JOIN api.world_cup.players player ON player.id = goal.scorer_player_id WHERE goal.minute = (SELECT MIN(minute) FROM api.world_cup.goals)",
+        "databricks": "SELECT player.full_name AS player FROM `evals`.world_cup.goals goal JOIN `evals`.world_cup.players player ON player.id = goal.scorer_player_id WHERE goal.minute = (SELECT MIN(minute) FROM `evals`.world_cup.goals)"
+      }
+    },
+    {
+      "id": "top-assist-provider-reworded",
+      "category": "paraphrase",
+      "split": "dev",
+      "tags": [
+        "trap:empty-column",
+        "difficulty:medium"
+      ],
+      "question": "Which player set up the most goals?",
+      "intent": "Paraphrase of top-assist-provider: the same question in other words.",
+      "notes": "Shares the reference and the checks of top-assist-provider.\n\nThe first paraphrase the branch wrote for top-assist-provider (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Messi"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "sqlMatches",
+          "args": {
+            "pattern": "assist",
+            "flags": "i"
+          },
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "WITH assists AS (SELECT player.full_name AS player, COUNT(*) AS assists FROM world_cup.goals goal JOIN world_cup.players player ON player.id = goal.assist_player_id GROUP BY player.full_name) SELECT player FROM assists WHERE assists = (SELECT MAX(assists) FROM assists)",
+        "sqlite": "WITH assists AS (SELECT player.full_name AS player, COUNT(*) AS assists FROM api.world_cup.goals goal JOIN api.world_cup.players player ON player.id = goal.assist_player_id GROUP BY player.full_name) SELECT player FROM assists WHERE assists = (SELECT MAX(assists) FROM assists)",
+        "databricks": "WITH assists AS (SELECT player.full_name AS player, COUNT(*) AS assists FROM `evals`.world_cup.goals goal JOIN `evals`.world_cup.players player ON player.id = goal.assist_player_id GROUP BY player.full_name) SELECT player FROM assists WHERE assists = (SELECT MAX(assists) FROM assists)"
+      }
+    },
+    {
+      "id": "mandzukic-goals-2018-reworded",
+      "category": "paraphrase",
+      "split": "dev",
+      "tags": [
+        "trap:domain-semantics",
+        "difficulty:medium"
+      ],
+      "question": "What was Mario Mandzukic's goal tally at the 2018 World Cup?",
+      "intent": "Paraphrase of mandzukic-goals-2018: the same question in other words.",
+      "notes": "Shares the reference and the checks of mandzukic-goals-2018.\n\nThe first paraphrase the branch wrote for mandzukic-goals-2018 (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS goals FROM world_cup.goals goal JOIN world_cup.players player ON player.id = goal.scorer_player_id JOIN world_cup.matches match ON match.id = goal.match_id JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id WHERE player.full_name = 'Mario Mandzukic' AND tournament.tournament_year = 2018 AND goal.goal_type <> 'own_goal'",
+        "sqlite": "SELECT COUNT(*) AS goals FROM api.world_cup.goals goal JOIN api.world_cup.players player ON player.id = goal.scorer_player_id JOIN api.world_cup.matches m ON m.id = goal.match_id JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id WHERE player.full_name = 'Mario Mandzukic' AND tournament.tournament_year = 2018 AND goal.goal_type <> 'own_goal'",
+        "databricks": "SELECT COUNT(*) AS goals FROM `evals`.world_cup.goals goal JOIN `evals`.world_cup.players player ON player.id = goal.scorer_player_id JOIN `evals`.world_cup.matches m ON m.id = goal.match_id JOIN `evals`.world_cup.tournaments tournament ON tournament.id = m.tournament_id WHERE player.full_name = 'Mario Mandzukic' AND tournament.tournament_year = 2018 AND goal.goal_type <> 'own_goal'"
+      }
+    },
+    {
+      "id": "extra-time-goals-reworded",
+      "category": "paraphrase",
+      "split": "dev",
+      "tags": [
+        "trap:domain-semantics",
+        "difficulty:medium"
+      ],
+      "question": "How many extra-time goals were there across both tournaments?",
+      "intent": "Paraphrase of extra-time-goals: the same question in other words.",
+      "notes": "Shares the reference and the checks of extra-time-goals.\n\nThe first paraphrase the branch wrote for extra-time-goals (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS goals FROM world_cup.goals WHERE minute > 90",
+        "sqlite": "SELECT COUNT(*) AS goals FROM api.world_cup.goals WHERE minute > 90",
+        "databricks": "SELECT COUNT(*) AS goals FROM `evals`.world_cup.goals WHERE minute > 90"
+      }
+    },
+    {
+      "id": "argentina-draws-2022-reworded",
+      "category": "paraphrase",
+      "split": "held-out",
+      "tags": [
+        "trap:domain-semantics",
+        "difficulty:hard"
+      ],
+      "question": "How many of Argentina's 2022 World Cup matches ended in a draw?",
+      "intent": "Paraphrase of argentina-draws-2022: the same question in other words.",
+      "notes": "Shares the reference and the checks of argentina-draws-2022.\n\nThe first paraphrase the branch wrote for argentina-draws-2022 (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS draws FROM world_cup.matches match JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id JOIN world_cup.teams team ON team.id IN (match.home_team_id, match.away_team_id) WHERE tournament.tournament_year = 2022 AND team.common_name = 'Argentina' AND match.home_goals = match.away_goals",
+        "sqlite": "SELECT COUNT(*) AS draws FROM api.world_cup.matches m JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN api.world_cup.teams team ON team.id IN (m.home_team_id, m.away_team_id) WHERE tournament.tournament_year = 2022 AND team.common_name = 'Argentina' AND m.home_goals = m.away_goals",
+        "databricks": "SELECT COUNT(*) AS draws FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN `evals`.world_cup.teams team ON team.id IN (m.home_team_id, m.away_team_id) WHERE tournament.tournament_year = 2022 AND team.common_name = 'Argentina' AND m.home_goals = m.away_goals"
+      }
+    },
+    {
+      "id": "south-american-goals-reworded",
+      "category": "paraphrase",
+      "split": "dev",
+      "tags": [
+        "trap:multi-step-join",
+        "difficulty:medium"
+      ],
+      "question": "What was the combined goal tally of the South American sides?",
+      "intent": "Paraphrase of south-american-goals: the same question in other words.",
+      "notes": "Shares the reference and the checks of south-american-goals.\n\nThe first paraphrase the branch wrote for south-american-goals (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "usesEntities",
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS goals FROM world_cup.goals goal JOIN world_cup.teams team ON team.id = goal.scoring_team_id WHERE team.common_name IN ('Argentina', 'Brazil', 'Uruguay')",
+        "sqlite": "SELECT COUNT(*) AS goals FROM api.world_cup.goals goal JOIN api.world_cup.teams team ON team.id = goal.scoring_team_id WHERE team.common_name IN ('Argentina', 'Brazil', 'Uruguay')",
+        "databricks": "SELECT COUNT(*) AS goals FROM `evals`.world_cup.goals goal JOIN `evals`.world_cup.teams team ON team.id = goal.scoring_team_id WHERE team.common_name IN ('Argentina', 'Brazil', 'Uruguay')"
+      }
+    },
+    {
+      "id": "third-placed-team-scorers-2018-reworded",
+      "category": "paraphrase",
+      "split": "held-out",
+      "tags": [
+        "trap:multi-step-join",
+        "difficulty:hard"
+      ],
+      "question": "Who were the goalscorers for the side that came third in 2018?",
+      "intent": "Paraphrase of third-placed-team-scorers-2018: the same question in other words.",
+      "notes": "Shares the reference and the checks of third-placed-team-scorers-2018.\n\nThe first paraphrase the branch wrote for third-placed-team-scorers-2018 (feat/engine-eval-loop, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "De Bruyne"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "usesEntities",
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT DISTINCT player.full_name AS player FROM world_cup.matches playoff JOIN world_cup.tournaments tournament ON tournament.id = playoff.tournament_id JOIN world_cup.matches match ON match.tournament_id = tournament.id JOIN world_cup.goals goal ON goal.match_id = match.id AND goal.scoring_team_id = playoff.winner_team_id JOIN world_cup.players player ON player.id = goal.scorer_player_id WHERE tournament.tournament_year = 2018 AND playoff.stage = 'third_place' AND goal.goal_type <> 'own_goal'",
+        "sqlite": "SELECT DISTINCT player.full_name AS player FROM api.world_cup.matches playoff JOIN api.world_cup.tournaments tournament ON tournament.id = playoff.tournament_id JOIN api.world_cup.matches m ON m.tournament_id = tournament.id JOIN api.world_cup.goals goal ON goal.match_id = m.id AND goal.scoring_team_id = playoff.winner_team_id JOIN api.world_cup.players player ON player.id = goal.scorer_player_id WHERE tournament.tournament_year = 2018 AND playoff.stage = 'third_place' AND goal.goal_type <> 'own_goal'",
+        "databricks": "SELECT DISTINCT player.full_name AS player FROM `evals`.world_cup.matches playoff JOIN `evals`.world_cup.tournaments tournament ON tournament.id = playoff.tournament_id JOIN `evals`.world_cup.matches m ON m.tournament_id = tournament.id JOIN `evals`.world_cup.goals goal ON goal.match_id = m.id AND goal.scoring_team_id = playoff.winner_team_id JOIN `evals`.world_cup.players player ON player.id = goal.scorer_player_id WHERE tournament.tournament_year = 2018 AND playoff.stage = 'third_place' AND goal.goal_type <> 'own_goal'"
+      }
+    }
+  ]
+}

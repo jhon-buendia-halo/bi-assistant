@@ -114,16 +114,27 @@ export class AgentsController {
     }));
   }
 
-  /** Start a run against one datasource. Long-running: poll the job below. */
+  /**
+   * Start a run against one datasource. Long-running: poll the job below.
+   * `judge` (`off` when absent) and `judgeCategories` are checked by the
+   * service, after the dataset preflight (agents-evals R19 step 8, R144).
+   */
   @Post(':key/evals/run')
   async runEvals(
     @Param('key') key: string,
-    @Body() body: { datasourceId?: string; caseIds?: string[] },
+    @Body()
+    body: {
+      datasourceId?: string;
+      caseIds?: string[];
+      judge?: unknown;
+      judgeCategories?: unknown;
+    },
   ): Promise<{ ok: boolean; message: string; jobId?: string }> {
     const result = await this.evalRuns.start(
       key,
       body?.datasourceId ?? '',
       Array.isArray(body?.caseIds) ? body.caseIds.map(String) : undefined,
+      { judge: body?.judge, judgeCategories: body?.judgeCategories },
     );
     if ('error' in result) return { ok: false, message: result.error };
     if ('conflictWith' in result) {

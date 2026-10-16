@@ -1,5 +1,13 @@
 jest.mock('@mastra/core/evals', () => ({
   runEvals: jest.fn(() => Promise.resolve({ scores: {} })),
+  // The set files' deterministic checks are wrapped with it at import.
+  createScorer: (config: Record<string, unknown>) => {
+    const scorer: Record<string, unknown> = { ...config };
+    for (const step of ['analyze', 'generateScore', 'generateReason']) {
+      scorer[step] = () => scorer;
+    }
+    return scorer;
+  },
 }));
 // The cases' scorers are built at import; they never run here.
 jest.mock('@mastra/evals/checks', () => ({
@@ -32,6 +40,7 @@ import {
   runAssistantEvalCase,
 } from './assistant.evals';
 import { RFP_EVAL_SET, RFP_ID_PLACEHOLDER, rfpEvalTarget } from './rfp.evals';
+import { loadEvalSets } from './eval-set-files';
 import {
   EVAL_SETS,
   agentForCases,
@@ -136,10 +145,14 @@ describe('the rfp eval set (agents.md 8.1)', () => {
     expect(RFP_EVAL_SET.cases.some((c) => c.expectedSql)).toBe(false);
   });
 
-  it('keeps the assistant sets as they were, and lists sets per agent', () => {
-    expect(ASSISTANT_EVAL_SETS.map((set) => set.id)).toEqual([
+  it('keeps the assistant sets, one per set file variant, and lists sets per agent', () => {
+    expect(ASSISTANT_EVAL_SETS.map((set) => set.id)).toEqual(
+      loadEvalSets().map((set) => set.id),
+    );
+    expect(ASSISTANT_EVAL_SETS.slice(0, 4).map((set) => set.id)).toEqual([
       'world-cup',
       'world-cup-rest',
+      'world-cup-databricks',
       'formula-1',
     ]);
     expect(ASSISTANT_EVAL_SETS.some((set) => set.agentKey)).toBe(false);
@@ -147,7 +160,7 @@ describe('the rfp eval set (agents.md 8.1)', () => {
     expect(evalSetsFor('rfp')).toEqual([RFP_EVAL_SET]);
     expect(evalSetsFor('sql-fixer')).toEqual([]);
     expect(hasEvals('rfp')).toBe(true);
-    expect(EVAL_SETS).toHaveLength(4);
+    expect(EVAL_SETS).toHaveLength(ASSISTANT_EVAL_SETS.length + 1);
     const ids = EVAL_SETS.flatMap((set) => set.cases.map((c) => c.id));
     expect(new Set(ids).size).toBe(ids.length);
   });

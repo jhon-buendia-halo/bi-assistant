@@ -9,8 +9,15 @@
  *
  * Deliberately dependency-free (no Nest, no `pg`, no fs): both a Nest service
  * and the DI-less Mastra eval modules import it, and it must stay cheap and
- * side-effect-free for either to do so.
+ * side-effect-free for either to do so. The knowledge seeds it carries are
+ * plain data modules too (`./knowledge/`).
  */
+
+import { FINANCE_KNOWLEDGE } from './knowledge/finance';
+import { GENOMICS_KNOWLEDGE } from './knowledge/genomics';
+import { HEALTH_INSURANCE_KNOWLEDGE } from './knowledge/health-insurance';
+import { SUPPLY_CHAIN_KNOWLEDGE } from './knowledge/supply-chain';
+import type { KnowledgeSeed } from './knowledge/types';
 
 /** Coordinates the panel prefills for a sample. */
 export interface SampleFixtureDefaults {
@@ -46,15 +53,25 @@ export interface SampleFixture {
    * `'rest'` fixtures are register-only for the eval suite: the loader cannot
    * provision them (their datasource is created by
    * `scripts/setup-worldcup-rest.ts`), and their entities are keyed
-   * `api.<schema>.<table>`.
+   * `api.<schema>.<table>`. `'databricks'` fixtures are register-only too:
+   * `scripts/setup-fixture-databricks.ts` loads their rows into a Unity
+   * Catalog schema and registers them, and their entities are keyed
+   * `<catalog>.<schema>.<table>` (`evals.world_cup.matches`).
    */
-  datasourceKind?: 'postgres' | 'rest';
+  datasourceKind?: 'postgres' | 'rest' | 'databricks';
   /**
    * A `'rest'` sample whose API this app runs itself (the embedded Intellify
    * RFP API, ADR-0027): loading it takes no connection and the loader reads
    * the API's URL and key in-process instead.
    */
   selfRegistering?: boolean;
+  /**
+   * Knowledge entries and metrics about the sample's data, created by the
+   * loader after a successful load from the panel (testing-data R26). Only
+   * the Finance, Health Insurance, Genomics and Supply Chain samples carry
+   * one; World Cup deliberately has none.
+   */
+  knowledge?: KnowledgeSeed;
 }
 
 const WORLD_CUP: SampleFixture = {
@@ -86,6 +103,7 @@ const WORLD_CUP: SampleFixture = {
     'players',
     'goals',
     'match_team_statistics',
+    'disciplinary_events',
     'v_match_results',
     'v_player_goal_totals',
   ],
@@ -316,6 +334,293 @@ const INTELLIFY_API: SampleFixture = {
   ],
 };
 
+/**
+ * The synthetic domain samples (BA-185). Each is written by a seeded generator
+ * in `docker/postgres/generate/` straight into this folder, owns one schema and
+ * gets its own database on the shared server, and must expose every table and
+ * view of its schema. Their rows are invented: see `docs/evals/domains/`.
+ */
+function domainDefaults(database: string): SampleFixtureDefaults {
+  return {
+    host: SAMPLE_HOST,
+    port: SAMPLE_PORT,
+    database,
+    user: SAMPLE_USER,
+    password: SAMPLE_PASSWORD,
+    ssl: false,
+  };
+}
+
+const FINANCE: SampleFixture = {
+  id: 'finance',
+  name: 'Finance',
+  description:
+    'Synthetic retail bank and wealth manager, 2024 and 2025 — customers, ' +
+    'accounts, transactions, loans, portfolios, holdings, fees and fiscal ' +
+    'periods; money in cents.',
+  seedFile: '007_finance.sql',
+  schema: 'finance',
+  defaults: domainDefaults('finance'),
+  datasourceName: 'Finance PostgreSQL',
+  datasetName: 'Finance',
+  requiredTables: [
+    'regions',
+    'branches',
+    'customers',
+    'account_types',
+    'accounts',
+    'cards',
+    'fx_rates',
+    'transactions',
+    'loans',
+    'loan_payments',
+    'fiscal_periods',
+    'securities',
+    'portfolios',
+    'holdings',
+    'fees',
+    'v_accounts',
+    'v_transactions',
+  ],
+  knowledge: FINANCE_KNOWLEDGE,
+};
+
+const HEALTH_INSURANCE: SampleFixture = {
+  id: 'health-insurance',
+  name: 'Health Insurance',
+  description:
+    'Synthetic health insurer, claims of 2024 and 2025 — members, plans, ' +
+    'providers, claims, claim lines and denials; money in cents.',
+  seedFile: '004_health_insurance.sql',
+  schema: 'health_insurance',
+  defaults: domainDefaults('health_insurance'),
+  datasourceName: 'Health Insurance PostgreSQL',
+  datasetName: 'Health Insurance',
+  requiredTables: [
+    'countries',
+    'states',
+    'regions',
+    'plans',
+    'members',
+    'providers',
+    'denial_reasons',
+    'claims',
+    'claim_lines',
+    'claim_denials',
+    'v_claim_financials',
+    'v_member_claim_totals',
+  ],
+  knowledge: HEALTH_INSURANCE_KNOWLEDGE,
+};
+
+const GENOMICS: SampleFixture = {
+  id: 'genomics',
+  name: 'Genomics',
+  description:
+    'Synthetic clinical-genomics cohort, samples of 2023 and 2024 — ' +
+    'subjects, samples, genes, variants, variant calls, expression and ' +
+    'phenotypes. Invented data, never for clinical use.',
+  seedFile: '005_genomics.sql',
+  schema: 'genomics',
+  defaults: domainDefaults('genomics'),
+  datasourceName: 'Genomics PostgreSQL',
+  datasetName: 'Genomics',
+  requiredTables: [
+    'superpopulations',
+    'ancestry_groups',
+    'genes',
+    'transcripts',
+    'subjects',
+    'samples',
+    'variants',
+    'variant_calls',
+    'gene_expression',
+    'phenotypes',
+    'subject_phenotypes',
+    'v_variant_calls',
+    'v_sample_qc',
+  ],
+  knowledge: GENOMICS_KNOWLEDGE,
+};
+
+const SUPPLY_CHAIN: SampleFixture = {
+  id: 'supply-chain',
+  name: 'Supply Chain',
+  description:
+    'Synthetic industrial distributor, purchase orders of 2024 and 2025 — ' +
+    'suppliers, products, warehouses, purchase orders, shipments, receipts ' +
+    'and inventory; money in cents.',
+  seedFile: '006_supply_chain.sql',
+  schema: 'supply_chain',
+  defaults: domainDefaults('supply_chain'),
+  datasourceName: 'Supply Chain PostgreSQL',
+  datasetName: 'Supply Chain',
+  requiredTables: [
+    'regions',
+    'warehouses',
+    'suppliers',
+    'product_categories',
+    'products',
+    'carriers',
+    'purchase_orders',
+    'purchase_order_lines',
+    'shipments',
+    'receipts',
+    'inventory_snapshots',
+    'v_purchase_order_lines',
+    'v_shipments',
+    'v_receipts',
+  ],
+  knowledge: SUPPLY_CHAIN_KNOWLEDGE,
+};
+
+const MARKETING_ANALYTICS: SampleFixture = {
+  id: 'marketing-analytics',
+  name: 'Marketing Analytics',
+  description:
+    'Synthetic market-insight product for six insurance carriers, 2024 and ' +
+    '2025 — policy sales by quarter, revenue by period, campaigns and a ' +
+    'benchmark with masked competitors; money in cents.',
+  seedFile: '008_marketing_analytics.sql',
+  schema: 'marketing_analytics',
+  defaults: domainDefaults('marketing_analytics'),
+  datasourceName: 'Marketing Analytics PostgreSQL',
+  datasetName: 'Marketing Analytics',
+  requiredTables: [
+    'regions',
+    'states',
+    'carriers',
+    'lines_of_business',
+    'products',
+    'channels',
+    'periods',
+    'policy_sales',
+    'revenue_by_period',
+    'campaigns',
+    'campaign_results',
+    'market_benchmarks',
+    'competitor_masks',
+    'analyst_access',
+  ],
+};
+
+/**
+ * The finance and marketing-analytics samples again, served from their dumps
+ * by the local REST API (`serve.ts --fixture <id>`, BA-187), so the same rows
+ * sit behind PostgreSQL and REST (ADR-0015). Register-only like the World Cup
+ * REST sample: `scripts/setup-fixture-rest.ts` creates the datasource and
+ * dataset, and `defaults` are placeholders.
+ */
+function restDefaults(port: number): SampleFixtureDefaults {
+  return {
+    host: '127.0.0.1',
+    port,
+    database: '',
+    user: '',
+    password: '',
+    ssl: false,
+  };
+}
+
+const FINANCE_REST: SampleFixture = {
+  id: 'finance-rest',
+  name: 'Finance (REST API)',
+  description:
+    'The Finance sample over a local REST API ' +
+    "('npm run finance:api' serves it on http://127.0.0.1:55081).",
+  datasourceKind: 'rest',
+  schema: FINANCE.schema,
+  defaults: restDefaults(55081),
+  datasourceName: 'Finance REST API',
+  datasetName: 'Finance (REST)',
+  requiredTables: FINANCE.requiredTables,
+};
+
+const MARKETING_ANALYTICS_REST: SampleFixture = {
+  id: 'marketing-analytics-rest',
+  name: 'Marketing Analytics (REST API)',
+  description:
+    'The Marketing Analytics sample over a local REST API ' +
+    "('npm run marketing-analytics:api' serves it on http://127.0.0.1:55082).",
+  datasourceKind: 'rest',
+  schema: MARKETING_ANALYTICS.schema,
+  defaults: restDefaults(55082),
+  datasourceName: 'Marketing Analytics REST API',
+  datasetName: 'Marketing Analytics (REST)',
+  requiredTables: MARKETING_ANALYTICS.requiredTables,
+};
+
+/**
+ * The World Cup REST API started with the `connector` profile (BA-187): the
+ * REST-only eval set needs its extra endpoints, so they are required here and
+ * the preflight refuses a dataset of the plain API. One server per paging
+ * style (ports 55090 to 55093); the names are those of its `page` variant.
+ */
+const WORLD_CUP_REST_CONNECTOR: SampleFixture = {
+  id: 'world-cup-rest-connector',
+  name: 'World Cup (REST API, connector profile)',
+  description:
+    'The World Cup sample over a local REST API with the connector profile ' +
+    "('REST_API_PROFILE=connector npm run worldcup:api', one server per paging style).",
+  datasourceKind: 'rest',
+  schema: WORLD_CUP.schema,
+  defaults: restDefaults(55090),
+  datasourceName: 'World Cup REST API (page)',
+  datasetName: 'World Cup (REST page)',
+  requiredTables: [
+    ...WORLD_CUP.requiredTables,
+    'tournament_teams',
+    'squad_members',
+    'matches_nested',
+  ],
+};
+
+/**
+ * The Unity Catalog catalog the Databricks samples live in by default, and the
+ * one their reference queries name in the set files
+ * (`` `evals`.world_cup.matches ``). A sample loaded into another catalog
+ * still runs: the references are rewritten to the catalog of the selected
+ * datasets when they run (agents-evals R192).
+ */
+export const DATABRICKS_FIXTURE_CATALOG = 'evals';
+
+/**
+ * World Cup, finance and marketing analytics again, in a Databricks Unity
+ * Catalog schema (`evals.<schema>`), loaded from the same JSON dumps as the
+ * REST samples so the rows are identical on every kind (ADR-0015, BA-186).
+ * Register-only: `scripts/setup-fixture-databricks.ts --fixture <id>` loads
+ * the rows and registers the datasource and dataset in a running backend;
+ * the Testing Data panel refuses them, and `defaults` are placeholders (the
+ * catalog as the database).
+ */
+function databricksFixture(source: SampleFixture): SampleFixture {
+  return {
+    id: `${source.id}-databricks`,
+    name: `${source.name} (Databricks)`,
+    description:
+      `The ${source.name} sample in a Databricks Unity Catalog schema ` +
+      `(${DATABRICKS_FIXTURE_CATALOG}.${source.schema}), loaded from its JSON dump by ` +
+      `'npm run fixture:databricks -- --fixture ${source.id}'.`,
+    datasourceKind: 'databricks',
+    schema: source.schema,
+    defaults: {
+      host: '',
+      port: 443,
+      database: DATABRICKS_FIXTURE_CATALOG,
+      user: '',
+      password: '',
+      ssl: true,
+    },
+    datasourceName: `${source.name} Databricks`,
+    datasetName: `${source.name} (Databricks)`,
+    requiredTables: source.requiredTables,
+  };
+}
+
+const WORLD_CUP_DATABRICKS = databricksFixture(WORLD_CUP);
+const FINANCE_DATABRICKS = databricksFixture(FINANCE);
+const MARKETING_ANALYTICS_DATABRICKS = databricksFixture(MARKETING_ANALYTICS);
+
 /** Every sample the app knows how to provision, in panel order. */
 export const SAMPLE_FIXTURES: SampleFixture[] = [
   WORLD_CUP,
@@ -323,10 +628,33 @@ export const SAMPLE_FIXTURES: SampleFixture[] = [
   INTELLIFY,
   WORLD_CUP_REST,
   INTELLIFY_API,
+  FINANCE,
+  HEALTH_INSURANCE,
+  GENOMICS,
+  SUPPLY_CHAIN,
+  MARKETING_ANALYTICS,
+  FINANCE_REST,
+  MARKETING_ANALYTICS_REST,
+  WORLD_CUP_REST_CONNECTOR,
+  WORLD_CUP_DATABRICKS,
+  FINANCE_DATABRICKS,
+  MARKETING_ANALYTICS_DATABRICKS,
 ];
 
 export function findFixture(id: string): SampleFixture | undefined {
   return SAMPLE_FIXTURES.find((fixture) => fixture.id === id);
+}
+
+/**
+ * The PostgreSQL sample a Databricks sample is loaded from, whose dump and
+ * seed hold its rows and types: `world-cup` for `world-cup-databricks`.
+ * Undefined for any other sample.
+ */
+export function databricksSource(
+  fixture: SampleFixture,
+): SampleFixture | undefined {
+  if (fixture.datasourceKind !== 'databricks') return undefined;
+  return findFixture(fixture.id.replace(/-databricks$/, ''));
 }
 
 /**
