@@ -26,7 +26,7 @@ import type { EvalStatus } from './eval-summary';
  * 8.5).
  *
  * `EVAL_JUDGE` (`off` by default, `on` or `categories`) and
- * `EVAL_JUDGE_CATEGORIES` set the judge option (agents-evals R153). With it
+ * `EVAL_JUDGE_CATEGORIES` set the judge option (agents-evals R154). With it
  * off, judge checks are not scored and no judge call is made.
  */
 async function main(): Promise<void> {
@@ -59,7 +59,7 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  // The judge option, checked before the app boots too (R153).
+  // The judge option, checked before the app boots too (R154).
   const judge = judgeSettingFromEnv(process.env);
   if ('error' in judge) {
     console.error(judge.error);
@@ -146,7 +146,7 @@ const CHECK_MARK: Readonly<Record<EvalStatus, string>> = {
 };
 
 /**
- * 0 only when no question failed and at least one passed (R153): a
+ * 0 only when no question failed and at least one passed (R154): a
  * judge-only question left unscored is a gap that does not fail the run, and
  * a run with nothing scored does not pass.
  */

@@ -6,7 +6,7 @@ import { quote } from './turn';
 const SQL_TYPE =
   '(?:integer|int|int4|int8|bigint|smallint|text|varchar|character varying|char|numeric|decimal|boolean|bool|date|timestamptz|timestamp|double precision|double|float|real|string)';
 
-/** What the chat must never carry (agents-evals R116), each with its name. */
+/** What the chat must never carry (agents-evals R117), each with its name. */
 const FORBIDDEN: readonly [RegExp, string][] = [
   [/```[ \t]*(?:html|css|js|javascript|jsx|ts|typescript|svg|xml)\b/i, 'code'],
   [
@@ -45,7 +45,7 @@ function schemaDump(answer: string): string | undefined {
 }
 
 /**
- * `noHtml` (agents-evals R116, criterion I4): the answer is prose. No HTML,
+ * `noHtml` (agents-evals R117, criterion I4): the answer is prose. No HTML,
  * CSS or JavaScript ("Never paste HTML, CSS or JavaScript into the chat"),
  * and no raw schema dump ("Never dump raw schemas or column lists").
  */

@@ -10,7 +10,7 @@ Databases the model has never seen, shaped like a customer's, with traps planted
 | Genomics | `genomics` | `genomics` | as above | none yet | `backend/src/mastra/evals/sets/genomics.json` (49 questions) | copied as is |
 | Supply chain | `supply-chain` | `supply_chain` | as above | none yet | `backend/src/mastra/evals/sets/supply-chain.json` (20 questions) | copied as is |
 
-Where the fixture rules live: the catalogue and its loader in [testing-data](../../../specs/capabilities/testing-data/spec.md); the set format in [data-model 4.9](../../../specs/system/data-model.md#49-eval-question-bank-files-bundled-read-only); the set rules in [agents-evals](../../../specs/capabilities/agents-evals/spec.md) R106-R110 and R133; scripts in [delivery](../../../specs/system/delivery.md); folders in [tech-stack](../../../specs/system/tech-stack.md).
+Where the fixture rules live: the catalogue and its loader in [testing-data](../../../specs/capabilities/testing-data/spec.md); the set format in [data-model 4.9](../../../specs/system/data-model.md#49-eval-question-bank-files-bundled-read-only); the set rules in [agents-evals](../../../specs/capabilities/agents-evals/spec.md) R107-R111 and R134; scripts in [delivery](../../../specs/system/delivery.md); folders in [tech-stack](../../../specs/system/tech-stack.md).
 
 ## How a domain is built
 

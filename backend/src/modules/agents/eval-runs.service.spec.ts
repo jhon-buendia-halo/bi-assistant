@@ -130,7 +130,7 @@ describe('EvalRunsService dataset validation', () => {
       const result = await runner.start('assistant', 'wc');
       expect(result).toEqual({ jobId: expect.any(String) as string });
       await new Promise((resolve) => setImmediate(resolve));
-      // No judge option given: the judge is off (R143).
+      // No judge option given: the judge is off (R144).
       expect(runAssistantEvalCase).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'champion-2022' }),
         ['Sample'],
@@ -305,7 +305,7 @@ describe('EvalRunsService one running run per agent', () => {
   });
 });
 
-describe('EvalRunsService judge option and summary (R143, R147)', () => {
+describe('EvalRunsService judge option and summary (R144, R148)', () => {
   const sample = [
     {
       name: 'Sample',

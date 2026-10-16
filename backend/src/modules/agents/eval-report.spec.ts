@@ -140,7 +140,7 @@ describe('renderEvalRunMarkdown — comparison section', () => {
   });
 });
 
-describe('renderEvalRunMarkdown — judge option and summary (R38, R152)', () => {
+describe('renderEvalRunMarkdown — judge option and summary (R38, R153)', () => {
   it('prints the judge line and the not-scored count after the passed line', () => {
     const markdown = renderEvalRunMarkdown(mixedRun());
     expect(markdown).toContain(

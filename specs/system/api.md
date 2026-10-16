@@ -455,10 +455,10 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Errors (Style B): `404 "Agent \"<key>\" not found"`; `404 "Agent \"<key>\" has no skill \"<name>\""`; `400 "Invalid skill file path \"<path>\""` for an empty, absolute or `..` path; `404 "Skill \"<name>\" has no file \"<path>\""`.
 
 #### 35. `GET /agents/:key/evals`
-- Response `200`: `{ sets: AgentEvalSet[] }`: the sets whose agent is `:key` (a set's `agentKey`, default `assistant`; [agents.md](agents.md) 8.1). Only `assistant` and `rfp` have sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, category: string, split: 'dev'|'held-out', checks: { id, name, description }[] }[] }`. The sets are those of [agents-evals](../capabilities/agents-evals/spec.md) R11: the assistant's, one per variant of the question bank files ([data-model.md](data-model.md) 4.9), and the RFP Builder's `rfp`. `category` is one of the eighteen of data-model 4.9, or `uncategorised` for a case with none (every `rfp` case), and `split` defaults to `dev` (agents-evals R149; added 2026-10-13, BA-184). A case's notes and reference queries are not part of the response, and `checks` lists the case's scorer checks only (not the result-set match or the judge).
+- Response `200`: `{ sets: AgentEvalSet[] }`: the sets whose agent is `:key` (a set's `agentKey`, default `assistant`; [agents.md](agents.md) 8.1). Only `assistant` and `rfp` have sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, category: string, split: 'dev'|'held-out', checks: { id, name, description }[] }[] }`. The sets are those of [agents-evals](../capabilities/agents-evals/spec.md) R11: the assistant's, one per variant of the question bank files ([data-model.md](data-model.md) 4.9), and the RFP Builder's `rfp`. `category` is one of the eighteen of data-model 4.9, or `uncategorised` for a case with none (every `rfp` case), and `split` defaults to `dev` (agents-evals R150; added 2026-10-13, BA-184). A case's notes and reference queries are not part of the response, and `checks` lists the case's scorer checks only (not the result-set match or the judge).
 
 #### 36. `POST /agents/:key/evals/run`
-- Body: `{ datasourceId: string; caseIds?: string[]; judge?: 'off'|'on'|'categories'; judgeCategories?: string[] }`. `caseIds` omitted = all questions. `judge` omitted (or `null`) = `'off'`: no judge call, judge checks recorded as not scored ([agents-evals](../capabilities/agents-evals/spec.md) R143, R144). `judgeCategories` is read only with `judge: 'categories'`, where it is required and non-empty, each entry one of the eighteen categories of [data-model.md](data-model.md) 4.9; with `'off'` or `'on'` it is ignored. The UI sends `'off'` or `'on'` (R148).
+- Body: `{ datasourceId: string; caseIds?: string[]; judge?: 'off'|'on'|'categories'; judgeCategories?: string[] }`. `caseIds` omitted = all questions. `judge` omitted (or `null`) = `'off'`: no judge call, judge checks recorded as not scored ([agents-evals](../capabilities/agents-evals/spec.md) R144, R145). `judgeCategories` is read only with `judge: 'categories'`, where it is required and non-empty, each entry one of the eighteen categories of [data-model.md](data-model.md) 4.9; with `'off'` or `'on'` it is ignored. The UI sends `'off'` or `'on'` (R149).
 - Success: `{ ok:true, message:"Eval run started", jobId }`. Returns immediately; the run is long-running (see [3.3](#33-eval-runs)).
 - Failures (Style A, `ok:false`), in the order of R19: `"Agent \"<key>\" has no evals to run"` (an agent with no sets: neither `assistant` nor `rfp`); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need); then the judge option: `"Unknown judge option \"<value>\""`; `"Pick at least one category to judge"` (`'categories'` with no or an empty `judgeCategories`); `"Unknown judge category \"<value>\". Known categories: <the eighteen, comma-separated>."`.
 - Side effects: persists an initial run record; spawns the run (one throwaway session is created for the run to host visual tools and deleted afterwards).
@@ -470,7 +470,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Response `200`: `{ ok:true, message:<status>, ...EvalRunView }`; unknown job: `{ ok:false, message:"Eval run \"<jobId>\" not found" }` (HTTP 200). `:key` is ignored by the lookup.
 
 #### 39. `GET /agents/:key/evals/runs/:jobId/download`
-- Response `200`: `text/markdown; charset=utf-8`, `Content-Disposition: attachment; filename="eval-run-<agentKey>-<YYYY-MM-DD-HH-mm-ss>-<first 8 of jobId>.md"`. Body: the judge line, the By category and By criterion tables, summary, failures, traces, answers, and the regression comparison when present; the datasource is shown by name. Format: [agents-evals](../capabilities/agents-evals/spec.md) R38, R41 and R152.
+- Response `200`: `text/markdown; charset=utf-8`, `Content-Disposition: attachment; filename="eval-run-<agentKey>-<YYYY-MM-DD-HH-mm-ss>-<first 8 of jobId>.md"`. Body: the judge line, the By category and By criterion tables, summary, failures, traces, answers, and the regression comparison when present; the datasource is shown by name. Format: [agents-evals](../capabilities/agents-evals/spec.md) R38, R41 and R153.
 - Errors (Style B): `404 "Eval run \"<jobId>\" not found"`.
 
 #### 40. `DELETE /agents/:key/evals/runs/:jobId`
@@ -512,8 +512,8 @@ interface EvalRunView {
   currentQuestion?: string; error?: string;
   startedAt: string; finishedAt?: string;
   comparison?: { previousRunId: string; regressions: {id,question}[]; improvements: {id,question}[]; unchanged: {id,question}[] };
-  judge: { mode: 'off' | 'on' | 'categories'; categories?: string[] };   // the run option (R143); { mode: 'on' } on runs saved before it
-  summary: EvalRunSummary;              // from the finished results, live while running (R147)
+  judge: { mode: 'off' | 'on' | 'categories'; categories?: string[] };   // the run option (R144); { mode: 'on' } on runs saved before it
+  summary: EvalRunSummary;              // from the finished results, live while running (R148)
 }
 type EvalStatus = 'passed' | 'failed' | 'not-scored';
 interface AssistantEvalCaseResult {
@@ -522,12 +522,12 @@ interface AssistantEvalCaseResult {
   scores: Record<string, number>;                     // per scorer id, 0..1
   checkResults: {
     id: string; description: string; score: number; passed: boolean; reason?: string;
-    status: EvalStatus;                               // 'not-scored' only for a judge check the run did not call (R144, R145)
-    criterion?: string;                               // D1…C4 (R145)
+    status: EvalStatus;                               // 'not-scored' only for a judge check the run did not call (R145, R146)
+    criterion?: string;                               // D1…C4 (R146)
   }[];
   answer: string;
   toolCalls: { name: string; input?: string; output?: string; error?: string }[];   // JSON-encoded, truncated to ~2000 chars each
-  status: EvalStatus;                                 // R146
+  status: EvalStatus;                                 // R147
   passed: boolean;                                    // status === 'passed'
   error?: string; durationMs: number;
 }
@@ -538,7 +538,7 @@ interface EvalRunSummary {
 }
 ```
 
-Runs saved before 2026-10-13 (BA-184) are served with the defaults of [agents-evals](../capabilities/agents-evals/spec.md) R143, R146 and R147: `judge` `{ mode: 'on' }`, every `status` from its `passed` flag, no `category` (counted under `uncategorised`) and no `criterion`, and a `summary` computed on read. `status` and `summary` are always present on the wire.
+Runs saved before 2026-10-13 (BA-184) are served with the defaults of [agents-evals](../capabilities/agents-evals/spec.md) R144, R147 and R148: `judge` `{ mode: 'on' }`, every `status` from its `passed` flag, no `category` (counted under `uncategorised`) and no `criterion`, and a `summary` computed on read. `status` and `summary` are always present on the wire.
 
 ### 2.6.1 Skills
 
@@ -1171,9 +1171,9 @@ The `Intellify API:` line carries the actual bound port of the embedded API (use
 | `INTELLIFY_DB_SSL` | Intellify API config | `true` connects over TLS. | `false` |
 | `INTELLIFY_DB_SCHEMA` | Intellify API config | Schema holding the Intellify data (the `intellify` fixture's). The `rfp` schema's name is fixed. | `intellify` |
 | `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` and `mastra/evals/validate-eval-sets.ts` (CLI eval scripts only) | Comma-separated dataset names to run the assistant evals, or validate a set's reference queries, against. Required by both scripts. | none |
-| `EVAL_SET` | the same two scripts | The id of one eval set ([agents-evals](../capabilities/agents-evals/spec.md) R11). Required by the validator (R109), which takes only a question bank file's set. The run needs this or `EVAL_CASES`, not both (R110, [agents.md](agents.md) 8.5). | none |
+| `EVAL_SET` | the same two scripts | The id of one eval set ([agents-evals](../capabilities/agents-evals/spec.md) R11). Required by the validator (R110), which takes only a question bank file's set. The run needs this or `EVAL_CASES`, not both (R111, [agents.md](agents.md) 8.5). | none |
 | `EVAL_CASES` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated eval case ids to run instead of a whole set; all from one set's fixture. | none |
-| `EVAL_JUDGE` | `mastra/evals/run-assistant-evals.ts` | The run's judge option ([agents-evals](../capabilities/agents-evals/spec.md) R143, R153): `off`, `on` or `categories`. Any other value is refused before the backend boots. | `off` |
+| `EVAL_JUDGE` | `mastra/evals/run-assistant-evals.ts` | The run's judge option ([agents-evals](../capabilities/agents-evals/spec.md) R144, R154): `off`, `on` or `categories`. Any other value is refused before the backend boots. | `off` |
 | `EVAL_JUDGE_CATEGORIES` | the same script | With `EVAL_JUDGE=categories`, the categories to judge, comma-separated (blanks ignored), each one of the eighteen of [data-model.md](data-model.md) 4.9. Required and non-empty then; ignored otherwise. | unset |
 
 ### 6.2 CLI-only

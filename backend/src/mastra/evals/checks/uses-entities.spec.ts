@@ -22,7 +22,7 @@ const turn = (...toolCalls: CheckToolCall[]): CheckTurn => ({
   toolCalls,
 });
 
-describe('usesEntities (R123, D2)', () => {
+describe('usesEntities (R124, D2)', () => {
   it('passes when one query reads every table of the reference, however qualified', () => {
     expect(
       usesEntities.evaluate(

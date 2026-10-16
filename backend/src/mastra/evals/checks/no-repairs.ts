@@ -3,7 +3,7 @@ import type { DeterministicCheck } from './check';
 import { callsOf, correctedSql, quote, writtenSql } from './turn';
 
 /**
- * `noRepairs` (agents-evals R112, criterion D3, first-try SQL): no
+ * `noRepairs` (agents-evals R113, criterion D3, first-try SQL): no
  * `run_readonly_sql` call needed the SQL fixer. The fixer's rewrite rides
  * back on the tool result as `correctedSql`. A turn with no SQL passes;
  * a call that still failed after a repair is `noToolErrors`'s to count.

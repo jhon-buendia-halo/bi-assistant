@@ -25,7 +25,7 @@ export type StoredEvalRun = Omit<
 /**
  * A stored run with the read-time defaults of data-model 3.8 (no migration):
  * judged when it has no option, statuses from each `passed` flag, and the
- * summary recomputed from the results (agents-evals R143, R146, R147).
+ * summary recomputed from the results (agents-evals R144, R147, R148).
  */
 export function withEvalRunDefaults(run: StoredEvalRun): EvalRunView {
   const results = (run.results ?? []).map(withStatusDefaults);

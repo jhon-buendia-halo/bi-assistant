@@ -173,8 +173,8 @@ export function lastSuccessfulSqlRecord(
  *
  * On a Databricks datasource the reference is a Databricks set's (the
  * preflight binds a Databricks set to a Databricks datasource and no other,
- * R184), so it runs in the catalog of the selected datasets' entities
- * rather than the canonical `evals` (R191); other references run as written.
+ * R185), so it runs in the catalog of the selected datasets' entities
+ * rather than the canonical `evals` (R192); other references run as written.
  *
  * Returns `undefined` when the case has no `expectedSql` — callers should
  * skip adding a check in that case rather than reporting a vacuous pass.

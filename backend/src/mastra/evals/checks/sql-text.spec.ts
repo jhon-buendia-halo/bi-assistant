@@ -3,7 +3,7 @@ import { tableName, tableReferences, withoutLiterals } from './sql-text';
 const names = (sql: string) =>
   tableReferences(sql).map((parts) => parts.join('.'));
 
-describe('tableReferences (R111)', () => {
+describe('tableReferences (R112)', () => {
   it('reads FROM and JOIN names, aliased or not, with every name part', () => {
     expect(
       names(

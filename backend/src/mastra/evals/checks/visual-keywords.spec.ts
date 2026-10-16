@@ -20,7 +20,7 @@ const turn = (...toolCalls: CheckToolCall[]): CheckTurn => ({
   toolCalls,
 });
 
-describe('visualKeywords (R120, G4)', () => {
+describe('visualKeywords (R121, G4)', () => {
   it('passes when a created visual’s title and description hold every keyword', () => {
     expect(
       visualKeywords.evaluate(

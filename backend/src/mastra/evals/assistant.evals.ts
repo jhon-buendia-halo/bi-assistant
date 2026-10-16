@@ -78,7 +78,7 @@ export interface AssistantEvalCase {
   intent: string;
   scorers: MastraScorer<any, any, any, any>[];
   /**
-   * The criterion each scorer measures (agents-evals R124, R145), one entry
+   * The criterion each scorer measures (agents-evals R125, R146), one entry
    * per scorer in the same order; `undefined` where a check names none.
    */
   checkCriteria?: (EvalCriterion | undefined)[];
@@ -97,7 +97,7 @@ export interface AssistantEvalCase {
    * quality, whether a visual plausibly answers the request). When present,
    * `runAssistantEvalCase` scores it with the LLM judge
    * (`../agents/eval-judge.agent`) as an additional check — when the run's
-   * judge option allows it; otherwise the check is not scored (R144).
+   * judge option allows it; otherwise the check is not scored (R145).
    */
   judgeRubric?: string;
   /**
@@ -305,9 +305,9 @@ export interface ScoredCheckResult {
 
 /** One check's verdict on a question, with why it landed there. */
 export interface EvalCheckResult extends ScoredCheckResult {
-  /** `not-scored` only for a judge check the run did not call (R145). */
+  /** `not-scored` only for a judge check the run did not call (R146). */
   status: EvalStatus;
-  /** The criterion the check measures, when it has one (R145). */
+  /** The criterion the check measures, when it has one (R146). */
   criterion?: string;
 }
 
@@ -316,7 +316,7 @@ export interface AssistantEvalCaseResult {
   id: string;
   /** The question as sent, after any setup the target's case needed. */
   question: string;
-  /** The case's category (R146); absent on runs saved before BA-184. */
+  /** The case's category (R147); absent on runs saved before BA-184. */
   category?: string;
   /** Score per scorer id, 0..1. Empty when the run threw. */
   scores: Record<string, number>;
@@ -326,7 +326,7 @@ export interface AssistantEvalCaseResult {
   answer: string;
   /** The tool calls the agent made, in order — the executed process. */
   toolCalls: EvalToolCall[];
-  /** Passed, failed or not scored (R146). */
+  /** Passed, failed or not scored (R147). */
   status: EvalStatus;
   /** True exactly when `status` is `passed`: a not-scored question is not. */
   passed: boolean;
@@ -795,7 +795,7 @@ async function runJudgeCheck(
 }
 
 /**
- * The judge check of a case with a rubric (R144, R145): the judge's verdict
+ * The judge check of a case with a rubric (R145, R146): the judge's verdict
  * when the run's option lets it grade this case's category, else a not-scored
  * check, with no model call. Its criterion follows the case's category.
  */
@@ -849,7 +849,7 @@ export async function runAssistantEvalCase(
   knowledgeBlock?: string,
   /** The agent the case runs on; the assistant when omitted (agents.md 8.1). */
   target: EvalTarget = ASSISTANT_EVAL_TARGET,
-  /** The run's judge option (R143); off unless the caller says otherwise. */
+  /** The run's judge option (R144); off unless the caller says otherwise. */
   judge: Readonly<EvalJudgeSetting> = JUDGE_OFF,
 ): Promise<AssistantEvalCaseResult> {
   const startedAt = Date.now();
@@ -1010,7 +1010,7 @@ export async function runAssistantEvalCase(
 
     // LLM-judge (Feature 2) — for cases where a regex/text check on the
     // final answer would be too brittle. Not called, and not scored, when
-    // the run's judge option leaves this case out (R144).
+    // the run's judge option leaves this case out (R145).
     const judgeCheck = await judgeCheckFor(
       evalCase,
       judge,
@@ -1108,7 +1108,7 @@ export async function runAssistantEvals(
   knowledgeBlock?: string,
   /** The agent and sets to run; the assistant's when omitted (agents.md 8.1). */
   target: EvalTarget = ASSISTANT_EVAL_TARGET,
-  /** The run's judge option (R143); off unless the caller says otherwise. */
+  /** The run's judge option (R144); off unless the caller says otherwise. */
   judge: Readonly<EvalJudgeSetting> = JUDGE_OFF,
 ): Promise<AssistantEvalCaseResult[]> {
   const datasetError = assistantEvalDatasetError(

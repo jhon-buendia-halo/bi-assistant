@@ -1,5 +1,5 @@
 /**
- * The recorded turn the deterministic checks read (agents-evals R111): the
+ * The recorded turn the deterministic checks read (agents-evals R112): the
  * question, the answer text and each tool call in order with its arguments,
  * its result and its error.
  *
@@ -268,7 +268,7 @@ export function turnFromCaseResult(result: {
 
 /* ---------------------------------------------------------------- helpers */
 
-/** Clip a quote to `max` characters on one line (R111: 120). */
+/** Clip a quote to `max` characters on one line (R112: 120). */
 export function quote(text: string, max = 120): string {
   const flat = text.replace(/\s+/g, ' ').trim();
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
@@ -290,7 +290,7 @@ export function resultString(
   return jsonStringField(call.resultText, field);
 }
 
-/** The `sql` argument of a `run_readonly_sql` call (R111's written SQL). */
+/** The `sql` argument of a `run_readonly_sql` call (R112's written SQL). */
 export function writtenSql(call: CheckToolCall): string | undefined {
   const sql = call.args.sql;
   return typeof sql === 'string' && sql.trim() ? sql : undefined;
@@ -303,7 +303,7 @@ export function correctedSql(call: CheckToolCall): string | undefined {
     : undefined;
 }
 
-/** The statement a successful call actually ran (R111's executed SQL). */
+/** The statement a successful call actually ran (R112's executed SQL). */
 export function executedSql(call: CheckToolCall): string | undefined {
   if (call.error !== undefined) return undefined;
   return correctedSql(call) ?? writtenSql(call);

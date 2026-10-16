@@ -26,7 +26,7 @@ jest.mock('@mastra/core/evals', () => ({
 import { loadEvalSets } from './eval-set-files';
 import { toAssistantEvalSets } from './eval-check-scorers';
 
-describe('toAssistantEvalSets criteria (agents-evals R145)', () => {
+describe('toAssistantEvalSets criteria (agents-evals R146)', () => {
   const definitions = loadEvalSets();
   const sets = toAssistantEvalSets(definitions);
 

@@ -7,7 +7,7 @@ export interface VisualKeywordsArgs {
 }
 
 /**
- * `visualKeywords` (agents-evals R120, criterion G4): a visual was created and
+ * `visualKeywords` (agents-evals R121, criterion G4): a visual was created and
  * its title and description say what was asked. A chart of the wrong data
  * under the right title still passes; that is the judge's part (research 2.3).
  */

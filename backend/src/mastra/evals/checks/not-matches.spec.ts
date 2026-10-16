@@ -15,7 +15,7 @@ function turn(answer: string, toolCalls: CheckToolCall[] = []): CheckTurn {
   };
 }
 
-describe('notMatches (R122)', () => {
+describe('notMatches (R123)', () => {
   it('passes a refusal that names only the covered years', () => {
     // The baseline's passing out-of-scope answer, shortened.
     expect(

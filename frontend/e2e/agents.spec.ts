@@ -79,7 +79,7 @@ const SEEDED_RUN = 'seeded-judge-off';
 /**
  * Stores a finished run of the world-cup set with the judge off, straight in
  * the app's database: a run that reaches its end needs a model, which the suite does not have. It is stored without a
- * summary, which the backend computes whenever a run is read (R147). One
+ * summary, which the backend computes whenever a run is read (R148). One
  * question passed (lookup), one failed (join), and one, whose only check is
  * the judge, was not scored (out-of-scope).
  */
@@ -516,7 +516,7 @@ test('downloads an execution as a Markdown report', async ({ page }) => {
 
   const report = await response.text();
   expect(report).toContain('# Eval run — assistant');
-  // The run's judge option and its two summary sections (R152), which a run
+  // The run's judge option and its two summary sections (R153), which a run
   // with no finished question has too.
   expect(report).toContain('Judge: off');
   expect(report).toContain('## By category');
@@ -526,7 +526,7 @@ test('downloads an execution as a Markdown report', async ({ page }) => {
 });
 
 /**
- * The sets the question bank files produce (agents-evals R11, R106): the World
+ * The sets the question bank files produce (agents-evals R11, R107): the World
  * Cup file gives two variants, PostgreSQL and REST; Formula 1 and the golden
  * set one each. Test ids are `eval-set-<set id>` and match exactly, so
  * `eval-set-world-cup` never matches the `-rest` or `-golden` sets.
@@ -572,7 +572,7 @@ test('lists every question set, the golden set among them', async ({
     await expect(set).toContainText(`${questions} questions`);
   }
 
-  // The golden set (R108): the nine golden-set questions and the two
+  // The golden set (R109): the nine golden-set questions and the two
   // answer-quality ones, each scored as having run SQL with no tool errors.
   // Its case ids live in the question bank file, so match on question text.
   await page.getByTestId('eval-set-world-cup-golden').click();

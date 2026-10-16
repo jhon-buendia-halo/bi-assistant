@@ -213,7 +213,7 @@ describe('the fixture registry is the single source of required entities', () =>
   });
 
   it.each(['world-cup', 'finance', 'marketing-analytics'])(
-    'requires a Databricks datasource for the %s Databricks sample and matches catalog keys (agents-evals R184)',
+    'requires a Databricks datasource for the %s Databricks sample and matches catalog keys (agents-evals R185)',
     (source) => {
       const sample = evalFixture(`${source}-databricks`);
       const keys = sample.requiredTables.map(
@@ -247,7 +247,7 @@ describe('the fixture registry is the single source of required entities', () =>
     },
   );
 
-  it('accepts a Databricks sample in any one catalog, and refuses one spread over several (agents-evals R191)', () => {
+  it('accepts a Databricks sample in any one catalog, and refuses one spread over several (agents-evals R192)', () => {
     const sample = evalFixture('world-cup-databricks');
     const keys = (catalog: string) =>
       sample.requiredTables.map(

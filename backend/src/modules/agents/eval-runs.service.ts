@@ -58,11 +58,11 @@ export interface EvalRunView {
   /** Legacy attribute: stored runs carry the super admin's id (data-model 3.15). */
   ownerId?: string;
   /**
-   * The run's judge option (agents-evals R143). Runs saved before it read as
+   * The run's judge option (agents-evals R144). Runs saved before it read as
    * `{ mode: 'on' }` (see `EvalRunsRepository`).
    */
   judge: EvalJudgeSetting;
-  /** Counts of the finished results, kept current while running (R147). */
+  /** Counts of the finished results, kept current while running (R148). */
   summary: EvalRunSummary;
 }
 
@@ -171,7 +171,7 @@ export class EvalRunsService {
     );
     if (datasetError) return { error: datasetError };
 
-    // R19 step 8: the judge option, off when none is given (R143).
+    // R19 step 8: the judge option, off when none is given (R144).
     const judge = parseJudgeSetting(
       judgeInput.judge,
       judgeInput.judgeCategories,

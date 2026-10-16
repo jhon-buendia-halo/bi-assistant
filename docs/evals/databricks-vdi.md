@@ -1,12 +1,12 @@
 # Databricks evals in the VDI (BA-186)
 
-The Databricks samples, their reference queries and the loader are built and unit-tested outside the VDI, with no warehouse (decided 2026-10-13). This runbook is the part that needs one: load the three samples into Unity Catalog, validate every Databricks reference, run the sets, and bring the evidence back. Rules: [testing-data](../../specs/capabilities/testing-data/spec.md) R23 to R25, [agents-evals](../../specs/capabilities/agents-evals/spec.md) R183 to R191.
+The Databricks samples, their reference queries and the loader are built and unit-tested outside the VDI, with no warehouse (decided 2026-10-13). This runbook is the part that needs one: load the three samples into Unity Catalog, validate every Databricks reference, run the sets, and bring the evidence back. Rules: [testing-data](../../specs/capabilities/testing-data/spec.md) R23 to R25, [agents-evals](../../specs/capabilities/agents-evals/spec.md) R184 to R192.
 
 ## What you need
 
 - A copy of the repository at the commit to validate, Node 20 or later, and `npm ci` done in `backend/` and `frontend/`.
 - A Databricks workspace, a **SQL warehouse** (not a cluster) and a personal access token.
-- A catalog in which the token can create schemas and tables: `evals` by default, or any other one (a team sandbox catalog works). The reference queries are written with `` `evals` `` and run in the catalog of the dataset you select, so the name does not matter ([agents-evals](../../specs/capabilities/agents-evals/spec.md) R191). If you have no such catalog, ask a workspace admin for one:
+- A catalog in which the token can create schemas and tables: `evals` by default, or any other one (a team sandbox catalog works). The reference queries are written with `` `evals` `` and run in the catalog of the dataset you select, so the name does not matter ([agents-evals](../../specs/capabilities/agents-evals/spec.md) R192). If you have no such catalog, ask a workspace admin for one:
 
   ```sql
   CREATE CATALOG IF NOT EXISTS <catalog>;

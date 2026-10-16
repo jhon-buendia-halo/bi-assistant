@@ -107,7 +107,7 @@ function judgedCase(
   };
 }
 
-describe('runAssistantEvalCase judge option (agents-evals R143 to R146)', () => {
+describe('runAssistantEvalCase judge option (agents-evals R144 to R147)', () => {
   it('makes no judge call with the judge off, the default, and records the judge check as not scored', async () => {
     const result = await runAssistantEvalCase(judgedCase('out-of-scope'), [
       'World Cup',

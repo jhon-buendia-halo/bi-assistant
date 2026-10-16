@@ -15,7 +15,7 @@ import { checkScorer } from './checks/check-scorer';
  * arguments, so the scorer id (`check-includes`, …) and description ('Checks
  * if output includes "Argentina"') are exactly what the Evals tab and stored
  * runs showed when the cases were TypeScript. The deterministic checks
- * (agents-evals R111 to R123) are `./checks/` wrapped with `createScorer`;
+ * (agents-evals R112 to R124) are `./checks/` wrapped with `createScorer`;
  * `context` binds the set's dialect and the case's reference query.
  */
 export function scorerForCheck(
@@ -65,7 +65,7 @@ export function toAssistantEvalSets(
             : {}),
         }),
       ),
-      // One per scorer, same order: what each check measures (R145).
+      // One per scorer, same order: what each check measures (R146).
       checkCriteria: evalCase.checks.map((check) => check.criterion),
       ...(evalCase.expectedSql !== undefined
         ? { expectedSql: evalCase.expectedSql }

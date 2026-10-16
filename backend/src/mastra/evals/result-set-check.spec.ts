@@ -608,7 +608,7 @@ describe('runResultSetCheck', () => {
   });
 });
 
-describe('the catalog a Databricks reference runs in (agents-evals R191)', () => {
+describe('the catalog a Databricks reference runs in (agents-evals R192)', () => {
   const REFERENCE = loadEvalSets()
     .find((set) => set.id === 'world-cup-databricks-only')
     ?.cases.find((evalCase) => evalCase.id === 'dbx-only-youngest-scorer-2022')

@@ -129,7 +129,7 @@ function targetFor(fixture: SampleFixture): LoadTarget {
     schema: process.env['DATABRICKS_SCHEMA']?.trim() || fixture.schema,
   };
   // Any catalog works: the references run in the dataset's catalog
-  // (agents-evals R191). The schema does not: the preflight and the
+  // (agents-evals R192). The schema does not: the preflight and the
   // references name the sample's own schema.
   if (target.schema !== fixture.schema) {
     console.warn(

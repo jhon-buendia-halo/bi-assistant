@@ -655,7 +655,7 @@ export async function main(
     INVENTORY_TIMEOUT_MS,
   );
   console.log(`✔ ${dataset.message ?? `dataset "${datasetName}" saved`}`);
-  // A profile has its own sample when its set needs its endpoints (R163).
+  // A profile has its own sample when its set needs its endpoints (R164).
   const evalSample =
     (index.switches?.profile &&
       findFixture(`${fixture.id}-${index.switches.profile}`)?.id) ||

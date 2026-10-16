@@ -776,7 +776,7 @@ export class AgentDetail implements OnDestroy {
 
   /**
    * Keep the run's card in Executions current while it goes, so its headline
-   * and summary follow its finished questions (R151).
+   * and summary follow its finished questions (R152).
    */
   private refreshListedRun(
     view: { ok: boolean; message: string } & Partial<EvalRunView>,

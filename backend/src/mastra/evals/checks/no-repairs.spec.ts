@@ -19,7 +19,7 @@ const turn = (...toolCalls: CheckToolCall[]): CheckTurn => ({
   toolCalls,
 });
 
-describe('noRepairs (R112, D3)', () => {
+describe('noRepairs (R113, D3)', () => {
   it('passes when every query ran as written', () => {
     expect(
       noRepairs.evaluate(

@@ -1,5 +1,5 @@
 /**
- * The judge run option (agents-evals R143 to R145, R153): whether a run calls
+ * The judge run option (agents-evals R144 to R146, R154): whether a run calls
  * the LLM judge, off by default. The deterministic checks are the gate; the
  * judge costs tokens and can vary between runs, so a check it did not grade is
  * reported as not scored, never as a pass (BA-9 research 2.3).
@@ -29,7 +29,7 @@ export const LEGACY_JUDGE_SETTING: Readonly<EvalJudgeSetting> = Object.freeze({
   mode: 'on',
 });
 
-/** The reason on a judge check the run did not call (R144). */
+/** The reason on a judge check the run did not call (R145). */
 export const JUDGE_OFF_REASON = 'Judge off for this run';
 
 export type JudgeSettingResult =

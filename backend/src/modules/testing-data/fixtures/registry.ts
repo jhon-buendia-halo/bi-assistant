@@ -562,7 +562,7 @@ const WORLD_CUP_REST_CONNECTOR: SampleFixture = {
  * one their reference queries name in the set files
  * (`` `evals`.world_cup.matches ``). A sample loaded into another catalog
  * still runs: the references are rewritten to the catalog of the selected
- * datasets when they run (agents-evals R191).
+ * datasets when they run (agents-evals R192).
  */
 export const DATABRICKS_FIXTURE_CATALOG = 'evals';
 

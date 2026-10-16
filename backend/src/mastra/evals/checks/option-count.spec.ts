@@ -20,7 +20,7 @@ const turn = (...toolCalls: CheckToolCall[]): CheckTurn => ({
 
 const labels = (...names: string[]) => names.map((label) => ({ label }));
 
-describe('optionCount (R119, I5)', () => {
+describe('optionCount (R120, I5)', () => {
   it('passes one clarification with 2 to 4 distinct options', () => {
     for (const options of [
       labels('Most goals', 'Most wins'),

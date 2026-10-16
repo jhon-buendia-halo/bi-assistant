@@ -42,7 +42,7 @@ function result(
   };
 }
 
-describe('questionStatus (agents-evals R146)', () => {
+describe('questionStatus (agents-evals R147)', () => {
   it('fails a question whose run threw, whatever its checks', () => {
     expect(questionStatus([], 'model down')).toBe('failed');
     expect(questionStatus([check('passed')], 'model down')).toBe('failed');
@@ -72,7 +72,7 @@ describe('questionStatus (agents-evals R146)', () => {
   });
 });
 
-describe('summarizeEvalResults (agents-evals R147)', () => {
+describe('summarizeEvalResults (agents-evals R148)', () => {
   it('counts questions per status and per category, in category-list order', () => {
     const summary = summarizeEvalResults([
       result('a', 'out-of-scope', [check('not-scored', 'G2')]),
@@ -148,7 +148,7 @@ describe('summarizeEvalResults (agents-evals R147)', () => {
   });
 });
 
-describe('withStatusDefaults (agents-evals R146, old records)', () => {
+describe('withStatusDefaults (agents-evals R147, old records)', () => {
   it('derives the statuses of a result saved before they existed', () => {
     const old = {
       id: 'champion-2022',
@@ -178,7 +178,7 @@ describe('withStatusDefaults (agents-evals R146, old records)', () => {
   });
 });
 
-describe('renderSummaryMarkdown (agents-evals R152)', () => {
+describe('renderSummaryMarkdown (agents-evals R153)', () => {
   it('renders the By category and By criterion tables', () => {
     const lines = renderSummaryMarkdown(
       summarizeEvalResults([

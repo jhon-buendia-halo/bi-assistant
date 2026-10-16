@@ -14,7 +14,7 @@ function sqlTurn(...statements: string[]): CheckTurn {
   };
 }
 
-describe('qualifiedNames (R118, I6)', () => {
+describe('qualifiedNames (R119, I6)', () => {
   it('accepts schema.table on PostgreSQL, and the three-part names the baseline used', () => {
     expect(
       qualifiedNames.evaluate(

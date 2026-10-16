@@ -18,7 +18,7 @@ const KIND_LABELS: Readonly<
 
 /**
  * Where a Databricks sample's setup is described: the loader and the sample
- * it loads (agents-evals R184). It names the loader's own argument, the
+ * it loads (agents-evals R185). It names the loader's own argument, the
  * PostgreSQL sample whose dump it reads.
  */
 function databricksSetup(sample: SampleFixture): string {
@@ -107,7 +107,7 @@ export function assistantEvalDatasetError(
     return `${setup} Selected datasets: ${names.join(', ')}. Missing entities: ${missing.join(', ')}.`;
   }
   if (kind === 'databricks') {
-    // The references run in the datasets' one catalog (R191), so it must be
+    // The references run in the datasets' one catalog (R192), so it must be
     // unambiguous before any model token is spent.
     try {
       catalogOfEntities(selected.flatMap((dataset) => dataset.tables));
