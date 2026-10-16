@@ -196,6 +196,32 @@ Developer tooling for seeing what the backend and agents are doing: agent and LL
 - **Acceptance:** a developer following only the docs sees one chat question in Phoenix and Grafana.
 - **Notes:** last; depends on 0.3.2–0.3.6. Guide: [docs/observability.md](docs/observability.md), linked from README *Development*. Branch `docs/BA-118-observability-docs` (it includes the BA-114 compose branch merged in, so it holds the whole stack). Evidence: [evidence/0.3.7/](evidence/0.3.7/).
 
+### Milestone 0.4 — Harness Adjustments ([BA-119](https://halo-powered.atlassian.net/browse/BA-119))
+
+Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the workflow gates, and the project skills and checks that govern how a change is planned, built and shipped. No app behaviour changes. Epic spec: [specs/epics/BA-119/spec.md](specs/epics/BA-119/spec.md).
+
+#### 0.4.1 — Split CLAUDE.md into workflow-stage skills ([BA-236](https://halo-powered.atlassian.net/browse/BA-236))  `🚧 In progress`
+- **Intent:** a Claude Code session loads a workflow stage's conventions when that stage starts, as the RFP Builder loads its stage skills, rather than carrying all of CLAUDE.md on every turn.
+- **Scope:**
+  - CLAUDE.md keeps only the always-on core:
+    - what the repo is
+    - the mandatory first action
+    - the `## Workflow` list, with each step naming its skill
+    - the fast loop and the acceptance gate
+    - the hard gates
+    - model usage
+  - The conventions move, unchanged in substance, to the project skills `workflow-understand`, `workflow-plan`, `workflow-architecture`, `workflow-specs`, `workflow-e2e`, `workflow-implement`, `verify` (extended with step 9), `workflow-ship` and `workflow-retrospective`.
+  - `check-specs.py` checks the skills' links.
+  - Specs that cite a CLAUDE.md convention point at its skill.
+- **Out of scope:** app code; changing what a rule says; the `workflow-steps` mod.
+- **Acceptance:**
+  - A section map shows every CLAUDE.md rule in exactly one place.
+  - The mod still parses eleven steps and the first action, and its tests pass.
+  - A new session lists the nine skills.
+  - `check-specs.py` passes.
+  - Nothing under `backend/` or `frontend/` changes.
+- **Notes:** branch `docs/BA-119-harness-adjustments`. The user chose one skill per workflow stage, invocable as `/<name>`, on 2026-10-16.
+
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
 Source of truth for scope and dates: Jira project **BA**, version *1.0 Beta* ([timeline](https://halo-powered.atlassian.net/jira/software/projects/BA/boards/2688/timeline)). Each milestone mirrors one Jira epic and each feature mirrors one story, so IDs map 1:1. Imported 2026-10-01. Status changes are made in both places.

@@ -8,33 +8,35 @@ backend/    NestJS API
 specs/      the complete specification of the app
 ```
 
-**What the app does and how it works is specified in [specs/](specs/README.md), not here.** Start there for any question about behaviour, endpoints, stored data, agents, UI, build or release. This file holds the rules for working in the repo.
+**What the app does and how it works is specified in [specs/](specs/README.md), not here.** Start there for any question about behaviour, endpoints, stored data, agents, UI, build or release. This file holds the always-on rules for working in the repo; each workflow stage's conventions live in a project skill under [.claude/skills/](.claude/skills/), loaded when that stage starts.
 
 Process documents (see **Workflow** below):
 
-- [roadmap.md](roadmap.md) — pre-implementation plan for all work. See **Planning convention**. Longer-form phase plans live in [docs/plans/](docs/plans/); roadmap features link to them rather than duplicating them.
-- [changelog.md](changelog.md) — running log of every change. See **Logging convention**.
-- [specs/](specs/README.md) — the product, system, capability and epic specs; an LLM given only this folder can rebuild the app. Architecture and ADRs are in [specs/system/architecture.md](specs/system/architecture.md); user flows in Gherkin are in each capability spec. See **Spec convention**, **Architecture convention** and **Epic gate**.
-- [retrospective.md](retrospective.md) — what went well and wrong on each completed change. See **Retrospective convention**.
-- [evidence/](evidence/) — verifiable artifacts for each shipped change, linked from the changelog. See **Evidence convention**.
+- [roadmap.md](roadmap.md) — pre-implementation plan for all work. Skill `workflow-plan`. Longer-form phase plans live in [docs/plans/](docs/plans/); roadmap features link to them rather than duplicating them.
+- [changelog.md](changelog.md) — running log of every change. Skill `workflow-ship`.
+- [specs/](specs/README.md) — the product, system, capability and epic specs; an LLM given only this folder can rebuild the app. Architecture and ADRs are in [specs/system/architecture.md](specs/system/architecture.md); user flows in Gherkin are in each capability spec. Skills `workflow-specs`, `workflow-architecture` and `workflow-plan` (Epic gate).
+- [retrospective.md](retrospective.md) — what went well and wrong on each completed change. Skill `workflow-retrospective`.
+- [evidence/](evidence/) — verifiable artifacts for each shipped change, linked from the changelog. Skill `workflow-ship`.
 
 ## Workflow — order of operations
 
 > **MANDATORY FIRST ACTION — read [retrospective.md](retrospective.md) before doing anything else.** Before you restate the goal, ask a question, run a command, or touch a file — on *every* task, not just large ones — open [retrospective.md](retrospective.md) and read the lessons. They are recorded specifically so past mistakes are not repeated. This precedes step 1.
 
-Every meaningful change follows this eleven-step workflow. Do not skip a step. The steps run in two loops, a **fast loop** and an **acceptance gate** (see **When the steps run** below the list). Within each loop the steps are sequential gates; *within* a step, independent units still fan out to parallel subagents per **Model usage** above.
+Every meaningful change follows this eleven-step workflow. Do not skip a step. The steps run in two loops, a **fast loop** and an **acceptance gate** (see **When the steps run** below the list). Within each loop the steps are sequential gates; *within* a step, independent units still fan out to parallel subagents per **Model usage** below.
 
-1. **Understand the goal** — restate the request in your own words before touching anything. What user-observable outcome are we after? What's the success criterion? Apply any lesson from [retrospective.md](retrospective.md) that bears on this task.
-2. **Ask clarifying questions until the goal is 100% understood** — scope, behaviour, edge cases, acceptance criteria. Do not proceed to step 3 with unresolved questions.
-3. **Update roadmap** — find or add the feature in [roadmap.md](roadmap.md) with `Intent`, `Scope`, `Acceptance` filled in; set status to `🚧 In progress`. See **Planning convention**. Before any file changes, confirm the user story belongs to a Jira epic (see **Epic gate**), then work on the epic's branch and git worktree: reuse it if the epic already has one open, otherwise create it. See **Branching convention**.
-4. **Update architecture** — if the change involves an architectural decision, record it as an ADR in [specs/system/architecture.md](specs/system/architecture.md) under the relevant C4 level *before* any code is written.
-5. **Update specs** — before any test or code, update every spec the change affects: the epic spec, the capability spec's Rules and Gherkin Flows, and the system specs for any endpoint, persisted shape, prompt, UI or delivery change. The Gherkin is the executable spec the implementation is measured against. See **Spec convention**.
-6. **Component impact-based analysis on E2E** — for every component / page / service / backend module touched, enumerate the Gherkin scenarios (in the capability specs) that exercise it and decide per scenario: *add / update / delete / re-run-as-is*. Produce the explicit list before writing any test or implementation code.
-7. **Implement / update / delete E2E** — apply the step-6 decisions to [frontend/e2e/](frontend/e2e/) (and backend `test/*.e2e-spec.ts` where the flow is API-level). They are written in the acceptance gate, after the code exists, so each added or updated scenario must assert the specific behaviour the change introduced: it would fail on the base commit.
-8. **Implement changes** — production code, built against the Acceptance criteria and the step-5 Gherkin. It runs in the fast loop, before steps 6 and 7.
-9. **Run E2E and fix until green** — `npm run test:e2e` in [frontend/](frontend/) (builds the backend with the web UI, then drives the **web app** in Chromium through `e2e/fixtures/app.fixture`; global setup starts the World Cup Postgres with `docker compose up -d --wait postgres` unless `E2E_SKIP_DOCKER=1`). Run `npm run test:e2e:desktop` only when the user asks for a desktop run. See **Test target convention**. Also run `python3 scripts/check-specs.py` at the repo root, `npm test` / `npm run lint` / `npm run build` in [backend/](backend/) and `npm test` / `npm run build` in [frontend/](frontend/). **Run only the impacted E2E specs**, the spec files step 6 lists (added, updated and re-run-as-is), never the whole suite unless the user asks for it: `npm run test:e2e -- e2e/<spec>.spec.ts …`, and `npm run test:e2e:org -- e2e/<spec>.spec.ts …` for impacted org specs. **The evals must pass** whenever the change touches what an agent receives (its prompt, skills, tools, context blocks or model routing): run its eval set on the base commit and on the branch, same model and data dir (`npm run evals:assistant` with `EVAL_SET` or `EVAL_CASES`, see [delivery.md](specs/system/delivery.md)). Passing means a **100% pass rate** on the branch: every case passes, and every case is re-run until it has 3 runs with all 3 passing. The base run tells which failures the change caused, but a failure on the base doesn't excuse one on the branch. Diagnose root causes; fix the test if the test was wrong, the implementation if it was wrong. Repeat until every impacted spec and the evals are green.
-10. **Update changelog with evidence** — only after step 9 is green, add a dated entry to [changelog.md](changelog.md) and capture the evidence under [evidence/](evidence/) (E2E summary, screenshots of the running app, exports). Mark the roadmap entry `✅ Done`. Confirm the specs touched in step 5 describe what actually shipped, and fix them in the same PR if not. See **Logging convention** and **Evidence convention**.
-11. **Retrospective** — add a dated entry to [retrospective.md](retrospective.md): what went well, what went wrong, what to do differently. Step 1 of the *next* change reads it.
+**Load a step's skill before you start that step, and follow it**: it holds the conventions, commands and checks for that step, as the RFP Builder loads a stage's skill before that stage. One skill may cover two steps.
+
+1. **Understand the goal** — restate the request in your own words before touching anything. Skill: `workflow-understand`.
+2. **Ask clarifying questions until the goal is 100% understood** — scope, behaviour, edge cases, acceptance criteria. Skill: `workflow-understand`.
+3. **Update roadmap** — find or add the feature in [roadmap.md](roadmap.md), pass the **Epic gate**, then work on the epic's branch and worktree. Skill: `workflow-plan`.
+4. **Update architecture** — if the change involves an architectural decision, record it as an ADR in [specs/system/architecture.md](specs/system/architecture.md) *before* any code is written. Skill: `workflow-architecture`.
+5. **Update specs** — before any test or code, update every spec the change affects. Skill: `workflow-specs`.
+6. **Component impact-based analysis on E2E** — for every component, page, service or backend module touched, decide per Gherkin scenario: *add / update / delete / re-run-as-is*. Skill: `workflow-e2e`.
+7. **Implement / update / delete E2E** — apply the step-6 decisions to the Playwright and API-level E2E specs, each asserting what the change introduced. Skill: `workflow-e2e`.
+8. **Implement changes** — production code, built against the Acceptance criteria and the step-5 Gherkin. Skill: `workflow-implement`.
+9. **Run E2E and fix until green** — the impacted E2E specs, `check-specs`, unit tests, lint, builds and, when an agent's input changed, its evals at 100%. Skill: `verify`.
+10. **Update changelog with evidence** — only after step 9 is green, add a dated changelog entry, capture the evidence and mark the roadmap entry `✅ Done`. Skill: `workflow-ship`.
+11. **Retrospective** — add a dated entry to [retrospective.md](retrospective.md): what went well, what went wrong, what to do differently. Skill: `workflow-retrospective`.
 
 **When the steps run — fast loop, then acceptance gate.** Adopted 2026-10-14 so the user can test a change by hand before the slow steps run, instead of the whole workflow running from scratch for every request.
 
@@ -42,137 +44,20 @@ Every meaningful change follows this eleven-step workflow. Do not skip a step. T
 - **Acceptance gate, once the user accepts the change by hand:** steps 6, 7, 9, 10 and 11, in order, once per story. Several accepted stories may go through the gate together before the epic PR opens.
 - **No epic PR opens** while one of its stories has not passed the acceptance gate.
 
-Versioning stays automatic (see **Versioning** under **Code rules**): the changelog is the human-readable record of *what* shipped, Conventional Commit subjects still drive the version bump.
+Versioning stays automatic (see **Versioning** below): the changelog is the human-readable record of *what* shipped, Conventional Commit subjects still drive the version bump.
 
-## Planning convention — read before building
+## Hard gates — they apply in every turn, inside a step or not
 
-**Every feature must be defined in [roadmap.md](roadmap.md) before any code is written for it.** The roadmap uses a strict **Release → Milestone → Feature** hierarchy with numeric IDs (`R`, `R.M`, `R.M.F`) and a status legend (`📋 Planned`, `🚧 In progress`, `✅ Done`, `🚫 Cut`). A feature is only ready to start when its Intent, Scope, and Acceptance fields are filled in.
+Each gate's details are in the skill named after it.
 
-1. Find or add the entry in [roadmap.md](roadmap.md) first.
-2. Confirm Intent / Scope / Acceptance are present before touching code.
-3. Update status to `🚧 In progress`, then `✅ Done` when merged and verified.
-4. If something gets cut, leave the entry with status `🚫 Cut` and a one-line reason.
+- **Epic gate — no Jira epic, no code change.** Every new code change must map to a Jira epic in project BA, and the epic must have a confirmed spec. If it does not, do not branch, edit code or open a PR. Checked before step 3. Skill: `workflow-plan`.
+- **Never on `main`.** Every epic is built on one branch, in one worktree, and ships as one PR; nothing goes directly on `main`. Skill: `workflow-plan` (branching), `workflow-ship` (PR and cleanup).
+- **Specs change with the code, on the same branch.** Skill: `workflow-specs`.
+- **Ask the target before starting the app or the Postgres stack from a worktree; check the default ports first; stop by PID.** Skill: `workflow-implement` (Worktree deploy convention).
 
-Items in the **Backlog** section are not yet sequenced into a release. Promote them into a Milestone before starting work.
+### Versioning
 
-### Find the right feature — don't just append
-
-When a new requirement arrives, the first move is a classification step, not "append at the bottom":
-
-1. **Identify the milestone** the work belongs to — read each milestone's description; they exist for this.
-2. **Decide add / extend / split:** extend an existing feature's `Scope` / `Acceptance` / `Notes` if the work fits it; otherwise add a new feature under the *right* milestone, slotted in dependency order; if no milestone fits cleanly, propose a new milestone or restate boundaries *before* adding the feature.
-3. **Then write the entry** with Intent / Scope / Out-of-scope / Acceptance / Notes, and update cross-references in features that touch it.
-
-The roadmap is read top-to-bottom; ordering and grouping carry meaning.
-
-## Logging convention — record every change
-
-**Every meaningful change must be logged in [changelog.md](changelog.md), as the *final* implementation step (step 10).** Reverse-chronological dated sections (`## YYYY-MM-DD`) with categorized subsections (`### Added`, `### Changed`, `### Removed`, `### Cut`, `### Fixed`). Bundle related edits from one session into one bullet; reference the affected file or roadmap feature ID. Never rewrite past entries — fix forward with a new dated entry. Roadmap status transitions get a matching changelog entry at the same time. **Every entry links to its evidence.**
-
-## Evidence convention — every shipped change is independently verifiable
-
-**Every change logged in [changelog.md](changelog.md) must be backed by artifacts in [evidence/](evidence/), linked from the entry**, so the user can confirm the work without re-running anything.
-
-Layout: one folder per shipped change, keyed by roadmap feature ID — `evidence/<feature-id>/` (e.g. `evidence/1.2.3/`). Store:
-
-- **E2E results** — the `npm run test:e2e` summary (`e2e-results.txt`) and/or the Playwright HTML report / trace (`frontend/playwright-report/`, `frontend/test-results/`) for the specs exercising the change, naming the spec files so evidence maps back to Gherkin scenarios.
-- **Screenshots** — of the running web app (Playwright `page.screenshot` in the app fixture works; desktop screenshots only when the user asked for a desktop run), named for what they show (`visual-panel-revert.png`, not `screenshot1.png`), capturing the actual claimed state.
-- **Other artifacts** — exported visuals (`index.html`, `answer.md`, `data.json`), sample API responses, diagnostics reports, short recordings.
-
-Link with a relative path: `Evidence: [evidence/1.2.3/](evidence/1.2.3/)`. Keep artifacts lightweight. If a change genuinely produces no observable artifact, say so explicitly — *"Evidence: existing E2E suite green, no UI change"*.
-
-## Architecture convention — record every architectural decision
-
-**Every architectural decision is documented in [specs/system/architecture.md](specs/system/architecture.md) using the C4 model** (System Context → Containers → Components → Code), as short ADRs with `ID`, `Title`, `Status`, `Date`, `Context`, `Decision`, `Consequences`. Never edit a prior ADR's substance — supersede it with a new ADR and mark the old one `Superseded by ADR-NNNN`.
-
-Architectural: choosing or replacing a framework, splitting/merging containers (Electron main, renderer, NestJS backend, npm CLI), introducing an external system (LLM provider, datasource type), changing data-flow direction, new integration boundaries, persistence-shape changes that need migrations. Not architectural: file moves, renames, day-to-day feature work (roadmap + changelog). The other system specs in [specs/system/](specs/system/) record *how* things work; ADRs record *why*.
-
-## Spec convention — the specs describe the shipped app, completely
-
-**[specs/](specs/README.md) is the single source of truth for what the app does and how it is built, complete enough that an LLM given only that folder could rebuild the app.** Layout, formats, stack-neutrality and the rebuild prompt are in [specs/README.md](specs/README.md).
-
-- **Specs change with the code, on the same branch** (workflow step 5). A PR that changes behaviour, an endpoint, a persisted shape, an agent prompt or tool, the UI, or the build and release process without the matching spec change is incomplete. Because specs change on the branch, `main` always describes the shipped app.
-- **Where things go:** behaviour rules and user flows → `specs/capabilities/<capability>/spec.md`; endpoints, IPC and CLI → `system/api.md`; collections, document shapes, files on disk and migrations → `system/data-model.md`; agents, prompts, tools and model routing → `system/agents.md`; layout, screens, tokens and copy → `system/ui.md`; frameworks, versions and code layout → `system/tech-stack.md`; build, packaging and release → `system/delivery.md`; terms → `product/glossary.md`. A new capability gets a new folder and a row in the [specs/README.md](specs/README.md) table.
-- **Each fact lives in one file.** Link to it; never copy it.
-- **CI enforces coverage.** `.github/workflows/spec-checks.yml` runs `python3 scripts/check-specs.py` on every PR, and a ruleset on `main` makes it a required check, so a PR with drifting specs cannot merge. It fails when a route, collection, agent, Playwright spec, capability or roadmap epic has no spec, or when a link breaks. Run it locally before pushing. It proves coverage, not correctness.
-- **Gherkin:** every user-facing flow is a `Scenario:` under a `Feature:` in the Flows section of the capability spec that owns it, in standard Gherkin (`Given / When / Then / And`). It covers navigation, dialogs, panels, toasts, form submits, chat/stream behaviour and visual tailoring, but not purely visual tweaks or internal refactors. Write from the user's point of view (`When I click "New session"`), not the implementation's. Each Feature names its Playwright spec file, or says `E2E: none yet`.
-
-## E2E test convention — every flow change triggers an impact analysis on Playwright
-
-**Playwright specs in [frontend/e2e/](frontend/e2e/) are the executable mirror of the Gherkin Features in [specs/capabilities/](specs/capabilities/)** — one spec file per Gherkin `Feature:`. A Feature marked `E2E: none yet` gets its spec file the first time a change touches it. Whenever step 5 touches a scenario, perform the step-6 analysis and decide per scenario: **Add**, **Update**, **Delete**, or **Re-run as-is**. Test edits (step 7) land in the acceptance gate, after the user has accepted the change by hand and before it ships; don't ship a flow change without the matching E2E change, nor with any impacted spec red.
-
-Scope: Playwright covers end-to-end behaviour in the running app: the web app by default, the Electron app on request (see **Test target convention**). Unit tests stay beside their source (`*.spec.ts` — Jest in backend, `ng test` in frontend) and are not governed by this rule. Visual baselines (`*-snapshots/`) are updated only with `npm run test:e2e:update` and only when the visual change is intended.
-
-## Test target convention — test the web app; desktop only on request
-
-**During epic development, E2E tests, evidence screenshots and manual checks of the running app run against the web app built from the epic branch, not the Electron desktop app.** The desktop app is tested only when the user explicitly asks for a desktop run. Otherwise desktop is not covered, and the evidence and PR say so.
-
-- **Web target (default):** `npm run test:e2e` in [frontend/](frontend/). It builds the backend with the web UI (`build:all`) and runs the Playwright `web` project. Each test starts the npm CLI (`backend/dist/cli.js --no-open`) on a free port with its own temp data dir and drives it in Chromium at 1440×900, the desktop window size. It never touches port 3000 or your data.
-- **Desktop target (on request only):** `npm run test:e2e:desktop` runs the same specs in the Playwright `desktop` project against the real Electron app. It needs port 3000 free.
-- **Desktop-only scenarios** (Electron shell features such as native dialogs, shell-side log capture and redaction, the "Restart backend" button) call `desktopOnly()` from the fixture. They are skipped on web with the reason `Desktop only`. List every skipped scenario as **"desktop not run"** in the evidence README and the PR description, unless a desktop run was requested and passed.
-- **Manual checks and screenshots:** start the web mode, not Electron. Run `npm --prefix backend run build:all`, then `node backend/dist/cli.js --no-open --port <free> --data-dir <tmp>`, and open the printed URL. In a worktree, this is the isolated target from the **Worktree deploy convention**.
-- **Unit tests are unchanged:** Jest in `backend/` and `ng test` in `frontend/` don't depend on the target.
-- **Adopted 2026-10-09 ([BA-156](https://halo-powered.atlassian.net/browse/BA-156)).** Commands and fixture details: [specs/system/delivery.md](specs/system/delivery.md) and [specs/system/tech-stack.md](specs/system/tech-stack.md).
-
-## Retrospective convention — capture lessons so the next run is better
-
-**Every completed change closes with an entry in [retrospective.md](retrospective.md) (step 11), and reading that file is the mandatory first action of the next task.** Reverse-chronological dated sections (`## YYYY-MM-DD`), one per shipped change, referencing the roadmap feature ID, with three subsections:
-
-- **What went well** — specific decisions, tests, or conventions worth repeating, and why.
-- **What went wrong** — misread goals, regressions, skipped or out-of-order steps, lost time. An entry with no `What went wrong` means you didn't look hard enough.
-- **What to do differently** — a concrete instruction your future self can follow ("before renaming a persisted field, add it to `LEGACY_DOC_FIELDS`"), not "be more careful".
-
-Skip only for trivial, zero-risk edits. Never rewrite a past entry. When a recurring lesson hardens into a rule, promote it into the relevant convention (or CLAUDE.md proper) and note the promotion.
-
-## Epic gate — no Jira epic, no code change
-
-**Every new code change must map to a Jira epic in project BA. If it does not, the change is not done: do not branch, edit code or open a PR.** This is a hard gate, checked before step 3 of the workflow.
-
-- The change maps to an epic when its Jira issue (the Story or Bug being worked on) has an Epic as its `parent`, or the issue is that Epic itself. Check with `.claude/skills/jira/scripts/jira.sh issue <US-ID>` and read the `parent` field, then confirm the parent's `issuetype` is `Epic`.
-- No epic: stop and tell the user which issue has no epic. Ask them to link it to an existing epic or create one (with the `jira` skill, with confirmation). Never pick an epic yourself or invent a key.
-- The epic also appears in the matching [roadmap.md](roadmap.md) milestone (each milestone mirrors one epic) and in the PR description, which links the epic and every story it includes.
-- **Every epic has a high-level spec** at `specs/epics/<EPIC-ID>/spec.md` (e.g. `specs/epics/BA-12/spec.md`), in the format in [specs/README.md](specs/README.md): goal, scope, out of scope, stories, the capability and system specs it touches, acceptance, and dependencies, risks and open questions. If the epic has no spec yet, or its spec is still `Status: Draft`, write or finish it before any code for its stories and get the user to confirm it (`Status: Confirmed`).
-- **One-time exception (2026-10-04):** the user waived confirmation for the eight epic specs drafted by the BA-90 backfill (BA-2, BA-4, BA-5, BA-9, BA-10, BA-11, BA-12, BA-82). Specs marked *confirmation waived* do not block their stories. The exception does not extend to any other epic spec; every new one follows the rule above.
-- Keep the epic spec high level. Story detail lives in the roadmap and Jira, behaviour in the capability specs, decisions in [specs/system/architecture.md](specs/system/architecture.md); link to them rather than copying. Update the spec when the epic's scope changes, and link it from the matching roadmap milestone.
-
-## Branching convention — one epic, one branch, one worktree, one PR
-
-**Every epic is developed on a single feature branch, checked out in a single git worktree, and ships as a single PR that includes all of its user stories.** Stories under the same epic do not get their own branches or PRs: each one is built, specified, tested and logged on the epic's branch, one after the other. No work goes directly on `main` or the default branch, and no branch is created without an existing Jira epic behind it.
-
-- **Branch name:** `<type>/<EPIC-ID>-<short-description>`
-  - `<type>` is a Conventional Commit type: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `ci` or `build`. Use the highest-impact type among the epic's commits (`feat` if any story adds a feature). The version bump reads every commit since the last tag, so mixed commit types on one branch still bump correctly.
-  - `<EPIC-ID>` is the key of an **existing** Jira Epic in project BA, uppercase as Jira shows it (e.g. `BA-111`). Each story worked on the branch must be a child of that epic. Check both with `.claude/skills/jira/scripts/jira.sh issue <KEY>` before the first commit for a story. If the story or epic doesn't exist yet, stop and ask the user to create it (or create it with the `jira` skill, with confirmation). Never invent an ID. See **Epic gate**.
-  - `<short-description>` is lowercase kebab-case, a few words, ASCII only, describing the epic.
-  - Example: `feat/BA-111-local-observability`.
-- **One open branch per epic.** Before starting a story, check for the epic's branch (`git branch -a --list '*/<EPIC-ID>-*'`) and its worktree (`git worktree list`). If they exist, continue there; create them only for the epic's first story.
-- **Worktree:** one per epic branch, under `.claude/worktrees/`. **The folder is named after the epic it builds: `<EPIC-ID>-<short-description>`, exactly the branch name without the type.** No other name is allowed (no session ids, no `wt-…`, no story ids):
-  ```bash
-  git worktree add .claude/worktrees/BA-111-local-observability -b feat/BA-111-local-observability main
-  ```
-  When the Claude desktop app creates the worktree for the session under another name (e.g. `.claude/worktrees/bridge-cse_…`), bring both to the convention before the first commit: rename the branch (`git branch -m <type>/<EPIC-ID>-<short-description>`) and move the folder (`git worktree move <current-path> .claude/worktrees/<EPIC-ID>-<short-description>`; a worktree the app has locked needs `git worktree unlock` first, or the move after the session ends).
-- **Bugs:** a Bug whose parent epic has an open branch is fixed on that branch, like a story. A Bug against work that already shipped, whose epic has no open branch, gets its own `fix/<BUG-ID>-<short-description>` branch, worktree and PR (e.g. `fix/BA-83-empty-session-thread`). The bug must still belong to an epic.
-- **Traceability:**
-  - Each commit is scoped to the story (or bug) it implements: `feat(BA-115): …`.
-  - Each story keeps its own [roadmap.md](roadmap.md) feature, changelog entry, evidence folder and retrospective entry, all made on the epic branch.
-  - The PR title names the epic (`feat(BA-111): …` or `feat: … (BA-111)`).
-  - The PR description links the epic and lists every story and bug it includes, each with its Jira link and roadmap feature ID.
-  - Open the PR when the epic's stories are done, not one PR per story.
-- **Review:** a PR into `main` needs one approving review. Only the repo owner (the only admin) can merge without one, through the ruleset bypass; nobody can push straight to `main`. Details: *Branch rulesets on `main`* in [delivery.md](specs/system/delivery.md).
-- **Cleanup — mandatory once the PR merges:** delete the epic's worktree folder and its branch. From the main checkout:
-  ```bash
-  git worktree remove .claude/worktrees/<EPIC-ID>-<short-description>   # deletes the folder
-  git worktree prune
-  git branch -d <type>/<EPIC-ID>-<short-description>
-  git push origin --delete <type>/<EPIC-ID>-<short-description>   # if GitHub didn't delete it on merge
-  ```
-  Then confirm with `git worktree list` that it is gone and that `.claude/worktrees/<EPIC-ID>-…` no longer exists on disk. `git worktree remove` refuses when the folder holds uncommitted or untracked files: look at them first, and never discard work that isn't in the merged PR without asking the user. Git-ignored local files (`.env`, `.env.*.local`, `node_modules/`, `dist/`) go with the folder; copy any you still need (such as `.env.llm.local`) before removing. Also tear down the worktree's isolated resources (an infra-mcp namespace, a `docker compose -p` stack, a temp data dir).
-- **Adopted 2026-10-09 ([BA-149](https://halo-powered.atlassian.net/browse/BA-149)).** Branches created earlier under the old one-issue-per-branch rule merge as they are.
-
-## Worktree deploy convention — always ask which target
-
-**When work happens in a git worktree (any path under `.claude/worktrees/`), do not silently run against shared state.** Before starting the app or the Postgres compose stack from a worktree, ask: *run against the shared data dir / main compose stack, or an isolated one for this worktree?* The Electron app and the `npx` CLI default to shared data dirs (`userData`, `~/.questions-to-insights`) and backend port 3000; the compose Postgres uses project name `questions-to-insights-world-cup` and port 55432, and its opt-in `observability` profile adds ports 6006, 3001, 4317 and 4318 — a second instance collides unless isolated (CLI `--data-dir` and `--port`; desktop `QUESTIONS_TO_INSIGHTS_USER_DATA_DIR`; `docker compose -p <name>` with `WORLD_CUP_DB_PORT` and the observability port variables). A second *desktop* instance can't run on another port until roadmap 1.7.20 (BA-109) lands, so use the CLI for side-by-side runs. Details: [specs/system/delivery.md](specs/system/delivery.md). Skip the question only when the user has already named the target in the same turn. Merging the worktree back goes through `sync_with_base_branch` / a PR, never a silent push.
-
-**Local test deploys: check the default ports first, and never commit deploy tweaks.** Before starting the app for the user to try, list what is already listening (`ss -ltnp`, `docker ps`) on the default ports: backend 3000, Postgres 55432, observability 6006, 3001, 4317 and 4318. The shared World Cup Postgres on 55432 is the database the app expects, so it is reused, not a conflict. For any other default port in use, start the app on a free port through flags or environment variables only (CLI `--port` and `--data-dir`, `PORT`, `WORLD_CUP_DB_PORT`, the observability port variables). If running locally needs a change to a tracked file, keep that change out of every commit and revert it once the user is done testing. Report the URL, port, data dir and PID, and stop the process by that PID, never with `pkill -f`.
+Never edit `version` by hand. Conventional Commit subjects drive the automatic bump on merge; installers and the npm package are built manually. See [delivery.md](specs/system/delivery.md).
 
 ## Model usage: plan vs. execute
 
@@ -181,28 +66,3 @@ For planning purposes, Fable creates the plan.
 For execution, do not pin a fixed model. Once the execution plan is well defined, the session LLM picks whichever model version it judges best for the work at hand (capability vs. speed vs. cost for that plan) and runs the plan with it.
 
 Execute by fanning out: split the plan into independent units of work and dispatch them to parallel subagents (all agent calls for independent units go out in a single message so they run concurrently). Keep sequential only what genuinely depends on a previous result. The session LLM chooses the model per subagent the same way — cheap/fast models for mechanical or narrow-scope units, stronger models for units needing design judgment or cross-file reasoning.
-
-## Code rules — the short list to keep in mind while coding
-
-How the app is built and works is in [specs/system/](specs/system/): [tech-stack.md](specs/system/tech-stack.md) (frameworks, versions, folder layout), [delivery.md](specs/system/delivery.md) (scripts, packaging, npm package, versioning, release), [data-model.md](specs/system/data-model.md), [api.md](specs/system/api.md), [agents.md](specs/system/agents.md), [ui.md](specs/system/ui.md). The rules below are the ones that bite when ignored.
-
-### Frontend (Angular renderer + Electron main)
-
-- **Feature-based folders.** New feature = `src/app/features/<feature>/` with `components/`, `services/`, `models/` (and `pages/`, `store/`, a lazy `<feature>.routes.ts` once routing exists). `core/` holds app-wide singletons, `shared/` presentational pieces with no feature logic. Full tree and current state: [tech-stack.md](specs/system/tech-stack.md).
-- Standalone components + signals, no NgModules. Tailwind CSS v4, `lucide-angular` icons.
-- Electron builds use `--base-href ./`. An absolute `/` base breaks asset loading over `file://`.
-- Electron IPC goes only through `frontend/electron/preload.cjs` (`contextBridge`); keep `contextIsolation` on and `nodeIntegration` off.
-- `SessionChat` re-syncs from its `session` input only when the session **id** changes. Same-id refreshes (visual metadata) must not abort an in-flight stream.
-- **Known gap:** under `file://` the renderer hardcodes `http://localhost:3000`, so a non-default `BACKEND_PORT` breaks the desktop renderer. Tracked as roadmap 1.7.20 ([BA-109](https://halo-powered.atlassian.net/browse/BA-109)).
-
-### Backend (NestJS)
-
-- **Feature-based modules.** New feature = `src/modules/<feature>/` with `<feature>.module.ts`, controller, service and `dto/`, `entities/`, `repositories/` as needed, registered in `app.module.ts`. Technical concerns go in `infrastructure/`; feature modules depend on it, never the reverse.
-- **New collection** = add `{ token, table }` to `COLLECTIONS` in `database.module.ts` and a token in `doc-store.ts`. Repositories inject the token, never the db handle.
-- **Renaming a collection or a persisted field needs a migration**, or existing installs silently start empty: `LEGACY_TABLE_NAMES` for tables, `LEGACY_DOC_FIELDS` for fields on sorted collections (raw SQL, so `updatedAt` is not restamped), covered by `database.module.spec.ts`. Record it in [data-model.md](specs/system/data-model.md).
-- **New agent** = a file in `src/mastra/agents/` plus registration in `src/mastra/index.ts`, and an entry in [agents.md](specs/system/agents.md). Its `model` is `async () => resolveAgentModel()`; never hardcode a provider.
-- `APP_DATA_DIR` is read at import time by `database.module.ts` and `mastra/storage.ts`, so it must be set before the app module is imported (the CLI does this).
-
-### Versioning
-
-Never edit `version` by hand. Conventional Commit subjects drive the automatic bump on merge; installers and the npm package are built manually. See [delivery.md](specs/system/delivery.md).
