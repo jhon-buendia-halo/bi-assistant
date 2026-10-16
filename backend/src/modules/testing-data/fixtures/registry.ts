@@ -9,8 +9,15 @@
  *
  * Deliberately dependency-free (no Nest, no `pg`, no fs): both a Nest service
  * and the DI-less Mastra eval modules import it, and it must stay cheap and
- * side-effect-free for either to do so.
+ * side-effect-free for either to do so. The knowledge seeds it carries are
+ * plain data modules too (`./knowledge/`).
  */
+
+import { FINANCE_KNOWLEDGE } from './knowledge/finance';
+import { GENOMICS_KNOWLEDGE } from './knowledge/genomics';
+import { HEALTH_INSURANCE_KNOWLEDGE } from './knowledge/health-insurance';
+import { SUPPLY_CHAIN_KNOWLEDGE } from './knowledge/supply-chain';
+import type { KnowledgeSeed } from './knowledge/types';
 
 /** Coordinates the panel prefills for a sample. */
 export interface SampleFixtureDefaults {
@@ -58,6 +65,13 @@ export interface SampleFixture {
    * the API's URL and key in-process instead.
    */
   selfRegistering?: boolean;
+  /**
+   * Knowledge entries and metrics about the sample's data, created by the
+   * loader after a successful load from the panel (testing-data R26). Only
+   * the Finance, Health Insurance, Genomics and Supply Chain samples carry
+   * one; World Cup deliberately has none.
+   */
+  knowledge?: KnowledgeSeed;
 }
 
 const WORLD_CUP: SampleFixture = {
@@ -368,6 +382,7 @@ const FINANCE: SampleFixture = {
     'v_accounts',
     'v_transactions',
   ],
+  knowledge: FINANCE_KNOWLEDGE,
 };
 
 const HEALTH_INSURANCE: SampleFixture = {
@@ -395,6 +410,7 @@ const HEALTH_INSURANCE: SampleFixture = {
     'v_claim_financials',
     'v_member_claim_totals',
   ],
+  knowledge: HEALTH_INSURANCE_KNOWLEDGE,
 };
 
 const GENOMICS: SampleFixture = {
@@ -424,6 +440,7 @@ const GENOMICS: SampleFixture = {
     'v_variant_calls',
     'v_sample_qc',
   ],
+  knowledge: GENOMICS_KNOWLEDGE,
 };
 
 const SUPPLY_CHAIN: SampleFixture = {
@@ -454,6 +471,7 @@ const SUPPLY_CHAIN: SampleFixture = {
     'v_shipments',
     'v_receipts',
   ],
+  knowledge: SUPPLY_CHAIN_KNOWLEDGE,
 };
 
 const MARKETING_ANALYTICS: SampleFixture = {

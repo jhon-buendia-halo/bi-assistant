@@ -16,7 +16,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
 ### The catalogue
 
-- R1. The catalogue SHALL be the single definition of every sample: the panel, the loader and the eval suite's data check read from it, so adding a sample means adding one seed file and one catalogue entry. A catalogue entry SHALL declare: id (stable, used in URLs and by eval sets), name, description, optional seed file, owned schema, default connection (host, port, database, user, password, SSL), datasource name, dataset name, required table names, optional kind (PostgreSQL by default, REST or Databricks) and, for a REST sample, whether it is **self-registering** (R21).
+- R1. The catalogue SHALL be the single definition of every sample: the panel, the loader and the eval suite's data check read from it, so adding a sample means adding one seed file and one catalogue entry. A catalogue entry SHALL declare: id (stable, used in URLs and by eval sets), name, description, optional seed file, owned schema, default connection (host, port, database, user, password, SSL), datasource name, dataset name, required table names, optional kind (PostgreSQL by default, REST or Databricks), for a REST sample whether it is **self-registering** (R21), and an optional **knowledge seed** (R26).
 - R2. The system SHALL ship these fixtures, in this panel order:
 
   | Id | Name | Schema | Seed | Datasource name | Dataset name | Required entities |
@@ -93,6 +93,17 @@ Added 2026-10-13 (BA-186). Validated on a warehouse in the VDI, from a copy of t
   Running it again leaves the same tables. `--dry-run` prints the statements (each INSERT cut to two rows; `--full` prints them whole), the column types and what it would register, and connects to nothing. Another catalog (`DATABRICKS_CATALOG`) is allowed, and the eval sets run on it (agents-evals R192). Another schema (`DATABRICKS_SCHEMA`) is allowed with a warning that the eval sets will not run on that copy, since the preflight and the references need the sample's own schema. Flags and environment: [delivery.md](../../system/delivery.md).
 - R25. After loading (or alone, with `--register-only`; never with `--no-register`), the script SHALL register the sample in a running backend (`BACKEND_URL`) by calling its HTTP API ([api.md](../../system/api.md)) directly, with no sign-in and no token, since the app has one built-in user (ADR-0030): save a Databricks datasource named as the sample's datasource name with the host, warehouse id and token (reusing the record of that name), read its inventory live, and save the dataset named as the sample's dataset name with exactly its required entities from `<catalog>.<schema>`. A required table that is missing, browse-only or without columns fails the registration, listing each, and no dataset is saved.
 
+### Knowledge seeds
+
+Added 2026-10-16 (roadmap 1.1.10, BA-188): the rules about each synthetic domain's data that `feat/engine-eval-loop` seeded with a script, now created by the loader, so a chat or an eval run on a loaded domain sample gets the same knowledge block.
+
+- R26. The Finance, Health Insurance, Genomics and Supply Chain samples SHALL each ship a **knowledge seed**: knowledge entries (terms, instructions and default filters, [knowledge](../knowledge/spec.md)) and metrics ([metrics](../metrics/spec.md)) that state rules about the sample's data, such as a column's vocabulary, a join path, a coverage boundary, a unit or a standing filter (the banking rules of the branch moved onto the finance schema and checked against it). After a successful load from the panel (R16), the loader SHALL create each seed entry the app does not hold yet, through the normal knowledge and metrics create:
+  - a knowledge entry scoped to the sample's dataset (by name), enabled, so with source `user` (knowledge R6), its entities named `<database>.<schema>.<table>` on the loaded database; an entry about one column names the column in its body;
+  - a metric on the loaded datasource, its entity named the same way.
+
+  The loader SHALL create the entries so that the block, built newest first (knowledge R16) within its 2,000 characters (knowledge R17), sends the seed's default filters first, then its instructions, then its terms, each group in the seed's order: it creates them in the reverse of that order, each with a later update time than the one before. A knowledge entry is held when one of the same kind and title (trimmed, ignoring case) is scoped to that dataset; a metric when one of the same name exists. Held entries SHALL be left as they are, so loading again never duplicates an entry or overwrites an edit, and an entry the user deleted comes back on the next load. When the loader created any, the success message SHALL end with ` — added <k> knowledge entries and <m> metrics` (after ` — created the database` when both apply; `entry` and `metric` in the singular for 1; a part with 0 left out). Creating the seed SHALL NOT fail a load that succeeded: if an entry cannot be saved, the message SHALL end with ` — could not add its knowledge seed: <detail>` instead, and the entries already created stay. The other samples ship no seed, so loading them creates no knowledge entry or metric; World Cup ships none, so its chats and eval runs see the same context as before. Removing a sample (R18) SHALL leave its knowledge entries and metrics.
+- R27. A knowledge seed SHALL state rules about the data, never a hint about one eval question: no entry names the id of a question of its sample's eval sets ([agents-evals](../agents-evals/spec.md) R11) or repeats a question's wording, and none settles an ambiguity that an `ambiguous` question asks the assistant to notice. A coverage boundary (the years or values the data holds) is a rule about the data and is allowed, even where an `out-of-scope` question relies on it. A unit test SHALL check the first two against the bundled question bank files; the third is checked by review when an entry is written.
+
 ## Edge cases and errors
 
 - **Server not running:** R11's message, with the compose hint.
@@ -108,7 +119,7 @@ Added 2026-10-13 (BA-186). Validated on a warehouse in the VDI, from a copy of t
 ## Contracts
 
 - Endpoints: list fixtures with status, load a fixture with a connection, remove a fixture: [api.md](../../system/api.md), section Testing data. Results are `{ ok, message, … }`; failures are not HTTP errors.
-- Reads and writes the `connections` and `datasets` collections (and the datasource inventory snapshot) only through the datasources and datasets capabilities: [data-model.md](../../system/data-model.md).
+- Reads and writes the `connections` and `datasets` collections (and the datasource inventory snapshot) only through the datasources and datasets capabilities, and creates a sample's knowledge seed (R26) only through the [knowledge](../knowledge/spec.md) and [metrics](../metrics/spec.md) capabilities: [data-model.md](../../system/data-model.md).
 - No agent. The eval suite reads the catalogue to check that a case set's sample data is present before a run: [agents.md](../../system/agents.md) and [agents-evals](../agents-evals/spec.md).
 - Related scripts: `npm run fixtures:<domain>` (regenerates a synthetic domain's seed and facts), `npm run fixture:dump -- --fixture <id>` (exports a loaded sample to gzipped JSON), `npm run worldcup:api`, `npm run finance:api` and `npm run marketing-analytics:api` (serve a sample's REST API, with the switches of BA-187), `npm run worldcup:api:dump`, `npm run worldcup:rest:setup` and `npm run fixture:rest:setup` (create a REST sample's datasource and dataset, one per server variant), `npm run fixture:databricks -- --fixture <source>` (loads a sample into Databricks and registers it, R24, R25), `docker compose up -d postgres` (the seeded World Cup server), all from the repository: [delivery.md](../../system/delivery.md).
 - Terms: [glossary](../../product/glossary.md).
@@ -168,6 +179,30 @@ Feature: Testing data
     Then I see a message that starts with "Seeded finance on 127.0.0.1:55432 and loaded 17 entities into dataset "Finance""
     And the message ends with "— created the database"
     And the sample shows "17/17 entities" with a check mark
+
+  Scenario: Loads a domain sample with its knowledge seed
+    Given no knowledge entry is scoped to the "Health Insurance" dataset
+    When I click the "Health Insurance" sample
+    And I click "Load testing data"
+    And I click "Confirm"
+    Then I see a message that starts with "Seeded health_insurance on 127.0.0.1:55432 and loaded 12 entities into dataset "Health Insurance""
+    And the message ends with "knowledge entries and" followed by the number of metrics
+    When I open Knowledge and filter by the dataset "Health Insurance"
+    Then I see the sample's knowledge entries, each enabled
+
+  Scenario: Loading a sample again keeps its knowledge entries as edited
+    Given the "Health Insurance" sample is loaded with its knowledge seed
+    And I changed the body of one of its knowledge entries
+    When I load the "Health Insurance" sample again
+    Then the message does not mention knowledge entries
+    And that entry keeps the body I wrote
+    And no knowledge entry is listed twice
+
+  Scenario: Loading the World Cup sample creates no knowledge
+    Given no knowledge entry exists
+    When I load the "World Cup" sample
+    Then the message does not mention knowledge entries
+    And Knowledge shows no entries
 
   Scenario: Refuses to load a Databricks sample
     Given I am in "Testing Data"

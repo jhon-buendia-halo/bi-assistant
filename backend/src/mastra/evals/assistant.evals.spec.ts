@@ -372,9 +372,9 @@ describe('tool selection in the eval cases (agents.md 8.1, ADR-0022)', () => {
   const setCases = (id: string) =>
     ASSISTANT_EVAL_SETS.find((set) => set.id === id)?.cases ?? [];
 
-  it('has 12 World Cup cases, two of them with a tool selection', () => {
+  it('has 52 World Cup cases, two of them with a tool selection', () => {
     const cases = setCases('world-cup');
-    expect(cases).toHaveLength(12);
+    expect(cases).toHaveLength(52);
     expect(
       cases
         .filter((evalCase) => evalCase.agentTools)
@@ -398,9 +398,9 @@ describe('tool selection in the eval cases (agents.md 8.1, ADR-0022)', () => {
     ).toBe(true);
   });
 
-  it('derives the same 12 for the REST set, selections included', () => {
+  it('derives the same 52 for the REST set, selections included', () => {
     const rest = setCases('world-cup-rest');
-    expect(rest).toHaveLength(12);
+    expect(rest).toHaveLength(52);
     expect(
       rest.find((evalCase) => evalCase.id === 'rest-no-visuals-chart-request')
         ?.agentTools,

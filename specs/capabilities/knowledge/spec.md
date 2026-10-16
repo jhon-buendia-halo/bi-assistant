@@ -16,7 +16,7 @@ Shape and validation
 - R3. The system SHALL require a non-empty title and a non-empty body after trimming whitespace. On create the messages are `title is required` / `body is required`; on update they are `title must not be empty` / `body must not be empty`.
 - R4. The system SHALL trim every synonym and entity, and drop blanks. A snippet with no synonyms or no entities on create SHALL omit those fields.
 - R5. The system SHALL treat `entities` as fully-qualified `catalog.schema.table` names, and SHALL treat `synonyms` as alternate names for the term.
-- R6. A snippet created through the API or UI SHALL have source `user`; a snippet created by bootstrap SHALL have source `mined`. The source SHALL NOT change afterwards (an accepted or edited mined snippet stays `mined`).
+- R6. A snippet created through the API or UI, or from a sample's knowledge seed when the sample is loaded ([testing-data](../testing-data/spec.md) R26), SHALL have source `user`; a snippet created by bootstrap SHALL have source `mined`. The source SHALL NOT change afterwards (an accepted or edited mined snippet stays `mined`).
 - R7. A snippet created without an explicit enabled flag SHALL be enabled. A mined snippet SHALL always be created disabled.
 
 Scoping
@@ -191,6 +191,7 @@ Feature: Knowledge snippets (E2E: none yet)
 
 ## Open questions
 
+- Open question (2026-10-16, BA-188, for [BA-4](../../epics/BA-4/spec.md)): the knowledge seed of each domain sample ([testing-data](../testing-data/spec.md) R26) is 3,760 to 6,143 characters, so the 2,000-character block (R17) sends only its first few entries (its default filters and instructions first, by creation order). Raise the budget, or choose entries by relevance to the question rather than by update time?
 - Open question: a snippet whose scope has only a datasource id is stored but never selected for the assistant (selection requires a dataset match or no scope). Is datasource scoping intended to work, and should the authoring UI offer it?
 - Open question: editing in the UI cannot clear entities and does not clear stale synonyms when switching a term to another kind. Intended, or a bug to fix in the rebuild?
 - Open question: the "Pending suggestions" view hides the Edit action; a mined suggestion can only be edited after it is accepted. Intended?

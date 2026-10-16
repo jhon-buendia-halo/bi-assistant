@@ -88,6 +88,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Knowledge bootstrap.** The action that has an agent draft up to 15 knowledge entries from a dataset's schema and a few sample rows. Drafts arrive as "Pending suggestions", disabled.
 
+**Knowledge seed.** The knowledge entries and metrics a synthetic domain sample (Finance, Health Insurance, Genomics, Supply Chain) ships about its data, created when the sample is loaded from Testing Data and then edited or deleted like any other. See [../capabilities/testing-data/spec.md](../capabilities/testing-data/spec.md) R26.
+
 **Knowledge used.** The list of knowledge entries that were actually included in the context of one answer, recorded when the context was built. It shows what the model was given, not what it applied.
 
 **Line of coverage.** A kind of employee benefit a client offers and a *carrier* insures, such as medical, dental, vision, life, disability, voluntary benefits or an employee assistance programme. The Intellify data has 12 (its *products*). Also called a *line*. An *RFP* markets one or more lines.

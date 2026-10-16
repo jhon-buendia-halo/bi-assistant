@@ -43,7 +43,7 @@ Agent Hub and agent detail
 
 Question sets
 - R10. Only the assistant and the RFP Builder (`rfp`) SHALL have eval sets; each set names the agent it runs on, and an agent's Evals tab lists only its own sets. Every other agent's Evals tab SHALL show "No evals configured for this agent yet."
-- R11. The system SHALL provide these sets, each bound to one sample fixture, listed in this order. For the assistant: `world-cup` ("World Cup", PostgreSQL, 12 questions), `world-cup-rest` ("World Cup (REST API)", the same 12 questions against the REST sample, case ids prefixed `rest-`), `world-cup-databricks` ("World Cup (Databricks)", the same 12 against the Databricks sample, case ids prefixed `dbx-`; R207), `formula-1` ("Formula 1", PostgreSQL, 1950 to 2026, 10 questions), `world-cup-golden` ("World Cup (golden set)", PostgreSQL, 11 questions; R109) and `world-cup-golden-rest` ("World Cup (golden set, REST API)", the same 11 questions against the REST sample, case ids prefixed `rest-`) and `world-cup-golden-databricks` ("World Cup (golden set, Databricks)", the same 11 against the Databricks sample, case ids prefixed `dbx-`), then `world-cup-rest-connector` ("World Cup (REST connector)", 12 REST-only questions against the World Cup REST sample with the connector profile, case ids prefixed `rest-connector-`; R164), then `world-cup-databricks-only` ("World Cup (Databricks only)", 10 Databricks-only questions against the World Cup Databricks sample, case ids prefixed `dbx-only-`; R189). After them come the synthetic domain sets (BA-185), one PostgreSQL set per domain, each followed by its REST and Databricks sets where the domain has those samples (R207), in this order: `finance` ("Finance", 68 questions, 20 held out), `finance-rest` ("Finance (REST API)", the same 68 questions against the Finance REST sample, case ids prefixed `rest-`), `finance-databricks` ("Finance (Databricks)", the same 68 against the Finance Databricks sample, case ids prefixed `dbx-`), `health-insurance` ("Health Insurance", 42 questions, 14 held out), `genomics` ("Genomics", 49, 16 held out), `supply-chain` ("Supply Chain", 20, 6 held out), `marketing-analytics` ("Marketing Analytics", 50 questions, 16 held out, 4 of them governance questions), `marketing-analytics-rest` ("Marketing Analytics (REST API)", the same 50 questions against the Marketing Analytics REST sample, case ids prefixed `rest-`) and `marketing-analytics-databricks` ("Marketing Analytics (Databricks)", the same 50 against the Marketing Analytics Databricks sample, case ids prefixed `dbx-`). The assistant's sets come from question bank files (R107). For the RFP Builder, after them: `rfp` ("RFP Builder", the `intellify-api` REST sample, 28 questions, listed in [agents.md](../../system/agents.md) 8.1), defined in code rather than in a question bank file. The RFP records an `rfp` run creates SHALL be deleted when the run ends. The assistant's question lists are in *Eval suite content* below. Case ids SHALL be unique across all sets.
+- R11. The system SHALL provide these sets, each bound to one sample fixture, listed in this order. For the assistant: `world-cup` ("World Cup", PostgreSQL, 52 questions, 15 held out), `world-cup-rest` ("World Cup (REST API)", the same 52 questions against the REST sample, case ids prefixed `rest-`), `world-cup-databricks` ("World Cup (Databricks)", the same 52 against the Databricks sample, case ids prefixed `dbx-`; R207), `formula-1` ("Formula 1", PostgreSQL, 1950 to 2026, 10 questions), `world-cup-golden` ("World Cup (golden set)", PostgreSQL, 11 questions; R109) and `world-cup-golden-rest` ("World Cup (golden set, REST API)", the same 11 questions against the REST sample, case ids prefixed `rest-`) and `world-cup-golden-databricks` ("World Cup (golden set, Databricks)", the same 11 against the Databricks sample, case ids prefixed `dbx-`), then `world-cup-rest-connector` ("World Cup (REST connector)", 12 REST-only questions against the World Cup REST sample with the connector profile, case ids prefixed `rest-connector-`; R164), then `world-cup-databricks-only` ("World Cup (Databricks only)", 10 Databricks-only questions against the World Cup Databricks sample, case ids prefixed `dbx-only-`; R189). After them come the synthetic domain sets (BA-185), one PostgreSQL set per domain, each followed by its REST and Databricks sets where the domain has those samples (R207), in this order: `finance` ("Finance", 68 questions, 20 held out), `finance-rest` ("Finance (REST API)", the same 68 questions against the Finance REST sample, case ids prefixed `rest-`), `finance-databricks` ("Finance (Databricks)", the same 68 against the Finance Databricks sample, case ids prefixed `dbx-`), `health-insurance` ("Health Insurance", 42 questions, 14 held out), `genomics` ("Genomics", 49, 16 held out), `supply-chain` ("Supply Chain", 20, 6 held out), `marketing-analytics` ("Marketing Analytics", 50 questions, 16 held out, 4 of them governance questions), `marketing-analytics-rest` ("Marketing Analytics (REST API)", the same 50 questions against the Marketing Analytics REST sample, case ids prefixed `rest-`) and `marketing-analytics-databricks` ("Marketing Analytics (Databricks)", the same 50 against the Marketing Analytics Databricks sample, case ids prefixed `dbx-`). The assistant's sets come from question bank files (R107). For the RFP Builder, after them: `rfp` ("RFP Builder", the `intellify-api` REST sample, 28 questions, listed in [agents.md](../../system/agents.md) 8.1), defined in code rather than in a question bank file. The RFP records an `rfp` run creates SHALL be deleted when the run ends. The assistant's question lists are in *Eval suite content* below. Case ids SHALL be unique across all sets.
 - R12. Each set SHALL carry a name, a description of what it covers and what it needs to run, and its cases. Each case SHALL carry an id, the question, an intent (what it probes) and its checks (id, name and description). A case from a question bank file SHALL also carry its category and split (R150); a case defined in code (the RFP Builder's `rfp` set) has neither.
 - R13. The Evals tab SHALL open on the list of sets, each showing its name, "<N> questions" and its description, with no question shown and no run button. Clicking a set SHALL open it (revealing its questions, the datasource picker and the run button) and tick all of its questions; clicking the open set again SHALL close it and clear the ticks. Sets SHALL be unselectable while a run is starting or running.
 - R14. An open set SHALL show "<N> questions in <set name>. Each check must score 1.0 for its question to pass.", then the datasource picker, the **Judge** select (R149), the run button, a **Select all** checkbox and the numbered question list.
@@ -106,7 +106,7 @@ Other entry points
 
 Besides what each row below lists, every question of these four sets carries the deterministic checks of its category (R126), except the two tool-selection questions `no-clarification-best-team` and `no-visuals-chart-request`, which keep only the checks they list.
 
-World Cup set (`world-cup`; the REST set repeats these twelve with ids `rest-<id>`, differing only in the reference queries, written for the REST sample's dialect):
+World Cup set (`world-cup`; the REST set repeats its questions with ids `rest-<id>` and the Databricks set with ids `dbx-<id>`, differing only in the reference queries, written for each sample's dialect). Its first twelve questions:
 
 | id | Question | What must hold |
 |---|---|---|
@@ -122,6 +122,51 @@ World Cup set (`world-cup`; the REST set repeats these twelve with ids `rest-<id
 | `visual-request` | Chart the goals scored by each team in the 2022 knockout stage. | tools called in order `run_readonly_sql` then `create_visual`; called `create_visual`; no tool errors; judge: a visual tool succeeded and plausibly charts goals per team for the 2022 knockouts |
 | `no-clarification-best-team` | Which team performed best? | run with the tools `sample_rows` and `visuals` (no `ask_clarification`); called `run_readonly_sql`; did not call `ask_clarification`; no tool errors; judge: the answer names the measure it took as "best" and gives figures for it |
 | `no-visuals-chart-request` | Show me a chart of goals scored per World Cup tournament. | run with the tools `sample_rows` and `ask_clarification` (no `visuals`); called `run_readonly_sql`; did not call `create_visual`; no tool errors; judge: the answer says it can't draw a visual here and gives the goals per tournament (23 in 2018, 24 in 2022) |
+
+The other 40 questions of the World Cup set (added 2026-10-16, roadmap 1.1.10, BA-188): 23 are World Cup questions of `feat/engine-eval-loop` the set lacked, unchanged in wording and, but for two, in PostgreSQL reference, converted as the health insurance set's were (below): the branch's categories mapped to the eighteen (`ratio-trap` to `ratio`, `ties` and `id-vs-name` to `ranking`, `value-vocabulary` to `encoding`, `empty-column` to `null`, `domain-semantics` to `business-term`, `multi-step-join` to `join`, `clarification` to `ambiguous`; `discovery` and `out-of-scope` unchanged), the branch category kept as a `trap:` tag and the branch's difficulty as a `difficulty:` tag, its `finalSqlSucceeded` check replaced by `noToolErrors` and its `excludes` by `notMatches`, its SQLite reference kept (the `match` alias renamed `m`, R205) and a Databricks reference written (R206). The other 17 are each the first paraphrase the branch wrote for one of those questions, in category `paraphrase`, with the id `<id>-reworded` and the references, checks and split of the question it rephrases (R134). By category: paraphrase 17, ranking 6, encoding 3, business-term 3, null 1, and 2 each of ratio, join, discovery, ambiguous and out-of-scope; 15 of the 40 are held out; 34 have a reference query, so 39 of the set's 52 do. Each carries the deterministic checks of its category (R126), a paraphrase those of the question it rephrases; the arguments of its `sqlMatches`, `matches` and `notMatches` checks are in the table below. Two branch references read tables that are not among the World Cup sample's required entities ([testing-data](../testing-data/spec.md) R2), so they are not in its dataset and the validator refuses them (R110): `third-placed-team-scorers-2018` takes the winner of the third-place play-off instead of `tournament_teams.final_rank`, and `south-american-goals` names Argentina, Brazil and Uruguay instead of joining `countries` and `confederations`, each returning the rows of the branch reference. The branch's `finalists-groups-2022` and its paraphrase were left out: the groups are only in `tournament_teams`, which the sample does not require, so the question could have no reference and its checks would pass groups given from general knowledge, which [agents.md](../../system/agents.md) rule A12 forbids; it comes back when the sample requires that table. The trap each question guards, its trap query, its other paraphrase, the branch's provenance and any branch reference it no longer uses are in its notes. The three `business-term` questions (`mandzukic-goals-2018`, `extra-time-goals`, `argentina-draws-2022`) have no knowledge entry behind them, because the World Cup sample ships no knowledge seed ([testing-data](../testing-data/spec.md) R26): they test what the schema alone tells the assistant.
+
+| id | Question | What must hold |
+|---|---|---|
+| `shot-accuracy-by-team-2022` | At the 2022 World Cup, which three teams put the highest share of their shots on target? | ratio; includes "England"; ran SQL; no tool errors; result-set match |
+| `shot-conversion-2022` | Which team turned the highest share of its shots into goals at the 2022 World Cup? | ratio, `held-out`; includes "Netherlands"; ran SQL; no tool errors; result-set match |
+| `busiest-stadium` | Which stadium hosted the most matches? | ranking; matches both Saint (or St.) Petersburg and Lusail; ran SQL; no tool errors; result-set match |
+| `highest-scoring-match` | Which match produced the most goals? | ranking; matches both Croatia and Argentina (the two finals); ran SQL; no tool errors; result-set match |
+| `top-scorer-both-tournaments` | Who scored the most goals across the 2018 and 2022 World Cups combined? | ranking, `held-out`; matches both Messi and Mbapp(e); ran SQL; no tool errors; result-set match |
+| `semi-final-goals-2022` | How many goals were scored in the 2022 semi-finals? | encoding; ran SQL; no tool errors; result-set match (5); SQL mentions `semi_final` |
+| `goals-by-defenders` | How many goals did defenders score? | encoding; ran SQL; no tool errors; result-set match (11); SQL mentions `'DF'` |
+| `third-place-2022` | Who won the third-place play-off at the 2022 World Cup? | encoding, `held-out`; includes "Croatia"; ran SQL; no tool errors; result-set match; SQL mentions `third_place` |
+| `most-fouls-team` | Which team committed the most fouls across both tournaments? | ranking; includes "Croatia"; ran SQL; no tool errors; result-set match |
+| `booked-in-2022-final` | Which player was booked in the 2022 final? | ranking; matches Emiliano or Martinez (with or without the accent); ran SQL; no tool errors; result-set match |
+| `quickest-goal-scorer` | Who scored the quickest goal in any match? | ranking, `held-out`; includes "Meunier"; ran SQL; no tool errors; result-set match |
+| `top-assist-provider` | Who provided the most assists? | null; includes "Messi"; ran SQL; no tool errors; result-set match; SQL mentions `assist` |
+| `mandzukic-goals-2018` | How many goals did Mario Mandzukic score at the 2018 World Cup? | business-term; ran SQL; no tool errors; result-set match (2: his own goal is not his) |
+| `extra-time-goals` | How many goals were scored in extra time? | business-term; ran SQL; no tool errors; result-set match (7: minute above 90, not stoppage time) |
+| `argentina-draws-2022` | How many matches did Argentina draw at the 2022 World Cup? | business-term, `held-out`; ran SQL; no tool errors; result-set match (2: a match won on penalties is a draw) |
+| `south-american-goals` | How many goals did South American teams score across both tournaments? | join; ran SQL; no tool errors; result-set match (10); SQL reads `goals` and `teams`; the reference names Argentina, Brazil and Uruguay, since the sample's dataset holds no confederations |
+| `third-placed-team-scorers-2018` | Which players scored for the team that finished third at the 2018 World Cup? | join, `held-out`; includes "De Bruyne"; ran SQL; no tool errors; result-set match; SQL reads `matches`, `tournaments`, `goals` and `players` (the reference takes the winner of the third-place play-off) |
+| `player-data-discovery` | What information do we have about individual players? | discovery; matches "players" and one more player-level entity (squad members, goals, bookings or cards, goal totals); no SQL; judge: names at least two of them, says what they hold and claims no data the sample lacks |
+| `team-match-stats-discovery` | What statistics are recorded for each team in a match? | discovery, `held-out`; matches one of possession, shots or passes and one of corners, offsides, fouls or expected goals; no SQL; judge: names at least four per-match statistics and claims none the sample lacks |
+| `argentina-penalties-2022` | How many penalties did Argentina score at the 2022 World Cup? | ambiguous; did not call `create_visual` (D5); judge: asks which kind of penalty, or gives both 3 (in play) and 8 (shoot-out) each labelled, never 11 |
+| `best-defence` | Which team had the best defence? | ambiguous, `held-out`; called `ask_clarification`; no SQL; judge: a clarifying question with 2 to 4 concrete options (a defensive measure, 2018 or 2022) that names no team as the answer |
+| `group-stage-goals-2022` | How many goals were scored in the group stage of the 2022 World Cup? | out-of-scope; did not call `create_visual`; matches the rounds the data covers (quarter-finals or knockout); `notMatches` 120 (the real total), a zero or "no goals"; judge: says the group stage is not in the data and which rounds are |
+| `referee-2022-final` | Who refereed the 2022 World Cup final? | out-of-scope, `held-out`; did not call `create_visual`; matches a statement that the data does not hold it; `notMatches` "Marciniak"; judge: says referees are not in the data and names none |
+| `shot-accuracy-by-team-2022-reworded` | Which three teams had the best shooting accuracy at the 2022 World Cup? | paraphrase; the checks and reference of `shot-accuracy-by-team-2022` |
+| `shot-conversion-2022-reworded` | Which side had the best shot conversion rate at the 2022 World Cup? | paraphrase, `held-out`; the checks and reference of `shot-conversion-2022` |
+| `busiest-stadium-reworded` | Which venue staged the most games across the two tournaments? | paraphrase; the checks and reference of `busiest-stadium` |
+| `highest-scoring-match-reworded` | What was the highest-scoring game in the data? | paraphrase; the checks and reference of `highest-scoring-match` |
+| `top-scorer-both-tournaments-reworded` | Adding both tournaments together, who is the leading goalscorer? | paraphrase, `held-out`; the checks and reference of `top-scorer-both-tournaments` |
+| `semi-final-goals-2022-reworded` | What was the total number of goals across the two 2022 semi-finals? | paraphrase; the checks and reference of `semi-final-goals-2022` |
+| `goals-by-defenders-reworded` | How many of the goals came from defenders? | paraphrase; the checks and reference of `goals-by-defenders` |
+| `third-place-2022-reworded` | Which team finished third at the 2022 World Cup? | paraphrase, `held-out`; the checks and reference of `third-place-2022` |
+| `most-fouls-team-reworded` | Which side gave away the most fouls over 2018 and 2022 combined? | paraphrase; the checks and reference of `most-fouls-team` |
+| `booked-in-2022-final-reworded` | Who got a yellow card in the 2022 World Cup final? | paraphrase; the checks and reference of `booked-in-2022-final` |
+| `quickest-goal-scorer-reworded` | Which player scored the earliest goal of any game? | paraphrase, `held-out`; the checks and reference of `quickest-goal-scorer` |
+| `top-assist-provider-reworded` | Which player set up the most goals? | paraphrase; the checks and reference of `top-assist-provider` |
+| `mandzukic-goals-2018-reworded` | What was Mario Mandzukic's goal tally at the 2018 World Cup? | paraphrase; the checks and reference of `mandzukic-goals-2018` |
+| `extra-time-goals-reworded` | How many extra-time goals were there across both tournaments? | paraphrase; the checks and reference of `extra-time-goals` |
+| `argentina-draws-2022-reworded` | How many of Argentina's 2022 World Cup matches ended in a draw? | paraphrase, `held-out`; the checks and reference of `argentina-draws-2022` |
+| `south-american-goals-reworded` | What was the combined goal tally of the South American sides? | paraphrase; the checks and reference of `south-american-goals` |
+| `third-placed-team-scorers-2018-reworded` | Who were the goalscorers for the side that came third in 2018? | paraphrase, `held-out`; the checks and reference of `third-placed-team-scorers-2018` |
 
 Formula 1 set (`formula-1`), ids all prefixed `f1-`:
 
@@ -324,7 +369,7 @@ Four Official agents built into the app to show further US Health use cases befo
 - R109. The golden set `world-cup-golden` SHALL hold 11 World Cup questions with known-correct answers, each keeping as its note the trap it guards (listed under *Eval suite content*): the nine questions of the former golden-set harness and the two of the answer-quality gate that the nine do not already ask. Each SHALL be scored by the result-set match (R31), a check that `run_readonly_sql` was called, a check that no tool call returned an error, and the deterministic checks of its category (R126). The set SHALL be bound to the World Cup PostgreSQL sample and behave like any other set (R13 to R42).
 - R110. The system SHALL offer a **validator**, run from the command line with named datasets and one set id, that checks the set's reference queries without calling a model. It takes only a set from a question bank file (R107); the `rfp` set, defined in code and with no reference query, is not one. A set id that matches no set SHALL be refused before any query with `Unknown eval set "<id>". Known sets: <ids>.`. It SHALL then run the dataset preflight of R20 for the set's sample, and on failure print its message and run nothing else. It SHALL then take each case's reference query for the set's dialect, one case at a time. It SHALL first read the reference's table references (R112) and fail the case without running it, with the reason `the reference reads <entity>, which is not in the selected datasets`, when one of them is not an entity of the selected datasets. Names are compared as in R20, on the last two name parts and ignoring case (a one-part name on its only part), so `world_cup.goals` matches the entity `world_cup.world_cup.goals` (added 2026-10-13, BA-183). Otherwise it SHALL run the reference the way the result-set match runs it (R31: read-only, at most 500 rows, a truncated reference fails). It SHALL print one line per case with a reference query: `✓ <case id>  <dialect>  <n> rows` when it ran, or `✗ <case id>  <dialect>  <reason>` when it failed. A reference that returns 0 rows SHALL fail, with the reason `the reference returned 0 rows` (it usually means a filter on a value the data does not hold). A failed case SHALL NOT stop the others. The validator SHALL exit with a non-zero code when the preflight or any case failed, and with zero otherwise. A case with no reference query has nothing to validate. No model tokens SHALL be spent.
 - R111. The command-line run of R42 SHALL take exactly one selection: a set id, which runs only that set's questions against the sample of that set, or a list of case ids, which must all belong to one sample (R19 step 6). With neither, with both, with a set id that matches no set or with a case id that matches no case, it SHALL run nothing: it SHALL be refused before the backend boots and before any model call, with the messages of [agents.md](../../system/agents.md) 8.5 (changed 2026-10-15, when BA-204 came over from `main`: before, a run without a set id selected every set and was refused by R19 step 6).
-- R134. Each synthetic domain set (R11) SHALL hold out about 30% of the questions of every category (split `held-out`), chosen when the question is written and never moved to dev afterwards; a question of category `paraphrase` SHALL take the split of the question it rephrases, so a held-out question never has a dev twin. The `world-cup`, `world-cup-rest`, `formula-1` and `world-cup-golden` sets stay all dev. Every reference query of a domain set SHALL return at least one row on its sample, and, where the sample's planted facts ([../../system/data-model.md](../../system/data-model.md) section 4.10) hold the answer, SHALL return it; a reference that fails either is fixed or its question dropped before it is committed (BA-185).
+- R134. Each synthetic domain set (R11) SHALL hold out about 30% of the questions of every category (split `held-out`), chosen when the question is written and never moved to dev afterwards; a question of category `paraphrase` SHALL take the split of the question it rephrases, so a held-out question never has a dev twin. The `formula-1` and `world-cup-golden` sets, and the first twelve questions of the `world-cup` sets, stay all dev; the questions added to the `world-cup` sets on 2026-10-16 (roadmap 1.1.10) hold out about 30% of every category like a domain set's. Every reference query of a domain set SHALL return at least one row on its sample, and, where the sample's planted facts ([../../system/data-model.md](../../system/data-model.md) section 4.10) hold the answer, SHALL return it; a reference that fails either is fixed or its question dropped before it is committed (BA-185).
 
 ### REST samples and the REST-only set
 
@@ -525,14 +570,14 @@ Feature: Agents
     When I open the LLM Config tab
     Then I see "Provider"
     When I open the Evals tab
-    Then I see the "world-cup" set listed with "12 questions"
+    Then I see the "world-cup" set listed with "52 questions"
     And no individual question is shown
     And the run button is hidden
     When I open the "world-cup" set
     Then the "champion-2022" question shows "Who won the 2022 World Cup?"
     And it shows the category chip "lookup"
     And it lists the check "Checks if output includes "Argentina""
-    And 12 questions are listed, each with a category chip
+    And 52 questions are listed, each with a category chip
     When I click the open "world-cup" set again
     Then no questions are listed
     When I click "All agents"
@@ -557,19 +602,19 @@ Feature: Agents
     And I open the "Questions to Insights Assistant" agent
     And I open the Evals tab and the "world-cup" set
     Then the datasource picker offers "World Cup PostgreSQL" and "PostgreSQL"
-    And the run button reads "Run 12 selected"
+    And the run button reads "Run 52 selected"
     When I click the run button
     Then the run button reads "Running…"
-    And I see "0/12 done"
+    And I see "0/52 done"
 
   Scenario: Runs only the ticked questions
     Given a "World Cup PostgreSQL" datasource exists
     And I am on the "world-cup" set in the agent's Evals tab
-    Then the run button reads "Run 12 selected"
+    Then the run button reads "Run 52 selected"
     When I untick the "champion-2022" question
-    Then the run button reads "Run 11 selected"
+    Then the run button reads "Run 51 selected"
     When I click select-all
-    Then the run button reads "Run 12 selected"
+    Then the run button reads "Run 52 selected"
     When I click select-all again
     Then the run button reads "Run 0 selected"
     And the run button is disabled
@@ -607,15 +652,15 @@ Feature: Agents
     Given a "World Cup PostgreSQL" datasource exists
     And a dataset containing the World Cup tables and views exists
     And I am on the "world-cup" set in the agent's Evals tab
-    Then the Questions sub-tab is shown with 12 questions
+    Then the Questions sub-tab is shown with 52 questions
     When I open the executions sub-tab
     Then I see "No eval runs yet"
     And no questions are listed
     When I return to the Questions sub-tab and click the run button
     And I open the executions sub-tab
-    Then the first execution shows "0/12 passed"
+    Then the first execution shows "0/52 passed"
     When I return to the Questions sub-tab
-    Then 12 questions are listed
+    Then 52 questions are listed
 
   Scenario: Downloads an execution as a Markdown report
     Given a "World Cup PostgreSQL" datasource exists
@@ -636,9 +681,9 @@ Feature: Agents
     And I open the "Questions to Insights Assistant" agent
     And I open the Evals tab
     Then I see 18 sets
-    And the "world-cup" set shows "World Cup" and "12 questions"
-    And the "world-cup-rest" set shows "World Cup (REST API)" and "12 questions"
-    And the "world-cup-databricks" set shows "World Cup (Databricks)" and "12 questions"
+    And the "world-cup" set shows "World Cup" and "52 questions"
+    And the "world-cup-rest" set shows "World Cup (REST API)" and "52 questions"
+    And the "world-cup-databricks" set shows "World Cup (Databricks)" and "52 questions"
     And the "formula-1" set shows "Formula 1" and "10 questions"
     And the "world-cup-golden" set shows "World Cup (golden set)" and "11 questions"
     And the "world-cup-golden-rest" set shows "World Cup (golden set, REST API)" and "11 questions"
@@ -1536,7 +1581,7 @@ Feature: Databricks samples
     Given an LLM configuration is saved
     When I pick the "World Cup Databricks" datasource
     And I open the "world-cup-databricks" set, select every question and click the run button
-    Then the run starts and shows "0/12 done"
+    Then the run starts and shows "0/52 done"
     And when it finishes every question shows its verdict, its checks and its executed steps
     And the SQL in the executed steps names tables as <catalog>.world_cup.<table>, the catalog of the "World Cup (Databricks)" dataset
 
