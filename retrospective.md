@@ -14,6 +14,42 @@ Entry template:
 
 ---
 
+## 2026-10-16 — 0.4.2 Jira MCP tool in `.claude/tools` (BA-237)
+
+### What went well
+- Building the server with no dependencies (Node's `fetch`, a 40-line stdio JSON-RPC loop) meant nothing to install in `.claude/`. `claude mcp get jira` showed it `✔ Connected` on the first try.
+- Finding the main checkout's `.env` through `git rev-parse --git-common-dir` removed a whole class of retrospective lessons (`JIRA_CONFIG_FILE` in worktrees, `jq` missing, `$'…'` quoting, `raw` to set a parent). The stdio smoke run proved it from a worktree with no `.env`.
+- A fresh headless `claude -p` session checked what no unit test can: the 11 `mcp__jira__` tools load, and a read tool runs with no permission prompt (`permission_denials: []`).
+
+### What went wrong
+- I wrote `server.mjs` to the main checkout instead of the worktree: one absolute path written without the worktree segment. It was caught by listing the folder, and moved.
+- The tests were written after the code. Their first failure was a bug in my own fake (a 204 `Response` built with a body), not in the tool.
+- The branch was created as `docs/` for a docs-only first story. When this story's `feat` commit landed, the branch had to be renamed to `feat/` (cheap only because it was never pushed).
+- The write tools were never called against the real Jira. They are proven only against a faked Jira, to avoid filing test issues.
+
+### What to do differently
+- In a worktree session, write every new file under the worktree root, and run `git -C <main checkout> status --short` after a batch of new files to catch strays.
+- For a harness epic that may add tooling, name the branch `feat/` from the first story, rather than after the first `feat` commit.
+- For a new tool, write the faked-API test first and see it fail on the missing handler before writing the handler.
+- The first real use of `create_issue` or `create_epic` after merge doubles as its live check: read the issue back with `get_issue` and confirm `parentType`.
+
+## 2026-10-16 — 0.4.1 Split CLAUDE.md into workflow-stage skills (BA-236)
+
+### What went well
+- Moving the text by line range with a script, not retyping it, made "nothing lost" checkable. A line check found 129 of 140 lines verbatim in one place, and the rest are explained one by one in [evidence/0.4.1/section-map.md](evidence/0.4.1/section-map.md).
+- Keeping the `<n>. **<title>** — …` step format, and running the `workflow-steps` mod's own `parseWorkflow` on the new file, proved the Workflow pane still works without touching the mod.
+- Copying the RFP Builder's shape (a core list naming one skill per stage, plus "load a stage's skill before you start that stage") gave the user a concrete preview to choose from in one question.
+
+### What went wrong
+- I offered "New story, I name the epic" without listing the epics. The user picked it without naming one, which cost a second question.
+- The epic spec said the conventions move "unchanged in substance". Two rule changes then landed on the same branch (the planning model, and the Epic-gate check through `get_issue`), so the line check had to explain 3 more lines.
+- The user's `/verify` ran the main checkout's copy of `verify` (the base directory names the main checkout), not the branch's extended one. This branch has no web-app surface, so I verified it with a fresh headless session instead.
+
+### What to do differently
+- When a question offers "I'll name X", put the candidates (here, the open epics from `search_issues`) in the same question.
+- When a "move, don't change" story is followed by rule changes on the same branch, record each change in the roadmap notes as it lands, and keep the line check re-runnable against `main`, so the map stays honest.
+- For a harness-only change, verify with a fresh `claude -p` session in the worktree (skills listed, tools loaded, no permission denials), not with the web-app `verify` recipe.
+
 ## 2026-10-15 — Merge of `main` (v0.34.0) into the BA-9 branch
 
 ### What went well
@@ -35,6 +71,24 @@ Entry template:
 - Run the spec resolver after the code resolvers, or hand it their notes files up front, so it describes the merged code rather than one side.
 - In E2E, open top-level pages through the navigation rail (`getByRole('complementary', { name: 'Navigation rail' })`), never by a page-wide button name.
 - Before merging main, renumber the branch's ids past main's and rename clashing modules in a separate commit, applied only to lines the branch added; keep the old→new map in the evidence.
+
+## 2026-10-15 — 1.15.1 and 1.15.2 US Health demo: banner and showcase agents (BA-233)
+
+### What went well
+- Reusing the existing "blocked Official agent" path (`chatRequirement`, as the RFP Builder uses while its dataset is missing) made the showcase agents a catalogue flag plus four small UI rules, with no new architecture and no eval gate.
+- Checking the running app with a short Playwright script before handing it over caught three things the unit tests could not: the Assistant's Chat Box text on a showcase page, the showcase cards hidden behind "Show more", and a stray Show more on an always-expanded section.
+
+### What went wrong
+- I placed the showcase constants in the same file as the Mastra `Agent`s; importing it from the services broke four Jest suites (ESM). The RFP Builder already showed the pattern: keep plain data in a separate module.
+- A code comment (`// Showcase agents: …`) inside `agents: { … }` in `mastra/index.ts` made `check-specs.py` count an agent called `agents`.
+- The user had to point out that the Survey Agent was "missing": it existed but sat behind the Official section's Show more. I had judged the hub from the API list, not from what the first screen shows.
+- Running existing Playwright specs in the fast loop rewrote shipped evidence screenshots of 1.14.17 and 1.14.19 (those specs save screenshots on every run); they had to be restored with `git checkout -- evidence/`.
+
+### What to do differently
+- Keep an agent's catalogue data (keys, prompts, reasons) in a module without framework imports, and build the framework objects in a second file, as `rfp.agent.ts` and `showcase-catalog.ts` do.
+- Never write `<word>:` in a comment inside the `agents: { … }` registry block.
+- For a demo change, check the first screen a viewer sees (cards above the fold, nothing behind Show more), not only that the data is there.
+- After any Playwright run, check `git status -- evidence/` and restore screenshots that belong to other features before committing.
 
 ## 2026-10-15 — 1.14.2 to 1.14.19 acceptance gate and merge of epic BA-213
 

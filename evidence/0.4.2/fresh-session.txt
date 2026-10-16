@@ -1,0 +1,18 @@
+Headless session: claude -p in the worktree (Claude Code, fresh session), 2026-10-16.
+Prompt: list the workflow- skills, verify and jira; list the mcp__jira__ tools; call get_issue BA-236; change nothing.
+
+1. There are 8 `workflow-` skills: `workflow-architecture`, `workflow-e2e`, `workflow-implement`, `workflow-plan`, `workflow-retrospective`, `workflow-ship`, `workflow-specs` and `workflow-understand`. The `verify` skill is available, and so is `jira`. I loaded `jira` before the call because the jira server asks for that; it is not a jira tool.
+
+2. There are 11 `mcp__jira__` tools: `add_comment`, `create_epic`, `create_issue`, `get_issue`, `get_project`, `list_statuses`, `list_transitions`, `search_issues`, `transition_issue`, `update_issue` and `whoami`.
+
+3. `get_issue` for BA-236 returned:
+   - **key:** BA-236
+   - **type:** Story
+   - **parent:** BA-119 ("Harness Adjustments")
+   - **parentType:** Epic
+
+   BA-236 passes the Epic gate.
+
+I made no other jira calls and created or changed nothing.
+
+permission_denials: [] | turns: 6

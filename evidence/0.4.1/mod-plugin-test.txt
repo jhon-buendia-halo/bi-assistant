@@ -1,0 +1,8 @@
+(pass) a queued step's detail shows what is expected of it [40.83ms]
+(pass) the header shows the overall completion: the mean of the done, running and queued rows [43.48ms]
+(pass) a subagent's own turn credits its tokens to it and to the task it was spawned under, and marks it finished [44.49ms]
+(pass) without a readable CLAUDE.md the built-in step titles are used [33.22ms]
+
+ 29 pass
+ 0 fail
+Ran 29 tests across 2 files. [1.24s]

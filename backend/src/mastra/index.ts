@@ -5,6 +5,7 @@ import { assistantAgent } from './agents/assistant.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
 import { rfpAgent } from './agents/rfp.agent';
+import { showcaseAgents } from './agents/showcase.agents';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
 import { sqlVerifierAgent } from './agents/sql-verifier.agent';
 import { visualizationAgent } from './agents/visualization.agent';
@@ -29,6 +30,11 @@ export const mastra = new Mastra({
     'assistant-eval-judge': evalJudgeAgent,
     'knowledge-bootstrap': knowledgeBootstrapAgent,
     rfp: rfpAgent,
+    // Showcase agents (agents.md 2.9), Official cards that cannot chat.
+    benchmarking: showcaseAgents.benchmarking,
+    survey: showcaseAgents.survey,
+    'lad-coe': showcaseAgents['lad-coe'],
+    strategy: showcaseAgents.strategy,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

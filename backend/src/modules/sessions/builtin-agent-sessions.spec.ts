@@ -307,6 +307,16 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
       expect(ctx.repository.insert).not.toHaveBeenCalled();
     });
 
+    it('refuses a showcase agent with its reason, creating nothing (agents-evals R106)', async () => {
+      const ctx = build();
+      for (const key of ['benchmarking', 'survey', 'lad-coe', 'strategy']) {
+        await expect(ctx.service.createFromAgent(key)).rejects.toThrow(
+          new BadRequestException('Showcase agent: not available to chat yet.'),
+        );
+      }
+      expect(ctx.repository.insert).not.toHaveBeenCalled();
+    });
+
     it('still answers not found for a built-in key that declares no dataset', async () => {
       await expect(
         build().service.createFromAgent('assistant'),

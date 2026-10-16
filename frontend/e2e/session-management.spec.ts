@@ -341,3 +341,34 @@ test('I copy the session id to share it', async ({ page }) => {
   await expect(page.getByText('Session ID copied')).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(id);
 });
+
+test('the Agent field lists the showcase agents disabled', async ({ page }) => {
+  await openComposer(page);
+  await agentField(page).click();
+  const names = (await agentList(page).getByRole('option').allInnerTexts()).map(
+    (text) => text.split('\n')[0].trim(),
+  );
+  expect(names.slice(0, 6)).toEqual([
+    'Assistant',
+    'RFP Builder',
+    'Benchmarking Agent',
+    'LAD COE Agent',
+    'Strategy Agent',
+    'Survey Agent',
+  ]);
+  for (const name of [
+    'Benchmarking Agent',
+    'LAD COE Agent',
+    'Strategy Agent',
+    'Survey Agent',
+  ]) {
+    const option = agentOption(page, name);
+    await expect(option).toHaveAttribute('aria-disabled', 'true');
+    await expect(option).toContainText(
+      'Showcase agent: not available to chat yet.',
+    );
+  }
+  // It cannot be chosen (clicked past Playwright's aria-disabled check).
+  await agentOption(page, 'Survey Agent').click({ force: true });
+  await expect(agentField(page)).toHaveText(/Assistant/);
+});

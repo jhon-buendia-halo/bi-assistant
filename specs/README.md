@@ -62,6 +62,7 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-82 Agent Routines | [epics/BA-82](epics/BA-82/spec.md) |
 | BA-89 Delivery Process | [epics/BA-89](epics/BA-89/spec.md) |
 | BA-111 Local Development Observability | [epics/BA-111](epics/BA-111/spec.md) |
+| BA-119 Harness Adjustments | [epics/BA-119](epics/BA-119/spec.md) |
 | BA-141 Agentic Hub Look and Feel | [epics/BA-141](epics/BA-141/spec.md) |
 | BA-150 Agent Hub | [epics/BA-150](epics/BA-150/spec.md) |
 | BA-159 LLM configuration | [epics/BA-159](epics/BA-159/spec.md) |
@@ -69,6 +70,7 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-169 Claude Code workflow mod | [epics/BA-169](epics/BA-169/spec.md) |
 | BA-198 Assistant skills: progressive-disclosure agent structure | [epics/BA-198](epics/BA-198/spec.md) |
 | BA-213 Agent Hub: tools and skills per agent | [epics/BA-213](epics/BA-213/spec.md) |
+| BA-233 US Health demo | [epics/BA-233](epics/BA-233/spec.md) |
 
 ## Stack neutrality
 

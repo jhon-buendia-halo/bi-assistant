@@ -2,6 +2,30 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-16
+
+### Changed
+- **Harness: CLAUDE.md split into workflow-stage skills** (roadmap 0.4.1, [BA-236](https://halo-powered.atlassian.net/browse/BA-236), epic [BA-119](https://halo-powered.atlassian.net/browse/BA-119), [specs/epics/BA-119/spec.md](specs/epics/BA-119/spec.md)).
+  - [CLAUDE.md](CLAUDE.md) keeps only the always-on core: the mandatory first action, the eleven steps (each naming its skill), the fast loop and acceptance gate, *Hard gates*, versioning and model usage. It went from 208 to 68 lines.
+  - The conventions moved verbatim, as the RFP Builder loads a stage's skill, to the project skills `workflow-understand`, `workflow-plan`, `workflow-architecture`, `workflow-specs`, `workflow-e2e`, `workflow-implement`, `verify` (now also step 9), `workflow-ship` and `workflow-retrospective`.
+  - *Model usage*: plans are made by Opus 5.5 at high effort (was Fable), at the user's request.
+  - `check-specs.py` checks the links inside the skills. [delivery.md](specs/system/delivery.md) section 10 lists the skills, and the specs that cited a CLAUDE.md convention point at its skill.
+  - Evidence: [evidence/0.4.1/](evidence/0.4.1/).
+
+### Added
+- **Harness: `.claude/tools/` and a Jira MCP server** (roadmap 0.4.2, [BA-237](https://halo-powered.atlassian.net/browse/BA-237), epic [BA-119](https://halo-powered.atlassian.net/browse/BA-119)).
+  - `.claude/tools/` holds developer tools, each an MCP server or a script ([delivery.md](specs/system/delivery.md) section 11).
+  - The first tool is `jira`, a dependency-free stdio MCP server registered in `.mcp.json` and enabled in `.claude/settings.json`. It provides:
+    - `create_epic`
+    - `create_issue`: a Story or Bug must name an Epic, which is checked before anything is created.
+    - `update_issue`, `add_comment` and `transition_issue`.
+    - the reads `jira.sh` had: `whoami`, `get_project`, `search_issues`, `get_issue` (with the parent's type, for the Epic gate), `list_statuses` and `list_transitions`.
+  - Read tools run without asking; write tools ask every time. From a worktree it reads the main checkout's `.env`; `setup.mjs` writes the credentials from the developer's terminal.
+  - Evidence: [evidence/0.4.2/](evidence/0.4.2/).
+
+### Removed
+- **`jira.sh`** (0.4.2, [BA-237](https://halo-powered.atlassian.net/browse/BA-237)). Replaced by the `jira` MCP tools, so a Jira call no longer needs `jq`, careful quoting, `JIRA_CONFIG_FILE` in a worktree, or `raw` to set a parent. The `jira` skill is now the guide to the tools. Evidence: [evidence/0.4.2/](evidence/0.4.2/).
+
 ## 2026-10-15
 
 ### Changed
@@ -26,6 +50,9 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 - **Workflow eval bar** ([CLAUDE.md](CLAUDE.md) step 9). The evals must pass at 100%: every case in 3 runs out of 3.
 
 ### Added
+- **US Health demo** (epic [BA-233](https://halo-powered.atlassian.net/browse/BA-233), roadmap 1.15.1 and 1.15.2, [specs/epics/BA-233/spec.md](specs/epics/BA-233/spec.md)):
+  - **Banner** ([BA-234](https://halo-powered.atlassian.net/browse/BA-234)): the top banner reads "US Health Agentic Hub"; the window title, drawer label, welcome heading and build identity keep "Agentic Hub" (app-shell R7). The `application-shell` baseline is refreshed. Evidence: [evidence/1.15.1/](evidence/1.15.1/).
+  - **Showcase agents** ([BA-235](https://halo-powered.atlassian.net/browse/BA-235)): Benchmarking, LAD COE (Life, Absence and Disability Center of Excellence), Strategy and Survey agents, Official cards with inferred, editable prompts and no tools, dataset or chat. A "Showcase" chip, Start chat and the New conversation picker disabled with "Showcase agent: not available to chat yet.", sessions refused with that reason, and their page opening on the System Prompt (agents-evals R106; agents.md 2.9). The Official section now shows every card, showcase agents after the Assistant and the RFP Builder (R3). Evidence: [evidence/1.15.2/](evidence/1.15.2/).
 - **Agent tools and skills, the RFP Builder, the agent panel and a single-user app** (epic [BA-213](https://halo-powered.atlassian.net/browse/BA-213), roadmap 1.14.2 to 1.14.19, PR #78; ADR-0022, ADR-0024, ADR-0026 to ADR-0030). Merged with E2E green and the **eval gate deferred** by the user's decision: stories whose acceptance needs the evals (1.14.2, 1.14.4, 1.14.5, 1.14.6, 1.14.10, 1.14.11, 1.14.15, 1.14.17, 1.14.18) stay `🚧 In progress` until world-cup, formula-1 and rfp pass at 100% over 3 runs; a first, partial pass (cut short when the OpenAI credits ran out) is in [evidence/1.14.15/eval-partial-2026-10-15.md](evidence/1.14.15/eval-partial-2026-10-15.md).
   - **Tools and skills** (1.14.2 [BA-217](https://halo-powered.atlassian.net/browse/BA-217), 1.14.3 [BA-215](https://halo-powered.atlassian.net/browse/BA-215), 1.14.4 [BA-216](https://halo-powered.atlassian.net/browse/BA-216), 1.14.5 [BA-218](https://halo-powered.atlassian.net/browse/BA-218), 1.14.6 [BA-219](https://halo-powered.atlassian.net/browse/BA-219), 1.14.7 [BA-220](https://halo-powered.atlassian.net/browse/BA-220)): an agent gets only the tools and skills its instructions link (`[[tool:…]]`, `[[skill:…]]`), skills are written in the app and link tools, built-in skills can be edited and reset. The skills library and a user agent's Skills tab list only the built-in skills every agent gets (R75 fix). Evidence: [evidence/1.14.2/](evidence/1.14.2/) to [evidence/1.14.7/](evidence/1.14.7/).
   - **Agent page** (1.14.8 [BA-221](https://halo-powered.atlassian.net/browse/BA-221), 1.14.9 [BA-222](https://halo-powered.atlassian.net/browse/BA-222), 1.14.10 [BA-223](https://halo-powered.atlassian.net/browse/BA-223), 1.14.11 [BA-224](https://halo-powered.atlassian.net/browse/BA-224)): Tools library, Graph and LLM Config tabs; Chat Box, editable System Prompt and Skills tabs; skills reach the model through Mastra's skill tool; every agent's System Prompt is editable, built-in ones included. Evidence: [evidence/1.14.8/](evidence/1.14.8/) to [evidence/1.14.11/](evidence/1.14.11/).

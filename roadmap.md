@@ -196,6 +196,48 @@ Developer tooling for seeing what the backend and agents are doing: agent and LL
 - **Acceptance:** a developer following only the docs sees one chat question in Phoenix and Grafana.
 - **Notes:** last; depends on 0.3.2–0.3.6. Guide: [docs/observability.md](docs/observability.md), linked from README *Development*. Branch `docs/BA-118-observability-docs` (it includes the BA-114 compose branch merged in, so it holds the whole stack). Evidence: [evidence/0.3.7/](evidence/0.3.7/).
 
+### Milestone 0.4 — Harness Adjustments ([BA-119](https://halo-powered.atlassian.net/browse/BA-119))
+
+Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the workflow gates, and the project skills and checks that govern how a change is planned, built and shipped. No app behaviour changes. Epic spec: [specs/epics/BA-119/spec.md](specs/epics/BA-119/spec.md).
+
+#### 0.4.1 — Split CLAUDE.md into workflow-stage skills ([BA-236](https://halo-powered.atlassian.net/browse/BA-236))  `✅ Done`
+- **Intent:** a Claude Code session loads a workflow stage's conventions when that stage starts, as the RFP Builder loads its stage skills, rather than carrying all of CLAUDE.md on every turn.
+- **Scope:**
+  - CLAUDE.md keeps only the always-on core:
+    - what the repo is
+    - the mandatory first action
+    - the `## Workflow` list, with each step naming its skill
+    - the fast loop and the acceptance gate
+    - the hard gates
+    - model usage
+  - The conventions move, unchanged in substance, to the project skills `workflow-understand`, `workflow-plan`, `workflow-architecture`, `workflow-specs`, `workflow-e2e`, `workflow-implement`, `verify` (extended with step 9), `workflow-ship` and `workflow-retrospective`.
+  - `check-specs.py` checks the skills' links.
+  - Specs that cite a CLAUDE.md convention point at its skill.
+- **Out of scope:** app code; changing what a rule says; the `workflow-steps` mod.
+- **Acceptance:**
+  - A section map shows every CLAUDE.md rule in exactly one place.
+  - The mod still parses eleven steps and the first action, and its tests pass.
+  - A new session lists the nine skills.
+  - `check-specs.py` passes.
+  - Nothing under `backend/` or `frontend/` changes.
+- **Notes:** branch `feat/BA-119-harness-adjustments`. The user chose one skill per workflow stage, invocable as `/<name>`, on 2026-10-16. One rule change at the user's request, the same day: *Model usage* now says plans are made by Opus 5.5 at high effort (was Fable). Evidence: [evidence/0.4.1/](evidence/0.4.1/).
+
+#### 0.4.2 — Jira MCP tool in `.claude/tools` for epics and stories ([BA-237](https://halo-powered.atlassian.net/browse/BA-237))  `✅ Done`
+- **Intent:** Claude creates and checks epics and stories through typed tools that work from any checkout, instead of a shell script that needs `jq`, careful quoting and a `raw` call to set a parent.
+- **Scope:**
+  - `.claude/tools/` as the home of developer tools, each an MCP server or a script, with a README.
+  - A `jira` MCP server with no dependencies, registered in `.mcp.json` and enabled in `.claude/settings.json`. Its read tools are allowed without asking; its write tools ask every time.
+  - Its tools: `create_epic`, plus `create_issue` (a Story or Bug must name an Epic, checked before creating). It also covers everything `jira.sh` did: `whoami`, `get_project`, `search_issues`, `get_issue` (with the parent's type, for the Epic gate), `list_statuses`, `list_transitions`, `update_issue`, `add_comment`, `transition_issue`.
+  - Credentials from the environment or `.env`, falling back to the main checkout's `.env` from a worktree; `setup.mjs` writes them from the developer's terminal.
+  - `jira.sh` is removed. The `jira` skill is rewritten as the guide to the tools, and `workflow-plan` points at `get_issue`.
+- **Out of scope:** the Epic gate as a tool that also checks the epic spec; listing or tracking an epic's stories beyond JQL; scaffolding specs or roadmap entries. The user chose creation only, on 2026-10-16.
+- **Acceptance:**
+  - Unit tests pass, with Jira faked.
+  - A stdio smoke run from a worktree reads the main checkout's `.env` and returns a real issue with its parent's type.
+  - In a new session, `/mcp` lists `jira` with its eleven tools.
+  - `check-specs.py` passes.
+- **Notes:** same branch `feat/BA-119-harness-adjustments`. The user chose an MCP server over scripts and over the claude.ai Atlassian connector, and chose to replace `jira.sh`, on 2026-10-16. `update_issue` replaces the `raw` calls earlier stories needed to set a parent or edit a description. Evidence: [evidence/0.4.2/](evidence/0.4.2/).
+
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
 Source of truth for scope and dates: Jira project **BA**, version *1.0 Beta* ([timeline](https://halo-powered.atlassian.net/jira/software/projects/BA/boards/2688/timeline)). Each milestone mirrors one Jira epic and each feature mirrors one story, so IDs map 1:1. Imported 2026-10-01. Status changes are made in both places.
@@ -1067,6 +1109,24 @@ A user agent's builder chooses its tools from the assistant's own set, writes sk
 - **Out of scope:** any replacement access control (the host is the boundary); changing the desktop backend's bind address (kept by the user's choice); a way back to multi-user (needs a new ADR).
 - **Acceptance:** the app opens straight into the shell with no sign-in page, no account menu and no Admin rail item; every area and Settings section is reachable and Reasoning effort is always shown; sessions, agents, skills, knowledge, metrics and verified queries owned by any user are listed after opening an old data dir, and `app.sqlite` has no `users` table; `grep -rn "ORG_\|RequirePermission\|CurrentUserService\|auth.can\|/me'" backend/src frontend/src` is empty; the `navigation.spec.ts` scenario "opens as the super admin" passes; `check-specs.py`, unit tests, builds and the impacted E2E specs are green. No eval gate: nothing an agent receives changes.
 - **Notes:** asked on 2026-10-14: "No just leave the super admin user remove everything related to authentication and authorization". Decisions: single user, no sign-in; Admin area removed entirely; other users' data reassigned to the super admin; the super admin's name appears nowhere (agents keep "Owner: You"); the desktop bind is unchanged and the ADR states the exposure (anyone who reaches the port has full access). Design: [docs/plans/BA-213/ba-232-design.md](docs/plans/BA-213/ba-232-design.md).
+
+### Milestone 1.15 — US Health demo ([BA-233](https://halo-powered.atlassian.net/browse/BA-233))
+
+The app is shown to the US Health practice as its own hub: the banner reads "US Health Agentic Hub", and the Agent Hub presents four further use cases as Official showcase agents (Benchmarking, Survey, LAD COE and Strategy; Benchmarking added on 2026-10-15) that can be read and edited but cannot chat yet, in an Official section that always shows every card. Builds on Milestone 1.9 (the Agent Hub, ADR-0008) and Milestone 1.14 (built-in prompt overrides, ADR-0026). No ADR: the showcase agents are ordinary registry entries. All stories are built on the branch `feat/BA-233-us-health-demo` and ship as one PR. Epic spec: [specs/epics/BA-233/spec.md](specs/epics/BA-233/spec.md).
+
+#### 1.15.1 — Banner reads "US Health Agentic Hub" ([BA-234](https://halo-powered.atlassian.net/browse/BA-234))  `✅ Done`
+- **Intent:** the hub introduces itself as the US Health practice's own when it is demoed.
+- **Scope:** the top banner, the page's only level-one heading, reads "US Health Agentic Hub" instead of "Agentic Hub" (app-shell R7, ui.md 1.2); the "Shows the product name" scenario checks the new heading; the `application-shell` web baseline is refreshed at the acceptance gate.
+- **Out of scope:** renaming the product: the window and document title (R33), the drawer label beside the menu button, the welcome heading "Welcome to Agentic Hub" (R51), the Settings build identity "Agentic Hub v…" (R32), the operating-system app name and the installers stay as they are; any other size or layout change of the banner.
+- **Acceptance:** the banner's `h1` reads "US Health Agentic Hub" while the document title, the welcome heading and the Settings footer still read "Agentic Hub"; the `layout-accessibility.spec.ts` scenarios pass on the web target with the refreshed `application-shell-web-linux.png`; `check-specs.py`, frontend unit tests and builds are green.
+- **Notes:** confirmed by the user on 2026-10-15. The desktop baseline is not regenerated unless a desktop run is requested.
+
+#### 1.15.2 — Showcase agents: Survey, LAD COE and Strategy ([BA-235](https://halo-powered.atlassian.net/browse/BA-235))  `✅ Done`
+- **Intent:** the Agent Hub shows the US Health practice four further use cases it recognises, all visible at a glance, each with a description and a system prompt to read and discuss, without pretending they can already chat.
+- **Scope:** four built-in Official agents in the registry, `benchmarking` (id `benchmarking-agent`, "Benchmarking Agent", added on 2026-10-15), `survey` (id `survey-agent`, "Survey Agent"), `lad-coe` (id `lad-coe-agent`, "LAD COE Agent", Life, Absence and Disability Center of Excellence) and `strategy` (id `strategy-agent`, "Strategy Agent"), with no tools, dataset, skills or evals and the model resolved like every agent's but never called (agents.md 2.9); `GET /agents` lists them as `kind: "official"`, owner `Official`, with `showcase: true` and `chatRequirement` `Showcase agent: not available to chat yet.` (api.md 33); the hub card shows a `Showcase` chip (title = the reason) and **Start chat** disabled with the reason as its title, on the card and in the detail header (which also shows the reason as text); their page has no Chat Box tab, opens on the System Prompt tab and shows the description and an editable System Prompt (ADR-0026, plain text, no links); in the hub they come after the agents that can chat, and (added 2026-10-15) the Official section always shows every card, with no `Show more` (agents-evals R3); the New conversation Agent picker lists them disabled with the reason; `POST /sessions` with a showcase key is refused with the reason, creating nothing (agents-evals R106, sessions-chat R52, R64).
+- **Out of scope:** a working chat for the showcase agents; datasets, skills or evals for them; renaming the product, the window title or the installer; any change to the assistant's or the RFP Builder's prompts.
+- **Acceptance:** the Agent Hub scenarios "The showcase agents are Official cards that cannot chat yet" and "A showcase agent's page shows its description and System Prompt" (`agent-hub.spec.ts`) and the Session management scenario "The Agent field lists the showcase agents disabled" (`session-management.spec.ts`) pass on the web target, with all four showcase agents shown, after the assistant and the RFP Builder, and the existing Agent Hub scenarios updated for an Official section that shows every card with no `Show more`; a backend unit test proves the catalogue entry and the session refusal; `check-specs.py`, backend and frontend unit tests, lint and builds are green. No eval gate: what the assistant and the RFP Builder receive is unchanged.
+- **Notes:** confirmed by the user on 2026-10-15. Scope extended by the user on 2026-10-15: the Benchmarking Agent, and the Official section always expanded; the Jira story keeps its key and title. The descriptions and prompts are `SHOWCASE_AGENTS` and `BENCHMARKING_PROMPT`, `SURVEY_PROMPT`, `LAD_COE_PROMPT`, `STRATEGY_PROMPT` in `backend/src/mastra/agents/showcase-catalog.ts`, copied verbatim into agents.md 2.9. Open: "LAD" is read as Life, Absence and Disability.
 
 ## Release 2 — Multi-user  (no target date yet)
 

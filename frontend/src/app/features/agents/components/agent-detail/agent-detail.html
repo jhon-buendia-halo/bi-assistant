@@ -24,7 +24,9 @@
         <lucide-angular [img]="Bot" [size]="19" />
       </span>
       <div class="flex min-w-0 flex-col gap-1">
-        <h2 class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong">
+        <h2
+          class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
+        >
           {{ agent.name }}
         </h2>
         <div class="flex flex-wrap items-center gap-2">
@@ -51,6 +53,13 @@
       </div>
       @if (showStartChat() || canChange()) {
         <div class="ml-auto flex shrink-0 items-center gap-2">
+          @if (agent.showcase && startChatBlockedReason()) {
+            <span
+              data-testid="agent-showcase-reason"
+              class="text-[12px] text-fg-muted"
+              >{{ startChatBlockedReason() }}</span
+            >
+          }
           @if (showStartChat()) {
             <button
               type="button"
@@ -160,7 +169,10 @@
     <!-- Tab panels -->
     <div class="mt-6">
       @if (chatMounted() && agent.kind !== "system") {
-        <div [class.hidden]="activeTab() !== 'chat'" data-testid="agent-panel-chat">
+        <div
+          [class.hidden]="activeTab() !== 'chat'"
+          data-testid="agent-panel-chat"
+        >
           <app-agent-chat-box
             [style.height]="isUserAgent() ? 'calc(100vh - 22rem)' : null"
             [style.min-height]="isUserAgent() ? '420px' : null"
@@ -196,7 +208,11 @@
             }
           } @else {
             <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">
-              <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+              <lucide-angular
+                [img]="Loader2"
+                [size]="14"
+                class="animate-spin"
+              />
               <span>Loading skills…</span>
             </div>
           }
@@ -254,7 +270,11 @@
             <!-- The inline Skills tab above stays mounted. -->
           } @else if (skillsLoading()) {
             <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">
-              <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+              <lucide-angular
+                [img]="Loader2"
+                [size]="14"
+                class="animate-spin"
+              />
               <span>Loading skills…</span>
             </div>
           } @else if (skillsError(); as skillsErr) {

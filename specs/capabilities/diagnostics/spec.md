@@ -93,7 +93,7 @@ The panel is a modal overlay above the whole app, reached from the bottom of the
 
 ## Flows
 
-E2E: `frontend/e2e/diagnostics.spec.ts` for the Feature below (moved verbatim from the repository `gherkin.md`). Scenarios tagged `@desktop-only` rely on the desktop shell (shell-side redaction, the native save dialog) and run only in the Playwright `desktop` project. The `web` project skips them (see *Test target convention* in [CLAUDE.md](../../../CLAUDE.md)).
+E2E: `frontend/e2e/diagnostics.spec.ts` for the Feature below (moved verbatim from the repository `gherkin.md`). Scenarios tagged `@desktop-only` rely on the desktop shell (shell-side redaction, the native save dialog) and run only in the Playwright `desktop` project. The `web` project skips them (see *Test target convention* in the [`workflow-e2e`](../../../.claude/skills/workflow-e2e/SKILL.md) project skill).
 
 ```gherkin
 Feature: Diagnostics

@@ -91,7 +91,7 @@ const asDemoUser =
   (): Promise<T> =>
     fn();
 
-function build() {
+function build(extra: Record<string, unknown> = {}) {
   const db = new BetterSqlite3(':memory:');
   const skills = new SqliteDocStore<SkillDoc>(db, 'skills');
   const userAgents = new UserAgentsService(
@@ -110,6 +110,7 @@ function build() {
       'You are the assistant.',
     ),
     'assistant-eval-judge': fakeAgent('assistant-eval-judge', []),
+    ...extra,
   };
   const mastra = { listAgents: () => registry } as unknown as MastraService;
   return { db, skills, service: new AgentsService(mastra, userAgents) };
@@ -144,6 +145,25 @@ describe('AgentsService (built-in and user agents)', () => {
         starterQuestions: [],
       });
       expect(agents[2]).toMatchObject({ kind: 'system', owner: 'System' });
+    }),
+  );
+
+  it(
+    'lists a showcase agent as Official, blocked with its reason (agents-evals R106)',
+    asDemoUser(async () => {
+      const showcase = build({ survey: fakeAgent('Survey Agent', []) });
+      const agents = await showcase.service.list();
+      expect(agents.find((agent) => agent.key === 'survey')).toMatchObject({
+        kind: 'official',
+        owner: 'Official',
+        showcase: true,
+        chatRequirement: 'Showcase agent: not available to chat yet.',
+        datasets: [],
+      });
+      expect(
+        agents.find((agent) => agent.key === 'assistant'),
+      ).not.toHaveProperty('showcase');
+      showcase.db.close();
     }),
   );
 
