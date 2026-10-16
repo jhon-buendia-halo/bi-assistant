@@ -1,4 +1,17 @@
 {
   "enabledPlugins": {},
-  "extraKnownMarketplaces": {}
+  "extraKnownMarketplaces": {},
+  "enabledMcpjsonServers": [
+    "jira"
+  ],
+  "permissions": {
+    "allow": [
+      "mcp__jira__whoami",
+      "mcp__jira__get_project",
+      "mcp__jira__search_issues",
+      "mcp__jira__get_issue",
+      "mcp__jira__list_statuses",
+      "mcp__jira__list_transitions"
+    ]
+  }
 }

@@ -8,7 +8,7 @@ backend/    NestJS API
 specs/      the complete specification of the app
 ```
 
-**What the app does and how it works is specified in [specs/](specs/README.md), not here.** Start there for any question about behaviour, endpoints, stored data, agents, UI, build or release. This file holds the always-on rules for working in the repo; each workflow stage's conventions live in a project skill under [.claude/skills/](.claude/skills/), loaded when that stage starts.
+**What the app does and how it works is specified in [specs/](specs/README.md), not here.** Start there for any question about behaviour, endpoints, stored data, agents, UI, build or release. This file holds the always-on rules for working in the repo; each workflow stage's conventions live in a project skill under [.claude/skills/](.claude/skills/), loaded when that stage starts. Developer tools (MCP servers and scripts, such as the Jira tools) live in [.claude/tools/](.claude/tools/README.md).
 
 Process documents (see **Workflow** below):
 

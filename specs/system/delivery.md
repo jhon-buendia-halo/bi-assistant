@@ -246,7 +246,7 @@ Runs on every pull request, on every push to `main`, and on manual dispatch. It 
 | Check | Fails when |
 |---|---|
 | Layout | a product or system spec is missing, or the capability or epic tables in `specs/README.md` don't match the folders on disk |
-| Links | a relative link in `CLAUDE.md`, `README.md`, `roadmap.md`, any spec or any project skill (`.claude/skills/*/SKILL.md`) doesn't resolve. `changelog.md` and `retrospective.md` are skipped, because their past entries are never rewritten. |
+| Links | a relative link in `CLAUDE.md`, `README.md`, `roadmap.md`, any spec, any project skill (`.claude/skills/*/SKILL.md`) or any tool README (`.claude/tools/**/*.md`) doesn't resolve. `changelog.md` and `retrospective.md` are skipped, because their past entries are never rewritten. |
 | Capability format | a capability spec lacks one of the required sections |
 | E2E mirror | a `frontend/e2e/*.spec.ts` file is not the `E2E:` line of exactly one capability spec, or an `E2E:` line names a missing file |
 | API | a backend controller route is not written as `` `METHOD /path` `` in `system/api.md` |
@@ -436,4 +436,17 @@ Developer tooling for people who work on this repository in Claude Code, not par
 | `workflow-ship` | 10 | Logging and Evidence conventions, the epic PR, post-merge cleanup |
 | `workflow-retrospective` | 11 | Retrospective convention |
 
-Other project skills are task runbooks, not workflow steps: `jira`, `intellify-api` and `deploy-labs-site` (section 8). Each step line in `CLAUDE.md` keeps the `<n>. **<title>** — <description>` form, followed by `Skill: \`<name>\``, so the `workflow-steps` mod (section 9) still parses it. `check-specs.py` checks the relative links inside every `SKILL.md` (section 5).
+Other project skills are task runbooks, not workflow steps: `jira` (the guide to the Jira tools, section 11), `intellify-api` and `deploy-labs-site` (section 8). Each step line in `CLAUDE.md` keeps the `<n>. **<title>** — <description>` form, followed by `Skill: \`<name>\``, so the `workflow-steps` mod (section 9) still parses it. `check-specs.py` checks the relative links inside every `SKILL.md` and every Markdown file under `.claude/tools/` (section 5).
+
+## 11. Claude Code tools (`.claude/tools/`)
+
+Developer tooling for people who work on this repository in Claude Code, not part of the app or its releases. A tool is code Claude Code (and developers) run; the skill that names it says when and how. Epic [BA-119](../epics/BA-119/spec.md). Each tool has its own folder, a README (kind, files, how to test) and a row in `.claude/tools/README.md`. A tool is one of two kinds:
+
+| Kind | When | Wiring |
+|---|---|---|
+| MCP server | An external, authenticated service that Claude is the main user of, with structured inputs and shared writes that need approval per call | Registered in the repo-root `.mcp.json` (stdio, `node .claude/tools/<name>/server.mjs`) and enabled for every developer by `enabledMcpjsonServers` in the committed `.claude/settings.json`; its read tools are in `permissions.allow` there, its write tools ask on every call |
+| Script | Deterministic, repo-local work that people and CI also run (checks, generators) | Run from the shell; no server |
+
+| Tool | Kind | Detail |
+|---|---|---|
+| `jira` | MCP server | Jira Cloud REST v3. Read tools: `whoami`, `get_project`, `search_issues`, `get_issue` (with `parent` and `parentType`, for the Epic gate), `list_statuses`, `list_transitions`. Write tools: `create_epic`, `create_issue` (Story, Bug or Task; a Story or Bug must name its epic, checked to be an Epic before anything is created), `update_issue` (summary, description, epic), `add_comment`, `transition_issue`. Credentials `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_PROJECT`: the environment, then `JIRA_CONFIG_FILE`, or else this checkout's `.env` and then the main checkout's (found through `git rev-parse --git-common-dir`), read on every call. `setup.mjs` writes them from the developer's own terminal. No dependencies (Node 22 or later). Tests: `node --test '.claude/tools/jira/tests/*.test.mjs'`, with Jira faked. Replaces the earlier `jira.sh` script ([BA-237](https://halo-powered.atlassian.net/browse/BA-237)). |

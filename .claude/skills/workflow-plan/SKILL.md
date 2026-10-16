@@ -36,7 +36,7 @@ The roadmap is read top-to-bottom; ordering and grouping carry meaning.
 
 **Every new code change must map to a Jira epic in project BA. If it does not, the change is not done: do not branch, edit code or open a PR.** This is a hard gate, checked before step 3 of the workflow.
 
-- The change maps to an epic when its Jira issue (the Story or Bug being worked on) has an Epic as its `parent`, or the issue is that Epic itself. Check with `.claude/skills/jira/scripts/jira.sh issue <US-ID>` and read the `parent` field, then confirm the parent's `issuetype` is `Epic`.
+- The change maps to an epic when its Jira issue (the Story or Bug being worked on) has an Epic as its `parent`, or the issue is that Epic itself. Check with the `get_issue` tool of the `jira` skill: it passes when `parentType` is `Epic` (or the issue is itself the Epic).
 - No epic: stop and tell the user which issue has no epic. Ask them to link it to an existing epic or create one (with the `jira` skill, with confirmation). Never pick an epic yourself or invent a key.
 - The epic also appears in the matching [roadmap.md](../../../roadmap.md) milestone (each milestone mirrors one epic) and in the PR description, which links the epic and every story it includes.
 - **Every epic has a high-level spec** at `specs/epics/<EPIC-ID>/spec.md` (e.g. `specs/epics/BA-12/spec.md`), in the format in [specs/README.md](../../../specs/README.md): goal, scope, out of scope, stories, the capability and system specs it touches, acceptance, and dependencies, risks and open questions. If the epic has no spec yet, or its spec is still `Status: Draft`, write or finish it before any code for its stories and get the user to confirm it (`Status: Confirmed`).
@@ -49,7 +49,7 @@ The roadmap is read top-to-bottom; ordering and grouping carry meaning.
 
 - **Branch name:** `<type>/<EPIC-ID>-<short-description>`
   - `<type>` is a Conventional Commit type: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `ci` or `build`. Use the highest-impact type among the epic's commits (`feat` if any story adds a feature). The version bump reads every commit since the last tag, so mixed commit types on one branch still bump correctly.
-  - `<EPIC-ID>` is the key of an **existing** Jira Epic in project BA, uppercase as Jira shows it (e.g. `BA-111`). Each story worked on the branch must be a child of that epic. Check both with `.claude/skills/jira/scripts/jira.sh issue <KEY>` before the first commit for a story. If the story or epic doesn't exist yet, stop and ask the user to create it (or create it with the `jira` skill, with confirmation). Never invent an ID. See **Epic gate**.
+  - `<EPIC-ID>` is the key of an **existing** Jira Epic in project BA, uppercase as Jira shows it (e.g. `BA-111`). Each story worked on the branch must be a child of that epic. Check both with the `get_issue` tool of the `jira` skill before the first commit for a story. If the story or epic doesn't exist yet, stop and ask the user to create it (or create it with the `jira` skill, with confirmation). Never invent an ID. See **Epic gate**.
   - `<short-description>` is lowercase kebab-case, a few words, ASCII only, describing the epic.
   - Example: `feat/BA-111-local-observability`.
 - **One open branch per epic.** Before starting a story, check for the epic's branch (`git branch -a --list '*/<EPIC-ID>-*'`) and its worktree (`git worktree list`). If they exist, continue there; create them only for the epic's first story.

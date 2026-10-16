@@ -55,7 +55,7 @@ check(listed_epics == set(epics), "specs/README.md lists exactly the epic specs 
 
 # 2. Every relative link resolves.
 # changelog.md and retrospective.md are excluded: past entries are never rewritten, so their links may point at moved files.
-files = ["CLAUDE.md", "README.md", "roadmap.md"] + glob.glob("specs/**/*.md", recursive=True) + glob.glob(".claude/skills/*/SKILL.md")
+files = ["CLAUDE.md", "README.md", "roadmap.md"] + glob.glob("specs/**/*.md", recursive=True) + glob.glob(".claude/skills/*/SKILL.md") + glob.glob(".claude/tools/**/*.md", recursive=True)
 broken = []
 for f in files:
     for target in re.findall(r"\]\(([^)\s]+)\)", strip_code(read(f))):

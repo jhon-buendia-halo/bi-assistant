@@ -32,6 +32,7 @@ Today CLAUDE.md is about 200 lines. It is loaded into every turn of every sessio
   | 10 | `workflow-ship` | Logging, Evidence, the epic PR and post-merge cleanup |
   | 11 | `workflow-retrospective` | Retrospective |
 
+- **Developer tools in `.claude/tools/` (BA-237).** A home for tools that Claude Code uses, each one an MCP server (an external, authenticated service with shared writes) or a script (repo-local work that people and CI also run), with the skill that names it. The first is a `jira` MCP server, registered in a committed `.mcp.json`, that creates epics and creates stories or bugs under an epic (checking that the parent is an Epic), and covers everything `jira.sh` did (read, search, update, comment, transition). It replaces `jira.sh`, and the `jira` skill becomes the guide to it.
 - **Links stay checked.** `scripts/check-specs.py` also checks the relative links in `.claude/skills/*/SKILL.md`. Specs that cite "*X convention* in CLAUDE.md" point at the skill that now holds that convention.
 
 ## Out of scope
@@ -45,6 +46,7 @@ Today CLAUDE.md is about 200 lines. It is loaded into every turn of every sessio
 | Story | Summary | Roadmap feature |
 |---|---|---|
 | [BA-236](https://halo-powered.atlassian.net/browse/BA-236) | Split CLAUDE.md into workflow-stage skills | 0.4.1 |
+| [BA-237](https://halo-powered.atlassian.net/browse/BA-237) | Jira MCP tool in .claude/tools for epics and stories | 0.4.2 |
 
 All stories are built on one branch, `docs/BA-119-harness-adjustments`, and ship as one PR.
 
@@ -55,6 +57,7 @@ All stories are built on one branch, `docs/BA-119-harness-adjustments`, and ship
   - The `check-specs` link rule covers the project skills.
   - A short list of the project skills that carry the workflow.
 - [capabilities/diagnostics/spec.md](../../capabilities/diagnostics/spec.md): its *Test target convention* link points at `workflow-e2e`.
+- [system/delivery.md](../../system/delivery.md) section 11: `.claude/tools/`, the two kinds of tool and the `jira` MCP server.
 - No endpoint, persisted shape, prompt or UI of the application changes, so no Gherkin scenario or Playwright spec is touched.
 
 ## Acceptance
@@ -63,6 +66,7 @@ All stories are built on one branch, `docs/BA-119-harness-adjustments`, and ship
 - CLAUDE.md's `## Workflow` names the skill for every step, and the `workflow-steps` mod still parses all eleven steps and the mandatory first action. Its tests pass.
 - In a new Claude Code session in the repo, the nine skills are listed and each can be invoked as `/<name>`.
 - `python3 scripts/check-specs.py` passes, including the links inside the skills.
+- The `jira` tools' unit tests pass, and in a new session `/mcp` lists the `jira` server. Its read tools run without a prompt, its write tools ask, and a Story created under an Epic reads back with that Epic as its parent.
 - `git diff` of the PR touches nothing under `backend/` or `frontend/`.
 
 ## Dependencies, risks and open questions
