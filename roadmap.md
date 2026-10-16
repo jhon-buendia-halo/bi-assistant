@@ -220,7 +220,7 @@ Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the wor
   - A new session lists the nine skills.
   - `check-specs.py` passes.
   - Nothing under `backend/` or `frontend/` changes.
-- **Notes:** branch `docs/BA-119-harness-adjustments`. The user chose one skill per workflow stage, invocable as `/<name>`, on 2026-10-16.
+- **Notes:** branch `docs/BA-119-harness-adjustments`. The user chose one skill per workflow stage, invocable as `/<name>`, on 2026-10-16. One rule change at the user's request, the same day: *Model usage* now says plans are made by Opus 5.5 at high effort (was Fable).
 
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
