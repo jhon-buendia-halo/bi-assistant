@@ -48,7 +48,7 @@ Today CLAUDE.md is about 200 lines. It is loaded into every turn of every sessio
 | [BA-236](https://halo-powered.atlassian.net/browse/BA-236) | Split CLAUDE.md into workflow-stage skills | 0.4.1 |
 | [BA-237](https://halo-powered.atlassian.net/browse/BA-237) | Jira MCP tool in .claude/tools for epics and stories | 0.4.2 |
 
-All stories are built on one branch, `docs/BA-119-harness-adjustments`, and ship as one PR.
+All stories are built on one branch, `feat/BA-119-harness-adjustments`, and ship as one PR.
 
 ## Specs touched
 
