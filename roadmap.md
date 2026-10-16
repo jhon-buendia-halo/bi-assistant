@@ -196,6 +196,48 @@ Developer tooling for seeing what the backend and agents are doing: agent and LL
 - **Acceptance:** a developer following only the docs sees one chat question in Phoenix and Grafana.
 - **Notes:** last; depends on 0.3.2–0.3.6. Guide: [docs/observability.md](docs/observability.md), linked from README *Development*. Branch `docs/BA-118-observability-docs` (it includes the BA-114 compose branch merged in, so it holds the whole stack). Evidence: [evidence/0.3.7/](evidence/0.3.7/).
 
+### Milestone 0.4 — Harness Adjustments ([BA-119](https://halo-powered.atlassian.net/browse/BA-119))
+
+Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the workflow gates, and the project skills and checks that govern how a change is planned, built and shipped. No app behaviour changes. Epic spec: [specs/epics/BA-119/spec.md](specs/epics/BA-119/spec.md).
+
+#### 0.4.1 — Split CLAUDE.md into workflow-stage skills ([BA-236](https://halo-powered.atlassian.net/browse/BA-236))  `✅ Done`
+- **Intent:** a Claude Code session loads a workflow stage's conventions when that stage starts, as the RFP Builder loads its stage skills, rather than carrying all of CLAUDE.md on every turn.
+- **Scope:**
+  - CLAUDE.md keeps only the always-on core:
+    - what the repo is
+    - the mandatory first action
+    - the `## Workflow` list, with each step naming its skill
+    - the fast loop and the acceptance gate
+    - the hard gates
+    - model usage
+  - The conventions move, unchanged in substance, to the project skills `workflow-understand`, `workflow-plan`, `workflow-architecture`, `workflow-specs`, `workflow-e2e`, `workflow-implement`, `verify` (extended with step 9), `workflow-ship` and `workflow-retrospective`.
+  - `check-specs.py` checks the skills' links.
+  - Specs that cite a CLAUDE.md convention point at its skill.
+- **Out of scope:** app code; changing what a rule says; the `workflow-steps` mod.
+- **Acceptance:**
+  - A section map shows every CLAUDE.md rule in exactly one place.
+  - The mod still parses eleven steps and the first action, and its tests pass.
+  - A new session lists the nine skills.
+  - `check-specs.py` passes.
+  - Nothing under `backend/` or `frontend/` changes.
+- **Notes:** branch `feat/BA-119-harness-adjustments`. The user chose one skill per workflow stage, invocable as `/<name>`, on 2026-10-16. One rule change at the user's request, the same day: *Model usage* now says plans are made by Opus 5.5 at high effort (was Fable). Evidence: [evidence/0.4.1/](evidence/0.4.1/).
+
+#### 0.4.2 — Jira MCP tool in `.claude/tools` for epics and stories ([BA-237](https://halo-powered.atlassian.net/browse/BA-237))  `✅ Done`
+- **Intent:** Claude creates and checks epics and stories through typed tools that work from any checkout, instead of a shell script that needs `jq`, careful quoting and a `raw` call to set a parent.
+- **Scope:**
+  - `.claude/tools/` as the home of developer tools, each an MCP server or a script, with a README.
+  - A `jira` MCP server with no dependencies, registered in `.mcp.json` and enabled in `.claude/settings.json`. Its read tools are allowed without asking; its write tools ask every time.
+  - Its tools: `create_epic`, plus `create_issue` (a Story or Bug must name an Epic, checked before creating). It also covers everything `jira.sh` did: `whoami`, `get_project`, `search_issues`, `get_issue` (with the parent's type, for the Epic gate), `list_statuses`, `list_transitions`, `update_issue`, `add_comment`, `transition_issue`.
+  - Credentials from the environment or `.env`, falling back to the main checkout's `.env` from a worktree; `setup.mjs` writes them from the developer's terminal.
+  - `jira.sh` is removed. The `jira` skill is rewritten as the guide to the tools, and `workflow-plan` points at `get_issue`.
+- **Out of scope:** the Epic gate as a tool that also checks the epic spec; listing or tracking an epic's stories beyond JQL; scaffolding specs or roadmap entries. The user chose creation only, on 2026-10-16.
+- **Acceptance:**
+  - Unit tests pass, with Jira faked.
+  - A stdio smoke run from a worktree reads the main checkout's `.env` and returns a real issue with its parent's type.
+  - In a new session, `/mcp` lists `jira` with its eleven tools.
+  - `check-specs.py` passes.
+- **Notes:** same branch `feat/BA-119-harness-adjustments`. The user chose an MCP server over scripts and over the claude.ai Atlassian connector, and chose to replace `jira.sh`, on 2026-10-16. `update_issue` replaces the `raw` calls earlier stories needed to set a parent or edit a description. Evidence: [evidence/0.4.2/](evidence/0.4.2/).
+
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
 Source of truth for scope and dates: Jira project **BA**, version *1.0 Beta* ([timeline](https://halo-powered.atlassian.net/jira/software/projects/BA/boards/2688/timeline)). Each milestone mirrors one Jira epic and each feature mirrors one story, so IDs map 1:1. Imported 2026-10-01. Status changes are made in both places.

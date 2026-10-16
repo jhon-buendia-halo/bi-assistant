@@ -2,6 +2,30 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-16
+
+### Changed
+- **Harness: CLAUDE.md split into workflow-stage skills** (roadmap 0.4.1, [BA-236](https://halo-powered.atlassian.net/browse/BA-236), epic [BA-119](https://halo-powered.atlassian.net/browse/BA-119), [specs/epics/BA-119/spec.md](specs/epics/BA-119/spec.md)).
+  - [CLAUDE.md](CLAUDE.md) keeps only the always-on core: the mandatory first action, the eleven steps (each naming its skill), the fast loop and acceptance gate, *Hard gates*, versioning and model usage. It went from 208 to 68 lines.
+  - The conventions moved verbatim, as the RFP Builder loads a stage's skill, to the project skills `workflow-understand`, `workflow-plan`, `workflow-architecture`, `workflow-specs`, `workflow-e2e`, `workflow-implement`, `verify` (now also step 9), `workflow-ship` and `workflow-retrospective`.
+  - *Model usage*: plans are made by Opus 5.5 at high effort (was Fable), at the user's request.
+  - `check-specs.py` checks the links inside the skills. [delivery.md](specs/system/delivery.md) section 10 lists the skills, and the specs that cited a CLAUDE.md convention point at its skill.
+  - Evidence: [evidence/0.4.1/](evidence/0.4.1/).
+
+### Added
+- **Harness: `.claude/tools/` and a Jira MCP server** (roadmap 0.4.2, [BA-237](https://halo-powered.atlassian.net/browse/BA-237), epic [BA-119](https://halo-powered.atlassian.net/browse/BA-119)).
+  - `.claude/tools/` holds developer tools, each an MCP server or a script ([delivery.md](specs/system/delivery.md) section 11).
+  - The first tool is `jira`, a dependency-free stdio MCP server registered in `.mcp.json` and enabled in `.claude/settings.json`. It provides:
+    - `create_epic`
+    - `create_issue`: a Story or Bug must name an Epic, which is checked before anything is created.
+    - `update_issue`, `add_comment` and `transition_issue`.
+    - the reads `jira.sh` had: `whoami`, `get_project`, `search_issues`, `get_issue` (with the parent's type, for the Epic gate), `list_statuses` and `list_transitions`.
+  - Read tools run without asking; write tools ask every time. From a worktree it reads the main checkout's `.env`; `setup.mjs` writes the credentials from the developer's terminal.
+  - Evidence: [evidence/0.4.2/](evidence/0.4.2/).
+
+### Removed
+- **`jira.sh`** (0.4.2, [BA-237](https://halo-powered.atlassian.net/browse/BA-237)). Replaced by the `jira` MCP tools, so a Jira call no longer needs `jq`, careful quoting, `JIRA_CONFIG_FILE` in a worktree, or `raw` to set a parent. The `jira` skill is now the guide to the tools. Evidence: [evidence/0.4.2/](evidence/0.4.2/).
+
 ## 2026-10-15
 
 ### Added

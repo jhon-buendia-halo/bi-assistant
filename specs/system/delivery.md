@@ -109,7 +109,7 @@ cd backend && npm run build:all && npm run start:web # web mode from the working
 | `frontend/` | `npm test`, `npm run build`, `npm run test:e2e` |
 | `backend/` | `npm test`, `npm run build`, lint on the files you touched, and `npm run test:e2e` |
 
-`test:e2e` builds the backend with the web UI and drives the web app; its global setup starts the World Cup Postgres itself (see section 6). The desktop target (`test:e2e:desktop`) runs only when a desktop run is requested, and refuses to launch the app if port 3000 is taken. Which target to test, and how skipped desktop-only scenarios are reported, is the *Test target convention* in [CLAUDE.md](../../CLAUDE.md).
+`test:e2e` builds the backend with the web UI and drives the web app; its global setup starts the World Cup Postgres itself (see section 6). The desktop target (`test:e2e:desktop`) runs only when a desktop run is requested, and refuses to launch the app if port 3000 is taken. Which target to test, and how skipped desktop-only scenarios are reported, is the *Test target convention* in the [`workflow-e2e`](../../.claude/skills/workflow-e2e/SKILL.md) project skill (section 10).
 
 ## 3. Desktop packaging (electron-builder)
 
@@ -204,7 +204,7 @@ All release workflows run on Node 22 and live in `.github/workflows/`. The one p
 | Permissions | `contents: write` (the tag push), `statuses: write` (the spec-check status). Branch pushes use the deploy key. |
 | Chaining | Pushes made with the deploy key do trigger workflows. The bump commit starts `spec-checks.yml` on `main` and a `version-on-merge.yml` run that skips itself (see *Skipped when*). `build-desktop.yml` runs on any pushed `v*` tag, so the tag is pushed with `GITHUB_TOKEN`, whose pushes start no workflows. That keeps merge-time tagging from starting builds; a tag pushed by hand still builds. |
 
-Conventional Commit subjects therefore drive the bump, Because the bump reads every commit since the last tag, an epic's single PR with mixed `feat`/`fix`/`docs` commits still bumps at the highest level it contains. The epic branch's type names that highest-impact type (see *Branching convention* in [CLAUDE.md](../../CLAUDE.md)).
+Conventional Commit subjects therefore drive the bump, Because the bump reads every commit since the last tag, an epic's single PR with mixed `feat`/`fix`/`docs` commits still bumps at the highest level it contains. The epic branch's type names that highest-impact type (see *Branching convention* in the [`workflow-plan`](../../.claude/skills/workflow-plan/SKILL.md) project skill).
 
 ### `build-desktop.yml` — Build desktop installers
 
@@ -246,7 +246,7 @@ Runs on every pull request, on every push to `main`, and on manual dispatch. It 
 | Check | Fails when |
 |---|---|
 | Layout | a product or system spec is missing, or the capability or epic tables in `specs/README.md` don't match the folders on disk |
-| Links | a relative link in `CLAUDE.md`, `README.md`, `roadmap.md` or any spec doesn't resolve. `changelog.md` and `retrospective.md` are skipped, because their past entries are never rewritten. |
+| Links | a relative link in `CLAUDE.md`, `README.md`, `roadmap.md`, any spec, any project skill (`.claude/skills/*/SKILL.md`) or any tool README (`.claude/tools/**/*.md`) doesn't resolve. `changelog.md` and `retrospective.md` are skipped, because their past entries are never rewritten. |
 | Capability format | a capability spec lacks one of the required sections |
 | E2E mirror | a `frontend/e2e/*.spec.ts` file is not the `E2E:` line of exactly one capability spec, or an `E2E:` line names a missing file |
 | API | a backend controller route is not written as `` `METHOD /path` `` in `system/api.md` |
@@ -338,7 +338,7 @@ Defaults are shared state: the desktop app uses Electron's `userData` directory 
 | Observability profile | same project; ports 6006, 3001, 4317, 4318 | `docker compose -p <name>` plus `PHOENIX_PORT`, `GRAFANA_PORT`, `OTLP_GRPC_PORT`, `OTLP_HTTP_PORT` (see *Observability profile* above) |
 | Playwright | needs port 3000 free | one e2e run at a time per machine; each test already gets its own temp profile |
 
-The project rule: when work happens in a worktree, ask which target (shared or isolated) before starting the app or the Compose stack. See *Worktree deploy convention* in [CLAUDE.md](../../CLAUDE.md).
+The project rule: when work happens in a worktree, ask which target (shared or isolated) before starting the app or the Compose stack. See *Worktree deploy convention* in the [`workflow-implement`](../../.claude/skills/workflow-implement/SKILL.md) project skill.
 
 ## 8. The product page (`site/`)
 
@@ -419,3 +419,34 @@ Opens a **Workflow** pane (the right-hand sidebar in a wide fullscreen terminal 
 - **Commands.** `/workflow` re-reads `CLAUDE.md` and opens (and focuses) the pane; Esc closes it. `/workflow reset` clears the queue and starts `#1` again, for a new change in the same session.
 - A pane opened by the mod itself only appears in a terminal at least 144 columns wide (110 once the developer has opened it themselves); narrower, a toast says to run `/workflow`, which opens it at any width. A row is never wider than the pane, because a `Button` does not truncate its children: it always has the `#n`, a 16-column title, the % and the caret, then takes, while they fit, tokens, cost, the agent and the 8-cell bar, the title up to 28 columns, the step and the duration, the title up to 34, and finally the summary when at least 12 columns are left (about 110 columns in all). At 96 columns a row has every figure and a 32-column title, and the summary is read in the detail; in a 74-column sidebar it drops the step and duration columns.
 - State lives in `$.state` for the session only (`steps`, `source`, `firstAction`, `queue`, `open`). Nothing is stored across sessions and nothing is written back to the repository.
+
+## 10. Claude Code project skills (`.claude/skills/`)
+
+Developer tooling for people who work on this repository in Claude Code, not part of the app or its releases. `CLAUDE.md` holds only the always-on core: the mandatory first action, the eleven-step `## Workflow` list, the fast loop and acceptance gate, the hard gates and model usage. Each step's conventions live in a project skill. Claude loads the skill before the step starts, and a developer can invoke it as `/<name>`. Epic [BA-119](../epics/BA-119/spec.md).
+
+| Skill | Steps | Holds |
+|---|---|---|
+| `workflow-understand` | 1–2 | restating the goal, clarifying questions |
+| `workflow-plan` | 3 | Planning convention, Epic gate, Branching convention (branch, worktree, commit scope) |
+| `workflow-architecture` | 4 | Architecture convention (C4, ADRs) |
+| `workflow-specs` | 5 | Spec convention (where facts go, Gherkin, CI coverage) |
+| `workflow-e2e` | 6–7 | E2E test convention, Test target convention |
+| `workflow-implement` | 8 | Code rules, Worktree deploy convention |
+| `verify` | 9 | the step-9 commands and eval bar; checking a change in the running web app |
+| `workflow-ship` | 10 | Logging and Evidence conventions, the epic PR, post-merge cleanup |
+| `workflow-retrospective` | 11 | Retrospective convention |
+
+Other project skills are task runbooks, not workflow steps: `jira` (the guide to the Jira tools, section 11), `intellify-api` and `deploy-labs-site` (section 8). Each step line in `CLAUDE.md` keeps the `<n>. **<title>** — <description>` form, followed by `Skill: \`<name>\``, so the `workflow-steps` mod (section 9) still parses it. `check-specs.py` checks the relative links inside every `SKILL.md` and every Markdown file under `.claude/tools/` (section 5).
+
+## 11. Claude Code tools (`.claude/tools/`)
+
+Developer tooling for people who work on this repository in Claude Code, not part of the app or its releases. A tool is code Claude Code (and developers) run; the skill that names it says when and how. Epic [BA-119](../epics/BA-119/spec.md). Each tool has its own folder, a README (kind, files, how to test) and a row in `.claude/tools/README.md`. A tool is one of two kinds:
+
+| Kind | When | Wiring |
+|---|---|---|
+| MCP server | An external, authenticated service that Claude is the main user of, with structured inputs and shared writes that need approval per call | Registered in the repo-root `.mcp.json` (stdio, `node .claude/tools/<name>/server.mjs`) and enabled for every developer by `enabledMcpjsonServers` in the committed `.claude/settings.json`; its read tools are in `permissions.allow` there, its write tools ask on every call |
+| Script | Deterministic, repo-local work that people and CI also run (checks, generators) | Run from the shell; no server |
+
+| Tool | Kind | Detail |
+|---|---|---|
+| `jira` | MCP server | Jira Cloud REST v3. Read tools: `whoami`, `get_project`, `search_issues`, `get_issue` (with `parent` and `parentType`, for the Epic gate), `list_statuses`, `list_transitions`. Write tools: `create_epic`, `create_issue` (Story, Bug or Task; a Story or Bug must name its epic, checked to be an Epic before anything is created), `update_issue` (summary, description, epic), `add_comment`, `transition_issue`. Credentials `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_PROJECT`: the environment, then `JIRA_CONFIG_FILE`, or else this checkout's `.env` and then the main checkout's (found through `git rev-parse --git-common-dir`), read on every call. `setup.mjs` writes them from the developer's own terminal. No dependencies (Node 22 or later). Tests: `node --test '.claude/tools/jira/tests/*.test.mjs'`, with Jira faked. Replaces the earlier `jira.sh` script ([BA-237](https://halo-powered.atlassian.net/browse/BA-237)). |

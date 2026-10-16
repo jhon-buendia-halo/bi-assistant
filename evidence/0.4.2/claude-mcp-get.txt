@@ -1,0 +1,8 @@
+jira:
+  Scope: Project config (shared via .mcp.json)
+  Status: ✔ Connected
+  Type: stdio
+  Command: node
+  Args: .claude/tools/jira/server.mjs
+
+To remove this server, run: claude mcp remove jira -s project

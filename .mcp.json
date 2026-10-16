@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "jira": {
+      "type": "stdio",
+      "command": "node",
+      "args": [".claude/tools/jira/server.mjs"]
+    }
+  }
+}
