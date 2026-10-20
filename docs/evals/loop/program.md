@@ -7,7 +7,7 @@ The loop of [the BA-9 plan, section 3.6](../../plans/BA-9.md#36-the-improvement-
 - The fixer's locks: the tool [eval-loop](../../../.claude/tools/eval-loop/README.md).
 - The log of rounds: [results.tsv](results.tsv). The leak check's allowlist: [leak-allowlist.txt](leak-allowlist.txt).
 
-Added 2026-10-20 (BA-242, roadmap 1.1.20). The accept rule, the stop rule and the budget below are defaults the user may change.
+Added 2026-10-20 (BA-242, roadmap 1.1.20). The accept rule was confirmed by the user on 2026-10-20; the stop rule and the budget below are defaults the user may change.
 
 ## Roles
 
