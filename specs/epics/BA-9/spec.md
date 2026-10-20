@@ -1,6 +1,6 @@
 # BA-9 — Golden Dataset and Evals
 
-- **Jira:** [BA-9](https://halo-powered.atlassian.net/browse/BA-9) · **Roadmap:** Milestone 1.1 · **Status:** Confirmed by the user on 2026-10-13, rewritten to the scope of the execution plan ([BA-128](https://halo-powered.atlassian.net/browse/BA-128)).
+- **Jira:** [BA-9](https://halo-powered.atlassian.net/browse/BA-9) · **Roadmap:** Milestone 1.1 · **Status:** Confirmed by the user on 2026-10-13, rewritten to the scope of the execution plan ([BA-128](https://halo-powered.atlassian.net/browse/BA-128)). Scope extended on 2026-10-20 with a supervised improvement loop ([BA-242](https://halo-powered.atlassian.net/browse/BA-242)) and investigation questions ([BA-243](https://halo-powered.atlassian.net/browse/BA-243)), confirmed by the user the same day.
 - **Research:** [docs/research/BA-9.md](../../../docs/research/BA-9.md) ([BA-127](https://halo-powered.atlassian.net/browse/BA-127)) · **Plan:** [docs/plans/BA-9.md](../../../docs/plans/BA-9.md) ([BA-128](https://halo-powered.atlassian.net/browse/BA-128)) · **ADR:** ADR-0015 in [architecture.md](../../system/architecture.md)
 
 ## Goal
@@ -14,6 +14,8 @@ Know, with numbers, whether a change made answers better or worse, on every data
 - **REST.** Server variants of the local API that page, nest, cap, refuse and require a token, the same server serving the domain dumps, and REST-only cases.
 - **Breadth and depth.** Health insurance, genomics and supply chain brought over from the local branch on PostgreSQL as they are; World Cup and finance growing toward 100 questions and marketing analytics toward 60, split into dev and held-out.
 - **Numbers you can trust.** Repeats with intervals, tokens, cost and latency, and a nightly CI run on PostgreSQL.
+- **A supervised improvement loop** (added 2026-10-20, [BA-242](https://halo-powered.atlassian.net/browse/BA-242)). Before the beta, the loop of plan 3.6 runs with a person deciding every change: triage of dev failures, one lever per round (prompt, tool descriptions and errors, context, knowledge), accept or revert on dev and held-out. Locks keep the loop from editing sets, checks, thresholds or facts, a leak check rejects changes that quote the sets, and the fixer reads a dev-only export, never a held-out case.
+- **Investigation questions** (added 2026-10-20, [BA-243](https://halo-powered.atlassian.net/browse/BA-243)). Questions that ask why something happened, scored with deterministic checks against a story planted in the fixture data, with a planted wrong explanation. A person writes and approves each brief and the held-out wording.
 - **Trust in the judge and comparisons.** Judge agreement measured against human labels; arms (knowledge on and off, model comparison); component checks and two-turn tasks.
 - **After the beta: evals on the user's own data.** A user eval set per dataset fed by verified queries, templates from the schema and model drafts a person approves, and the eval set carried in the agent bundle.
 
@@ -22,10 +24,10 @@ Know, with numbers, whether a change made answers better or worse, on every data
 - A wholesale merge of `feat/engine-eval-loop` or `feat/knowledge-learning-evals`; expert mode, learning and memory belong to other epics.
 - The HR and retail domains, which carry expert-mode and learning fields.
 - Databricks in the nightly CI run, because of cost; Databricks runs are on demand.
-- An agent that proposes changes from the scores (automating the improvement loop); approval by more than one reviewer; export as a Genie benchmark; evals on documents an agent reads.
+- Unattended automation of the improvement loop: until after the beta it runs supervised, with a person accepting every change ([BA-242](https://halo-powered.atlassian.net/browse/BA-242)); approval by more than one reviewer; export as a Genie benchmark; evals on documents an agent reads.
 
 ## Stories
-The two process stories come first; five stories cover the plan's steps. [BA-212](https://halo-powered.atlassian.net/browse/BA-212), the Intellify sample, was built under this epic on its own branch and shipped on `main` in PR #77 (roadmap 1.1.19, Done); it came onto this branch when `main` was merged in on 2026-10-15.
+The two process stories come first; five stories cover the plan's steps; two more were added on 2026-10-20 (BA-242, BA-243). [BA-212](https://halo-powered.atlassian.net/browse/BA-212), the Intellify sample, was built under this epic on its own branch and shipped on `main` in PR #77 (roadmap 1.1.19, Done); it came onto this branch when `main` was merged in on 2026-10-15.
 
 | Story | Summary | Roadmap features |
 |---|---|---|
@@ -37,6 +39,8 @@ The two process stories come first; five stories cover the plan's steps. [BA-212
 | [BA-190](https://halo-powered.atlassian.net/browse/BA-190) | Judge validation, arms and component checks (Steps 6-8, after the beta) | 1.1.12-1.1.14 |
 | [BA-193](https://halo-powered.atlassian.net/browse/BA-193) | Evals on the user's own data (Steps 9-12, after the beta) | 1.1.15-1.1.18 |
 | [BA-212](https://halo-powered.atlassian.net/browse/BA-212) | Intellify sample as a Testing Data fixture (Done; shipped on `main` in PR #77) | 1.1.19 |
+| [BA-242](https://halo-powered.atlassian.net/browse/BA-242) | Supervised improvement loop (before the beta) | 1.1.20 |
+| [BA-243](https://halo-powered.atlassian.net/browse/BA-243) | Investigation questions with planted insights | 1.1.21 |
 
 The 15 step stories created on 2026-10-13 (BA-182 to BA-196) were compacted to these five the same day at the user's request; the ten merged issues (BA-183, BA-184, BA-185, BA-187, BA-189, BA-191, BA-192, BA-194, BA-195, BA-196) are closed as duplicates of their story and taken out of the epic. Record: [evidence/1.1.3/jira-compaction.tsv](../../../evidence/1.1.3/jira-compaction.tsv).
 
@@ -50,6 +54,8 @@ The 15 step stories created on 2026-10-13 (BA-182 to BA-196) were compacted to t
 - A knowledge on and off comparison by category is one report (Step 7), which answers [BA-80](https://halo-powered.atlassian.net/browse/BA-80)'s acceptance.
 - The judge agrees with human labels on at least 90% of passes and of fails before its verdict counts (Step 6).
 - Steps 9 to 12 meet the done-when of each step in the plan.
+- **By the beta, the loop (BA-242):** its tooling is in, and a baseline plus at least three supervised rounds on gpt-4o-mini are recorded with dev and held-out side by side, each accepted change committed with its eval diff.
+- **Investigation questions (BA-243):** at least two approved briefs, each with dev and held-out questions and validated references, run in the loop's rounds.
 
 ## Dependencies, risks and open questions
 - **Databricks access** exists inside a VDI (2026-10-13). Step 2 is built here without a warehouse; its runs on a real warehouse are validated later in the VDI, from a copy of the repository. Until then, Databricks results are unverified.
@@ -58,5 +64,6 @@ The 15 step stories created on 2026-10-13 (BA-182 to BA-196) were compacted to t
 - **The baseline on `main`** (six runs, action 3 in plan 3.0) is taken before any change; every later step compares with it.
 - **Time:** with the two domains, the minimum is about 19 to 24 days of work against the 14 working days from 2026-10-13, so it fits only if Claude runs the domain work in parallel with the other steps. What moves after the beta, and in which order, is in plan 3.0.
 - **Cost:** real numbers need an LLM key and spend tokens; the judge is off by default, Databricks runs are on demand.
+- **The loop's model** (the user's choice, 2026-10-20): gpt-4o-mini, until Anthropic API keys are available. Fixes in the app (context, tool errors) are expected to carry over to other models; prompt rules accepted on gpt-4o-mini are re-measured on any other model before they count there. Budget: about $25 at most to the beta at 34,000 tokens per attempt (plan 3.6), standard OpenAI prices read on 2026-10-20.
 - **ADR number:** ADR-0013 and ADR-0014 are claimed on other branches; re-check that 0015 is free when this branch merges. Re-checked on 2026-10-15, when `main` (v0.34.0) was merged in: `main` has ADR-0001 to ADR-0012 and ADR-0018 to ADR-0030, so 0015 is still free.
 - The Phase 1 plan's golden-set item ([phase-1-answer-reliability](../../../docs/plans/phase-1-answer-reliability.md), Workstream C) is covered by Steps 1a and 5.
