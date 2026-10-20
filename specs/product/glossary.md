@@ -60,7 +60,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Eval run.** One execution of selected eval cases against a datasource and its datasets, with a *judge option* (off by default) that says whether the LLM judge is called. Records per-question results (passed, failed or not scored, scores, tool calls, answer) and a summary by category and by criterion. When a completed earlier run exists for the same agent, datasource and datasets, the run also stores a *regression comparison*.
 
-**Eval set.** A named group of eval cases bound to one *sample fixture* (World Cup on PostgreSQL, World Cup on REST, Formula 1, and the World Cup golden set on PostgreSQL for the assistant; the Intellify RFP API for the *RFP Builder*). Each of the assistant's sets is one variant of a question bank file, and the RFP Builder's set is defined in code; see [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
+**Eval set.** A named group of eval cases bound to one *sample fixture* (World Cup on PostgreSQL, on REST and on Databricks, Formula 1, and the synthetic domains such as Finance for the assistant; the Intellify RFP API for the *RFP Builder*). Each of the assistant's sets is one variant of a question bank file, and the RFP Builder's set is defined in code; see [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
 **Exhibit.** A table attached to an *RFP package* as a CSV file with a header row, computed from the Intellify data for the RFP's client and lines in scope: A census, B plan designs, C financials and D carriers.
 

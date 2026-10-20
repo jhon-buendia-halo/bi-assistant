@@ -59,28 +59,31 @@ describe('eval regression baseline scope', () => {
       caseIds,
       results: caseIds.map((id) => ({ id, passed: true })),
     });
-    const worldCup = ['champion-2022', 'final-score-2018'];
-    const golden = ['pass-accuracy-by-team', 'teams-tied-on-four-goals'];
+    const worldCup = ['dbx-champion-2022', 'dbx-final-score-2018'];
+    const databricksOnly = [
+      'matches-per-tournament',
+      'top-attendance-per-tournament',
+    ];
 
-    it('does not compare a golden-set run with an earlier World Cup run', async () => {
+    it('does not compare a world-cup-databricks-only run with an earlier world-cup-databricks run', async () => {
       const repository = new EvalRunsRepository(
         storeOf([run('wc-1', worldCup)]),
       );
       expect(
         await repository.mostRecentCompleted(
           'assistant',
-          'golden-1',
+          'only-1',
           'wc',
           ['World Cup'],
-          golden,
+          databricksOnly,
         ),
       ).toBeNull();
     });
 
-    it('compares a World Cup run with the earlier World Cup run, past a golden-set run in between', async () => {
+    it('compares a world-cup-databricks run with the earlier world-cup-databricks run, past a world-cup-databricks-only run in between', async () => {
       const repository = new EvalRunsRepository(
         // Newest first, as the store sorts them.
-        storeOf([run('golden-1', golden), run('wc-1', worldCup)]),
+        storeOf([run('only-1', databricksOnly), run('wc-1', worldCup)]),
       );
       const baseline = await repository.mostRecentCompleted(
         'assistant',

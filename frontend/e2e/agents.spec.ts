@@ -261,7 +261,7 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   await page.getByTestId('agent-tab-evals').click();
   // The tab opens on the set list, with every question still hidden.
   await expect(page.getByTestId('eval-set-world-cup')).toContainText(
-    '12 questions',
+    '63 questions',
   );
   await expect(page.locator(CASE_ROWS)).toHaveCount(0);
   await expect(page.getByTestId('eval-run')).toBeHidden();
@@ -281,10 +281,10 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   await expect(page.getByTestId('eval-case-category-out-of-scope')).toHaveText(
     'out-of-scope',
   );
-  await expect(page.locator(CASE_ROWS)).toHaveCount(12);
+  await expect(page.locator(CASE_ROWS)).toHaveCount(63);
   await expect(
     page.locator('[data-testid^="eval-case-category-"]'),
-  ).toHaveCount(12);
+  ).toHaveCount(63);
 
   // Clicking the open set again collapses it.
   await page.getByTestId('eval-set-world-cup').click();
@@ -343,13 +343,13 @@ test('offers the configured datasources and starts a run from the evals tab', as
   await expect(picker).toContainText('PostgreSQL');
 
   // Every question is ticked by default.
-  await expect(page.getByTestId('eval-run')).toContainText('Run 12 selected');
+  await expect(page.getByTestId('eval-run')).toContainText('Run 63 selected');
 
   // Starting the run is enough to assert here: completing it means live model
   // calls, which the suite must not make.
   await page.getByTestId('eval-run').click();
   await expect(page.getByTestId('eval-run')).toContainText('Running…');
-  await expect(page.getByText(/0\/12 done/)).toBeVisible();
+  await expect(page.getByText(/0\/63 done/)).toBeVisible();
 });
 
 test('runs only the ticked questions', async ({ page }) => {
@@ -366,14 +366,14 @@ test('runs only the ticked questions', async ({ page }) => {
   await openWorldCupSet(page);
 
   const run = page.getByTestId('eval-run');
-  await expect(run).toContainText('Run 12 selected');
+  await expect(run).toContainText('Run 63 selected');
 
   // Untick one, then clear the rest via select-all.
   await page.getByTestId('eval-select-champion-2022').uncheck();
-  await expect(run).toContainText('Run 11 selected');
+  await expect(run).toContainText('Run 62 selected');
 
   await page.getByTestId('eval-select-all').click();
-  await expect(run).toContainText('Run 12 selected');
+  await expect(run).toContainText('Run 63 selected');
   await page.getByTestId('eval-select-all').click();
   await expect(run).toContainText('Run 0 selected');
   await expect(run).toBeDisabled();
@@ -463,7 +463,7 @@ test('separates the question suite from past executions', async ({ page }) => {
   await openWorldCupSet(page);
 
   // Questions is the default sub-tab.
-  await expect(page.locator(CASE_ROWS)).toHaveCount(12);
+  await expect(page.locator(CASE_ROWS)).toHaveCount(63);
 
   await page.getByTestId('eval-subtab-runs').click();
   await expect(page.getByText(/No eval runs yet/)).toBeVisible();
@@ -476,10 +476,10 @@ test('separates the question suite from past executions', async ({ page }) => {
   await page.getByTestId('eval-subtab-runs').click();
   await expect(
     page.locator('[data-testid^="eval-run-"]').first(),
-  ).toContainText('0/12 passed');
+  ).toContainText('0/63 passed');
 
   await page.getByTestId('eval-subtab-questions').click();
-  await expect(page.locator(CASE_ROWS)).toHaveCount(12);
+  await expect(page.locator(CASE_ROWS)).toHaveCount(63);
 });
 
 test('downloads an execution as a Markdown report', async ({ page }) => {
@@ -527,19 +527,17 @@ test('downloads an execution as a Markdown report', async ({ page }) => {
 
 /**
  * The sets the question bank files produce (agents-evals R11, R107): the World
- * Cup file gives two variants, PostgreSQL and REST; Formula 1 and the golden
- * set one each. Test ids are `eval-set-<set id>` and match exactly, so
- * `eval-set-world-cup` never matches the `-rest` or `-golden` sets.
+ * Cup file gives three variants, PostgreSQL, REST and Databricks, and holds the
+ * former golden set as its last 11 questions (R109). Test ids are
+ * `eval-set-<set id>` and match exactly, so `eval-set-world-cup` never matches
+ * the `-rest` or `-databricks` sets.
  */
 const EVAL_SETS: ReadonlyArray<[id: string, name: string, questions: number]> =
   [
-    ['world-cup', 'World Cup', 12],
-    ['world-cup-rest', 'World Cup (REST API)', 12],
-    ['world-cup-databricks', 'World Cup (Databricks)', 12],
+    ['world-cup', 'World Cup', 63],
+    ['world-cup-rest', 'World Cup (REST API)', 63],
+    ['world-cup-databricks', 'World Cup (Databricks)', 63],
     ['formula-1', 'Formula 1', 10],
-    ['world-cup-golden', 'World Cup (golden set)', 11],
-    ['world-cup-golden-rest', 'World Cup (golden set, REST API)', 11],
-    ['world-cup-golden-databricks', 'World Cup (golden set, Databricks)', 11],
     ['world-cup-rest-connector', 'World Cup (REST connector)', 12],
     ['world-cup-databricks-only', 'World Cup (Databricks only)', 10],
     ['finance', 'Finance', 68],
@@ -553,7 +551,7 @@ const EVAL_SETS: ReadonlyArray<[id: string, name: string, questions: number]> =
     ['marketing-analytics-databricks', 'Marketing Analytics (Databricks)', 50],
   ];
 
-test('lists every question set, the golden set among them', async ({
+test('lists every question set, the former golden set inside the World Cup sets', async ({
   page,
 }) => {
   await page
@@ -571,54 +569,29 @@ test('lists every question set, the golden set among them', async ({
     await expect(set).toContainText(name);
     await expect(set).toContainText(`${questions} questions`);
   }
+  // The golden set is no longer a set of its own (R109).
+  await expect(page.getByText('World Cup (golden set)')).toHaveCount(0);
 
-  // The golden set (R109): the nine golden-set questions and the two
-  // answer-quality ones, each scored as having run SQL with no tool errors.
-  // Its case ids live in the question bank file, so match on question text.
-  await page.getByTestId('eval-set-world-cup-golden').click();
+  // Its 11 questions close the World Cup set: the nine golden-set questions
+  // and the two answer-quality ones, each scored as having run SQL with no
+  // tool errors. Match on question text and position, not case ids.
+  await openWorldCupSet(page);
   const cases = page.locator(CASE_ROWS);
-  await expect(cases).toHaveCount(11);
-  await expect(
-    cases.filter({
-      hasText: 'Which teams scored exactly four goals in total?',
-    }),
-  ).toHaveCount(1);
-  await expect(
-    cases.filter({
-      hasText: 'What share of the disciplinary cards shown were yellow?',
-    }),
-  ).toHaveCount(1);
-  await expect(
-    cases.filter({ hasText: 'Checks that "run_readonly_sql" was called' }),
-  ).toHaveCount(11);
-  await expect(
-    cases.filter({ hasText: 'Checks that no tool calls resulted in errors' }),
-  ).toHaveCount(11);
-});
-
-test('starts a run of the golden set on the World Cup datasource', async ({
-  page,
-}) => {
-  // The golden set is bound to the World Cup PostgreSQL sample, so the same
-  // saved scope as the world-cup set passes its preflight (R19, R20).
-  await createWorldCupDatasource(page);
-  await createWorldCupDataset(page, WORLD_CUP_EVAL_TABLES);
-
-  await page
-    .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents' })
-    .click();
-  await page.getByTestId('agent-assistant').click();
-  await page.getByTestId('agent-tab-evals').click();
-  await page.getByTestId('eval-set-world-cup-golden').click();
-
-  const run = page.getByTestId('eval-run');
-  await expect(run).toContainText('Run 11 selected');
-
-  // Starting is enough: completing it means live model calls.
-  await run.click();
-  await expect(run).toContainText('Running…');
-  await expect(page.getByText(/0\/11 done/)).toBeVisible();
+  await expect(cases).toHaveCount(63);
+  await expect(cases.nth(55)).toContainText(
+    'Which teams scored exactly four goals in total?',
+  );
+  await expect(cases.nth(62)).toContainText(
+    'What share of the disciplinary cards shown were yellow?',
+  );
+  for (let index = 52; index < 63; index += 1) {
+    await expect(cases.nth(index)).toContainText(
+      'Checks that "run_readonly_sql" was called',
+    );
+    await expect(cases.nth(index)).toContainText(
+      'Checks that no tool calls resulted in errors',
+    );
+  }
 });
 
 test('runs with the judge off by default', async ({ page, appDataDir }) => {

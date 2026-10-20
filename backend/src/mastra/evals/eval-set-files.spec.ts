@@ -155,12 +155,31 @@ const ADDED_TO_WORLD_CUP = [
   'south-american-goals-reworded',
   'third-placed-team-scorers-2018-reworded',
 ];
+/**
+ * The 11 questions of the former World Cup golden set, merged into the end of
+ * the World Cup bank on 2026-10-20 (BA-188).
+ */
+const MERGED_GOLDEN = [
+  'pass-accuracy-by-team',
+  'shot-accuracy-by-team',
+  'top-scoring-team',
+  'teams-tied-on-four-goals',
+  'card-types-recorded',
+  'goals-with-recorded-assist',
+  'goals-by-type',
+  'attendance-by-tournament',
+  'matches-by-stage',
+  'pass-completion-by-team',
+  'yellow-card-share',
+];
 /** Every case added to the snapshot's sets since, in suite order. */
 const ADDED_SINCE = [
   ...ADDED_ON_MAIN.slice(0, 2),
   ...ADDED_TO_WORLD_CUP,
+  ...MERGED_GOLDEN,
   ...ADDED_ON_MAIN.slice(2),
   ...ADDED_TO_WORLD_CUP.map((id) => `rest-${id}`),
+  ...MERGED_GOLDEN.map((id) => `rest-${id}`),
 ];
 
 /** The snapshot's shape: what the Evals tab, the runner and the report read. */
@@ -244,15 +263,12 @@ describe('eval set files', () => {
     ).toEqual(BEFORE.caseIds);
   });
 
-  it('lists the sets in the suite order, the World Cup golden set before the domains', () => {
+  it('lists the sets in the suite order, the domains after the World Cup banks', () => {
     expect(sets.map((set) => set.id)).toEqual([
       'world-cup',
       'world-cup-rest',
       'world-cup-databricks',
       'formula-1',
-      'world-cup-golden',
-      'world-cup-golden-rest',
-      'world-cup-golden-databricks',
       'world-cup-rest-connector',
       'world-cup-databricks-only',
       'finance',
@@ -267,17 +283,33 @@ describe('eval set files', () => {
     ]);
   });
 
-  it('holds the golden set: 11 World Cup questions, each scored on SQL, tools and rows', () => {
-    const [golden] = loadEvalSets().filter(
-      (set) => set.id === 'world-cup-golden',
-    );
-    expect(golden).toMatchObject({
-      name: 'World Cup (golden set)',
+  it('holds the former golden set as the last 11 World Cup questions, each scored on SQL, tools and rows', () => {
+    const [worldCup] = loadEvalSets().filter((set) => set.id === 'world-cup');
+    expect(worldCup).toMatchObject({
       fixtureId: 'world-cup',
       dialect: 'postgres',
     });
-    expect(golden.cases).toHaveLength(11);
+    expect(worldCup.cases).toHaveLength(63);
+    const golden = { cases: worldCup.cases.slice(-11) };
+    expect(golden.cases.map((evalCase) => evalCase.id)).toEqual(MERGED_GOLDEN);
+
+    expect(golden.cases.map((evalCase) => evalCase.question)).toEqual([
+      'Which three teams completed the highest share of their attempted passes across all matches?',
+      'Which three teams put the highest share of their shots on target?',
+      'Which team scored the most goals in total?',
+      'Which teams scored exactly four goals in total?',
+      'What types of disciplinary cards were recorded, and how many of each?',
+      'How many goals have a recorded assisting player?',
+      'How many goals were scored of each goal type?',
+      'What was the total match attendance for each tournament year?',
+      'How many matches were played at each stage of the tournaments?',
+      'What share of their attempted passes did each team complete?',
+      'What share of the disciplinary cards shown were yellow?',
+    ]);
     for (const evalCase of golden.cases) {
+      expect(evalCase.notes).toMatch(
+        /^From the former World Cup golden set \(world-cup-golden, merged into this bank on 2026-10-20\)\. /,
+      );
       // The two checks it moved with, now with their criteria, then the
       // deterministic checks of its category (R109, R126).
       expect(evalCase.checks.slice(0, 2)).toEqual([
@@ -310,13 +342,19 @@ describe('eval set files', () => {
     }
   });
 
-  it('keeps the Formula 1 set, the golden set and the first twelve World Cup questions all dev (agents-evals R134)', () => {
-    const moved = ['world-cup.json', 'formula-1.json', 'world-cup-golden.json'];
+  it('keeps the Formula 1 set, the first twelve World Cup questions and the last eleven (the former golden set) all dev (agents-evals R134)', () => {
+    const moved = ['world-cup.json', 'formula-1.json'];
     for (const set of loadEvalSets().filter((s) => moved.includes(s.file))) {
       const first = set.file === 'world-cup.json' ? 12 : set.cases.length;
       expect(
         set.cases.slice(0, first).every((evalCase) => evalCase.split === 'dev'),
       ).toBe(true);
+      if (set.file === 'world-cup.json') {
+        // The former golden set, merged in as the last 11 questions.
+        expect(
+          set.cases.slice(-11).every((evalCase) => evalCase.split === 'dev'),
+        ).toBe(true);
+      }
     }
   });
 
@@ -329,9 +367,13 @@ describe('eval set files', () => {
     const banks = loadEvalSets().filter((s) => s.file === 'world-cup.json');
     expect(banks.map((set) => set.id)).toEqual(Object.keys(prefixes));
     for (const set of banks) {
-      const added = set.cases.slice(12);
+      // The 40 questions, then the former golden set at the end.
+      const added = set.cases.slice(12, 12 + ADDED_TO_WORLD_CUP.length);
       expect(added.map((evalCase) => evalCase.id)).toEqual(
         ADDED_TO_WORLD_CUP.map((id) => `${prefixes[set.id]}${id}`),
+      );
+      expect(set.cases.slice(12 + ADDED_TO_WORLD_CUP.length)).toHaveLength(
+        MERGED_GOLDEN.length,
       );
       expect(
         added.filter((evalCase) => evalCase.split === 'held-out'),
@@ -386,7 +428,7 @@ describe('eval set files', () => {
 });
 
 describe('the deterministic checks on the moved sets (agents-evals R126)', () => {
-  const MOVED = ['world-cup.json', 'formula-1.json', 'world-cup-golden.json'];
+  const MOVED = ['world-cup.json', 'formula-1.json'];
   const moved = loadEvalSets().filter((set) => MOVED.includes(set.file));
   const ANSWER = [
     'noRepairs',
@@ -413,9 +455,6 @@ describe('the deterministic checks on the moved sets (agents-evals R126)', () =>
       'world-cup-rest',
       'world-cup-databricks',
       'formula-1',
-      'world-cup-golden',
-      'world-cup-golden-rest',
-      'world-cup-golden-databricks',
     ]);
     for (const set of moved) {
       const deterministicOf = (evalCase: (typeof set.cases)[number]) =>
@@ -502,19 +541,6 @@ describe('the deterministic checks on the moved sets (agents-evals R126)', () =>
       {
         id: 'formula-1',
         dialect: 'Checks that the SQL fits the PostgreSQL dialect',
-      },
-      {
-        id: 'world-cup-golden',
-        dialect: 'Checks that the SQL fits the PostgreSQL dialect',
-      },
-      {
-        id: 'world-cup-golden-rest',
-        dialect:
-          'Checks that the SQL fits the SQLite (the REST connector) dialect',
-      },
-      {
-        id: 'world-cup-golden-databricks',
-        dialect: 'Checks that the SQL fits the Databricks SQL dialect',
       },
     ]);
     const finalScore = toAssistantEvalSets(moved)[0].cases.find(
@@ -906,9 +932,9 @@ describe('choosing one set by id (EVAL_SET of eval:validate)', () => {
   const sets = loadEvalSets();
 
   it('finds the named set, its id trimmed', () => {
-    const golden = evalSetById(sets, 'world-cup-golden');
-    expect(golden.cases).toHaveLength(11);
-    expect(golden.cases.map((evalCase) => evalCase.id)).toContain(
+    const worldCup = evalSetById(sets, 'world-cup');
+    expect(worldCup.cases).toHaveLength(63);
+    expect(worldCup.cases.map((evalCase) => evalCase.id)).toContain(
       'teams-tied-on-four-goals',
     );
     expect(evalSetById(sets, ' world-cup-rest ').cases[0].id).toBe(
@@ -919,7 +945,7 @@ describe('choosing one set by id (EVAL_SET of eval:validate)', () => {
   it('refuses an unknown set, naming the known ones', () => {
     const message = `Unknown eval set "world-cop". Known sets: ${sets.map((set) => set.id).join(', ')}.`;
     expect(message).toContain(
-      'Known sets: world-cup, world-cup-rest, world-cup-databricks, formula-1, world-cup-golden, ',
+      'Known sets: world-cup, world-cup-rest, world-cup-databricks, formula-1, world-cup-rest-connector, ',
     );
     expect(() => evalSetById(sets, 'world-cop')).toThrow(message);
   });

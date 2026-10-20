@@ -67,7 +67,7 @@ Then, in the app, edit the dataset `World Cup (Databricks)`, refresh the invento
 ```bash
 cd backend
 export APP_DATA_DIR=~/q2i-dbx
-for set in world-cup-databricks world-cup-golden-databricks world-cup-databricks-only; do
+for set in world-cup-databricks world-cup-databricks-only; do
   EVAL_SET=$set EVAL_DATASETS="World Cup (Databricks)" node dist/mastra/evals/validate-eval-sets.js | tee validate-$set.txt
 done
 EVAL_SET=finance-databricks EVAL_DATASETS="Finance (Databricks)" node dist/mastra/evals/validate-eval-sets.js | tee validate-finance-databricks.txt

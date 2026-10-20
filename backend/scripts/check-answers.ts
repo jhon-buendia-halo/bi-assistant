@@ -31,12 +31,13 @@
  * teams, and turns where a result guard fired. `CHECK_ARM` is free text echoed
  * in the header so a captured transcript records which arm produced it.
  *
- * Sibling of the assistant eval suite's golden set
- * (`src/mastra/evals/sets/world-cup-golden.json`, run with
- * `EVAL_SET=world-cup-golden npm run evals:assistant`): that one compares
- * result sets against trusted SQL, this one asserts the answer is not
- * degenerate. Its two questions the golden set did not already ask were moved
- * there (BA-182); this script stays until runs have repeats (BA-9 Step 5).
+ * Sibling of the assistant eval suite's World Cup set
+ * (`src/mastra/evals/sets/world-cup.json`, run with
+ * `EVAL_SET=world-cup npm run evals:assistant`; its last 11 questions are the
+ * former golden set): that one compares result sets against trusted SQL, this
+ * one asserts the answer is not degenerate. Its two questions the golden set
+ * did not already ask were moved there (BA-182); this script stays until
+ * runs have repeats (BA-9 Step 5).
  */
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';

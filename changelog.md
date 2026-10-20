@@ -2,6 +2,16 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-20
+
+### Changed
+- **World Cup golden set merged into the World Cup question bank** (roadmap 1.1.10, [BA-188](https://halo-powered.atlassian.net/browse/BA-188), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)).
+  - The 11 questions of `world-cup-golden.json` now close `world-cup.json`, so `world-cup`, `world-cup-rest` and `world-cup-databricks` hold 63 questions (15 held out). They keep their ids, checks, three reference queries and `dev` split, gain no tag, and their note now starts by naming the set they came from.
+  - The sets `world-cup-golden`, `world-cup-golden-rest` and `world-cup-golden-databricks` are gone, and the Evals tab lists 15 sets. A sample now has one question bank; a separate file remains only for questions that exist on one datasource kind (`world-cup-rest-connector`, `world-cup-databricks-only`).
+  - Runs store question ids, not a set id, so earlier golden-set runs stay in the history.
+  - Specs: agents-evals R109 (rewritten in place), R11, R40, R107, R126, R134, R164, R169, R204 and R207, and the Agents Gherkin; agents.md (sets table), data-model.md 4.9, delivery.md, the glossary and testing-data R2. `frontend/e2e/agents.spec.ts` follows them: 12 scenarios; the golden run scenario is deleted, and the World Cup counts (stale at 12 since the 40-question slice) are now 63.
+  - Evidence: [evidence/1.1.10/golden-merge/](evidence/1.1.10/golden-merge/).
+
 ## 2026-10-16
 
 ### Changed

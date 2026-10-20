@@ -9,9 +9,9 @@ import {
 import { loadEvalSets } from './eval-set-files';
 
 const SETS = loadEvalSets();
-/** A real reference: the golden set's pass-accuracy question on Databricks. */
+/** A real reference: the World Cup bank's pass-accuracy question on Databricks. */
 const GOLDEN = SETS.find(
-  (set) => set.id === 'world-cup-golden-databricks',
+  (set) => set.id === 'world-cup-databricks',
 )?.cases.find((evalCase) => evalCase.id === 'dbx-pass-accuracy-by-team')
   ?.expectedSql as string;
 

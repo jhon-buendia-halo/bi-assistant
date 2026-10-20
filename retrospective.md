@@ -14,6 +14,24 @@ Entry template:
 
 ---
 
+## 2026-10-20 — 1.1.10 World Cup golden set merged into the World Cup bank (BA-188)
+
+### What went well
+- I merged the JSON by text splice, not `json.dumps`, and asserted the result: the 52 World Cup cases were unchanged, the 11 golden cases were identical apart from the note prefix, the variants were identical and the ids unique. A round trip through `json.dumps` would have reformatted every Prettier-style inline array in the file.
+- Checking that both files had the same variants (fixtures, dialects, prefixes) before proposing the merge showed that every prefixed case id stays the same. That turned a possible history break into a set-id change only.
+- Specs and code went to two parallel agents with the decisions written out (no tag, rule number kept, the R40 example swapped for `world-cup-databricks` / `world-cup-databricks-only`). Both came back consistent, with `check-specs` and 1089 tests green on their first run.
+- I ran the validator against this worktree's own compose Postgres (55433), through an isolated instance. Loading the fixture into the shared 55432 would have dropped and recreated its `world_cup` schema with this branch's seed.
+
+### What went wrong
+- I offered the user the shared web data dir "with your datasources, datasets and runs" and said old golden runs would show in its history. `~/.questions-to-insights` was nearly empty (no datasource, dataset or run); I found out only when the validator needed a dataset.
+- `agents.spec.ts` had expected 12 World Cup questions since the 40-question slice (52) was committed. Four of the six E2E failures in the fast loop predated this change, and nothing in the roadmap notes said so.
+- The code agent left three comment lines far wider than their files. A sanity assertion in my own E2E-edit script was too strict and stopped the first run (it wrote nothing).
+
+### What to do differently
+- Before describing a data dir to the user as the test target, read it: `GET /datasources`, `GET /datasets` and `GET /agents/<key>/evals/runs` on the running instance, or the file sizes in the data dir.
+- When a story's fast-loop commit leaves an E2E spec knowingly stale (counts, removed sets), say so in the roadmap feature's Notes with the spec file, so the next fast loop can tell old failures from new ones.
+- In a code brief, add: "wrap comments to the width of the surrounding lines". In my own edit scripts, assert on what changed (counts of exact old strings), not on what must be absent afterwards.
+
 ## 2026-10-16 — 0.4.2 Jira MCP tool in `.claude/tools` (BA-237)
 
 ### What went well

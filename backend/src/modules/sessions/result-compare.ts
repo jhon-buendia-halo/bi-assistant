@@ -1,7 +1,7 @@
 /**
  * Result-set equality, shared by the assistant eval suite's result-set check
  * (`mastra/evals/result-set-check.ts`, which grades every case with a
- * reference query, the golden set's included) and careful mode's independent
+ * reference query, the World Cup set's included) and careful mode's independent
  * cross-check.
  *
  * Two queries "agree" when they return the same facts, regardless of column

@@ -59,20 +59,20 @@ describe('eval:validate', () => {
     const run = jest.fn().mockResolvedValue({ rowCount: 1 });
     const { result, lines } = await validate(run);
 
-    expect(WITH_REFERENCE).toHaveLength(39);
+    expect(WITH_REFERENCE).toHaveLength(50);
     expect(run.mock.calls).toEqual(
       WITH_REFERENCE.map((c) => [c.expectedSql, c.id]),
     );
-    expect(lines.slice(0, 39)).toEqual(
+    expect(lines.slice(0, 50)).toEqual(
       WITH_REFERENCE.map((c) => `✓ ${c.id}  postgres  1 rows`),
     );
     // Cases with no reference query have nothing to validate: no line.
     expect(lines.join('\n')).not.toContain('schema-discovery');
     expect(lines.at(-1)).toBe(
-      '\nworld-cup: 39 of 39 reference queries passed; 13 cases have no reference query.',
+      '\nworld-cup: 50 of 50 reference queries passed; 13 cases have no reference query.',
     );
     expect(result).toEqual({
-      ran: 39,
+      ran: 50,
       failed: 0,
       withoutReference: 13,
       exitCode: 0,
@@ -92,11 +92,11 @@ describe('eval:validate', () => {
     expect(lines[0]).toBe(
       '✗ champion-2022  postgres  column champion.common_nme does not exist at …',
     );
-    expect(lines.slice(1, 39)).toEqual(
+    expect(lines.slice(1, 50)).toEqual(
       WITH_REFERENCE.slice(1).map((c) => `✓ ${c.id}  postgres  2 rows`),
     );
-    expect(run).toHaveBeenCalledTimes(39);
-    expect(result).toMatchObject({ ran: 39, failed: 1, exitCode: 1 });
+    expect(run).toHaveBeenCalledTimes(50);
+    expect(result).toMatchObject({ ran: 50, failed: 1, exitCode: 1 });
   });
 
   it('fails a reference truncated at the row limit, the way the result-set check does', async () => {
@@ -124,7 +124,7 @@ describe('eval:validate', () => {
     expect(lines[0]).toBe(
       '✗ champion-2022  postgres  the reference returned 0 rows',
     );
-    expect(result).toMatchObject({ failed: 39, exitCode: 1 });
+    expect(result).toMatchObject({ failed: 50, exitCode: 1 });
   });
 
   it('stops at the dataset preflight: prints it, runs nothing, exits 1', async () => {
@@ -149,7 +149,9 @@ describe('eval:validate', () => {
   });
 
   describe('references read only dataset entities (R110, BA-183)', () => {
-    const GOLDEN = loadEvalSets().find((set) => set.id === 'world-cup-golden')!;
+    // The last 11 questions of the World Cup bank, the former golden set.
+    const BANK = loadEvalSets().find((set) => set.id === 'world-cup')!;
+    const GOLDEN = { ...BANK, cases: BANK.cases.slice(-11) };
 
     it('fails a reference reading a table the datasets lack, without running it', async () => {
       // The gap BA-182 found by hand: two golden questions read

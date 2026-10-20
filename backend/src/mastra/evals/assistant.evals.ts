@@ -199,7 +199,7 @@ export interface AssistantEvalSet {
 /**
  * Every question set the assistant suite offers, in the order of
  * `EVAL_SET_FILES`: World Cup, then its REST API and Databricks variants,
- * Formula 1, the golden set, the REST- and Databricks-only sets and the
+ * Formula 1, the REST- and Databricks-only sets and the
  * synthetic domains. The questions are data under `./sets/` (ADR-0015), read
  * and checked by `loadEvalSets` when this module loads, so a set file the
  * loader refuses stops the backend instead of running a broken case. Adding

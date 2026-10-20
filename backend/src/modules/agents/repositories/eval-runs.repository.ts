@@ -63,9 +63,9 @@ export class EvalRunsRepository {
    * shares at least one question id with `questionIds`, excluding
    * `excludeJobId`. Regression tracking diffs a finishing run against this
    * baseline (agents-evals R40). A run of another set on the same datasource
-   * and datasets (`world-cup` and `world-cup-golden`) has no question in
-   * common, so it would skip every question; it is not comparable. `null`
-   * when no comparable completed run exists.
+   * and datasets (`world-cup-databricks` and `world-cup-databricks-only`) has
+   * no question in common, so it would skip every question; it is not
+   * comparable. `null` when no comparable completed run exists.
    */
   async mostRecentCompleted(
     agentKey: string,

@@ -43,7 +43,6 @@ import {
 import type { DeterministicCheckSpec, DeterministicCheckType } from './checks';
 import worldCupSetFile from './sets/world-cup.json';
 import formula1SetFile from './sets/formula-1.json';
-import worldCupGoldenSetFile from './sets/world-cup-golden.json';
 import worldCupRestConnectorSetFile from './sets/world-cup-rest-connector.json';
 import worldCupDatabricksOnlySetFile from './sets/world-cup-databricks-only.json';
 import financeSetFile from './sets/finance.json';
@@ -199,15 +198,13 @@ export interface EvalSetFileSource {
 
 /**
  * Every set file, in the order the suite lists its sets: World Cup, World Cup
- * (REST API), Formula 1, World Cup (golden set), World Cup (REST connector,
- * BA-187), World Cup (Databricks only, BA-186), then the synthetic domains
- * (BA-185): Finance, Health Insurance, Genomics, Supply Chain, Marketing
- * Analytics.
+ * (REST API), Formula 1, World Cup (REST connector, BA-187), World Cup
+ * (Databricks only, BA-186), then the synthetic domains (BA-185): Finance,
+ * Health Insurance, Genomics, Supply Chain, Marketing Analytics.
  */
 export const EVAL_SET_FILES: readonly EvalSetFileSource[] = [
   { file: 'world-cup.json', content: worldCupSetFile },
   { file: 'formula-1.json', content: formula1SetFile },
-  { file: 'world-cup-golden.json', content: worldCupGoldenSetFile },
   {
     file: 'world-cup-rest-connector.json',
     content: worldCupRestConnectorSetFile,

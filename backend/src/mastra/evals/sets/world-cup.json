@@ -3157,6 +3157,603 @@
         "sqlite": "SELECT DISTINCT player.full_name AS player FROM api.world_cup.matches playoff JOIN api.world_cup.tournaments tournament ON tournament.id = playoff.tournament_id JOIN api.world_cup.matches m ON m.tournament_id = tournament.id JOIN api.world_cup.goals goal ON goal.match_id = m.id AND goal.scoring_team_id = playoff.winner_team_id JOIN api.world_cup.players player ON player.id = goal.scorer_player_id WHERE tournament.tournament_year = 2018 AND playoff.stage = 'third_place' AND goal.goal_type <> 'own_goal'",
         "databricks": "SELECT DISTINCT player.full_name AS player FROM `evals`.world_cup.matches playoff JOIN `evals`.world_cup.tournaments tournament ON tournament.id = playoff.tournament_id JOIN `evals`.world_cup.matches m ON m.tournament_id = tournament.id JOIN `evals`.world_cup.goals goal ON goal.match_id = m.id AND goal.scoring_team_id = playoff.winner_team_id JOIN `evals`.world_cup.players player ON player.id = goal.scorer_player_id WHERE tournament.tournament_year = 2018 AND playoff.stage = 'third_place' AND goal.goal_type <> 'own_goal'"
       }
+    },
+    {
+      "id": "pass-accuracy-by-team",
+      "category": "ratio",
+      "question": "Which three teams completed the highest share of their attempted passes across all matches?",
+      "intent": "A ratio of two different measures, completed over attempted passes, ranked top three.",
+      "notes": "From the former World Cup golden set (world-cup-golden, merged into this bank on 2026-10-20). Healthy ratio over two genuinely different measures. The regression this guards: an answer that divided a sum by itself reported a perfect rate for every row. A correct answer here must divide completed passes by ATTEMPTED passes, so the rates differ per team.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT t.common_name, SUM(s.passes_completed)::numeric / SUM(s.passes_attempted) AS pass_accuracy FROM world_cup.match_team_statistics s JOIN world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY pass_accuracy DESC, t.common_name LIMIT 3",
+        "sqlite": "SELECT t.common_name, CAST(SUM(s.passes_completed) AS REAL) / SUM(s.passes_attempted) AS pass_accuracy FROM api.world_cup.match_team_statistics s JOIN api.world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY pass_accuracy DESC, t.common_name LIMIT 3",
+        "databricks": "SELECT t.common_name, SUM(s.passes_completed) / SUM(s.passes_attempted) AS pass_accuracy FROM `evals`.world_cup.match_team_statistics s JOIN `evals`.world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY pass_accuracy DESC, t.common_name LIMIT 3"
+      }
+    },
+    {
+      "id": "shot-accuracy-by-team",
+      "category": "ratio",
+      "question": "Which three teams put the highest share of their shots on target?",
+      "intent": "The same two-measure ratio on a different column pair, shots on target over shots.",
+      "notes": "From the former World Cup golden set (world-cup-golden, merged into this bank on 2026-10-20). Second two-measure ratio, on a different column pair, so a fix that special-cases passes does not pass this one.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT t.common_name, SUM(s.shots_on_target)::numeric / SUM(s.shots) AS shot_accuracy FROM world_cup.match_team_statistics s JOIN world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY shot_accuracy DESC, t.common_name LIMIT 3",
+        "sqlite": "SELECT t.common_name, CAST(SUM(s.shots_on_target) AS REAL) / SUM(s.shots) AS shot_accuracy FROM api.world_cup.match_team_statistics s JOIN api.world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY shot_accuracy DESC, t.common_name LIMIT 3",
+        "databricks": "SELECT t.common_name, SUM(s.shots_on_target) / SUM(s.shots) AS shot_accuracy FROM `evals`.world_cup.match_team_statistics s JOIN `evals`.world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY shot_accuracy DESC, t.common_name LIMIT 3"
+      }
+    },
+    {
+      "id": "top-scoring-team",
+      "category": "ranking",
+      "question": "Which team scored the most goals in total?",
+      "intent": "Ranking with an unambiguous winner (France, 14 goals), named rather than reported as an id.",
+      "notes": "From the former World Cup golden set (world-cup-golden, merged into this bank on 2026-10-20). Unambiguous ranking: France lead on 14 with no tie at the top, so a correct answer cannot be a coin toss.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT t.common_name, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name ORDER BY goals DESC, t.common_name LIMIT 1",
+        "sqlite": "SELECT t.common_name, COUNT(*) AS goals FROM api.world_cup.goals g JOIN api.world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name ORDER BY goals DESC, t.common_name LIMIT 1",
+        "databricks": "SELECT t.common_name, COUNT(*) AS goals FROM `evals`.world_cup.goals g JOIN `evals`.world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name ORDER BY goals DESC, t.common_name LIMIT 1"
+      }
+    },
+    {
+      "id": "teams-tied-on-four-goals",
+      "category": "ranking",
+      "tags": ["ties"],
+      "question": "Which teams scored exactly four goals in total?",
+      "intent": "A tie asked for explicitly: every team on exactly four goals, not one of them.",
+      "notes": "From the former World Cup golden set (world-cup-golden, merged into this bank on 2026-10-20). Ties are real here — Belgium and England both scored 4, and four more teams tie on 2. A 'top 5 scorers' answer would have to break that tie arbitrarily; asking for the tie explicitly makes the expected result deterministic.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT t.common_name, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name HAVING COUNT(*) = 4 ORDER BY t.common_name",
+        "sqlite": "SELECT t.common_name, COUNT(*) AS goals FROM api.world_cup.goals g JOIN api.world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name HAVING COUNT(*) = 4 ORDER BY t.common_name",
+        "databricks": "SELECT t.common_name, COUNT(*) AS goals FROM `evals`.world_cup.goals g JOIN `evals`.world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name HAVING COUNT(*) = 4 ORDER BY t.common_name"
+      }
+    },
+    {
+      "id": "card-types-recorded",
+      "category": "aggregate",
+      "tags": ["constant-metric"],
+      "question": "What types of disciplinary cards were recorded, and how many of each?",
+      "intent": "A breakdown where only one value occurs: every card recorded is a yellow.",
+      "notes": "From the former World Cup golden set (world-cup-golden, merged into this bank on 2026-10-20). Every card in the data is a yellow, so any 'share that were yellow' metric is 1 on every row — the constant-metric trap. The honest answer states that only yellows were recorded rather than reporting a meaningless 100%.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT card_type, COUNT(*) AS cards FROM world_cup.disciplinary_events GROUP BY card_type ORDER BY cards DESC, card_type",
+        "sqlite": "SELECT card_type, COUNT(*) AS cards FROM api.world_cup.disciplinary_events GROUP BY card_type ORDER BY cards DESC, card_type",
+        "databricks": "SELECT card_type, COUNT(*) AS cards FROM `evals`.world_cup.disciplinary_events GROUP BY card_type ORDER BY cards DESC, card_type"
+      }
+    },
+    {
+      "id": "goals-with-recorded-assist",
+      "category": "null",
+      "question": "How many goals have a recorded assisting player?",
+      "intent": "A sparse column: count the goals that have an assist instead of grouping by a mostly blank key.",
+      "notes": "From the former World Cup golden set (world-cup-golden, merged into this bank on 2026-10-20). Assists are recorded on only 2 of 47 goals, so grouping by assisting player buries 45 goals under a blank key. A correct answer counts the goals that HAVE an assist rather than silently presenting the blank group as a finding.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "sqlMatches",
+          "args": {
+            "pattern": "assist",
+            "flags": "i"
+          },
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS goals_with_assist FROM world_cup.goals WHERE assist_player_id IS NOT NULL",
+        "sqlite": "SELECT COUNT(*) AS goals_with_assist FROM api.world_cup.goals WHERE assist_player_id IS NOT NULL",
+        "databricks": "SELECT COUNT(*) AS goals_with_assist FROM `evals`.world_cup.goals WHERE assist_player_id IS NOT NULL"
+      }
+    },
+    {
+      "id": "goals-by-type",
+      "category": "aggregate",
+      "tags": ["control"],
+      "question": "How many goals were scored of each goal type?",
+      "intent": "Control: a categorical breakdown with no ratio and no nulls.",
+      "notes": "From the former World Cup golden set (world-cup-golden, merged into this bank on 2026-10-20). Categorical breakdown with no ratio and no nulls — a control. If this fails, the problem is schema linking, not the guards.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT goal_type, COUNT(*) AS goals FROM world_cup.goals GROUP BY goal_type ORDER BY goals DESC, goal_type",
+        "sqlite": "SELECT goal_type, COUNT(*) AS goals FROM api.world_cup.goals GROUP BY goal_type ORDER BY goals DESC, goal_type",
+        "databricks": "SELECT goal_type, COUNT(*) AS goals FROM `evals`.world_cup.goals GROUP BY goal_type ORDER BY goals DESC, goal_type"
+      }
+    },
+    {
+      "id": "attendance-by-tournament",
+      "category": "aggregate",
+      "tags": ["control"],
+      "question": "What was the total match attendance for each tournament year?",
+      "intent": "Control: a plain aggregate over a join.",
+      "notes": "From the former World Cup golden set (world-cup-golden, merged into this bank on 2026-10-20). Plain aggregate over a join — the healthy baseline. Guards must stay silent on this one.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT tr.tournament_year, SUM(m.attendance) AS total_attendance FROM world_cup.matches m JOIN world_cup.tournaments tr ON tr.id = m.tournament_id GROUP BY tr.tournament_year ORDER BY tr.tournament_year",
+        "sqlite": "SELECT tr.tournament_year, SUM(m.attendance) AS total_attendance FROM api.world_cup.matches m JOIN api.world_cup.tournaments tr ON tr.id = m.tournament_id GROUP BY tr.tournament_year ORDER BY tr.tournament_year",
+        "databricks": "SELECT tr.tournament_year, SUM(m.attendance) AS total_attendance FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments tr ON tr.id = m.tournament_id GROUP BY tr.tournament_year ORDER BY tr.tournament_year"
+      }
+    },
+    {
+      "id": "matches-by-stage",
+      "category": "aggregate",
+      "tags": ["ties"],
+      "question": "How many matches were played at each stage of the tournaments?",
+      "intent": "A full breakdown whose smallest groups tie (final and third place, 2 matches each).",
+      "notes": "From the former World Cup golden set (world-cup-golden, merged into this bank on 2026-10-20). Ties at the bottom (final and third_place both 2) — a 'least common stage' phrasing would be ambiguous, so the question asks for the full breakdown.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT stage, COUNT(*) AS matches FROM world_cup.matches GROUP BY stage ORDER BY matches DESC, stage",
+        "sqlite": "SELECT stage, COUNT(*) AS matches FROM api.world_cup.matches GROUP BY stage ORDER BY matches DESC, stage",
+        "databricks": "SELECT stage, COUNT(*) AS matches FROM `evals`.world_cup.matches GROUP BY stage ORDER BY matches DESC, stage"
+      }
+    },
+    {
+      "id": "pass-completion-by-team",
+      "category": "ratio",
+      "question": "What share of their attempted passes did each team complete?",
+      "intent": "A share for every team built from two different measures, completed over attempted passes; the rates must differ by team.",
+      "notes": "From the former World Cup golden set (world-cup-golden, merged into this bank on 2026-10-20). Moved from the answer-quality gate (scripts/check-answers.ts, check pass-completion-ratio). It guards the production bug: the same measure aliased twice and divided by itself, narrated as a flat rate. Ground truth varies by team (Croatia 0.871, Brazil 0.870, England 0.869), so a correct answer cannot be uniform. The gate accepted the share computed in SQL or in the prose; the result-set check compares rows, so it needs the share in the SQL result, as an unrounded fraction. Reference SQL written for the move (BA-182); it returned 12 rows on the World Cup fixture on 2026-10-13.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT t.common_name, SUM(s.passes_completed)::numeric / SUM(s.passes_attempted) AS pass_completion FROM world_cup.match_team_statistics s JOIN world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY t.common_name",
+        "sqlite": "SELECT t.common_name, CAST(SUM(s.passes_completed) AS REAL) / SUM(s.passes_attempted) AS pass_completion FROM api.world_cup.match_team_statistics s JOIN api.world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY t.common_name",
+        "databricks": "SELECT t.common_name, SUM(s.passes_completed) / SUM(s.passes_attempted) AS pass_completion FROM `evals`.world_cup.match_team_statistics s JOIN `evals`.world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY t.common_name"
+      }
+    },
+    {
+      "id": "yellow-card-share",
+      "category": "ratio",
+      "tags": ["constant-metric"],
+      "question": "What share of the disciplinary cards shown were yellow?",
+      "intent": "A share that is 100% everywhere: the answer must say every card was a yellow rather than compare teams.",
+      "notes": "From the former World Cup golden set (world-cup-golden, merged into this bank on 2026-10-20). Moved from the answer-quality gate (scripts/check-answers.ts, check constant-metric-not-compared). It guards invented variation: breaking down a metric that is 100% on every row as if teams differed. Every card in the fixture is a yellow (8 of 8). The gate checked that the answer mentions yellow and says all, only or 100%. The reference returns the two counts the share is built from (8 yellow cards of 8), because the share itself may be written as 1 or as 100. Reference SQL written for the move (BA-182); it returned 1 row on the World Cup fixture on 2026-10-13.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) FILTER (WHERE card_type = 'yellow') AS yellow_cards, COUNT(*) AS total_cards FROM world_cup.disciplinary_events",
+        "sqlite": "SELECT SUM(CASE WHEN card_type = 'yellow' THEN 1 ELSE 0 END) AS yellow_cards, COUNT(*) AS total_cards FROM api.world_cup.disciplinary_events",
+        "databricks": "SELECT COUNT_IF(card_type = 'yellow') AS yellow_cards, COUNT(*) AS total_cards FROM `evals`.world_cup.disciplinary_events"
+      }
     }
   ]
 }
