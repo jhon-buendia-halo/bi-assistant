@@ -1,0 +1,12 @@
+# Allowlist of eval:leak-check (agents-evals R230; docs/evals/loop/program.md).
+#
+# One literal per line, then " | " and why it may stay in a lever file:
+#   <literal> | <reason>
+# The literal is the one the report prints between quotes, such as
+#   fiscal year | a rule about the data, stated in the finance knowledge seed
+# It is compared after normalisation (accents removed, lower case, quotes and
+# dashes straight), with the whole literal of a finding. Lines that start with
+# "#" are comments. A line without a reason is refused.
+#
+# The fixer never reads this file (start-fixer.sh deletes it from its tree):
+# a reason may name what a held-out question asks.

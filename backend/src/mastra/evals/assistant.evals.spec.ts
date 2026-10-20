@@ -12,7 +12,11 @@ jest.mock('../agents/eval-judge.agent', () => {
 jest.mock('../model-resolver', () => ({
   resolveAgentModel: jest.fn().mockResolvedValue({}),
 }));
-jest.mock('../model-compat', () => ({ providerOptionsFor: () => ({}) }));
+jest.mock('../model-compat', () => ({
+  providerOptionsFor: () => ({}),
+  modelIdOf: (config: string | { id: string }) =>
+    typeof config === 'string' ? config : config.id,
+}));
 jest.mock('../tool-services', () => ({
   getDatasetToolServices: () => ({ getDatasets: () => Promise.resolve([]) }),
 }));
@@ -44,9 +48,12 @@ jest.mock('@mastra/evals/checks', () => ({
 import { runEvals } from '@mastra/core/evals';
 import { evalJudgeAgent } from '../agents/eval-judge.agent';
 import { appSkillBody } from '../app-skills';
+import { resolveAgentModel } from '../model-resolver';
+import { USAGE_SINK_CONTEXT_KEY, usageSinkFrom } from '../usage-sink';
 import {
   ASSISTANT_EVAL_SETS,
   ASSISTANT_EVAL_TARGET,
+  evalRunModel,
   runAssistantEvalCase,
 } from './assistant.evals';
 import type { AssistantEvalCase } from './assistant.evals';
@@ -429,5 +436,300 @@ describe('tool selection in the eval cases (agents.md 8.1, ADR-0022)', () => {
     expect(sentContext()[0].content).toContain(
       'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
     );
+  });
+});
+
+describe('runAssistantEvalCase attempt fields (agents-evals R211, R215)', () => {
+  it('carries the split of its case and counts as one attempt', async () => {
+    const heldOut = await runAssistantEvalCase(
+      { ...judgedCase('ratio', { rubric: false }), split: 'held-out' },
+      ['World Cup'],
+    );
+    expect(heldOut).toMatchObject({
+      split: 'held-out',
+      status: 'passed',
+      passes: 1,
+      runs: 1,
+      flaky: false,
+    });
+    expect(heldOut).not.toHaveProperty('attempts');
+
+    const dev = await runAssistantEvalCase(evalCase, ['World Cup']);
+    expect(dev).toMatchObject({ split: 'dev', passes: 0, runs: 1 });
+  });
+
+  it('gives a thrown attempt its split and no passes', async () => {
+    jest.mocked(runEvals).mockRejectedValueOnce(new Error('connection lost'));
+    const result = await runAssistantEvalCase(
+      { ...judgedCase('lookup'), split: 'held-out' },
+      ['World Cup'],
+    );
+    expect(result).toMatchObject({
+      split: 'held-out',
+      status: 'failed',
+      passes: 0,
+      runs: 1,
+      flaky: false,
+    });
+  });
+});
+
+/** runEvals for one item: the target result given, every scorer 1. */
+function runEvalsReturning(
+  targetResult: Record<string, unknown>,
+  duringTurn?: (requestContext: { get(key: string): unknown }) => void,
+) {
+  jest.mocked(runEvals).mockImplementationOnce(((config: {
+    scorers: { id: string }[];
+    data: { requestContext: { get(key: string): unknown } }[];
+    onItemComplete?: (item: unknown) => void;
+  }) => {
+    duringTurn?.(config.data[0].requestContext);
+    config.onItemComplete?.({ targetResult, scorerResults: {} });
+    return Promise.resolve({
+      scores: Object.fromEntries(config.scorers.map((sc) => [sc.id, 1])),
+    });
+  }) as never);
+}
+
+const RUN_MODEL = { model: 'openai/gpt-4o-mini' };
+
+describe('runAssistantEvalCase usage and cost (agents-evals R219 to R221)', () => {
+  it('records the generate of the agent over every step and the call of the judge, priced', async () => {
+    runEvalsReturning({
+      text: 'Argentina',
+      usage: { inputTokens: 1, outputTokens: 1 },
+      totalUsage: { inputTokens: 10_000, outputTokens: 1_000 },
+    });
+    generate.mockResolvedValueOnce({
+      object: { pass: true, reason: 'ok' },
+      usage: { inputTokens: 2_000, outputTokens: 100 },
+    });
+    const result = await runAssistantEvalCase(
+      judgedCase('out-of-scope'),
+      ['World Cup'],
+      undefined,
+      undefined,
+      ASSISTANT_EVAL_TARGET,
+      { mode: 'on' },
+      RUN_MODEL,
+    );
+    expect(result.usage).toEqual([
+      {
+        agent: 'assistant',
+        model: 'gpt-4o-mini',
+        inputTokens: 10_000,
+        cachedInputTokens: 0,
+        outputTokens: 1_000,
+        reasoningTokens: 0,
+        calls: 1,
+        unreportedCalls: 0,
+      },
+      {
+        agent: 'judge',
+        model: 'gpt-4o-mini',
+        inputTokens: 2_000,
+        cachedInputTokens: 0,
+        outputTokens: 100,
+        reasoningTokens: 0,
+        calls: 1,
+        unreportedCalls: 0,
+      },
+    ]);
+    // (10,000 × 0.15 + 1,000 × 0.60 + 2,000 × 0.15 + 100 × 0.60) / 10^6.
+    expect(result.costUsd).toBe(0.00246);
+  });
+
+  it('calls the judge with the same options as before usage was recorded', async () => {
+    await runAssistantEvalCase(
+      judgedCase('out-of-scope'),
+      ['World Cup'],
+      undefined,
+      undefined,
+      ASSISTANT_EVAL_TARGET,
+      { mode: 'on' },
+      RUN_MODEL,
+    );
+    const [prompt, options] = generate.mock.calls[0] as [string, unknown];
+    expect(prompt).toContain('Rubric:\nSays it cannot answer.');
+    expect(options).toEqual({
+      maxSteps: 1,
+      toolChoice: 'none',
+      providerOptions: {},
+      structuredOutput: {
+        schema: expect.anything() as unknown,
+        jsonPromptInjection: 'inline',
+      },
+    });
+  });
+
+  it('puts the sink of the attempt on the request context for the SQL fixer and the designer', async () => {
+    runEvalsReturning(
+      { text: 'Argentina', totalUsage: { inputTokens: 100, outputTokens: 10 } },
+      (requestContext) => {
+        expect(typeof requestContext.get(USAGE_SINK_CONTEXT_KEY)).toBe(
+          'function',
+        );
+        const sink = usageSinkFrom(requestContext);
+        sink?.(
+          'sql-fixer',
+          { usage: { inputTokens: 60, outputTokens: 5 } },
+          'openai/gpt-4o-mini-2024-07-18',
+        );
+        // A designer call that reported nothing, on the run's model.
+        sink?.('designer', { text: '{}' });
+      },
+    );
+    const result = await runAssistantEvalCase(
+      evalCase,
+      ['World Cup'],
+      undefined,
+      undefined,
+      ASSISTANT_EVAL_TARGET,
+      undefined,
+      RUN_MODEL,
+    );
+    expect(
+      result.usage?.map(({ agent, model, calls, unreportedCalls }) => ({
+        agent,
+        model,
+        calls,
+        unreportedCalls,
+      })),
+    ).toEqual([
+      {
+        agent: 'assistant',
+        model: 'gpt-4o-mini',
+        calls: 1,
+        unreportedCalls: 0,
+      },
+      {
+        agent: 'sql-fixer',
+        model: 'gpt-4o-mini-2024-07-18',
+        calls: 1,
+        unreportedCalls: 0,
+      },
+      { agent: 'designer', model: 'gpt-4o-mini', calls: 0, unreportedCalls: 1 },
+    ]);
+    // (100 × 0.15 + 10 × 0.60 + 60 × 0.15 + 5 × 0.60) / 10^6: the dated
+    // snapshot takes its model's rate, and the unreported call adds 0.
+    expect(result.costUsd).toBe(0.000033);
+  });
+
+  it('counts a generate whose result reports no tokens as unreported, not free', async () => {
+    runEvalsReturning({ text: 'Argentina' });
+    const result = await runAssistantEvalCase(
+      evalCase,
+      ['World Cup'],
+      undefined,
+      undefined,
+      ASSISTANT_EVAL_TARGET,
+      undefined,
+      RUN_MODEL,
+    );
+    expect(result.usage).toEqual([
+      expect.objectContaining({
+        agent: 'assistant',
+        calls: 0,
+        unreportedCalls: 1,
+        inputTokens: 0,
+      }),
+    ]);
+    expect(result.costUsd).toBe(0);
+  });
+
+  it('counts a generate that threw as an unreported call, keeping what was recorded', async () => {
+    jest.mocked(runEvals).mockImplementationOnce(((config: {
+      data: { requestContext: { get(key: string): unknown } }[];
+    }) => {
+      usageSinkFrom(config.data[0].requestContext)?.('sql-fixer', {
+        usage: { inputTokens: 50, outputTokens: 5 },
+      });
+      return Promise.reject(new Error('model down'));
+    }) as never);
+    const result = await runAssistantEvalCase(
+      evalCase,
+      ['World Cup'],
+      undefined,
+      undefined,
+      ASSISTANT_EVAL_TARGET,
+      undefined,
+      RUN_MODEL,
+    );
+    expect(result.error).toBe('model down');
+    expect(
+      result.usage?.map(({ agent, calls, unreportedCalls }) => ({
+        agent,
+        calls,
+        unreportedCalls,
+      })),
+    ).toEqual([
+      { agent: 'assistant', calls: 0, unreportedCalls: 1 },
+      { agent: 'sql-fixer', calls: 1, unreportedCalls: 0 },
+    ]);
+  });
+
+  it('counts a judge call that threw as unreported', async () => {
+    generate.mockRejectedValueOnce(new Error('judge down'));
+    const result = await runAssistantEvalCase(
+      judgedCase('reasoning'),
+      ['World Cup'],
+      undefined,
+      undefined,
+      ASSISTANT_EVAL_TARGET,
+      { mode: 'on' },
+      RUN_MODEL,
+    );
+    expect(
+      result.usage?.find((entry) => entry.agent === 'judge'),
+    ).toMatchObject({ calls: 0, unreportedCalls: 1 });
+  });
+
+  it('is not priced on a model the price table does not list', async () => {
+    runEvalsReturning({
+      text: 'Argentina',
+      totalUsage: { inputTokens: 100, outputTokens: 10 },
+    });
+    const result = await runAssistantEvalCase(
+      evalCase,
+      ['World Cup'],
+      undefined,
+      undefined,
+      ASSISTANT_EVAL_TARGET,
+      undefined,
+      { model: 'openai/gpt-9-ultra' },
+    );
+    expect(result.usage?.[0]).toMatchObject({
+      model: 'gpt-9-ultra',
+      inputTokens: 100,
+    });
+    expect(result.costUsd).toBeNull();
+  });
+
+  it('records on the model resolved for the attempt when the run names none', async () => {
+    jest.mocked(resolveAgentModel).mockResolvedValueOnce({
+      id: 'lenai/gpt-4o-mini',
+      apiKey: 'k',
+    });
+    runEvalsReturning({
+      text: 'Argentina',
+      totalUsage: { inputTokens: 100, outputTokens: 10 },
+    });
+    const result = await runAssistantEvalCase(evalCase, ['World Cup']);
+    expect(result.usage?.[0].model).toBe('gpt-4o-mini');
+  });
+});
+
+describe('evalRunModel (R22, R219)', () => {
+  it('answers the router id of the resolved model', async () => {
+    jest.mocked(resolveAgentModel).mockResolvedValueOnce('openai/gpt-4o-mini');
+    await expect(evalRunModel()).resolves.toBe('openai/gpt-4o-mini');
+  });
+
+  it('answers undefined when the model cannot be resolved', async () => {
+    jest
+      .mocked(resolveAgentModel)
+      .mockRejectedValueOnce(new Error('no settings'));
+    await expect(evalRunModel()).resolves.toBeUndefined();
   });
 });

@@ -1,0 +1,12 @@
+{
+  "_comment": "Model prices for eval cost, in US dollars per million tokens (agents-evals R220; data-model 4.11). Keys are model ids without the provider prefix, lower case. A model missing here makes a run's cost \"not priced\"; its tokens are still counted. Each rate names where it was read and on which day; re-read it before trusting a cost figure.",
+  "models": {
+    "gpt-4o-mini": {
+      "inputPerMillionUsd": 0.15,
+      "cachedInputPerMillionUsd": 0.075,
+      "outputPerMillionUsd": 0.6,
+      "source": "developers.openai.com/api/docs/pricing",
+      "readOn": "2026-10-20"
+    }
+  }
+}

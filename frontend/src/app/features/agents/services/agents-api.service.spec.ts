@@ -30,6 +30,7 @@ describe('AgentsApiService eval runs', () => {
       datasourceId: 'ds-1',
       caseIds: ['champion-2022'],
       judge: 'off',
+      repeats: 1,
     });
     req.flush({ ok: true, message: 'Eval run started', jobId: 'job-1' });
   });
@@ -39,5 +40,14 @@ describe('AgentsApiService eval runs', () => {
     const req = http.expectOne((r) => r.url.endsWith('/evals/run'));
     expect(req.request.body.judge).toBe('on');
     req.flush({ ok: true, message: 'Eval run started', jobId: 'job-2' });
+  });
+
+  it('sends the repeats with the run', () => {
+    api
+      .startEvalRun('assistant', 'ds-1', ['out-of-scope'], 'off', 3)
+      .subscribe();
+    const req = http.expectOne((r) => r.url.endsWith('/evals/run'));
+    expect(req.request.body.repeats).toBe(3);
+    req.flush({ ok: true, message: 'Eval run started', jobId: 'job-3' });
   });
 });

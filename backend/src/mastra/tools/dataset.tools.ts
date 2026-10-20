@@ -6,6 +6,7 @@ import {
   DatasetColumnSnapshot,
   DatasetSnapshot,
 } from '../tool-services';
+import { usageSinkFrom } from '../usage-sink';
 
 /** requestContext key carrying the session's dataset names. */
 export const DATASETS_CONTEXT_KEY = 'datasets';
@@ -226,6 +227,7 @@ export const runReadOnlySqlTool = createTool({
         sql,
         rowLimit,
         datasetNames(requestContext),
+        usageSinkFrom(requestContext),
       );
       // Inspect the statement that actually ran — the fixer may have repaired
       // the one the model wrote. Warnings ride back on the tool result so the

@@ -41,6 +41,7 @@ import {
   AgentSkillsView,
   AgentsApiService,
   EvalJudgeChoice,
+  EvalRepeats,
   EvalRunView,
   EvalStatus,
 } from '../../services/agents-api.service';
@@ -50,10 +51,17 @@ import {
   checkResultFor,
   checkStatus,
   evalRunSummary,
+  resultPasses,
+  resultRuns,
+  resultSplit,
   resultStatus,
+  runCost,
   runCounts,
+  runFlakyCount,
   runHeadline,
+  runRepeats,
   runVerdict,
+  splitLine,
 } from '../../services/eval-run.util';
 import { EvalRunSummaryTables } from '../eval-run-summary/eval-run-summary';
 import {
@@ -257,6 +265,7 @@ export class AgentDetail implements OnDestroy {
       this.evalRuns.set([]);
       this.expandedRunId.set(null);
       this.judge.set('off');
+      this.repeats.set(1);
       this.evalSelection.clear();
       this.publishing.set(false);
       this.deleting.set(false);
@@ -598,6 +607,13 @@ export class AgentDetail implements OnDestroy {
   readonly resultStatus = resultStatus;
   readonly runHeadline = runHeadline;
   readonly runVerdict = runVerdict;
+  readonly runRepeatsOf = runRepeats;
+  readonly runFlakyCount = runFlakyCount;
+  readonly runCost = runCost;
+  readonly splitLine = splitLine;
+  readonly resultSplit = resultSplit;
+  readonly resultRuns = resultRuns;
+  readonly resultPasses = resultPasses;
 
   /** A check's status on a finished question; undefined when it has none. */
   checkStatusIn(
@@ -672,6 +688,14 @@ export class AgentDetail implements OnDestroy {
     this.judge.set(value === 'on' ? 'on' : 'off');
   }
 
+  /** Attempts per question the run asks for (agents-evals R214). */
+  readonly repeats = signal<EvalRepeats>(1);
+
+  onRepeatsChange(event: Event): void {
+    const value = Number((event.target as HTMLSelectElement).value);
+    this.repeats.set(value === 3 || value === 5 ? value : 1);
+  }
+
   /** Datasources offered in the run dropdown. */
   readonly datasources = signal<Datasource[]>([]);
   readonly selectedDatasourceId = signal<string>('');
@@ -684,6 +708,9 @@ export class AgentDetail implements OnDestroy {
   );
   readonly runResults = signal<AgentEvalCaseResult[]>([]);
   readonly runCurrentQuestion = signal<string | null>(null);
+  /** The attempt of the question in flight, and the run's attempts each. */
+  readonly runCurrentAttempt = signal<number | null>(null);
+  readonly runRepeats = signal<EvalRepeats>(1);
   readonly runDatasets = signal<string[]>([]);
   private pollTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -725,10 +752,18 @@ export class AgentDetail implements OnDestroy {
     this.runError.set(null);
     this.runResults.set([]);
     this.runCurrentQuestion.set(null);
+    this.runCurrentAttempt.set(null);
+    this.runRepeats.set(this.repeats());
     this.syncSelection();
 
     this.api
-      .startEvalRun(this.agentKey(), datasourceId, caseIds, this.judge())
+      .startEvalRun(
+        this.agentKey(),
+        datasourceId,
+        caseIds,
+        this.judge(),
+        this.repeats(),
+      )
       .subscribe({
         next: (res) => {
           this.runStarting.set(false);
@@ -761,6 +796,8 @@ export class AgentDetail implements OnDestroy {
         this.syncSelection();
         this.refreshListedRun(view);
         this.runCurrentQuestion.set(view.currentQuestion ?? null);
+        this.runCurrentAttempt.set(view.currentAttempt ?? null);
+        this.runRepeats.set(view.repeats ?? 1);
         this.runDatasets.set(view.datasets ?? []);
         if (view.status === 'running') {
           this.pollTimer = setTimeout(() => this.pollRun(jobId), 1500);

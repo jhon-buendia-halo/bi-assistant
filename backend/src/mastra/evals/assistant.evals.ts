@@ -4,7 +4,9 @@ import type { MastraScorer } from '@mastra/core/evals';
 import type { Agent } from '@mastra/core/agent';
 import { assistantAgent } from '../agents/assistant.agent';
 import { resolveAgentModel } from '../model-resolver';
-import { providerOptionsFor } from '../model-compat';
+import { modelIdOf, providerOptionsFor } from '../model-compat';
+import { USAGE_SINK_CONTEXT_KEY } from '../usage-sink';
+import type { UsageSink } from '../usage-sink';
 import {
   evalJudgeAgent,
   evalJudgeOutputSchema,
@@ -39,10 +41,10 @@ import {
 import type { EvalJudgeSetting } from './judge-option';
 import { questionStatus } from './eval-summary';
 import type { EvalStatus } from './eval-summary';
-import {
-  assistantEvalDatasetError,
-  evalFixture,
-} from './assistant-eval-datasets';
+import { recordUsage } from './eval-usage';
+import type { ModelUsageEntry } from './eval-usage';
+import { costUsdOf } from './eval-attempts';
+import { evalFixture } from './assistant-eval-datasets';
 import type { SampleFixture } from '../../modules/testing-data/fixtures/registry';
 import {
   synthesizeToolOnlyTurn,
@@ -311,13 +313,20 @@ export interface EvalCheckResult extends ScoredCheckResult {
   criterion?: string;
 }
 
-/** Outcome of one question. */
+/**
+ * Outcome of one question: of one attempt as `runAssistantEvalCase` returns
+ * it, and of all its attempts once `foldAttempts` (pass^k, R211) has folded
+ * them. With more than one attempt, the scores, checks, answer, tool calls,
+ * error and duration are the representative attempt's.
+ */
 export interface AssistantEvalCaseResult {
   id: string;
   /** The question as sent, after any setup the target's case needed. */
   question: string;
   /** The case's category (R147); absent on runs saved before BA-184. */
   category?: string;
+  /** The case's split (R215); `dev` for a case that names none. */
+  split: EvalSplit;
   /** Score per scorer id, 0..1. Empty when the run threw. */
   scores: Record<string, number>;
   /** Per-check verdicts, in the order the case declares them. */
@@ -334,6 +343,34 @@ export interface AssistantEvalCaseResult {
   error?: string;
   /** Wall time for the question, in milliseconds. */
   durationMs: number;
+  /** The attempts that passed, and the attempts made (R211). */
+  passes: number;
+  runs: number;
+  /** Some attempts passed and some failed; the question counts as failed. */
+  flaky: boolean;
+  /** Every attempt in order; only when `runs` is above 1. */
+  attempts?: EvalAttempt[];
+  /** Tokens per agent and model, over every attempt (R219). */
+  usage?: ModelUsageEntry[];
+  /** US dollars over every attempt; `null` when not priced (R221). */
+  costUsd?: number | null;
+}
+
+/** One attempt of a question (R210), as a result's `attempts` holds it. */
+export interface EvalAttempt {
+  /** 1-based. */
+  attempt: number;
+  status: EvalStatus;
+  passed: boolean;
+  scores: Record<string, number>;
+  checkResults: EvalCheckResult[];
+  answer: string;
+  toolCalls: EvalToolCall[];
+  error?: string;
+  durationMs: number;
+  /** This attempt's tokens alone, and their cost (`null`: not priced). */
+  usage: ModelUsageEntry[];
+  costUsd: number | null;
 }
 
 /** Tool payloads can be whole result sets; keep the trace readable. */
@@ -569,14 +606,17 @@ export function fixtureForCases(
  * plus, when a throwaway eval session exists, the same `session-id` and a
  * live turn-records array `create_visual`/`update_visual` read via
  * `TURN_RECORDS_CONTEXT_KEY` in a real chat turn (see
- * `SessionsService.streamMessage`).
+ * `SessionsService.streamMessage`), and the attempt's usage sink, which the
+ * SQL fixer, the visual designer and the tool-only synthesis report their
+ * model calls to (agents.md 8.3). The sink is not part of any prompt.
  */
 function evalRequestContext(
   datasets: string[],
   sessionId: string | undefined,
   turnRecords: ToolDataRecord[],
   question: string,
-  agentTools?: readonly OptionalAgentTool[],
+  agentTools: readonly OptionalAgentTool[] | undefined,
+  usageSink: UsageSink,
 ): RequestContext {
   const requestContext = new RequestContext();
   requestContext.set(DATASETS_CONTEXT_KEY, datasets);
@@ -588,6 +628,7 @@ function evalRequestContext(
   if (agentTools && !isFullSelection(agentTools)) {
     requestContext.set(AGENT_TOOLS_CONTEXT_KEY, [...agentTools]);
   }
+  requestContext.set(USAGE_SINK_CONTEXT_KEY, usageSink);
   return requestContext;
 }
 
@@ -636,12 +677,11 @@ const EVAL_SESSION_PLACEHOLDER_ANSWER =
 /**
  * A real, disposable session so `create_visual`/`update_visual` — which read
  * `session-id` from requestContext and look up session state — behave the
- * same way they do in a real chat turn. Both callers of the eval suite
- * (`EvalRunsService`, the in-app runner, and `run-assistant-evals.ts`, the
- * CLI) boot the full Nest app and can hand this a `SessionsService`; callers
- * that cannot (e.g. a lightweight unit test) simply omit it and the suite
- * still runs — `create_visual` then reports "No session in context", scored
- * like any other tool error.
+ * same way they do in a real chat turn. The one runner of the eval suite,
+ * `EvalRunsService`, serves both the app and the CLI (`run-assistant-evals.ts`
+ * boots the full Nest app); a run that cannot create one still runs, and
+ * `create_visual` then reports "No session in context", scored like any
+ * other tool error.
  */
 export async function createEvalSession(
   sessions: SessionsService,
@@ -706,7 +746,9 @@ function withStatus(
  * model the assistant runs on, via `resolveAgentModel`). Returns `undefined`
  * when the case has no rubric. A judge that errors or returns unparseable
  * JSON scores 0 rather than crashing the run — the run's other checks and
- * remaining cases must still complete.
+ * remaining cases must still complete. The judge's call is reported to
+ * `usageSink` (R219): its result, or none when the call threw, which counts
+ * as a call that reported no tokens.
  */
 async function runJudgeCheck(
   evalCase: AssistantEvalCase,
@@ -716,9 +758,11 @@ async function runJudgeCheck(
   question: string = evalCase.question,
   /** Earlier turns sent before the question, if any. */
   history: EvalHistoryMessage[] = [],
+  usageSink?: UsageSink,
 ): Promise<ScoredCheckResult | undefined> {
   if (!evalCase.judgeRubric) return undefined;
   const description = `LLM judge: ${evalCase.judgeRubric}`;
+  let called = false;
   try {
     const prompt = [
       ...(history.length
@@ -749,20 +793,23 @@ async function runJudgeCheck(
       answer || '(the assistant produced no answer text)',
     ].join('\n');
 
+    // Deterministic-ish grading: low temperature where the provider
+    // supports it, via providerOptions rather than a top-level field the
+    // structured-output call overload does not accept.
+    const providerOptions = providerOptionsFor(await resolveAgentModel(), {
+      temperature: 0,
+    });
+    called = true;
     const result = await evalJudgeAgent.generate(prompt, {
       maxSteps: 1,
       toolChoice: 'none',
-      // Deterministic-ish grading: low temperature where the provider
-      // supports it, via providerOptions rather than a top-level field the
-      // structured-output call overload does not accept.
-      providerOptions: providerOptionsFor(await resolveAgentModel(), {
-        temperature: 0,
-      }),
+      providerOptions,
       structuredOutput: {
         schema: evalJudgeOutputSchema,
         jsonPromptInjection: 'inline',
       },
     });
+    usageSink?.('judge', result);
     const parsed = evalJudgeOutputSchema.safeParse(
       (result as { object?: unknown }).object ??
         parseJsonObject((result as { text?: string }).text),
@@ -784,6 +831,7 @@ async function runJudgeCheck(
       reason: parsed.data.pass ? undefined : parsed.data.reason,
     };
   } catch (err) {
+    if (called) usageSink?.('judge', undefined);
     return {
       id: LLM_JUDGE_CHECK_ID,
       description,
@@ -806,6 +854,7 @@ async function judgeCheckFor(
   toolCalls: EvalToolCall[],
   question: string,
   history: EvalHistoryMessage[],
+  usageSink?: UsageSink,
 ): Promise<EvalCheckResult | undefined> {
   if (!evalCase.judgeRubric) return undefined;
   const criterion = judgeCriterion(evalCase.category);
@@ -826,14 +875,42 @@ async function judgeCheckFor(
     toolCalls,
     question,
     history,
+    usageSink,
   );
   return check ? withStatus(check, criterion) : undefined;
 }
 
+/** What one attempt needs to know about the run it belongs to. */
+export interface EvalAttemptOptions {
+  /**
+   * The router id of the model the run's agent runs on (`EvalRunView.model`),
+   * recorded for every call whose producer names no model (R219). Resolved
+   * for the attempt when omitted.
+   */
+  model?: string;
+}
+
 /**
- * Run one question. Each case is its own `runEvals` call because `runEvals`
- * keys and averages scores across the data items of a single call — one call
- * for all ten questions would collapse them into one set of numbers.
+ * The router id of the model the evaluated agent runs on now
+ * (`openai/gpt-4o-mini`), as a run records it (R22, R219); undefined when it
+ * cannot be resolved, which never fails a run.
+ */
+export async function evalRunModel(): Promise<string | undefined> {
+  try {
+    const config = await resolveAgentModel();
+    return config ? modelIdOf(config) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Run one question once: one attempt (R210). Each case is its own `runEvals`
+ * call because `runEvals` keys and averages scores across the data items of
+ * a single call — one call for all ten questions would collapse them into
+ * one set of numbers. The result is the attempt's alone (`runs` 1), with the
+ * tokens of every model call made for it (R219); `runCaseAttempts` folds a
+ * question's attempts.
  */
 export async function runAssistantEvalCase(
   evalCase: AssistantEvalCase,
@@ -842,15 +919,16 @@ export async function runAssistantEvalCase(
   /**
    * The curated-knowledge system block (`KnowledgeService.definitionBlock`)
    * for these datasets — same block a real chat turn gets from
-   * `SessionsService.agentContext`. Both callers (`EvalRunsService`, the CLI
-   * in `run-assistant-evals.ts`) populate this from `KnowledgeService`;
-   * omitted (or empty) when neither wires one in.
+   * `SessionsService.agentContext`. `EvalRunsService`, which runs the suite
+   * for the app and the CLI, populates this from `KnowledgeService`; omitted
+   * (or empty) when no caller wires one in.
    */
   knowledgeBlock?: string,
   /** The agent the case runs on; the assistant when omitted (agents.md 8.1). */
   target: EvalTarget = ASSISTANT_EVAL_TARGET,
   /** The run's judge option (R144); off unless the caller says otherwise. */
   judge: Readonly<EvalJudgeSetting> = JUDGE_OFF,
+  options: EvalAttemptOptions = {},
 ): Promise<AssistantEvalCaseResult> {
   const startedAt = Date.now();
   // The question sent: the case's own, unless the target's setup fills it.
@@ -865,8 +943,33 @@ export async function runAssistantEvalCase(
   // Populated live via onStepFinish as the run executes — the same records a
   // real turn would have threaded through TURN_RECORDS_CONTEXT_KEY.
   const turnRecords: ToolDataRecord[] = [];
+  // Every model call made for this attempt, by agent and model (R219). A
+  // producer that names no model ran on the run's.
+  const usage: ModelUsageEntry[] = [];
+  let runModel = options.model;
+  const usageSink: UsageSink = (agent, result, model) => {
+    try {
+      recordUsage(usage, agent, model ?? runModel, result);
+    } catch {
+      // Recording tokens never fails the attempt it measures.
+    }
+  };
+  // The agent's own generate: started, and whether its result was recorded.
+  let assistantCalled = false;
+  let assistantRecorded = false;
+  /** The fields every attempt result carries, whatever happened. */
+  const attemptFields = (status: EvalStatus) => ({
+    id: evalCase.id,
+    question,
+    ...(evalCase.category !== undefined ? { category: evalCase.category } : {}),
+    split: evalCase.split ?? 'dev',
+    passes: status === 'passed' ? 1 : 0,
+    runs: 1,
+    flaky: false,
+  });
 
   try {
+    runModel ??= await evalRunModel();
     const datasetSnapshots =
       await getDatasetToolServices().getDatasets(datasets);
     if (target.prepareQuestion) {
@@ -888,6 +991,7 @@ export async function runAssistantEvalCase(
       turnRecords,
       question,
       evalCase.agentTools,
+      usageSink,
     );
     target.configureContext?.(requestContext);
     const orientation = await target.orientation({
@@ -897,6 +1001,7 @@ export async function runAssistantEvalCase(
       vars,
     });
 
+    assistantCalled = true;
     const result = await runEvals({
       data: [
         {
@@ -922,6 +1027,9 @@ export async function runAssistantEvalCase(
         onStepFinish: (step: unknown) => captureStepRecords(step, turnRecords),
       },
       onItemComplete: ({ targetResult, scorerResults }) => {
+        // The agent's generate, every step included (`totalUsage`).
+        usageSink('assistant', targetResult);
+        assistantRecorded = true;
         answer = String(targetResult?.text ?? '');
         toolCalls = extractToolCalls(targetResult);
         rawToolCalls = extractRawToolCalls(targetResult).map((call) => ({
@@ -1030,16 +1138,13 @@ export async function runAssistantEvalCase(
         : toolCalls,
       question,
       history,
+      usageSink,
     );
     if (judgeCheck) checkResults.push(judgeCheck);
 
     const status = questionStatus(checkResults);
     return {
-      id: evalCase.id,
-      question,
-      ...(evalCase.category !== undefined
-        ? { category: evalCase.category }
-        : {}),
+      ...attemptFields(status),
       scores,
       checkResults,
       answer,
@@ -1047,14 +1152,17 @@ export async function runAssistantEvalCase(
       status,
       passed: status === 'passed',
       durationMs: Date.now() - startedAt,
+      usage,
+      costUsd: costUsdOf(usage),
     };
   } catch (err) {
+    // The generate threw before its result was recorded: a call whose
+    // tokens are unknown, never a free one (R219).
+    if (assistantCalled && !assistantRecorded) {
+      usageSink('assistant', undefined);
+    }
     return {
-      id: evalCase.id,
-      question,
-      ...(evalCase.category !== undefined
-        ? { category: evalCase.category }
-        : {}),
+      ...attemptFields('failed'),
       scores: {},
       checkResults: [],
       answer,
@@ -1063,6 +1171,8 @@ export async function runAssistantEvalCase(
       passed: false,
       error: err instanceof Error ? err.message : String(err),
       durationMs: Date.now() - startedAt,
+      usage,
+      costUsd: costUsdOf(usage),
     };
   } finally {
     await target.afterCase?.(datasets);
@@ -1088,55 +1198,4 @@ async function runCustomCheck(
     passed,
     reason,
   };
-}
-
-/**
- * Run every case sequentially against the given datasets, reporting each as it
- * lands. Sequential keeps the load on the datasource (and the model) to what a
- * single user session would produce.
- *
- * `sessions`, when provided, gets one throwaway session created up front and
- * deleted when every case has run (or the run throws) — shared across cases
- * because only the `visual-request` case needs it, so there is no benefit to
- * a fresh one per question.
- */
-export async function runAssistantEvals(
-  datasets: string[],
-  onCaseComplete?: (result: AssistantEvalCaseResult) => void,
-  caseIds?: string[],
-  sessions?: SessionsService,
-  knowledgeBlock?: string,
-  /** The agent and sets to run; the assistant's when omitted (agents.md 8.1). */
-  target: EvalTarget = ASSISTANT_EVAL_TARGET,
-  /** The run's judge option (R144); off unless the caller says otherwise. */
-  judge: Readonly<EvalJudgeSetting> = JUDGE_OFF,
-): Promise<AssistantEvalCaseResult[]> {
-  const datasetError = assistantEvalDatasetError(
-    datasets,
-    await getDatasetToolServices().getDatasets(datasets),
-    fixtureForCases(caseIds, target.sets),
-  );
-  if (datasetError) throw new Error(datasetError);
-  const evalSession = sessions
-    ? await createEvalSession(sessions, datasets, target.sessionAgentKey)
-    : undefined;
-  try {
-    const results: AssistantEvalCaseResult[] = [];
-    for (const evalCase of selectEvalCases(caseIds, target.sets)) {
-      const result = await runAssistantEvalCase(
-        evalCase,
-        datasets,
-        evalSession?.id,
-        knowledgeBlock,
-        target,
-        judge,
-      );
-      results.push(result);
-      onCaseComplete?.(result);
-    }
-    return results;
-  } finally {
-    await target.finish?.(datasets);
-    await cleanupEvalSession(sessions, evalSession);
-  }
 }

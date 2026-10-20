@@ -459,19 +459,19 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Response `200`: `{ sets: AgentEvalSet[] }`: the sets whose agent is `:key` (a set's `agentKey`, default `assistant`; [agents.md](agents.md) 8.1). Only `assistant` and `rfp` have sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, category: string, split: 'dev'|'held-out', checks: { id, name, description }[] }[] }`. The sets are those of [agents-evals](../capabilities/agents-evals/spec.md) R11: the assistant's, one per variant of the question bank files ([data-model.md](data-model.md) 4.9), and the RFP Builder's `rfp`. `category` is one of the eighteen of data-model 4.9, or `uncategorised` for a case with none (every `rfp` case), and `split` defaults to `dev` (agents-evals R150; added 2026-10-13, BA-184). A case's notes and reference queries are not part of the response, and `checks` lists the case's scorer checks only (not the result-set match or the judge).
 
 #### 36. `POST /agents/:key/evals/run`
-- Body: `{ datasourceId: string; caseIds?: string[]; judge?: 'off'|'on'|'categories'; judgeCategories?: string[] }`. `caseIds` omitted = all questions. `judge` omitted (or `null`) = `'off'`: no judge call, judge checks recorded as not scored ([agents-evals](../capabilities/agents-evals/spec.md) R144, R145). `judgeCategories` is read only with `judge: 'categories'`, where it is required and non-empty, each entry one of the eighteen categories of [data-model.md](data-model.md) 4.9; with `'off'` or `'on'` it is ignored. The UI sends `'off'` or `'on'` (R149).
+- Body: `{ datasourceId: string; caseIds?: string[]; judge?: 'off'|'on'|'categories'; judgeCategories?: string[]; repeats?: 1|3|5 }`. `caseIds` omitted = all questions. `judge` omitted (or `null`) = `'off'`: no judge call, judge checks recorded as not scored ([agents-evals](../capabilities/agents-evals/spec.md) R144, R145). `judgeCategories` is read only with `judge: 'categories'`, where it is required and non-empty, each entry one of the eighteen categories of [data-model.md](data-model.md) 4.9; with `'off'` or `'on'` it is ignored. The UI sends `'off'` or `'on'` (R149). `repeats` omitted (or `null`) = `1`: the attempts per question, the number `1`, `3` or `5` (R209, R210; added 2026-10-20, BA-242). The UI sends the value of its Repeats select (R214).
 - Success: `{ ok:true, message:"Eval run started", jobId }`. Returns immediately; the run is long-running (see [3.3](#33-eval-runs)).
-- Failures (Style A, `ok:false`), in the order of R19: `"Agent \"<key>\" has no evals to run"` (an agent with no sets: neither `assistant` nor `rfp`); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need); then the judge option: `"Unknown judge option \"<value>\""`; `"Pick at least one category to judge"` (`'categories'` with no or an empty `judgeCategories`); `"Unknown judge category \"<value>\". Known categories: <the eighteen, comma-separated>."`.
-- Side effects: persists an initial run record; spawns the run (one throwaway session is created for the run to host visual tools and deleted afterwards).
+- Failures (Style A, `ok:false`), in the order of R19: `"Agent \"<key>\" has no evals to run"` (an agent with no sets: neither `assistant` nor `rfp`); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need); then the judge option: `"Unknown judge option \"<value>\""`; `"Pick at least one category to judge"` (`'categories'` with no or an empty `judgeCategories`); `"Unknown judge category \"<value>\". Known categories: <the eighteen, comma-separated>."`; then the repeats: `"Repeats must be 1, 3 or 5 (got \"<value>\")"`, `<value>` a string as sent and anything else JSON-encoded (a string `"3"` is refused too).
+- Side effects: persists an initial run record (with `repeats`, the agent's `model` and `source: 'app'`, [data-model.md](data-model.md) 3.8); spawns the run (one throwaway session is created for the run to host visual tools and deleted afterwards).
 
 #### 37. `GET /agents/:key/evals/runs`
-- Response `200`: `{ runs: EvalRunView[] }`, newest first; in-flight runs reflect live in-memory state.
+- Response `200`: `{ runs: EvalRunView[] }`, newest first; in-flight runs reflect live in-memory state. Runs saved by the command line on the same data directory are listed too (`source: 'cli'`, agents-evals R223).
 
 #### 38. `GET /agents/:key/evals/runs/:jobId`
-- Response `200`: `{ ok:true, message:<status>, ...EvalRunView }`; unknown job: `{ ok:false, message:"Eval run \"<jobId>\" not found" }` (HTTP 200). `:key` is ignored by the lookup.
+- Response `200`: `{ ok:true, message:<status>, ...EvalRunView }`; unknown job: `{ ok:false, message:"Eval run \"<jobId>\" not found" }` (HTTP 200). `:key` is ignored by the lookup. While a question runs, `currentQuestion` and `currentAttempt` name it and its attempt; each finished result carries its `split`, its attempts (`passes`, `runs`, `flaky`, and `attempts` when `repeats` is above 1), its `usage` and its `costUsd`, and the run its `repeats`, `model`, `usage`, `costUsd`, `rates` and `source` (agents-evals R209 to R223). A saved response is one of the run files the improvement-loop tools read (R224).
 
 #### 39. `GET /agents/:key/evals/runs/:jobId/download`
-- Response `200`: `text/markdown; charset=utf-8`, `Content-Disposition: attachment; filename="eval-run-<agentKey>-<YYYY-MM-DD-HH-mm-ss>-<first 8 of jobId>.md"`. Body: the judge line, the By category and By criterion tables, summary, failures, traces, answers, and the regression comparison when present; the datasource is shown by name. Format: [agents-evals](../capabilities/agents-evals/spec.md) R38, R41 and R153.
+- Response `200`: `text/markdown; charset=utf-8`, `Content-Disposition: attachment; filename="eval-run-<agentKey>-<YYYY-MM-DD-HH-mm-ss>-<first 8 of jobId>.md"`. Body: the judge line, the repeats, dev and held-out, flaky, tokens and cost lines, the By category (with its Dev, Held-out, Flaky, Not scored and Total columns) and By criterion tables, summary (with a Split column), failures, traces with each question's split, attempts, tokens and cost, answers, and the regression comparison when present; the datasource is shown by name. Format: [agents-evals](../capabilities/agents-evals/spec.md) R38, R41, R153 and R218.
 - Errors (Style B): `404 "Eval run \"<jobId>\" not found"`.
 
 #### 40. `DELETE /agents/:key/evals/runs/:jobId`
@@ -506,40 +506,75 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 ```ts
 interface EvalRunView {
   jobId: string; agentKey: string; datasourceId: string;
-  datasets: string[];            // dataset names bound to the datasource
+  datasets: string[];            // dataset names bound to the datasource (the command line: the datasets it names)
   caseIds: string[]; totalCases: number;
   status: 'running' | 'completed' | 'failed';
   results: AssistantEvalCaseResult[];   // finished questions, in order
   currentQuestion?: string; error?: string;
+  currentAttempt?: number;              // the attempt of currentQuestion in flight, 1..repeats (R210)
   startedAt: string; finishedAt?: string;
   comparison?: { previousRunId: string; regressions: {id,question}[]; improvements: {id,question}[]; unchanged: {id,question}[] };
   judge: { mode: 'off' | 'on' | 'categories'; categories?: string[] };   // the run option (R144); { mode: 'on' } on runs saved before it
-  summary: EvalRunSummary;              // from the finished results, live while running (R148)
+  repeats: 1 | 3 | 5;                   // attempts per question (R209); 1 on runs saved before it
+  model?: string;                       // router id the evaluated agent ran on, e.g. 'openai/gpt-4o-mini' (R219)
+  usage?: ModelUsageEntry[];            // sum of the results' usage; absent: not recorded (runs saved before BA-242)
+  costUsd?: number | null;              // US dollars; null = not priced (R221); absent: not recorded
+  rates?: Record<string, ModelRate>;    // the rates the cost was computed with (R220)
+  source: 'app' | 'cli';                // where it was started (R223); 'app' on runs saved before it
+  summary: EvalRunSummary;              // from the finished results, live while running (R148, R213)
 }
 type EvalStatus = 'passed' | 'failed' | 'not-scored';
+interface EvalCheckResult {
+  id: string; description: string; score: number; passed: boolean; reason?: string;
+  status: EvalStatus;                                 // 'not-scored' only for a judge check the run did not call (R145, R146)
+  criterion?: string;                                 // D1…C4 (R146)
+}
+type EvalToolCall = { name: string; input?: string; output?: string; error?: string };   // JSON-encoded, truncated to ~2000 chars each
 interface AssistantEvalCaseResult {
   id: string; question: string;
   category?: string;                                  // the case's category; absent on runs saved before BA-184
+  split: 'dev' | 'held-out';                          // R215; from the question bank on runs saved before it, else 'dev'
   scores: Record<string, number>;                     // per scorer id, 0..1
-  checkResults: {
-    id: string; description: string; score: number; passed: boolean; reason?: string;
-    status: EvalStatus;                               // 'not-scored' only for a judge check the run did not call (R145, R146)
-    criterion?: string;                               // D1…C4 (R146)
-  }[];
+  checkResults: EvalCheckResult[];
   answer: string;
-  toolCalls: { name: string; input?: string; output?: string; error?: string }[];   // JSON-encoded, truncated to ~2000 chars each
-  status: EvalStatus;                                 // R147
+  toolCalls: EvalToolCall[];
+  status: EvalStatus;                                 // R147; over all attempts, pass^k (R211)
   passed: boolean;                                    // status === 'passed'
+  error?: string; durationMs: number;                 // with runs > 1, these and the fields above are the representative attempt's
+  passes: number; runs: number; flaky: boolean;       // attempts passed, attempts made (R211); 1 attempt on runs saved before
+  attempts?: EvalAttempt[];                           // only when runs > 1
+  usage?: ModelUsageEntry[];                          // sum over its attempts (R219)
+  costUsd?: number | null;                            // null = not priced (R221)
+}
+interface EvalAttempt {
+  attempt: number;                                    // 1-based
+  status: EvalStatus; passed: boolean;
+  scores: Record<string, number>; checkResults: EvalCheckResult[];
+  answer: string; toolCalls: EvalToolCall[];
   error?: string; durationMs: number;
+  usage: ModelUsageEntry[]; costUsd: number | null;
+}
+interface ModelUsageEntry {
+  agent: 'assistant' | 'sql-fixer' | 'designer' | 'judge';
+  model: string;                                      // without provider prefix, lower case: 'gpt-4o-mini'
+  inputTokens: number; cachedInputTokens: number;     // cached is part of input
+  outputTokens: number; reasoningTokens: number;      // reasoning is part of output
+  calls: number; unreportedCalls: number;             // calls with and without token counts
+}
+interface ModelRate { inputPerMillionUsd: number; cachedInputPerMillionUsd?: number; outputPerMillionUsd: number; source?: string; readOn?: string }
+interface EvalSplitSummary {
+  passed: number; failed: number; notScored: number; flaky: number; total: number;
+  interval?: { low: number; high: number };           // Wilson 95% of passed / (passed + failed), 0..1 (R212)
 }
 interface EvalRunSummary {
-  passed: number; failed: number; notScored: number;   // questions per status
-  byCategory: { category: string; passed: number; failed: number; notScored: number; total: number }[];
-  byCriterion: { criterion: string; passed: number; failed: number; total: number }[];   // scored checks with a criterion
+  passed: number; failed: number; notScored: number; flaky: number;   // questions per status; flaky ones count as failed
+  bySplit: { dev: EvalSplitSummary; heldOut: EvalSplitSummary };      // R213
+  byCategory: { category: string; passed: number; failed: number; notScored: number; flaky: number; total: number; dev: EvalSplitSummary; heldOut: EvalSplitSummary }[];
+  byCriterion: { criterion: string; passed: number; failed: number; total: number }[];   // scored checks with a criterion, over every attempt
 }
 ```
 
-Runs saved before 2026-10-13 (BA-184) are served with the defaults of [agents-evals](../capabilities/agents-evals/spec.md) R144, R147 and R148: `judge` `{ mode: 'on' }`, every `status` from its `passed` flag, no `category` (counted under `uncategorised`) and no `criterion`, and a `summary` computed on read. `status` and `summary` are always present on the wire.
+Runs saved before 2026-10-13 (BA-184) are served with the defaults of [agents-evals](../capabilities/agents-evals/spec.md) R144, R147 and R148: `judge` `{ mode: 'on' }`, every `status` from its `passed` flag, no `category` (counted under `uncategorised`) and no `criterion`, and a `summary` computed on read. `status` and `summary` are always present on the wire. Runs saved before 2026-10-20 (BA-242) are served with the defaults of [data-model.md](data-model.md) 3.8: `repeats` 1, `source` `'app'`, each result's `split` from the question bank (else `'dev'`) and `passes`, `runs` and `flaky` as one attempt, with no `usage`, `costUsd`, `model` or `rates`. `repeats`, `source`, every result's `split`, `passes`, `runs` and `flaky`, and the summary's `flaky` and `bySplit` are always present on the wire.
 
 ### 2.6.1 Skills
 
@@ -1003,8 +1038,8 @@ Pattern: **start, poll, then download**. Endpoints 46-48.
 
 Pattern: **start, poll, list, download, delete**. Endpoints 36-40.
 
-- One running run per agent (`conflictWith` surfaced as `ok:false` + `jobId`).
-- A run executes the selected questions sequentially against the datasets bound to the datasource. After every question the finished result is appended to `results` and the record is persisted (a crash mid-suite keeps finished questions). `currentQuestion` names the question in flight.
+- One running run per agent (`conflictWith` surfaced as `ok:false` + `jobId`), within one process: a command-line run on the same data directory is not seen (agents-evals R223).
+- A run executes the selected questions sequentially against the datasets bound to the datasource. With `repeats` k, each question runs k attempts back to back before the next question (R210). After every question (all of its attempts) the finished result is appended to `results` and the record is persisted (a crash mid-suite keeps finished questions). `currentQuestion` names the question in flight and `currentAttempt` its attempt.
 - Observed by polling `GET /agents/:key/evals/runs/:jobId` (the shipped UI polls every **1500 ms** until `status !== "running"`); the run history (`…/runs`) reads persisted records with live in-memory state overlaid for in-flight runs. Persisted runs survive restart; an interrupted run is not resumed and its stored `status` may stay `running` (G4).
 - On completion the run is compared with the most recent previous completed run for the same agent, datasource and datasets, and `comparison` (regressions, improvements, unchanged by case id) is attached; a comparison failure never fails the run.
 - Cannot delete a run while it is `running`.
@@ -1156,7 +1191,7 @@ The `Intellify API:` line carries the actual bound port of the embedded API (use
 | `APP_DATA_DIR` | database module, Mastra storage; set by CLI and Electron main | Directory for `app.sqlite`, `mastra.sqlite`, `observability.duckdb` and `workspaces/`. | database: `<cwd>/data`; Mastra storage: `<INIT_CWD or PWD or cwd>/data` |
 | `APP_SECRET` | crypto service; set by CLI and Electron main | Key material for encrypting API keys at rest (SHA-256 to an AES-256-GCM key). Missing: the crypto service reads `<APP_DATA_DIR>/.app-secret`, or generates it (32 random bytes hex, mode 0600) and logs where. Must stay stable across launches. | `<APP_DATA_DIR>/.app-secret` |
 | `WEB_ROOT` | `app-bootstrap.ts` | Directory holding the built web UI (`index.html`). | `<package>/public` |
-| `INIT_CWD`, `PWD` | Mastra storage | Launch directory used to place the fallback `data/` folder (Studio changes `cwd`). | process cwd |
+| `INIT_CWD`, `PWD` | Mastra storage; `INIT_CWD` also the eval command line | Launch directory used to place the fallback `data/` folder (Studio changes `cwd`). `INIT_CWD` (set by npm) is also the folder the eval command line reads a relative `EVAL_RUN_FILE` or `EVAL_RESULTS_FILE` against (R223). | process cwd |
 | `VISUAL_MODEL` | visual designer agent | Forces the designer model (router id `provider/model`). Unset: reasoning-family models are swapped for `openai/gpt-4.1-mini` and `nano` models upgraded to their `mini` sibling; others kept. | unset |
 | `OPENAI_API_KEY` | Mastra's env-bound model router (via model resolver) | Fallback model credential (`openai/gpt-4o-mini`) when no LLM settings are saved. | unset |
 | `WORLD_CUP_DB_PORT` | testing-data fixture registry | Port of the sample PostgreSQL server in the form prefill and compose stack. | `55432` |
@@ -1176,6 +1211,11 @@ The `Intellify API:` line carries the actual bound port of the embedded API (use
 | `EVAL_CASES` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated eval case ids to run instead of a whole set; all from one set's fixture. | none |
 | `EVAL_JUDGE` | `mastra/evals/run-assistant-evals.ts` | The run's judge option ([agents-evals](../capabilities/agents-evals/spec.md) R144, R154): `off`, `on` or `categories`. Any other value is refused before the backend boots. | `off` |
 | `EVAL_JUDGE_CATEGORIES` | the same script | With `EVAL_JUDGE=categories`, the categories to judge, comma-separated (blanks ignored), each one of the eighteen of [data-model.md](data-model.md) 4.9. Required and non-empty then; ignored otherwise. | unset |
+| `EVAL_REPEATS` | the same script | Attempts per question: `1`, `3` or `5` ([agents-evals](../capabilities/agents-evals/spec.md) R209, R222). Any other value is refused before the backend boots. | `1` |
+| `EVAL_SPLIT` | the same script | Runs only the selected questions of this split: `dev` or `held-out` (R222). Any other value is refused before the backend boots, and so is a selection it leaves empty. | unset (both) |
+| `EVAL_CATEGORY` | the same script | Runs only the selected questions of these categories, comma-separated (blanks ignored), each one of the eighteen of [data-model.md](data-model.md) 4.9 (R222). Refused like `EVAL_SPLIT`. | unset (all) |
+| `EVAL_RESULTS_FILE` | the same script | A path: the run's results, answers and tool calls included, are written there as a JSON array when the run ends (R224). A relative path is read against `INIT_CWD` when npm set it, else the working directory (R223). | unset |
+| `EVAL_RUN_FILE` | the same script | A path: the saved run record, as endpoint 38 returns it without `ok` and `message`, is written there as JSON when the run ends (R223, R224). A relative path is read against `INIT_CWD` when npm set it, else the working directory (R223). | unset |
 
 ### 6.2 CLI-only
 
@@ -1196,7 +1236,7 @@ The `Intellify API:` line carries the actual bound port of the embedded API (use
 
 ### 6.4 Developer scripts (not part of the shipped app)
 
-`BACKEND_URL` (default `http://127.0.0.1:3000`; the scripts call that backend's HTTP API directly, with no sign-in and no token), `REST_API_URL` or `WORLD_CUP_API_URL` (`http://127.0.0.1:55080`) and `REST_API_TOKEN` for `setup-fixture-rest.ts` and its wrapper `setup-worldcup-rest.ts`; the `REST_API_*` switches and `WORLD_CUP_API_PORT` (`55080`) for the sample REST server ([delivery.md](delivery.md) section 2, *The fixture REST API*); `WORLD_CUP_DB_HOST|PORT|DATABASE|USER|PASSWORD` (`127.0.0.1|55432|world_cup|world_cup|world_cup_dev`) for the dump script; `CHECK_TIMEOUT_MS` (`180000`), `CHECK_MODEL` (`gpt-4o-mini`), `CHECK_ARM`, `CHECK_TRIALS` for `check-answers.ts`. `npm run intellify-api` in `backend/` runs the Intellify RFP API standalone (`node dist/intellify-api/main.js`, after a build), configured only by the `INTELLIFY_*` variables of 6.1, with `INTELLIFY_API_KEY` required (2.16).
+`BACKEND_URL` (default `http://127.0.0.1:3000`; the scripts call that backend's HTTP API directly, with no sign-in and no token), `REST_API_URL` or `WORLD_CUP_API_URL` (`http://127.0.0.1:55080`) and `REST_API_TOKEN` for `setup-fixture-rest.ts` and its wrapper `setup-worldcup-rest.ts`; the `REST_API_*` switches and `WORLD_CUP_API_PORT` (`55080`) for the sample REST server ([delivery.md](delivery.md) section 2, *The fixture REST API*); `WORLD_CUP_DB_HOST|PORT|DATABASE|USER|PASSWORD` (`127.0.0.1|55432|world_cup|world_cup|world_cup_dev`) for the dump script; `CHECK_TIMEOUT_MS` (`180000`), `CHECK_MODEL` (`gpt-4o-mini`), `CHECK_ARM`, `CHECK_TRIALS` for `check-answers.ts`; `APP_DATA_DIR` as the data directory `eval:diff` and `eval:export-failures` read runs from when `--data-dir` is not given (default `data` in the backend folder; [agents-evals](../capabilities/agents-evals/spec.md) R225, R228). The improvement-loop tools take everything else as flags ([delivery.md](delivery.md) section 2), and read a relative path flag against npm's `INIT_CWD`, else the working directory (agents-evals, *Improvement loop tools*). `npm run intellify-api` in `backend/` runs the Intellify RFP API standalone (`node dist/intellify-api/main.js`, after a build), configured only by the `INTELLIFY_*` variables of 6.1, with `INTELLIFY_API_KEY` required (2.16).
 
 ### 6.5 Frontend build/runtime
 

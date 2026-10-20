@@ -171,17 +171,22 @@ describe('runs saved before BA-184 are read with defaults (R144, R147, R148)', (
         'failed',
       ]);
       expect(run?.results[1].checkResults[0].status).toBe('failed');
+      const counts = { passed: 1, failed: 1, notScored: 0, flaky: 0, total: 2 };
+      const both = { ...counts, interval: expect.any(Object) as object };
+      const none = { passed: 0, failed: 0, notScored: 0, flaky: 0, total: 0 };
       expect(run?.summary).toEqual({
         passed: 1,
         failed: 1,
         notScored: 0,
+        flaky: 0,
+        // Both cases are dev in the World Cup question bank.
+        bySplit: { dev: both, heldOut: none },
         byCategory: [
           {
             category: 'uncategorised',
-            passed: 1,
-            failed: 1,
-            notScored: 0,
-            total: 2,
+            ...counts,
+            dev: both,
+            heldOut: none,
           },
         ],
         byCriterion: [],
@@ -213,5 +218,119 @@ describe('runs saved before BA-184 are read with defaults (R144, R147, R148)', (
       'passed',
       'failed',
     ]);
+  });
+});
+
+describe('runs saved before BA-242 are read with defaults (data-model 3.8, R209, R215, R223)', () => {
+  const old = {
+    jobId: 'old',
+    agentKey: 'assistant',
+    datasourceId: 'wc',
+    datasets: ['World Cup'],
+    caseIds: ['champion-2022', 'shot-conversion-2022', 'gone-from-the-bank'],
+    status: 'completed',
+    totalCases: 3,
+    startedAt: '2026-10-15T00:00:00.000Z',
+    judge: { mode: 'off' },
+    results: [
+      'champion-2022',
+      'shot-conversion-2022',
+      'gone-from-the-bank',
+    ].map((id, index) => ({
+      id,
+      question: `question ${id}`,
+      category: 'lookup',
+      scores: {},
+      checkResults: [],
+      answer: '',
+      toolCalls: [],
+      status: index === 1 ? 'failed' : 'passed',
+      passed: index !== 1,
+      durationMs: 1,
+    })),
+  };
+  const repository = new EvalRunsRepository({
+    findOne: jest.fn().mockResolvedValue(old),
+    find: jest.fn().mockResolvedValue([old]),
+  } as unknown as DocStore<EvalRunView>);
+
+  it('reads one attempt per question, the source app and each split from the question bank, else dev', async () => {
+    for (const run of [
+      await repository.get('old'),
+      (await repository.list('assistant'))[0],
+    ]) {
+      expect(run).toMatchObject({ repeats: 1, source: 'app' });
+      expect(
+        run?.results.map(({ id, split, passes, runs, flaky }) => ({
+          id,
+          split,
+          passes,
+          runs,
+          flaky,
+        })),
+      ).toEqual([
+        { id: 'champion-2022', split: 'dev', passes: 1, runs: 1, flaky: false },
+        {
+          id: 'shot-conversion-2022',
+          split: 'held-out',
+          passes: 0,
+          runs: 1,
+          flaky: false,
+        },
+        {
+          id: 'gone-from-the-bank',
+          split: 'dev',
+          passes: 1,
+          runs: 1,
+          flaky: false,
+        },
+      ]);
+      // No usage was recorded, so none is made up; the category stays.
+      expect(run).not.toHaveProperty('usage');
+      expect(run).not.toHaveProperty('costUsd');
+      expect(run?.results[0].category).toBe('lookup');
+      expect(run?.summary.bySplit.dev).toMatchObject({ passed: 2, total: 2 });
+      expect(run?.summary.bySplit.heldOut).toMatchObject({
+        failed: 1,
+        total: 1,
+      });
+    }
+  });
+
+  it('keeps what a newer run stored', async () => {
+    const current = {
+      ...old,
+      repeats: 3,
+      source: 'cli',
+      usage: [],
+      costUsd: 0,
+      results: [
+        {
+          ...old.results[0],
+          split: 'held-out',
+          passes: 2,
+          runs: 3,
+          flaky: true,
+          status: 'failed',
+          passed: false,
+        },
+      ],
+    };
+    const read = await new EvalRunsRepository({
+      findOne: jest.fn().mockResolvedValue(current),
+    } as unknown as DocStore<EvalRunView>).get('current');
+    expect(read).toMatchObject({
+      repeats: 3,
+      source: 'cli',
+      usage: [],
+      costUsd: 0,
+    });
+    expect(read?.results[0]).toMatchObject({
+      split: 'held-out',
+      passes: 2,
+      runs: 3,
+      flaky: true,
+    });
+    expect(read?.summary.flaky).toBe(1);
   });
 });

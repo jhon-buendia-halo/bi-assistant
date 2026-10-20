@@ -1361,6 +1361,7 @@ describe('SessionsService SQL self-correction', () => {
     return {
       run: (sql: string) =>
         installed.runReadOnlySql('ds-1', sql, 100, ['claims']),
+      installed,
       fixer,
     };
   }
@@ -1392,6 +1393,52 @@ describe('SessionsService SQL self-correction', () => {
         correctedSql: 'SELECT count(claim_id) AS n FROM main.health.claims',
         note: expect.stringContaining('auto-corrected') as string,
       }),
+    );
+  });
+
+  it('reports each fixer call to the usage sink, with the raw result and the model', async () => {
+    (resolveAgentModel as jest.Mock).mockResolvedValue('openai/gpt-4o-mini');
+    const runs = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('Column a cannot be resolved'))
+      .mockRejectedValueOnce(new Error('Column b cannot be resolved'))
+      .mockResolvedValueOnce({ columns: ['n'], rows: [{ n: 1 }] });
+    const { installed, fixer } = await bridge({
+      runs,
+      fixerReplies: [{ sql: 'SELECT 1 AS n' }, { sql: 'SELECT 2 AS n' }],
+    });
+    const sink = jest.fn();
+
+    await installed.runReadOnlySql('ds-1', 'SELECT bad', 100, ['claims'], sink);
+
+    expect(sink).toHaveBeenCalledTimes(2);
+    expect(sink).toHaveBeenNthCalledWith(
+      1,
+      'sql-fixer',
+      { object: { sql: 'SELECT 1 AS n' } },
+      'openai/gpt-4o-mini',
+    );
+    expect(sink).toHaveBeenNthCalledWith(
+      2,
+      'sql-fixer',
+      { object: { sql: 'SELECT 2 AS n' } },
+      'openai/gpt-4o-mini',
+    );
+    expect(fixer.generate).toHaveBeenCalledTimes(2);
+  });
+
+  it('repairs the same without a usage sink', async () => {
+    const runs = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('Column a cannot be resolved'))
+      .mockResolvedValueOnce({ columns: ['n'], rows: [{ n: 1 }] });
+    const { run } = await bridge({
+      runs,
+      fixerReplies: [{ sql: 'SELECT 1 AS n' }],
+    });
+
+    await expect(run('SELECT bad')).resolves.toEqual(
+      expect.objectContaining({ correctedSql: 'SELECT 1 AS n' }),
     );
   });
 
@@ -1599,6 +1646,7 @@ describe('SessionsService visual tool bridge (turn records)', () => {
       undefined,
       'chart it',
       turnRecords,
+      undefined,
     );
   });
 
@@ -1620,7 +1668,31 @@ describe('SessionsService visual tool bridge (turn records)', () => {
       'visual-1',
       'break it down further',
       turnRecords,
+      undefined,
     );
+  });
+
+  it("hands an eval attempt's usage sink on to the designer", async () => {
+    const { installed, visuals } = await bridge();
+    const sink = jest.fn();
+
+    await installed.createVisual(
+      'session-1',
+      undefined,
+      'chart it',
+      undefined,
+      sink,
+    );
+    await installed.updateVisual(
+      'session-1',
+      'visual-1',
+      'tweak it',
+      undefined,
+      sink,
+    );
+
+    expect((visuals.create.mock.calls as unknown[][])[0][4]).toBe(sink);
+    expect((visuals.update.mock.calls as unknown[][])[0][4]).toBe(sink);
   });
 
   it('passes nothing through for a tool call outside a turn (REST tailoring parity)', async () => {
@@ -1634,11 +1706,13 @@ describe('SessionsService visual tool bridge (turn records)', () => {
       undefined,
       'chart it',
       undefined,
+      undefined,
     );
     expect(visuals.update).toHaveBeenCalledWith(
       expect.anything(),
       'visual-1',
       'tweak it',
+      undefined,
       undefined,
     );
   });

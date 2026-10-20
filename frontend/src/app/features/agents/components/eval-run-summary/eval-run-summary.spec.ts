@@ -1,14 +1,57 @@
 import { TestBed } from '@angular/core/testing';
-import { EvalRunSummary } from '../../services/agents-api.service';
+import {
+  EvalRunSummary,
+  EvalSplitSummary,
+} from '../../services/agents-api.service';
 import { EvalRunSummaryTables } from './eval-run-summary';
+
+const NONE: EvalSplitSummary = {
+  passed: 0,
+  failed: 0,
+  notScored: 0,
+  flaky: 0,
+  total: 0,
+};
 
 const SUMMARY: EvalRunSummary = {
   passed: 1,
   failed: 1,
   notScored: 1,
   byCategory: [
-    { category: 'lookup', passed: 1, failed: 0, notScored: 0, total: 1 },
-    { category: 'out-of-scope', passed: 0, failed: 1, notScored: 1, total: 2 },
+    {
+      category: 'lookup',
+      passed: 1,
+      failed: 0,
+      notScored: 0,
+      flaky: 0,
+      total: 1,
+      dev: {
+        passed: 1,
+        failed: 0,
+        notScored: 0,
+        flaky: 0,
+        total: 1,
+        interval: { low: 0.21, high: 1 },
+      },
+      heldOut: NONE,
+    },
+    {
+      category: 'out-of-scope',
+      passed: 0,
+      failed: 1,
+      notScored: 1,
+      flaky: 1,
+      total: 2,
+      dev: NONE,
+      heldOut: {
+        passed: 0,
+        failed: 1,
+        notScored: 1,
+        flaky: 1,
+        total: 2,
+        interval: { low: 0, high: 0.79 },
+      },
+    },
   ],
   byCriterion: [
     { criterion: 'D3', passed: 4, failed: 0, total: 4 },
@@ -49,7 +92,7 @@ describe('EvalRunSummaryTables', () => {
       [...tables[0].querySelectorAll('thead th[scope="col"]')].map((th) =>
         th.textContent?.trim(),
       ),
-    ).toEqual(['Category', 'Passed', 'Failed', 'Not scored', 'Total']);
+    ).toEqual(['Category', 'Dev', 'Held-out', 'Flaky', 'Not scored', 'Total']);
     expect(
       [...tables[1].querySelectorAll('thead th[scope="col"]')].map((th) =>
         th.textContent?.trim(),
@@ -57,7 +100,7 @@ describe('EvalRunSummaryTables', () => {
     ).toEqual(['Criterion', 'Passed', 'Failed', 'Total']);
   });
 
-  it('gives each category and criterion a row of counts', async () => {
+  it('gives each category and criterion a row of cells', async () => {
     const el = await render(SUMMARY);
     expect(
       cells(
@@ -65,7 +108,12 @@ describe('EvalRunSummaryTables', () => {
           '[data-testid="eval-run-summary-category-out-of-scope"]',
         ),
       ),
-    ).toEqual(['out-of-scope', '0', '1', '1', '2']);
+    ).toEqual(['out-of-scope', '—', '0/1 (0–79%)', '1', '1', '2']);
+    expect(
+      cells(
+        el.querySelector('[data-testid="eval-run-summary-category-lookup"]'),
+      ),
+    ).toEqual(['lookup', '1/1 (21–100%)', '—', '0', '0', '1']);
     expect(
       cells(el.querySelector('[data-testid="eval-run-summary-criterion-G2"]')),
     ).toEqual(['G2', '2', '1', '3']);
@@ -74,6 +122,18 @@ describe('EvalRunSummaryTables', () => {
         '[data-testid="eval-run-summary-category-lookup"] th[scope="row"]',
       ),
     ).not.toBeNull();
+  });
+
+  it('reads a category without split counts as dashes and no flaky', async () => {
+    const el = await render({
+      ...SUMMARY,
+      byCategory: [
+        { category: 'old', passed: 1, failed: 0, notScored: 0, total: 1 },
+      ],
+    });
+    expect(
+      cells(el.querySelector('[data-testid="eval-run-summary-category-old"]')),
+    ).toEqual(['old', '—', '—', '0', '0', '1']);
   });
 
   it('leaves out a table with no rows', async () => {

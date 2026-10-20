@@ -8,7 +8,19 @@ import {
   EVAL_STATUS_LABELS,
   checkStatus,
   evalRunSummary,
+  formatCost,
+  resultCostLabel,
+  resultFlaky,
+  resultPasses,
+  resultRuns,
+  resultSplit,
   resultStatus,
+  runCost,
+  runFlakyCount,
+  runRepeats,
+  splitCell,
+  splitLine,
+  usageLabel,
   runCounts,
   runHeadline,
   runVerdict,
@@ -161,5 +173,154 @@ describe('evalRunSummary', () => {
 
   it('shows nothing when a run carries no summary', () => {
     expect(evalRunSummary(run({ results: [result()] }))).toBeNull();
+  });
+});
+
+describe('repeats, split and cost helpers', () => {
+  const none = { passed: 0, failed: 0, notScored: 0, flaky: 0, total: 0 };
+
+  it('reads a run saved before repeats as one attempt', () => {
+    expect(runRepeats(run())).toBe(1);
+    expect(runRepeats(run({ repeats: 3 }))).toBe(3);
+    expect(resultRuns(result())).toBe(1);
+    expect(resultPasses(result())).toBe(1);
+    expect(resultPasses(result({ passed: false, status: 'failed' }))).toBe(0);
+    expect(resultPasses(result({ passes: 2, runs: 3 }))).toBe(2);
+    expect(resultFlaky(result())).toBeFalse();
+    expect(resultSplit(result())).toBe('dev');
+    expect(resultSplit(result({ split: 'held-out' }))).toBe('held-out');
+  });
+
+  it('counts flaky questions from the summary, else the results', () => {
+    expect(
+      runFlakyCount(
+        run({
+          results: [result({ flaky: true }), result({ id: 'b' })],
+        }),
+      ),
+    ).toBe(1);
+    expect(
+      runFlakyCount(
+        run({
+          results: [],
+          summary: {
+            passed: 0,
+            failed: 0,
+            notScored: 0,
+            flaky: 4,
+            byCategory: [],
+            byCriterion: [],
+          },
+        }),
+      ),
+    ).toBe(4);
+  });
+
+  it('prices a run to four decimals, or says Not priced', () => {
+    expect(formatCost(0.5)).toBe('$0.5000');
+    expect(runCost(run())).toBeNull();
+    expect(runCost(run({ costUsd: 0.01234 }))).toEqual({
+      label: '$0.0123',
+      priced: true,
+      title: null,
+    });
+    const usage = (model: string) => ({
+      agent: 'assistant' as const,
+      model,
+      inputTokens: 1,
+      cachedInputTokens: 0,
+      outputTokens: 1,
+      reasoningTokens: 0,
+      calls: 1,
+      unreportedCalls: 0,
+    });
+    expect(
+      runCost(
+        run({
+          costUsd: null,
+          usage: [usage('gpt-4o-mini'), usage('acme-1')],
+          rates: {
+            'gpt-4o-mini': { inputPerMillionUsd: 1, outputPerMillionUsd: 2 },
+          },
+        }),
+      ),
+    ).toEqual({
+      label: 'Not priced',
+      priced: false,
+      title: 'No price for acme-1',
+    });
+    expect(runCost(run({ costUsd: null }))?.title).toBeNull();
+    expect(resultCostLabel(result())).toBeNull();
+    expect(resultCostLabel(result({ costUsd: null }))).toBe('Not priced');
+    expect(resultCostLabel(result({ costUsd: 0.002 }))).toBe('$0.0020');
+  });
+
+  it('formats a split as passed/scored with its interval, or a dash', () => {
+    expect(
+      splitCell({
+        passed: 20,
+        failed: 5,
+        notScored: 2,
+        flaky: 0,
+        total: 27,
+        interval: { low: 0.609, high: 0.911 },
+      }),
+    ).toBe('20/25 (61–91%)');
+    expect(splitCell({ ...none, notScored: 1, total: 1 })).toBe('—');
+    expect(splitCell(undefined)).toBe('—');
+  });
+
+  it('writes the split line, with — for a side with nothing scored', () => {
+    const base = {
+      passed: 0,
+      failed: 0,
+      notScored: 0,
+      byCategory: [],
+      byCriterion: [],
+    };
+    expect(
+      splitLine({
+        ...base,
+        bySplit: {
+          dev: {
+            passed: 20,
+            failed: 5,
+            notScored: 0,
+            flaky: 0,
+            total: 25,
+            interval: { low: 0.61, high: 0.91 },
+          },
+          heldOut: none,
+        },
+      }),
+    ).toBe('Dev 20/25 (61–91%) · Held-out —');
+    expect(splitLine(base)).toBeNull();
+  });
+
+  it('labels token use, leaving out zero cached and reasoning parts', () => {
+    const entry = {
+      agent: 'assistant' as const,
+      model: 'gpt-4o-mini',
+      inputTokens: 12345,
+      cachedInputTokens: 0,
+      outputTokens: 678,
+      reasoningTokens: 0,
+      calls: 2,
+      unreportedCalls: 0,
+    };
+    expect(usageLabel(entry)).toBe('12,345 in · 678 out');
+    expect(
+      usageLabel({
+        ...entry,
+        cachedInputTokens: 1000,
+        reasoningTokens: 50,
+        unreportedCalls: 1,
+      }),
+    ).toBe(
+      '12,345 in · 1,000 cached · 678 out · 50 reasoning · 1 call reported no usage',
+    );
+    expect(usageLabel({ ...entry, unreportedCalls: 2 })).toContain(
+      '2 calls reported no usage',
+    );
   });
 });

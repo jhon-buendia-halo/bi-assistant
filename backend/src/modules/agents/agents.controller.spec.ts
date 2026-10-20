@@ -29,6 +29,7 @@ describe('AgentsController POST /agents/:key/evals/run (api.md 36)', () => {
     expect(start).toHaveBeenCalledWith('assistant', 'wc', ['champion-2022'], {
       judge: 'categories',
       judgeCategories: ['ambiguous'],
+      repeats: undefined,
     });
     expect(answer).toEqual({
       ok: true,
@@ -43,6 +44,33 @@ describe('AgentsController POST /agents/:key/evals/run (api.md 36)', () => {
     expect(start).toHaveBeenCalledWith('assistant', 'wc', undefined, {
       judge: undefined,
       judgeCategories: undefined,
+      repeats: undefined,
+    });
+  });
+
+  it('forwards the repeats as sent, for the service to check (R209)', async () => {
+    const start = jest.fn().mockResolvedValue({ jobId: 'job-1' });
+    await build(start).runEvals('assistant', {
+      datasourceId: 'wc',
+      repeats: 3,
+    });
+    expect(start).toHaveBeenCalledWith(
+      'assistant',
+      'wc',
+      undefined,
+      expect.objectContaining({ repeats: 3 }),
+    );
+  });
+
+  it('answers a refused repeats value in Style A', async () => {
+    const start = jest
+      .fn()
+      .mockResolvedValue({ error: 'Repeats must be 1, 3 or 5 (got "2")' });
+    await expect(
+      build(start).runEvals('assistant', { datasourceId: 'wc', repeats: 2 }),
+    ).resolves.toEqual({
+      ok: false,
+      message: 'Repeats must be 1, 3 or 5 (got "2")',
     });
   });
 
@@ -59,5 +87,47 @@ describe('AgentsController POST /agents/:key/evals/run (api.md 36)', () => {
       ok: false,
       message: 'Unknown judge option "sometimes"',
     });
+  });
+});
+
+describe('AgentsController GET /agents/:key/evals/runs/:jobId/download (api.md 39)', () => {
+  it('notes in the report that the compared run used other repeats (R218)', async () => {
+    const run = {
+      jobId: 'job-12345678',
+      agentKey: 'assistant',
+      datasourceId: 'wc',
+      datasets: ['World Cup'],
+      caseIds: [],
+      status: 'completed',
+      results: [],
+      totalCases: 0,
+      startedAt: '2026-10-20T10:00:00.000Z',
+      judge: { mode: 'off' },
+      repeats: 3,
+      source: 'app',
+      comparison: {
+        previousRunId: 'job-0',
+        regressions: [],
+        improvements: [],
+        unchanged: [],
+      },
+    };
+    const evalRuns = {
+      status: jest.fn().mockResolvedValue(run),
+      datasourceName: jest.fn().mockResolvedValue('World Cup PostgreSQL'),
+      comparedRunRepeats: jest.fn().mockResolvedValue(1),
+    };
+    const controller = new AgentsController(
+      {} as AgentsService,
+      evalRuns as unknown as EvalRunsService,
+      {} as AgentPromptsService,
+    );
+    const res = { setHeader: jest.fn(), send: jest.fn() };
+    await controller.evalRunDownload('job-12345678', res as never);
+    expect(evalRuns.comparedRunRepeats).toHaveBeenCalledWith(run);
+    const markdown = String((res.send.mock.calls[0] as [string])[0]);
+    expect(markdown).toContain('Repeats: 3');
+    expect(markdown).toContain('Note: the previous run used Repeats 1.');
+    expect(markdown).toContain('- **Datasource:** World Cup PostgreSQL');
   });
 });

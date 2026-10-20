@@ -3,10 +3,12 @@
  * environment, so a bad selection fails before the backend boots and before
  * any model call: a full run costs money, so there is no default.
  */
+import { EVAL_CATEGORIES, EVAL_SPLITS } from './eval-set-files';
 
 interface EvalSetIds {
   id: string;
-  cases: { id: string }[];
+  /** A case defined in code (the RFP Builder's) has no split or category. */
+  cases: { id: string; split?: string; category?: string }[];
 }
 
 export type CliEvalSelection = { caseIds: string[] } | { error: string };
@@ -44,5 +46,56 @@ export function selectCliEvalCases(
   }
   return {
     error: `Set EVAL_SET to one question set (${known}) or EVAL_CASES to comma-separated case ids`,
+  };
+}
+
+/**
+ * Narrow a selection to `EVAL_SPLIT` (`dev` or `held-out`) and the
+ * categories of `EVAL_CATEGORY` (comma-separated, blanks ignored), each
+ * unset or blank for no filter (agents-evals R222). A case with no split is
+ * `dev`; a case with no category matches no category. Refuses an unknown
+ * split, an unknown category, and a filter that leaves no question.
+ */
+export function narrowCliEvalCases(
+  env: Readonly<Record<string, string | undefined>>,
+  sets: readonly EvalSetIds[],
+  caseIds: readonly string[],
+): CliEvalSelection {
+  const split = env['EVAL_SPLIT']?.trim() ?? '';
+  if (split && !(EVAL_SPLITS as readonly string[]).includes(split)) {
+    return { error: `Unknown EVAL_SPLIT "${split}"; use dev or held-out` };
+  }
+  const categories = list(env['EVAL_CATEGORY']);
+  const unknown = categories.find(
+    (category) => !(EVAL_CATEGORIES as readonly string[]).includes(category),
+  );
+  if (unknown !== undefined) {
+    return {
+      error: `Unknown EVAL_CATEGORY "${unknown}". Known categories: ${EVAL_CATEGORIES.join(', ')}.`,
+    };
+  }
+  if (!split && categories.length === 0) return { caseIds: [...caseIds] };
+
+  const cases = new Map(
+    sets.flatMap((set) => set.cases).map((evalCase) => [evalCase.id, evalCase]),
+  );
+  const kept = caseIds.filter((id) => {
+    const evalCase = cases.get(id);
+    return (
+      (!split || (evalCase?.split ?? 'dev') === split) &&
+      (categories.length === 0 ||
+        (evalCase?.category !== undefined &&
+          categories.includes(evalCase.category)))
+    );
+  });
+  if (kept.length > 0) return { caseIds: kept };
+
+  const setId = env['EVAL_SET']?.trim();
+  const filters = [
+    ...(split ? [`EVAL_SPLIT=${split}`] : []),
+    ...(categories.length ? [`EVAL_CATEGORY=${categories.join(',')}`] : []),
+  ];
+  return {
+    error: `No question of ${setId ? `set "${setId}"` : 'the listed cases'} matches ${filters.join(' ')}`,
   };
 }

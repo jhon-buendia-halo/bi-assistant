@@ -2,6 +2,7 @@ import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { getDatasetToolServices } from '../tool-services';
 import type { DatasetToolTurnRecord } from '../tool-services';
+import { usageSinkFrom } from '../usage-sink';
 
 /** requestContext keys for the visual tools. */
 export const SESSION_ID_CONTEXT_KEY = 'session-id';
@@ -74,6 +75,7 @@ export const createVisualTool = createTool({
         sourceMessageAt,
         steer,
         turnRecords,
+        usageSinkFrom(requestContext),
       );
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
@@ -116,6 +118,7 @@ export const updateVisualTool = createTool({
         target,
         instruction,
         turnRecords,
+        usageSinkFrom(requestContext),
       );
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };

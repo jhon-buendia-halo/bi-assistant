@@ -51,6 +51,7 @@ const WORLD_CUP: AgentEvalSet = {
       question: 'How many goals did Pelé score in the 1970 World Cup?',
       intent: 'Says it cannot answer.',
       category: 'out-of-scope',
+      split: 'held-out',
       checks: [
         {
           id: 'llm-judge',
@@ -224,6 +225,7 @@ describe('AgentDetail evals', () => {
       'ds-1',
       ['champion-2022', 'out-of-scope', 'no-category'],
       'off',
+      1,
     );
   });
 
@@ -235,6 +237,202 @@ describe('AgentDetail evals', () => {
 
     byTestId('eval-run')!.click();
     expect(api.startEvalRun.calls.mostRecent().args[3]).toBe('on');
+  });
+
+  it('offers a labelled Repeats select reading 1, with 1, 3 and 5', () => {
+    const select = byTestId('eval-repeats') as HTMLSelectElement;
+    expect(select.value).toBe('1');
+    expect([...select.options].map((o) => [o.value, o.text.trim()])).toEqual([
+      ['1', '1'],
+      ['3', '3'],
+      ['5', '5'],
+    ]);
+    const label = el.querySelector<HTMLLabelElement>(
+      'label[for="eval-repeats"]',
+    );
+    expect(label?.textContent?.trim()).toBe('Repeats');
+  });
+
+  it('sends the repeats with the run and keeps them across sets', () => {
+    const select = byTestId('eval-repeats') as HTMLSelectElement;
+    select.value = '3';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    fixture.componentInstance.selectSet('world-cup');
+    fixture.componentInstance.selectSet('world-cup');
+    fixture.detectChanges();
+    expect((byTestId('eval-repeats') as HTMLSelectElement).value).toBe('3');
+
+    byTestId('eval-run')!.click();
+    expect(api.startEvalRun.calls.mostRecent().args[4]).toBe(3);
+  });
+
+  it('disables Repeats while a run is in flight and shows its attempt', () => {
+    api.getEvalRun.and.returnValue(
+      of({
+        ok: true,
+        message: '',
+        ...FINISHED_RUN,
+        status: 'running',
+        repeats: 3,
+        currentAttempt: 2,
+        results: [],
+      }),
+    );
+    const select = byTestId('eval-repeats') as HTMLSelectElement;
+    select.value = '3';
+    select.dispatchEvent(new Event('change'));
+    byTestId('eval-run')!.click();
+    fixture.detectChanges();
+
+    expect((byTestId('eval-repeats') as HTMLSelectElement).disabled).toBeTrue();
+    expect(el.textContent).toContain('· attempt 2/3');
+    fixture.destroy();
+  });
+
+  it('marks a held-out question with a chip, and a dev one with none', () => {
+    expect(byTestId('eval-split-out-of-scope')?.textContent?.trim()).toBe(
+      'held-out',
+    );
+    expect(byTestId('eval-split-champion-2022')).toBeNull();
+    expect(byTestId('eval-split-no-category')).toBeNull();
+  });
+
+  it('shows no repeat, flaky or cost on a run saved before them', () => {
+    fixture.componentInstance.selectEvalTab('runs');
+    fixture.detectChanges();
+    expect(byTestId('eval-run-repeats-job-1')).toBeNull();
+    expect(byTestId('eval-run-flaky-job-1')).toBeNull();
+    expect(byTestId('eval-run-cost-job-1')).toBeNull();
+  });
+
+  it('shows repeats, flaky, cost, the split line and held-out chips', () => {
+    const attempt = (n: number, passed: boolean) => ({
+      attempt: n,
+      status: passed ? ('passed' as const) : ('failed' as const),
+      passed,
+      scores: {},
+      checkResults: [],
+      answer: '',
+      toolCalls: [],
+      durationMs: 5,
+      usage: [],
+      costUsd: 0.001,
+    });
+    const run: EvalRunView = {
+      ...FINISHED_RUN,
+      repeats: 3,
+      costUsd: 0.0123,
+      results: [
+        result({
+          id: 'out-of-scope',
+          split: 'held-out',
+          status: 'failed',
+          flaky: true,
+          passes: 2,
+          runs: 3,
+          attempts: [attempt(1, true), attempt(2, true), attempt(3, false)],
+        }),
+      ],
+      summary: {
+        passed: 0,
+        failed: 1,
+        notScored: 0,
+        flaky: 1,
+        bySplit: {
+          dev: { passed: 0, failed: 0, notScored: 0, flaky: 0, total: 0 },
+          heldOut: {
+            passed: 0,
+            failed: 1,
+            notScored: 0,
+            flaky: 1,
+            total: 1,
+            interval: { low: 0, high: 0.79 },
+          },
+        },
+        byCategory: [
+          {
+            category: 'out-of-scope',
+            passed: 0,
+            failed: 1,
+            notScored: 0,
+            flaky: 1,
+            total: 1,
+            dev: { passed: 0, failed: 0, notScored: 0, flaky: 0, total: 0 },
+            heldOut: {
+              passed: 0,
+              failed: 1,
+              notScored: 0,
+              flaky: 1,
+              total: 1,
+              interval: { low: 0, high: 0.79 },
+            },
+          },
+        ],
+        byCriterion: [],
+      },
+    };
+    api.listEvalRuns.and.returnValue(of({ runs: [run] }));
+    fixture.componentInstance.selectEvalTab('runs');
+    fixture.detectChanges();
+
+    expect(byTestId('eval-run-repeats-job-1')?.textContent?.trim()).toBe(
+      'Repeat 3',
+    );
+    expect(byTestId('eval-run-flaky-job-1')?.textContent?.trim()).toBe(
+      '1 flaky',
+    );
+    expect(byTestId('eval-run-cost-job-1')?.textContent?.trim()).toBe(
+      '$0.0123',
+    );
+
+    byTestId('eval-run-job-1')!
+      .querySelector<HTMLButtonElement>('[aria-expanded]')!
+      .click();
+    fixture.detectChanges();
+
+    expect(byTestId('eval-run-splits-job-1')?.textContent?.trim()).toBe(
+      'Dev — · Held-out 0/1 (0–79%)',
+    );
+    expect(
+      [
+        ...byTestId('eval-run-summary-category-out-of-scope')!.querySelectorAll(
+          'th, td',
+        ),
+      ].map((c) => c.textContent?.trim()),
+    ).toEqual(['out-of-scope', '—', '0/1 (0–79%)', '1', '0', '1']);
+    expect(
+      byTestId('eval-run-result-split-job-1-out-of-scope')?.textContent?.trim(),
+    ).toBe('held-out');
+    expect(
+      byTestId('eval-run-result-job-1-out-of-scope')?.textContent,
+    ).toContain('2/3');
+  });
+
+  it('says Not priced, with the models, on an unpriced run', () => {
+    const run: EvalRunView = {
+      ...FINISHED_RUN,
+      costUsd: null,
+      usage: [
+        {
+          agent: 'assistant',
+          model: 'acme-1',
+          inputTokens: 10,
+          cachedInputTokens: 0,
+          outputTokens: 5,
+          reasoningTokens: 0,
+          calls: 1,
+          unreportedCalls: 0,
+        },
+      ],
+    };
+    api.listEvalRuns.and.returnValue(of({ runs: [run] }));
+    fixture.componentInstance.selectEvalTab('runs');
+    fixture.detectChanges();
+    const cost = byTestId('eval-run-cost-job-1')!;
+    expect(cost.textContent?.trim()).toBe('Not priced');
+    expect(cost.getAttribute('title')).toBe('No price for acme-1');
   });
 
   it('shows a not-scored question and check as "Not scored"', () => {

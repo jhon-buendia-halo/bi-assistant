@@ -11,8 +11,14 @@ import {
 import { EvalSelectionService } from '../../services/eval-selection.service';
 import {
   EVAL_STATUS_LABELS,
+  USAGE_AGENT_LABELS,
   checkStatus,
+  resultCostLabel,
+  resultPasses,
+  resultRuns,
+  resultSplit,
   resultStatus,
+  usageLabel,
 } from '../../services/eval-run.util';
 
 @Component({
@@ -31,6 +37,9 @@ export class EvalTrace {
 
   readonly statusLabels = EVAL_STATUS_LABELS;
   readonly checkStatus = checkStatus;
+  readonly agentLabels = USAGE_AGENT_LABELS;
+  readonly usageLabel = usageLabel;
+  readonly resultCostLabel = resultCostLabel;
 
   private readonly selectionService = inject(EvalSelectionService);
 
@@ -41,6 +50,34 @@ export class EvalTrace {
   readonly status = computed(() => {
     const result = this.result();
     return result ? resultStatus(result) : null;
+  });
+
+  /** Dev or Held-out, which half of its set the question belongs to. */
+  readonly splitLabel = computed(() => {
+    const result = this.result();
+    if (!result) return null;
+    return resultSplit(result) === 'held-out' ? 'Held-out' : 'Dev';
+  });
+
+  /** Attempts made at the question (one on a record from before repeats). */
+  readonly attemptCount = computed(() => {
+    const result = this.result();
+    return result ? resultRuns(result) : 1;
+  });
+
+  readonly attemptsPassed = computed(() => {
+    const result = this.result();
+    return result ? resultPasses(result) : 0;
+  });
+
+  /**
+   * The attempt whose checks, steps and answer the panel shows: the first
+   * that failed, else the first (agents-evals R211).
+   */
+  readonly representativeAttempt = computed(() => {
+    const attempts = this.result()?.attempts ?? [];
+    return (attempts.find((a) => a.status === 'failed') ?? attempts[0])
+      ?.attempt;
   });
 
   /**

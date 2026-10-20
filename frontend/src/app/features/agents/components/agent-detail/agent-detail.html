@@ -463,6 +463,30 @@
                         <span class="shrink-0 text-[13px] text-fg">{{
                           runHeadline(run.results, run.totalCases)
                         }}</span>
+                        @if (runRepeatsOf(run) > 1) {
+                          <span
+                            [attr.data-testid]="'eval-run-repeats-' + run.jobId"
+                            class="chip chip-neutral shrink-0 whitespace-nowrap"
+                            >Repeat {{ runRepeatsOf(run) }}</span
+                          >
+                        }
+                        @if (runFlakyCount(run) > 0) {
+                          <span
+                            [attr.data-testid]="'eval-run-flaky-' + run.jobId"
+                            class="chip chip-warning shrink-0 whitespace-nowrap"
+                            >{{ runFlakyCount(run) }} flaky</span
+                          >
+                        }
+                        @if (runCost(run); as cost) {
+                          <span
+                            [attr.data-testid]="'eval-run-cost-' + run.jobId"
+                            [attr.title]="cost.title"
+                            class="shrink-0 text-[12px] tabular-nums"
+                            [class.text-fg]="cost.priced"
+                            [class.text-fg-muted]="!cost.priced"
+                            >{{ cost.label }}</span
+                          >
+                        }
                         <span class="truncate text-[12px] text-fg-muted">
                           {{ startedLabel(run) }} ·
                           {{ datasourceName(run.datasourceId) }} ·
@@ -507,6 +531,14 @@
                         Scoped to {{ run.datasets.join(", ") }}
                       </p>
                       @if (runSummary(run); as summary) {
+                        @if (splitLine(summary); as line) {
+                          <p
+                            [attr.data-testid]="'eval-run-splits-' + run.jobId"
+                            class="mt-1 text-[12px] text-fg-muted"
+                          >
+                            {{ line }}
+                          </p>
+                        }
                         <app-eval-run-summary
                           [summary]="summary"
                           [jobId]="run.jobId"
@@ -551,6 +583,26 @@
                             <span class="min-w-0 flex-1 text-[12px] text-fg">{{
                               result.question
                             }}</span>
+                            @if (resultSplit(result) === "held-out") {
+                              <span
+                                [attr.data-testid]="
+                                  'eval-run-result-split-' +
+                                  run.jobId +
+                                  '-' +
+                                  result.id
+                                "
+                                class="chip chip-info shrink-0 whitespace-nowrap"
+                                >held-out</span
+                              >
+                            }
+                            @if (runRepeatsOf(run) > 1) {
+                              <span
+                                class="shrink-0 font-mono text-[11px] text-fg-muted"
+                                >{{ resultPasses(result) }}/{{
+                                  resultRuns(result)
+                                }}</span
+                              >
+                            }
                             <span
                               class="shrink-0 font-mono text-[11px] text-fg-muted"
                               >{{ result.durationMs }}ms</span
@@ -668,6 +720,22 @@
                       </option>
                     </select>
                   </div>
+                  <div class="flex items-center gap-1.5">
+                    <label for="eval-repeats" class="field-label"
+                      >Repeats</label
+                    >
+                    <select
+                      id="eval-repeats"
+                      data-testid="eval-repeats"
+                      (change)="onRepeatsChange($event)"
+                      [disabled]="running() || runStarting()"
+                      class="field w-auto"
+                    >
+                      <option value="1" [selected]="repeats() === 1">1</option>
+                      <option value="3" [selected]="repeats() === 3">3</option>
+                      <option value="5" [selected]="repeats() === 5">5</option>
+                    </select>
+                  </div>
                   <button
                     data-testid="eval-run"
                     (click)="startRun()"
@@ -697,6 +765,11 @@
                       {{ passedCount() }} passed
                       @if (notScoredCount() > 0) {
                         · {{ notScoredCount() }} not scored
+                      }
+                      @if (
+                        running() && runRepeats() > 1 && runCurrentAttempt()
+                      ) {
+                        · attempt {{ runCurrentAttempt() }}/{{ runRepeats() }}
                       }
                     </span>
                   }
@@ -784,6 +857,13 @@
                                 "
                                 class="chip chip-neutral shrink-0 whitespace-nowrap"
                                 >{{ category }}</span
+                              >
+                            }
+                            @if (evalCase.split === "held-out") {
+                              <span
+                                [attr.data-testid]="'eval-split-' + evalCase.id"
+                                class="chip chip-info shrink-0 whitespace-nowrap"
+                                >held-out</span
                               >
                             }
                             @if (resultFor(evalCase.id); as result) {

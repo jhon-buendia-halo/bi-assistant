@@ -3,36 +3,57 @@ import { EVAL_RUNS_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
 import type { EvalRunView } from '../eval-runs.service';
 import { LEGACY_JUDGE_SETTING } from '../../../mastra/evals/judge-option';
+import { LEGACY_REPEATS } from '../../../mastra/evals/repeats-option';
 import {
   summarizeEvalResults,
-  withStatusDefaults,
+  withResultDefaults,
 } from '../../../mastra/evals/eval-summary';
 import type { StoredEvalCaseResult } from '../../../mastra/evals/eval-summary';
+import type { EvalSplit } from '../../../mastra/evals/eval-set-files';
+import { evalCaseIndex } from '../../../mastra/evals/eval-case-index';
 
 /**
  * A run as the store may hold it: one saved before BA-184 has no judge
- * option, no summary and no statuses (data-model 3.8).
+ * option, no summary and no statuses; one saved before BA-242 has no
+ * repeats, no source, no usage and no split on its results (data-model 3.8).
  */
 export type StoredEvalRun = Omit<
   EvalRunView,
-  'judge' | 'summary' | 'results'
+  'judge' | 'summary' | 'results' | 'repeats' | 'source'
 > & {
   judge?: EvalRunView['judge'];
   summary?: EvalRunView['summary'];
   results?: StoredEvalCaseResult[];
+  repeats?: EvalRunView['repeats'];
+  source?: EvalRunView['source'];
 };
+
+/** The split of the question bank case with this id, if there is one. */
+function questionBankSplit(caseId: string): EvalSplit | undefined {
+  return evalCaseIndex().get(caseId)?.split;
+}
 
 /**
  * A stored run with the read-time defaults of data-model 3.8 (no migration):
- * judged when it has no option, statuses from each `passed` flag, and the
- * summary recomputed from the results (agents-evals R144, R147, R148).
+ * judged when it has no option, statuses from each `passed` flag (R144,
+ * R147); one attempt per question and the source `app` when it has neither,
+ * and each result's split from `splitOf`, by default the question bank's,
+ * else `dev` (R209, R215, R223); and the summary recomputed from the results
+ * (R148, R213). Usage stays absent on a run saved before it was recorded.
  */
-export function withEvalRunDefaults(run: StoredEvalRun): EvalRunView {
-  const results = (run.results ?? []).map(withStatusDefaults);
+export function withEvalRunDefaults(
+  run: StoredEvalRun,
+  splitOf: (caseId: string) => EvalSplit | undefined = questionBankSplit,
+): EvalRunView {
+  const results = (run.results ?? []).map((result) =>
+    withResultDefaults(result, splitOf),
+  );
   return {
     ...run,
     results,
     judge: run.judge ?? { ...LEGACY_JUDGE_SETTING },
+    repeats: run.repeats ?? LEGACY_REPEATS,
+    source: run.source ?? 'app',
     summary: summarizeEvalResults(results),
   };
 }
@@ -50,7 +71,7 @@ export class EvalRunsRepository {
       { agentKey },
       { sort: { startedAt: -1 } },
     );
-    return runs.map(withEvalRunDefaults);
+    return runs.map((run) => withEvalRunDefaults(run));
   }
 
   async get(jobId: string): Promise<EvalRunView | null> {

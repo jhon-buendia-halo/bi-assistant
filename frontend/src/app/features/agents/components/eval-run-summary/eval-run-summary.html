@@ -12,8 +12,14 @@
       <thead>
         <tr class="text-fg-muted">
           <th scope="col" class="py-1 pr-6 font-medium">Category</th>
-          <th scope="col" class="py-1 pl-4 text-right font-medium">Passed</th>
-          <th scope="col" class="py-1 pl-4 text-right font-medium">Failed</th>
+          <th scope="col" class="py-1 pl-4 text-right font-medium">Dev</th>
+          <th
+            scope="col"
+            class="py-1 pl-4 text-right font-medium whitespace-nowrap"
+          >
+            Held-out
+          </th>
+          <th scope="col" class="py-1 pl-4 text-right font-medium">Flaky</th>
           <th
             scope="col"
             class="py-1 pl-4 text-right font-medium whitespace-nowrap"
@@ -32,11 +38,18 @@
             <th scope="row" class="py-1 pr-6 font-mono font-normal text-fg">
               {{ row.category }}
             </th>
-            <td class="py-1 pl-4 text-right text-fg tabular-nums">
-              {{ row.passed }}
+            <td
+              class="py-1 pl-4 text-right whitespace-nowrap text-fg tabular-nums"
+            >
+              {{ splitCell(row.dev) }}
+            </td>
+            <td
+              class="py-1 pl-4 text-right whitespace-nowrap text-fg tabular-nums"
+            >
+              {{ splitCell(row.heldOut) }}
             </td>
             <td class="py-1 pl-4 text-right text-fg tabular-nums">
-              {{ row.failed }}
+              {{ row.flaky ?? 0 }}
             </td>
             <td class="py-1 pl-4 text-right text-fg tabular-nums">
               {{ row.notScored }}

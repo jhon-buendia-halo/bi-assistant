@@ -7,15 +7,19 @@ import type {
 } from '../../mastra/evals/assistant.evals';
 import {
   checkStatusOf,
+  costText,
   renderSummaryMarkdown,
   resultStatusOf,
+  splitLines,
   summarizeEvalResults,
+  tokensText,
 } from '../../mastra/evals/eval-summary';
 import type { EvalStatus } from '../../mastra/evals/eval-summary';
 import {
   judgeLabel,
   LEGACY_JUDGE_SETTING,
 } from '../../mastra/evals/judge-option';
+import type { ModelRate } from '../../mastra/evals/eval-usage';
 
 /** A question's result as the report shows it (R38). */
 const VERDICT: Readonly<Record<EvalStatus, string>> = {
@@ -54,6 +58,11 @@ function runDuration(run: EvalRunView): string {
   );
 }
 
+/** A result's attempts; one for a result saved before repeats (R211). */
+function runsOf(result: AssistantEvalCaseResult): number {
+  return result.runs ?? 1;
+}
+
 function toolCallSection(call: EvalToolCall, index: number): string {
   const lines = [`##### ${index + 1}. \`${call.name}\``];
   if (call.input) lines.push('', 'Input:', fence(call.input, 'json'));
@@ -62,18 +71,33 @@ function toolCallSection(call: EvalToolCall, index: number): string {
   return lines.join('\n');
 }
 
-function caseSection(result: AssistantEvalCaseResult, index: number): string {
+function caseSection(
+  result: AssistantEvalCaseResult,
+  index: number,
+  rates: Readonly<Record<string, ModelRate>> | undefined,
+): string {
   const verdict = VERDICT[resultStatusOf(result)];
   const lines = [
     `### ${index + 1}. ${result.question}`,
     '',
     `- **Result:** ${verdict}`,
     `- **Id:** \`${result.id}\``,
-    `- **Duration:** ${durationLabel(result.durationMs)}`,
+    `- **Split:** ${result.split ?? 'dev'}`,
   ];
+  if (runsOf(result) > 1) {
+    lines.push(
+      `- **Attempts:** ${result.passes} of ${runsOf(result)} passed${result.flaky ? ', flaky' : ''}`,
+    );
+  }
+  lines.push(
+    `- **Duration:** ${durationLabel(result.durationMs)}`,
+    `- **Tokens:** ${tokensText(result.usage)}`,
+    `- **Cost:** ${costText(result.costUsd, result.usage, rates)}`,
+  );
 
   if (result.error) lines.push('', `> **Run error:** ${result.error}`);
 
+  // The representative attempt's checks, steps and answer (R211).
   if (result.checkResults.length > 0) {
     lines.push('', '| Check | Score | Why |', '| --- | --- | --- |');
     for (const check of result.checkResults) {
@@ -112,17 +136,26 @@ function deltaList(deltas: EvalCaseDelta[]): string[] {
 /**
  * "Compared to previous run" section — regressions and improvements by case
  * id/question, matched against the agent's most recent previous completed
- * run. Callers omit this entirely when `run.comparison` is absent (no
- * previous completed run to compare against, or an old record saved before
- * regression tracking existed).
+ * run (R41), as the report and the command line print it. Callers omit this
+ * entirely when `run.comparison` is absent (no previous completed run to
+ * compare against, or an old record saved before regression tracking
+ * existed). With `previousRepeats` other than `repeats`, it notes the
+ * previous run's (R218).
  */
-function comparisonSection(comparison: EvalRegressionSummary): string[] {
+export function renderComparisonMarkdown(
+  comparison: EvalRegressionSummary,
+  repeats = 1,
+  previousRepeats?: number,
+): string[] {
   const lines = [
     '',
     '## Compared to previous run',
     '',
     `_Compared to run \`${comparison.previousRunId}\`._`,
   ];
+  if (previousRepeats !== undefined && previousRepeats !== repeats) {
+    lines.push('', `Note: the previous run used Repeats ${previousRepeats}.`);
+  }
 
   if (
     comparison.regressions.length === 0 &&
@@ -149,10 +182,33 @@ function comparisonSection(comparison: EvalRegressionSummary): string[] {
   return lines;
 }
 
-/** A self-contained Markdown report of one eval run, traces included. */
+/**
+ * The repeats, dev, held-out, flaky, tokens and cost lines that follow the
+ * judge and not-scored lines (R218). The cost per question counts the
+ * finished questions.
+ */
+export function renderRunMetricLines(
+  run: Pick<EvalRunView, 'repeats' | 'results' | 'usage' | 'costUsd' | 'rates'>,
+  summary = summarizeEvalResults(run.results),
+): string[] {
+  return [
+    `Repeats: ${run.repeats ?? 1}`,
+    ...splitLines(summary),
+    ...(summary.flaky > 0 ? [`Flaky: ${summary.flaky}`] : []),
+    `Tokens: ${tokensText(run.usage)}`,
+    `Cost: ${costText(run.costUsd, run.usage, run.rates, run.results.length)}`,
+  ];
+}
+
+/**
+ * A self-contained Markdown report of one eval run, traces included.
+ * `previousRepeats` is the repeats of the run it was compared with, when
+ * known, so the comparison can note a difference (R218).
+ */
 export function renderEvalRunMarkdown(
   run: EvalRunView,
   datasourceName?: string,
+  previousRepeats?: number,
 ): string {
   // From the results, so a run read without a stored summary has one too.
   const summary = summarizeEvalResults(run.results);
@@ -171,6 +227,9 @@ export function renderEvalRunMarkdown(
   if (summary.notScored > 0) {
     lines.push(`Not scored: ${summary.notScored}`, '');
   }
+  for (const line of renderRunMetricLines(run, summary)) {
+    lines.push(line, '');
+  }
   lines.push(
     `- **Started:** ${run.startedAt}`,
     `- **Finished:** ${run.finishedAt ?? '—'}`,
@@ -185,18 +244,33 @@ export function renderEvalRunMarkdown(
 
   lines.push('', ...renderSummaryMarkdown(summary));
 
-  lines.push('', '## Summary', '', '| # | Question | Result | Duration |');
-  lines.push('| --- | --- | --- | --- |');
+  lines.push(
+    '',
+    '## Summary',
+    '',
+    '| # | Question | Split | Result | Duration |',
+  );
+  lines.push('| --- | --- | --- | --- | --- |');
   for (const [index, result] of run.results.entries()) {
+    const attempts =
+      runsOf(result) > 1 ? ` ${result.passes}/${runsOf(result)}` : '';
     lines.push(
       `| ${index + 1} | ${result.question.replace(/\|/g, '\\|')} | ${
-        MARK[resultStatusOf(result)]
-      } | ${durationLabel(result.durationMs)} |`,
+        result.split ?? 'dev'
+      } | ${MARK[resultStatusOf(result)]}${attempts} | ${durationLabel(
+        result.durationMs,
+      )} |`,
     );
   }
 
   if (run.comparison) {
-    lines.push(...comparisonSection(run.comparison));
+    lines.push(
+      ...renderComparisonMarkdown(
+        run.comparison,
+        run.repeats ?? 1,
+        previousRepeats,
+      ),
+    );
   }
 
   if (failed.length > 0) {
@@ -220,7 +294,7 @@ export function renderEvalRunMarkdown(
 
   lines.push('', '## Questions', '');
   for (const [index, result] of run.results.entries()) {
-    lines.push(caseSection(result, index), '');
+    lines.push(caseSection(result, index, run.rates), '');
   }
 
   return `${lines.join('\n').trimEnd()}\n`;
