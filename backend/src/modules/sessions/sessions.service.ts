@@ -331,12 +331,13 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * Hybrid context: a cheap orientation block (dataset names + entity keys,
-   * the session's visuals and which one is open), the curated metric
-   * definitions covering those entities, the curated knowledge-store
-   * snippets covering this session's datasets, plus any user-approved
-   * question → SQL pairs resembling `question`, in the system context, and
-   * requestContext scoping the tools to this session.
+   * Hybrid context: a cheap orientation block (dataset names, entity keys
+   * with their columns and types, the session's visuals and which one is
+   * open), the curated metric definitions covering those entities, the
+   * curated knowledge-store snippets covering this session's datasets,
+   * plus any user-approved question → SQL pairs resembling `question`, in
+   * the system context, and requestContext scoping the tools to this
+   * session.
    *
    * Memory-free on purpose — `agentOptions` adds the session's conversation
    * thread, `backgroundAgentOptions` deliberately does not.

@@ -24,6 +24,11 @@ export function knowledgeContext(block: string | undefined): SystemBlock[] {
 
 /** Join hints shown up front to the assistant — enough for a wide dataset. */
 const JOIN_HINT_CHARS = 1_500;
+/**
+ * Column lists in the orientation lines — every column of a dataset of about
+ * 20 entities. Past it, each entity is cut to an equal share instead.
+ */
+const ORIENTATION_COLUMN_CHARS = 5_000;
 /** Default character budget for `schemaSnapshotBlock` when unspecified. */
 const DEFAULT_SCHEMA_BLOCK_CHARS = 6_000;
 /** Default sample values shown per column when unspecified. */
@@ -78,12 +83,47 @@ function joinHintHeader(lines: string[]): string {
 }
 
 /**
+ * Long PostgreSQL type names shortened to their standard aliases, so a
+ * column list stays compact without misstating a type.
+ */
+function compactType(type: string): string {
+  return type
+    .replace(/ without time zone$/, '')
+    .replace(/ with time zone$/, 'tz')
+    .replace(/^character varying/, 'varchar')
+    .replace(/^double precision$/, 'double');
+}
+
+/**
+ * As many of `columns` as fit in `budget` characters (at least one), naming
+ * how many were left out.
+ */
+function fitColumns(columns: string[], budget: number): string {
+  const shown: string[] = [];
+  let used = 0;
+  for (const column of columns) {
+    const cost = column.length + (shown.length ? 2 : 0);
+    if (shown.length && used + cost > budget) break;
+    shown.push(column);
+    used += cost;
+  }
+  const left = columns.length - shown.length;
+  return left ? `${shown.join(', ')}, … +${left} more` : shown.join(', ');
+}
+
+/**
  * Dataset/entity orientation lines: which datasets are in scope, the
- * fully-qualified entities they expose, and how those entities join. This is
- * the dataset-grounding half of `SessionsService.agentContext`'s first
- * system block — extracted so the assistant eval harness, which has no
- * session, can still ground the model in the same datasets/join-hints a real
- * turn would see.
+ * fully-qualified entities they expose with their columns and types, and how
+ * those entities join. This is the dataset-grounding half of
+ * `SessionsService.agentContext`'s first system block — extracted so the
+ * assistant eval harness, which has no session, can still ground the model in
+ * the same datasets/join-hints a real turn would see.
+ *
+ * Every entity gets its columns: without them the model guesses column names,
+ * and an entity listed bare is one it avoids — it queries a view's base table
+ * instead, which lacks the columns the view joins in. When the lists are over
+ * budget, each entity is cut to an equal share rather than the last ones
+ * (often the views) going bare.
  */
 export function entityOrientationLines(
   datasetNames: string[],
@@ -91,11 +131,24 @@ export function entityOrientationLines(
   /** The call's tool selection (agents.md 2.1); undefined = every tool. */
   selection?: readonly OptionalAgentTool[],
 ): string[] {
-  const entityLines = datasets.flatMap((s) =>
-    s.tables.map(
-      (t) =>
-        `- ${t} (dataset: ${s.name}; datasource: ${s.datasourceKind ?? 'unknown'} ${s.datasourceId ?? ''})`,
-    ),
+  const entities = datasets.flatMap((s) =>
+    s.tables.map((t) => ({
+      line: `- ${t} (dataset: ${s.name}; datasource: ${s.datasourceKind ?? 'unknown'} ${s.datasourceId ?? ''})`,
+      columns: (s.entities?.find((e) => e.key === t)?.columns ?? []).map(
+        (column) => `${column.name} ${compactType(column.type)}`,
+      ),
+    })),
+  );
+  const columnChars = entities.reduce(
+    (sum, { columns }) => sum + columns.join(', ').length,
+    0,
+  );
+  const share =
+    columnChars > ORIENTATION_COLUMN_CHARS
+      ? Math.floor(ORIENTATION_COLUMN_CHARS / entities.length)
+      : Infinity;
+  const entityLines = entities.map(({ line, columns }) =>
+    columns.length ? `${line}: ${fitColumns(columns, share)}` : line,
   );
   const joinHints = joinHintBlock(datasets);
   return [

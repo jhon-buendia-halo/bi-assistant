@@ -1040,7 +1040,7 @@ For every assistant call made on behalf of a session (chat turns, the grounding 
 ```
 Datasets for this session: <dataset names, comma-separated>.
 Entities available (fully-qualified catalog.schema.table):
-- <entity key> (dataset: <dataset>; datasource: <kind or "unknown"> <datasource id>)
+- <entity key> (dataset: <dataset>; datasource: <kind or "unknown"> <datasource id>): <column> <type>, <column> <type>, …
 …                                   ← or "(none — the datasets are empty)"
 Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.   ← "describe_entity / run_readonly_sql" without sample_rows (2.1)
 
@@ -1055,6 +1055,8 @@ Interactive visuals in this session (id — title, current version):   ← this 
 …                                   ← or "(none yet)"
 Visual currently open in the right panel: <visualId>.   ← or "No visual is open in the right panel."
 ```
+
+Columns (added 2026-10-21, BA-242 round 5, kept by the user): each entity line ends with `: ` and the entity's columns with their types, in the dataset's order, with no sample values and no join suffixes (the join section has those); an entity whose columns the dataset did not capture keeps its bare line. Long PostgreSQL type names are shortened to their standard aliases: `character varying` → `varchar`, `timestamp without time zone` → `timestamp`, `timestamp with time zone` → `timestamptz`, `double precision` → `double`. The column lists share 5,000 characters; when they need more, each entity gets an equal share (5,000 over the number of entities, rounded down), keeps at least its first column, and ends with `, … +<n> more`, so no entity is listed without its columns. On gpt-5.6-luna this cut the tool calls per attempt from 5.4 to 3.7 and the cost per question by 14.5%, with no category down ([results.tsv](../../docs/evals/loop/results.tsv) round 5).
 
 Join hints: one line per column with a reference, `->` when declared by the datasource, `~>` when inferred; de-duplicated; stop adding lines once 1,500 characters are used.
 
