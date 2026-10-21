@@ -269,7 +269,6 @@ describe('the accept rule (R227)', () => {
     expect(check.met).toBe(false);
     expect(check.reasons).toEqual([
       'dev join is within, not up',
-      'held-out join fell from 3/4 to 2/4',
       'held-out all is down',
       'dev ranking is down',
       'dev all is down',
@@ -282,6 +281,33 @@ describe('the accept rule (R227)', () => {
     expect(lines[lines.length - 1]).toBe(
       `Accept rule: not met (${check.reasons.join('; ')})`,
     );
+  });
+
+  it('lets a held-out target fall within its interval, and fails one that is down (changed 2026-10-21)', () => {
+    const within = (passedAfter: number, scored: number) => {
+      const before = loopRun(
+        BEFORE,
+        [
+          ...results('join', 80, 48, dev('join')),
+          ...results('ho-join', scored, scored, heldOut('join')),
+        ],
+        { costUsd: 0.8 + scored / 100 },
+      );
+      const after = loopRun(
+        AFTER,
+        [
+          ...results('join', 70, 56, dev('join')),
+          ...results('ho-join', scored, passedAfter, heldOut('join')),
+        ],
+        { costUsd: 0.7 + scored / 100 },
+      );
+      return checkAcceptRule(computeDiff([before], [after]), ['join']);
+    };
+    expect(within(3, 4)).toEqual({ met: true, reasons: [] });
+    expect(within(0, 10).reasons).toEqual([
+      'held-out join is down',
+      'held-out all is down',
+    ]);
   });
 
   it('is not met for a target with no held-out question, or a side not priced', () => {

@@ -473,22 +473,15 @@ export function checkAcceptRule(
     if (missing) add(missing);
     else if (r?.flag !== 'up') add(`dev ${category} is ${r?.flag}, not up`);
   }
-  // 2. On held-out, no target category fell or is down; none scored fails.
+  // 2. On held-out, no target category is down; none scored fails. Until
+  // 2026-10-21 a fall of one question failed it too, which a rerun of the
+  // same code did by chance on small held-out categories (results.tsv
+  // round 4), so only a fall beyond the interval counts now.
   for (const category of targets) {
     const r = findRow(diff, 'held-out', category);
     const missing = noScored(r, 'held-out', category);
-    if (missing) {
-      add(missing);
-      continue;
-    }
-    const { before, after } = r!;
-    if (after.passed * before.scored < before.passed * after.scored) {
-      add(
-        `held-out ${category} fell from ${formatCount(before)} to ${formatCount(after)}`,
-      );
-    } else if (r!.flag === 'down') {
-      add(`held-out ${category} is down`);
-    }
+    if (missing) add(missing);
+    else if (r!.flag === 'down') add(`held-out ${category} is down`);
   }
   // 3. The held-out all row is not down; 4. no row is down on either split.
   const heldOutAll = findRow(diff, 'held-out', ALL);

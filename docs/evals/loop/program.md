@@ -73,7 +73,7 @@ Decision D2 of 2026-10-20, checked by `eval:diff --target` (R227); exit 0 means 
 | # | Condition | `eval:diff` shows it as |
 |---|---|---|
 | 1 | Every target category is up on dev | the dev row's flag is `up` (Newcombe's 95% interval of the change lies above 0) |
-| 2 | On held-out, every target category's rate did not fall and is not down; a target with no scored held-out question does not meet this | the held-out row's after count is not below its before count, and its flag is not `down` |
+| 2 | On held-out, no target category is down; a target with no scored held-out question does not meet this. Until 2026-10-21 a held-out target that fell by one question failed it too; the user changed it after round 4, an A/A run in which three small held-out categories fell by chance | the held-out row's flag is not `down` |
 | 3 | The held-out `all` row is not down | its flag is not `down` |
 | 4 | No category is down on either split, and neither `all` row is | no row is flagged `down` |
 | 5 | The cost per question rose by at most 10%; a side that is not priced or not recorded does not meet this | `Cost per question:` at most `+10%` |
