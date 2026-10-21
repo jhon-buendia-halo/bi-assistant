@@ -363,13 +363,21 @@ describe('costOf (agents-evals R221)', () => {
 });
 
 describe('the bundled price table (data-model 4.11)', () => {
-  it('prices gpt-4o-mini, with where and when each rate was read', () => {
+  it('prices gpt-4o-mini and gpt-5.6-luna, with where and when each rate was read', () => {
     expect(PRICE_TABLE['gpt-4o-mini']).toEqual({
       inputPerMillionUsd: 0.15,
       cachedInputPerMillionUsd: 0.075,
       outputPerMillionUsd: 0.6,
       source: 'developers.openai.com/api/docs/pricing',
       readOn: '2026-10-20',
+    });
+    expect(PRICE_TABLE['gpt-5.6-luna']).toEqual({
+      inputPerMillionUsd: 0.2,
+      cachedInputPerMillionUsd: 0.02,
+      outputPerMillionUsd: 1.2,
+      source:
+        'developers.openai.com/api/docs/pricing (Standard, short context)',
+      readOn: '2026-10-21',
     });
     for (const rate of Object.values(PRICE_TABLE)) {
       expect(rate.source).toEqual(expect.any(String));

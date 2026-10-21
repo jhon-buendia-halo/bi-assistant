@@ -797,6 +797,13 @@ Added 2026-10-20 (BA-242). The prices an eval run's cost is computed with ([agen
       "outputPerMillionUsd": 0.6,
       "source": "developers.openai.com/api/docs/pricing",
       "readOn": "2026-10-20"
+    },
+    "gpt-5.6-luna": {
+      "inputPerMillionUsd": 0.2,
+      "cachedInputPerMillionUsd": 0.02,
+      "outputPerMillionUsd": 1.2,
+      "source": "developers.openai.com/api/docs/pricing (Standard, short context)",
+      "readOn": "2026-10-21"
     }
   }
 }

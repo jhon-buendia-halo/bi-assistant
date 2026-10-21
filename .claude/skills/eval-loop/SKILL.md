@@ -20,10 +20,10 @@ Every path below is absolute, so every command reads it the same wherever it run
 
 ## 1. Data dir, build, snapshot
 
-Once, before the baseline: the loop has its own data dir, so it never touches `~/.questions-to-insights` or `backend/data`.
+Once, before a baseline: one data dir per set (since 2026-10-21), so the three sets run at once and the loop never touches `~/.questions-to-insights` or `backend/data`. (`$LOOP/data/gpt-4o-mini/` keeps the first model's single data dir, rounds 0 to 2.)
 
 ```bash
-mkdir -p "$LOOP/data" "$LOOP/runs" "$LOOP/exports"
+mkdir -p "$LOOP/data/world-cup" "$LOOP/data/finance" "$LOOP/data/marketing-analytics" "$LOOP/runs" "$LOOP/exports"
 ```
 
 Build once per round, and never while a run or a served app uses `backend/dist` (`nest build` clears it):
@@ -32,6 +32,8 @@ Build once per round, and never while a run or a served app uses `backend/dist` 
 npm --prefix backend run build:all    # when the app will be started from the snapshot (step 1b)
 npm --prefix backend run build        # otherwise
 ```
+
+When another session's app serves this worktree's `backend/dist`, build in a scratch copy instead and snapshot from there: `rsync -a --delete --exclude node_modules --exclude dist --exclude data --exclude public backend/ <scratch>/backend/`, link `backend/node_modules` into it, copy `frontend/dist/frontend/browser/` into its `public/`, and run `npx nest build` inside it.
 
 Snapshot the build, so a later build never changes a running round:
 
@@ -47,33 +49,33 @@ ln -s "$PWD/backend/node_modules" "$SNAP/node_modules"
 
 For the baseline, and again after a knowledge-seed change. Follow the worktree deploy convention of [workflow-implement](../workflow-implement/SKILL.md): ask the user whether the samples go into the shared compose Postgres on 55432 or an isolated one, check the ports, stop by PID.
 
+Once per set, with that set's data dir:
+
 ```bash
-lsof -nP -iTCP -sTCP:LISTEN | grep -E ':(3000|3310|55432) '
-node "$SNAP/dist/cli.js" --data-dir "$LOOP/data" --port 3310 --no-open --no-intellify-api >"$LOOP/app.log" 2>&1 &
+lsof -nP -iTCP -sTCP:LISTEN | grep -E ':(3000|3310|55432|55433) '
+node "$SNAP/dist/cli.js" --data-dir "$LOOP/data/finance" --port 3310 --no-open --no-intellify-api >"$LOOP/app-finance.log" 2>&1 &
 echo "app PID $!"     # report it; stop with kill <PID>, never pkill -f
 ```
 
-Then the user, at `http://127.0.0.1:3310`: Settings → LLM, OpenAI with the model `gpt-4o-mini` and their key (they type it; never ask for it in chat); Settings → Testing Data, **Load** World Cup, Finance and Marketing Analytics. That creates the datasets `World Cup`, `Finance` and `Marketing Analytics`. After a knowledge-seed change, delete the changed Finance entries on the Knowledge screen first, then Load Finance again: a reload never overwrites an entry of the same title (testing-data R26). Stop the app by its PID.
+Then, at `http://127.0.0.1:3310`: Settings → LLM, OpenAI with the model `gpt-5.6-luna`, reasoning effort `low` (the loop's model since 2026-10-21; program.md), and the key. The user types the key, or the lead saves it with `PUT /llm/settings` from a script that reads `OPENAI_API_KEY` from the main checkout's `.env` and never prints it. Settings → Testing Data: **Load** that set's sample only (World Cup, Finance or Marketing Analytics, into its own database, such as `loop_finance`), which creates its dataset. After a knowledge-seed change, delete the changed Finance entries on the Knowledge screen of the finance data dir first, then Load Finance again: a reload never overwrites an entry of the same title (testing-data R26). Stop the app by its PID before the next set.
 
 Before the baseline, confirm the OpenAI account has credit for the runs (program.md, *The budget*).
 
-## 2. Runs: one set after another
+## 2. Runs: the three sets at once
 
-Never two at once on one data dir: they share its database (R223).
+Each set from its own data dir; never two runs at once on one data dir, since they share its database (R223). On macOS, run the whole step under `caffeinate -i -s -m` so the machine does not sleep.
 
 ```bash
-while IFS='|' read -r set dataset; do
-  APP_DATA_DIR="$LOOP/data" EVAL_DATASETS="$dataset" EVAL_SET="$set" \
+for set in world-cup finance marketing-analytics; do
+  case "$set" in world-cup) dataset="World Cup" ;; finance) dataset="Finance" ;; *) dataset="Marketing Analytics" ;; esac
+  APP_DATA_DIR="$LOOP/data/$set" EVAL_DATASETS="$dataset" EVAL_SET="$set" \
   EVAL_REPEATS=3 EVAL_JUDGE=off EVAL_RUN_FILE="$LOOP/runs/$R-$set.json" \
-    node "$SNAP/dist/mastra/evals/run-assistant-evals.js" </dev/null 2>&1 | tee "$LOOP/runs/$R-$set.log"
-done <<'EOF'
-world-cup|World Cup
-finance|Finance
-marketing-analytics|Marketing Analytics
-EOF
+    node "$SNAP/dist/mastra/evals/run-assistant-evals.js" </dev/null >"$LOOP/runs/$R-$set.log" 2>&1 &
+done
+wait
 ```
 
-Each run prints `Run id: <jobId>`, the dev and held-out lines and its cost, and is saved in the loop's data dir. A failing question makes the command exit 1; that is normal. For the baseline (`R=r0`), write the run ids into row 0 of `docs/evals/loop/results.tsv` and stop here.
+Each run prints `Run id: <jobId>`, the dev and held-out lines and its cost into its log, and is saved in its set's data dir. A failing question makes the command exit 1; that is normal. For the baseline (`R=r0`), write the run ids into row 0 of `docs/evals/loop/results.tsv` and stop here.
 
 ## 3. The slice and its failures (supervisor)
 
@@ -111,7 +113,7 @@ git apply "$LOOP/fixer/$R/change.patch"
 Rebuild and snapshot as in step 1 (`build`, then the snapshot commands), then run the slice on dev only, in each set that holds the category:
 
 ```bash
-APP_DATA_DIR="$LOOP/data" EVAL_DATASETS="Finance" EVAL_SET=finance \
+APP_DATA_DIR="$LOOP/data/finance" EVAL_DATASETS="Finance" EVAL_SET=finance \
 EVAL_SPLIT=dev EVAL_CATEGORY=<category> EVAL_REPEATS=3 EVAL_JUDGE=off \
 EVAL_RUN_FILE="$LOOP/runs/$R-slice-finance.json" \
   node "$SNAP/dist/mastra/evals/run-assistant-evals.js" 2>&1 | tee "$LOOP/runs/$R-slice-finance.log"

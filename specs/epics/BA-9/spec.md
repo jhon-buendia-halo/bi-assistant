@@ -54,7 +54,7 @@ The 15 step stories created on 2026-10-13 (BA-182 to BA-196) were compacted to t
 - A knowledge on and off comparison by category is one report (Step 7), which answers [BA-80](https://halo-powered.atlassian.net/browse/BA-80)'s acceptance.
 - The judge agrees with human labels on at least 90% of passes and of fails before its verdict counts (Step 6).
 - Steps 9 to 12 meet the done-when of each step in the plan.
-- **By the beta, the loop (BA-242):** its tooling is in, and a baseline plus at least three supervised rounds on gpt-4o-mini are recorded with dev and held-out side by side, each accepted change committed with its eval diff.
+- **By the beta, the loop (BA-242):** its tooling is in, and a baseline plus at least three supervised rounds (on gpt-4o-mini, then on gpt-5.6-luna from 2026-10-21) are recorded with dev and held-out side by side, each accepted change committed with its eval diff.
 - **Investigation questions (BA-243):** at least two approved briefs, each with dev and held-out questions and validated references, run in the loop's rounds.
 
 ## Dependencies, risks and open questions
@@ -64,6 +64,6 @@ The 15 step stories created on 2026-10-13 (BA-182 to BA-196) were compacted to t
 - **The baseline on `main`** (six runs, action 3 in plan 3.0) is taken before any change; every later step compares with it.
 - **Time:** with the two domains, the minimum is about 19 to 24 days of work against the 14 working days from 2026-10-13, so it fits only if Claude runs the domain work in parallel with the other steps. What moves after the beta, and in which order, is in plan 3.0.
 - **Cost:** real numbers need an LLM key and spend tokens; the judge is off by default, Databricks runs are on demand.
-- **The loop's model** (the user's choice, 2026-10-20): gpt-4o-mini, until Anthropic API keys are available. Fixes in the app (context, tool errors) are expected to carry over to other models; prompt rules accepted on gpt-4o-mini are re-measured on any other model before they count there. Budget: about $25 at most to the beta at 34,000 tokens per attempt (plan 3.6), standard OpenAI prices read on 2026-10-20.
+- **The loop's model** (the user's choice, 2026-10-20): gpt-4o-mini, until Anthropic API keys are available. Fixes in the app (context, tool errors) are expected to carry over to other models; prompt rules accepted on gpt-4o-mini are re-measured on any other model before they count there. Budget: about $25 at most to the beta at 34,000 tokens per attempt (plan 3.6), standard OpenAI prices read on 2026-10-20. Changed by the user on 2026-10-21, after two rounds on gpt-4o-mini: gpt-5.6-luna at low reasoning effort, chosen from a probe of 31 dev questions at one attempt each (gpt-4o-mini passed 16% of its baseline attempts on them, gpt-5.6-luna 71%, gpt-6-luna 58%, gpt-5-mini 32%), at about the same cost per full run as gpt-4o-mini's measured $1.44.
 - **ADR number:** ADR-0013 and ADR-0014 are claimed on other branches; re-check that 0015 is free when this branch merges. Re-checked on 2026-10-15, when `main` (v0.34.0) was merged in: `main` has ADR-0001 to ADR-0012 and ADR-0018 to ADR-0030, so 0015 is still free.
 - The Phase 1 plan's golden-set item ([phase-1-answer-reliability](../../../docs/plans/phase-1-answer-reliability.md), Workstream C) is covered by Steps 1a and 5.

@@ -7,7 +7,7 @@ The loop of [the BA-9 plan, section 3.6](../../plans/BA-9.md#36-the-improvement-
 - The fixer's locks: the tool [eval-loop](../../../.claude/tools/eval-loop/README.md).
 - The log of rounds: [results.tsv](results.tsv). The leak check's allowlist: [leak-allowlist.txt](leak-allowlist.txt).
 
-Added 2026-10-20 (BA-242, roadmap 1.1.20). The accept rule was confirmed by the user on 2026-10-20; the stop rule and the budget below are defaults the user may change. On 2026-10-21 the user decided that the lead runs every round and reverts on its own a round that fails, so the user decides only the rounds that meet the accept rule (*Roles*). A second decision the same day, after round 1: one cause fixed rarely makes a whole question pass all its attempts on gpt-4o-mini, since most questions fail for several causes, so a round whose target slice is not `up` still gets its full run, and the user may keep its change as the new baseline (decision `kept`) when conditions 2 to 5 of the accept rule hold, though condition 1 does not.
+Added 2026-10-20 (BA-242, roadmap 1.1.20). The accept rule was confirmed by the user on 2026-10-20; the stop rule and the budget below are defaults the user may change. On 2026-10-21 the user decided that the lead runs every round and reverts on its own a round that fails, so the user decides only the rounds that meet the accept rule (*Roles*). A second decision the same day, after round 1: one cause fixed rarely makes a whole question pass all its attempts on gpt-4o-mini, since most questions fail for several causes, so a round whose target slice is not `up` still gets its full run, and the user may keep its change as the new baseline (decision `kept`) when conditions 2 to 5 of the accept rule hold, though condition 1 does not. A third decision the same day, after a probe of four models on 31 dev questions: the loop runs on gpt-5.6-luna at low reasoning effort from round 3, which re-baselines it, and the three sets run at once, each from its own data dir.
 
 ## Roles
 
@@ -46,7 +46,7 @@ The question bank files, the checks and their thresholds, the eval harness, the 
 
 | Path | Holds |
 |---|---|
-| `.eval-loop/data/` | The loop's own data dir (`APP_DATA_DIR` of every run): its samples, its LLM settings with gpt-4o-mini, its saved runs |
+| `.eval-loop/data/<set>/` | The loop's data dirs, one per set since 2026-10-21 so the sets run at once (`APP_DATA_DIR` of that set's runs): its sample, its LLM settings (gpt-5.6-luna, low effort), its saved runs. `data/gpt-4o-mini/` keeps the first model's one data dir, with rounds 0 to 2 |
 | `.eval-loop/build/<round>/backend/` | The round's build snapshot: `dist/`, `public/` and `package.json` copied, `node_modules` linked. Every eval of the round runs from it, so a later `nest build` (which clears `dist/`) never changes a running round |
 | `.eval-loop/runs/<round>-<set>.json` | Each run's record (`EVAL_RUN_FILE`), and its console output beside it as `.log` |
 | `.eval-loop/exports/<round>/` | The round's failure export (`eval:export-failures`) |
@@ -56,7 +56,7 @@ The question bank files, the checks and their thresholds, the eval harness, the 
 
 The skill [eval-loop](../../../.claude/skills/eval-loop/SKILL.md) has the full commands. In short, for round `r<N>` against the baseline round `r<B>` (the last accepted round, `r0` at first):
 
-0. **Baseline** (round `r0`, and again after every accepted change or question bank change): build, snapshot, then run each set one after another, repeat 3, judge off: `world-cup`, `finance`, `marketing-analytics`. Record the run ids in `results.tsv`.
+0. **Baseline** (round `r0`, and again after every accepted change or question bank change): build, snapshot, then run the three sets at once, each from its own data dir, repeat 3, judge off: `world-cup`, `finance`, `marketing-analytics`. Record the run ids in `results.tsv`.
 1. **Pick the worst slice**: the category with the lowest dev pass rate, weighted by the priority of the plan's [section 3.9](../../plans/BA-9.md#39-thresholds-to-react-to-a-proposal-not-a-decision) (lookup, aggregate, join, ranking and ratio first; out-of-scope and non-existent must be at 100%).
 2. **Read the failures**: `npm --prefix backend run eval:export-failures -- --run <run> --out .eval-loop/exports/r<N>`, one per set that holds the slice; group the failures, one sentence each; the largest group is the hypothesis.
 3. **One lever, one change**: `.claude/tools/eval-loop/start-fixer.sh r<N> --headless --lever "<lever>" --target <category>`; when the fixer is done, `.claude/tools/eval-loop/collect-fixer.sh r<N>`, then `npm --prefix backend run eval:leak-check -- --diff-file .eval-loop/fixer/r<N>/change.patch`. A rejection goes back to a new fixer with the `--fixer` report (it names no held-out case), or the lead allowlists a false positive with its reason. The lead reviews the patch and applies it: `git apply .eval-loop/fixer/r<N>/change.patch`.
@@ -90,7 +90,7 @@ With about ten questions per category, a single run rarely flags `up`: one flip 
 
 ## The budget
 
-$25 in all. A full run of the three sets at repeat 3 is 181 questions (63 World Cup, 68 Finance, 50 Marketing Analytics), so 543 attempts, about $3.30 with gpt-4o-mini at about 34,000 tokens per attempt (the plan's measure on `feat/engine-eval-loop`). A round adds its target slice, a few dozen attempts. So the baseline and about six rounds fit before the $22 stop. Re-estimate from the baseline's measured `Cost:` lines before round 1; the judge stays off inside the loop.
+$25 in all. A full run of the three sets at repeat 3 is 181 questions (63 World Cup, 68 Finance, 50 Marketing Analytics), so 543 attempts. The first estimate, about $3.30 with gpt-4o-mini at about 34,000 tokens per attempt (the plan's measure on `feat/engine-eval-loop`), was 2.3 times the measured baseline: $1.44, about 22,800 tokens per attempt with 66% of the input cached. On gpt-5.6-luna at low effort the probe of 2026-10-21 puts a full run at about $1.15 to $1.25, and at about 16.6 seconds per attempt, which is why the sets run at once. A round adds its target slice, a few dozen attempts, so about $1.35 a round; the judge stays off inside the loop.
 
 ## results.tsv
 
