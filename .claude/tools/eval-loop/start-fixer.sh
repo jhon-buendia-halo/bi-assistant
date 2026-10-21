@@ -5,7 +5,8 @@
 #
 # Usage:
 #   .claude/tools/eval-loop/start-fixer.sh <round> [--export <dir>]
-#       [--lever "<lever>"] [--target <categories>] [--allow-dirty] [--dry-run]
+#       [--lever "<lever>"] [--target <categories>] [--allow-dirty]
+#       [--headless [--max-budget-usd <n>]] [--dry-run]
 #
 #   <round>        the round's name, such as r1
 #   --export       the round's failure export (eval:export-failures --out);
@@ -14,6 +15,12 @@
 #   --target       the target categories, comma-separated, told to the fixer
 #   --allow-dirty  start although the lever files have uncommitted changes
 #                  (the fixer's tree is HEAD, without them)
+#   --headless     run the fixer non-interactively (claude -p), as the lead
+#                  session does: a permission it would ask for is refused, no
+#                  session is saved, and its transcript goes to
+#                  .eval-loop/fixer/<round>/fixer.jsonl, its final report to
+#                  report.md beside it
+#   --max-budget-usd  the headless fixer's spending cap (default 5)
 #   --dry-run      prepare the tree and print the claude command, do not run it
 #
 # It adds a detached worktree at .eval-loop/fixer/<round>/tree (no branch),
@@ -68,7 +75,7 @@ root="$(git -C "$script_dir" rev-parse --show-toplevel)"
 settings="$script_dir/fixer-settings.json"
 
 round="${1:-}"
-[[ -n "$round" && "$round" != --* ]] || die "usage: start-fixer.sh <round> [--export <dir>] [--lever \"<lever>\"] [--target <categories>] [--allow-dirty] [--dry-run]"
+[[ -n "$round" && "$round" != --* ]] || die "usage: start-fixer.sh <round> [--export <dir>] [--lever \"<lever>\"] [--target <categories>] [--allow-dirty] [--headless [--max-budget-usd <n>]] [--dry-run]"
 [[ "$round" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "a round is letters, digits, dots, dashes and underscores (got \"$round\")"
 shift
 
@@ -77,12 +84,16 @@ lever=""
 target=""
 allow_dirty=0
 dry_run=0
+headless=0
+max_budget=5
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --export) [[ $# -ge 2 ]] || die "--export needs a folder"; export_src="$2"; shift 2 ;;
     --lever) [[ $# -ge 2 ]] || die "--lever needs a value"; lever="$2"; shift 2 ;;
     --target) [[ $# -ge 2 ]] || die "--target needs categories"; target="$2"; shift 2 ;;
     --allow-dirty) allow_dirty=1; shift ;;
+    --headless) headless=1; shift ;;
+    --max-budget-usd) [[ $# -ge 2 ]] || die "--max-budget-usd needs an amount"; max_budget="$2"; shift 2 ;;
     --dry-run) dry_run=1; shift ;;
     *) die "unknown argument \"$1\"" ;;
   esac
@@ -149,8 +160,15 @@ cmd=(claude
   --strict-mcp-config
   --add-dir "$fixer/export"
   -n "eval-loop fixer $round"
-  --append-system-prompt "$role"
-  "$prompt")
+  --append-system-prompt "$role")
+# Headless, the same command in print mode: nothing can be asked, so a
+# permission outside the tree and the export is refused, and no session file
+# is kept (the transcript is fixer.jsonl, which the lead reads).
+if [[ $headless -eq 1 ]]; then
+  [[ "$max_budget" =~ ^[0-9]+([.][0-9]+)?$ ]] || die "--max-budget-usd is an amount in dollars (got \"$max_budget\")"
+  cmd+=(-p --output-format stream-json --verbose --no-session-persistence --max-budget-usd "$max_budget")
+fi
+cmd+=("$prompt")
 
 echo "Fixer tree: $tree (held-out paths deleted)"
 echo "Export:     $fixer/export"
@@ -161,4 +179,17 @@ if [[ $dry_run -eq 1 ]]; then
   exit 0
 fi
 cd "$tree"
-CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 exec "${cmd[@]}"
+if [[ $headless -eq 0 ]]; then
+  CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 exec "${cmd[@]}"
+fi
+status=0
+CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 "${cmd[@]}" </dev/null >"$fixer/fixer.jsonl" 2>"$fixer/fixer.err" || status=$?
+# The final report is the result event's text; the transcript keeps the rest.
+node -e '
+const fs = require("fs");
+const lines = fs.readFileSync(process.argv[1], "utf8").split("\n").filter(Boolean);
+const result = lines.map((l) => { try { return JSON.parse(l); } catch { return {}; } }).filter((e) => e.type === "result").pop();
+fs.writeFileSync(process.argv[2], result ? `${result.result ?? ""}\n\n(${result.subtype}, ${result.num_turns} turns, $${Number(result.total_cost_usd ?? 0).toFixed(2)})\n` : "No result event; see fixer.jsonl and fixer.err.\n");
+' "$fixer/fixer.jsonl" "$fixer/report.md" || true
+echo "Fixer done (exit $status): report $fixer/report.md, transcript $fixer/fixer.jsonl"
+exit "$status"

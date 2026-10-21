@@ -85,15 +85,15 @@ npm --prefix backend run --silent eval:export-failures -- --run "$LOOP/runs/$B-f
 
 One export per round: when two sets hold the slice, export the one with the most failures of it, or export each to its own folder and pass `--export` below. Read the export, group the failures, and write the hypothesis in one sentence. Choose one lever.
 
-## 4. The fixer (the user, in their own terminal)
+## 4. The fixer
 
-The fixer is an interactive Claude Code session the user drives; this session cannot. Ask the user to run, from the worktree root, with this round's name:
+Since 2026-10-21 the lead runs the fixer headless, in the background, from the worktree root:
 
 ```bash
-.claude/tools/eval-loop/start-fixer.sh r1 --lever "<lever>" --target <category>
+.claude/tools/eval-loop/start-fixer.sh "$R" --headless --lever "<lever>" --target <category>
 ```
 
-It refuses while the lever files have uncommitted changes (commit or revert them first). When the fixer says it is done, the user exits it (`/exit`). Then collect and check its change:
+It refuses while the lever files have uncommitted changes (commit or revert them first). When it ends, read `$LOOP/fixer/$R/report.md` (its final report) and, when something looks off, its transcript `fixer.jsonl`. The user may still run it interactively instead, without `--headless`, in a terminal outside VS Code; they exit it (`/exit`) when it says it is done. Then collect and check its change:
 
 ```bash
 .claude/tools/eval-loop/collect-fixer.sh "$R"
@@ -132,6 +132,8 @@ npm --prefix backend run --silent eval:diff -- \
 It prints `Accept rule: met` (exit 0) or `Accept rule: not met (<reasons>)` (exit 1); exit 2 is a bad argument or run. Show the user the table, the flips, the cost and the verdict.
 
 ## 7. Record
+
+Since 2026-10-21 (program.md, *Roles*), the lead reverts on its own a round whose target slice is not `up` or that fails the accept rule, records it and goes on to the next hypothesis; it asks the user only about a round that meets the accept rule.
 
 - **The user accepts:** update the specs and tests the change affects (the prompt in `specs/system/agents.md` Appendix A, `backend/src/mastra/agents/__fixtures__/`, pinned unit tests), run those tests, and commit the lever files with them, the `eval:diff` output (`$LOOP/runs/$R-diff.txt`) in the commit message. The after runs become the next baseline: `B=$R`.
 - **Not accepted, or `tried`:** revert the change: `git restore -- <the lever files the patch changed>` (listed by `git apply --stat "$LOOP/fixer/$R/change.patch"`), and delete any lever file it created.

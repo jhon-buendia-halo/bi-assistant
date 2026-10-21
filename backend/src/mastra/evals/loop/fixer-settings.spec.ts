@@ -144,7 +144,13 @@ describe('fixer-settings.json (delivery.md, Improvement loop)', () => {
     expect(settings.autoMemoryEnabled).toBe(false);
     expect(Object.keys(settings.permissions ?? {})).toEqual(['deny']);
     for (const rule of deny)
-      expect(rule).toMatch(/^(Edit|Read)\((\*\*\/|\/\/\*\*\/|~\/).+\)$/);
+      expect(rule).toMatch(
+        /^((Edit|Read)\((\*\*\/|\/\/\*\*\/|~\/).+\)|mcp__ide)$/,
+      );
+  });
+
+  it("denies every tool of the IDE's MCP server, which --strict-mcp-config does not remove", () => {
+    expect(deny).toContain('mcp__ide');
   });
 
   it('denies editing every forbidden path', () => {
@@ -178,7 +184,7 @@ describe('fixer-settings.json (delivery.md, Improvement loop)', () => {
       ]);
     }
     expect(deny).toContain('Read(~/.questions-to-insights/**)');
-    expect(deny).toContain('Read(~/.claude/projects/**/memory/**)');
+    expect(deny).toContain('Read(~/.claude/projects/**)');
   });
 });
 
@@ -214,5 +220,15 @@ describe('start-fixer.sh and collect-fixer.sh', () => {
     );
     expect(startScript).toContain('CLAUDE_CODE_DISABLE_AUTO_MEMORY=1');
     expect(startScript).not.toMatch(/--tools[^\n]*Bash/);
+  });
+
+  it('runs headless with the same locked command, no saved session and a budget', () => {
+    expect(startScript).toContain('--headless');
+    expect(startScript).toContain(
+      'cmd+=(-p --output-format stream-json --verbose --no-session-persistence --max-budget-usd "$max_budget")',
+    );
+    expect(startScript.indexOf('cmd=(claude')).toBeLessThan(
+      startScript.indexOf('cmd+=(-p'),
+    );
   });
 });

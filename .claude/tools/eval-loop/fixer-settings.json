@@ -53,7 +53,8 @@
       "Read(//**/.eval-loop/data/**)",
       "Read(//**/proposals/**)",
       "Read(~/.questions-to-insights/**)",
-      "Read(~/.claude/projects/**/memory/**)"
+      "Read(~/.claude/projects/**)",
+      "mcp__ide"
     ]
   }
 }
