@@ -1,2 +1,2 @@
 round	date	hypothesis	lever	files	target_categories	dev_before	dev_after	heldout_before	heldout_after	categories_down	cost_per_question_before	cost_per_question_after	round_cost_usd	decision	reason	run_ids_before	run_ids_after
-0														baseline	Phase 2 fills this row from the first full run.		
+0	2026-10-20						all:13/130		all:7/51			0.0079	1.4378	baseline	Baseline at 851bf83: World Cup, Finance and Marketing Analytics on PostgreSQL, repeat 3, judge off, gpt-4o-mini; 543 attempts.		97d932a5;3ebeaeb7;531236cd
