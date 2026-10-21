@@ -5,7 +5,10 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { MastraService } from '../../mastra/mastra.service';
-import { schemaSnapshotBlock } from '../../mastra/context-blocks';
+import {
+  KNOWLEDGE_BLOCK_CHARS,
+  schemaSnapshotBlock,
+} from '../../mastra/context-blocks';
 import type { DatasetSnapshot } from '../../mastra/tool-services';
 import {
   knowledgeBootstrapOutputSchema,
@@ -24,8 +27,6 @@ import {
   KnowledgeUse,
 } from './entities/knowledge-snippet.entity';
 
-/** Character budget the curated-knowledge system block may take per turn. */
-const KNOWLEDGE_BLOCK_CHARS = 2_000;
 /** Schema block budget/sample-value depth handed to the bootstrap agent. */
 const BOOTSTRAP_SCHEMA_CHARS = 6_000;
 const BOOTSTRAP_SCHEMA_SAMPLE_VALUES = 5;

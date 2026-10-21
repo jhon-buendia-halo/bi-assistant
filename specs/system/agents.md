@@ -1076,7 +1076,7 @@ Curated dataset knowledge (user-authored — treat as authoritative over anythin
 - [<kind>] <title>: <body>[; synonyms: a, b][; entities: x, y]
 ```
 
-Budget 2,000 characters; the first entry that doesn't fit ends the list. The list of snippets that made it in (`{id, kind, title, body, datasetId?}`) is threaded through the turn and persisted on the answer as `knowledge` — exactly what the model saw, even if the store changes mid-turn.
+Budget 2,000 characters (`KNOWLEDGE_BLOCK_CHARS`, in `context-blocks.ts` since 2026-10-21, where the improvement loop's context lever can change it); the first entry that doesn't fit ends the list. At 2,000 the Finance sample's knowledge seed reaches the model with 3 of its 12 entries (1,780 of its 6,253 characters). The list of snippets that made it in (`{id, kind, title, body, datasetId?}`) is threaded through the turn and persisted on the answer as `knowledge` — exactly what the model saw, even if the store changes mid-turn.
 
 No rules travel with the block. How to apply it is the on-demand `curated-knowledge` skill (7.4, rules A13–A18, Appendix B): the assistant's catalog always lists it, and its description tells the model to read it when the call carries this block. When no snippet applies, the block is not sent. Every caller that sends Block 3 sends it the same way: the chat turn, the grounding pass, deep-analysis calls and the eval suite.
 

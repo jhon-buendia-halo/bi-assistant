@@ -29,7 +29,7 @@ The supervisor sees held-out results in `eval:diff` and the run reports. Those s
 |---|---|---|
 | The prompt | `backend/src/mastra/agents/` (the assistant's prompt) and its skills, `backend/src/mastra/skills/` | clarification, discovery, ids instead of names, coverage statements, format |
 | Tool descriptions and error messages | `backend/src/mastra/tools/`, `backend/src/mastra/tool-section.ts` | first-try SQL, wrong table, wrong filter |
-| Context blocks | `backend/src/mastra/context-blocks.ts`, `backend/src/modules/sessions/sessions.service.ts` | what the turn is told about the datasets and the session |
+| Context blocks | `backend/src/mastra/context-blocks.ts`, `backend/src/modules/sessions/sessions.service.ts` | what the turn is told about the datasets and the session, and how much curated knowledge it carries: the knowledge block's budget, `KNOWLEDGE_BLOCK_CHARS`, moved into `context-blocks.ts` on 2026-10-21 (the user's decision, after finding that 2,000 characters carry 3 of the Finance sample's 12 entries) |
 | A domain sample's knowledge seed | `backend/src/modules/testing-data/fixtures/knowledge/` | business-term, default-filter, value vocabulary |
 
 These are the lever files of R229: the only files a round may change, and the only files the leak check reads. One lever per round, because two cannot be attributed.

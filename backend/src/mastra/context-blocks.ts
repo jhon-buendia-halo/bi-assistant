@@ -22,6 +22,13 @@ export function knowledgeContext(block: string | undefined): SystemBlock[] {
   return [{ role: 'system', content: block }];
 }
 
+/**
+ * Character budget the curated-knowledge system block (Block 3) may take per
+ * turn: entries go in newest first and the first that does not fit ends the
+ * list (`KnowledgeService.contextFor`). Kept beside the other context budgets
+ * so the improvement loop's context lever can change it (BA-242).
+ */
+export const KNOWLEDGE_BLOCK_CHARS = 2_000;
 /** Join hints shown up front to the assistant — enough for a wide dataset. */
 const JOIN_HINT_CHARS = 1_500;
 /**
