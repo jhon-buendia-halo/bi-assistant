@@ -118,7 +118,7 @@ EVAL_RUN_FILE="$LOOP/runs/$R-slice-finance.json" \
 npm --prefix backend run --silent eval:diff -- --before "$LOOP/runs/$B-finance.json" --after "$LOOP/runs/$R-slice-finance.json"
 ```
 
-The dev row of the category is not `up`: revert (step 7) and record the round as `tried`. Otherwise run every set again, as in step 2.
+Read the slice's dev row and its per-attempt numbers, then run every set again, as in step 2, whether or not the row is `up` (since 2026-10-21; program.md, *The accept rule*, **Kept**).
 
 ## 6. The accept rule
 
@@ -133,7 +133,7 @@ It prints `Accept rule: met` (exit 0) or `Accept rule: not met (<reasons>)` (exi
 
 ## 7. Record
 
-Since 2026-10-21 (program.md, *Roles*), the lead reverts on its own a round whose target slice is not `up` or that fails the accept rule, records it and goes on to the next hypothesis; it asks the user only about a round that meets the accept rule.
+Since 2026-10-21 (program.md, *Roles*), the lead reverts on its own a round that fails any of conditions 2 to 5 of the accept rule, records it and goes on to the next hypothesis; it asks the user about a round that meets the accept rule (`accepted`) or meets conditions 2 to 5 only (`kept`).
 
 - **The user accepts:** update the specs and tests the change affects (the prompt in `specs/system/agents.md` Appendix A, `backend/src/mastra/agents/__fixtures__/`, pinned unit tests), run those tests, and commit the lever files with them, the `eval:diff` output (`$LOOP/runs/$R-diff.txt`) in the commit message. The after runs become the next baseline: `B=$R`.
 - **Not accepted, or `tried`:** revert the change: `git restore -- <the lever files the patch changed>` (listed by `git apply --stat "$LOOP/fixer/$R/change.patch"`), and delete any lever file it created.

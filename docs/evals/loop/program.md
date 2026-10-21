@@ -7,13 +7,13 @@ The loop of [the BA-9 plan, section 3.6](../../plans/BA-9.md#36-the-improvement-
 - The fixer's locks: the tool [eval-loop](../../../.claude/tools/eval-loop/README.md).
 - The log of rounds: [results.tsv](results.tsv). The leak check's allowlist: [leak-allowlist.txt](leak-allowlist.txt).
 
-Added 2026-10-20 (BA-242, roadmap 1.1.20). The accept rule was confirmed by the user on 2026-10-20; the stop rule and the budget below are defaults the user may change. On 2026-10-21 the user decided that the lead runs every round and reverts on its own a round that fails, so the user decides only the rounds that meet the accept rule (*Roles*).
+Added 2026-10-20 (BA-242, roadmap 1.1.20). The accept rule was confirmed by the user on 2026-10-20; the stop rule and the budget below are defaults the user may change. On 2026-10-21 the user decided that the lead runs every round and reverts on its own a round that fails, so the user decides only the rounds that meet the accept rule (*Roles*). A second decision the same day, after round 1: one cause fixed rarely makes a whole question pass all its attempts on gpt-4o-mini, since most questions fail for several causes, so a round whose target slice is not `up` still gets its full run, and the user may keep its change as the new baseline (decision `kept`) when conditions 2 to 5 of the accept rule hold, though condition 1 does not.
 
 ## Roles
 
 | Role | Who | Does | Never |
 |---|---|---|---|
-| Supervisor | The user and the lead Claude Code session | Picks the slice, the lever and the hypothesis; reads the full runs, dev and held-out; reviews the fixer's patch; the user accepts, the lead reverts; updates the specs and tests an accepted change affects. Since 2026-10-21 the lead walks the whole round, reverts on its own a round whose target slice is not `up` or that fails the accept rule, and asks the user only about a round that meets it | Tells the fixer anything about a held-out question |
+| Supervisor | The user and the lead Claude Code session | Picks the slice, the lever and the hypothesis; reads the full runs, dev and held-out; reviews the fixer's patch; the user accepts, the lead reverts; updates the specs and tests an accepted change affects. Since 2026-10-21 the lead walks the whole round, reverts on its own a round that fails any of conditions 2 to 5 of the accept rule, and asks the user about a round that meets the accept rule, or that meets conditions 2 to 5 (`kept`) | Tells the fixer anything about a held-out question |
 | Fixer | A Claude Code session started by `.claude/tools/eval-loop/start-fixer.sh`: headless (`--headless`), by the lead, since 2026-10-21; or interactively by the user | Reads the round's failure export, proposes one change, edits only lever files | Reads a held-out question, runs a command (it has no Bash), touches tests or specs |
 | CLI runner | `node .eval-loop/build/<round>/backend/dist/mastra/evals/run-assistant-evals.js` | Runs a set from the round's build snapshot and saves the run in the loop's data dir | Runs two sets at once on one data dir |
 
@@ -60,7 +60,7 @@ The skill [eval-loop](../../../.claude/skills/eval-loop/SKILL.md) has the full c
 1. **Pick the worst slice**: the category with the lowest dev pass rate, weighted by the priority of the plan's [section 3.9](../../plans/BA-9.md#39-thresholds-to-react-to-a-proposal-not-a-decision) (lookup, aggregate, join, ranking and ratio first; out-of-scope and non-existent must be at 100%).
 2. **Read the failures**: `npm --prefix backend run eval:export-failures -- --run <run> --out .eval-loop/exports/r<N>`, one per set that holds the slice; group the failures, one sentence each; the largest group is the hypothesis.
 3. **One lever, one change**: `.claude/tools/eval-loop/start-fixer.sh r<N> --headless --lever "<lever>" --target <category>`; when the fixer is done, `.claude/tools/eval-loop/collect-fixer.sh r<N>`, then `npm --prefix backend run eval:leak-check -- --diff-file .eval-loop/fixer/r<N>/change.patch`. A rejection goes back to a new fixer with the `--fixer` report (it names no held-out case), or the lead allowlists a false positive with its reason. The lead reviews the patch and applies it: `git apply .eval-loop/fixer/r<N>/change.patch`.
-4. **Target slice**: rebuild, snapshot as `r<N>`, run the slice on dev only, repeat 3 (`EVAL_SPLIT=dev EVAL_CATEGORY=<category>`), in each set that holds it; compare with `eval:diff` against the baseline run of that set. No `up` on the dev row of the category: revert, record the round as `tried`, back to step 2 with the next group.
+4. **Target slice**: rebuild, snapshot as `r<N>`, run the slice on dev only, repeat 3 (`EVAL_SPLIT=dev EVAL_CATEGORY=<category>`), in each set that holds it; compare with `eval:diff` against the baseline run of that set. The slice shows whether the change moved its target at all: until 2026-10-21 a round with no `up` on the dev row of the category was reverted here and recorded as `tried`; since then the full run follows either way, and the slice's per-attempt numbers (passing attempts, attempts with a repaired SQL) go into the round's reason.
 5. **Full run**: every set again, dev and held-out, repeat 3, judge off.
 6. **Accept rule**: `npm --prefix backend run eval:diff -- --before <the r<B> runs> --after <the r<N> runs> --target <category> --round <N> --lever "<lever>" --hypothesis "<hypothesis>" --tsv`.
 7. **Record**: on a round that meets the accept rule, the user accepts, and the lead commits the lever files (with the specs and tests of the section above) and the `eval:diff` output in the commit message; or the lead reverts (`git restore -- <files>`, and deletes any new lever file). Either way, append the round's row to `results.tsv`, from the draft row `eval:diff` printed.
@@ -79,6 +79,8 @@ Decision D2 of 2026-10-20, checked by `eval:diff --target` (R227); exit 0 means 
 | 5 | The cost per question rose by at most 10%; a side that is not priced or not recorded does not meet this | `Cost per question:` at most `+10%` |
 
 With about ten questions per category, a single run rarely flags `up`: one flip moves a category by ten points, and the interval is wide. Condition 1 is what makes an accepted change believable; widening a slice (more questions, not more repeats) is the honest way to make it reachable.
+
+**Kept** (since 2026-10-21): when conditions 2 to 5 hold and condition 1 does not, the user may keep the change as the new baseline. It is recorded as `kept`, not `accepted`, with the slice's per-attempt numbers as its evidence, and the next rounds build on it. A change that fails any of conditions 2 to 5 is reverted by the lead.
 
 ## The stop rule
 
@@ -106,7 +108,7 @@ One row per round, tab-separated, in these columns:
 | `categories_down` | The rows flagged `down` on either split, `;`-separated |
 | `cost_per_question_before`, `cost_per_question_after` | Dollars, 4 decimals, or `not priced` / `not recorded` |
 | `round_cost_usd` | What the round's runs cost: the full run (the draft fills it), plus the target slice's runs |
-| `decision` | `baseline`, `accepted`, `reverted` or `tried` (reverted after the target slice) |
+| `decision` | `baseline`, `accepted`, `kept` (conditions 2 to 5 met, condition 1 not, kept by the user; since 2026-10-21), `reverted` or `tried` (reverted after the target slice, before 2026-10-21) |
 | `reason` | Why, one sentence: the accept rule's reasons when not met |
 | `run_ids_before`, `run_ids_after` | 8-character run ids, `;`-separated |
 
