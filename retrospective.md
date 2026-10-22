@@ -14,6 +14,33 @@ Entry template:
 
 ---
 
+## 2026-10-22 — 1.1.20 Supervised improvement loop: rounds 0 to 9 and the acceptance gate (BA-242)
+
+### What went well
+- Counting what the traces did before choosing a lever found the real first group. The kind-id bug expected to lead was in 3.7% of the attempts; SQL written on guessed column names was in 345 of 370 dev SQL attempts, because the turn listed tables but not columns.
+- The held-out split did its job. Round 1 lifted dev from 13/130 to 24/130, but two held-out questions went from 3/3 to 0/3 on real side effects of the change (a 2,500-character cap left a view without its columns, and leaner queries fetched names apart). Round 2 fixed the cap, and round 5 kept the change on the next model.
+- An A/A rerun (round 4, round 3's code and model) measured the noise: 21 dev and 11 held-out questions flipped with no change, and three small held-out categories fell by chance. The accept rule's condition 2 was changed before round 5's results came in, not after.
+- A probe of four models on 31 dev questions ($0.26, each in its own data dir and databases) settled the model choice with numbers instead of a price table: gpt-4o-mini passed 16% of its attempts there, gpt-5.6-luna 71%. One data dir per set then let the three sets run at once, about 50 minutes for a full run instead of 100.
+- Measuring the mechanism beside the pass rate (tool calls per attempt, repaired SQL, ungrounded numbers) made each keep or revert explainable when the question-level rate stayed within its interval.
+- Every fact of the Finance knowledge round was checked by SQL against the loop's database and against `docs/evals/domains/finance-policy.md` before it was applied. The leak check's false positives (month names, column values) went to the allowlist with reasons, and no rule was reworded to dodge it.
+- The headless fixer took the user's terminal out of every round, and a permission it would ask for is refused rather than prompted.
+
+### What went wrong
+- The interactive fixer, started in VS Code's integrated terminal, was offered the IDE's MCP server (with `executeCode`) despite `--strict-mcp-config`; only the user's screenshot of its permission prompt showed it.
+- The first baseline on gpt-5.6-luna came out not priced: on a gpt-5 family model `create_visual` works and its designer runs on gpt-4.1-mini (agents.md 1.5), which had no rate. A run keeps its rates, so it could never be a before side, and the baseline had to be taken again ($1.23).
+- Round 6's commit ran only the knowledge and context-block tests. `knowledge-seed-block.spec.ts` (its own `BLOCK_BUDGET = 2_000`) failed for four samples, and knowledge R17, testing-data R26 and data-model still said 2,000; round 7 found it.
+- Shell slips cost time and $0.10: in zsh, `local set=$1 … name=$R-$set` expanded `$set` before assigning it, so the first round 3 start wrote three sets into one log; a heredoc delimiter inside the text a Python edit replaced cut the script; `collect-fixer.sh … | head -3` was killed before it removed the worktree; a command kept in `$P` was not word-split.
+- I wrote round 9's reason from the slice's numbers (aggregate 10/15 to 9/15) instead of the full run's (10/15 to 12/15); it was caught while generating the summary, before the gate's commit.
+- With about ten questions per category and pass^3, condition 1 of the accept rule was out of reach for a fix of one cause: one round of seven that changed the app met the whole rule. Nobody checked the rule against the noise before the loop started, and rounds 1 and 2 ($2.39) ran on a model later dropped.
+
+### What to do differently
+- Before changing an eval model, list every model a run calls (assistant, SQL fixer, the designer's gpt-4.1-mini on gpt-5 family models, the judge) and price each in `pricing.json` first.
+- Before the first round of any loop, run an A/A rerun of the baseline and check each accept-rule condition against its flips.
+- After a change is kept or accepted, run the full backend unit suite and grep the specs for the value it replaced (`grep -rn "2,000" specs`) before committing it.
+- In zsh scripts, give each `local` that depends on another its own line; write edit scripts with the Write tool whenever the replaced text may hold a heredoc delimiter; never pipe a script that cleans up into `head`.
+- Run the fixer headless, or from a terminal outside VS Code; keep `mcp__ide` in its deny rules.
+- Take a round's `results.tsv` cells and reason from the full run's `eval:diff` draft row by script, never from the slice.
+
 ## 2026-10-20 — 1.1.10 World Cup golden set merged into the World Cup bank (BA-188)
 
 ### What went well

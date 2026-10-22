@@ -2,6 +2,27 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-22
+
+### Added
+- **The supervised improvement loop of the assistant's evals** (roadmap 1.1.20, [BA-242](https://halo-powered.atlassian.net/browse/BA-242), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)).
+  - Runs can ask each question 1, 3 or 5 times (**Repeats**); a question passes only when every attempt passes, and one that passes sometimes is **flaky**. Results, the run summary, the Evals tab and the Markdown report show the dev and held-out splits side by side with 95% intervals, and record tokens and cost per attempt, question and run from a bundled price table (agents-evals R209 to R221).
+  - The command line saves its runs like the app (`EVAL_REPEATS`, `EVAL_SPLIT`, `EVAL_CATEGORY`, `EVAL_RUN_FILE`; R222 to R224). Three loop tools: `eval:diff` (two sides of runs by split and category, Newcombe's interval of each change, flips, cost, and the accept rule), `eval:export-failures` (what the fixer may read: dev failures only, held-out counts only) and `eval:leak-check` (rejects a lever-file change that quotes a question bank or planted facts; R225 to R230).
+  - The fixer runs in a detached worktree with every held-out file deleted, only Read, Edit, Write, Glob and Grep, deny rules over the protected paths, no MCP server and no auto-memory; `start-fixer.sh --headless` lets the lead run it (`.claude/tools/eval-loop/`). The runbook is [docs/evals/loop/program.md](docs/evals/loop/program.md), with its log [results.tsv](docs/evals/loop/results.tsv) and the project skill `eval-loop`.
+  - Ten rounds ran (0 to 9): three on gpt-4o-mini, then, after a probe of four models, on gpt-5.6-luna at low effort, with the three sets run at once. Dev went from 13/130 to 102/130 and held-out from 7/51 to 33/51, at $0.0053 per question (was $0.0079); $11.89 of OpenAI spend.
+  - Evidence: [evidence/1.1.20/](evidence/1.1.20/) (loop-summary.md, model-probe.md, eval-diffs/, checks.txt, e2e-results.txt, e2e-impact.md, screenshots).
+
+### Changed
+- **What the assistant receives, from the loop's rounds** (BA-242), each kept or accepted by the user with its `eval:diff` in the commit:
+  - Every entity line of the turn's orientation block lists its columns and types (agents.md 4.1, round 5): tool calls per attempt 5.40 → 3.66, cost per question −14.5%.
+  - The curated knowledge block takes 7,000 characters, not 2,000 (knowledge R17, round 6): at 2,000 the Finance sample's seed reached the model with 3 of its 12 entries.
+  - The Finance knowledge seed gains rules for the wealth tables (round 7, accepted): Finance dev 29/48 → 43/48, held-out 11/20 → 14/20.
+  - Prompt rule A40: derived figures the answer cites are computed in SQL first (agents.md Appendix A, round 9); a prompt rule, re-measured on any other model before it counts there.
+- **The loop's own rules, by the user's decisions** ([program.md](docs/evals/loop/program.md)): the lead reverts a round that fails on its own; every round gets its full run, and a change that meets conditions 2 to 5 of the accept rule may be kept; condition 2 refuses a held-out target only when it is `down`, after an A/A rerun showed small held-out categories fall by chance; the loop runs on gpt-5.6-luna, which the price table now covers with gpt-4.1-mini (agents-evals R220).
+
+### Fixed
+- **The result-set match no longer fails a right share stated as a rounded percentage** (agents-evals R31, BA-242): a number written with decimals matches a non-whole reference when it equals it, or 100 times it, rounded to its own decimals; careful mode's cross-check keeps the strict comparison.
+
 ## 2026-10-20
 
 ### Changed
