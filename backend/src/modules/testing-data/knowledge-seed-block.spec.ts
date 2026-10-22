@@ -31,9 +31,10 @@ import { KnowledgeRepository } from '../knowledge/repositories/knowledge.reposit
 import { SAMPLE_FIXTURES, type SampleFixture } from './fixtures/registry';
 import type { KnowledgeSeed } from './fixtures/knowledge/types';
 import { TestingDataService } from './testing-data.service';
+import { KNOWLEDGE_BLOCK_CHARS } from '../../mastra/context-blocks';
 
 /** Knowledge R17: the characters of snippet lines the block may take. */
-const BLOCK_BUDGET = 2_000;
+const BLOCK_BUDGET = KNOWLEDGE_BLOCK_CHARS;
 
 const SEEDED = SAMPLE_FIXTURES.filter((fixture) => fixture.knowledge);
 
