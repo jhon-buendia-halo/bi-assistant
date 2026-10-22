@@ -162,11 +162,297 @@ function seedFinishedRun(appDataDir: string): void {
     createdAt: '2026-10-01T09:00:00.000Z',
     updatedAt: '2026-10-01T09:01:00.000Z',
   };
+  storeRun(appDataDir, run);
+}
+
+/** Stores a run document straight in the app's database. */
+function storeRun(appDataDir: string, run: object): void {
   appSql(
     appDataDir,
     'INSERT INTO "eval_runs" (doc) VALUES (?)',
     JSON.stringify(run),
   );
+}
+
+/** One agent's usage on one model (agents-evals R219), no reasoning tokens. */
+function usageEntry(
+  agent: 'assistant' | 'sql-fixer',
+  model: string,
+  inputTokens: number,
+  cachedInputTokens: number,
+  outputTokens: number,
+  calls: number,
+) {
+  return {
+    agent,
+    model,
+    inputTokens,
+    cachedInputTokens,
+    outputTokens,
+    reasoningTokens: 0,
+    calls,
+    unreportedCalls: 0,
+  };
+}
+
+/** One attempt of a question, as a result's `attempts` holds it (R211). */
+function seededAttempt(
+  attempt: number,
+  status: SeededStatus,
+  checkResults: ReturnType<typeof seededCheck>[],
+  durationMs: number,
+  usage: ReturnType<typeof usageEntry>[],
+  costUsd: number,
+) {
+  return {
+    attempt,
+    status,
+    passed: status === 'passed',
+    scores: Object.fromEntries(checkResults.map((c) => [c.id, c.score])),
+    checkResults,
+    answer: 'A seeded answer.',
+    toolCalls: [],
+    durationMs,
+    usage,
+    costUsd,
+  };
+}
+
+const GPT_4O_MINI = 'gpt-4o-mini';
+
+const CHAMPION_CHECKS = [
+  seededCheck(
+    'check-includes',
+    'Checks if output includes "Argentina"',
+    'G1',
+    'passed',
+  ),
+  seededCheck(
+    'check-called-tool',
+    'Checks that "run_readonly_sql" was called',
+    'D1',
+    'passed',
+  ),
+];
+
+/** Job id of the seeded run with Repeats 3. */
+const REPEATS_RUN = 'seeded-repeats-3';
+
+/**
+ * Stores a finished run of the world-cup set with Repeats 3 on gpt-4o-mini
+ * (R209 to R221): `champion-2022` (dev, lookup) passed all three attempts,
+ * and `shot-conversion-2022` (held-out, ratio) passed attempts 1 and 3 and
+ * failed attempt 2, so it is flaky and failed, its representative attempt
+ * is 2, and its usage is the assistant's and the SQL fixer's. Like the run
+ * above it is stored without a summary. The costs are what the backend's
+ * own `costUsdOf`, `foldAttempts` and `sumCostUsd` give for these tokens at
+ * the bundled price table's gpt-4o-mini rates (computed with
+ * `backend/dist/mastra/evals/`, not by hand).
+ */
+function seedRepeatsRun(appDataDir: string): void {
+  const shotPassed = [
+    seededCheck(
+      'check-includes',
+      'Checks if output includes "Netherlands"',
+      'G1',
+      'passed',
+    ),
+    seededCheck(
+      'check-called-tool',
+      'Checks that "run_readonly_sql" was called',
+      'D1',
+      'passed',
+    ),
+  ];
+  const shotFailed = [
+    seededCheck(
+      'check-includes',
+      'Checks if output includes "Netherlands"',
+      'G1',
+      'failed',
+      'expected "Netherlands" in the answer — answer was "Brazil"',
+    ),
+    shotPassed[1],
+  ];
+  storeRun(appDataDir, {
+    jobId: REPEATS_RUN,
+    agentKey: 'assistant',
+    datasourceId: 'seeded-datasource',
+    datasets: [WORLD_CUP_DATASET],
+    caseIds: ['champion-2022', 'shot-conversion-2022'],
+    status: 'completed',
+    totalCases: 2,
+    startedAt: '2026-10-02T09:00:00.000Z',
+    finishedAt: '2026-10-02T09:02:00.000Z',
+    judge: { mode: 'off' },
+    repeats: 3,
+    model: `openai/${GPT_4O_MINI}`,
+    source: 'app',
+    results: [
+      {
+        ...seededResult(
+          'champion-2022',
+          'Who won the 2022 World Cup?',
+          'lookup',
+          'passed',
+          CHAMPION_CHECKS,
+        ),
+        split: 'dev',
+        durationMs: 1300,
+        passes: 3,
+        runs: 3,
+        flaky: false,
+        usage: [usageEntry('assistant', GPT_4O_MINI, 14410, 7168, 450, 6)],
+        costUsd: 0.001894,
+        attempts: [
+          seededAttempt(
+            1,
+            'passed',
+            CHAMPION_CHECKS,
+            1300,
+            [usageEntry('assistant', GPT_4O_MINI, 4800, 0, 150, 2)],
+            0.00081,
+          ),
+          seededAttempt(
+            2,
+            'passed',
+            CHAMPION_CHECKS,
+            1200,
+            [usageEntry('assistant', GPT_4O_MINI, 4800, 3584, 140, 2)],
+            0.000535,
+          ),
+          seededAttempt(
+            3,
+            'passed',
+            CHAMPION_CHECKS,
+            1250,
+            [usageEntry('assistant', GPT_4O_MINI, 4810, 3584, 160, 2)],
+            0.000549,
+          ),
+        ],
+      },
+      {
+        ...seededResult(
+          'shot-conversion-2022',
+          'Which team turned the highest share of its shots into goals at the 2022 World Cup?',
+          'ratio',
+          'failed',
+          shotFailed,
+        ),
+        split: 'held-out',
+        durationMs: 2100,
+        passes: 2,
+        runs: 3,
+        flaky: true,
+        usage: [
+          usageEntry('assistant', GPT_4O_MINI, 18750, 8192, 690, 9),
+          usageEntry('sql-fixer', GPT_4O_MINI, 2250, 0, 185, 2),
+        ],
+        costUsd: 0.00306,
+        attempts: [
+          seededAttempt(
+            1,
+            'passed',
+            shotPassed,
+            1500,
+            [
+              usageEntry('assistant', GPT_4O_MINI, 6200, 0, 220, 3),
+              usageEntry('sql-fixer', GPT_4O_MINI, 1100, 0, 90, 1),
+            ],
+            0.001281,
+          ),
+          seededAttempt(
+            2,
+            'failed',
+            shotFailed,
+            2100,
+            [
+              usageEntry('assistant', GPT_4O_MINI, 6400, 4096, 260, 3),
+              usageEntry('sql-fixer', GPT_4O_MINI, 1150, 0, 95, 1),
+            ],
+            0.001038,
+          ),
+          seededAttempt(
+            3,
+            'passed',
+            shotPassed,
+            1400,
+            [usageEntry('assistant', GPT_4O_MINI, 6150, 4096, 210, 3)],
+            0.000741,
+          ),
+        ],
+      },
+    ],
+    usage: [
+      usageEntry('assistant', GPT_4O_MINI, 33160, 15360, 1140, 15),
+      usageEntry('sql-fixer', GPT_4O_MINI, 2250, 0, 185, 2),
+    ],
+    costUsd: 0.004954,
+    // The rates the run was priced with, as the price table had them (R220).
+    rates: {
+      [GPT_4O_MINI]: {
+        inputPerMillionUsd: 0.15,
+        cachedInputPerMillionUsd: 0.075,
+        outputPerMillionUsd: 0.6,
+        source: 'developers.openai.com/api/docs/pricing',
+        readOn: '2026-10-20',
+      },
+    },
+    createdAt: '2026-10-02T09:00:00.000Z',
+    updatedAt: '2026-10-02T09:02:00.000Z',
+  });
+}
+
+/** Job id of the seeded run on a model with no price. */
+const UNPRICED_RUN = 'seeded-not-priced';
+
+/** A model the bundled price table (data-model 4.11) does not list. */
+const UNPRICED_MODEL = 'llama-3.3-70b';
+
+/**
+ * Stores a finished run of the world-cup set, Repeats 1, whose one question
+ * ran on a model with no price: its tokens are recorded, its cost and the
+ * run's are not priced (`costUsd: null`) and the run keeps no rate (R221).
+ */
+function seedUnpricedRun(appDataDir: string): void {
+  const usage = [usageEntry('assistant', UNPRICED_MODEL, 5100, 0, 180, 2)];
+  storeRun(appDataDir, {
+    jobId: UNPRICED_RUN,
+    agentKey: 'assistant',
+    datasourceId: 'seeded-datasource',
+    datasets: [WORLD_CUP_DATASET],
+    caseIds: ['champion-2022'],
+    status: 'completed',
+    totalCases: 1,
+    startedAt: '2026-10-03T09:00:00.000Z',
+    finishedAt: '2026-10-03T09:00:30.000Z',
+    judge: { mode: 'off' },
+    repeats: 1,
+    model: `lenai/${UNPRICED_MODEL}`,
+    source: 'app',
+    results: [
+      {
+        ...seededResult(
+          'champion-2022',
+          'Who won the 2022 World Cup?',
+          'lookup',
+          'passed',
+          CHAMPION_CHECKS,
+        ),
+        split: 'dev',
+        passes: 1,
+        runs: 1,
+        flaky: false,
+        usage,
+        costUsd: null,
+      },
+    ],
+    usage,
+    costUsd: null,
+    rates: {},
+    createdAt: '2026-10-03T09:00:00.000Z',
+    updatedAt: '2026-10-03T09:00:30.000Z',
+  });
 }
 
 /** axe violations on the page in Light then Dark, one line per node. */
@@ -281,6 +567,14 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   await expect(page.getByTestId('eval-case-category-out-of-scope')).toHaveText(
     'out-of-scope',
   );
+  // A held-out question carries the chip `held-out`, a dev one no split
+  // chip (R215).
+  await expect(page.getByTestId('eval-split-champion-2022')).toHaveCount(0);
+  await expect(
+    page
+      .getByTestId('eval-case-shot-conversion-2022')
+      .getByTestId('eval-split-shot-conversion-2022'),
+  ).toHaveText('held-out');
   await expect(page.locator(CASE_ROWS)).toHaveCount(63);
   await expect(
     page.locator('[data-testid^="eval-case-category-"]'),
@@ -519,6 +813,18 @@ test('downloads an execution as a Markdown report', async ({ page }) => {
   // The run's judge option and its two summary sections (R153), which a run
   // with no finished question has too.
   expect(report).toContain('Judge: off');
+  // The repeats, dev, held-out and cost lines (R218). The run has only just
+  // started, so how many questions it has finished, and so the counts, are
+  // not fixed; a new run records its cost from the start, so it is never
+  // "not recorded".
+  expect(report).toMatch(/^Repeats: 1$/m);
+  expect(report).toMatch(/^Dev: \d+\/\d+ passed · 95% interval (—|\d+–\d+%)$/m);
+  expect(report).toMatch(
+    /^Held-out: \d+\/\d+ passed · 95% interval (—|\d+–\d+%)$/m,
+  );
+  expect(report).toMatch(
+    /^Cost: (\$\d+\.\d{4}( · \$\d+\.\d{4} per question)?|not priced \(.+\))$/m,
+  );
   expect(report).toContain('## By category');
   expect(report).toContain('## By criterion');
   expect(report).toContain('## Summary');
@@ -669,20 +975,43 @@ test('reports pass rate by category', async ({ page, appDataDir }) => {
   await card.getByRole('button', { name: /passed/ }).click();
   const summary = page.getByTestId(`eval-run-summary-${SEEDED_RUN}`);
 
-  // By category: one row per category, counting questions.
+  // By category: one row per category, counting questions, its dev and
+  // held-out questions side by side as "<passed>/<scored> (<interval>)", or
+  // "—" with none scored (R152, R216). The seeded results carry no split, so
+  // each reads its question bank case's (R215): all three are dev. The
+  // intervals are Wilson's for 1 of 1 and 0 of 1 (R212).
   const byCategory = summary.getByRole('table', { name: 'By category' });
   await expect(byCategory.getByRole('columnheader')).toHaveText([
     'Category',
-    'Passed',
-    'Failed',
+    'Dev',
+    'Held-out',
+    'Flaky',
     'Not scored',
     'Total',
   ]);
   const categoryCounts = (category: string) =>
     summary.getByTestId(`eval-run-summary-category-${category}`).locator('td');
-  await expect(categoryCounts('lookup')).toHaveText(['1', '0', '0', '1']);
-  await expect(categoryCounts('join')).toHaveText(['0', '1', '0', '1']);
-  await expect(categoryCounts('out-of-scope')).toHaveText(['0', '0', '1', '1']);
+  await expect(categoryCounts('lookup')).toHaveText([
+    '1/1 (21–100%)',
+    '—',
+    '0',
+    '0',
+    '1',
+  ]);
+  await expect(categoryCounts('join')).toHaveText([
+    '0/1 (0–79%)',
+    '—',
+    '0',
+    '0',
+    '1',
+  ]);
+  await expect(categoryCounts('out-of-scope')).toHaveText([
+    '—',
+    '—',
+    '0',
+    '1',
+    '1',
+  ]);
 
   // By criterion: one row per criterion of a scored check, counting checks;
   // the not-scored judge check (G2) counts nowhere.
@@ -717,4 +1046,178 @@ test('reports pass rate by category', async ({ page, appDataDir }) => {
   await expect(page.getByTestId('eval-judge')).toBeVisible();
   const questions = await axeViolations(page, 'Evals questions');
   expect([...executions, ...questions]).toEqual([]);
+});
+
+test('runs every question three times when Repeats is 3', async ({ page }) => {
+  // The stub stands in for the model and holds its first call open, so the
+  // run is still going when the test looks at it and no question finishes.
+  const stub = await startLlmStub();
+  try {
+    await saveLenaiSettings(page, stub.baseUrl);
+    stub.hold = () => new Promise<void>(() => undefined);
+    await createWorldCupDatasource(page);
+    await createWorldCupDataset(page, WORLD_CUP_EVAL_TABLES);
+
+    await page
+      .getByRole('complementary', { name: 'Navigation rail' })
+      .getByRole('button', { name: 'Agents' })
+      .click();
+    await page.getByTestId('agent-assistant').click();
+    await page.getByTestId('agent-tab-evals').click();
+    await openWorldCupSet(page);
+
+    // A labelled select after the Judge select, 1 unless changed (R214).
+    const repeats = page.getByLabel('Repeats', { exact: true });
+    await expect(repeats).toHaveValue('1');
+    await expect(repeats.locator('option')).toHaveText(['1', '3', '5']);
+    await repeats.selectOption('3');
+    await expect(repeats).toHaveValue('3');
+
+    // The run is started with repeats 3, and records them (R19, R22, R209).
+    const firstPoll = page.waitForResponse(
+      (res) =>
+        res.request().method() === 'GET' &&
+        /\/evals\/runs\/[^/]+$/.test(new URL(res.url()).pathname),
+    );
+    const [request] = await Promise.all([
+      page.waitForRequest((req) => isRunStart(req.method(), req.url())),
+      page.getByTestId('eval-run').click(),
+    ]);
+    expect(request.postDataJSON()).toMatchObject({ repeats: 3 });
+    const view = (await (await firstPoll).json()) as {
+      status?: string;
+      repeats?: number;
+    };
+    expect(view).toMatchObject({ status: 'running', repeats: 3 });
+
+    // The select is disabled while the run is going.
+    await expect(page.getByTestId('eval-run')).toContainText('Running…');
+    await expect(repeats).toBeDisabled();
+  } finally {
+    await stub.close();
+  }
+});
+
+test('shows dev and held-out side by side, with repeats, flaky questions and cost', async ({
+  page,
+  appDataDir,
+}) => {
+  await followOsTheme(page);
+  seedRepeatsRun(appDataDir);
+  await page.addScriptTag({ content: axe.source });
+
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
+  await page.getByTestId('agent-assistant').click();
+  await page.getByTestId('agent-tab-evals').click();
+  await page.getByTestId('eval-subtab-runs').click();
+
+  // After "<passed>/<total> passed": the repeats, the flaky questions and
+  // the run's cost (R216). The flaky question counts as failed (R211).
+  const card = page.getByTestId(`eval-run-${REPEATS_RUN}`);
+  await expect(card).toContainText('1/2 passed');
+  await expect(card.getByTestId(`eval-run-repeats-${REPEATS_RUN}`)).toHaveText(
+    'Repeat 3',
+  );
+  await expect(card.getByTestId(`eval-run-flaky-${REPEATS_RUN}`)).toHaveText(
+    '1 flaky',
+  );
+  await expect(card.getByTestId(`eval-run-cost-${REPEATS_RUN}`)).toHaveText(
+    '$0.0050',
+  );
+
+  // Expanded: the split line, dev and held-out each with its passed and
+  // scored questions and its interval (R212, R213, R216), computed on read.
+  await card.getByRole('button', { name: /passed/ }).click();
+  await expect(page.getByTestId(`eval-run-splits-${REPEATS_RUN}`)).toHaveText(
+    'Dev 1/1 (21–100%) · Held-out 0/1 (0–79%)',
+  );
+  const summary = page.getByTestId(`eval-run-summary-${REPEATS_RUN}`);
+  const byCategory = summary.getByRole('table', { name: 'By category' });
+  await expect(byCategory.getByRole('columnheader')).toHaveText([
+    'Category',
+    'Dev',
+    'Held-out',
+    'Flaky',
+    'Not scored',
+    'Total',
+  ]);
+  await expect(
+    summary.getByTestId('eval-run-summary-category-ratio').locator('td'),
+  ).toHaveText(['—', '0/1 (0–79%)', '1', '0', '1']);
+
+  // The flaky question's row: its held-out chip and its passed attempts.
+  const row = page.getByTestId(
+    `eval-run-result-${REPEATS_RUN}-shot-conversion-2022`,
+  );
+  await expect(
+    row.getByTestId(
+      `eval-run-result-split-${REPEATS_RUN}-shot-conversion-2022`,
+    ),
+  ).toHaveText('held-out');
+  await expect(row).toContainText('2/3');
+
+  // The Details panel: split, attempts, tokens per agent and cost (R217).
+  await row.click();
+  const panel = page.getByLabel('Details panel');
+  await expect(panel).toContainText(
+    'Which team turned the highest share of its shots into goals at the 2022 World Cup?',
+  );
+  await expect(panel.getByTestId('eval-trace-split')).toContainText('Held-out');
+  await expect(panel.getByTestId('eval-trace-attempts')).toContainText(
+    '2 of 3 attempts passed',
+  );
+  const assistantTokens = panel.getByTestId('eval-trace-tokens-assistant');
+  await expect(assistantTokens).toContainText('Assistant');
+  await expect(assistantTokens).toContainText(GPT_4O_MINI);
+  await expect(assistantTokens).toContainText(
+    '18,750 in · 8,192 cached · 690 out',
+  );
+  const fixerTokens = panel.getByTestId('eval-trace-tokens-sql-fixer');
+  await expect(fixerTokens).toContainText('SQL fixer');
+  await expect(fixerTokens).toContainText(GPT_4O_MINI);
+  await expect(fixerTokens).toContainText('2,250 in · 185 out');
+  await expect(panel.getByTestId('eval-trace-cost')).toHaveText('$0.0031');
+
+  // No accessibility violations on the new parts, in either theme.
+  expect(await axeViolations(page, 'Evals executions with repeats')).toEqual(
+    [],
+  );
+});
+
+test('says "Not priced" for a model with no price', async ({
+  page,
+  appDataDir,
+}) => {
+  seedUnpricedRun(appDataDir);
+
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
+  await page.getByTestId('agent-assistant').click();
+  await page.getByTestId('agent-tab-evals').click();
+  await page.getByTestId('eval-subtab-runs').click();
+
+  // Not priced, naming the model without a price (R216, R221).
+  const cost = page.getByTestId(`eval-run-cost-${UNPRICED_RUN}`);
+  await expect(cost).toHaveText('Not priced');
+  await expect(cost).toHaveAttribute('title', `No price for ${UNPRICED_MODEL}`);
+
+  // The question's tokens are still shown, and its cost is not priced (R217).
+  await page
+    .getByTestId(`eval-run-${UNPRICED_RUN}`)
+    .getByRole('button', { name: /passed/ })
+    .click();
+  await page
+    .getByTestId(`eval-run-result-${UNPRICED_RUN}-champion-2022`)
+    .click();
+  const panel = page.getByLabel('Details panel');
+  await expect(panel).toContainText('Who won the 2022 World Cup?');
+  const tokens = panel.getByTestId('eval-trace-tokens-assistant');
+  await expect(tokens).toContainText(UNPRICED_MODEL);
+  await expect(tokens).toContainText('5,100 in · 180 out');
+  await expect(panel.getByTestId('eval-trace-cost')).toHaveText('Not priced');
 });
