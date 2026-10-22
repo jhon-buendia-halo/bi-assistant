@@ -398,6 +398,51 @@ describe('runResultSetCheck', () => {
     expect(result?.passed).toBe(true);
   });
 
+  describe('a share stated rounded or as a percentage (R31, changed 2026-10-22)', () => {
+    const shares = [
+      { team: 'Croatia', share: '0.87131704860236716192' },
+      { team: 'Brazil', share: '0.87047465808527755430' },
+    ];
+    const check = (rows: Record<string, unknown>[]) =>
+      runResultSetCheck('SELECT reference', ['World Cup'], snapshot, [
+        sql(rows),
+      ]);
+
+    it('accepts the share as a rounded percentage', async () => {
+      reference(shares);
+      const result = await check([
+        { team: 'Croatia', pct: 87.13 },
+        { team: 'Brazil', pct: '87.05' },
+      ]);
+      expect(result?.passed).toBe(true);
+    });
+
+    it('accepts the share rounded to the decimals the answer carries', async () => {
+      reference(shares);
+      const result = await check([
+        { team: 'Croatia', share: 0.871 },
+        { team: 'Brazil', share: 0.8705 },
+      ]);
+      expect(result?.passed).toBe(true);
+    });
+
+    it('still rejects a wrong percentage, and a whole number for a fraction', async () => {
+      reference(shares);
+      expect(
+        (
+          await check([
+            { team: 'Croatia', pct: 88.13 },
+            { team: 'Brazil', pct: 87.05 },
+          ])
+        )?.passed,
+      ).toBe(false);
+      reference([{ team: 'Argentina', goals_per_match: 3.4 }]);
+      expect(
+        (await check([{ team: 'Argentina', goals_per_match: 3 }]))?.passed,
+      ).toBe(false);
+    });
+  });
+
   it('rejects a leaderboard whose row for the answer holds the wrong figure', async () => {
     reference([{ player: 'Lionel Messi', goals: 4 }]);
     const result = await runResultSetCheck(

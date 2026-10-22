@@ -8,7 +8,7 @@
 // type it borrows from `assistant.evals.ts` (`ScoredCheckResult`) is imported
 // with `import type`, which TypeScript erases entirely, so it adds no runtime
 // edge back to that heavier module.
-import { compareResults, rowKey } from '../../modules/sessions/result-compare';
+import { normalizeValue, rowKey } from '../../modules/sessions/result-compare';
 import { getDatasetToolServices } from '../tool-services';
 import type { DatasetSnapshot } from '../tool-services';
 import type { ToolDataRecord } from '../../modules/sessions/entities/session.entity';
@@ -22,12 +22,64 @@ export interface ResultSetCheckOptions {
 
 type Row = Record<string, unknown>;
 
-/** A candidate must contain every reference value, never just a subset. */
-function containsReferenceRow(expected: Row, actual: Row): boolean {
+const NUMERIC = /^-?\d+(\.\d+)?$/;
+
+/** A cell as a plain number, with the text it was written as. */
+function numberCell(value: unknown): { value: number; text: string } | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return { value, text: String(value) };
+  }
+  if (typeof value === 'bigint')
+    return { value: Number(value), text: String(value) };
+  if (typeof value === 'string' && NUMERIC.test(value.trim())) {
+    return { value: Number(value.trim()), text: value.trim() };
+  }
+  return null;
+}
+
+/**
+ * The same fact (R31): equal values at six significant digits, as
+ * `normalizeValue` compares them; or, since 2026-10-22, an assistant number
+ * written with decimals that is the reference, or 100 times the reference (a
+ * share stated as a percentage), rounded to those decimals. A whole number
+ * never stands for a fraction, so a count cannot pass for a ratio.
+ */
+function sameCell(reference: unknown, actual: unknown): boolean {
+  if (normalizeValue(reference) === normalizeValue(actual)) return true;
+  const ref = numberCell(reference);
+  const got = numberCell(actual);
+  if (!ref || !got || Number.isInteger(ref.value)) return false;
+  const places = /\.(\d+)$/.exec(got.text)?.[1].length ?? 0;
+  if (places === 0) return false;
+  const half = 0.5 * 10 ** -places + 1e-9;
   return (
-    Object.keys(actual).length >= Object.keys(expected).length &&
-    compareResults([expected], [actual], { widthTolerant: true }).match
+    Math.abs(ref.value - got.value) <= half ||
+    Math.abs(ref.value * 100 - got.value) <= half
   );
+}
+
+/**
+ * A candidate must contain every reference value, never just a subset: each
+ * reference cell matched to a cell of its own (a small bipartite matching).
+ */
+function containsReferenceRow(expected: Row, actual: Row): boolean {
+  const wanted = Object.values(expected);
+  const cells = Object.values(actual);
+  if (cells.length < wanted.length) return false;
+  const owner = new Map<number, number>();
+  const place = (index: number, seen: Set<number>): boolean => {
+    for (let cell = 0; cell < cells.length; cell += 1) {
+      if (seen.has(cell) || !sameCell(wanted[index], cells[cell])) continue;
+      seen.add(cell);
+      const current = owner.get(cell);
+      if (current === undefined || place(current, seen)) {
+        owner.set(cell, index);
+        return true;
+      }
+    }
+    return false;
+  };
+  return wanted.every((_value, index) => place(index, new Set()));
 }
 
 /**
