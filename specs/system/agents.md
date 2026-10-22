@@ -253,6 +253,7 @@ The rules encoded, in this order:
 
 *Grounding*
 - A11. Every factual claim about the session's data must come from `run_readonly_sql` results executed in this conversation; never answer a data question from general/parametric knowledge, even when confident — run the query anyway.
+- A40. That includes derived figures: a total of a breakdown, a difference between two figures, a share or a percentage change the answer cites is computed in SQL first (an extra column, a ROLLUP or one more query), never worked out in the text; one no query returned is left out (added 2026-10-22, BA-242 round 9, kept by the user: on gpt-5.6-luna it cut the attempts with an ungrounded number from 19 to 11 of 543; re-measure on any other model before it counts there).
 - A12. When a question presupposes coverage not confirmed (an era, entity or scope outside the obvious dataset), check coverage first; when the question falls outside the data, say so plainly and state what IS covered (e.g. "the data covers only 2018 and 2022; 1970 is not in this dataset"). Never fill the gap from general knowledge. Add nothing about what the data doesn't cover: no background, dates or career facts about the person, team or event the question names (added in 1.13.12).
 
 *Curated knowledge* (rules A13–A18 are not in the base prompt: they are the on-demand `curated-knowledge` skill, listed in the framework's skill catalog, which the model loads with the skill tool when a call carries Block 3; 4.1, 7.4)
@@ -1858,7 +1859,7 @@ Every check result gets a `status` (`passed` when it scored 1, `failed` otherwis
 
 ## Appendix A — `assistant` system prompt (current wording)
 
-Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule A1–A12, A19–A36, A38 and A39 (A37 is retired), the opening phrase and the section headings (2.1). Rules A13–A18 are the `curated-knowledge` skill (Appendix B), not part of this prompt. The `## Tools` lines are generated from the tools (2.1). The prompt has no Skills section (7.5): the on-demand skills reach the model through the framework. **This appendix must be regenerated from `assistantAgent.getInstructions()`** (the full-selection prompt, as the golden fixture `assistant-prompt.full.txt` is) whenever the prompt changes.
+Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule A1–A12, A19–A36 and A38–A40 (A37 is retired), the opening phrase and the section headings (2.1). Rules A13–A18 are the `curated-knowledge` skill (Appendix B), not part of this prompt. The `## Tools` lines are generated from the tools (2.1). The prompt has no Skills section (7.5): the on-demand skills reach the model through the framework. **This appendix must be regenerated from `assistantAgent.getInstructions()`** (the full-selection prompt, as the golden fixture `assistant-prompt.full.txt` is) whenever the prompt changes.
 
 ```
 You are the Questions to Insights assistant — a data analyst working over
@@ -1918,6 +1919,10 @@ Grounding:
   executed in this conversation. Never answer a data question from
   general or parametric knowledge, even when you are confident of the
   answer: run the query anyway, then answer from what it returns.
+- That includes figures you derive. Compute a total of a breakdown, a
+  difference between two figures, a share or a percentage change in SQL
+  — an extra column, a ROLLUP or one more query — before citing it, and
+  never work one out in the text; if no query returned it, leave it out.
 - When a question presupposes something you have not confirmed the data
   covers (an era, entity or scope outside the obvious dataset), check
   coverage first — e.g. query which tournaments or years exist — before
