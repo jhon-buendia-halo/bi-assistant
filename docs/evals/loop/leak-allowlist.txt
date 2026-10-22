@@ -10,3 +10,10 @@
 #
 # The fixer never reads this file (start-fixer.sh deletes it from its tree):
 # a reason may name what a held-out question asks.
+july | month name of the Finance fiscal calendar (fiscal year July to June, finance-policy.md), stated in the finance knowledge seed (round 7, 2026-10-22)
+september | month name of the Finance fiscal calendar (fiscal quarter 1 is July to September), finance knowledge seed (round 7)
+october | month name of the Finance fiscal calendar (fiscal quarter 2 starts in October), finance knowledge seed (round 7)
+december | month name of the Finance fiscal calendar (fiscal quarter 2 ends in December), finance knowledge seed (round 7)
+custody | a stored value of fees.fee_type (finance-policy.md fee table), the column vocabulary in the finance knowledge seed (round 7)
+trading | a stored value of fees.fee_type (finance-policy.md fee table), the column vocabulary in the finance knowledge seed (round 7)
+premier | a stored value of customers.segment (finance-policy.md section 6: not a wealth segment), finance knowledge seed (round 7)
