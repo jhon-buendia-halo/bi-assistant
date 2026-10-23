@@ -1,0 +1,20 @@
+1.1.22 (BA-244) — checks, 2026-10-23, on 3f6ebba
+
+python3 scripts/check-specs.py                         ALL CHECKS PASSED
+backend: npx jest                                      134 suites, 2151 tests passed
+backend: npx tsc --noEmit -p tsconfig.json             clean
+backend: npx eslint and npx prettier --check on every file the story touched
+         (tools/dataset.tools.ts, tools/left-join-filter.ts and their specs,
+         agents/assistant-prompt.ts, evals/checks/option-count.ts and its spec,
+         evals/eval-usage.spec.ts)                     clean
+builds:  npm run test:e2e:prepare (backend build:all with the web UI,
+         frontend production build)                    exit 0
+frontend unit tests: no frontend source changed in this story; the last run
+         (CHROME_BIN=<Playwright's Chromium> npx ng test --watch=false
+         --browsers=ChromeHeadless, before the push of 0e36211)  366 of 366 passed
+eval:leak-check on each round's final lever diff       0 rejected (round 12: one
+         false positive, "week", a SQL keyword, allowlisted with its reason)
+E2E:     e2e-results.txt                               62 of 62 passed (web)
+
+Evals at 100% on a Claude model (the repo's gate for a change to what an agent
+receives): not run. It waits for the Anthropic keys (roadmap 1.1.20 and 1.1.22).

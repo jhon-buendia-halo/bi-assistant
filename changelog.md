@@ -5,10 +5,21 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-23
 
 ### Added
+- **Improvement loop rounds 10 to 13, and rule A40 on a second model** (roadmap 1.1.22, [BA-244](https://halo-powered.atlassian.net/browse/BA-244), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)). From round 9's baseline on gpt-5.6-luna, with the keep and accept decisions delegated to the lead by the user the same day: dev 102/130 to 113/130, held-out 33/51 to 35/51, cost per question $0.0053 to $0.0057; $16.89 of the loop's $22 spent. The rounds stopped at 13: what still fails on dev is a check or question to change (listed for the user in the evidence), knowledge the Marketing Analytics sample lacks, or a flaky tail. Rule A40, measured again on gpt-6-luna (round 8's build against round 9's), holds there: dev 88/130 to 98/130, ungrounded dev attempts 15 to 6. Evidence: [evidence/1.1.22/](evidence/1.1.22/) (loop-summary.md, a40-gpt-6-luna.md, eval-diffs/, e2e-impact.md, e2e-results.txt, checks.txt).
 - **E2E coverage of the improvement loop's behaviour** (roadmap 1.1.23, [BA-245](https://halo-powered.atlassian.net/browse/BA-245), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)).
   - `frontend/e2e/agents.spec.ts` gains scenarios 16 to 19 and extends 14 and 15: the progress line's ` · attempt <a>/<k>` (agents-evals R26, R214); one line per attempt and the attempt the checks come from (R217); `No price for <models>` and calls that reported no usage (R216, R217); the report's flaky, tokens, split, attempts and cost lines and the repeats note, on a command-line run (R218, R223); a run saved before BA-242, with its splits and nothing it did not record (R216 to R218); and the API's refusal of repeats other than 1, 3 or 5 (R209). 19 of 19 pass on the web target, and the new and updated ones pass three runs each.
   - The agents-evals spec gains their Gherkin, the command-line scenarios name the backend tests that prove them, and a new Feature "Improvement loop tools" holds seven scenarios over `eval:diff`, `eval:export-failures` and `eval:leak-check` (R224 to R230). Three new tests run those tools' entry functions on stored runs, with no model calls. No production code changed.
   - Evidence: [evidence/1.1.23/](evidence/1.1.23/) (e2e-impact.md, e2e-results.txt, checks.txt).
+
+### Changed
+- **What the assistant receives, from rounds 10 to 12** (BA-244), each kept by the lead with its `eval:diff` in the commit:
+  - A `run_readonly_sql` result grouped into several rows says that a total, a difference or a count across its rows comes from the query, as a window column or one more query; the tool's description says it too (agents.md 3.4 and 5.3, round 10): attempts with an ungrounded number 11 to 4 of 543.
+  - Working rule A41: a masked identity stays masked, the label is the entity's name and a mapping table only labels rows (agents.md, round 11): the masked-competitor governance question 0/3 to 3/3.
+  - `run_readonly_sql` warns when a filter in a LEFT JOIN's ON clause removes no row and says where it goes; the statement still runs (agents.md 5.4, round 12).
+- **gpt-6-luna is priced for eval costs** (data-model 4.11).
+
+### Fixed
+- **`check-option-count` reads clarification options as the tool takes them** (agents-evals R120, BA-244): one string, one option per line; it had read only a list, so every clarification failed as carrying no options.
 
 ## 2026-10-22
 

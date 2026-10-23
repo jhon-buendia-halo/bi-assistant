@@ -14,6 +14,28 @@ Entry template:
 
 ---
 
+## 2026-10-23 — 1.1.22 Improvement loop rounds 10 to 13, and rule A40 on a second model (BA-244)
+
+### What went well
+- Reading the traces behind each kept round, not only the pass counts, made the keep decisions explainable: ungrounded-number attempts 11 to 4 (round 10), the masked-competitor question 0/3 to 3/3 (round 11), and a warning that fired in 3 attempts, each then passing (round 12). When held-out fell (33 to 29 in round 10), counting clarification requests per attempt across rounds 8 to 10 showed the one systematic-looking held-out flip was not caused by the change.
+- Running the round 12 detector over round 11's 493 dev statements before the full run gave its false-positive rate (7 flagged, each a real dead filter) for free.
+- Looking at why a question failed every attempt found a check bug, not an assistant bug: `check-option-count` had read clarification options as a list since BA-210 made them one string, so every clarification failed. Fixed as a supervisor change with its own baseline round, as R31 was in round 8.
+- The A40 A/B on gpt-6-luna reused the round 8 and 9 build snapshots (their `dist/` differed only in the prompt file) and clones of the loop's data dirs (`cp -c`, no extra disk), with only the price file patched in the copies. It ran beside the rounds without contention, since OpenAI rate limits are per model.
+- A round script (`round.sh`: build, snapshot, slice, full run, `eval:diff`) and an `until` wait for the build line removed the shell slips of the previous story.
+
+### What went wrong
+- The fixer's round 12 patch refused the statement it detected. A refusal is a tool error, so `check-no-tool-errors` would have failed every attempt that recovered; it was caught only in review, and the lead rewrote it as a warning.
+- The first frontend unit-test run before the push used `npm test`, which looks for an installed Chrome and hung; the second used headed Chromium, where one layout test failed. The gate's command (`CHROME_BIN=<Playwright's Chromium> npx ng test --watch=false --browsers=ChromeHeadless`) was in `evidence/1.1.20/checks.txt`, not in the `verify` skill.
+- The first `git push` of the day failed with a GitHub 500; a plain retry went through.
+- Four dev failures that remain are checks or questions, not the assistant (a view counted as not joining, "round of 16" read as a number, a pattern without the `i` flag, a per-tournament breakdown against an overall reference). None was found before the rounds started, so rounds 9 to 12 kept targeting categories whose ceiling was set by them.
+- The session started on battery at 29% for a job of several hours; `caffeinate -s` only holds sleep off on AC power, and the user had to plug the machine in.
+
+### What to do differently
+- In the fixer's prompt for a tools round, say that a refused statement is a tool error that fails `check-no-tool-errors`, so a detected defect should come back as a warning on the result (A34) unless the statement must never run.
+- Add the frontend unit-test command with `CHROME_BIN` and `--browsers=ChromeHeadless` to the `verify` skill.
+- Before the first round of a loop, list every question that fails all its attempts in the baseline and read its reference and checks; a check or question defect goes to the user before any round targets its category.
+- Before a job of several hours, check `pmset -g batt`; on battery, ask the user to plug in and keep the lid open, then start one `caffeinate -i -m -s` for the whole job and stop it by PID at the end.
+
 ## 2026-10-23 — 1.1.23 E2E coverage of the improvement loop's behaviour (BA-245)
 
 ### What went well
