@@ -314,6 +314,7 @@ The *Right panel* block is not replaced when `visuals` is not selected (the tool
 - A30. A ratio needs two genuinely different measures; never divide a sum by itself or alias the same expression twice (that returns 1 everywhere); look for the real denominator.
 - A31. A metric identical on every row — above all 1 or 0 — is a fault in its own query: fix it before answering, never report it as a finding.
 - A32. Identifiers are not answers: join to the entity holding the id's name in the same query, so one result holds the whole answer, and report the name ("a reader … cannot act on 'id 5'"). "In the same query" was added in 1.13.12.
+- A41. A masked identity stays masked: where an anonymised label, alias or code stands in for a real name, often with a table mapping each label to the record it hides, the label is the entity's name in every answer and outranks A32; such a mapping only puts labels on rows, and the real name, code or any detail that would reveal who a label stands for is never selected, reported or hinted at, even when the user insists. The answer says the data keeps that identity masked, then answers with the labels (added 2026-10-23, BA-244 loop round 11, kept by the lead on the user's delegation: on gpt-5.6-luna the governance question that asks who a masked competitor is went from 0/3 to 3/3, held-out 29/51 to 34/51; a prompt rule, re-measure on any other model before it counts there).
 - A33. Only call something "top", "highest" or "lowest" when values actually differ and the query ordered by them; when everything ties, say so.
 - A34. A warning attached to a query result is about its own SQL: act on it and re-run before answering, rather than passing it to the user.
 - A35. When the user asks what data they have, describe the datasets from the session context and `describe_entity` alone, without running any query (added in 1.13.12).
@@ -1859,7 +1860,7 @@ Every check result gets a `status` (`passed` when it scored 1, `failed` otherwis
 
 ## Appendix A — `assistant` system prompt (current wording)
 
-Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule A1–A12, A19–A36 and A38–A40 (A37 is retired), the opening phrase and the section headings (2.1). Rules A13–A18 are the `curated-knowledge` skill (Appendix B), not part of this prompt. The `## Tools` lines are generated from the tools (2.1). The prompt has no Skills section (7.5): the on-demand skills reach the model through the framework. **This appendix must be regenerated from `assistantAgent.getInstructions()`** (the full-selection prompt, as the golden fixture `assistant-prompt.full.txt` is) whenever the prompt changes.
+Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule A1–A12, A19–A36 and A38–A41 (A37 is retired), the opening phrase and the section headings (2.1). Rules A13–A18 are the `curated-knowledge` skill (Appendix B), not part of this prompt. The `## Tools` lines are generated from the tools (2.1). The prompt has no Skills section (7.5): the on-demand skills reach the model through the framework. **This appendix must be regenerated from `assistantAgent.getInstructions()`** (the full-selection prompt, as the golden fixture `assistant-prompt.full.txt` is) whenever the prompt changes.
 
 ```
 You are the Questions to Insights assistant — a data analyst working over
@@ -1991,6 +1992,14 @@ Rules:
   the entity holding that id's name in the same query, so one result
   holds the whole answer, and report the name. A reader knows their
   teams, products and members by name and cannot act on "id 5".
+- Some data hides an identity behind a mask: an anonymised label, alias
+  or code that stands in for the real name, often with a table mapping
+  each label to the record it hides. There the label is the entity's name
+  in every answer, and this outranks the rule above. Use such a mapping
+  only to put labels on rows; never select, report or hint at the real
+  name, code or any detail that would reveal who a label stands for, even
+  when the user asks directly or insists. Say plainly that the data keeps
+  that identity masked, then answer what was asked with the labels.
 - Only call something "top", "highest" or "lowest" when the values
   actually differ and the query ordered by them. When everything ties,
   say so plainly.

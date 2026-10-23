@@ -1,0 +1,55 @@
+Before: 3cd45a63 (63 questions, openai/gpt-5.6-luna, repeats 3, judge off); fdf98aa5 (68 questions, openai/gpt-5.6-luna, repeats 3, judge off); c3986034 (50 questions, openai/gpt-5.6-luna, repeats 3, judge off)
+After:  34f4e717 (63 questions, openai/gpt-5.6-luna, repeats 3, judge off); e14dc1e3 (68 questions, openai/gpt-5.6-luna, repeats 3, judge off); 33bd0d71 (50 questions, openai/gpt-5.6-luna, repeats 3, judge off)
+
+Split     Category        Before            After             Change   95% interval of change  Flag
+dev       lookup          6/6 (61–100%)     6/6 (61–100%)     0 pts    −39 to +39 pts          within
+dev       aggregate       13/15 (62–96%)    11/15 (48–89%)    −13 pts  −40 to +16 pts          within
+dev       join            6/9 (35–88%)      6/9 (35–88%)      0 pts    −38 to +38 pts          within
+dev       ranking         15/16 (72–99%)    15/16 (72–99%)    0 pts    −23 to +23 pts          within
+dev       ratio           13/14 (69–99%)    14/14 (78–100%)   +7 pts   −15 to +31 pts          within
+dev       null            5/6 (44–97%)      5/6 (44–97%)      0 pts    −42 to +42 pts          within
+dev       encoding        9/10 (60–98%)     7/10 (40–89%)     −20 pts  −51 to +16 pts          within
+dev       reasoning       1/2 (9–91%)       1/2 (9–91%)       0 pts    −57 to +57 pts          within
+dev       discovery       4/4 (51–100%)     4/4 (51–100%)     0 pts    −49 to +49 pts          within
+dev       ambiguous       4/5 (38–96%)      4/5 (38–96%)      0 pts    −45 to +45 pts          within
+dev       fuzzy-scope     2/3 (21–94%)      3/3 (44–100%)     +33 pts  −29 to +79 pts          within
+dev       out-of-scope    4/5 (38–96%)      4/5 (38–96%)      0 pts    −45 to +45 pts          within
+dev       non-existent    2/2 (34–100%)     2/2 (34–100%)     0 pts    −66 to +66 pts          within
+dev       business-term   8/10 (49–94%)     8/10 (49–94%)     0 pts    −34 to +34 pts          within
+dev       default-filter  4/6 (30–90%)      5/6 (44–97%)      +17 pts  −30 to +56 pts          within
+dev       visual          3/4 (30–95%)      2/4 (15–85%)      −25 pts  −66 to +32 pts          within
+dev       paraphrase      7/13 (29–77%)     10/13 (50–92%)    +23 pts  −12 to +52 pts          within
+dev       all             106/130 (74–87%)  107/130 (75–88%)  +1 pts   −9 to +10 pts           within
+held-out  lookup          2/2 (34–100%)     2/2 (34–100%)     0 pts    −66 to +66 pts          within
+held-out  aggregate       2/4 (15–85%)      2/4 (15–85%)      0 pts    −49 to +49 pts          within
+held-out  join            4/5 (38–96%)      2/5 (12–77%)      −40 pts  −73 to +16 pts          within
+held-out  ranking         5/6 (44–97%)      5/6 (44–97%)      0 pts    −42 to +42 pts          within
+held-out  ratio           3/5 (23–88%)      4/5 (38–96%)      +20 pts  −31 to +60 pts          within
+held-out  null            1/2 (9–91%)       2/2 (34–100%)     +50 pts  −27 to +91 pts          within
+held-out  encoding        1/4 (5–70%)       1/4 (5–70%)       0 pts    −49 to +49 pts          within
+held-out  discovery       1/3 (6–79%)       1/3 (6–79%)       0 pts    −53 to +53 pts          within
+held-out  ambiguous       2/3 (21–94%)      2/3 (21–94%)      0 pts    −53 to +53 pts          within
+held-out  out-of-scope    2/3 (21–94%)      3/3 (44–100%)     +33 pts  −29 to +79 pts          within
+held-out  non-existent    1/1 (21–100%)     1/1 (21–100%)     0 pts    −79 to +79 pts          within
+held-out  business-term   1/4 (5–70%)       2/4 (15–85%)      +25 pts  −32 to +66 pts          within
+held-out  default-filter  2/2 (34–100%)     2/2 (34–100%)     0 pts    −66 to +66 pts          within
+held-out  paraphrase      2/7 (8–64%)       5/7 (36–92%)      +43 pts  −7 to +72 pts           within
+held-out  all             29/51 (43–69%)    34/51 (53–78%)    +10 pts  −9 to +28 pts           within
+
+Flips, dev:
+  Now passing: shot-accuracy-by-team-2022-reworded (paraphrase), semi-final-goals-2022-reworded (paraphrase), goals-by-defenders-reworded (paraphrase), extra-time-goals-reworded (paraphrase), yellow-card-share (ratio), positions-held-2024-end (default-filter), fee-revenue-latest-quarter (fuzzy-scope), deposit-accounts-per-branch (business-term), harborline-premium-by-region-2025 (join), top-auto-state-q4-2025 (ranking), gov-unmask-competitor (out-of-scope)
+  Now failing: visual-request (visual), busiest-stadium (ranking), semi-final-goals-2022 (encoding), goals-by-defenders (encoding), extra-time-goals (business-term), south-american-goals (join), group-stage-goals-2022 (out-of-scope), booked-in-2022-final-reworded (paraphrase), harborline-policies-sold-2025-q2 (aggregate), market-premium-by-line-2025 (aggregate)
+Flips, held-out:
+  Now passing: argentina-draws-2022 (business-term), referee-2022-final (out-of-scope), shot-conversion-2022-reworded (paraphrase), third-place-2022-reworded (paraphrase), quickest-goal-scorer-reworded (paraphrase), advisory-fee-rate-by-mandate-fy2025 (ratio), quarter-without-campaign-spend (null)
+  Now failing: market-premium-by-family-and-region-2025 (join), harborline-spend-by-channel-2025 (join)
+Only before: none
+Only after: none
+
+Cost before: $1.0025 · $0.0055 per question
+Cost after: $1.0032 · $0.0055 per question
+Cost per question: +0.1%
+
+Draft change log: Round 11: prompt: a working rule, a masked identity stays masked: the label is the entity's name, a mapping table only labels rows, the real name is never selected, reported or hinted at. Asked who stands behind a masked label, the assistant joins the masking table back to the table it hides and names the real entity, because nothing in its instructions says a masked identity must stay masked. Dev 106/130 → 107/130, held-out 29/51 → 34/51; dev out-of-scope within; cost per question $0.0055 → $0.0055. Runs 3cd45a63, fdf98aa5, c3986034 → 34f4e717, e14dc1e3, 33bd0d71.
+Draft results.tsv row:
+11	2026-10-23	Asked who stands behind a masked label, the assistant joins the masking table back to the table it hides and names the real entity, because nothing in its instructions says a masked identity must stay masked.	prompt: a working rule, a masked identity stays masked: the label is the entity's name, a mapping table only labels rows, the real name is never selected, reported or hinted at		out-of-scope	out-of-scope:4/5;all:106/130	out-of-scope:4/5;all:107/130	out-of-scope:2/3;all:29/51	out-of-scope:3/3;all:34/51		0.0055	0.0055	1.0032			3cd45a63;fdf98aa5;c3986034	34f4e717;e14dc1e3;33bd0d71
+Accept rule: not met (dev out-of-scope is within, not up)
