@@ -1,0 +1,26 @@
+1.1.23 (BA-245) — Playwright, web target, 2026-10-23
+From frontend/, on this worktree's build (npm run test:e2e:prepare, exit 0), with E2E_SKIP_DOCKER=1 so the
+already-running compose Postgres on 55432 was used and not recreated. Desktop not run.
+
+$ npx tsc --noEmit -p e2e/tsconfig.json
+(clean)
+
+$ npx playwright test --list e2e/agents.spec.ts
+Total: 38 tests in 1 file (19 per project: web, desktop)
+
+$ E2E_SKIP_DOCKER=1 npx playwright test --project=web e2e/agents.spec.ts
+first run: 18 passed, 1 failed — scenario 16, on the test's own matcher: getByText(/^0\/63 done · 0 passed ·
+attempt 2\/3$/) did not match the span's raw whitespace, while the page snapshot showed
+"0/63 done · 0 passed · attempt 2/3". The matcher now allows whitespace (\s+); no app change.
+after the fix:
+  1 passed (5.2s)           (-g "which attempt")
+  19 passed (43.7s)         (the whole file)
+after prettier --write on the file (formatting only):
+  19 passed (45.0s)         (the whole file)
+
+$ E2E_SKIP_DOCKER=1 npx playwright test --project=web e2e/agents.spec.ts --repeat-each=3 \
+    -g "dev and held-out side by side|Not priced|which attempt|command-line run with Repeats 3|saved before repeats and costs|from the API"
+18 passed (39.9s)           (scenarios 14 to 19, three times each)
+
+$ git status -- evidence/
+nothing but evidence/1.1.23/ (agents.spec.ts writes no screenshots; nothing to restore)

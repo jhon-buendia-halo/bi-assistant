@@ -673,7 +673,7 @@ Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details 
 
 ## Flows
 
-E2E: `frontend/e2e/agents.spec.ts` for the Feature below (first moved from the repository `gherkin.md`; the System steps now open "Show more", R3). A run that reached its end needs a model, which the E2E suite does not have, so the "finished run" of the scenarios that need one is seeded rather than run. That the backend writes such a run (statuses, the not-scored judge check with no judge call, the summary; and since BA-242 the attempts, pass^k, splits, usage and cost) is proven by the backend unit tests `backend/src/mastra/evals/assistant.evals.spec.ts`, `backend/src/mastra/evals/eval-summary.spec.ts`, `backend/src/mastra/evals/eval-attempts.spec.ts`, `backend/src/mastra/evals/eval-usage.spec.ts`, `backend/src/mastra/evals/eval-stats.spec.ts` and `backend/src/modules/agents/eval-runs.service.spec.ts`. The seeded runs of the last two scenarios are stored without a summary, as the others are, so they also prove the summary and its intervals are computed on read.
+E2E: `frontend/e2e/agents.spec.ts` for the Feature below (first moved from the repository `gherkin.md`; the System steps now open "Show more", R3). A run that reached its end needs a model, which the E2E suite does not have, so the "finished run" of the scenarios that need one is seeded rather than run. That the backend writes such a run (statuses, the not-scored judge check with no judge call, the summary; and since BA-242 the attempts, pass^k, splits, usage and cost) is proven by the backend unit tests `backend/src/mastra/evals/assistant.evals.spec.ts`, `backend/src/mastra/evals/eval-summary.spec.ts`, `backend/src/mastra/evals/eval-attempts.spec.ts`, `backend/src/mastra/evals/eval-usage.spec.ts`, `backend/src/mastra/evals/eval-stats.spec.ts` and `backend/src/modules/agents/eval-runs.service.spec.ts`. Every seeded run is stored without a summary, so the scenarios that read one also prove the summary and its intervals are computed on read; a run "saved before repeats" is stored as runs were before BA-242, with no repeats, split, usage or cost, so it also proves the read-time defaults (data-model 3.8). The scenarios that start a run hold the model's calls open with the local LLM stub, so a question is still running when the test looks at it. The repeats refusal is checked through the API, since the Repeats select offers only 1, 3 and 5 (R209, R214).
 
 ```gherkin
 Feature: Agents
@@ -861,8 +861,9 @@ Feature: Agents
     Then the run is started with repeats 3
     And the "Repeats" select is disabled while the run is going
 
+  # R211, R212, R213, R216, R217, R221
   Scenario: Shows dev and held-out side by side, with repeats, flaky questions and cost
-    Given a finished run of the "world-cup" set with Repeats 3 on "gpt-4o-mini", in which a held-out question passed 2 of its 3 attempts
+    Given a finished run of the "world-cup" set with Repeats 3 on "gpt-4o-mini", in which a held-out question passed attempts 1 and 3 and failed attempt 2
     And I am on the agent's Evals tab
     When I open the executions sub-tab
     Then the run shows "Repeat 3", "1 flaky" and its cost in dollars
@@ -872,16 +873,72 @@ Feature: Agents
     And the flaky question's row shows the chip "held-out" and "2/3"
     When I click that row
     Then the Details panel shows "Held-out" and "2 of 3 attempts passed"
+    And it lists "Attempt 1", "Attempt 2" and "Attempt 3", each with its verdict and duration
+    And it says "Checks, steps and answer below are from attempt 2."
+    And "Why it failed" gives the reason attempt 2 failed
     And it shows the tokens of the assistant and of the SQL fixer
     And it shows the question's cost in dollars
 
+  # R216, R217, R218, R219, R221
   Scenario: Says "Not priced" for a model with no price
-    Given a finished run of the "world-cup" set on a model the price table does not list
+    Given a finished run of the "world-cup" set on a model the price table does not list, one of whose calls reported no usage
     And I am on the agent's Evals tab
     When I open the executions sub-tab
-    Then the run shows "Not priced"
+    Then the run shows "Not priced", titled "No price for" and the model
     When I expand the run and click one of its questions
-    Then the Details panel shows the question's tokens and "Not priced"
+    Then the Details panel shows the question's tokens with "1 call reported no usage", and "Not priced"
+    When I download the run's report
+    Then the report contains "Cost: not priced" followed by the model in brackets
+    And its "Tokens:" line counts the call without usage, ending with "3 calls · 1 without usage"
+
+  # R26, R210, R214
+  Scenario: Shows which attempt of a question is running when Repeats is 3
+    Given a "World Cup PostgreSQL" datasource exists
+    And a dataset containing the World Cup tables and views exists
+    And the model answers its first call and holds every later call open
+    And I am on the "world-cup" set in the agent's Evals tab
+    When I choose "3" in the "Repeats" select
+    And I click the run button
+    Then the progress line reads "0/63 done · 0 passed · attempt 2/3" once the first attempt has finished
+
+  # R40, R41, R218, R223
+  Scenario: Downloads the report of a command-line run with Repeats 3, compared with a run of Repeats 1
+    Given a finished run of the "world-cup" set saved before repeats, so with Repeats 1
+    And a later run of the same set saved from the command line with Repeats 3 and compared with it, in which a held-out question passed 2 of its 3 attempts
+    And I am on the agent's Evals tab
+    When I open the executions sub-tab
+    Then both runs are listed, the command-line run first
+    When I download the command-line run's report
+    Then the report contains "Repeats: 3" and "Flaky: 1"
+    And its "Tokens:" line sums every call of the run, and its "Cost:" line gives the run's cost and its cost per question
+    And its "## Summary" table has the columns "#", "Question", "Split", "Result" and "Duration", the flaky question reading "held-out" and "❌ 2/3"
+    And the flaky question's section shows "- **Split:** held-out", "- **Attempts:** 2 of 3 passed, flaky", and its "- **Tokens:**" and "- **Cost:**" lines
+    And its "## Compared to previous run" section says "Note: the previous run used Repeats 1."
+
+  # R209, R215, R216, R217, R218, R221
+  Scenario: Shows a run saved before repeats and costs with its splits and nothing it did not record
+    Given a finished run of the "world-cup" set saved before repeats, splits, tokens and costs were recorded, with the held-out question "shot-conversion-2022"
+    And I am on the agent's Evals tab
+    When I open the executions sub-tab
+    Then the run shows no "Repeat", no flaky count and no cost
+    When I expand the run
+    Then its split line reads "Dev 1/1 (21–100%) · Held-out 0/1 (0–79%)", each question's split read from the question bank
+    And the "shot-conversion-2022" row shows the chip "held-out" and no attempts
+    When I click that row
+    Then the Details panel shows "Held-out"
+    And it shows no attempts, no tokens and no cost
+    When I download the run's report
+    Then the report contains "Repeats: 1", "Tokens: not recorded" and "Cost: not recorded", and no "Flaky:" line
+    And the question's section shows "- **Split:** held-out" and no "**Attempts:**" line
+
+  # R19, R209
+  Scenario: Refuses repeats other than 1, 3 or 5 from the API
+    Given a "World Cup PostgreSQL" datasource exists
+    And a dataset containing the World Cup tables and views exists
+    When a run of "champion-2022" is requested through the API with repeats 2, then "3", then true
+    Then each request is refused with 'Repeats must be 1, 3 or 5 (got "2")', then '(got "3")', then '(got "true")'
+    When I open the executions sub-tab of the agent's Evals tab
+    Then I see "No eval runs yet"
 ```
 
 E2E: `frontend/e2e/agent-hub.spec.ts`
@@ -1706,9 +1763,126 @@ Feature: Question sets from the command line
     And only "ambiguous-best-team" and "out-of-scope" are judged
     When I run it with "EVAL_JUDGE=sometimes"
     Then it is refused with 'Unknown judge option "sometimes"' before any model call
+
+  # R209, R222
+  Scenario: Refuses bad repeats, a bad split or category, or a filter that leaves no question
+    When I run the "world-cup" set from the command line with "EVAL_REPEATS=2"
+    Then it is refused with 'Repeats must be 1, 3 or 5 (got "2")'
+    When I run it with "EVAL_SPLIT=test"
+    Then it is refused with 'Unknown EVAL_SPLIT "test"; use dev or held-out'
+    When I run it with "EVAL_CATEGORY=lookup,joins"
+    Then it is refused with 'Unknown EVAL_CATEGORY "joins". Known categories:' and the eighteen categories
+    When I run the "formula-1" set with "EVAL_SPLIT=held-out"
+    Then it is refused with 'No question of set "formula-1" matches EVAL_SPLIT=held-out'
+    And each time the backend did not start and no model was called
+
+  # R154, R211, R222
+  Scenario: Repeats each question and narrows the set from the command line
+    When I run the "world-cup" set from the command line with "EVAL_REPEATS=3", "EVAL_SPLIT=held-out" and "EVAL_CATEGORY=ratio"
+    Then only its held-out ratio question "shot-conversion-2022" runs, three times
+    And it prints "Repeats: 3" under the judge line
+    And it prints the question with "2/3 attempts" after its id and "flaky" after its duration
+    And after the final line it prints "Flaky: 1", the "Dev:" and "Held-out:" lines, the "## By category" table, and the "Tokens:" and "Cost:" lines
+    And it exits with code 1, since a flaky question failed
+
+  # R40, R41, R218, R223
+  Scenario: Saves a command-line run like a run started in the app
+    When I run the "world-cup" set from the command line with "EVAL_RUN_FILE=run.json" and "EVAL_RESULTS_FILE=results.json"
+    Then the run is saved in the data directory with the source "cli", the datasource of its datasets and the datasets
+    And it prints "Run id: <jobId>" and "No comparable earlier run."
+    And it writes the saved run to "run.json" and its results to "results.json" in the folder npm was started from
+    When the run is compared with an earlier run that used Repeats 1, and it used Repeats 3
+    Then it prints the comparison as the report writes it, with "Note: the previous run used Repeats 1."
+    And an app on the same data directory lists the run under Executions and downloads it as a report
 ```
 
-The judge scenario's setting parsing and gating are covered by the unit tests `backend/src/mastra/evals/judge-option.spec.ts` and `backend/src/mastra/evals/assistant.evals.spec.ts`.
+The judge scenario's setting parsing and gating are covered by the unit tests `backend/src/mastra/evals/judge-option.spec.ts` and `backend/src/mastra/evals/assistant.evals.spec.ts`. The last three scenarios (BA-245) run the command's entry point, `main` of `run-assistant-evals.ts`, with no backend and no model: `backend/src/mastra/evals/run-assistant-evals.spec.ts` covers the refusals ("refuses … before the backend boots", "refuses a set the split leaves empty"), the narrowed run with repeats and its lines ("runs the narrowed selection through the run service, prints the lines and writes the run file"), the run id, the comparison and its note ("prints the comparison as the report writes it, noting other repeats") and where the files go ("writes relative run files where npm was started"); `backend/src/mastra/evals/repeats-option.spec.ts` and `eval-cli-selection.spec.ts` cover the setting parsing and the narrowing. That the run is saved with the source `cli` is covered by `backend/src/modules/agents/eval-runs.service.spec.ts` ("saves the run with the source cli and the datasource of the named datasets"), and that an app on the same data directory lists and downloads it by the `agents.spec.ts` scenario "Downloads the report of a command-line run with Repeats 3, compared with a run of Repeats 1", whose seeded run carries the source `cli`.
+
+### Feature: Improvement loop tools
+
+E2E: none yet. The tools run from the command line, not in the app (R225 to R230). Each scenario is covered by backend unit tests under `backend/src/mastra/evals/loop/` that run the tool's entry function (`evalDiffMain`, `exportFailuresMain`, `leakCheckMain`) on run files, on an `app.sqlite` in a temp data directory or on a temp git repository, with the bundled question banks, no model call and no network; they are listed after the Feature.
+
+```gherkin
+Feature: Improvement loop tools
+
+  # R224, R225, R226
+  Scenario: Compares the runs before and after a change with eval:diff
+    Given a data directory whose app.sqlite holds a run before a change and a run after it, of the same set, model, repeats and judge option
+    When I run "eval:diff" with "--before" and "--after" set to the first 8 characters of the two run ids, and "--data-dir" set to that directory
+    Then it prints one row per split and category with a scored question, then an "all" row per split
+    And each row shows the before and after rates as "<passed>/<scored> (<interval>)", the change in points, its 95% interval and the flag "up", "down" or "within"
+    And it lists the questions whose verdict flipped under "Now passing:" and "Now failing:", and the questions on one side only
+    And it prints each side's cost and cost per question, and the change in cost per question in percent
+    And app.sqlite is left as it was
+
+  # R226
+  Scenario: Warns when the two sides cannot be compared, and drafts the round's records
+    Given the before run used Repeats 1 and the after run Repeats 3, another model and the judge on
+    When I run "eval:diff" on them
+    Then it warns that the model, the repeats ("pass^k is not comparable across repeats") and the judge option differ
+    When I add "--round", "--lever", "--hypothesis", "--target" and "--tsv"
+    Then it prints a draft change-log line and a draft results.tsv row
+    And the row's held-out cells hold only "<category>:<passed>/<scored>" counts
+
+  # R227
+  Scenario: Checks the accept rule for the target categories
+    When I run "eval:diff" with "--target join" on runs in which dev join is up, no category is down and the cost per question rose by at most 10%
+    Then it prints "Accept rule: met" and exits with code 0
+    When dev join is only within its interval, another category is down, or the cost per question rose by more than 10%
+    Then it prints "Accept rule: not met (<reasons>)", each reason naming the condition, the split and the category, and exits with code 1
+    And a target with no scored held-out question on a side does not meet the rule
+
+  # R224, R225
+  Scenario: Refuses a run it cannot read
+    When I run "eval:diff" with a run id that no saved run has
+    Then it is refused with 'No eval run "<id>" in <path of app.sqlite>' and exits with code 2
+    And a prefix that matches two runs is refused with 'Run id "<prefix>" matches 2 runs (…); give more characters'
+    And a path that names no file is refused with "No such run file: <path>"
+    And a file that is not an eval run is refused with "<file> is not an eval run: expected a run record, a poll response or a results array"
+    And a question in two runs of one side is refused with 'Question "<id>" is in two runs of the before side (…)'
+
+  # R224, R228
+  Scenario: Exports a run's dev failures for the fixer, with only the counts of the held-out questions
+    Given a run of the "world-cup" set saved in app.sqlite before results carried a split, in which the dev question "final-score-2018" and the held-out question "shot-conversion-2022" failed
+    When I run "eval:export-failures" with "--run" set to its first 8 characters and "--out" set to a new folder
+    Then the folder holds a README, with the dev table and the counts of the held-out questions, and one file for "final-score-2018"
+    And no file holds the held-out question's id, question, answer or check reasons, nor any case's notes or reference query
+    When I run it again into the same folder
+    Then it is refused with "<folder> is not empty; pass --force to replace an earlier export" and exits with code 2
+    When I run it with "--force"
+    Then it replaces only the files the earlier export wrote
+    And "--force" on a folder that holds no earlier export is refused
+
+  # R229, R230
+  Scenario: Rejects a lever change that quotes a question bank
+    Given a change to the assistant's prompt that adds a held-out question of the "world-cup" set word for word
+    When I run "eval:leak-check"
+    Then it prints the finding as "<file>:<line> [question] "<literal>" ← <source>", a dev source before a held-out one, and exits with code 1
+    And with "--json" its sources include "world-cup.json" case "shot-conversion-2022" (held-out)
+    When I run it with "--fixer"
+    Then every held-out source reads "a held-out case" and no held-out case id is printed
+    And it reads the uncommitted change with the untracked lever files, the staged change with "--staged", and a patch file with "--diff-file"
+    And a change with no quote passes with code 0
+
+  # R229, R230
+  Scenario: Lets through what is not a leak
+    Given a change to a lever file
+    When it only moves a line within the file, or adds a literal of the allowlist, a common word, a year, or four question words with fewer than two distinctive
+    Then the leak check rejects nothing
+    When it adds a string literal of a reference query
+    Then the leak check only warns
+    When the same quote is added to a unit test of a lever file
+    Then the leak check does not read it
+```
+
+Covered by (backend unit tests, `backend/src/mastra/evals/loop/`):
+- *Compares the runs before and after a change*: `eval-diff.spec.ts` "evalDiffMain on runs saved in app.sqlite" (added by BA-245: both sides by prefix from `app.sqlite`, the rows, the flips, the costs, the database unchanged), "eval:diff rows" and "eval:diff flips, sides, cost and warnings"; `run-source.spec.ts` "saved runs, read without writing from app.sqlite" and "the three shapes of an exported run file".
+- *Warns … and drafts the round's records*: `eval-diff.spec.ts` "warns when sets, model, repeats or judge differ, between or within sides" and "eval:diff drafts".
+- *Checks the accept rule*: `eval-diff.spec.ts` "the accept rule", "evalDiffMain exit codes" and "evalDiffMain on runs saved in app.sqlite".
+- *Refuses a run it cannot read*: `run-source.spec.ts` ("refuses a prefix that matches several runs, and an unknown id", "refuses anything else", "reads a value that names a file as a file, anything else as an id"), `eval-diff.spec.ts` ("combines the runs of a side and refuses a question in two of them", "exits 2 on a bad argument, a missing run or an unknown category") and `cli-args.spec.ts`.
+- *Exports a run's dev failures*: `failure-export.spec.ts`, its "exports a run saved in app.sqlite before splits, taking each split from the question bank" added by BA-245.
+- *Rejects a lever change that quotes a question bank*: `leak-check.spec.ts` "leakCheckMain against a git repository", its "rejects a held-out question, and with --fixer names no held-out case" added by BA-245, and "leak check report".
+- *Lets through what is not a leak*: `leak-check.spec.ts` "leak check false-positive guards" and "only warns on a string literal of a reference query"; `common-words.spec.ts`.
 
 ### Feature: Databricks samples
 
@@ -1750,7 +1924,7 @@ Feature: Databricks samples
 ## Acceptance
 
 - One real `world-cup` run on PostgreSQL with the judge off reports a pass rate per category and per criterion in its report and in the Evals tab, makes no judge call, and shows every judge check as not scored (BA-184).
-- The fifteen `agents.spec.ts` scenarios pass, the nine `agent-hub.spec.ts` scenarios pass, and the `agent-editor.spec.ts` scenarios pass, with the axe scans of the hub and the editor clean in both themes.
+- The nineteen `agents.spec.ts` scenarios pass, the nine `agent-hub.spec.ts` scenarios pass, and the `agent-editor.spec.ts` scenarios pass, with the axe scans of the hub and the editor clean in both themes.
 - The validator (R110) passes for `world-cup` (its last 11 questions the former golden set, R109) against the World Cup PostgreSQL datasource and for `world-cup-rest` against the World Cup REST datasource, and fails, naming the case, when one reference query is broken on purpose. A run of each moved set gives the same verdicts as a run before the move, within the run-to-run variation.
 - Running the `world-cup` set against the bundled sample with a working model finishes, records one result per ticked question, and every question's Details panel shows its checks and executed steps.
 - A second completed run on the same datasource and datasets produces a Markdown report with a "Compared to previous run" section; a run on a different datasource or dataset set does not.
