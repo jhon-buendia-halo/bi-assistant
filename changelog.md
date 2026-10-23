@@ -2,6 +2,14 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-23
+
+### Added
+- **E2E coverage of the improvement loop's behaviour** (roadmap 1.1.23, [BA-245](https://halo-powered.atlassian.net/browse/BA-245), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)).
+  - `frontend/e2e/agents.spec.ts` gains scenarios 16 to 19 and extends 14 and 15: the progress line's ` · attempt <a>/<k>` (agents-evals R26, R214); one line per attempt and the attempt the checks come from (R217); `No price for <models>` and calls that reported no usage (R216, R217); the report's flaky, tokens, split, attempts and cost lines and the repeats note, on a command-line run (R218, R223); a run saved before BA-242, with its splits and nothing it did not record (R216 to R218); and the API's refusal of repeats other than 1, 3 or 5 (R209). 19 of 19 pass on the web target, and the new and updated ones pass three runs each.
+  - The agents-evals spec gains their Gherkin, the command-line scenarios name the backend tests that prove them, and a new Feature "Improvement loop tools" holds seven scenarios over `eval:diff`, `eval:export-failures` and `eval:leak-check` (R224 to R230). Three new tests run those tools' entry functions on stored runs, with no model calls. No production code changed.
+  - Evidence: [evidence/1.1.23/](evidence/1.1.23/) (e2e-impact.md, e2e-results.txt, checks.txt).
+
 ## 2026-10-22
 
 ### Added

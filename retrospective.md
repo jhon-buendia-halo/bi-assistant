@@ -14,6 +14,24 @@ Entry template:
 
 ---
 
+## 2026-10-23 — 1.1.23 E2E coverage of the improvement loop's behaviour (BA-245)
+
+### What went well
+- The list of untested behaviour was written at the previous gate (`evidence/1.1.20/e2e-impact.md`), so the story's scope was fixed before it started and the Jira text could quote it.
+- Running the story in its own worktree kept its `test:e2e:prepare` builds out of the epic worktree, where an eval loop round was building and running from `backend/dist` snapshots at the same time.
+- The progress line's ` · attempt <a>/<k>` was made deterministic in E2E with the LLM stub: it answers a run's first model call and holds the later ones, so the run stops at "attempt 2/3" with no real model and no component-level fallback.
+- Where a backend test already proved a command-line rule, the Gherkin names that test instead of adding a second one; only three entry functions with no test got one.
+
+### What went wrong
+- The worktree the agent was given came up on `main` (`ea78278`), not on the epic branch's head. The agent noticed and reset to `05d28f8` before writing anything; had it not, the work would have been built on code without BA-242.
+- The agent's first full run failed on its own matcher (an anchored regex against a span's raw whitespace), not on the app.
+- The spec had no way to cite rule numbers in Gherkin; the agent added `# R…` comment lines above the new scenarios, a style the older scenarios do not follow.
+
+### What to do differently
+- When delegating epic work to an `isolation: worktree` agent, tell it the epic branch and its head commit, and have it check `git log -1` and reset to that commit before its first edit.
+- In Playwright text assertions on rendered spans, match whitespace with `\s+` (or normalise the text) rather than literal spaces.
+- Decide whether Gherkin scenarios cite their rules with `# R…` comment lines, and if so, add it to the `workflow-specs` conventions so new and old scenarios agree.
+
 ## 2026-10-22 — 1.1.20 Supervised improvement loop: rounds 0 to 9 and the acceptance gate (BA-242)
 
 ### What went well

@@ -412,12 +412,12 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 - **Acceptance:** each round has its `results.tsv` row and `eval:diff`; each kept or accepted change is committed with its diff; the A40 A/B is recorded with its `eval:diff`.
 - **Notes:** added 2026-10-23 at the user's request. The same day the user delegated the keep and accept decisions to the lead session; the accept rule, the levers and the forbidden paths are unchanged. Needs 1.1.20. Jira: [BA-244](https://halo-powered.atlassian.net/browse/BA-244).
 
-#### 1.1.23 — E2E coverage of the improvement loop's behaviour ([BA-245](https://halo-powered.atlassian.net/browse/BA-245))  `🚧 In progress`
+#### 1.1.23 — E2E coverage of the improvement loop's behaviour ([BA-245](https://halo-powered.atlassian.net/browse/BA-245))  `✅ Done`
 - **Intent:** every behaviour the agents-evals spec states for BA-242 has a scenario that fails when it breaks.
 - **Scope:** the list in [evidence/1.1.20/e2e-impact.md](evidence/1.1.20/e2e-impact.md), *Behaviour the spec states with no Gherkin step*: Gherkin scenarios in the agents-evals spec; Playwright scenarios on the web target for R214, R26 and R216 to R218; an API-level test for the Repeats refusal (R209); tests of the command-line options and tools (R222, R223, R225 to R230) against stored runs, with no model calls.
 - **Out of scope:** changes to the app's behaviour; the desktop target.
 - **Acceptance:** each listed behaviour has a Gherkin scenario and a passing test; `check-specs` is green.
-- **Notes:** added 2026-10-23 at the user's request. Needs 1.1.20. Jira: [BA-245](https://halo-powered.atlassian.net/browse/BA-245).
+- **Notes:** added 2026-10-23 at the user's request. Needs 1.1.20. Jira: [BA-245](https://halo-powered.atlassian.net/browse/BA-245). Done on 2026-10-23: `agents.spec.ts` scenarios 16 to 19 added and 14 and 15 extended (19 of 19 pass on the web target); the command-line behaviour is covered by backend tests the Gherkin names, three of them new; no production code changed. Evidence: [evidence/1.1.23/](evidence/1.1.23/).
 
 ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2))
 
