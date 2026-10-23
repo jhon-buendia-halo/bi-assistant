@@ -117,6 +117,26 @@ const RATIONALE_DESCRIPTION = [
   'jargon, no restating the statement.',
 ].join(' ');
 
+/**
+ * A breakdown invites the answer to add its rows up, subtract one from
+ * another or count them — figures no tool result holds. The note rides on
+ * the result the answer is written from and says where such a figure has to
+ * come from: the query, not the answer text.
+ */
+const ACROSS_ROWS_NOTE = [
+  'grouped rows — a total across them, a difference between two of them, a',
+  'share of their whole or how many of them there are may be stated only',
+  'when a result column holds it; otherwise get it from SQL — a window column',
+  '(SUM(SUM(x)) OVER () for the total, SUM(x) - LAG(SUM(x)) OVER (ORDER BY g)',
+  'for the change from the row before, COUNT(*) OVER () for the number of',
+  'groups) or one more query — and never work it out in the answer',
+].join(' ');
+
+/** A grouped statement that returned more than one row. */
+function isBreakdown(sql: string, rows: unknown[]): boolean {
+  return rows.length > 1 && /\bgroup\s+by\b/i.test(sql);
+}
+
 export const listEntitiesTool = createTool({
   id: 'list_entities',
   description:
@@ -201,8 +221,11 @@ export const runReadOnlySqlTool = createTool({
     'PostgreSQL for postgres, SQLite for rest. Reference entities with fully-qualified',
     'catalog.schema.table names (on Postgres, the catalog is the database',
     'name; you may write schema.table). Only query entities from this',
-    "session's datasets. Write/DDL statements are rejected. datasourceId is",
-    'optional when the session uses a single datasource.',
+    "session's datasets. A figure across the rows — a total, the difference",
+    'between two rows, how many groups there are — must come from the query',
+    'too: add it as a window column (e.g. SUM(SUM(x)) OVER ()) or run one more',
+    'query. Write/DDL statements are rejected. datasourceId is optional when',
+    'the session uses a single datasource.',
   ].join(' '),
   inputSchema: z.object({
     sql: z.string().describe('A single SELECT or WITH statement'),
@@ -241,7 +264,16 @@ export const runReadOnlySqlTool = createTool({
       const warnings = inspectResult(executed, rows, rowLimit).map(
         (warning) => warning.message,
       );
-      return warnings.length ? { ...result, warnings } : result;
+      // Joined like the service's own notes, so the agent reads one note.
+      const notes = [
+        ...(result.note ? [result.note] : []),
+        ...(isBreakdown(executed, rows) ? [ACROSS_ROWS_NOTE] : []),
+      ];
+      return {
+        ...result,
+        ...(notes.length ? { note: notes.join('; ') } : {}),
+        ...(warnings.length ? { warnings } : {}),
+      };
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }

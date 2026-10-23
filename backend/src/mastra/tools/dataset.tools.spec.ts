@@ -66,3 +66,73 @@ describe('run_readonly_sql usage sink (agents-evals R219)', () => {
     );
   });
 });
+
+describe('run_readonly_sql note on a grouped result (agents.md 5.3)', () => {
+  const execute = runReadOnlySqlTool.execute as unknown as Execute;
+  let runReadOnlySql: jest.Mock;
+  let requestContext: RequestContext;
+  const twoGroups = [
+    { g: 'a', n: 2 },
+    { g: 'b', n: 3 },
+  ];
+
+  beforeEach(() => {
+    runReadOnlySql = jest.fn();
+    setDatasetToolServices({
+      getDatasets: jest
+        .fn()
+        .mockResolvedValue([
+          { name: 'claims', datasourceId: 'ds-1', tables: [] },
+        ]),
+      runReadOnlySql,
+    } as unknown as DatasetToolServices);
+    requestContext = new RequestContext();
+    requestContext.set(DATASETS_CONTEXT_KEY, ['claims']);
+  });
+
+  const run = (sql: string) =>
+    execute({ sql, rationale: 'because' }, { requestContext }) as Promise<{
+      note?: string;
+    }>;
+
+  it('says where a figure across the rows must come from, with no digits', async () => {
+    runReadOnlySql.mockResolvedValue({ columns: ['g', 'n'], rows: twoGroups });
+
+    const { note } = await run('SELECT g, COUNT(*) AS n FROM t GROUP BY g');
+
+    expect(note).toMatch(/^grouped rows — a total across them/);
+    expect(note).toContain('SUM(SUM(x)) OVER ()');
+    expect(note).not.toMatch(/\d/);
+  });
+
+  it('joins it after the notes the SQL service added', async () => {
+    runReadOnlySql.mockResolvedValue({
+      columns: ['g', 'n'],
+      rows: twoGroups,
+      correctedSql: 'SELECT g, COUNT(*) AS n FROM t GROUP BY g',
+      note: 'original query failed and was auto-corrected — cite the corrected SQL',
+    });
+
+    const { note } = await run('SELECT g, COUNT(*) AS n FROM t GROUP BY gg');
+
+    expect(note).toMatch(
+      /^original query failed and was auto-corrected — cite the corrected SQL; grouped rows/,
+    );
+  });
+
+  it('adds nothing to a single row or an ungrouped result', async () => {
+    runReadOnlySql.mockResolvedValueOnce({
+      columns: ['g', 'n'],
+      rows: [twoGroups[0]],
+    });
+    runReadOnlySql.mockResolvedValueOnce({
+      columns: ['g', 'n'],
+      rows: twoGroups,
+    });
+
+    expect(
+      (await run('SELECT g, COUNT(*) AS n FROM t GROUP BY g')).note,
+    ).toBeUndefined();
+    expect((await run('SELECT g, n FROM t')).note).toBeUndefined();
+  });
+});
