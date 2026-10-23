@@ -24,10 +24,10 @@ Know, with numbers, whether a change made answers better or worse, on every data
 - A wholesale merge of `feat/engine-eval-loop` or `feat/knowledge-learning-evals`; expert mode, learning and memory belong to other epics.
 - The HR and retail domains, which carry expert-mode and learning fields.
 - Databricks in the nightly CI run, because of cost; Databricks runs are on demand.
-- Unattended automation of the improvement loop: until after the beta it runs supervised, with a person accepting every change ([BA-242](https://halo-powered.atlassian.net/browse/BA-242)); approval by more than one reviewer; export as a Genie benchmark; evals on documents an agent reads.
+- Unattended automation of the improvement loop: until after the beta it runs supervised, with a person accepting every change ([BA-242](https://halo-powered.atlassian.net/browse/BA-242)), and from 2026-10-23 with the lead session deciding keep and accept on the user's delegation ([BA-244](https://halo-powered.atlassian.net/browse/BA-244)); approval by more than one reviewer; export as a Genie benchmark; evals on documents an agent reads.
 
 ## Stories
-The two process stories come first; five stories cover the plan's steps; two more were added on 2026-10-20 (BA-242, BA-243). [BA-212](https://halo-powered.atlassian.net/browse/BA-212), the Intellify sample, was built under this epic on its own branch and shipped on `main` in PR #77 (roadmap 1.1.19, Done); it came onto this branch when `main` was merged in on 2026-10-15.
+The two process stories come first; five stories cover the plan's steps; two more were added on 2026-10-20 (BA-242, BA-243), and two on 2026-10-23 (BA-244, BA-245). [BA-212](https://halo-powered.atlassian.net/browse/BA-212), the Intellify sample, was built under this epic on its own branch and shipped on `main` in PR #77 (roadmap 1.1.19, Done); it came onto this branch when `main` was merged in on 2026-10-15.
 
 | Story | Summary | Roadmap features |
 |---|---|---|
@@ -41,6 +41,8 @@ The two process stories come first; five stories cover the plan's steps; two mor
 | [BA-212](https://halo-powered.atlassian.net/browse/BA-212) | Intellify sample as a Testing Data fixture (Done; shipped on `main` in PR #77) | 1.1.19 |
 | [BA-242](https://halo-powered.atlassian.net/browse/BA-242) | Supervised improvement loop (before the beta) | 1.1.20 |
 | [BA-243](https://halo-powered.atlassian.net/browse/BA-243) | Investigation questions with planted insights | 1.1.21 |
+| [BA-244](https://halo-powered.atlassian.net/browse/BA-244) | Improvement loop rounds 10 onward, and rule A40 on a second model | 1.1.22 |
+| [BA-245](https://halo-powered.atlassian.net/browse/BA-245) | E2E coverage of the improvement loop's behaviour | 1.1.23 |
 
 The 15 step stories created on 2026-10-13 (BA-182 to BA-196) were compacted to these five the same day at the user's request; the ten merged issues (BA-183, BA-184, BA-185, BA-187, BA-189, BA-191, BA-192, BA-194, BA-195, BA-196) are closed as duplicates of their story and taken out of the epic. Record: [evidence/1.1.3/jira-compaction.tsv](../../../evidence/1.1.3/jira-compaction.tsv).
 
