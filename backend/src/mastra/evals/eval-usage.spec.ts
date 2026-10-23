@@ -363,7 +363,7 @@ describe('costOf (agents-evals R221)', () => {
 });
 
 describe('the bundled price table (data-model 4.11)', () => {
-  it('prices gpt-4o-mini, gpt-5.6-luna and gpt-4.1-mini, with where and when each rate was read', () => {
+  it('prices gpt-4o-mini, gpt-5.6-luna, gpt-6-luna and gpt-4.1-mini, with where and when each rate was read', () => {
     expect(PRICE_TABLE['gpt-4o-mini']).toEqual({
       inputPerMillionUsd: 0.15,
       cachedInputPerMillionUsd: 0.075,
@@ -378,6 +378,14 @@ describe('the bundled price table (data-model 4.11)', () => {
       source:
         'developers.openai.com/api/docs/pricing (Standard, short context)',
       readOn: '2026-10-21',
+    });
+    expect(PRICE_TABLE['gpt-6-luna']).toEqual({
+      inputPerMillionUsd: 0.1,
+      cachedInputPerMillionUsd: 0.01,
+      outputPerMillionUsd: 0.5,
+      source:
+        'developers.openai.com/api/docs/pricing (Standard, short context)',
+      readOn: '2026-10-23',
     });
     expect(PRICE_TABLE['gpt-4.1-mini']).toEqual({
       inputPerMillionUsd: 0.4,
