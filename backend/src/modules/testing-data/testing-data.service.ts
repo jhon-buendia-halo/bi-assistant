@@ -6,6 +6,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Client } from 'pg';
 import { DatasetsService } from '../datasets/datasets.service';
 import { DatasourcesService } from '../datasources/datasources.service';
+import { KnowledgeService } from '../knowledge/knowledge.service';
+import { MetricsService } from '../metrics/metrics.service';
 import { getIntellifyApiInfo } from '../../intellify-api/api-info';
 import type {
   CatalogInfo,
@@ -15,8 +17,11 @@ import type {
 } from '../datasources/entities/datasource.entity';
 import type { DatasetEntitySnapshot } from '../datasets/repositories/datasets.repository';
 import type { LoadTestingDataDto } from './dto/testing-data.dto';
+import type { KnowledgeSnippetKind } from '../knowledge/entities/knowledge-snippet.entity';
+import type { SeedKnowledgeEntry } from './fixtures/knowledge/types';
 import {
   SAMPLE_FIXTURES,
+  databricksSource,
   findFixture,
   requiredEntityKeys,
   type SampleFixture,
@@ -93,6 +98,17 @@ export interface LoadTestingDataResult {
 }
 
 /**
+ * What creating a sample's knowledge seed did (testing-data R26): how many
+ * knowledge entries and metrics it created, and, when one could not be saved,
+ * why. The entries created before the failure stay.
+ */
+export interface KnowledgeSeedOutcome {
+  knowledge: number;
+  metrics: number;
+  error?: string;
+}
+
+/**
  * One-call provisioning of a bundled sample against a PostgreSQL server the
  * user names: seed the sample's schema, register a datasource, and save the
  * dataset covering the entities the assistant evals need. Hand-doing all three
@@ -113,6 +129,8 @@ export class TestingDataService {
   constructor(
     private readonly datasources: DatasourcesService,
     private readonly datasets: DatasetsService,
+    private readonly knowledge: KnowledgeService,
+    private readonly metrics: MetricsService,
   ) {}
 
   /**
@@ -148,7 +166,11 @@ export class TestingDataService {
         continue;
       }
       // `list()` hands back the masked view, so no password can leak from here.
-      const connection = connectionView(datasource.config);
+      // Only a PostgreSQL datasource has a host:port/database to show.
+      const connection =
+        datasource.kind === 'postgres'
+          ? connectionView(datasource.config)
+          : undefined;
       datasets ??= await this.datasets.list();
       const dataset = datasets.find(
         (candidate) => candidate.name === fixture.datasetName,
@@ -205,6 +227,18 @@ export class TestingDataService {
         message:
           `The ${fixture.name} sample is registered for evals only — create its ` +
           'datasource with scripts/setup-worldcup-rest.ts instead of loading it here.',
+      };
+    }
+    if (fixture.datasourceKind === 'databricks') {
+      // The panel is a PostgreSQL client; a Databricks sample is loaded into
+      // Unity Catalog and registered by its own script (testing-data R23).
+      const source = databricksSource(fixture)?.id ?? fixture.id;
+      return {
+        ok: false,
+        message:
+          `The ${fixture.name} sample is registered for evals only — load it into ` +
+          `Databricks and register it with scripts/setup-fixture-databricks.ts --fixture ${source} ` +
+          'instead of loading it here (runbook: docs/evals/databricks-vdi.md).',
       };
     }
     const parsed = parseConnection(input);
@@ -315,15 +349,24 @@ export class TestingDataService {
       datasourceId: datasource.id,
     });
 
+    // The load has succeeded; the seed can only add to the message (R26).
+    const seed = await this.createKnowledgeSeed(
+      fixture,
+      config.database,
+      datasource.id,
+    );
+
     return {
       ok: true,
-      message: seedable
-        ? `Seeded ${fixture.schema} on ${target} and loaded ${entities.length} entities ` +
-          `into dataset "${fixture.datasetName}"` +
-          (createdDatabase ? ' — created the database' : '')
-        : `Registered ${target}/${config.database} and loaded ${entities.length} entities ` +
-          `into dataset "${fixture.datasetName}" — the ${fixture.name} sample ships no ` +
-          'seed SQL, so nothing was written to the database',
+      message:
+        (seedable
+          ? `Seeded ${fixture.schema} on ${target} and loaded ${entities.length} entities ` +
+            `into dataset "${fixture.datasetName}"` +
+            (createdDatabase ? ' — created the database' : '')
+          : `Registered ${target}/${config.database} and loaded ${entities.length} entities ` +
+            `into dataset "${fixture.datasetName}" — the ${fixture.name} sample ships no ` +
+            'seed SQL, so nothing was written to the database') +
+        knowledgeSeedSuffix(seed),
       datasourceId: datasource.id,
       datasetName: fixture.datasetName,
       entityCount: entities.length,
@@ -513,6 +556,173 @@ export class TestingDataService {
     const all = await this.datasources.list();
     return all.find((d) => d.name === fixture.datasourceName);
   }
+
+  /**
+   * Create the sample's knowledge seed (R26) through the normal knowledge and
+   * metrics create: each knowledge entry scoped to the sample's dataset and
+   * enabled, each metric on the loaded datasource, every entity named
+   * `<database>.<schema>.<table>` on the database just loaded. An entry the
+   * app already holds is left as it is: a knowledge entry of the same kind
+   * and title scoped to that dataset, or a metric of the same name. Never
+   * throws: a save that fails stops the seed and is reported in the outcome,
+   * so the load it follows still succeeds.
+   *
+   * The knowledge block keeps only what fits its budget, newest-updated first
+   * (knowledge R16, R17), so the entries are created in the reverse of the
+   * order they should be sent in (`seedCreationOrder`), each one stamped
+   * strictly later than the one before: the store breaks a tie by insertion
+   * order, oldest first, which would put the terms ahead of the filters.
+   */
+  private async createKnowledgeSeed(
+    fixture: SampleFixture,
+    database: string,
+    datasourceId: string,
+  ): Promise<KnowledgeSeedOutcome> {
+    const outcome: KnowledgeSeedOutcome = { knowledge: 0, metrics: 0 };
+    const seed = fixture.knowledge;
+    if (!seed) return outcome;
+    const qualify = (entity: string) => `${database}.${entity}`;
+    try {
+      const heldEntries = new Set(
+        (await this.knowledge.list({ datasetId: fixture.datasetName }))
+          .filter((entry) => entry.scope?.datasetId === fixture.datasetName)
+          .map((entry) => heldEntryKey(entry.kind, entry.title)),
+      );
+      let lastStamp: number | undefined;
+      for (const entry of seedCreationOrder(seed.knowledge)) {
+        const key = heldEntryKey(entry.kind, entry.title);
+        if (heldEntries.has(key)) continue;
+        if (lastStamp !== undefined) await waitPast(lastStamp);
+        const saved = await this.knowledge.create({
+          kind: entry.kind,
+          scope: { datasetId: fixture.datasetName },
+          title: entry.title,
+          body: entry.body,
+          ...(entry.synonyms?.length ? { synonyms: entry.synonyms } : {}),
+          entities: entry.entities.map(qualify),
+          enabled: true,
+        });
+        lastStamp = savedAt(saved?.updatedAt);
+        heldEntries.add(key);
+        outcome.knowledge += 1;
+      }
+
+      const heldMetrics = new Set(
+        (await this.metrics.list()).map((metric) => heldMetricKey(metric.name)),
+      );
+      for (const metric of seed.metrics) {
+        const key = heldMetricKey(metric.name);
+        if (heldMetrics.has(key)) continue;
+        await this.metrics.create({
+          name: metric.name,
+          label: metric.label,
+          ...(metric.description ? { description: metric.description } : {}),
+          entity: qualify(metric.entity),
+          datasourceId,
+          expression: metric.expression,
+          ...(metric.dimensions?.length
+            ? { dimensions: metric.dimensions }
+            : {}),
+        });
+        heldMetrics.add(key);
+        outcome.metrics += 1;
+      }
+    } catch (err) {
+      const error = describeError(err);
+      this.logger.warn(
+        `${fixture.name} loaded, but its knowledge seed stopped after ` +
+          `${outcome.knowledge} knowledge entries and ${outcome.metrics} metrics: ${error}`,
+      );
+      return { ...outcome, error };
+    }
+    if (outcome.knowledge || outcome.metrics) {
+      this.logger.log(
+        `${fixture.name} knowledge seed${knowledgeSeedSuffix(outcome)} ` +
+          `(dataset "${fixture.datasetName}")`,
+      );
+    }
+    return outcome;
+  }
+}
+
+/**
+ * The order a seed's entries should reach the assistant in when the
+ * knowledge block cannot hold them all: the default filters, then the
+ * instructions, then the terms, each group in the seed's own order.
+ */
+const SEND_ORDER: readonly KnowledgeSnippetKind[] = [
+  'default_filter',
+  'instruction',
+  'term',
+];
+
+/**
+ * The order the loader creates a seed's entries in: the reverse of the send
+ * order (terms in reverse seed order first, default filters last), because
+ * the block lists the newest-updated entry first (knowledge R16).
+ */
+export function seedCreationOrder(
+  entries: readonly SeedKnowledgeEntry[],
+): SeedKnowledgeEntry[] {
+  return SEND_ORDER.flatMap((kind) =>
+    entries.filter((entry) => entry.kind === kind),
+  ).reverse();
+}
+
+/**
+ * The millisecond an entry was stamped with: its stored `updatedAt`, never
+ * later than now (so a malformed or future stamp cannot stall the wait).
+ */
+function savedAt(updatedAt: string | undefined): number {
+  const now = Date.now();
+  const stamp = Date.parse(updatedAt ?? '');
+  return Number.isFinite(stamp) ? Math.min(stamp, now) : now;
+}
+
+/** Resolve once the clock has moved past `ms`, so the next stamp is later. */
+async function waitPast(ms: number): Promise<void> {
+  while (Date.now() <= ms) {
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+}
+
+/**
+ * A knowledge entry is held (R26) when one of the same kind and title is
+ * scoped to the sample's dataset. Titles compare trimmed and case-blind, as
+ * the knowledge bootstrap compares them, so a title re-cased by hand is still
+ * the same entry and is never duplicated.
+ */
+function heldEntryKey(kind: string, title: string): string {
+  return `${kind}:${title.trim().toLowerCase()}`;
+}
+
+/** Metric names are stored trimmed and lowercased (metrics R2). */
+function heldMetricKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+/**
+ * The end of a successful load's message once the knowledge seed ran (R26):
+ * ` — added <k> knowledge entries and <m> metrics`, singular for 1 and a part
+ * with 0 left out; nothing when it created nothing; and when an entry could
+ * not be saved, ` — could not add its knowledge seed: <detail>` instead.
+ */
+export function knowledgeSeedSuffix(outcome: KnowledgeSeedOutcome): string {
+  if (outcome.error !== undefined) {
+    return ` — could not add its knowledge seed: ${outcome.error}`;
+  }
+  const parts: string[] = [];
+  if (outcome.knowledge > 0) {
+    parts.push(
+      `${outcome.knowledge} knowledge ${outcome.knowledge === 1 ? 'entry' : 'entries'}`,
+    );
+  }
+  if (outcome.metrics > 0) {
+    parts.push(
+      `${outcome.metrics} ${outcome.metrics === 1 ? 'metric' : 'metrics'}`,
+    );
+  }
+  return parts.length ? ` — added ${parts.join(' and ')}` : '';
 }
 
 /** The registry entry as the API exposes it, around a computed status. */

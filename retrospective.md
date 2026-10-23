@@ -14,6 +14,91 @@ Entry template:
 
 ---
 
+## 2026-10-23 — 1.1.22 Improvement loop rounds 10 to 13, and rule A40 on a second model (BA-244)
+
+### What went well
+- Reading the traces behind each kept round, not only the pass counts, made the keep decisions explainable: ungrounded-number attempts 11 to 4 (round 10), the masked-competitor question 0/3 to 3/3 (round 11), and a warning that fired in 3 attempts, each then passing (round 12). When held-out fell (33 to 29 in round 10), counting clarification requests per attempt across rounds 8 to 10 showed the one systematic-looking held-out flip was not caused by the change.
+- Running the round 12 detector over round 11's 493 dev statements before the full run gave its false-positive rate (7 flagged, each a real dead filter) for free.
+- Looking at why a question failed every attempt found a check bug, not an assistant bug: `check-option-count` had read clarification options as a list since BA-210 made them one string, so every clarification failed. Fixed as a supervisor change with its own baseline round, as R31 was in round 8.
+- The A40 A/B on gpt-6-luna reused the round 8 and 9 build snapshots (their `dist/` differed only in the prompt file) and clones of the loop's data dirs (`cp -c`, no extra disk), with only the price file patched in the copies. It ran beside the rounds without contention, since OpenAI rate limits are per model.
+- A round script (`round.sh`: build, snapshot, slice, full run, `eval:diff`) and an `until` wait for the build line removed the shell slips of the previous story.
+
+### What went wrong
+- The fixer's round 12 patch refused the statement it detected. A refusal is a tool error, so `check-no-tool-errors` would have failed every attempt that recovered; it was caught only in review, and the lead rewrote it as a warning.
+- The first frontend unit-test run before the push used `npm test`, which looks for an installed Chrome and hung; the second used headed Chromium, where one layout test failed. The gate's command (`CHROME_BIN=<Playwright's Chromium> npx ng test --watch=false --browsers=ChromeHeadless`) was in `evidence/1.1.20/checks.txt`, not in the `verify` skill.
+- The first `git push` of the day failed with a GitHub 500; a plain retry went through.
+- Four dev failures that remain are checks or questions, not the assistant (a view counted as not joining, "round of 16" read as a number, a pattern without the `i` flag, a per-tournament breakdown against an overall reference). None was found before the rounds started, so rounds 9 to 12 kept targeting categories whose ceiling was set by them.
+- The session started on battery at 29% for a job of several hours; `caffeinate -s` only holds sleep off on AC power, and the user had to plug the machine in.
+
+### What to do differently
+- In the fixer's prompt for a tools round, say that a refused statement is a tool error that fails `check-no-tool-errors`, so a detected defect should come back as a warning on the result (A34) unless the statement must never run.
+- Add the frontend unit-test command with `CHROME_BIN` and `--browsers=ChromeHeadless` to the `verify` skill.
+- Before the first round of a loop, list every question that fails all its attempts in the baseline and read its reference and checks; a check or question defect goes to the user before any round targets its category.
+- Before a job of several hours, check `pmset -g batt`; on battery, ask the user to plug in and keep the lid open, then start one `caffeinate -i -m -s` for the whole job and stop it by PID at the end.
+
+## 2026-10-23 — 1.1.23 E2E coverage of the improvement loop's behaviour (BA-245)
+
+### What went well
+- The list of untested behaviour was written at the previous gate (`evidence/1.1.20/e2e-impact.md`), so the story's scope was fixed before it started and the Jira text could quote it.
+- Running the story in its own worktree kept its `test:e2e:prepare` builds out of the epic worktree, where an eval loop round was building and running from `backend/dist` snapshots at the same time.
+- The progress line's ` · attempt <a>/<k>` was made deterministic in E2E with the LLM stub: it answers a run's first model call and holds the later ones, so the run stops at "attempt 2/3" with no real model and no component-level fallback.
+- Where a backend test already proved a command-line rule, the Gherkin names that test instead of adding a second one; only three entry functions with no test got one.
+
+### What went wrong
+- The worktree the agent was given came up on `main` (`ea78278`), not on the epic branch's head. The agent noticed and reset to `05d28f8` before writing anything; had it not, the work would have been built on code without BA-242.
+- The agent's first full run failed on its own matcher (an anchored regex against a span's raw whitespace), not on the app.
+- The spec had no way to cite rule numbers in Gherkin; the agent added `# R…` comment lines above the new scenarios, a style the older scenarios do not follow.
+
+### What to do differently
+- When delegating epic work to an `isolation: worktree` agent, tell it the epic branch and its head commit, and have it check `git log -1` and reset to that commit before its first edit.
+- In Playwright text assertions on rendered spans, match whitespace with `\s+` (or normalise the text) rather than literal spaces.
+- Decide whether Gherkin scenarios cite their rules with `# R…` comment lines, and if so, add it to the `workflow-specs` conventions so new and old scenarios agree.
+
+## 2026-10-22 — 1.1.20 Supervised improvement loop: rounds 0 to 9 and the acceptance gate (BA-242)
+
+### What went well
+- Counting what the traces did before choosing a lever found the real first group. The kind-id bug expected to lead was in 3.7% of the attempts; SQL written on guessed column names was in 345 of 370 dev SQL attempts, because the turn listed tables but not columns.
+- The held-out split did its job. Round 1 lifted dev from 13/130 to 24/130, but two held-out questions went from 3/3 to 0/3 on real side effects of the change (a 2,500-character cap left a view without its columns, and leaner queries fetched names apart). Round 2 fixed the cap, and round 5 kept the change on the next model.
+- An A/A rerun (round 4, round 3's code and model) measured the noise: 21 dev and 11 held-out questions flipped with no change, and three small held-out categories fell by chance. The accept rule's condition 2 was changed before round 5's results came in, not after.
+- A probe of four models on 31 dev questions ($0.26, each in its own data dir and databases) settled the model choice with numbers instead of a price table: gpt-4o-mini passed 16% of its attempts there, gpt-5.6-luna 71%. One data dir per set then let the three sets run at once, about 50 minutes for a full run instead of 100.
+- Measuring the mechanism beside the pass rate (tool calls per attempt, repaired SQL, ungrounded numbers) made each keep or revert explainable when the question-level rate stayed within its interval.
+- Every fact of the Finance knowledge round was checked by SQL against the loop's database and against `docs/evals/domains/finance-policy.md` before it was applied. The leak check's false positives (month names, column values) went to the allowlist with reasons, and no rule was reworded to dodge it.
+- The headless fixer took the user's terminal out of every round, and a permission it would ask for is refused rather than prompted.
+
+### What went wrong
+- The interactive fixer, started in VS Code's integrated terminal, was offered the IDE's MCP server (with `executeCode`) despite `--strict-mcp-config`; only the user's screenshot of its permission prompt showed it.
+- The first baseline on gpt-5.6-luna came out not priced: on a gpt-5 family model `create_visual` works and its designer runs on gpt-4.1-mini (agents.md 1.5), which had no rate. A run keeps its rates, so it could never be a before side, and the baseline had to be taken again ($1.23).
+- Round 6's commit ran only the knowledge and context-block tests. `knowledge-seed-block.spec.ts` (its own `BLOCK_BUDGET = 2_000`) failed for four samples, and knowledge R17, testing-data R26 and data-model still said 2,000; round 7 found it.
+- Shell slips cost time and $0.10: in zsh, `local set=$1 … name=$R-$set` expanded `$set` before assigning it, so the first round 3 start wrote three sets into one log; a heredoc delimiter inside the text a Python edit replaced cut the script; `collect-fixer.sh … | head -3` was killed before it removed the worktree; a command kept in `$P` was not word-split.
+- I wrote round 9's reason from the slice's numbers (aggregate 10/15 to 9/15) instead of the full run's (10/15 to 12/15); it was caught while generating the summary, before the gate's commit.
+- With about ten questions per category and pass^3, condition 1 of the accept rule was out of reach for a fix of one cause: one round of seven that changed the app met the whole rule. Nobody checked the rule against the noise before the loop started, and rounds 1 and 2 ($2.39) ran on a model later dropped.
+
+### What to do differently
+- Before changing an eval model, list every model a run calls (assistant, SQL fixer, the designer's gpt-4.1-mini on gpt-5 family models, the judge) and price each in `pricing.json` first.
+- Before the first round of any loop, run an A/A rerun of the baseline and check each accept-rule condition against its flips.
+- After a change is kept or accepted, run the full backend unit suite and grep the specs for the value it replaced (`grep -rn "2,000" specs`) before committing it.
+- In zsh scripts, give each `local` that depends on another its own line; write edit scripts with the Write tool whenever the replaced text may hold a heredoc delimiter; never pipe a script that cleans up into `head`.
+- Run the fixer headless, or from a terminal outside VS Code; keep `mcp__ide` in its deny rules.
+- Take a round's `results.tsv` cells and reason from the full run's `eval:diff` draft row by script, never from the slice.
+
+## 2026-10-20 — 1.1.10 World Cup golden set merged into the World Cup bank (BA-188)
+
+### What went well
+- I merged the JSON by text splice, not `json.dumps`, and asserted the result: the 52 World Cup cases were unchanged, the 11 golden cases were identical apart from the note prefix, the variants were identical and the ids unique. A round trip through `json.dumps` would have reformatted every Prettier-style inline array in the file.
+- Checking that both files had the same variants (fixtures, dialects, prefixes) before proposing the merge showed that every prefixed case id stays the same. That turned a possible history break into a set-id change only.
+- Specs and code went to two parallel agents with the decisions written out (no tag, rule number kept, the R40 example swapped for `world-cup-databricks` / `world-cup-databricks-only`). Both came back consistent, with `check-specs` and 1089 tests green on their first run.
+- I ran the validator against this worktree's own compose Postgres (55433), through an isolated instance. Loading the fixture into the shared 55432 would have dropped and recreated its `world_cup` schema with this branch's seed.
+
+### What went wrong
+- I offered the user the shared web data dir "with your datasources, datasets and runs" and said old golden runs would show in its history. `~/.questions-to-insights` was nearly empty (no datasource, dataset or run); I found out only when the validator needed a dataset.
+- `agents.spec.ts` had expected 12 World Cup questions since the 40-question slice (52) was committed. Four of the six E2E failures in the fast loop predated this change, and nothing in the roadmap notes said so.
+- The code agent left three comment lines far wider than their files. A sanity assertion in my own E2E-edit script was too strict and stopped the first run (it wrote nothing).
+
+### What to do differently
+- Before describing a data dir to the user as the test target, read it: `GET /datasources`, `GET /datasets` and `GET /agents/<key>/evals/runs` on the running instance, or the file sizes in the data dir.
+- When a story's fast-loop commit leaves an E2E spec knowingly stale (counts, removed sets), say so in the roadmap feature's Notes with the spec file, so the next fast loop can tell old failures from new ones.
+- In a code brief, add: "wrap comments to the width of the surrounding lines". In my own edit scripts, assert on what changed (counts of exact old strings), not on what must be absent afterwards.
+
 ## 2026-10-16 — 0.4.2 Jira MCP tool in `.claude/tools` (BA-237)
 
 ### What went well
@@ -49,6 +134,28 @@ Entry template:
 - When a question offers "I'll name X", put the candidates (here, the open epics from `search_issues`) in the same question.
 - When a "move, don't change" story is followed by rule changes on the same branch, record each change in the roadmap notes as it lands, and keep the line check re-runnable against `main`, so the map stays honest.
 - For a harness-only change, verify with a fresh `claude -p` session in the worktree (skills listed, tools loaded, no permission denials), not with the web-app `verify` recipe.
+
+## 2026-10-15 — Merge of `main` (v0.34.0) into the BA-9 branch
+
+### What went well
+- Renumbering the branch's own ids in a commit *before* the merge (`58abf47`) kept them unambiguous: a rule like R70 could still only be ours, so a script restricted to the lines the branch added could shift 328 lines safely. After the merge the same script could not have told main's R70 from ours.
+- Renaming our `eval-sets.ts` to `eval-set-files.ts` before the merge turned an add/add conflict between two unrelated modules into no conflict at all.
+- Four resolvers, each owning a disjoint list of files and forbidden from writing to the git index, finished 27 files with no clashes; the merge was staged once, at the end.
+- A script comparing main's code-defined World Cup and Formula 1 cases with what the JSON loader produces proved the two sets match (12/12, 12/12, 10/10), instead of eyeballing JSON.
+
+### What went wrong
+- A file that merged cleanly was broken: `databricks/register.ts` still signed in through `POST /auth/local/sign-in`, which BA-232 removed on main. Its unit test mocked the sign-in, so it stayed green. The spec resolver found it by reading, not a test.
+- `frontend/e2e/agents.spec.ts` imported a helper main had deleted (`helpers/local-auth`); `ng build` doesn't compile `e2e/`, so the frontend resolver reported green.
+- The spec resolver ran at the same time as the code resolvers, so its "code problems" list was half stale by the time it arrived, and it had to be sent a second round with the other resolvers' notes.
+- I mapped one rule number twice in my own notes (the category-checks rule is R125 after the shift, not R168); the spec resolver caught it against the spec.
+- Main's new welcome page added two more buttons named "Agents", and two of our E2E scenarios clicked the first match on the page; they only failed after the merge.
+
+### What to do differently
+- When main removes a feature (an API, a route, a helper), grep both sides' *added* code for its names after the merge, not only the conflicted files: `git diff <base> HEAD -U0 | grep '^+' | grep -E '<removed names>'`.
+- After resolving E2E files, compile them with `npx playwright test --list <spec>` and `npx tsc --noEmit -p e2e/tsconfig.json`; `ng build` does not cover `e2e/`.
+- Run the spec resolver after the code resolvers, or hand it their notes files up front, so it describes the merged code rather than one side.
+- In E2E, open top-level pages through the navigation rail (`getByRole('complementary', { name: 'Navigation rail' })`), never by a page-wide button name.
+- Before merging main, renumber the branch's ids past main's and rename clashing modules in a separate commit, applied only to lines the branch added; keep the old→new map in the evidence.
 
 ## 2026-10-15 — 1.15.1 and 1.15.2 US Health demo: banner and showcase agents (BA-233)
 
@@ -281,6 +388,74 @@ Entry template:
 - Before proposing a skill split, measure every prompt section and the framework's per-turn catalog overhead, and grep for the content each skill would hold. Put the numbers in the epic spec, so a skill with nothing to move or a net token cost never reaches confirmation.
 - Pick the eval model with the user before the first eval run, and check that its key is set (`awk -F= '/^[A-Z_]+=/{print $1, length($2)}' .env.llm.local`). Never use the env fallback model as a regression baseline.
 - When a check script compares an old build with a new one, make it assert its own preconditions (the state the old build should leave) and fail when they don't hold. Start each build with the `cwd` the real launcher uses.
+
+## 2026-10-13 — 1.1.5 to 1.1.9 Checks, report and judge, domains, Databricks and REST (BA-183 to BA-187)
+
+### What went well
+- Six agents worked in parallel in one worktree, each owning a list of files and a range of rule numbers (R68-R89, R90-R99, R100-R119, R120-R139, R140-R159, R160-R169). No two agents overwrote each other, and the shared files (`registry.ts`, `eval-sets.ts`, order-list tests) took minimal insertions only.
+- Splitting Steps 2 and 3 by file rather than by step (REST server, Databricks loader, one agent for every dialect reference) meant only one agent ever edited a set file.
+- Every SQLite reference was checked against PostgreSQL rows (117 of 117 equal). Every Databricks reference passed static checks and a DuckDB proxy run, so the VDI run starts from references that are already very likely right.
+- Asking for the catalog to be a parameter before the VDI run removed the most likely way the first Databricks run would have failed (a workspace without an `evals` catalog).
+- The real runs used two personas in parallel. Six sets of 10 to 68 questions finished in 40 minutes.
+
+### What went wrong
+- Stories that ran in parallel on shared files can't be split into one commit per story without rewriting hunks, so 1.1.5 to 1.1.9 land in one commit.
+- The E2E list of sets changed four times (4, 9, 16, 18) as agents added variants. Each agent edited the Gherkin, and the Playwright list waited for me.
+- The REST agent found that its references needed a sample (`world-cup-rest-connector`) that wasn't in the plan, because a Step 1b guard test failed. That was the right call, but the contract hadn't foreseen it.
+- I wrote two durations into the report page before reading them (50 and 40 seconds against the real 48 and 39). I caught it before publishing the final version.
+- The plan estimated about 20 minutes per run. With the judge off, runs took 8 to 17 minutes for 10 to 68 questions.
+
+### What to do differently
+- When parallel agents share a file that lists items (sets, fixtures), give one agent ownership of the list and have the others report their ids, rather than each editing the list.
+- For parallel stories on one branch, either sequence the stories that share files, or accept one commit and say so in the PR. Decide before dispatching, not at commit time.
+- Read every number for a report from the run records with a script; never type one from memory, even a rough one.
+- A question's done-when that needs a model run should name the persona and the data directory, so parallel runs can be planned up front.
+
+## 2026-10-13 — 1.1.2 baseline and 1.1.4 One format and a validator (BA-127, BA-182)
+
+### What went well
+- A snapshot of the old in-code definitions, taken before the move, plus a field-by-field equality test made "no change in behaviour" provable. A one-character regex change made it fail.
+- The baseline ran through the same endpoint the Evals tab calls, from an empty data directory and a separate copy of the World Cup database. It ran in parallel with development and never touched the user's data or the shared `world_cup` database.
+- Reading the traces before reporting "0 of 10" found two concrete causes, rather than "the model is weak": a one-row answer refused as truncated, and the datasource passed as `"<kind> <id>"`. Counting the tool errors across all six runs confirmed the second before it went into the research.
+- The specs agent read the backend agent's files as they appeared and wrote the rules to match them. The backend agent ran the validator for real from a scratch compile while `dist` was frozen.
+
+### What went wrong
+- The plan put the baseline on the user, but the machine had no LLM key in any data dir or in the environment. It also estimated about 20 minutes per run, and real runs took about 5.
+- `npm run worldcup:rest:setup` has been broken on `main` since BA-161: it sends no sign-in token and gets 401. No test covers it.
+- The first full E2E run failed 87 tests because Playwright's Chromium was not installed on this macOS machine, which cost one build cycle.
+- The visual baseline test has no macOS image in the repository, so every fresh macOS run fails it and writes an untracked `application-shell-web-darwin.png`.
+- The Step 1a contract missed that two golden questions read a table outside the World Cup sample's required list. The backend agent found it, and the fix changed the sample from 9 to 10 entities.
+- `tsc --noEmit` with incremental builds wrote `tsbuildinfo` files into the frozen `dist` while the baseline ran. It was harmless, but it broke the rule set for that window.
+- The user mistook the current app for the old one. Their familiar build came from two branches 113 commits behind `main`, and I hadn't said which version and look they would see.
+
+### What to do differently
+- Before planning or promising an eval run, check for a model key (`GET /llm/settings`, `env | grep OPENAI`) and time one run before estimating the rest.
+- On a new macOS machine, run `npx playwright install chromium` before the first E2E run. After a macOS run, move any generated `*-darwin.png` out of the tree; never commit it.
+- When a reference query moves into a set, check that every table it reads is in the fixture's required list. Better: make the validator check that each reference reads only dataset entities (a candidate for Step 1b).
+- When `dist` must not change, type-check with `--tsBuildInfoFile` pointing into the scratchpad.
+- When starting the app for the user, say which commit it runs and that branch builds may look different.
+
+## 2026-10-12 — 1.1.2 and 1.1.3 BA-9 research and execution plan drafted (BA-127, BA-128)
+
+### What went well
+- Two parallel agents converted the artifact into the research and the plan, each given the other doc's exact heading list. The cross-document anchors worked first time: 407 relative links, none broken.
+- Re-checking the artifact against the code found thirteen errors that seven artifact versions had missed. Examples: the REST players endpoint (50 rows) fits in one page, so the paging example tested nothing; three spec rules cited from the wrong capability (R10, R20, R25); and the 3.8 status command counts 23, not 30.
+- Checking every branch for claimed ADR numbers before writing found ADR-0013 (`feat/hindsight-memory`) and ADR-0014 (`feat/BA-2-data-model-dsl`), so the case-format ADR became ADR-0015 with no collision.
+- Staging an intermediate `roadmap.md` (`git hash-object -w` + `git update-index --cacheinfo`), then running the spec check on an export of the index, gave each story its own green commit while both shared the roadmap.
+
+### What went wrong
+- I asked mid-drafting where Steps 9 to 12 belong. The user answered that the task was Step 0 only. The question concerned the epic spec's wording, a Step 0 deliverable the user confirms anyway, so it should have waited for that confirmation.
+- The research agent's link checker resolved anchors in one direction only. Re-running it on the plan reported 23 false failures, and a second checker had to be written.
+- The plan is committed while BA-128 is still To Do in Jira. BA-127 can't be Done until the baseline on `main` is taken, and BA-128 may only start after BA-127 is Done. Status follows that order; drafting did not.
+- A throwaway check ran `cd $T && … | tail -1; rm -rf $T`. The pipe hid the failure, the folder was deleted before the retry, and the shell's working directory reset to the main checkout.
+- My first retrospective insert anchored on yesterday's top entry; a newer one had arrived with `main`, so the anchor matched nothing (the assertion caught it).
+
+### What to do differently
+- When a decision is part of a deliverable the user will confirm (an epic spec, a story list), draft it with the plan's default and raise it at confirmation. Don't ask mid-drafting.
+- When parallel agents write documents that link to each other, give them one shared link checker that resolves anchors in any `.md` file, and run it once both are done.
+- Before keeping a spec rule number cited in a plan (R10, R20, …), grep the cited capability spec for that rule.
+- In throwaway shell checks, use absolute paths and never pipe into `tail` before an `rm` in the same chain.
+- Anchor retrospective and changelog inserts on the first `## ` heading after the template, read at insert time, not on a remembered entry.
 
 ## 2026-10-12 — 1.11.3 Task details in the workflow pane (BA-174)
 

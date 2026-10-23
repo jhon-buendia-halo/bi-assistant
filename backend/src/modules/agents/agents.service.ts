@@ -31,6 +31,7 @@ import { LlmService } from '../llm/llm.service';
 import { AgentPromptsService } from './agent-prompts.service';
 import type { AgentPromptView } from './entities/agent-prompt-override.entity';
 import { evalSetsFor } from '../../mastra/evals/eval-sets';
+import { UNCATEGORISED } from '../../mastra/evals/eval-summary';
 import { builtinAgentSession } from './builtin-sessions';
 import {
   SHOWCASE_AGENT_KEYS,
@@ -122,6 +123,10 @@ export interface AgentEvalCase {
   question: string;
   /** What the question probes for. */
   intent: string;
+  /** The case's category, shown as a chip (agents-evals R150). */
+  category: string;
+  /** `dev`, or `held-out` for cases kept out of prompt tuning. */
+  split: string;
   checks: AgentEvalCheck[];
 }
 
@@ -481,6 +486,8 @@ export class AgentsService {
         id: evalCase.id,
         question: evalCase.question,
         intent: evalCase.intent,
+        category: evalCase.category ?? UNCATEGORISED,
+        split: evalCase.split ?? 'dev',
         checks: evalCase.scorers.map((scorer) => ({
           id: String(scorer.id ?? ''),
           name: String(scorer.name ?? ''),

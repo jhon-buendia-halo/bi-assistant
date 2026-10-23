@@ -33,6 +33,7 @@ jest.mock('../../mastra/agents/knowledge-bootstrap.agent', () => {
 
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { KnowledgeService } from './knowledge.service';
+import { KNOWLEDGE_BLOCK_CHARS } from '../../mastra/context-blocks';
 import type { KnowledgeSnippet } from './entities/knowledge-snippet.entity';
 
 const snippet = (
@@ -380,8 +381,10 @@ describe('KnowledgeService.definitionBlock', () => {
 
     const block = await service.definitionBlock([]);
 
-    expect(block.length).toBeLessThanOrEqual(2_200);
+    // The budget counts the entries; the header and line breaks come on top.
+    expect(block.length).toBeLessThanOrEqual(KNOWLEDGE_BLOCK_CHARS + 200);
     expect(block).toContain('Term 0');
+    expect(block).not.toContain('Term 99');
   });
 });
 

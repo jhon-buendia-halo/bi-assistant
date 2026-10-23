@@ -10,5 +10,6 @@ Each tool is one of two kinds:
 | Tool | Kind | Skill | What it does |
 |---|---|---|---|
 | [jira](jira/README.md) | MCP server | `jira` | Jira Cloud: read and search issues, create epics and stories or bugs under an epic, update, comment, transition |
+| [eval-loop](eval-loop/README.md) | Script | `eval-loop` | The improvement loop's fixer isolation: a detached worktree without the held-out questions, a locked claude session, its change collected as a patch |
 
 A new tool gets its own folder with a README (kind, files, how to test), a row here, and a line in [delivery.md](../../specs/system/delivery.md) section 11.

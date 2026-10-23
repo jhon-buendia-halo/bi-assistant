@@ -212,6 +212,88 @@ describe('the fixture registry is the single source of required entities', () =>
     ).toContain(`Missing entities: ${rest.schema}.${rest.requiredTables[0]}`);
   });
 
+  it.each(['world-cup', 'finance', 'marketing-analytics'])(
+    'requires a Databricks datasource for the %s Databricks sample and matches catalog keys (agents-evals R185)',
+    (source) => {
+      const sample = evalFixture(`${source}-databricks`);
+      const keys = sample.requiredTables.map(
+        (table) => `evals.${sample.schema}.${table}`,
+      );
+      const databricks = fixture({
+        datasourceId: 'dbx',
+        datasourceKind: 'databricks',
+        tables: keys,
+      });
+
+      expect(check(['Sample'], [databricks], sample)).toBeUndefined();
+      // The same tables behind a PostgreSQL datasource are the wrong kind.
+      expect(check(['Sample'], [fixture({ tables: keys })], sample)).toContain(
+        'must belong to one Databricks datasource',
+      );
+      // Every message names the loader and the sample it loads.
+      const missing = check(
+        ['Sample'],
+        [{ ...databricks, tables: keys.slice(1) }],
+        sample,
+      );
+      expect(missing).toContain(
+        `Setup: scripts/setup-fixture-databricks.ts --fixture ${source} ` +
+          '(runbook: docs/evals/databricks-vdi.md).',
+      );
+      expect(missing).toContain(`Select its Databricks datasource`);
+      expect(missing).toContain(
+        `Missing entities: ${sample.schema}.${sample.requiredTables[0]}`,
+      );
+    },
+  );
+
+  it('accepts a Databricks sample in any one catalog, and refuses one spread over several (agents-evals R192)', () => {
+    const sample = evalFixture('world-cup-databricks');
+    const keys = (catalog: string) =>
+      sample.requiredTables.map(
+        (table) => `${catalog}.${sample.schema}.${table}`,
+      );
+    const dbx = (tables: string[]) =>
+      fixture({ datasourceId: 'dbx', datasourceKind: 'databricks', tables });
+
+    expect(
+      check(['Sample'], [dbx(keys('dev_sandbox'))], sample),
+    ).toBeUndefined();
+    expect(
+      check(
+        ['Sample'],
+        [dbx([...keys('evals').slice(1), keys('main')[0]])],
+        sample,
+      ),
+    ).toContain(
+      'The selected datasets span several catalogs (evals, main); the Databricks reference queries run in one.',
+    );
+    expect(
+      check(['Sample'], [dbx([...keys('evals'), 'world_cup.extra'])], sample),
+    ).toContain('The entity "world_cup.extra" is not catalog.schema.table');
+  });
+
+  it('refuses a PostgreSQL set on a Databricks datasource, and the other way round', () => {
+    const databricksTables = tables.map((table) =>
+      table.replace(/^world_cup\./, 'evals.'),
+    );
+    const onDatabricks = fixture({
+      datasourceId: 'dbx',
+      datasourceKind: 'databricks',
+      tables: databricksTables,
+    });
+    // The World Cup PostgreSQL set, pointed at the Databricks sample.
+    expect(check(['Sample'], [onDatabricks], WORLD_CUP)).toContain(
+      'The selected datasets must belong to one PostgreSQL datasource.',
+    );
+    // The Databricks set, pointed at the PostgreSQL sample.
+    expect(
+      check(['Sample'], [fixture()], evalFixture('world-cup-databricks')),
+    ).toContain(
+      'The selected datasets must belong to one Databricks datasource.',
+    );
+  });
+
   it('fails loudly when a question set points at an unknown fixture', () => {
     expect(() => evalFixture('no-such-sample')).toThrow(
       'Unknown sample fixture "no-such-sample"',

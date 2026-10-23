@@ -15,7 +15,8 @@ import {
   resolveVisualizationModel,
   specVisualOutputSchema,
 } from '../../mastra/agents/visualization.agent';
-import { modelCallTuning } from '../../mastra/model-compat';
+import { modelCallTuning, modelIdOf } from '../../mastra/model-compat';
+import type { UsageSink } from '../../mastra/usage-sink';
 import { getDatasetToolServices } from '../../mastra/tool-services';
 import {
   ChartDataRecord,
@@ -111,6 +112,8 @@ interface DesignContext {
    * does not thread a turn through keeps today's behavior unchanged.
    */
   mergedData?: ToolDataRecord[];
+  /** Hears each designer call; set only inside an eval attempt (R219). */
+  usageSink?: UsageSink;
 }
 
 /** The records a design pass should read: the merged set, or the answer's own. */
@@ -209,6 +212,7 @@ export class VisualizationService {
     sourceMessageAt: string | undefined,
     instruction?: string,
     turnRecords?: ToolDataRecord[],
+    usageSink?: UsageSink,
   ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
     const answer = this.findSourceAnswer(session, sourceMessageAt);
     const question = this.findQuestion(session, answer);
@@ -224,6 +228,7 @@ export class VisualizationService {
       answer,
       instruction,
       mergedData,
+      usageSink,
     });
 
     const visualId = randomUUID();
@@ -269,6 +274,7 @@ export class VisualizationService {
     visualId: string,
     instruction: string,
     turnRecords?: ToolDataRecord[],
+    usageSink?: UsageSink,
   ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
     const trimmed = (instruction ?? '').trim();
     if (!trimmed) throw new BadRequestException('instruction is required');
@@ -296,6 +302,7 @@ export class VisualizationService {
       instruction: trimmed,
       current,
       mergedData,
+      usageSink,
     });
     return this.appendVersion(
       session,
@@ -811,7 +818,8 @@ export class VisualizationService {
     // hint have to be filed the way the *designer's own* model reads them — a
     // gateway deployment ignores an `openai` bucket, and a gpt-5-class one
     // rejects `max_tokens` outright.
-    const tuning = modelCallTuning(await resolveVisualizationModel(), {
+    const designerModel = await resolveVisualizationModel();
+    const tuning = modelCallTuning(designerModel, {
       maxOutputTokens:
         mode === 'spec'
           ? SPEC_OUTPUT_TOKENS
@@ -865,6 +873,7 @@ export class VisualizationService {
     } finally {
       clearTimeout(deadline);
     }
+    context.usageSink?.('designer', result, modelIdOf(designerModel));
     let output: unknown = unwrapSchemaEnvelope(result.object);
     if (!output && result.text?.trim()) {
       const jsonText = result.text

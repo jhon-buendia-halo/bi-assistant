@@ -116,12 +116,18 @@ export interface AgentEvalCheck {
   description: string;
 }
 
+/** Which half of a set a question belongs to (data-model 4.9). */
+export type AgentEvalSplit = 'dev' | 'held-out';
+
 export interface AgentEvalCase {
   id: string;
   question: string;
   /** What the question probes for. */
   intent: string;
   checks: AgentEvalCheck[];
+  /** The one primary kind of question it is, e.g. `lookup`. */
+  category?: string;
+  split?: AgentEvalSplit;
 }
 
 /** A named group of eval questions sharing one fixture. */
@@ -140,13 +146,64 @@ export interface EvalToolCall {
   error?: string;
 }
 
+/**
+ * How a check or a question came out. `not-scored` is a judge check on a run
+ * with the judge off, or a question whose only unsettled checks are those.
+ */
+export type EvalStatus = 'passed' | 'failed' | 'not-scored';
+
 export interface EvalCheckResult {
   id: string;
   description: string;
   score: number;
+  /** True only when `status` is `passed`. */
   passed: boolean;
-  /** Why the check failed, when the scorer reports it. */
+  /** Absent on runs stored before statuses existed: read `passed`. */
+  status?: EvalStatus;
+  /** The BA-9 criterion the check measures (D1…, G1…, I1…, C1…). */
+  criterion?: string;
+  /** Why the check failed or was not scored, when known. */
   reason?: string;
+}
+
+/** One agent's token use in an attempt or run (api.md 2.6, R219). */
+export interface ModelUsageEntry {
+  agent: 'assistant' | 'sql-fixer' | 'designer' | 'judge';
+  /** Without provider prefix, lower case: `gpt-4o-mini`. */
+  model: string;
+  inputTokens: number;
+  /** Part of `inputTokens`. */
+  cachedInputTokens: number;
+  outputTokens: number;
+  /** Part of `outputTokens`. */
+  reasoningTokens: number;
+  calls: number;
+  /** Calls that came back with no token counts. */
+  unreportedCalls: number;
+}
+
+export interface ModelRate {
+  inputPerMillionUsd: number;
+  cachedInputPerMillionUsd?: number;
+  outputPerMillionUsd: number;
+  source?: string;
+  readOn?: string;
+}
+
+/** One try of a question when the run repeats (R211). */
+export interface EvalAttempt {
+  /** 1-based. */
+  attempt: number;
+  status: EvalStatus;
+  passed: boolean;
+  scores: Record<string, number>;
+  checkResults: EvalCheckResult[];
+  answer: string;
+  toolCalls: EvalToolCall[];
+  error?: string;
+  durationMs: number;
+  usage: ModelUsageEntry[];
+  costUsd: number | null;
 }
 
 export interface AgentEvalCaseResult {
@@ -159,9 +216,73 @@ export interface AgentEvalCaseResult {
   answer: string;
   /** The tool calls the agent made, in order. */
   toolCalls: EvalToolCall[];
+  /** True only when `status` is `passed`. */
   passed: boolean;
+  /** Absent on runs stored before statuses existed: read `passed`. */
+  status?: EvalStatus;
+  category?: string;
+  /** Absent only on records an older server wrote (R215). */
+  split?: AgentEvalSplit;
   error?: string;
+  /** With several attempts, this and the fields above are the
+   * representative attempt's. */
   durationMs: number;
+  /** Attempts passed and made; absent on records an older server wrote. */
+  passes?: number;
+  runs?: number;
+  flaky?: boolean;
+  /** Only when `runs` is above 1. */
+  attempts?: EvalAttempt[];
+  /** Absent: not recorded (saved before usage was). */
+  usage?: ModelUsageEntry[];
+  /** Null: not priced. Absent: not recorded. */
+  costUsd?: number | null;
+}
+
+/** What the run button sends; the API also takes `categories`. */
+export type EvalJudgeChoice = 'off' | 'on';
+/** Attempts per question the run button can send (R209). */
+export type EvalRepeats = 1 | 3 | 5;
+export type EvalJudgeMode = EvalJudgeChoice | 'categories';
+
+/** Questions of one split, or of one split in one category (R212). */
+export interface EvalSplitSummary {
+  passed: number;
+  failed: number;
+  notScored: number;
+  flaky: number;
+  total: number;
+  /** Wilson 95% of passed over scored, 0..1; absent with none scored. */
+  interval?: { low: number; high: number };
+}
+
+export interface EvalCategoryTally {
+  category: string;
+  passed: number;
+  failed: number;
+  notScored: number;
+  flaky?: number;
+  total: number;
+  dev?: EvalSplitSummary;
+  heldOut?: EvalSplitSummary;
+}
+
+export interface EvalCriterionTally {
+  criterion: string;
+  passed: number;
+  failed: number;
+  total: number;
+}
+
+/** A finished run's counts, by question and by criterion. */
+export interface EvalRunSummary {
+  passed: number;
+  failed: number;
+  notScored: number;
+  flaky?: number;
+  bySplit?: { dev: EvalSplitSummary; heldOut: EvalSplitSummary };
+  byCategory: EvalCategoryTally[];
+  byCriterion: EvalCriterionTally[];
 }
 
 export interface EvalRunView {
@@ -174,9 +295,25 @@ export interface EvalRunView {
   results: AgentEvalCaseResult[];
   totalCases: number;
   currentQuestion?: string;
+  /** The attempt of `currentQuestion` in flight, 1..repeats. */
+  currentAttempt?: number;
   error?: string;
   startedAt: string;
   finishedAt?: string;
+  /** Absent on runs stored before the judge could be switched off. */
+  judge?: { mode: EvalJudgeMode; categories?: string[] };
+  /** Attempts per question; absent on older records: read 1. */
+  repeats?: EvalRepeats;
+  /** Router id the agent ran on, such as `openai/gpt-4o-mini`. */
+  model?: string;
+  /** Absent: not recorded. */
+  usage?: ModelUsageEntry[];
+  /** US dollars; null: not priced; absent: not recorded. */
+  costUsd?: number | null;
+  rates?: Record<string, ModelRate>;
+  source?: 'app' | 'cli';
+  /** Absent on older runs; derive it with `evalRunSummary`. */
+  summary?: EvalRunSummary;
 }
 
 export interface AgentSkillFileEntry {
@@ -325,14 +462,17 @@ export class AgentsApiService {
     );
   }
 
+  /** Start a run of the given questions; the judge is off unless asked. */
   startEvalRun(
     key: string,
     datasourceId: string,
     caseIds: string[],
+    judge: EvalJudgeChoice = 'off',
+    repeats: EvalRepeats = 1,
   ): Observable<EvalRunStartResult> {
     return this.http.post<EvalRunStartResult>(
       `${API_BASE_URL}/agents/${encodeURIComponent(key)}/evals/run`,
-      { datasourceId, caseIds },
+      { datasourceId, caseIds, judge, repeats },
     );
   }
 

@@ -58,9 +58,9 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Eval check.** One scorer that grades an eval case's answer or tool calls.
 
-**Eval run.** One execution of selected eval cases against a datasource and its datasets. Records per-question results (pass or fail, scores, tool calls, answer). When a completed earlier run exists for the same agent, datasource and datasets, the run also stores a *regression comparison*.
+**Eval run.** One execution of selected eval cases against a datasource and its datasets, with a *judge option* (off by default) that says whether the LLM judge is called. Records per-question results (passed, failed or not scored, scores, tool calls, answer) and a summary by category and by criterion. When a completed earlier run exists for the same agent, datasource and datasets, the run also stores a *regression comparison*.
 
-**Eval set.** A named group of eval cases bound to one *sample fixture* (World Cup on PostgreSQL, World Cup on REST, Formula 1).
+**Eval set.** A named group of eval cases bound to one *sample fixture* (World Cup on PostgreSQL, on REST and on Databricks, Formula 1, and the synthetic domains such as Finance for the assistant; the Intellify RFP API for the *RFP Builder*). Each of the assistant's sets is one variant of a question bank file, and the RFP Builder's set is defined in code; see [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
 **Exhibit.** A table attached to an *RFP package* as a CSV file with a header row, computed from the Intellify data for the RFP's client and lines in scope: A census, B plan designs, C financials and D carriers.
 
@@ -82,9 +82,13 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Interpretation.** A one-line, deterministic summary of how an answer was produced (which entities, what kind of query), built by the system at save time. Never model output.
 
+**Judge option.** Whether an *eval run* calls the LLM judge: `off` (the default), `on`, or `categories`, which judges only the questions of the listed categories. A judge check the run does not call is *not scored*. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R144.
+
 **Knowledge entry.** A curated piece of business knowledge the assistant treats as authoritative. Three kinds: `term` (glossary definition, with optional synonyms and entity bindings), `instruction` (a standing rule) and `default_filter`. Scoped globally, to a dataset or to a datasource. Only enabled entries reach the assistant, within a size budget per turn. Source is `user` or `mined` (drafted by the bootstrap agent, saved disabled for review). The UI says "Knowledge". Code and Jira call these *snippets*.
 
 **Knowledge bootstrap.** The action that has an agent draft up to 15 knowledge entries from a dataset's schema and a few sample rows. Drafts arrive as "Pending suggestions", disabled.
+
+**Knowledge seed.** The knowledge entries and metrics a synthetic domain sample (Finance, Health Insurance, Genomics, Supply Chain) ships about its data, created when the sample is loaded from Testing Data and then edited or deleted like any other. See [../capabilities/testing-data/spec.md](../capabilities/testing-data/spec.md) R26.
 
 **Knowledge used.** The list of knowledge entries that were actually included in the context of one answer, recorded when the context was built. It shows what the model was given, not what it applied.
 
@@ -101,6 +105,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Metric.** A governed, named SQL aggregation expression over one entity (for example `denial_rate`), with a label, description and dimensions. The assistant reuses its expression verbatim instead of re-deriving it. Metrics are the app's lightweight semantic layer. A metric can be promoted from a *verified query*; the draft is a *metric candidate*.
 
 **Mined entry.** A *knowledge entry* with source `mined`.
+
+**Not scored.** The verdict of an eval check that was not run because the *judge option* was off for its question, and of an eval question none of whose checks was scored. It is never counted as a pass. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R145 to R147.
 
 **Official agent.** One of the app's own agents shown in the agent hub's Official section: the *assistant*, the *RFP Builder* and the four *showcase agents*. The assistant and the RFP Builder are the only built-in agents that can start a chat; the showcase agents cannot yet.
 

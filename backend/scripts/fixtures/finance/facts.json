@@ -1,0 +1,321 @@
+{
+  "generator": "docker/postgres/generate/finance.ts",
+  "seeds": {
+    "banking": 20260929,
+    "wealth": 20261013
+  },
+  "asOf": "2025-12-31",
+  "fiscalYear": "Runs 1 July to 30 June, named by the calendar year it ends in: fiscal 2025 = 2024-07-01..2025-06-30.",
+  "units": "Every amount is in US cents unless named *Dollars.",
+  "banking": {
+    "B4_branchesOpening12Accounts2024": [
+      "Atlanta Midtown",
+      "Chicago Loop"
+    ],
+    "B5_loanStatusCounts": {
+      "CURRENT": 56,
+      "DELINQUENT": 8,
+      "DEFAULTED": 4,
+      "PAID_OFF": 39,
+      "CHARGED_OFF": 3
+    },
+    "B5_nonPerformingLoans": 12,
+    "B7_mostTransactions2025": "Barnaby Cole",
+    "B7_mostLoanPrincipal": "Farid Haddad",
+    "B7_mostDepositBalances": "Pradeep Venkataraman",
+    "B8_mostCardPurchases2025": "Xiomara Castellanos",
+    "B10_testAccounts": 6,
+    "B10_march2025Transactions": {
+      "excludingTest": 236,
+      "includingTest": 250
+    },
+    "B11_accountsOpened2024ByRegion": [
+      {
+        "region": "Northeast",
+        "viaAccountBranch": 13,
+        "viaHomeBranch": 16
+      },
+      {
+        "region": "Southeast",
+        "viaAccountBranch": 20,
+        "viaHomeBranch": 20
+      },
+      {
+        "region": "Midwest",
+        "viaAccountBranch": 18,
+        "viaHomeBranch": 17
+      },
+      {
+        "region": "West",
+        "viaAccountBranch": 6,
+        "viaHomeBranch": 4
+      }
+    ]
+  },
+  "wealth": {
+    "tables": {
+      "fiscal_periods": 36,
+      "securities": 28,
+      "portfolios": 46,
+      "holdings": 2165,
+      "fees": 1536
+    },
+    "W1_emptyMonth": {
+      "month": "2025-08",
+      "feesChargedPerMonth2025": [
+        {
+          "month": "2025-01",
+          "fees": 88,
+          "amountDollars": 61123.55
+        },
+        {
+          "month": "2025-02",
+          "fees": 50,
+          "amountDollars": 44768.45
+        },
+        {
+          "month": "2025-03",
+          "fees": 50,
+          "amountDollars": 44673.45
+        },
+        {
+          "month": "2025-04",
+          "fees": 74,
+          "amountDollars": 60162.85
+        },
+        {
+          "month": "2025-05",
+          "fees": 59,
+          "amountDollars": 45225.53
+        },
+        {
+          "month": "2025-06",
+          "fees": 54,
+          "amountDollars": 48578.25
+        },
+        {
+          "month": "2025-07",
+          "fees": 98,
+          "amountDollars": 122676.22
+        },
+        {
+          "month": "2025-08",
+          "fees": 0,
+          "amountDollars": 0
+        },
+        {
+          "month": "2025-09",
+          "fees": 81,
+          "amountDollars": 99467.44
+        },
+        {
+          "month": "2025-10",
+          "fees": 93,
+          "amountDollars": 66688.24
+        },
+        {
+          "month": "2025-11",
+          "fees": 59,
+          "amountDollars": 50035.84
+        },
+        {
+          "month": "2025-12",
+          "fees": 61,
+          "amountDollars": 53131.02
+        }
+      ]
+    },
+    "W2_mostHeldSecuritiesFy2025End": {
+      "asOf": "2025-06-30",
+      "tied": [
+        "Axle & Mast Industrials 5.60% 2030",
+        "Birchwood Holdings 5.10% 2029"
+      ],
+      "portfolios": 17,
+      "withTestPortfolios": [
+        {
+          "security": "Birchwood Holdings 5.10% 2029",
+          "portfolios": 20
+        },
+        {
+          "security": "Axle & Mast Industrials 5.60% 2030",
+          "portfolios": 17
+        }
+      ]
+    },
+    "W3_testPortfolios": {
+      "count": 3,
+      "owners": [
+        "Anouk Verbeek",
+        "Cornelius Oyelowo",
+        "Dmitri Volkonsky"
+      ],
+      "aum2025EndDollars": 31648645.1
+    },
+    "W3_portfoliosOpened2024": {
+      "excludingTest": 7,
+      "includingTest": 10
+    },
+    "W3_largestPortfolio2025End": {
+      "excludingTest": {
+        "owner": "Alistair Buchanan",
+        "number": "PF-021539",
+        "valueDollars": 6432139.64
+      }
+    },
+    "W4_wealthClients2025End": {
+      "openRealPortfolioOwners": 31,
+      "anyPortfolioOwners": 38,
+      "premierCustomers": 19
+    },
+    "W5_aumByQuarterEndDollars": [
+      {
+        "asOf": "2024-03-31",
+        "excludingTest": 74022789.05,
+        "includingTest": 104397097.6
+      },
+      {
+        "asOf": "2024-06-30",
+        "excludingTest": 75122448.61,
+        "includingTest": 105614954.92
+      },
+      {
+        "asOf": "2024-09-30",
+        "excludingTest": 73602488.3,
+        "includingTest": 103885945.39
+      },
+      {
+        "asOf": "2024-12-31",
+        "excludingTest": 82168172.08,
+        "includingTest": 112679040.99
+      },
+      {
+        "asOf": "2025-03-31",
+        "excludingTest": 77944865.26,
+        "includingTest": 108711972.37
+      },
+      {
+        "asOf": "2025-06-30",
+        "excludingTest": 85727112.35,
+        "includingTest": 116698305.4
+      },
+      {
+        "asOf": "2025-09-30",
+        "excludingTest": 86279750.7,
+        "includingTest": 117796750.9
+      },
+      {
+        "asOf": "2025-12-31",
+        "excludingTest": 92587499.6,
+        "includingTest": 124236144.7
+      }
+    ],
+    "W5_aumByRegionFy2025EndDollars": {
+      "viaPortfolioBranch": [
+        {
+          "region": "Northeast",
+          "dollars": 33455353.41
+        },
+        {
+          "region": "Southeast",
+          "dollars": 17513471.73
+        },
+        {
+          "region": "Midwest",
+          "dollars": 21376829.38
+        },
+        {
+          "region": "West",
+          "dollars": 13381457.83
+        }
+      ],
+      "viaHomeBranch": [
+        {
+          "region": "Northeast",
+          "dollars": 29353486.88
+        },
+        {
+          "region": "Southeast",
+          "dollars": 16805793.02
+        },
+        {
+          "region": "Midwest",
+          "dollars": 21022845.51
+        },
+        {
+          "region": "West",
+          "dollars": 18544986.94
+        }
+      ]
+    },
+    "W6_constantBaseCurrency": {
+      "USD": 46
+    },
+    "W7_costBasisFy2025End": {
+      "positions": 264,
+      "withoutCost": 62,
+      "unrealizedGainDollars": 8842156.19,
+      "trapSumMinusSumDollars": 28256059.45
+    },
+    "W8_feeStatus": {
+      "refundedChargedIn2025Dollars": 23583.01,
+      "accruedAt2025EndDollars": 70820.02,
+      "collectedFy2026Q1Dollars": 204142.73
+    },
+    "W9_feeRevenueFy2025ByTypeDollars": [
+      {
+        "type": "ADVISORY",
+        "dollars": 478131.97
+      },
+      {
+        "type": "CUSTODY",
+        "dollars": 61690.28
+      },
+      {
+        "type": "PERFORMANCE",
+        "dollars": 56014.16
+      },
+      {
+        "type": "TRADING",
+        "dollars": 6641.85
+      }
+    ],
+    "W9_feeRevenueFy2026Q2Dollars": 167922.47,
+    "W10_feeRevenueFy2025ByRegionDollars": [
+      {
+        "region": "Northeast",
+        "dollars": 224013.73
+      },
+      {
+        "region": "Southeast",
+        "dollars": 115702.34
+      },
+      {
+        "region": "Midwest",
+        "dollars": 146032.32
+      },
+      {
+        "region": "West",
+        "dollars": 116729.87
+      }
+    ],
+    "W12_biggestClient": {
+      "mostAssets2025End": "Tamsin Whitlock",
+      "mostFeeRevenueFy2025": "Alistair Buchanan",
+      "topThreeFeeRevenueFy2025": [
+        {
+          "client": "Alistair Buchanan",
+          "dollars": 81264.97
+        },
+        {
+          "client": "Vivienne Saint-Clair",
+          "dollars": 65083.44
+        },
+        {
+          "client": "Cyrus Farahani",
+          "dollars": 47831.47
+        }
+      ]
+    }
+  }
+}

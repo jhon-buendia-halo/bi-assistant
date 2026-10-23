@@ -5,14 +5,15 @@
 // nothing here does, so a spec file can exercise this logic directly without
 // the ESM-only transitive deps that break under CommonJS Jest (same reason
 // `agent-constants.ts` and `context-blocks.ts` stay dependency-free). The one
-// type it borrows from `assistant.evals.ts` (`EvalCheckResult`) is imported
+// type it borrows from `assistant.evals.ts` (`ScoredCheckResult`) is imported
 // with `import type`, which TypeScript erases entirely, so it adds no runtime
 // edge back to that heavier module.
-import { compareResults, rowKey } from '../../modules/sessions/result-compare';
+import { normalizeValue, rowKey } from '../../modules/sessions/result-compare';
 import { getDatasetToolServices } from '../tool-services';
 import type { DatasetSnapshot } from '../tool-services';
 import type { ToolDataRecord } from '../../modules/sessions/entities/session.entity';
-import type { EvalCheckResult } from './assistant.evals';
+import type { ScoredCheckResult } from './assistant.evals';
+import { catalogOfEntities, referenceInCatalog } from './databricks-catalog';
 
 export interface ResultSetCheckOptions {
   /** For questions about distinct facts, repeated identical facts are harmless. */
@@ -21,12 +22,64 @@ export interface ResultSetCheckOptions {
 
 type Row = Record<string, unknown>;
 
-/** A candidate must contain every reference value, never just a subset. */
-function containsReferenceRow(expected: Row, actual: Row): boolean {
+const NUMERIC = /^-?\d+(\.\d+)?$/;
+
+/** A cell as a plain number, with the text it was written as. */
+function numberCell(value: unknown): { value: number; text: string } | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return { value, text: String(value) };
+  }
+  if (typeof value === 'bigint')
+    return { value: Number(value), text: String(value) };
+  if (typeof value === 'string' && NUMERIC.test(value.trim())) {
+    return { value: Number(value.trim()), text: value.trim() };
+  }
+  return null;
+}
+
+/**
+ * The same fact (R31): equal values at six significant digits, as
+ * `normalizeValue` compares them; or, since 2026-10-22, an assistant number
+ * written with decimals that is the reference, or 100 times the reference (a
+ * share stated as a percentage), rounded to those decimals. A whole number
+ * never stands for a fraction, so a count cannot pass for a ratio.
+ */
+function sameCell(reference: unknown, actual: unknown): boolean {
+  if (normalizeValue(reference) === normalizeValue(actual)) return true;
+  const ref = numberCell(reference);
+  const got = numberCell(actual);
+  if (!ref || !got || Number.isInteger(ref.value)) return false;
+  const places = /\.(\d+)$/.exec(got.text)?.[1].length ?? 0;
+  if (places === 0) return false;
+  const half = 0.5 * 10 ** -places + 1e-9;
   return (
-    Object.keys(actual).length >= Object.keys(expected).length &&
-    compareResults([expected], [actual], { widthTolerant: true }).match
+    Math.abs(ref.value - got.value) <= half ||
+    Math.abs(ref.value * 100 - got.value) <= half
   );
+}
+
+/**
+ * A candidate must contain every reference value, never just a subset: each
+ * reference cell matched to a cell of its own (a small bipartite matching).
+ */
+function containsReferenceRow(expected: Row, actual: Row): boolean {
+  const wanted = Object.values(expected);
+  const cells = Object.values(actual);
+  if (cells.length < wanted.length) return false;
+  const owner = new Map<number, number>();
+  const place = (index: number, seen: Set<number>): boolean => {
+    for (let cell = 0; cell < cells.length; cell += 1) {
+      if (seen.has(cell) || !sameCell(wanted[index], cells[cell])) continue;
+      seen.add(cell);
+      const current = owner.get(cell);
+      if (current === undefined || place(current, seen)) {
+        owner.set(cell, index);
+        return true;
+      }
+    }
+    return false;
+  };
+  return wanted.every((_value, index) => place(index, new Set()));
 }
 
 /**
@@ -109,16 +162,44 @@ function compareEvidence(
 export const RESULT_SET_CHECK_ID = 'result-set-match';
 
 /**
- * Connectors clamp `runReadOnlySql` at 500 rows (mirrors the golden-set
- * harness, `scripts/run-eval.ts`) — comparing more than that is moot.
+ * Connectors clamp `runReadOnlySql` at 500 rows — comparing more than that is
+ * moot.
  */
 export const RESULT_SET_ROW_LIMIT = 500;
 
+/** Runs one statement under a row limit; the caller picks the path. */
+export type ReferenceSqlExecutor = (
+  sql: string,
+  limit: number,
+) => Promise<{ rows: Row[]; truncated?: boolean }>;
+
+/**
+ * Run a case's reference query and return its rows. A reference that fills
+ * the row limit is refused: its result may be clipped, so a comparison against
+ * it could not tell a complete answer from a partial one.
+ *
+ * Shared by the result-set check (which runs it through the same
+ * `DatasetToolServices` bridge `run_readonly_sql` uses) and by
+ * `npm run eval:validate` (which runs it on the connector directly, so no
+ * model can repair a broken reference).
+ */
+export async function runReferenceSql(
+  sql: string,
+  execute: ReferenceSqlExecutor,
+): Promise<Row[]> {
+  const result = await execute(sql, RESULT_SET_ROW_LIMIT);
+  if (result.truncated || result.rows.length >= RESULT_SET_ROW_LIMIT) {
+    throw new Error(
+      'reference result is truncated; completeness cannot be verified',
+    );
+  }
+  return result.rows;
+}
+
 /**
  * The last `run_readonly_sql` call that did not error. This may be a coverage
- * lookup or supporting detail rather than the answer. Mirrors `lastSuccessfulSql` in
- * `scripts/run-eval.ts`, applied to the live `turnRecords` an eval run
- * captures via `onStepFinish` instead of a persisted session transcript.
+ * lookup or supporting detail rather than the answer. Read from the live
+ * `turnRecords` an eval run captures via `onStepFinish`.
  */
 export function lastSuccessfulSqlRecord(
   records: ToolDataRecord[],
@@ -142,6 +223,11 @@ export function lastSuccessfulSqlRecord(
  * own; extra columns and extra rows are fine. Rows from different queries
  * are never combined.
  *
+ * On a Databricks datasource the reference is a Databricks set's (the
+ * preflight binds a Databricks set to a Databricks datasource and no other,
+ * R185), so it runs in the catalog of the selected datasets' entities
+ * rather than the canonical `evals` (R192); other references run as written.
+ *
  * Returns `undefined` when the case has no `expectedSql` — callers should
  * skip adding a check in that case rather than reporting a vacuous pass.
  */
@@ -151,7 +237,7 @@ export async function runResultSetCheck(
   datasetSnapshots: DatasetSnapshot[],
   turnRecords: ToolDataRecord[],
   options: ResultSetCheckOptions = {},
-): Promise<EvalCheckResult | undefined> {
+): Promise<ScoredCheckResult | undefined> {
   if (!expectedSql) return undefined;
   const description =
     'Result set matches expectedSql (primary correctness signal)';
@@ -181,17 +267,26 @@ export async function runResultSetCheck(
   }
 
   try {
-    const expected = await getDatasetToolServices().runReadOnlySql(
-      datasourceId,
-      expectedSql,
-      RESULT_SET_ROW_LIMIT,
-      datasets,
+    const selected = datasetSnapshots.filter((snapshot) =>
+      datasets.includes(snapshot.name),
     );
-    if (expected.truncated) {
-      throw new Error(
-        'reference result is truncated; completeness cannot be verified',
-      );
-    }
+    const onDatabricks =
+      selected.length > 0 &&
+      selected.every((snapshot) => snapshot.datasourceKind === 'databricks');
+    const reference = onDatabricks
+      ? referenceInCatalog(
+          expectedSql,
+          catalogOfEntities(selected.flatMap((snapshot) => snapshot.tables)),
+        )
+      : expectedSql;
+    const expectedRows = await runReferenceSql(reference, (sql, limit) =>
+      getDatasetToolServices().runReadOnlySql(
+        datasourceId,
+        sql,
+        limit,
+        datasets,
+      ),
+    );
     const candidates = turnRecords.filter(
       (candidate) =>
         candidate.tool === 'run_readonly_sql' &&
@@ -200,20 +295,21 @@ export async function runResultSetCheck(
     );
     let reason = '';
     for (const candidate of candidates) {
+      // Rows clipped in storage (`rowCount` > rows kept) are not the rows
+      // the assistant saw, so they cannot be compared. A result `truncated`
+      // only because it reached the query's own row limit holds every row
+      // the assistant saw: it is compared like any other, so it matches when
+      // those rows hold every reference row (R31; the baseline's `limit: 1`
+      // champion answer was a false negative).
       if (
         !Array.isArray(candidate.rows) ||
-        candidate.truncated ||
         (candidate.rowCount !== undefined &&
           candidate.rowCount !== candidate.rows.length)
       ) {
         reason = 'captured rows are missing or truncated';
         continue;
       }
-      const comparison = compareEvidence(
-        expected.rows,
-        candidate.rows,
-        options,
-      );
+      const comparison = compareEvidence(expectedRows, candidate.rows, options);
       if (comparison.match) {
         return {
           id: RESULT_SET_CHECK_ID,
@@ -222,14 +318,16 @@ export async function runResultSetCheck(
           passed: true,
         };
       }
-      reason = comparison.reason;
+      reason = candidate.truncated
+        ? `the result reached its row limit (${candidate.rows.length} rows) and ${comparison.reason}`
+        : comparison.reason;
     }
     return {
       id: RESULT_SET_CHECK_ID,
       description,
       score: 0,
       passed: false,
-      reason: `expectedSql returned ${expected.rows.length} row(s); none of ${candidates.length} successful SQL result(s) matched. The last SQL ("${record.input}") did not match — ${reason}`,
+      reason: `expectedSql returned ${expectedRows.length} row(s); none of ${candidates.length} successful SQL result(s) matched. The last SQL ("${record.input}") did not match — ${reason}`,
     };
   } catch (err) {
     return {

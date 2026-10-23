@@ -8,3 +8,7 @@ dist
 .DS_Store
 .context
 .env
+
+# The improvement loop's working folder (docs/evals/loop/program.md):
+# its data dir, build snapshots, run files, exports and fixer worktrees.
+.eval-loop/

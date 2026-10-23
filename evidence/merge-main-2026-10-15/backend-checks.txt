@@ -1,0 +1,21 @@
+# Backend (npm test / npm run lint / npm run build)
+test exit 0
+lint exit 0
+build exit 0
+Test Suites: 115 passed, 115 total
+Tests:       1771 passed, 1771 total
+
+## Lint warnings (all in files identical to origin/main)
+backend/src/intellify-api/api-key.guard.spec.ts
+  46:31  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+  52:33  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+  62:21  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+  70:19  warning  Unsafe argument of type `any` assigned to a parameter of type `App`  @typescript-eslint/no-unsafe-argument
+backend/src/main.ts
+  15:1  warning  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+backend/src/mastra/tools/assistant-tools.spec.ts
+  115:23  warning  Unsafe argument of type `Mock<any, any, any>` assigned to a parameter of type `CreateVisualMock`  @typescript-eslint/no-unsafe-argument
+  181:23  warning  Unsafe argument of type `Mock<any, any, any>` assigned to a parameter of type `CreateVisualMock`  @typescript-eslint/no-unsafe-argument
+backend/src/modules/llm/retry-fetch.ts
+  92:39  warning  Unsafe argument of type `any` assigned to a parameter of type `{ (input: URL | RequestInfo, init?: RequestInit | undefined): Promise<Response>; (input: string | URL | Request, init?: RequestInit | undefined): Promise<...>; }`  @typescript-eslint/no-unsafe-argument
+✖ 8 problems (0 errors, 8 warnings)

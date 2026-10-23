@@ -1,0 +1,570 @@
+$ npm run fixture:databricks -- --fixture world-cup --dry-run --full   (every statement whole; 2026-10-13)
+
+-- Databricks load plan for the World Cup (Databricks) sample (world-cup-databricks)
+-- dump: backend/scripts/worldcup-rest-api/data (dumped 2026-09-29T17:23:10.569Z)
+-- target: evals.world_cup
+-- 14 relations, 341 rows, 30 statements
+-- column types (Databricks <- PostgreSQL, from seed | dump | values):
+--   confederations (5 rows): code STRING <- text (seed); name STRING <- text (seed)
+--   countries (13 rows): code STRING <- char(3) (seed); name STRING <- text (seed); confederation_code STRING <- text (seed)
+--   teams (12 rows): id BIGINT <- bigint (seed); country_code STRING <- char(3) (seed); common_name STRING <- text (seed); fifa_code STRING <- char(3) (seed)
+--   tournaments (2 rows): id BIGINT <- bigint (seed); name STRING <- text (seed); tournament_year INT <- integer (seed); host_country_code STRING <- char(3) (seed); starts_on DATE <- date (seed); ends_on DATE <- date (seed); champion_team_id BIGINT <- bigint (seed); runner_up_team_id BIGINT <- bigint (seed)
+--   tournament_teams (16 rows): id BIGINT <- bigint (seed); tournament_id BIGINT <- bigint (seed); team_id BIGINT <- bigint (seed); group_letter STRING <- char(1) (seed); final_rank INT <- integer (seed); qualified_for_knockout BOOLEAN <- boolean (seed)
+--   venues (9 rows): id BIGINT <- bigint (seed); tournament_id BIGINT <- bigint (seed); name STRING <- text (seed); city STRING <- text (seed); capacity INT <- integer (seed)
+--   players (50 rows): id BIGINT <- bigint (seed); national_team_id BIGINT <- bigint (seed); full_name STRING <- text (seed); position STRING <- text (seed); date_of_birth DATE <- date (seed)
+--   squad_members (79 rows): tournament_team_id BIGINT <- bigint (seed); player_id BIGINT <- bigint (seed); shirt_number INT <- integer (seed); squad_position STRING <- text (seed)
+--   matches (16 rows): id BIGINT <- bigint (seed); tournament_id BIGINT <- bigint (seed); match_number INT <- integer (seed); stage STRING <- text (seed); group_letter STRING <- char(1) (seed); kicked_off_at TIMESTAMP <- timestamptz (seed); venue_id BIGINT <- bigint (seed); home_team_id BIGINT <- bigint (seed); away_team_id BIGINT <- bigint (seed); home_goals INT <- integer (seed); away_goals INT <- integer (seed); went_to_extra_time BOOLEAN <- boolean (seed); home_penalties INT <- integer (seed); away_penalties INT <- integer (seed); winner_team_id BIGINT <- bigint (seed); attendance INT <- integer (seed)
+--   match_team_statistics (32 rows): match_id BIGINT <- bigint (seed); team_id BIGINT <- bigint (seed); possession_pct DECIMAL(5,2) <- numeric(5,2) (seed); shots INT <- integer (seed); shots_on_target INT <- integer (seed); corners INT <- integer (seed); fouls_committed INT <- integer (seed); offsides INT <- integer (seed); passes_completed INT <- integer (seed); passes_attempted INT <- integer (seed); expected_goals DECIMAL(5,2) <- numeric(5,2) (seed)
+--   goals (47 rows): id BIGINT <- bigint (seed); match_id BIGINT <- bigint (seed); scoring_team_id BIGINT <- bigint (seed); scorer_player_id BIGINT <- bigint (seed); assist_player_id BIGINT <- bigint (seed); minute INT <- integer (seed); stoppage_minute INT <- integer (seed); goal_type STRING <- text (seed); home_score_after INT <- integer (seed); away_score_after INT <- integer (seed)
+--   disciplinary_events (8 rows): id BIGINT <- bigint (seed); match_id BIGINT <- bigint (seed); team_id BIGINT <- bigint (seed); player_id BIGINT <- bigint (seed); minute INT <- integer (seed); stoppage_minute INT <- integer (seed); card_type STRING <- text (seed); reason STRING <- text (seed)
+--   v_match_results (16 rows): tournament_year BIGINT <- bigint (values); match_number BIGINT <- bigint (values); stage STRING <- text (values); kicked_off_at TIMESTAMP <- timestamp with time zone (values); venue STRING <- text (values); city STRING <- text (values); home_team STRING <- text (values); away_team STRING <- text (values); home_goals BIGINT <- bigint (values); away_goals BIGINT <- bigint (values); home_penalties BIGINT <- bigint (values); away_penalties BIGINT <- bigint (values); winner STRING <- text (values); attendance BIGINT <- bigint (values)
+--   v_player_goal_totals (36 rows): tournament_year BIGINT <- bigint (values); player STRING <- text (values); national_team STRING <- text (values); goals BIGINT <- bigint (values); penalties BIGINT <- bigint (values); own_goals BIGINT <- bigint (values); first_goal_minute BIGINT <- bigint (values)
+
+CREATE SCHEMA IF NOT EXISTS `evals`.`world_cup`;
+
+CREATE OR REPLACE TABLE `evals`.`world_cup`.`confederations` (
+  `code` STRING NOT NULL,
+  `name` STRING NOT NULL
+);
+
+INSERT INTO `evals`.`world_cup`.`confederations` (`code`, `name`) VALUES
+  ('AFC', 'Asian Football Confederation'),
+  ('CAF', 'Confederation of African Football'),
+  ('CONCACAF', 'Confederation of North, Central America and Caribbean Association Football'),
+  ('CONMEBOL', 'South American Football Confederation'),
+  ('UEFA', 'Union of European Football Associations');
+
+CREATE OR REPLACE TABLE `evals`.`world_cup`.`countries` (
+  `code` STRING NOT NULL,
+  `name` STRING NOT NULL,
+  `confederation_code` STRING NOT NULL
+);
+
+INSERT INTO `evals`.`world_cup`.`countries` (`code`, `name`, `confederation_code`) VALUES
+  ('ARG', 'Argentina', 'CONMEBOL'),
+  ('BEL', 'Belgium', 'UEFA'),
+  ('BRA', 'Brazil', 'CONMEBOL'),
+  ('CRO', 'Croatia', 'UEFA'),
+  ('ENG', 'England', 'UEFA'),
+  ('FRA', 'France', 'UEFA'),
+  ('MAR', 'Morocco', 'CAF'),
+  ('NED', 'Netherlands', 'UEFA'),
+  ('POR', 'Portugal', 'UEFA'),
+  ('QAT', 'Qatar', 'AFC'),
+  ('RUS', 'Russia', 'UEFA'),
+  ('SWE', 'Sweden', 'UEFA'),
+  ('URU', 'Uruguay', 'CONMEBOL');
+
+CREATE OR REPLACE TABLE `evals`.`world_cup`.`teams` (
+  `id` BIGINT NOT NULL,
+  `country_code` STRING NOT NULL,
+  `common_name` STRING NOT NULL,
+  `fifa_code` STRING NOT NULL
+);
+
+INSERT INTO `evals`.`world_cup`.`teams` (`id`, `country_code`, `common_name`, `fifa_code`) VALUES
+  (1, 'ARG', 'Argentina', 'ARG'),
+  (2, 'BEL', 'Belgium', 'BEL'),
+  (3, 'BRA', 'Brazil', 'BRA'),
+  (4, 'CRO', 'Croatia', 'CRO'),
+  (5, 'ENG', 'England', 'ENG'),
+  (6, 'FRA', 'France', 'FRA'),
+  (7, 'MAR', 'Morocco', 'MAR'),
+  (8, 'NED', 'Netherlands', 'NED'),
+  (9, 'POR', 'Portugal', 'POR'),
+  (10, 'RUS', 'Russia', 'RUS'),
+  (11, 'SWE', 'Sweden', 'SWE'),
+  (12, 'URU', 'Uruguay', 'URU');
+
+CREATE OR REPLACE TABLE `evals`.`world_cup`.`tournaments` (
+  `id` BIGINT NOT NULL,
+  `name` STRING NOT NULL,
+  `tournament_year` INT NOT NULL,
+  `host_country_code` STRING NOT NULL,
+  `starts_on` DATE NOT NULL,
+  `ends_on` DATE NOT NULL,
+  `champion_team_id` BIGINT,
+  `runner_up_team_id` BIGINT
+);
+
+INSERT INTO `evals`.`world_cup`.`tournaments` (`id`, `name`, `tournament_year`, `host_country_code`, `starts_on`, `ends_on`, `champion_team_id`, `runner_up_team_id`) VALUES
+  (1, '2018 FIFA World Cup', 2018, 'RUS', DATE'2018-06-14', DATE'2018-07-15', 6, 4),
+  (2, '2022 FIFA World Cup', 2022, 'QAT', DATE'2022-11-20', DATE'2022-12-18', 1, 6);
+
+CREATE OR REPLACE TABLE `evals`.`world_cup`.`tournament_teams` (
+  `id` BIGINT NOT NULL,
+  `tournament_id` BIGINT NOT NULL,
+  `team_id` BIGINT NOT NULL,
+  `group_letter` STRING,
+  `final_rank` INT,
+  `qualified_for_knockout` BOOLEAN NOT NULL
+);
+
+INSERT INTO `evals`.`world_cup`.`tournament_teams` (`id`, `tournament_id`, `team_id`, `group_letter`, `final_rank`, `qualified_for_knockout`) VALUES
+  (1, 2, 1, 'C', 1, TRUE),
+  (2, 1, 2, 'G', 3, TRUE),
+  (3, 2, 3, 'G', 7, TRUE),
+  (4, 1, 3, 'E', 6, TRUE),
+  (5, 2, 4, 'F', 3, TRUE),
+  (6, 1, 4, 'D', 2, TRUE),
+  (7, 2, 5, 'B', 6, TRUE),
+  (8, 1, 5, 'G', 4, TRUE),
+  (9, 2, 6, 'D', 2, TRUE),
+  (10, 1, 6, 'C', 1, TRUE),
+  (11, 2, 7, 'F', 4, TRUE),
+  (12, 2, 8, 'A', 5, TRUE),
+  (13, 2, 9, 'H', 8, TRUE),
+  (14, 1, 10, 'A', 8, TRUE),
+  (15, 1, 11, 'F', 7, TRUE),
+  (16, 1, 12, 'A', 5, TRUE);
+
+CREATE OR REPLACE TABLE `evals`.`world_cup`.`venues` (
+  `id` BIGINT NOT NULL,
+  `tournament_id` BIGINT NOT NULL,
+  `name` STRING NOT NULL,
+  `city` STRING NOT NULL,
+  `capacity` INT
+);
+
+INSERT INTO `evals`.`world_cup`.`venues` (`id`, `tournament_id`, `name`, `city`, `capacity`) VALUES
+  (1, 1, 'Nizhny Novgorod Stadium', 'Nizhny Novgorod', 43319),
+  (2, 1, 'Fisht Stadium', 'Sochi', 44287),
+  (3, 1, 'Saint Petersburg Stadium', 'Saint Petersburg', 64468),
+  (4, 1, 'Luzhniki Stadium', 'Moscow', 78011),
+  (5, 2, 'Khalifa International Stadium', 'Al Rayyan', 45857),
+  (6, 2, 'Al Thumama Stadium', 'Doha', 44400),
+  (7, 2, 'Education City Stadium', 'Al Rayyan', 44667),
+  (8, 2, 'Al Bayt Stadium', 'Al Khor', 68895),
+  (9, 2, 'Lusail Stadium', 'Lusail', 88966);
+
+CREATE OR REPLACE TABLE `evals`.`world_cup`.`players` (
+  `id` BIGINT NOT NULL,
+  `national_team_id` BIGINT NOT NULL,
+  `full_name` STRING NOT NULL,
+  `position` STRING NOT NULL,
+  `date_of_birth` DATE
+);
+
+INSERT INTO `evals`.`world_cup`.`players` (`id`, `national_team_id`, `full_name`, `position`, `date_of_birth`) VALUES
+  (1, 1, 'Angel Di Maria', 'MF', DATE'1988-02-14'),
+  (2, 1, 'Julian Alvarez', 'FW', DATE'2000-01-31'),
+  (3, 1, 'Lionel Messi', 'FW', DATE'1987-06-24'),
+  (4, 1, 'Nahuel Molina', 'DF', DATE'1998-04-06'),
+  (5, 1, 'Emiliano Martinez', 'GK', DATE'1992-09-02'),
+  (6, 2, 'Thomas Meunier', 'DF', DATE'1991-09-12'),
+  (7, 2, 'Eden Hazard', 'FW', DATE'1991-01-07'),
+  (8, 2, 'Kevin De Bruyne', 'MF', DATE'1991-06-28'),
+  (9, 2, 'Thibaut Courtois', 'GK', DATE'1992-05-11'),
+  (10, 3, 'Renato Augusto', 'MF', DATE'1988-02-08'),
+  (11, 3, 'Neymar', 'FW', DATE'1992-02-05'),
+  (12, 3, 'Fernandinho', 'MF', DATE'1985-05-04'),
+  (13, 3, 'Alisson Becker', 'GK', DATE'1992-10-02'),
+  (14, 4, 'Mislav Orsic', 'FW', DATE'1992-12-29'),
+  (15, 4, 'Josko Gvardiol', 'DF', DATE'2002-01-23'),
+  (16, 4, 'Bruno Petkovic', 'FW', DATE'1994-09-16'),
+  (17, 4, 'Mario Mandzukic', 'FW', DATE'1986-05-21'),
+  (18, 4, 'Ivan Perisic', 'MF', DATE'1989-02-02'),
+  (19, 4, 'Domagoj Vida', 'DF', DATE'1989-04-29'),
+  (20, 4, 'Andrej Kramaric', 'FW', DATE'1991-06-19'),
+  (21, 4, 'Luka Modric', 'MF', DATE'1985-09-09'),
+  (22, 4, 'Dominik Livakovic', 'GK', DATE'1995-01-09'),
+  (23, 4, 'Danijel Subasic', 'GK', DATE'1984-10-27'),
+  (24, 5, 'Harry Kane', 'FW', DATE'1993-07-28'),
+  (25, 5, 'Kieran Trippier', 'DF', DATE'1990-09-19'),
+  (26, 5, 'Dele Alli', 'MF', DATE'1996-04-11'),
+  (27, 5, 'Harry Maguire', 'DF', DATE'1993-03-05'),
+  (28, 5, 'Jordan Pickford', 'GK', DATE'1994-03-07'),
+  (29, 6, 'Randal Kolo Muani', 'FW', DATE'1998-12-05'),
+  (30, 6, 'Theo Hernandez', 'DF', DATE'1997-10-06'),
+  (31, 6, 'Olivier Giroud', 'FW', DATE'1986-09-30'),
+  (32, 6, 'Aurelien Tchouameni', 'MF', DATE'2000-01-27'),
+  (33, 6, 'Kylian Mbappe', 'FW', DATE'1998-12-20'),
+  (34, 6, 'Paul Pogba', 'MF', DATE'1993-03-15'),
+  (35, 6, 'Antoine Griezmann', 'FW', DATE'1991-03-21'),
+  (36, 6, 'Samuel Umtiti', 'DF', DATE'1993-11-14'),
+  (37, 6, 'Raphael Varane', 'DF', DATE'1993-04-25'),
+  (38, 6, 'Hugo Lloris', 'GK', DATE'1986-12-26'),
+  (39, 7, 'Achraf Dari', 'DF', DATE'1999-05-06'),
+  (40, 7, 'Youssef En-Nesyri', 'FW', DATE'1997-06-01'),
+  (41, 7, 'Yassine Bounou', 'GK', DATE'1991-04-05'),
+  (42, 8, 'Wout Weghorst', 'FW', DATE'1992-08-07'),
+  (43, 8, 'Andries Noppert', 'GK', DATE'1994-04-07'),
+  (44, 9, 'Cristiano Ronaldo', 'FW', DATE'1985-02-05'),
+  (45, 9, 'Diogo Costa', 'GK', DATE'1999-09-19'),
+  (46, 10, 'Mario Fernandes', 'DF', DATE'1990-09-19'),
+  (47, 10, 'Denis Cheryshev', 'MF', DATE'1990-12-26'),
+  (48, 10, 'Igor Akinfeev', 'GK', DATE'1986-04-08'),
+  (49, 11, 'Robin Olsen', 'GK', DATE'1990-01-08'),
+  (50, 12, 'Fernando Muslera', 'GK', DATE'1986-06-16');
+
+CREATE OR REPLACE TABLE `evals`.`world_cup`.`squad_members` (
+  `tournament_team_id` BIGINT NOT NULL,
+  `player_id` BIGINT NOT NULL,
+  `shirt_number` INT NOT NULL,
+  `squad_position` STRING NOT NULL
+);
+
+INSERT INTO `evals`.`world_cup`.`squad_members` (`tournament_team_id`, `player_id`, `shirt_number`, `squad_position`) VALUES
+  (1, 1, 3, 'MF'),
+  (1, 2, 4, 'FW'),
+  (1, 3, 5, 'FW'),
+  (1, 4, 2, 'DF'),
+  (1, 5, 1, 'GK'),
+  (2, 6, 2, 'DF'),
+  (2, 7, 4, 'FW'),
+  (2, 8, 3, 'MF'),
+  (2, 9, 1, 'GK'),
+  (3, 10, 3, 'MF'),
+  (3, 11, 4, 'FW'),
+  (3, 12, 2, 'MF'),
+  (3, 13, 1, 'GK'),
+  (4, 10, 3, 'MF'),
+  (4, 11, 4, 'FW'),
+  (4, 12, 2, 'MF'),
+  (4, 13, 1, 'GK'),
+  (5, 14, 10, 'FW'),
+  (5, 15, 4, 'DF'),
+  (5, 16, 8, 'FW'),
+  (5, 17, 9, 'FW'),
+  (5, 18, 5, 'MF'),
+  (5, 19, 3, 'DF'),
+  (5, 20, 7, 'FW'),
+  (5, 21, 6, 'MF'),
+  (5, 22, 2, 'GK'),
+  (5, 23, 1, 'GK'),
+  (6, 14, 10, 'FW'),
+  (6, 15, 4, 'DF'),
+  (6, 16, 8, 'FW'),
+  (6, 17, 9, 'FW'),
+  (6, 18, 5, 'MF'),
+  (6, 19, 3, 'DF'),
+  (6, 20, 7, 'FW'),
+  (6, 21, 6, 'MF'),
+  (6, 22, 2, 'GK'),
+  (6, 23, 1, 'GK'),
+  (7, 24, 5, 'FW'),
+  (7, 25, 3, 'DF'),
+  (7, 26, 4, 'MF'),
+  (7, 27, 2, 'DF'),
+  (7, 28, 1, 'GK'),
+  (8, 24, 5, 'FW'),
+  (8, 25, 3, 'DF'),
+  (8, 26, 4, 'MF'),
+  (8, 27, 2, 'DF'),
+  (8, 28, 1, 'GK'),
+  (9, 29, 10, 'FW'),
+  (9, 30, 4, 'DF'),
+  (9, 31, 9, 'FW'),
+  (9, 32, 5, 'MF'),
+  (9, 33, 8, 'FW'),
+  (9, 34, 6, 'MF'),
+  (9, 35, 7, 'FW'),
+  (9, 36, 3, 'DF'),
+  (9, 37, 2, 'DF'),
+  (9, 38, 1, 'GK'),
+  (10, 29, 10, 'FW'),
+  (10, 30, 4, 'DF'),
+  (10, 31, 9, 'FW'),
+  (10, 32, 5, 'MF'),
+  (10, 33, 8, 'FW'),
+  (10, 34, 6, 'MF'),
+  (10, 35, 7, 'FW'),
+  (10, 36, 3, 'DF'),
+  (10, 37, 2, 'DF'),
+  (10, 38, 1, 'GK'),
+  (11, 39, 2, 'DF'),
+  (11, 40, 3, 'FW'),
+  (11, 41, 1, 'GK'),
+  (12, 42, 2, 'FW'),
+  (12, 43, 1, 'GK'),
+  (13, 44, 2, 'FW'),
+  (13, 45, 1, 'GK'),
+  (14, 46, 2, 'DF'),
+  (14, 47, 3, 'MF'),
+  (14, 48, 1, 'GK'),
+  (15, 49, 1, 'GK'),
+  (16, 50, 1, 'GK');
+
+CREATE OR REPLACE TABLE `evals`.`world_cup`.`matches` (
+  `id` BIGINT NOT NULL,
+  `tournament_id` BIGINT NOT NULL,
+  `match_number` INT NOT NULL,
+  `stage` STRING NOT NULL,
+  `group_letter` STRING,
+  `kicked_off_at` TIMESTAMP NOT NULL,
+  `venue_id` BIGINT NOT NULL,
+  `home_team_id` BIGINT NOT NULL,
+  `away_team_id` BIGINT NOT NULL,
+  `home_goals` INT NOT NULL,
+  `away_goals` INT NOT NULL,
+  `went_to_extra_time` BOOLEAN NOT NULL,
+  `home_penalties` INT,
+  `away_penalties` INT,
+  `winner_team_id` BIGINT,
+  `attendance` INT
+);
+
+INSERT INTO `evals`.`world_cup`.`matches` (`id`, `tournament_id`, `match_number`, `stage`, `group_letter`, `kicked_off_at`, `venue_id`, `home_team_id`, `away_team_id`, `home_goals`, `away_goals`, `went_to_extra_time`, `home_penalties`, `away_penalties`, `winner_team_id`, `attendance`) VALUES
+  (1, 2, 64, 'final', NULL, TIMESTAMP'2022-12-18T15:00:00.000Z', 9, 1, 6, 3, 3, TRUE, 4, 2, 1, 88966),
+  (2, 2, 61, 'semi_final', NULL, TIMESTAMP'2022-12-13T19:00:00.000Z', 9, 1, 4, 3, 0, FALSE, NULL, NULL, 1, 88966),
+  (3, 2, 58, 'quarter_final', NULL, TIMESTAMP'2022-12-09T19:00:00.000Z', 9, 8, 1, 2, 2, TRUE, 3, 4, 1, 88235),
+  (4, 1, 63, 'third_place', NULL, TIMESTAMP'2018-07-14T14:00:00.000Z', 3, 2, 5, 2, 0, FALSE, NULL, NULL, 2, 64406),
+  (5, 1, 58, 'quarter_final', NULL, TIMESTAMP'2018-07-06T18:00:00.000Z', 3, 3, 2, 1, 2, FALSE, NULL, NULL, 2, 64406),
+  (6, 2, 63, 'third_place', NULL, TIMESTAMP'2022-12-17T15:00:00.000Z', 5, 4, 7, 2, 1, FALSE, NULL, NULL, 4, 44137),
+  (7, 1, 62, 'semi_final', NULL, TIMESTAMP'2018-07-11T18:00:00.000Z', 4, 4, 5, 2, 1, TRUE, NULL, NULL, 4, 78011),
+  (8, 1, 60, 'quarter_final', NULL, TIMESTAMP'2018-07-07T18:00:00.000Z', 2, 10, 4, 2, 2, TRUE, 3, 4, 4, 44287),
+  (9, 2, 57, 'quarter_final', NULL, TIMESTAMP'2022-12-09T15:00:00.000Z', 7, 4, 3, 1, 1, TRUE, 4, 2, 4, 43893),
+  (10, 1, 59, 'quarter_final', NULL, TIMESTAMP'2018-07-07T15:00:00.000Z', 2, 11, 5, 0, 2, FALSE, NULL, NULL, 5, 39991),
+  (11, 2, 62, 'semi_final', NULL, TIMESTAMP'2022-12-14T19:00:00.000Z', 8, 6, 7, 2, 0, FALSE, NULL, NULL, 6, 68294),
+  (12, 2, 60, 'quarter_final', NULL, TIMESTAMP'2022-12-10T19:00:00.000Z', 8, 5, 6, 1, 2, FALSE, NULL, NULL, 6, 68895),
+  (13, 1, 57, 'quarter_final', NULL, TIMESTAMP'2018-07-06T14:00:00.000Z', 1, 12, 6, 0, 2, FALSE, NULL, NULL, 6, 43319),
+  (14, 1, 64, 'final', NULL, TIMESTAMP'2018-07-15T15:00:00.000Z', 4, 6, 4, 4, 2, FALSE, NULL, NULL, 6, 78011),
+  (15, 1, 61, 'semi_final', NULL, TIMESTAMP'2018-07-10T18:00:00.000Z', 3, 6, 2, 1, 0, FALSE, NULL, NULL, 6, 64286),
+  (16, 2, 59, 'quarter_final', NULL, TIMESTAMP'2022-12-10T15:00:00.000Z', 6, 7, 9, 1, 0, FALSE, NULL, NULL, 7, 44198);
+
+CREATE OR REPLACE TABLE `evals`.`world_cup`.`match_team_statistics` (
+  `match_id` BIGINT NOT NULL,
+  `team_id` BIGINT NOT NULL,
+  `possession_pct` DECIMAL(5,2) NOT NULL,
+  `shots` INT NOT NULL,
+  `shots_on_target` INT NOT NULL,
+  `corners` INT NOT NULL,
+  `fouls_committed` INT NOT NULL,
+  `offsides` INT NOT NULL,
+  `passes_completed` INT NOT NULL,
+  `passes_attempted` INT NOT NULL,
+  `expected_goals` DECIMAL(5,2) NOT NULL
+);
+
+INSERT INTO `evals`.`world_cup`.`match_team_statistics` (`match_id`, `team_id`, `possession_pct`, `shots`, `shots_on_target`, `corners`, `fouls_committed`, `offsides`, `passes_completed`, `passes_attempted`, `expected_goals`) VALUES
+  (1, 1, 46.00, 21, 10, 6, 26, 4, 524, 648, 3.10),
+  (1, 6, 54.00, 10, 5, 5, 19, 4, 642, 733, 2.75),
+  (2, 1, 39.00, 9, 7, 2, 15, 1, 344, 408, 2.35),
+  (2, 4, 61.00, 12, 2, 4, 8, 0, 597, 670, 0.55),
+  (3, 1, 52.00, 15, 6, 8, 18, 2, 548, 659, 1.95),
+  (3, 8, 48.00, 6, 2, 2, 30, 1, 501, 612, 0.80),
+  (4, 2, 43.00, 12, 4, 4, 11, 1, 408, 493, 1.55),
+  (4, 5, 57.00, 15, 5, 5, 5, 0, 576, 653, 1.30),
+  (5, 2, 43.00, 8, 3, 4, 16, 0, 354, 422, 1.25),
+  (5, 3, 57.00, 26, 9, 8, 14, 1, 493, 559, 2.20),
+  (6, 4, 49.00, 12, 4, 6, 13, 2, 436, 508, 1.40),
+  (6, 7, 51.00, 9, 2, 3, 11, 0, 455, 529, 0.95),
+  (7, 4, 54.00, 22, 7, 8, 23, 1, 542, 638, 2.10),
+  (7, 5, 46.00, 11, 2, 4, 14, 3, 440, 526, 1.15),
+  (8, 4, 64.00, 17, 3, 8, 18, 0, 653, 746, 1.70),
+  (8, 10, 36.00, 13, 7, 6, 25, 1, 319, 427, 1.25),
+  (9, 3, 49.00, 21, 11, 7, 24, 3, 589, 684, 2.25),
+  (9, 4, 51.00, 9, 1, 3, 22, 3, 597, 685, 0.95),
+  (10, 5, 57.00, 12, 2, 6, 7, 1, 526, 603, 1.65),
+  (10, 11, 43.00, 7, 3, 1, 10, 2, 377, 466, 0.80),
+  (11, 6, 38.00, 14, 3, 2, 11, 4, 313, 389, 1.75),
+  (11, 7, 62.00, 13, 3, 3, 11, 3, 568, 634, 1.10),
+  (12, 5, 58.00, 16, 8, 5, 10, 1, 463, 526, 2.05),
+  (12, 6, 42.00, 8, 5, 2, 14, 2, 321, 391, 1.30),
+  (13, 6, 61.00, 11, 2, 3, 15, 0, 524, 617, 1.35),
+  (13, 12, 39.00, 11, 4, 4, 17, 0, 296, 386, 0.75),
+  (14, 4, 66.00, 15, 3, 6, 13, 1, 635, 724, 1.85),
+  (14, 6, 34.00, 8, 6, 2, 14, 1, 272, 377, 2.15),
+  (15, 2, 60.00, 9, 3, 5, 16, 1, 594, 651, 0.95),
+  (15, 6, 40.00, 19, 5, 4, 6, 1, 341, 403, 1.45),
+  (16, 7, 27.00, 9, 3, 3, 15, 2, 180, 271, 0.85),
+  (16, 9, 73.00, 12, 3, 9, 9, 2, 605, 706, 1.15);
+
+CREATE OR REPLACE TABLE `evals`.`world_cup`.`goals` (
+  `id` BIGINT NOT NULL,
+  `match_id` BIGINT NOT NULL,
+  `scoring_team_id` BIGINT NOT NULL,
+  `scorer_player_id` BIGINT,
+  `assist_player_id` BIGINT,
+  `minute` INT NOT NULL,
+  `stoppage_minute` INT NOT NULL,
+  `goal_type` STRING NOT NULL,
+  `home_score_after` INT NOT NULL,
+  `away_score_after` INT NOT NULL
+);
+
+INSERT INTO `evals`.`world_cup`.`goals` (`id`, `match_id`, `scoring_team_id`, `scorer_player_id`, `assist_player_id`, `minute`, `stoppage_minute`, `goal_type`, `home_score_after`, `away_score_after`) VALUES
+  (1, 1, 1, 3, NULL, 108, 0, 'open_play', 3, 2),
+  (2, 1, 1, 1, NULL, 36, 0, 'open_play', 2, 0),
+  (3, 1, 1, 3, NULL, 23, 0, 'penalty', 1, 0),
+  (4, 2, 1, 2, NULL, 39, 0, 'open_play', 2, 0),
+  (5, 2, 1, 3, NULL, 34, 0, 'penalty', 1, 0),
+  (6, 3, 1, 3, NULL, 73, 0, 'penalty', 0, 2),
+  (7, 2, 1, 2, 3, 69, 0, 'open_play', 3, 0),
+  (8, 3, 1, 4, 3, 35, 0, 'open_play', 0, 1),
+  (9, 4, 2, 7, NULL, 82, 0, 'open_play', 2, 0),
+  (10, 4, 2, 6, NULL, 4, 0, 'open_play', 1, 0),
+  (11, 5, 2, 8, NULL, 31, 0, 'open_play', 0, 2),
+  (12, 5, 2, 12, NULL, 13, 0, 'own_goal', 0, 1),
+  (13, 5, 3, 10, NULL, 76, 0, 'header', 1, 2),
+  (14, 9, 3, 11, NULL, 105, 1, 'open_play', 0, 1),
+  (15, 14, 4, 17, NULL, 69, 0, 'open_play', 4, 2),
+  (16, 14, 4, 18, NULL, 28, 0, 'open_play', 1, 1),
+  (17, 7, 4, 17, NULL, 109, 0, 'open_play', 2, 1),
+  (18, 7, 4, 18, NULL, 68, 0, 'open_play', 1, 1),
+  (19, 8, 4, 19, NULL, 101, 0, 'header', 1, 2),
+  (20, 8, 4, 20, NULL, 39, 0, 'header', 1, 1),
+  (21, 6, 4, 14, NULL, 42, 0, 'open_play', 2, 1),
+  (22, 6, 4, 15, NULL, 7, 0, 'header', 1, 0),
+  (23, 9, 4, 16, NULL, 117, 0, 'open_play', 1, 1),
+  (24, 7, 5, 25, NULL, 5, 0, 'free_kick', 0, 1),
+  (25, 10, 5, 26, NULL, 58, 0, 'header', 0, 2),
+  (26, 10, 5, 27, NULL, 30, 0, 'header', 0, 1),
+  (27, 12, 5, 24, NULL, 54, 0, 'penalty', 1, 1),
+  (28, 14, 6, 33, NULL, 65, 0, 'open_play', 4, 1),
+  (29, 14, 6, 34, NULL, 59, 0, 'open_play', 3, 1),
+  (30, 14, 6, 35, NULL, 38, 0, 'penalty', 2, 1),
+  (31, 14, 6, 17, NULL, 18, 0, 'own_goal', 1, 0),
+  (32, 15, 6, 36, NULL, 51, 0, 'header', 1, 0),
+  (33, 13, 6, 35, NULL, 61, 0, 'open_play', 0, 2),
+  (34, 13, 6, 37, NULL, 40, 0, 'header', 0, 1),
+  (35, 1, 6, 33, NULL, 118, 0, 'penalty', 3, 3),
+  (36, 1, 6, 33, NULL, 81, 0, 'open_play', 2, 2),
+  (37, 1, 6, 33, NULL, 80, 0, 'penalty', 2, 1),
+  (38, 11, 6, 29, NULL, 79, 0, 'open_play', 2, 0),
+  (39, 11, 6, 30, NULL, 5, 0, 'open_play', 1, 0),
+  (40, 12, 6, 31, NULL, 78, 0, 'header', 1, 2),
+  (41, 12, 6, 32, NULL, 17, 0, 'open_play', 0, 1),
+  (42, 6, 7, 39, NULL, 9, 0, 'header', 1, 1),
+  (43, 16, 7, 40, NULL, 42, 0, 'header', 1, 0),
+  (44, 3, 8, 42, NULL, 90, 11, 'open_play', 2, 2),
+  (45, 3, 8, 42, NULL, 83, 0, 'header', 1, 2),
+  (46, 8, 10, 46, NULL, 115, 0, 'header', 2, 2),
+  (47, 8, 10, 47, NULL, 31, 0, 'open_play', 1, 0);
+
+CREATE OR REPLACE TABLE `evals`.`world_cup`.`disciplinary_events` (
+  `id` BIGINT NOT NULL,
+  `match_id` BIGINT NOT NULL,
+  `team_id` BIGINT NOT NULL,
+  `player_id` BIGINT,
+  `minute` INT NOT NULL,
+  `stoppage_minute` INT NOT NULL,
+  `card_type` STRING NOT NULL,
+  `reason` STRING
+);
+
+INSERT INTO `evals`.`world_cup`.`disciplinary_events` (`id`, `match_id`, `team_id`, `player_id`, `minute`, `stoppage_minute`, `card_type`, `reason`) VALUES
+  (1, 3, 1, 3, 90, 0, 'yellow', 'Unsporting behaviour'),
+  (2, 1, 1, 5, 116, 0, 'yellow', 'Time wasting'),
+  (3, 9, 3, 11, 68, 0, 'yellow', 'Reckless challenge'),
+  (4, 5, 3, 12, 47, 0, 'yellow', 'Unsporting behaviour'),
+  (5, 8, 4, 19, 38, 0, 'yellow', 'Reckless challenge'),
+  (6, 7, 4, 17, 48, 0, 'yellow', 'Persistent infringement'),
+  (7, 12, 5, 27, 90, 0, 'yellow', 'Reckless challenge'),
+  (8, 3, 8, 42, 45, 0, 'yellow', 'Dissent');
+
+CREATE OR REPLACE TABLE `evals`.`world_cup`.`v_match_results` (
+  `tournament_year` BIGINT,
+  `match_number` BIGINT,
+  `stage` STRING,
+  `kicked_off_at` TIMESTAMP,
+  `venue` STRING,
+  `city` STRING,
+  `home_team` STRING,
+  `away_team` STRING,
+  `home_goals` BIGINT,
+  `away_goals` BIGINT,
+  `home_penalties` BIGINT,
+  `away_penalties` BIGINT,
+  `winner` STRING,
+  `attendance` BIGINT
+);
+
+INSERT INTO `evals`.`world_cup`.`v_match_results` (`tournament_year`, `match_number`, `stage`, `kicked_off_at`, `venue`, `city`, `home_team`, `away_team`, `home_goals`, `away_goals`, `home_penalties`, `away_penalties`, `winner`, `attendance`) VALUES
+  (2018, 57, 'quarter_final', TIMESTAMP'2018-07-06T14:00:00.000Z', 'Nizhny Novgorod Stadium', 'Nizhny Novgorod', 'Uruguay', 'France', 0, 2, NULL, NULL, 'France', 43319),
+  (2018, 58, 'quarter_final', TIMESTAMP'2018-07-06T18:00:00.000Z', 'Saint Petersburg Stadium', 'Saint Petersburg', 'Brazil', 'Belgium', 1, 2, NULL, NULL, 'Belgium', 64406),
+  (2018, 59, 'quarter_final', TIMESTAMP'2018-07-07T15:00:00.000Z', 'Fisht Stadium', 'Sochi', 'Sweden', 'England', 0, 2, NULL, NULL, 'England', 39991),
+  (2018, 60, 'quarter_final', TIMESTAMP'2018-07-07T18:00:00.000Z', 'Fisht Stadium', 'Sochi', 'Russia', 'Croatia', 2, 2, 3, 4, 'Croatia', 44287),
+  (2018, 61, 'semi_final', TIMESTAMP'2018-07-10T18:00:00.000Z', 'Saint Petersburg Stadium', 'Saint Petersburg', 'France', 'Belgium', 1, 0, NULL, NULL, 'France', 64286),
+  (2018, 62, 'semi_final', TIMESTAMP'2018-07-11T18:00:00.000Z', 'Luzhniki Stadium', 'Moscow', 'Croatia', 'England', 2, 1, NULL, NULL, 'Croatia', 78011),
+  (2018, 63, 'third_place', TIMESTAMP'2018-07-14T14:00:00.000Z', 'Saint Petersburg Stadium', 'Saint Petersburg', 'Belgium', 'England', 2, 0, NULL, NULL, 'Belgium', 64406),
+  (2018, 64, 'final', TIMESTAMP'2018-07-15T15:00:00.000Z', 'Luzhniki Stadium', 'Moscow', 'France', 'Croatia', 4, 2, NULL, NULL, 'France', 78011),
+  (2022, 57, 'quarter_final', TIMESTAMP'2022-12-09T15:00:00.000Z', 'Education City Stadium', 'Al Rayyan', 'Croatia', 'Brazil', 1, 1, 4, 2, 'Croatia', 43893),
+  (2022, 58, 'quarter_final', TIMESTAMP'2022-12-09T19:00:00.000Z', 'Lusail Stadium', 'Lusail', 'Netherlands', 'Argentina', 2, 2, 3, 4, 'Argentina', 88235),
+  (2022, 59, 'quarter_final', TIMESTAMP'2022-12-10T15:00:00.000Z', 'Al Thumama Stadium', 'Doha', 'Morocco', 'Portugal', 1, 0, NULL, NULL, 'Morocco', 44198),
+  (2022, 60, 'quarter_final', TIMESTAMP'2022-12-10T19:00:00.000Z', 'Al Bayt Stadium', 'Al Khor', 'England', 'France', 1, 2, NULL, NULL, 'France', 68895),
+  (2022, 61, 'semi_final', TIMESTAMP'2022-12-13T19:00:00.000Z', 'Lusail Stadium', 'Lusail', 'Argentina', 'Croatia', 3, 0, NULL, NULL, 'Argentina', 88966),
+  (2022, 62, 'semi_final', TIMESTAMP'2022-12-14T19:00:00.000Z', 'Al Bayt Stadium', 'Al Khor', 'France', 'Morocco', 2, 0, NULL, NULL, 'France', 68294),
+  (2022, 63, 'third_place', TIMESTAMP'2022-12-17T15:00:00.000Z', 'Khalifa International Stadium', 'Al Rayyan', 'Croatia', 'Morocco', 2, 1, NULL, NULL, 'Croatia', 44137),
+  (2022, 64, 'final', TIMESTAMP'2022-12-18T15:00:00.000Z', 'Lusail Stadium', 'Lusail', 'Argentina', 'France', 3, 3, 4, 2, 'Argentina', 88966);
+
+CREATE OR REPLACE TABLE `evals`.`world_cup`.`v_player_goal_totals` (
+  `tournament_year` BIGINT,
+  `player` STRING,
+  `national_team` STRING,
+  `goals` BIGINT,
+  `penalties` BIGINT,
+  `own_goals` BIGINT,
+  `first_goal_minute` BIGINT
+);
+
+INSERT INTO `evals`.`world_cup`.`v_player_goal_totals` (`tournament_year`, `player`, `national_team`, `goals`, `penalties`, `own_goals`, `first_goal_minute`) VALUES
+  (2018, 'Andrej Kramaric', 'Croatia', 1, 0, 0, 39),
+  (2018, 'Antoine Griezmann', 'France', 2, 1, 0, 38),
+  (2018, 'Dele Alli', 'England', 1, 0, 0, 58),
+  (2018, 'Denis Cheryshev', 'Russia', 1, 0, 0, 31),
+  (2018, 'Domagoj Vida', 'Croatia', 1, 0, 0, 101),
+  (2018, 'Eden Hazard', 'Belgium', 1, 0, 0, 82),
+  (2018, 'Fernandinho', 'Brazil', 0, 0, 1, NULL),
+  (2018, 'Harry Maguire', 'England', 1, 0, 0, 30),
+  (2018, 'Ivan Perisic', 'Croatia', 2, 0, 0, 28),
+  (2018, 'Kevin De Bruyne', 'Belgium', 1, 0, 0, 31),
+  (2018, 'Kieran Trippier', 'England', 1, 0, 0, 5),
+  (2018, 'Kylian Mbappe', 'France', 1, 0, 0, 65),
+  (2018, 'Mario Fernandes', 'Russia', 1, 0, 0, 115),
+  (2018, 'Mario Mandzukic', 'Croatia', 2, 0, 1, 69),
+  (2018, 'Paul Pogba', 'France', 1, 0, 0, 59),
+  (2018, 'Raphael Varane', 'France', 1, 0, 0, 40),
+  (2018, 'Renato Augusto', 'Brazil', 1, 0, 0, 76),
+  (2018, 'Samuel Umtiti', 'France', 1, 0, 0, 51),
+  (2018, 'Thomas Meunier', 'Belgium', 1, 0, 0, 4),
+  (2022, 'Achraf Dari', 'Morocco', 1, 0, 0, 9),
+  (2022, 'Angel Di Maria', 'Argentina', 1, 0, 0, 36),
+  (2022, 'Aurelien Tchouameni', 'France', 1, 0, 0, 17),
+  (2022, 'Bruno Petkovic', 'Croatia', 1, 0, 0, 117),
+  (2022, 'Harry Kane', 'England', 1, 1, 0, 54),
+  (2022, 'Josko Gvardiol', 'Croatia', 1, 0, 0, 7),
+  (2022, 'Julian Alvarez', 'Argentina', 2, 0, 0, 39),
+  (2022, 'Kylian Mbappe', 'France', 3, 2, 0, 80),
+  (2022, 'Lionel Messi', 'Argentina', 4, 3, 0, 23),
+  (2022, 'Mislav Orsic', 'Croatia', 1, 0, 0, 42),
+  (2022, 'Nahuel Molina', 'Argentina', 1, 0, 0, 35),
+  (2022, 'Neymar', 'Brazil', 1, 0, 0, 105),
+  (2022, 'Olivier Giroud', 'France', 1, 0, 0, 78),
+  (2022, 'Randal Kolo Muani', 'France', 1, 0, 0, 79),
+  (2022, 'Theo Hernandez', 'France', 1, 0, 0, 5),
+  (2022, 'Wout Weghorst', 'Netherlands', 2, 0, 0, 83),
+  (2022, 'Youssef En-Nesyri', 'Morocco', 1, 0, 0, 42);
+
+SELECT 'confederations' AS relation, COUNT(*) AS row_count FROM `evals`.`world_cup`.`confederations`
+UNION ALL
+SELECT 'countries' AS relation, COUNT(*) AS row_count FROM `evals`.`world_cup`.`countries`
+UNION ALL
+SELECT 'teams' AS relation, COUNT(*) AS row_count FROM `evals`.`world_cup`.`teams`
+UNION ALL
+SELECT 'tournaments' AS relation, COUNT(*) AS row_count FROM `evals`.`world_cup`.`tournaments`
+UNION ALL
+SELECT 'tournament_teams' AS relation, COUNT(*) AS row_count FROM `evals`.`world_cup`.`tournament_teams`
+UNION ALL
+SELECT 'venues' AS relation, COUNT(*) AS row_count FROM `evals`.`world_cup`.`venues`
+UNION ALL
+SELECT 'players' AS relation, COUNT(*) AS row_count FROM `evals`.`world_cup`.`players`
+UNION ALL
+SELECT 'squad_members' AS relation, COUNT(*) AS row_count FROM `evals`.`world_cup`.`squad_members`
+UNION ALL
+SELECT 'matches' AS relation, COUNT(*) AS row_count FROM `evals`.`world_cup`.`matches`
+UNION ALL
+SELECT 'match_team_statistics' AS relation, COUNT(*) AS row_count FROM `evals`.`world_cup`.`match_team_statistics`
+UNION ALL
+SELECT 'goals' AS relation, COUNT(*) AS row_count FROM `evals`.`world_cup`.`goals`
+UNION ALL
+SELECT 'disciplinary_events' AS relation, COUNT(*) AS row_count FROM `evals`.`world_cup`.`disciplinary_events`
+UNION ALL
+SELECT 'v_match_results' AS relation, COUNT(*) AS row_count FROM `evals`.`world_cup`.`v_match_results`
+UNION ALL
+SELECT 'v_player_goal_totals' AS relation, COUNT(*) AS row_count FROM `evals`.`world_cup`.`v_player_goal_totals`;
+
+-- Would register in the backend at http://127.0.0.1:3000:
+--   datasource "World Cup Databricks" (kind databricks, upserted by name)
+--   dataset "World Cup (Databricks)" with 10 entities: evals.world_cup.tournaments, evals.world_cup.teams, evals.world_cup.matches, evals.world_cup.venues, evals.world_cup.players, evals.world_cup.goals, evals.world_cup.match_team_statistics, evals.world_cup.disciplinary_events, evals.world_cup.v_match_results, evals.world_cup.v_player_goal_totals
+-- Dry run: nothing was connected to.

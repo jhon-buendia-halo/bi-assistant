@@ -1,0 +1,635 @@
+{
+  "variants": [
+    {
+      "id": "world-cup-databricks-only",
+      "name": "World Cup (Databricks only)",
+      "description": "Ten questions that only Databricks SQL raises: QUALIFY and window functions, Databricks date functions, median and count_if, numerics that arrive as text, a browse-only table and a cold-start timing. Select the World Cup Databricks datasource with the dataset 'World Cup (Databricks)' (world_cup in catalog evals, or any catalog: the references run in the dataset's catalog), loaded and registered by 'npm run fixture:databricks -- --fixture world-cup'. Run the first question after the warehouse has stopped to record a cold start. Validated on a warehouse in the VDI (docs/evals/databricks-vdi.md).",
+      "fixtureId": "world-cup-databricks",
+      "dialect": "databricks",
+      "caseIdPrefix": "dbx-only-"
+    }
+  ],
+  "cases": [
+    {
+      "id": "matches-per-tournament",
+      "category": "aggregate",
+      "tags": ["dbx:latency"],
+      "question": "How many matches does the data hold for each tournament?",
+      "intent": "A trivial count, first in the set, so its duration is the warehouse's start-up: run once after the warehouse has stopped (cold) and once right after (warm).",
+      "notes": "8 matches per tournament (quarter-finals to the final of 2018 and 2022). The case exists for its timing (criterion C1, research 2.7): a serverless warehouse starts in seconds, a pro or classic one in about 4 minutes, and auto-stop defaults to 10 minutes, so the first question of a run after a pause pays the start-up. Keep it first in the file. Its PostgreSQL equivalent returned the same rows on a ba9_ copy of the World Cup sample on 2026-10-13 (evidence/1.1.8/databricks-only-references.txt); the Databricks reference passes the static dialect check and is first run on a warehouse in the VDI (docs/evals/databricks-vdi.md).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\b8\\b"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "databricks": "SELECT t.tournament_year, COUNT(*) AS matches FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments t ON t.id = m.tournament_id GROUP BY t.tournament_year"
+      }
+    },
+    {
+      "id": "top-attendance-per-tournament",
+      "category": "ranking",
+      "tags": ["dbx:dialect"],
+      "question": "For each tournament, which match had the highest attendance?",
+      "intent": "A per-group maximum with ties: a window function ranked per tournament (QUALIFY on Databricks) that keeps every tied match.",
+      "notes": "Both tournaments tie: in 2018 the semi-final Croatia v England and the final France v Croatia drew 78,011 at Luzhniki; in 2022 the semi-final Argentina v Croatia and the final Argentina v France drew 88,966 at Lusail. ROW_NUMBER (the research's first draft of this case) keeps one match per tournament and fails the result-set match; RANK or a comparison with the per-tournament maximum keeps all four. England appears only in the tied 2018 semi-final. Its PostgreSQL equivalent returned the same rows on a ba9_ copy of the World Cup sample on 2026-10-13 (evidence/1.1.8/databricks-only-references.txt); the Databricks reference passes the static dialect check and is first run on a warehouse in the VDI (docs/evals/databricks-vdi.md).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "includes",
+          "args": {
+            "text": "England"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*78[,. ]?011)(?=[\\s\\S]*88[,. ]?966)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "databricks": "SELECT r.home_team, r.away_team, r.attendance FROM `evals`.world_cup.v_match_results r QUALIFY RANK() OVER (PARTITION BY r.tournament_year ORDER BY r.attendance DESC) = 1"
+      }
+    },
+    {
+      "id": "final-weekday",
+      "category": "lookup",
+      "tags": ["dbx:dialect"],
+      "question": "On which day of the week was each World Cup final played?",
+      "intent": "A date function that differs from PostgreSQL: Databricks formats a weekday with a Java pattern (date_format(…, 'EEEE')), not to_char codes.",
+      "notes": "Both finals were played on a Sunday (15 July 2018 and 18 December 2022, both 15:00 UTC, so the answer holds in any session time zone from UTC-15 to UTC+9). PostgreSQL's to_char(…, 'Day') pattern means something else in Databricks. Its PostgreSQL equivalent returned the same rows on a ba9_ copy of the World Cup sample on 2026-10-13 (evidence/1.1.8/databricks-only-references.txt); the Databricks reference passes the static dialect check and is first run on a warehouse in the VDI (docs/evals/databricks-vdi.md).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "includes",
+          "args": {
+            "text": "Sunday"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "databricks": "SELECT t.tournament_year, date_format(m.kicked_off_at, 'EEEE') AS weekday FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments t ON t.id = m.tournament_id WHERE m.stage = 'final'"
+      }
+    },
+    {
+      "id": "tournament-length-days",
+      "category": "lookup",
+      "tags": ["dbx:dialect"],
+      "question": "How many days did each tournament last, counting both the opening day and the day of the final?",
+      "intent": "Date arithmetic in Databricks SQL: datediff(end, start) returns days, while subtracting two dates returns an interval, not a number.",
+      "notes": "2018: 14 June to 15 July, 32 days; 2022: 20 November to 18 December, 29 days (both ends counted, as the question says). PostgreSQL subtracts dates to an integer; in Databricks ends_on - starts_on is an INTERVAL DAY, which the result-set match does not read as 31. Its PostgreSQL equivalent returned the same rows on a ba9_ copy of the World Cup sample on 2026-10-13 (evidence/1.1.8/databricks-only-references.txt); the Databricks reference passes the static dialect check and is first run on a warehouse in the VDI (docs/evals/databricks-vdi.md).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*\\b32\\b)(?=[\\s\\S]*\\b29\\b)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "databricks": "SELECT tournament_year, datediff(ends_on, starts_on) + 1 AS days FROM `evals`.world_cup.tournaments"
+      }
+    },
+    {
+      "id": "shot-share-on-target-by-tournament",
+      "category": "ratio",
+      "tags": ["dbx:numeric"],
+      "question": "In each tournament, what share of all shots were on target?",
+      "intent": "A ratio of two whole-number sums: Databricks divides to a DOUBLE, so no cast is needed, and the result arrives as a fraction to compare as a number.",
+      "notes": "2018: 0.3148 (31.5%); 2022: 0.3827 (38.3%). On PostgreSQL the same division needs a cast to numeric or it truncates to 0; on Databricks '/' already returns a DOUBLE, so a reference ported with the PostgreSQL cast is not needed, and an answer of 0 points at a PostgreSQL habit. Its PostgreSQL equivalent returned the same rows on a ba9_ copy of the World Cup sample on 2026-10-13 (evidence/1.1.8/databricks-only-references.txt); the Databricks reference passes the static dialect check and is first run on a warehouse in the VDI (docs/evals/databricks-vdi.md).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*(?:31[.,][45]|0[.,]31[45]))(?=[\\s\\S]*(?:38[.,][23]|0[.,]38[23]))"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "databricks": "SELECT t.tournament_year, SUM(s.shots_on_target) / SUM(s.shots) AS share_on_target FROM `evals`.world_cup.match_team_statistics s JOIN `evals`.world_cup.matches m ON m.id = s.match_id JOIN `evals`.world_cup.tournaments t ON t.id = m.tournament_id GROUP BY t.tournament_year"
+      }
+    },
+    {
+      "id": "average-possession-by-team-2018",
+      "category": "aggregate",
+      "tags": ["dbx:numeric"],
+      "question": "What was each team's average possession across its 2018 knockout matches?",
+      "intent": "An average over a DECIMAL(5,2) column: Databricks returns a DECIMAL, which the driver may hand over as text, and the comparison must still read it as a number.",
+      "notes": "Eight teams; Croatia highest at 61.33%, Russia lowest at 36%. possession_pct is DECIMAL(5,2) on Databricks (numeric(5,2) in the seed), so AVG returns DECIMAL(9,6); the result-set match compares numbers at 6 significant figures whether they arrive as numbers or as text (result-compare.ts). Its PostgreSQL equivalent returned the same rows on a ba9_ copy of the World Cup sample on 2026-10-13 (evidence/1.1.8/databricks-only-references.txt); the Databricks reference passes the static dialect check and is first run on a warehouse in the VDI (docs/evals/databricks-vdi.md).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "includes",
+          "args": {
+            "text": "Croatia"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "61[.,]3"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "databricks": "SELECT tm.common_name AS team, AVG(s.possession_pct) AS average_possession_pct FROM `evals`.world_cup.match_team_statistics s JOIN `evals`.world_cup.matches m ON m.id = s.match_id JOIN `evals`.world_cup.tournaments t ON t.id = m.tournament_id JOIN `evals`.world_cup.teams tm ON tm.id = s.team_id WHERE t.tournament_year = 2018 GROUP BY tm.common_name"
+      }
+    },
+    {
+      "id": "browse-only-player-contracts",
+      "category": "out-of-scope",
+      "tags": ["dbx:browse-only"],
+      "question": "What annual salary does each player who scored in the 2022 World Cup final earn at his club?",
+      "intent": "Salaries live only in a browse-only table (world_cup_restricted.player_contracts, in the sample's catalog): the answer must say the data cannot be read, not invent figures.",
+      "notes": "No reference query: the token cannot read the table. In the VDI an admin creates <catalog>.world_cup_restricted.player_contracts and leaves the eval principal BROWSE only (docs/evals/databricks-vdi.md, step 4); the connector then marks it selectable: false (datasources R25), and a SELECT on it fails with a permission error. That error is the expected path, so the case has no noToolErrors check. Without the table the case still guards fabrication: the World Cup sample holds no salaries at all. The checks: no visual, an answer that says the data is not accessible or not there, and no money figure.",
+      "checks": [
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "access|permission|not (?:available|accessible|in the data|part of)|no (?:data|information|salary|salaries|contract)|(?:don[’']t|do not|cannot|can[’']t|unable to) (?:see|query|read|access|find|retrieve)|(?:doesn[’']t|does not|don[’']t|do not) (?:contain|include|hold|have)",
+            "flags": "i"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "notMatches",
+          "args": {
+            "pattern": "[$€£]\\s?\\d|\\d[\\d,.]*\\s?(?:million|thousand|euros?|dollars?|pounds?|EUR|USD|GBP)\\b|\\d[\\d,.]*\\s?[mk]\\b",
+            "flags": "i"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ]
+    },
+    {
+      "id": "median-attendance-2022",
+      "category": "aggregate",
+      "tags": ["dbx:dialect"],
+      "question": "What was the median attendance of the 2022 knockout matches?",
+      "intent": "A function PostgreSQL lacks: Databricks has median(); PostgreSQL needs percentile_cont(0.5) WITHIN GROUP (ORDER BY …).",
+      "notes": "68,594.5: the mean of the two middle attendances of the eight 2022 matches (68,294 and 68,895). An answer of 68,595 is the same figure rounded; numbersGrounded allows half a unit. Its PostgreSQL equivalent returned the same rows on a ba9_ copy of the World Cup sample on 2026-10-13 (evidence/1.1.8/databricks-only-references.txt); the Databricks reference passes the static dialect check and is first run on a warehouse in the VDI (docs/evals/databricks-vdi.md).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "68[,. ]?59[45]"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "databricks": "SELECT median(m.attendance) AS median_attendance FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022"
+      }
+    },
+    {
+      "id": "goals-by-stage-per-tournament",
+      "category": "aggregate",
+      "tags": ["dbx:dialect"],
+      "question": "How many goals were scored at each stage, with one column for 2018 and one for 2022?",
+      "intent": "A conditional count laid out wide: count_if (or SUM over CASE) on Databricks, where PostgreSQL would reach for FILTER.",
+      "notes": "Quarter-finals 11 and 10, semi-finals 4 and 5, third place 2 and 3, final 6 and 6 (2018 then 2022). Own goals count, as in the match scores; shoot-out penalties do not. The question asks for the wide layout, so the reference is wide: a long result (stage, year, goals) states the same facts but does not match row for row. Its PostgreSQL equivalent returned the same rows on a ba9_ copy of the World Cup sample on 2026-10-13 (evidence/1.1.8/databricks-only-references.txt); the Databricks reference passes the static dialect check and is first run on a warehouse in the VDI (docs/evals/databricks-vdi.md).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "quarter",
+            "flags": "i"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        }
+      ],
+      "expectedSql": {
+        "databricks": "SELECT m.stage, COUNT_IF(t.tournament_year = 2018) AS goals_2018, COUNT_IF(t.tournament_year = 2022) AS goals_2022 FROM `evals`.world_cup.goals g JOIN `evals`.world_cup.matches m ON m.id = g.match_id JOIN `evals`.world_cup.tournaments t ON t.id = m.tournament_id GROUP BY m.stage"
+      }
+    },
+    {
+      "id": "youngest-scorer-2022",
+      "category": "join",
+      "tags": ["dbx:dialect"],
+      "question": "Who was the youngest player to score in the 2022 knockout rounds, and how old was he when he scored?",
+      "intent": "Ages from dates in Databricks SQL (months_between, or datediff over 365.25), over goals, players, matches and tournaments; PostgreSQL's age() does not exist there.",
+      "notes": "Josko Gvardiol, 20 (born 23 January 2002, scored in the third-place match on 17 December 2022). Own goals are left out: the scorer of an own goal did not score for his team. PostgreSQL computes the age with age(); Databricks has no age() and needs months_between or datediff. Its PostgreSQL equivalent returned the same rows on a ba9_ copy of the World Cup sample on 2026-10-13 (evidence/1.1.8/databricks-only-references.txt); the Databricks reference passes the static dialect check and is first run on a warehouse in the VDI (docs/evals/databricks-vdi.md).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "includes",
+          "args": {
+            "text": "Gvardiol"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\b20\\b"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "usesEntities",
+          "args": {
+            "entities": ["goals", "players"]
+          },
+          "criterion": "D2"
+        }
+      ],
+      "expectedSql": {
+        "databricks": "SELECT p.full_name, FLOOR(months_between(to_date(m.kicked_off_at), p.date_of_birth) / 12) AS age_in_years FROM `evals`.world_cup.goals g JOIN `evals`.world_cup.matches m ON m.id = g.match_id JOIN `evals`.world_cup.tournaments t ON t.id = m.tournament_id JOIN `evals`.world_cup.players p ON p.id = g.scorer_player_id WHERE t.tournament_year = 2022 AND g.goal_type <> 'own_goal' ORDER BY months_between(to_date(m.kicked_off_at), p.date_of_birth) LIMIT 1"
+      }
+    }
+  ]
+}

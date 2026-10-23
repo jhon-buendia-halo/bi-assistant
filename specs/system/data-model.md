@@ -385,28 +385,43 @@ An update that omits an optional field removes it from the stored document (`uns
 
 ### 3.8 `eval_runs`
 
-Persisted record of an eval run (the assistant's regression suite). Rewritten wholesale (`update` by `jobId` with upsert) after each question lands and at the end, so a crash mid-suite still leaves finished questions. The in-flight copy in process memory is authoritative while a run is running.
+Persisted record of an eval run (the assistant's regression suite), started in the app or, since BA-242, from the command line (`source`). Rewritten wholesale (`update` by `jobId` with upsert) after each question lands (after all of its attempts, [agents-evals](../capabilities/agents-evals/spec.md) R210) and at the end, so a crash mid-suite still leaves finished questions. The in-flight copy in process memory is authoritative while a run is running.
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `jobId` | uuid | yes | Run id. |
-| `agentKey` | string | yes | Agent evaluated; only `assistant` has evals. |
+| `agentKey` | string | yes | Agent evaluated: `assistant` or `rfp`, the two agents with evals ([agents.md](agents.md) 8). |
 | `datasourceId` | string | yes | Datasource the run was scoped to. |
-| `datasets` | string[] | yes | Names of the datasets bound to that datasource at start. |
+| `datasets` | string[] | yes | Names of the datasets bound to that datasource at start; for a command-line run, the datasets `EVAL_DATASETS` names (agents-evals R223). |
 | `caseIds` | string[] | yes | Ids of the questions the run covers. |
 | `status` | enum | yes | `running` \| `completed` \| `failed`. A backend crash leaves `running` on disk (nothing reconciles it). |
 | `results` | `AssistantEvalCaseResult[]` | yes | Finished questions in order. |
 | `totalCases` | number | yes | |
 | `currentQuestion` | string | no | Question being run; removed when the run ends. |
+| `currentAttempt` | number | no | The attempt of `currentQuestion` in flight, 1 to `repeats` (agents-evals R210); removed when the run ends. Since BA-242. |
 | `error` | string | no | Set when `status = failed`. |
 | `startedAt` | ISO | yes | Sort key (desc) for listings. |
 | `finishedAt` | ISO | no | Set when the run ends. |
 | `comparison` | `EvalRegressionSummary` | no | Set when a run completes and a previous completed run with the same agent, `datasourceId` and the same set of datasets (order-insensitive) exists. Absent on older records and when no comparable run exists. |
+| `judge` | `{ mode: 'off' \| 'on' \| 'categories'; categories?: string[] }` | no | The run's judge option ([agents-evals](../capabilities/agents-evals/spec.md) R144); `categories` only with mode `categories`, in category-list order. Written on every run since BA-184; absent on older records, which read as `{ mode: 'on' }`. |
+| `summary` | `EvalRunSummary` | no | The counts of the finished results (R148), rewritten with the run after every question. Written since BA-184; recomputed from `results` whenever a run is read, so older records get one too. |
+| `repeats` | `1` \| `3` \| `5` | no | Attempts per question (agents-evals R209). Written since BA-242; absent on older records, which read as `1`. |
+| `model` | string | no | The router id of the model the evaluated agent ran on, resolved when the run starts (`openai/gpt-4o-mini`; R219). Since BA-242. |
+| `usage` | `ModelUsageEntry[]` | no | The sum of the results' `usage`, by agent and model (R219). Written from the start of every run since BA-242, empty until a question finishes; absent on older records, whose tokens are not recorded. |
+| `costUsd` | number \| null | no | The sum of the results' cost in US dollars, to six decimals, `0` at the start; `null` when not priced (R221). Since BA-242; absent on older records. |
+| `rates` | `Record<string, ModelRate>` | no | The rates, from the price table (4.11), of the models in `usage` that have one, keyed by the model id as in `usage`: the snapshot the run's cost was computed with (R220). Since BA-242. |
+| `source` | `app` \| `cli` | no | Where the run was started: the Evals tab or the command line (R223). Since BA-242; absent on older records, which read as `app`. |
 | `ownerId` | string | no | Legacy and inert: `local` or absent (section 3.14). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
-`AssistantEvalCaseResult`: `id` (string, case id), `question` (string), `scores` (map<string, number 0..1>, per scorer id; empty when the run threw), `checkResults` (`EvalCheckResult[]`), `answer` (string), `toolCalls` (`EvalToolCall[]`), `passed` (boolean; every scorer scored 1), `error` (string, no; agent run failure), `durationMs` (number).
-`EvalCheckResult`: `id`, `description` (string), `score` (number), `passed` (boolean), `reason` (string, no).
+`AssistantEvalCaseResult`: `id` (string, case id), `question` (string), `category` (string, no; the case's category, section 4.9; absent before BA-184 and on a case defined in code, such as every `rfp` case), `split` (`dev` \| `held-out`, no; the case's split, `dev` for a case defined in code; R215; absent before BA-242), `scores` (map<string, number 0..1>, per scorer id; empty when the run threw), `checkResults` (`EvalCheckResult[]`), `answer` (string), `toolCalls` (`EvalToolCall[]`), `status` (`passed` \| `failed` \| `not-scored`; R147, over all attempts R211; absent before BA-184), `passed` (boolean; `status` is `passed`, which before BA-184 meant every scorer scored 1), `error` (string, no; agent run failure), `durationMs` (number), `passes` (number, no; the attempts that passed), `runs` (number, no; the attempts, the run's `repeats`), `flaky` (boolean, no; some attempts passed and some failed), `attempts` (`EvalAttempt[]`, no; every attempt in order, only when `runs` is above 1), `usage` (`ModelUsageEntry[]`, no; the sum over its attempts), `costUsd` (number \| null, no; the sum over its attempts, `null` when not priced). `passes`, `runs`, `flaky`, `usage` and `costUsd` are written since BA-242. With `runs` above 1, `scores`, `checkResults`, `answer`, `toolCalls`, `error` and `durationMs` are those of the representative attempt: the first failed attempt, else the first (R211).
+`EvalAttempt`: `attempt` (number, 1-based), `status`, `passed`, `scores`, `checkResults`, `answer`, `toolCalls`, `error` (no), `durationMs`, as on a result, and `usage` (`ModelUsageEntry[]`) and `costUsd` (number \| null) of that attempt alone. Its tool calls are truncated as a result's are.
+`ModelUsageEntry`: `agent` (`assistant` \| `sql-fixer` \| `designer` \| `judge`; `assistant` is the agent the run evaluates), `model` (string; the model id without its provider prefix, lower case, `unknown` when the caller could not tell), `inputTokens`, `cachedInputTokens` (part of `inputTokens`), `outputTokens`, `reasoningTokens` (part of `outputTokens`), `calls` (calls that reported tokens), `unreportedCalls` (calls that reported none, whose tokens are unknown), all numbers. A list holds one entry per agent and model, in the order `assistant`, `sql-fixer`, `designer`, `judge`. Rules: agents-evals R219 to R221.
+`ModelRate`: `inputPerMillionUsd`, `cachedInputPerMillionUsd` (no), `outputPerMillionUsd` (numbers, US dollars per million tokens), `source`, `readOn` (strings, no); as in the price table (4.11).
+`EvalCheckResult`: `id`, `description` (string), `score` (number), `passed` (boolean), `reason` (string, no), `status` (`passed` \| `failed` \| `not-scored`; R146; absent before BA-184), `criterion` (string, no; a criterion id of section 4.9, R146).
+`EvalRunSummary`: `passed`, `failed`, `notScored`, `flaky` (numbers of questions); `bySplit` (`{ dev: EvalSplitSummary, heldOut: EvalSplitSummary }`); `byCategory` (`{ category, passed, failed, notScored, flaky, total, dev: EvalSplitSummary, heldOut: EvalSplitSummary }[]`, category-list order, then others, `uncategorised` last); `byCriterion` (`{ criterion, passed, failed, total }[]`, D, G, I, C order, counting scored checks with a criterion over every attempt). `EvalSplitSummary`: `passed`, `failed`, `notScored`, `flaky`, `total` (numbers of questions) and `interval` (`{ low, high }`, numbers from 0 to 1, no; Wilson's 95% interval of `passed` over `passed + failed`, absent when that is 0). Rules: R148, R212, R213. `flaky`, `bySplit` and the split counts per category since BA-242.
+**Read-time defaults, no migration (BA-184).** A record saved before BA-184 is not rewritten. When read, a missing `judge` is `{ mode: 'on' }`; a result or check without `status` takes `passed` when its `passed` flag is true, else `failed`; a result without `category` counts under `uncategorised`; and `summary` is computed from `results`. The next save of a running run writes the new fields.
+**Read-time defaults, no migration (BA-242).** A record saved before BA-242 is not rewritten either. When read, a missing `repeats` is `1` and a missing `source` is `app`; a result without `split` takes the split of the question bank case with its id (the case index, `backend/src/mastra/evals/eval-case-index.ts`), else `dev`; a result without `runs` is one attempt (`runs` 1, `passes` 1 when its status is `passed`, else 0, `flaky` false) and, like any result without `attempts`, is its own one attempt; a run or result without `usage` has no tokens or cost recorded (agents-evals R218). Its `category` stays as above: the case index fills it only in the loop tools (R224).
 `EvalToolCall`: `name` (string), `input`, `output` (strings, no; JSON-encoded, each truncated to 2000 chars with a trailing `… (truncated)`), `error` (string, no).
 `EvalRegressionSummary`: `previousRunId` (string), `regressions`, `improvements`, `unchanged` (each `{id: string, question: string}[]`); cases present in only one of the two runs are skipped; regression = passed before, fails now; improvement = the reverse.
 
@@ -430,7 +445,7 @@ Curated business-glossary terms, standing instructions and default filters injec
 
 Bootstrap-created snippets are always `{source: "mined", enabled: false, scope: {datasetId: <dataset name>}}`, capped at the agent's draft limit, and a draft whose case-insensitive trimmed title already exists in that dataset's scope is skipped.
 
-`KnowledgeUse` (embedded in messages, not a collection): `id`, `kind`, `title`, `body` (exactly as it appeared in the block), `datasetId` (string, no; absent for a global snippet). Context assembly: enabled snippets whose scope is global or whose `datasetId` is among the session's datasets, ordered dataset-scoped before global then `updatedAt` desc, accumulated into a 2000-character block until the next entry would not fit; only those that fit are recorded as `knowledge`.
+`KnowledgeUse` (embedded in messages, not a collection): `id`, `kind`, `title`, `body` (exactly as it appeared in the block), `datasetId` (string, no; absent for a global snippet). Context assembly: enabled snippets whose scope is global or whose `datasetId` is among the session's datasets, ordered dataset-scoped before global then `updatedAt` desc, accumulated into a 7,000-character block (2,000 until 2026-10-21) until the next entry would not fit; only those that fit are recorded as `knowledge`.
 
 ### 3.10 `agents` — user agents
 
@@ -548,7 +563,7 @@ The app is single-user (ADR-0030): one built-in super admin, id `local`, is alwa
 
 ## 4. Files on disk
 
-All paths in this section are relative to `<app data dir>/workspaces/session-<session-id>/` (the **session workspace**), a contained filesystem root: agents' file tools cannot escape it and the file-delete tool is disabled for them (they may create and edit). The session id used in a directory name must match `^[a-zA-Z0-9_-]+$` (otherwise the operation fails with `Invalid session workspace ID`).
+Sections 4.1 to 4.7 are files the app writes; 4.9 and 4.11 are bundled, read-only assets that ship with the backend; 4.10 is the sample fixture data, of which only the seed SQL ships. All paths in 4.1 to 4.7 are relative to `<app data dir>/workspaces/session-<session-id>/` (the **session workspace**), a contained filesystem root: agents' file tools cannot escape it and the file-delete tool is disabled for them (they may create and edit). The session id used in a directory name must match `^[a-zA-Z0-9_-]+$` (otherwise the operation fails with `Invalid session workspace ID`).
 
 ### 4.1 Workspace layout
 
@@ -674,10 +689,6 @@ A spec visual's synthetic bundle is: body `<div id="qti-chart-root"></div>`, emp
 
 Workspaces hold no skills. Skills ship with the backend build and each agent declares its own ([agents.md](agents.md) sections 7.3 and 7.4). Until version 0.31, every workspace got a copy of the `interactive-visuals` skill at `.agents/skills/interactive-visuals/SKILL.md`, and the framework discovered skills there. Those copies are left on disk untouched and are never read, so no migration is needed.
 
-### 4.8 Old user skill folder
-
-Version 0.32 also read skills from `<APP_DATA_DIR>/skills/<name>/` (user level) and from the folder `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` named (project level), under ADR-0019. Since ADR-0021 skills ship only with the backend build ([agents.md](agents.md) 7.3). A `skills/` folder left in the app data dir is ignored: the app never reads, writes or deletes it, so no migration is needed.
-
 ### 4.7 Legacy visual layout
 
 Visuals created before versioning keep their **v1 files directly under `visuals/<id>/`** (no `v1/` directory) and have no `versions`/`currentVersion` in the session metadata. Rules readers must apply:
@@ -685,6 +696,144 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 - A visual with no `versions` and version ≤ 1 resolves to `visuals/<id>/`.
 - Once such a visual gains version 2, `versions` is materialised as `[{version: 1, createdAt: visual.createdAt, sourceMessageAt: visual.sourceMessageAt}, {version: 2, …}]` and v2 is written to `visuals/<id>/v2/`; for version 1 the reader prefers `visuals/<id>/v1/index.html` and falls back to the root when it does not exist.
 - Legacy versions may lack `body.html`, `manifest.json`, `data.json`, `answer.md`, `spec.json`; each reader has a fallback (extract the body from `index.html`, use the session metadata for title/description, use the source answer's `data`). Downloads always regenerate `index.html` so old versions ship with the readable frame.
+
+### 4.8 Old user skill folder
+
+Version 0.32 also read skills from `<APP_DATA_DIR>/skills/<name>/` (user level) and from the folder `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` named (project level), under ADR-0019. Since ADR-0021 skills ship only with the backend build ([agents.md](agents.md) 7.3). A `skills/` folder left in the app data dir is ignored: the app never reads, writes or deletes it, so no migration is needed.
+
+### 4.9 Eval question bank files (bundled, read-only)
+
+The assistant's eval sets are data files that ship with the backend, not files in the app data directory: the app reads them at startup and never writes them. One JSON file per question bank in `backend/src/mastra/evals/sets/`, copied into `dist` next to the compiled loader ([delivery.md](delivery.md)). Today, in this order, which is the order of the sets in the Evals tab: `world-cup.json` (its last 11 cases the former golden set, [agents-evals](../capabilities/agents-evals/spec.md) R109), `formula-1.json`, `world-cup-rest-connector.json` (REST-only, BA-187), `world-cup-databricks-only.json` (Databricks-only, BA-186), then the synthetic domains of BA-185, `finance.json`, `health-insurance.json`, `genomics.json`, `supply-chain.json` and `marketing-analytics.json`. The samples those sets question, their generators, planted facts and JSON dumps: section 4.10. Rules (variant expansion, the loader's refusals, the former golden set, the validator, the domain sets' held-out split): [agents-evals](../capabilities/agents-evals/spec.md) R107-R111 and R134; the deterministic checks and their criteria: R112-R126; how a case is scored: [agents.md](agents.md) section 8; decision: ADR-0015 in [architecture.md](architecture.md). The questions themselves are a data asset copied verbatim on rebuild (*Data assets* in [../README.md](../README.md)).
+
+A file is `{ variants: Variant[], cases: Case[] }`, both non-empty. At every level (file, variant, case, check, `args`, `resultSetOptions`) a field not listed below is refused, and every string listed is non-empty. Variant and case ids are lowercase words joined by hyphens (`champion-2022`).
+
+`Variant` (each becomes one eval set):
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | string | yes | The set id (`world-cup`). Unique across all files. |
+| `name` | string | yes | Shown in the Evals tab ("World Cup"). |
+| `description` | string | yes | What the set covers and what it needs to run, shown with the set. |
+| `fixtureId` | string | yes | The sample fixture the set runs on: a `SampleFixture.id` in the fixture registry ([testing-data](../capabilities/testing-data/spec.md) R1). Its required entities drive the dataset preflight. |
+| `dialect` | `postgres` \| `sqlite` \| `databricks` | yes | Which of each case's reference queries the set uses. It must be the dialect of the fixture's datasource kind: `postgres` for PostgreSQL, `sqlite` for REST (the REST connector's engine, which reads endpoints as `api.<schema>.<table>`), `databricks` for Databricks (`<catalog>.<schema>.<table>`). |
+| `caseIdPrefix` | string | yes | Put before every case id of the file to make the set's case ids: `""`, which keeps the file's ids, or lowercase words each followed by a hyphen (`rest-`). Missing or malformed: `"caseIdPrefix" is required: "" or lowercase words each followed by a hyphen (e.g. "rest-")`. |
+
+Variants of one bank are named by datasource kind ([agents-evals](../capabilities/agents-evals/spec.md) R207): the PostgreSQL variant takes the bank's id with no prefix, the REST variant `<bank>-rest` with the prefix `rest-` and the dialect `sqlite`, the Databricks variant `<bank>-databricks` with the prefix `dbx-` and the dialect `databricks`. How each dialect's reference names its tables (`api.<schema>.<table>`, `` `evals`.<schema>.<table> ``) and what it may not use: agents-evals R205 and R206.
+
+`Case`:
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | string | yes | Unique in the file; with the variant's prefix, unique across all sets. |
+| `category` | string | yes | One of `lookup`, `aggregate`, `join`, `ranking`, `ratio`, `null`, `encoding`, `reasoning`, `discovery`, `ambiguous`, `fuzzy-scope`, `out-of-scope`, `non-existent`, `business-term`, `default-filter`, `visual`, `follow-up`, `paraphrase`. Defined in [the BA-9 research, section 2.6](../../docs/research/BA-9.md#26-categories-of-the-golden-dataset). |
+| `split` | `dev` \| `held-out` | no | Default `dev`. |
+| `tags` | string[] | no | Additive kind-specific tags, such as `rest:paging` or `dbx:dialect` (same research section). Default `[]`. |
+| `question` | string | yes | Sent verbatim as the user message. |
+| `intent` | string | yes | What the question probes, shown in the Evals tab and the Details panel. |
+| `notes` | string | no | The trap the case guards and how its expected answer was checked, for people. Never graded, not shown in the app. |
+| `agentTools` | string[] | no | The tool selection the case runs with, as a session bound to a user agent with that selection would ([agents.md](agents.md) 2.1, 4.2): ids from `sample_rows`, `ask_clarification`, `visuals`, each at most once, kept in the order written and the same in every variant; `[]` keeps only the always-on tools. Absent: every tool. Refused with `Eval set file <file>, case "<id>": "agentTools" must be an array of tool ids (sample_rows, ask_clarification, visuals); leave it out for every tool` when it is not an array, `Eval set file <file>, case "<id>": agentTools has an unknown tool "<value>"; known: sample_rows, ask_clarification, visuals` for any other id (the value JSON-encoded), and `Eval set file <file>, case "<id>": agentTools lists "<tool>" twice` for a repeat. |
+| `checks` | `Check[]` | yes | Non-empty. The scorer checks (below). Each check type at most once per case. |
+| `expectedSql` | `{ postgres?, sqlite?, databricks? }` (strings) | no | One reference query per dialect, at least one. When present it must hold a query for every dialect the file's variants use (agents-evals R108): a reference for every dialect or none. Absent: the case has no result-set match. |
+| `resultSetOptions` | `{ distinctRows?: boolean }` | no | `distinctRows`: compare at the reference grain, so repeated identical rows are harmless (agents-evals R31). |
+| `judgeRubric` | string | no | Rubric for the LLM judge (agents.md 2.6); absent: no judge check. The judge runs only when the run's judge option allows it, and its check is otherwise not scored; its criterion follows the case's category ([agents-evals](../capabilities/agents-evals/spec.md) R145, R146). |
+
+`Check` = `{ type, args?, criterion? }`:
+
+- `type`: one of the check types in the table below. Any other value is refused.
+- `args`: as the table says for the type. A pattern (`matches`, `sqlMatches`, `notMatches`) is a JavaScript regular expression source with its `flags`: no `g` or `y`, which make a match stateful, and the pattern must compile. A list (`tools`, `nouns`, `ignore`, `keywords`, `entities`) is a non-empty array of non-empty strings. A type with no arguments takes no `args`, or an empty object.
+- `criterion`: optional; the id of the criterion the check measures, from [the research's criteria list](../../docs/research/BA-9.md#25-the-criteria-list-for-this-app): `D1` to `D6`, `G1` to `G4`, `I1` to `I7` or `C1` to `C4`. Any other value is refused. Absent: the type's default criterion below, or none.
+
+| `type` | `args` | Scorer id | Default criterion | What it asserts |
+|---|---|---|---|---|
+| `includes` | `{ text }` | `check-includes` | none | [agents.md](agents.md) 8.1 |
+| `matches` | `{ pattern, flags? }` | `check-matches` | none | agents.md 8.1 |
+| `calledTool` | `{ tool }` | `check-called-tool` | none | agents.md 8.1 |
+| `didNotCall` | `{ tool }` | `check-did-not-call` | none | agents.md 8.1 |
+| `toolOrder` | `{ tools }`, in call order | `check-tool-order` | none | agents.md 8.1 |
+| `noToolErrors` | none | `check-no-tool-errors` | none | agents.md 8.1 |
+| `noRepairs` | none | `check-no-repairs` | D3 | [agents-evals](../capabilities/agents-evals/spec.md) R113 |
+| `namesNotIds` | `{ nouns? }`, the entity nouns (default `team`, `player`, `club`, `squad`, `driver`, `constructor`) | `check-names-not-ids` | I1 | agents-evals R114 |
+| `numbersGrounded` | `{ ignore? }`, phrases removed from the answer before its numbers are read | `check-numbers-grounded` | G1 | agents-evals R115 |
+| `rationaleOk` | none | `check-rationale-ok` | I3 | agents-evals R116 |
+| `noHtml` | none | `check-no-html` | I4 | agents-evals R117 |
+| `dialect` | none: the set's `dialect` | `check-dialect` | I6 | agents-evals R118 |
+| `qualifiedNames` | none: the set's `dialect` | `check-qualified-names` | I6 | agents-evals R119 |
+| `optionCount` | none | `check-option-count` | I5 | agents-evals R120 |
+| `visualKeywords` | `{ keywords }` | `check-visual-keywords` | G4 | agents-evals R121 |
+| `sqlMatches` | `{ pattern, flags? }` | `check-sql-matches` | none | agents-evals R122 |
+| `notMatches` | `{ pattern, flags?, in? }`, `in` = `answer` (default) or `sql` | `check-not-matches` | none | agents-evals R123 |
+| `usesEntities` | `{ entities? }`; absent: the tables the case's reference query reads, so the case then needs a reference | `check-uses-entities` | D2 | agents-evals R124 |
+
+The result-set match and the LLM judge are not listed in `checks`: they follow from `expectedSql` and `judgeRubric`. In a run's results the result-set match measures `D1`, and the judge the criterion of the case's category (R146).
+
+### 4.10 Sample fixture data: seeds, planted facts and dumps
+
+The data behind the sample fixtures of [testing-data](../capabilities/testing-data/spec.md) R2. The app reads only the seed SQL, and only when the Testing Data loader seeds a sample; everything else is repository tooling.
+
+| What | Where | Ships | Written by |
+|---|---|---|---|
+| Seed SQL | `backend/src/modules/testing-data/fixtures/`: `001_world_cup.sql` (27 KB), `002_formula_1.sql.gz` (5.2 MB), `003_intellify.sql.gz` (237 KB), `004_health_insurance.sql` (464 KB), `005_genomics.sql` (405 KB), `006_supply_chain.sql` (572 KB), `007_finance.sql` (1.1 MB), `008_marketing_analytics.sql` (663 KB) | yes, copied into `dist` by the `nest-cli.json` asset rule `modules/testing-data/fixtures/**/*.sql*` ([delivery.md](delivery.md)) | World Cup by hand, Formula 1 by `pg_dump`, Intellify by `scripts/generate-intellify-seed.py` ([testing-data](../capabilities/testing-data/spec.md) R4), `004` to `008` by the generators below |
+| Generators | `docker/postgres/generate/<domain>.ts`, with the seeded random source `docker/postgres/generate/lib/rng.ts` | no | people; run with `npm run fixtures:<domain>` |
+| Planted facts | `backend/scripts/fixtures/<domain>/facts.json`, for the domains written for BA-9 (finance, marketing analytics) | no | the domain's generator, with its seed |
+| JSON dump | `backend/scripts/fixtures/<id>/data/<relation>.json.gz` and `_meta.json`, committed for finance and marketing analytics only | no | `npm run fixture:dump -- --fixture <id>` |
+
+**Seed SQL of a generated domain.** One transaction (`BEGIN` … `COMMIT`) that creates schema `<schema>`, sets the search path to it, creates every table with identity keys, indexes and the views, inserts every row, and comments the columns whose meaning is not obvious (a test flag, a unit, a lookalike column). A generator draws every value from one seeded random source and never reads the clock, so a run writes a byte-identical file; it asserts every planted trap and writes nothing when one drifts. Each domain gets its own database, so none of them is a compose init script. `004` to `006` are byte-identical to the init scripts of `feat/engine-eval-loop`; `007_finance.sql` keeps that branch's banking rows unchanged, drawn from the banking seed, and adds the wealth tables from a second seed.
+
+**Planted facts** (`facts.json`). A JSON object: `generator`, `seeds`, `asOf`, notes on the fiscal year and units, then the planted truths grouped by half of the domain and keyed by trap id (finance: `banking.B4_…` to `B11_…`, `wealth.W1_emptyMonth` to `W12_biggestClient`), each holding the value a reference query must return (amounts named `…Dollars` are in dollars, counts are plain numbers, names are strings). Agents-evals R134 checks references against it.
+
+**JSON dump.** One file per required table and view of the sample, `<relation>.json.gz`: a compact JSON array of row objects, gzipped, ordered by the primary key (by every column for a view). The gzip header carries no timestamp, so a re-dump of unchanged data differs only in `dumpedAt`. NUMERIC, BIGINT and FLOAT values are JSON numbers (a BIGINT beyond 2^53 fails the dump), dates are `YYYY-MM-DD`, timestamps ISO 8601 UTC. `_meta.json` stays plain JSON: `{ dumpedAt, source, fixture, schema, format: "json.gz", tables: { <relation>: <row count> }, columns: { <relation>: [{ name, type, nullable }] } }`, the fields of `backend/scripts/worldcup-rest-api/data/_meta.json` with the fixture, schema, format and column types added. The World Cup REST dump keeps its own format (plain, indented `<relation>.json`). The dump is the one source of the REST server and the Databricks loader of BA-9 Steps 2 and 3, so a sample's rows are identical on every datasource kind (ADR-0015 in [architecture.md](architecture.md)). Only the samples that run on every datasource kind have their dump committed: finance (0.44 MB) and marketing analytics (0.16 MB), decided 2026-10-13. The other domain samples are dumped on demand.
+
+### 4.11 Eval price table (bundled, read-only)
+
+Added 2026-10-20 (BA-242). The prices an eval run's cost is computed with ([agents-evals](../capabilities/agents-evals/spec.md) R220, R221): one JSON file, `backend/src/mastra/evals/pricing.json`, imported by `eval-usage.ts` (`resolveJsonModule`) as the question bank files are by their loader, so `nest build` emits it into `dist/mastra/evals/` and the CLI, the npm package and the desktop app read it from there ([delivery.md](delivery.md)). The app never writes it.
+
+```json
+{
+  "_comment": "…",
+  "models": {
+    "gpt-4o-mini": {
+      "inputPerMillionUsd": 0.15,
+      "cachedInputPerMillionUsd": 0.075,
+      "outputPerMillionUsd": 0.6,
+      "source": "developers.openai.com/api/docs/pricing",
+      "readOn": "2026-10-20"
+    },
+    "gpt-5.6-luna": {
+      "inputPerMillionUsd": 0.2,
+      "cachedInputPerMillionUsd": 0.02,
+      "outputPerMillionUsd": 1.2,
+      "source": "developers.openai.com/api/docs/pricing (Standard, short context)",
+      "readOn": "2026-10-21"
+    },
+    "gpt-6-luna": {
+      "inputPerMillionUsd": 0.1,
+      "cachedInputPerMillionUsd": 0.01,
+      "outputPerMillionUsd": 0.5,
+      "source": "developers.openai.com/api/docs/pricing (Standard, short context)",
+      "readOn": "2026-10-23"
+    },
+    "gpt-4.1-mini": {
+      "inputPerMillionUsd": 0.4,
+      "cachedInputPerMillionUsd": 0.1,
+      "outputPerMillionUsd": 1.6,
+      "source": "developers.openai.com/api/docs/pricing (Standard)",
+      "readOn": "2026-10-21"
+    }
+  }
+}
+```
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `_comment` | string | no | For people; ignored. |
+| `models` | object | yes | One `ModelRate` (3.8) per model, keyed by the model id without its provider prefix, in lower case (`gpt-4o-mini`, never `openai/gpt-4o-mini`). |
+| `models.<id>.inputPerMillionUsd` | number ≥ 0 | yes | US dollars per million input tokens. |
+| `models.<id>.cachedInputPerMillionUsd` | number ≥ 0 | no | US dollars per million cached input tokens; absent: the input rate. |
+| `models.<id>.outputPerMillionUsd` | number ≥ 0 | yes | US dollars per million output tokens (reasoning tokens included). |
+| `models.<id>.source` | string | no | Where the rate was read. |
+| `models.<id>.readOn` | string (`YYYY-MM-DD`) | no | The day it was read. |
+
+Any other field, a key that is not a lower-case id without a `/`, or a rate that is not a number of 0 or more is refused when the backend starts, with `Price file pricing.json, model "<id>": <what is wrong>`. A model is looked up by its id without the provider prefix, ignoring case, and a dated snapshot (`gpt-4o-mini-2024-07-18`) with no entry of its own by the id without its date. A model with no entry makes a cost not priced; its tokens are still recorded. A price is changed by editing the file, with a new `source` and `readOn`, in a release: a run keeps the rates it was computed with (`rates`, 3.8), so an earlier run's cost does not change.
 
 ---
 
@@ -725,6 +874,8 @@ None for `agents`: it is a new collection, and the store creates the table on fi
 None for the RFP Builder (BA-213, ADR-0028): `agentKey` and `rfpId` on sessions and `rfpPackage` on messages are new optional fields, and `rfp` is a new key in `agent_prompt_overrides`. The `rfp` schema in the Intellify database has its own versioned migrations (section 7.3).
 
 None for the agent panel (BA-231, ADR-0029): `panelItems` and `workflowState` on sessions are new optional fields; visuals made before are synthesized into the item list at read time (3.4.4), so no stored document is rewritten.
+
+None for the eval run statuses and summary (BA-184): `eval_runs` gains `judge`, `summary`, and `category`, `status` and `criterion` on its results and checks; no field is renamed, and older records are read with the defaults of section 3.8 (like M10, a read-time tolerance, never a rewrite). Covered by `eval-runs.repository.spec.ts`.
 
 Tests: the table/field renames (M1-M3), M14 and M4/M5 are covered by `database.module.spec.ts` and the repository/workspace specs.
 

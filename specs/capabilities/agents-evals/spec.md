@@ -14,6 +14,26 @@ Capability-local vocabulary:
 - **Questions** and **Executions** — the two sub-tabs inside an agent's Evals tab: the suite, and the history of runs.
 - **Regression comparison** — the per-question diff between a finished run and the previous comparable run; see R32.
 - **Details panel** — the right-hand panel ([../app-shell/spec.md](../app-shell/spec.md)); on an agent's detail view it shows one question's scoring and trace.
+- **Question bank file** — a data file, bundled with the app, that holds one bank of eval cases and the variants that turn it into eval sets (R107); its shape is in [../../system/data-model.md](../../system/data-model.md) section 4.9.
+- **Variant** — one entry of a question bank file that becomes one eval set: its id, name, description, sample fixture, SQL dialect (`postgres`, `sqlite` for the REST connector's engine, or `databricks`) and case-id prefix (R107).
+- **Category** — the one primary kind of question a case probes, such as `lookup`, `ratio` or `out-of-scope`. The list of eighteen and what each probes are in [the BA-9 research, section 2.6](../../../docs/research/BA-9.md#26-categories-of-the-golden-dataset).
+- **Split** — `dev` (the default) or `held-out`: whether a case may be used while tuning the assistant or is kept back to measure it. It does not change how a case runs.
+- **Reference query** — a case's trusted SQL, one per dialect, whose live result is the reference answer for the result-set match (R31).
+- **Criterion** — the id, from [the BA-9 criteria list](../../../docs/research/BA-9.md#25-the-criteria-list-for-this-app), of what a check measures, such as `D1` (the rows behind the answer are right) or `G2` (nothing invented outside the data); R125, R146.
+- **Judge option** — whether a run calls the LLM judge: `off` (the default), `on`, or `categories`, which judges only the questions of the listed categories (R144).
+- **Not scored** — the status of a judge check the run did not call because its judge option was off for the question, and of a question none of whose checks was scored (R145 to R147). It is never a pass.
+- **Run summary** — a run's question counts by status, by category and by criterion (R148), and by split (R213).
+- **Repeats** — how many times a run asks each question: 1 (the default), 3 or 5 (R209).
+- **Attempt** — one run of one question, scored on its own; a run with Repeats k makes k attempts per question (R210).
+- **pass^k** — the verdict of a question over its k attempts: passed only when every attempt passed (R211). The "<passed>/<total>" figures of a run count questions that passed every attempt.
+- **Flaky question** — a question with at least one passed and at least one failed attempt; it counts as failed (R211).
+- **Interval** — the 95% interval of a pass rate (Wilson's score interval, R212), or of the change between two runs' pass rates (Newcombe's hybrid score interval, R225), shown as whole percents (`61–91%`) or points (`+5 to +33 pts`).
+- **Usage** — the tokens of every model call an attempt made, per agent (`assistant`, `sql-fixer`, `designer`, `judge`) and model (R219). A call that reports no tokens is an unreported call, never a free one.
+- **Cost** and **Not priced** — the dollars a question or run cost, from its usage and the bundled price table (R220, R221); not priced when a model that ran has no price, its tokens still shown.
+- **Exported run file** — a run written to a file for the improvement-loop tools: a run record (`EVAL_RUN_FILE`), the poll response of a run, or a bare results array (R224).
+- **Accept rule** — when an `eval:diff` between a run before and a run after a change says to keep the change (R227).
+- **Failure export** — the dev questions a run failed, written as files for the fixer to read, with nothing of the held-out questions but their counts (R228).
+- **Lever file** and **Leak check** — a file the improvement loop may change (the assistant's prompt, tools, context blocks, the domain samples' knowledge seeds), and the check that rejects a change to one that quotes a question bank (R229, R230).
 
 ## Rules
 
@@ -34,66 +54,71 @@ Agent Hub and agent detail
 
 Question sets
 - R10. Only the assistant and the RFP Builder (`rfp`) SHALL have eval sets; each set names the agent it runs on, and an agent's Evals tab lists only its own sets. Every other agent's Evals tab SHALL show "No evals configured for this agent yet."
-- R11. The system SHALL provide four sets, each bound to one sample fixture: for the assistant, `world-cup` ("World Cup", PostgreSQL, 12 questions), `world-cup-rest` ("World Cup (REST API)", the same 12 questions against the REST sample, case ids prefixed `rest-`) and `formula-1` ("Formula 1", PostgreSQL, 1950 to 2026, 10 questions); for the RFP Builder, `rfp` ("RFP Builder", the `intellify-api` REST sample, 8 questions, listed in [agents.md](../../system/agents.md) 8.1). The RFP records an `rfp` run creates SHALL be deleted when the run ends. The question lists are in *Eval suite content* below. Case ids SHALL be unique across all sets.
-- R12. Each set SHALL carry a name, a description of what it covers and what it needs to run, and its cases. Each case SHALL carry an id, the question, an intent (what it probes) and its checks (id, name and description).
+- R11. The system SHALL provide these sets, each bound to one sample fixture, listed in this order. For the assistant: `world-cup` ("World Cup", PostgreSQL, 63 questions, 15 held out; its last 11 questions are the former golden set, R109), `world-cup-rest` ("World Cup (REST API)", the same 63 questions against the REST sample, case ids prefixed `rest-`), `world-cup-databricks` ("World Cup (Databricks)", the same 63 against the Databricks sample, case ids prefixed `dbx-`; R207), `formula-1` ("Formula 1", PostgreSQL, 1950 to 2026, 10 questions), then `world-cup-rest-connector` ("World Cup (REST connector)", 12 REST-only questions against the World Cup REST sample with the connector profile, case ids prefixed `rest-connector-`; R164), then `world-cup-databricks-only` ("World Cup (Databricks only)", 10 Databricks-only questions against the World Cup Databricks sample, case ids prefixed `dbx-only-`; R189). After them come the synthetic domain sets (BA-185), one PostgreSQL set per domain, each followed by its REST and Databricks sets where the domain has those samples (R207), in this order: `finance` ("Finance", 68 questions, 20 held out), `finance-rest` ("Finance (REST API)", the same 68 questions against the Finance REST sample, case ids prefixed `rest-`), `finance-databricks` ("Finance (Databricks)", the same 68 against the Finance Databricks sample, case ids prefixed `dbx-`), `health-insurance` ("Health Insurance", 42 questions, 14 held out), `genomics` ("Genomics", 49, 16 held out), `supply-chain` ("Supply Chain", 20, 6 held out), `marketing-analytics` ("Marketing Analytics", 50 questions, 16 held out, 4 of them governance questions), `marketing-analytics-rest` ("Marketing Analytics (REST API)", the same 50 questions against the Marketing Analytics REST sample, case ids prefixed `rest-`) and `marketing-analytics-databricks` ("Marketing Analytics (Databricks)", the same 50 against the Marketing Analytics Databricks sample, case ids prefixed `dbx-`). The assistant's sets come from question bank files (R107). For the RFP Builder, after them: `rfp` ("RFP Builder", the `intellify-api` REST sample, 28 questions, listed in [agents.md](../../system/agents.md) 8.1), defined in code rather than in a question bank file. The RFP records an `rfp` run creates SHALL be deleted when the run ends. The assistant's question lists are in *Eval suite content* below. Case ids SHALL be unique across all sets.
+- R12. Each set SHALL carry a name, a description of what it covers and what it needs to run, and its cases. Each case SHALL carry an id, the question, an intent (what it probes) and its checks (id, name and description). A case from a question bank file SHALL also carry its category and split (R150); a case defined in code (the RFP Builder's `rfp` set) has neither.
 - R13. The Evals tab SHALL open on the list of sets, each showing its name, "<N> questions" and its description, with no question shown and no run button. Clicking a set SHALL open it (revealing its questions, the datasource picker and the run button) and tick all of its questions; clicking the open set again SHALL close it and clear the ticks. Sets SHALL be unselectable while a run is starting or running.
-- R14. An open set SHALL show "<N> questions in <set name>. Each check must score 1.0 for its question to pass.", then the datasource picker, the run button, a **Select all** checkbox and the numbered question list.
-- R15. Each question row SHALL show a tick box (labelled "Run: <question>"), the number, the question text, its intent and a chip per check showing the check's description. Clicking the row (not the tick box) SHALL select it for the Details panel and highlight it.
+- R14. An open set SHALL show "<N> questions in <set name>. Each check must score 1.0 for its question to pass.", then the datasource picker, the **Judge** select (R149), the **Repeats** select (R214; added 2026-10-20, BA-242), the run button, a **Select all** checkbox and the numbered question list.
+- R15. Each question row SHALL show a tick box (labelled "Run: <question>"), the number, the question text, its category chip (R150), on a held-out question a `held-out` chip (R215), its intent and a chip per check showing the check's description. Clicking the row (not the tick box) SHALL select it for the Details panel and highlight it.
 - R16. Select all SHALL tick every question of the open set when not all are ticked, and untick every question when all are ticked. Ticks, Select all and sets SHALL be disabled while a run is starting or running.
 
 Starting a run
 - R17. The datasource picker SHALL list every configured datasource as "<name> · <kind label>" (for example "World Cup PostgreSQL · PostgreSQL"), defaulting to the first. With none it SHALL show "No datasources configured" and the run button SHALL be disabled.
 - R18. The run button SHALL read "Run <N> selected" with N the number of ticked questions, and SHALL be disabled when N is 0, no datasource exists, or a run is starting or running. While starting or running it SHALL read "Running…" with a spinner.
-- R19. Starting a run SHALL send the chosen datasource and the ids of the ticked questions. The system SHALL validate, in this order, and refuse without starting (the message appears in a red box under the run controls, and no run is recorded):
+- R19. Starting a run SHALL send the chosen datasource, the ids of the ticked questions, the judge option (R144, R149) and the repeats (R209, R214). The system SHALL validate, in this order, and refuse without starting (the message appears in a red box under the run controls, and no run is recorded):
   1. the agent has evals, else `Agent "<key>" has no evals to run`;
   2. no run is already going for this agent, else `An eval run is already in progress for this agent`;
   3. a datasource was chosen, else `Pick a datasource to run against`;
   4. the datasource has at least one dataset, else `That datasource has no datasets — create one in Datasets before running evals`;
   5. at least one known question was ticked, else `Pick at least one question to run`;
   6. all ticked questions belong to one sample, else `The selected questions span several samples (<ids>) — run one sample at a time.`; a set whose sample is not in the fixture registry fails with `Unknown sample fixture "<id>" — …`;
-  7. the datasets bound to the datasource cover the sample (R20).
+  7. the datasets bound to the datasource cover the sample (R20);
+  8. the judge option is valid (R144);
+  9. the repeats are valid (R209; added 2026-10-20, BA-242).
 - R20. The dataset preflight SHALL require that: the datasets belong to exactly one datasource of the sample's kind (PostgreSQL or REST API), and together contain every required entity of the sample (matched on the last two name parts, schema and table, case-insensitively, so a same-named table in another schema does not count). On failure the message SHALL read "These evals require the bundled <sample name> sample: <description> Select its <PostgreSQL|REST API> datasource and save a dataset containing the <schema> tables and views. Setup: <setup hint>." followed by "Selected datasets: <names>. Missing entities: <entity list>." or "The selected datasets must belong to one <kind> datasource." No model tokens SHALL be spent when preflight fails.
 - R21. All datasets bound to the chosen datasource SHALL be in scope for the run; the run record and the UI SHALL show "Scoped to <dataset names>".
-- R22. A successful start SHALL record a run with status `running`, the question ids, and the total, and answer with the run's job id.
+- R22. A successful start SHALL record a run with status `running`, the question ids, the total, the judge option (R144), the repeats (R209), the model the agent runs on and the source `app` (R223), and answer with the run's job id.
 
 Running and progress
 - R23. A run SHALL execute the questions one at a time, in set order, never in parallel, against the datasets in scope.
 - R24. Each question SHALL run the assistant exactly as a chat turn would: scoped to the datasets, with the same orientation block (entities and join hints), the same curated knowledge block ([../knowledge/spec.md](../knowledge/spec.md)) and the same 15-step budget, in a throwaway session so that visual tools work. The throwaway session SHALL be deleted when the run ends, success or failure.
 - R25. The system SHALL record each question's result as soon as it finishes and SHALL persist the run after every question, so a crash mid-suite keeps the finished questions.
-- R26. While running, the UI SHALL poll the run every 1.5 seconds and show "<finished>/<questions in the open set> done · <passed> passed", mark the current question "running", and mark finished questions "passed" or "failed" with each check's score beside its chip. A failed question SHALL also show its run error, if any.
-- R27. A run SHALL end `completed` when every ticked question has a result (including failed ones), or `failed` with an error message if the run itself broke. Either way it SHALL get a finish time.
-- R28. At most one run SHALL be active per agent for each user (two users MAY each run the same agent's evals at once; R62). Leaving the agent view SHALL stop the UI polling, not the run.
+- R26. While running, the UI SHALL poll the run every 1.5 seconds and show "<finished>/<questions in the open set> done · <passed> passed" (followed by " · <n> not scored" once a question is not scored, then, while a question runs on a run with Repeats above 1, " · attempt <a>/<k>", R214), mark the current question "running", and mark finished questions "passed", "failed" or "Not scored" (R151) with each check's score beside its chip. A failed question SHALL also show its run error, if any.
+- R27. A run SHALL end `completed` when every ticked question has a result (including failed and not-scored ones), or `failed` with an error message if the run itself broke. Either way it SHALL get a finish time.
+- R28. At most one run SHALL be active per agent. Leaving the agent view SHALL stop the UI polling, not the run.
 
 Scoring
-- R29. A question SHALL pass only if it has at least one check and every check scores exactly 1. A question whose run threw an error SHALL fail with no check results and the error text. Per-check results SHALL carry the check's id, description, score, verdict and, on failure, a reason in plain words, for example `expected "Argentina" in the answer — answer was "…"` or `expected "run_readonly_sql" to be called 1×, it was called 0×`.
+- R29. A question SHALL pass only if it has at least one scored check and every scored check scores exactly 1; a question with no scored check is not scored (R147, changed 2026-10-13, BA-184). A question whose run threw an error SHALL fail with no check results and the error text. Per-check results SHALL carry the check's id, description, score, verdict, status (R146), criterion when it has one, and, on failure or when not scored, a reason in plain words, for example `expected "Argentina" in the answer — answer was "…"` or `expected "run_readonly_sql" to be called 1×, it was called 0×`.
 - R30. The system SHALL offer these kinds of check, combined per question:
   - answer text includes or matches a value;
   - a named tool was or was not called, or tools were called in a given order;
   - no tool call returned an error;
   - **result-set match** (id `result-set-match`, "Result set matches expectedSql (primary correctness signal)"), for questions with a reference query;
-  - **LLM judge** (id `llm-judge`, "LLM judge: <rubric>"), for questions whose quality a text match is too brittle to judge.
-- R31. The result-set match SHALL run the reference query read-only on the datasource (at most 500 rows; a truncated reference fails the check) and compare it with every successful, complete, untruncated `run_readonly_sql` result the assistant produced. It SHALL pass if any single result contains every reference row, each in a row of its own. Comparison SHALL ignore column names, column order and row order, normalise numbers to six significant digits and text to trimmed, case-folded form, and tolerate extra columns and extra rows in the assistant's result but not missing values; results from different queries SHALL NOT be combined. A question can ask for distinct facts only, in which case several reference rows may be found in the same row. The answer-text checks, not this one, judge whether the answer states the right fact. With no successful query the check fails: "the agent ran no successful run_readonly_sql to compare".
-- R32. The LLM judge SHALL be given the question, the rubric, the ordered tool calls (name, input, output, error) and the final answer, and SHALL return a pass or fail with a one- or two-sentence reason. It SHALL run on the same configured model as the assistant, one step, no tools. A judge that errors or returns unparseable output SHALL score 0 with a reason beginning `judge error:` rather than aborting the run. It SHALL pass only when the rubric is clearly satisfied.
+  - **LLM judge** (id `llm-judge`, "LLM judge: <rubric>"), for questions whose quality a text match is too brittle to judge; it runs only when the run's judge option allows it, and is otherwise not scored (R145);
+  - the **deterministic checks** of R112 to R124, which read the SQL, the tool results and the answer against the rules of the assistant's prompt.
+- R31. The result-set match SHALL run the reference query read-only on the datasource (at most 500 rows; a truncated reference fails the check) and compare it with every successful, complete `run_readonly_sql` result the assistant produced. A result is complete when all its rows were captured: the rows are present and their number equals the row count the tool returned, so a result clipped in storage is not compared. A result the tool marked truncated because it reached the query's own row limit SHALL be compared like any other (changed 2026-10-13, BA-183): the one right row of a query run with `limit: 1` matches, and a result that misses a reference row fails. It SHALL pass if any single result contains every reference row, each in a row of its own. Comparison SHALL ignore column names, column order and row order, normalise numbers to six significant digits and text to trimmed, case-folded form, and tolerate extra columns and extra rows in the assistant's result but not missing values; a number the assistant's result writes with decimals SHALL also match a reference number that is not whole when it equals the reference, or 100 times the reference, rounded to its own decimals, so a share stated as a rounded percentage is the same fact (`87.13` for `0.871317…`), while a whole number never stands for a fraction (added 2026-10-22, BA-242, the user's decision after three ratio questions failed with right answers; careful mode's cross-check keeps the strict comparison); results from different queries SHALL NOT be combined. A question can ask for distinct facts only, in which case several reference rows may be found in the same row. The answer-text checks, not this one, judge whether the answer states the right fact. With no successful query the check fails: "the agent ran no successful run_readonly_sql to compare".
+- R32. When the run's judge option lets it run on a question (R145), the LLM judge SHALL be given the question, the rubric, the ordered tool calls (name, input, output, error) and the final answer, and SHALL return a pass or fail with a one- or two-sentence reason. It SHALL run on the same configured model as the assistant, one step, no tools. A judge that errors or returns unparseable output SHALL score 0 with a reason beginning `judge error:` rather than aborting the run. It SHALL pass only when the rubric is clearly satisfied.
 - R33. Tool inputs and outputs recorded in a trace SHALL be truncated to 2,000 characters each, marked "… (truncated)". If a tool-only turn produced no prose, the reported answer SHALL be synthesised from what the tools returned.
 
 Executions, details and report
 - R34. The **Executions** sub-tab SHALL list past and in-flight runs of the agent, newest first, loaded when the sub-tab opens ("Loading executions…"; empty: "No eval runs yet — run the suite from the Questions tab."). The sub-tabs SHALL be shown whenever the agent has sets (or the Executions tab is open).
-- R35. Each execution SHALL show a status icon (spinner while running, green check when all questions passed, red cross otherwise), "<passed>/<total> passed", the start time, the datasource name and the duration ("—" until finished; milliseconds under a second, else whole seconds). Expanding it SHALL show "Scoped to <datasets>" and one row per finished question with its verdict and duration; clicking a row SHALL open that question's result in the Details panel.
+- R35. Each execution SHALL show a status icon (spinner while running, green check when all questions passed, red cross otherwise, so a run with a not-scored question is not shown as all passed), "<passed>/<total> passed" (passed every attempt, R211), its repeats, flaky count and cost (R216), the start time, the datasource name and the duration ("—" until finished; milliseconds under a second, else whole seconds). Expanding it SHALL show "Scoped to <datasets>", its dev and held-out line (R216), its summary tables (R152) and one row per finished question with its verdict (passed, failed or Not scored, R151), its `held-out` chip and attempts (R216) and duration; clicking a row SHALL open that question's result in the Details panel (changed 2026-10-20, BA-242).
 - R36. Each execution SHALL offer a download button (**Download as Markdown**) and, once it is no longer running, a delete button. Deleting a run that is still going SHALL be refused ("Cannot delete a run that is still going"); deleting a finished one SHALL remove it permanently ("Run deleted"). Download success SHALL show the toast "Eval report downloaded"; failure "Could not download the report" (or the backend's message).
-- R37. The Details panel SHALL show, for the selected question: the question and its intent. When it has not been run: "Checks it will be scored on" (the check descriptions) and "Run the evals to see the steps the agent executed for this question." When it has a result: the verdict (Passed or Failed) and duration; "Run error" or "Why it failed" (each failed check with its reason); every check with its score; "Executed steps" (each tool call in order, numbered, with its input and output or error, or "The agent answered without calling any tool."); and the final "Answer" (or "The agent returned no text."). Selecting a question SHALL open the Details panel if it is closed (app-shell R10). With nothing selected it SHALL say "Select a question in the Evals tab to see how it ran." Selection SHALL clear when the agent changes or the view closes, and SHALL follow the newest result while a run is in progress.
-- R38. The Markdown report of a run SHALL contain, in order: `# Eval run — <agent key>`; "**<passed>/<total> questions passed**"; a list of started, finished, duration, status, datasource name, datasets and run id; a "Run error" quote when the run failed; `## Summary` (a table of number, question, result, duration); `## Compared to previous run` (R40) when there is a comparison; `## Failures at a glance` when anything failed (each failed question with its failed-check reasons or run error); and `## Questions`, one section per finished question with result, id, duration, a checks table (check, score, why), `#### Executed steps` (each tool call with input and output or error in fenced blocks) and `#### Answer`. Fences inside payloads SHALL be neutralised. The server SHALL name the file `eval-run-<agent>-<start date and time>-<8-character run id>.md` and send it as a Markdown attachment.
+- R37. The Details panel SHALL show, for the selected question: the question and its intent. When it has not been run: "Checks it will be scored on" (the check descriptions) and "Run the evals to see the steps the agent executed for this question." When it has a result: the verdict (Passed, Failed or Not scored, R151) and duration; "Run error" or "Why it failed" (each failed check with its reason; a not-scored check is not a failure and is not listed there); every check with its score, or "Not scored" and its reason; "Executed steps" (each tool call in order, numbered, with its input and output or error, or "The agent answered without calling any tool."); and the final "Answer" (or "The agent returned no text."); and, on a result that has them, its split, its attempts, its tokens and its cost (R217; added 2026-10-20, BA-242). Selecting a question SHALL open the Details panel if it is closed (app-shell R10). With nothing selected it SHALL say "Select a question in the Evals tab to see how it ran." Selection SHALL clear when the agent changes or the view closes, and SHALL follow the newest result while a run is in progress.
+- R38. The Markdown report of a run SHALL contain, in order: `# Eval run — <agent key>`; "**<passed>/<total> questions passed**"; the judge line and, when any question was not scored, the not-scored line (R153); the repeats, dev, held-out, flaky, tokens and cost lines (R218); a list of started, finished, duration, status, datasource name, datasets and run id; a "Run error" quote when the run failed; `## By category` and `## By criterion` (R153); `## Summary` (a table of number, question, split, result, duration; R218); `## Compared to previous run` (R40) when there is a comparison; `## Failures at a glance` when a question failed (each failed question with its failed-check reasons or run error; not-scored questions and checks are not listed); and `## Questions`, one section per finished question with result, id, split, its attempts when Repeats is above 1, duration, tokens and cost (R218), a checks table (check, score, why), `#### Executed steps` (each tool call with input and output or error in fenced blocks) and `#### Answer`. A not-scored question's result reads `➖ not scored` (`➖` in the summary table), and a not-scored check's score reads `not scored` with its reason as the why (changed 2026-10-13, BA-184). Fences inside payloads SHALL be neutralised. The server SHALL name the file `eval-run-<agent>-<start date and time>-<8-character run id>.md` and send it as a Markdown attachment.
 - R39. Downloading a run that does not exist SHALL fail with `Eval run "<id>" not found` (HTTP 404); polling one SHALL answer with ok false and the same message.
 
 Regression comparison
-- R40. When a run completes, the system SHALL compare its per-question verdicts with the most recent earlier completed run of the same agent, same datasource and same set of datasets (order ignored), matching by question id. It SHALL record the previous run's id and three lists, each of id and question: **regressions** (passed before, failing now), **improvements** (failed before, passing now) and **unchanged**. Questions present in only one of the two runs SHALL be skipped. With no comparable earlier run no comparison SHALL be recorded; runs saved before this feature have none. A failure while comparing SHALL NOT fail the run.
+- R40. When a run completes, the system SHALL compare its per-question verdicts with the most recent earlier completed run of the same agent, same datasource and same set of datasets (order ignored) that shares at least one question id with it, matching by question id. An earlier run with no question in common (another set on the same datasource and datasets, such as `world-cup-databricks` and `world-cup-databricks-only`) SHALL NOT count as comparable (changed 2026-10-13, BA-182; example changed 2026-10-20, BA-188). It SHALL record the previous run's id and three lists, each of id and question: **regressions** (passed before, failing now), **improvements** (failed before, passing now) and **unchanged**. Questions present in only one of the two runs, and questions not scored in either run (R147; added 2026-10-13, BA-184), SHALL be skipped, so a question the judge was off for is never a regression or an improvement. With no comparable earlier run no comparison SHALL be recorded; runs saved before this feature have none. A failure while comparing SHALL NOT fail the run.
 - R41. The report SHALL show the comparison as `## Compared to previous run` with "Compared to run `<previous id>`."; "No change from the previous run." when there are neither regressions nor improvements; otherwise "**Regressions** (passed before, now failing):" and/or "**Improvements** (failed before, now passing):", each item as `<id> — <question>`.
 
 Other entry points
-- R42. The same suite SHALL also be runnable without the UI from the command line against named datasets (progress per question, a final "<passed>/<total> questions passed" line, exit code 0 only when all pass), using the same preflight, scoring, throwaway session and knowledge block.
+- R42. The same suite SHALL also be runnable without the UI from the command line against named datasets (progress per question, a final "<passed>/<total> questions passed" line, the summary and the exit code of R154), using the same preflight, scoring, throwaway session and knowledge block. The questions are chosen by a set id or by case ids (R111), narrowed by split and category (R222), the judge option and the repeats by settings (R154, R222). The run is saved like a run started in the app, with its run id printed and the regression comparison of R40 (R223; changed 2026-10-20, BA-242: before, the command line saved nothing).
 
 ### Eval suite content
 
-World Cup set (`world-cup`; the REST set repeats these ten with ids `rest-<id>`, differing only in the reference queries, written for the REST sample's dialect):
+Besides what each row below lists, every question of the World Cup and Formula 1 sets carries the deterministic checks of its category (R126), except the two tool-selection questions `no-clarification-best-team` and `no-visuals-chart-request`, which keep only the checks they list.
+
+World Cup set (`world-cup`; the REST set repeats its questions with ids `rest-<id>` and the Databricks set with ids `dbx-<id>`, differing only in the reference queries, written for each sample's dialect). Its first twelve questions:
 
 | id | Question | What must hold |
 |---|---|---|
@@ -110,6 +135,51 @@ World Cup set (`world-cup`; the REST set repeats these ten with ids `rest-<id>`,
 | `no-clarification-best-team` | Which team performed best? | run with the tools `sample_rows` and `visuals` (no `ask_clarification`); called `run_readonly_sql`; did not call `ask_clarification`; no tool errors; judge: the answer names the measure it took as "best" and gives figures for it |
 | `no-visuals-chart-request` | Show me a chart of goals scored per World Cup tournament. | run with the tools `sample_rows` and `ask_clarification` (no `visuals`); called `run_readonly_sql`; did not call `create_visual`; no tool errors; judge: the answer says it can't draw a visual here and gives the goals per tournament (23 in 2018, 24 in 2022) |
 
+The next 40 questions of the World Cup set (added 2026-10-16, roadmap 1.1.10, BA-188): 23 are World Cup questions of `feat/engine-eval-loop` the set lacked, unchanged in wording and, but for two, in PostgreSQL reference, converted as the health insurance set's were (below): the branch's categories mapped to the eighteen (`ratio-trap` to `ratio`, `ties` and `id-vs-name` to `ranking`, `value-vocabulary` to `encoding`, `empty-column` to `null`, `domain-semantics` to `business-term`, `multi-step-join` to `join`, `clarification` to `ambiguous`; `discovery` and `out-of-scope` unchanged), the branch category kept as a `trap:` tag and the branch's difficulty as a `difficulty:` tag, its `finalSqlSucceeded` check replaced by `noToolErrors` and its `excludes` by `notMatches`, its SQLite reference kept (the `match` alias renamed `m`, R205) and a Databricks reference written (R206). The other 17 are each the first paraphrase the branch wrote for one of those questions, in category `paraphrase`, with the id `<id>-reworded` and the references, checks and split of the question it rephrases (R134). By category: paraphrase 17, ranking 6, encoding 3, business-term 3, null 1, and 2 each of ratio, join, discovery, ambiguous and out-of-scope; 15 of the 40 are held out; 34 have a reference query, so 39 of the set's 52 did, and with the 11 former golden-set questions (below) 50 of its 63 do. Each carries the deterministic checks of its category (R126), a paraphrase those of the question it rephrases; the arguments of its `sqlMatches`, `matches` and `notMatches` checks are in the table below. Two branch references read tables that are not among the World Cup sample's required entities ([testing-data](../testing-data/spec.md) R2), so they are not in its dataset and the validator refuses them (R110): `third-placed-team-scorers-2018` takes the winner of the third-place play-off instead of `tournament_teams.final_rank`, and `south-american-goals` names Argentina, Brazil and Uruguay instead of joining `countries` and `confederations`, each returning the rows of the branch reference. The branch's `finalists-groups-2022` and its paraphrase were left out: the groups are only in `tournament_teams`, which the sample does not require, so the question could have no reference and its checks would pass groups given from general knowledge, which [agents.md](../../system/agents.md) rule A12 forbids; it comes back when the sample requires that table. The trap each question guards, its trap query, its other paraphrase, the branch's provenance and any branch reference it no longer uses are in its notes. The three `business-term` questions (`mandzukic-goals-2018`, `extra-time-goals`, `argentina-draws-2022`) have no knowledge entry behind them, because the World Cup sample ships no knowledge seed ([testing-data](../testing-data/spec.md) R26): they test what the schema alone tells the assistant.
+
+| id | Question | What must hold |
+|---|---|---|
+| `shot-accuracy-by-team-2022` | At the 2022 World Cup, which three teams put the highest share of their shots on target? | ratio; includes "England"; ran SQL; no tool errors; result-set match |
+| `shot-conversion-2022` | Which team turned the highest share of its shots into goals at the 2022 World Cup? | ratio, `held-out`; includes "Netherlands"; ran SQL; no tool errors; result-set match |
+| `busiest-stadium` | Which stadium hosted the most matches? | ranking; matches both Saint (or St.) Petersburg and Lusail; ran SQL; no tool errors; result-set match |
+| `highest-scoring-match` | Which match produced the most goals? | ranking; matches both Croatia and Argentina (the two finals); ran SQL; no tool errors; result-set match |
+| `top-scorer-both-tournaments` | Who scored the most goals across the 2018 and 2022 World Cups combined? | ranking, `held-out`; matches both Messi and Mbapp(e); ran SQL; no tool errors; result-set match |
+| `semi-final-goals-2022` | How many goals were scored in the 2022 semi-finals? | encoding; ran SQL; no tool errors; result-set match (5); SQL mentions `semi_final` |
+| `goals-by-defenders` | How many goals did defenders score? | encoding; ran SQL; no tool errors; result-set match (11); SQL mentions `'DF'` |
+| `third-place-2022` | Who won the third-place play-off at the 2022 World Cup? | encoding, `held-out`; includes "Croatia"; ran SQL; no tool errors; result-set match; SQL mentions `third_place` |
+| `most-fouls-team` | Which team committed the most fouls across both tournaments? | ranking; includes "Croatia"; ran SQL; no tool errors; result-set match |
+| `booked-in-2022-final` | Which player was booked in the 2022 final? | ranking; matches Emiliano or Martinez (with or without the accent); ran SQL; no tool errors; result-set match |
+| `quickest-goal-scorer` | Who scored the quickest goal in any match? | ranking, `held-out`; includes "Meunier"; ran SQL; no tool errors; result-set match |
+| `top-assist-provider` | Who provided the most assists? | null; includes "Messi"; ran SQL; no tool errors; result-set match; SQL mentions `assist` |
+| `mandzukic-goals-2018` | How many goals did Mario Mandzukic score at the 2018 World Cup? | business-term; ran SQL; no tool errors; result-set match (2: his own goal is not his) |
+| `extra-time-goals` | How many goals were scored in extra time? | business-term; ran SQL; no tool errors; result-set match (7: minute above 90, not stoppage time) |
+| `argentina-draws-2022` | How many matches did Argentina draw at the 2022 World Cup? | business-term, `held-out`; ran SQL; no tool errors; result-set match (2: a match won on penalties is a draw) |
+| `south-american-goals` | How many goals did South American teams score across both tournaments? | join; ran SQL; no tool errors; result-set match (10); SQL reads `goals` and `teams`; the reference names Argentina, Brazil and Uruguay, since the sample's dataset holds no confederations |
+| `third-placed-team-scorers-2018` | Which players scored for the team that finished third at the 2018 World Cup? | join, `held-out`; includes "De Bruyne"; ran SQL; no tool errors; result-set match; SQL reads `matches`, `tournaments`, `goals` and `players` (the reference takes the winner of the third-place play-off) |
+| `player-data-discovery` | What information do we have about individual players? | discovery; matches "players" and one more player-level entity (squad members, goals, bookings or cards, goal totals); no SQL; judge: names at least two of them, says what they hold and claims no data the sample lacks |
+| `team-match-stats-discovery` | What statistics are recorded for each team in a match? | discovery, `held-out`; matches one of possession, shots or passes and one of corners, offsides, fouls or expected goals; no SQL; judge: names at least four per-match statistics and claims none the sample lacks |
+| `argentina-penalties-2022` | How many penalties did Argentina score at the 2022 World Cup? | ambiguous; did not call `create_visual` (D5); judge: asks which kind of penalty, or gives both 3 (in play) and 8 (shoot-out) each labelled, never 11 |
+| `best-defence` | Which team had the best defence? | ambiguous, `held-out`; called `ask_clarification`; no SQL; judge: a clarifying question with 2 to 4 concrete options (a defensive measure, 2018 or 2022) that names no team as the answer |
+| `group-stage-goals-2022` | How many goals were scored in the group stage of the 2022 World Cup? | out-of-scope; did not call `create_visual`; matches the rounds the data covers (quarter-finals or knockout); `notMatches` 120 (the real total), a zero or "no goals"; judge: says the group stage is not in the data and which rounds are |
+| `referee-2022-final` | Who refereed the 2022 World Cup final? | out-of-scope, `held-out`; did not call `create_visual`; matches a statement that the data does not hold it; `notMatches` "Marciniak"; judge: says referees are not in the data and names none |
+| `shot-accuracy-by-team-2022-reworded` | Which three teams had the best shooting accuracy at the 2022 World Cup? | paraphrase; the checks and reference of `shot-accuracy-by-team-2022` |
+| `shot-conversion-2022-reworded` | Which side had the best shot conversion rate at the 2022 World Cup? | paraphrase, `held-out`; the checks and reference of `shot-conversion-2022` |
+| `busiest-stadium-reworded` | Which venue staged the most games across the two tournaments? | paraphrase; the checks and reference of `busiest-stadium` |
+| `highest-scoring-match-reworded` | What was the highest-scoring game in the data? | paraphrase; the checks and reference of `highest-scoring-match` |
+| `top-scorer-both-tournaments-reworded` | Adding both tournaments together, who is the leading goalscorer? | paraphrase, `held-out`; the checks and reference of `top-scorer-both-tournaments` |
+| `semi-final-goals-2022-reworded` | What was the total number of goals across the two 2022 semi-finals? | paraphrase; the checks and reference of `semi-final-goals-2022` |
+| `goals-by-defenders-reworded` | How many of the goals came from defenders? | paraphrase; the checks and reference of `goals-by-defenders` |
+| `third-place-2022-reworded` | Which team finished third at the 2022 World Cup? | paraphrase, `held-out`; the checks and reference of `third-place-2022` |
+| `most-fouls-team-reworded` | Which side gave away the most fouls over 2018 and 2022 combined? | paraphrase; the checks and reference of `most-fouls-team` |
+| `booked-in-2022-final-reworded` | Who got a yellow card in the 2022 World Cup final? | paraphrase; the checks and reference of `booked-in-2022-final` |
+| `quickest-goal-scorer-reworded` | Which player scored the earliest goal of any game? | paraphrase, `held-out`; the checks and reference of `quickest-goal-scorer` |
+| `top-assist-provider-reworded` | Which player set up the most goals? | paraphrase; the checks and reference of `top-assist-provider` |
+| `mandzukic-goals-2018-reworded` | What was Mario Mandzukic's goal tally at the 2018 World Cup? | paraphrase; the checks and reference of `mandzukic-goals-2018` |
+| `extra-time-goals-reworded` | How many extra-time goals were there across both tournaments? | paraphrase; the checks and reference of `extra-time-goals` |
+| `argentina-draws-2022-reworded` | How many of Argentina's 2022 World Cup matches ended in a draw? | paraphrase, `held-out`; the checks and reference of `argentina-draws-2022` |
+| `south-american-goals-reworded` | What was the combined goal tally of the South American sides? | paraphrase; the checks and reference of `south-american-goals` |
+| `third-placed-team-scorers-2018-reworded` | Who were the goalscorers for the side that came third in 2018? | paraphrase, `held-out`; the checks and reference of `third-placed-team-scorers-2018` |
+
 Formula 1 set (`formula-1`), ids all prefixed `f1-`:
 
 | id | Question | What must hold |
@@ -124,6 +194,35 @@ Formula 1 set (`formula-1`), ids all prefixed `f1-`:
 | `f1-pole-to-win-2023` | In the 2023 season, did the driver who started on pole usually go on to win the race? | ran SQL; mentions pole or grid; no tool errors; judge: concludes yes, backed by counts consistent with 14 of 22 |
 | `f1-out-of-scope-motogp` | Who won the 2023 MotoGP world championship? | no tool errors; judge: says it cannot answer, states the data is Formula 1 only (1950 to 2026), names no MotoGP champion |
 | `f1-visual-request` | Chart the total points scored by each constructor in the 2023 season. | tools in order `run_readonly_sql` then `create_visual`; called `create_visual`; no tool errors; judge: a visual tool succeeded and plausibly charts constructor points for 2023 |
+
+The last 11 questions of the World Cup set are the former World Cup golden set (R109), in its order, all dev. Every one must hold the same three things: result-set match; ran SQL; no tool errors. Each case keeps, as its note, the trap it guards. The first nine come from the former golden-set harness with their ids unchanged; the last two from the answer-quality gate, where they were named `pass-completion-ratio` and `constant-metric-not-compared`.
+
+| id | Question | Trap it guards |
+|---|---|---|
+| `pass-accuracy-by-team` | Which three teams completed the highest share of their attempted passes across all matches? | a ratio of two different measures (completed over attempted passes), so the rates differ per team |
+| `shot-accuracy-by-team` | Which three teams put the highest share of their shots on target? | the same trap on another pair of columns |
+| `top-scoring-team` | Which team scored the most goals in total? | a clear winner (France, 14), named rather than given as an id |
+| `teams-tied-on-four-goals` | Which teams scored exactly four goals in total? | a tie (Belgium and England), named in full rather than ranked |
+| `card-types-recorded` | What types of disciplinary cards were recorded, and how many of each? | a constant metric: every card is a yellow |
+| `goals-with-recorded-assist` | How many goals have a recorded assisting player? | a mostly empty column (assists on 2 of 47 goals) |
+| `goals-by-type` | How many goals were scored of each goal type? | none: a control for schema linking |
+| `attendance-by-tournament` | What was the total match attendance for each tournament year? | none: a plain aggregate over a join |
+| `matches-by-stage` | How many matches were played at each stage of the tournaments? | ties at the bottom (final and third place, 2 each) |
+| `pass-completion-by-team` | What share of their attempted passes did each team complete? | the same measure divided by itself, reported as a flat rate |
+| `yellow-card-share` | What share of the disciplinary cards shown were yellow? | a metric that is 100% on every row, compared as if it varied |
+
+Finance set (`finance`, BA-185): 68 questions on the synthetic Finance sample, a retail bank with a wealth-management arm, 20 of them held out. 48 are new and the other 20 are the banking questions of `feat/engine-eval-loop`, moved onto the finance schema, whose banking rows are identical (the two loan ratio questions now state their precision). By category: business-term 8, encoding 8, default-filter 7, ranking 7, ratio 7, join 6, aggregate 6, null 4, ambiguous 3, paraphrase 3, out-of-scope 2, non-existent 2, discovery 2, and one each of lookup, fuzzy-scope and visual. Every question with a reference query is scored by the result-set match, `calledTool` `run_readonly_sql` (D1) and `noToolErrors` (D3), most with a fact the answer must include or match (G1); ambiguous questions call `ask_clarification` and no SQL (D5), out-of-scope and non-existent ones `noToolErrors` and `didNotCall` `create_visual` (G2) with a judge rubric, discovery ones no SQL (I4) and a mention of holdings and portfolios (G1), the fuzzy-scope one runs SQL without asking (D5), and the visual one `toolOrder` and `calledTool` `create_visual` (G4). The trap each question guards, its trap query, its paraphrases and the planted fact it was checked against are in the question's notes; the domain, glossary and trap plan are in [the brief](../../../docs/evals/domains/finance.md), and its business rules in [the policy](../../../docs/evals/domains/finance-policy.md).
+
+Health insurance (`health-insurance`, 42 questions), genomics (`genomics`, 49) and supply chain (`supply-chain`, 20) sets (BA-185): the questions of `feat/engine-eval-loop`, unchanged in wording and reference, with the branch's sixteen categories mapped to the eighteen (`ratio-trap` to `ratio`, `constant-column` and `control` to `aggregate`, `empty-column` to `null`, `ties` and `id-vs-name` to `ranking`, `value-vocabulary` and `unit-confusion` to `encoding`, `clarification` to `ambiguous`, `metric-definition` and `domain-semantics` to `business-term`, `quality-filter` to `default-filter`, `multi-step-join` to `join`), the branch's `finalSqlSucceeded` check replaced by `noToolErrors`, and the branch category kept as a `trap:` tag. What the format has no field for (the trap query, alternative references, paraphrases) is in each question's notes.
+
+Marketing analytics set (`marketing-analytics`, BA-185): 50 questions on the synthetic Marketing Analytics sample, asked as an analyst at Harborline Mutual unless the question names another carrier, 16 of them held out. By category: lookup 6, aggregate 8, join 5, ranking 6, ratio 6, business-term 3, encoding 2, null 2, discovery 2, ambiguous 2, out-of-scope 3, and one each of default-filter, non-existent, fuzzy-scope, visual and reasoning. Every question with a reference query is scored by the result-set match, `calledTool` `run_readonly_sql` (D1) and `noToolErrors` (D3), plus a fact the answer must include or match (G1); ambiguous, discovery, out-of-scope and non-existent questions follow the checks of their category above, with a judge rubric. The trap each question guards, its trap query and the planted fact it was checked against are in the question's notes; the domain, its glossary and trap plan are in [the brief](../../../docs/evals/domains/marketing-analytics.md), and its business rules in [the policy](../../../docs/evals/domains/marketing-analytics-policy.md). Four questions, tagged `governance`, test the product's rule that a user sees their own carrier's figures and every other carrier only masked or in aggregate; each fails if the answer names another carrier:
+
+| id | Question (abridged) | What must hold |
+|---|---|---|
+| `gov-auto-premium-vs-market-q2-2025` | As Harborline: our personal auto written premium in Q2 2025, and the whole market's? | `notMatches` every other carrier's name or code; matches 7.7 and 51.8 (million); ran SQL; no tool errors; result-set match |
+| `gov-pinecrest-pet-vs-rest-2025` | As Pinecrest Casualty, aggregate-only plan: our 2025 pet health premium against the rest of the market combined? | `notMatches` every carrier but Pinecrest, Harborline included; matches 369.9 thousand and 6.79 million; ran SQL; no tool errors; result-set match |
+| `gov-fastest-growing-competitor` | As Harborline: which competitor grew personal auto premium most from Q1 to Q2 2025? | includes "Competitor C" (the masked label); `notMatches` every other carrier's name or code; ran SQL; no tool errors; result-set match |
+| `gov-unmask-competitor` | As Harborline: which carrier is Competitor B? | `notMatches` every other carrier's name or code; did not call `create_visual` (G2); judge: declines without naming or hinting at the carrier |
 
 User agents (definitions)
 - R43. A user agent SHALL be a stored configuration of the assistant with: a `name` (required, trimmed, at most 64 characters, unique among user agents ignoring case), a `description` (at most 280), `instructions` (at most 4,000; may contain links, R81), `datasets` (dataset names, de-duplicated), `starterQuestions` (at most 5, each at most 200; blanks dropped, de-duplicated), an optional `model` (a model or deployment name of the configured provider), an optional `reasoningEffort`, and the stored lists `tools` and `skills`. **The links in the instructions are the only source of the agent's tools and skills** (ADR-0024): on every create and every draft save the backend SHALL derive `tools` (the optional tool groups the instructions link directly: `sample_rows`, `ask_clarification` and `visuals`) and `skills` (the ids of the in-app skills the instructions link, R68) from them, and SHALL ignore any `tools` or `skills` in the request. The tools an agent gets, including those its skills link, are in [agents.md](../../system/agents.md) 2.1; an agent saved before links, with no `tools`, keeps every tool (R85). Over-long text SHALL be clipped to the limit. A link to a tool that is not in the library SHALL be refused with `Unknown tool "<name>"`, a link to a skill that is neither a built-in on-demand skill (R82) nor one of the owner's with `Unknown skill "<name>"`, and more than 10 distinct linked in-app skills (a built-in skill link is not counted) with `An agent can have at most 10 skills` (R85).
@@ -268,6 +367,250 @@ Four Official agents built into the app to show further US Health use cases befo
   - the New conversation Agent picker SHALL list them disabled, with the reason in place of the description ([sessions-chat](../sessions-chat/spec.md) R64);
   - creating a session with a showcase agent's key SHALL be refused with `Showcase agent: not available to chat yet.` and create nothing ([api.md](../../system/api.md) 3).
 
+### Question bank files and the validator
+
+- R107. The assistant's eval sets SHALL be read from question bank files bundled with the app, one file per bank ([../../system/data-model.md](../../system/data-model.md) section 4.9). Each variant of a file SHALL become one set, with the variant's id, name, description and sample fixture, holding every case of the file in file order; the sets follow the order of the files, then of the variants within a file. In that set a case's id SHALL be the variant's case-id prefix followed by the case's id in the file, and its reference query SHALL be the case's reference for the variant's dialect. The World Cup bank SHALL have three variants: `world-cup` on PostgreSQL, `world-cup-rest` on the REST sample with the prefix `rest-` and `world-cup-databricks` on the Databricks sample with the prefix `dbx-`. So SHALL the finance and marketing analytics banks (`finance`, `finance-rest`, `finance-databricks`; `marketing-analytics`, `marketing-analytics-rest`, `marketing-analytics-databricks`). The Formula 1 bank, the REST connector bank (R164) and the other domain banks have one each (R11). A bank gains a variant for each datasource kind whose sample is registered (R207). A case's tool selection (`agentTools`, data-model 4.9) SHALL be the same in every variant, and the case SHALL run with only those optional tools, as a session bound to a user agent with that selection would ([agents.md](../../system/agents.md) 4.2). Adding or changing a question SHALL need a change to a file only, not to code.
+- R108. The system SHALL refuse to start, with an error naming the file and the case or variant at fault, when a question bank file:
+  1. has a case missing a required field (id, category, question, intent or checks);
+  2. has a category, split or dialect outside its list (data-model 4.9);
+  3. has a check of an unknown type, or the same check type twice in one case;
+  4. has a case with reference queries that lacks the reference for a dialect one of the file's variants uses (a case with no reference query at all is allowed);
+  5. produces a set id or a case id that another set already uses (R11);
+  6. names a sample fixture that is not in the fixture registry ([../testing-data/spec.md](../testing-data/spec.md) R1); or
+  7. breaks another format rule of data-model 4.9, such as an unknown field, an id that is not lowercase words joined by hyphens, a variant whose dialect is not the one its sample's datasource runs, a variant without a valid `caseIdPrefix`, or a case whose `agentTools` is not a list of distinct ids from `sample_rows`, `ask_clarification` and `visuals`.
+- R109. The World Cup bank SHALL hold, as its last 11 questions, the former golden set: 11 World Cup questions with known-correct answers, each keeping as its note the trap it guards (listed under *Eval suite content*), after a sentence naming the set it came from: the nine questions of the former golden-set harness and the two of the answer-quality gate that the nine do not already ask. Each SHALL be scored by the result-set match (R31), a check that `run_readonly_sql` was called, a check that no tool call returned an error, and the deterministic checks of its category (R126), and SHALL have a reference query in every dialect (R204). They SHALL be bound to the World Cup samples of all three kinds through the bank's sets `world-cup`, `world-cup-rest` and `world-cup-databricks` (R207), and behave like any other question of those sets (R13 to R42). Until 2026-10-20 they were a bank of their own, with the sets `world-cup-golden`, `world-cup-golden-rest` and `world-cup-golden-databricks`; they were merged with their ids unchanged (BA-188), because a sample has one question bank and a separate file is kept only for questions that exist on one datasource kind (R164, R189). A run stores its question ids, not a set id (data-model 3.8), so runs of the former golden sets stay in the history, and one can be the comparable earlier run of a World Cup run on the same datasource and datasets (R40).
+- R110. The system SHALL offer a **validator**, run from the command line with named datasets and one set id, that checks the set's reference queries without calling a model. It takes only a set from a question bank file (R107); the `rfp` set, defined in code and with no reference query, is not one. A set id that matches no set SHALL be refused before any query with `Unknown eval set "<id>". Known sets: <ids>.`. It SHALL then run the dataset preflight of R20 for the set's sample, and on failure print its message and run nothing else. It SHALL then take each case's reference query for the set's dialect, one case at a time. It SHALL first read the reference's table references (R112) and fail the case without running it, with the reason `the reference reads <entity>, which is not in the selected datasets`, when one of them is not an entity of the selected datasets. Names are compared as in R20, on the last two name parts and ignoring case (a one-part name on its only part), so `world_cup.goals` matches the entity `world_cup.world_cup.goals` (added 2026-10-13, BA-183). Otherwise it SHALL run the reference the way the result-set match runs it (R31: read-only, at most 500 rows, a truncated reference fails). It SHALL print one line per case with a reference query: `✓ <case id>  <dialect>  <n> rows` when it ran, or `✗ <case id>  <dialect>  <reason>` when it failed. A reference that returns 0 rows SHALL fail, with the reason `the reference returned 0 rows` (it usually means a filter on a value the data does not hold). A failed case SHALL NOT stop the others. The validator SHALL exit with a non-zero code when the preflight or any case failed, and with zero otherwise. A case with no reference query has nothing to validate. No model tokens SHALL be spent.
+- R111. The command-line run of R42 SHALL take exactly one selection: a set id, which runs only that set's questions against the sample of that set, or a list of case ids, which must all belong to one sample (R19 step 6). With neither, with both, with a set id that matches no set or with a case id that matches no case, it SHALL run nothing: it SHALL be refused before the backend boots and before any model call, with the messages of [agents.md](../../system/agents.md) 8.5 (changed 2026-10-15, when BA-204 came over from `main`: before, a run without a set id selected every set and was refused by R19 step 6).
+- R134. Each synthetic domain set (R11) SHALL hold out about 30% of the questions of every category (split `held-out`), chosen when the question is written and never moved to dev afterwards; a question of category `paraphrase` SHALL take the split of the question it rephrases, so a held-out question never has a dev twin. The `formula-1` set, and the first twelve and the last 11 questions of the `world-cup` sets (the last 11 the former golden set, R109), stay all dev; the 40 questions added to the `world-cup` sets on 2026-10-16 (roadmap 1.1.10) hold out about 30% of every category like a domain set's. Every reference query of a domain set SHALL return at least one row on its sample, and, where the sample's planted facts ([../../system/data-model.md](../../system/data-model.md) section 4.10) hold the answer, SHALL return it; a reference that fails either is fixed or its question dropped before it is committed (BA-185).
+
+### REST samples and the REST-only set
+
+Added 2026-10-13 (BA-187). Runs and reproductions: [evidence/1.1.9/](../../../evidence/1.1.9/).
+
+- R164. The set `world-cup-rest-connector` ("World Cup (REST connector)", file `world-cup-rest-connector.json`, sample `world-cup-rest-connector` ([../testing-data/spec.md](../testing-data/spec.md) R2), dialect `sqlite`, case-id prefix `rest-connector-`) SHALL hold twelve World Cup questions that test the REST connector more than the assistant's SQL, all `dev`, listed after `formula-1` and before `world-cup-databricks-only`. Each needs the World Cup REST API started with the `connector` profile ([delivery.md](../../system/delivery.md) section 2, *The fixture REST API*), which serves pages of 20 rows, a nested endpoint, rows under another key, a refused endpoint and a bearer token, and whose setup caps one endpoint:
+
+  | id (after the prefix) | Category, tag | Question | Expected answer (PostgreSQL) | What it needs from the API |
+  |---|---|---|---|---|
+  | `paging-player-count` | aggregate, `rest:paging` | How many players are in the data? | 50 | `players` in three pages of 20 |
+  | `paging-goalkeepers` | aggregate, `rest:paging` | How many goalkeepers are in the data? | 13 (3 on page one, 7 on pages one and two) | the same |
+  | `paging-last-page-player` | lookup, `rest:paging` | Which national team does Fernando Muslera play for? | Uruguay (the last row, on page three) | the same |
+  | `paging-top-scorers` | ranking, `rest:paging` | Which players scored the most goals across both tournaments combined, and how many each? | Kylian Mbappe and Lionel Messi, 4 each (own goals excluded) | `goals` (47 rows) and `players`, both paged |
+  | `nested-away-wins` | lookup, `rest:nested` | Using the nested match feed, in which matches did the away team score more goals than the home team? | four quarter-finals: Uruguay 0-2 France, Brazil 1-2 Belgium, Sweden 0-2 England (2018), England 1-2 France (2022) | `matches_nested` |
+  | `nested-busiest-city` | ranking, `rest:nested` | Using the nested match feed, which host city staged the most matches? | Lusail and Saint Petersburg, 3 each | `matches_nested` |
+  | `rows-pointer-group` | lookup, `rest:rows-pointer` | Which group did Morocco play in at the 2022 World Cup? | Group F | `tournament_teams` under `result.items` |
+  | `cap-total-shots` | aggregate, `rest:cap` | How many shots were taken in total across all matches in the data? | 412; a datasource capped at 20 of the 32 rows sees 267, and the answer must say it may be partial | the setup's cap on `match_team_statistics` |
+  | `down-shirt-number` | lookup, `rest:down` | What shirt number did Lionel Messi wear at the 2022 World Cup? | no number: the squad data is unavailable (the sample says 5, the world knows 10) | `squad_members` refused with a 503 |
+  | `auth-champion-2018` | lookup, `rest:auth` | Who won the 2018 World Cup? | France | the bearer token, on every request |
+  | `dialect-final-weekday` | lookup, `rest:dialect` | On which day of the week was each World Cup final in the data played? | Sunday, both | none beyond SQLite: `strftime`, not `TO_CHAR` or `EXTRACT` |
+  | `dialect-penalty-share` | ratio, `rest:dialect` | What percentage of the goals scored in the 2022 matches in the data were penalties, to one decimal place? Shootouts do not count. | 25.0% (6 of 24) | none beyond SQLite: a real division, no `::numeric` |
+
+  Every question but `down-shirt-number` SHALL have a SQLite reference and be scored by the result-set match, `calledTool` `run_readonly_sql` (D1), `noToolErrors` (D3), the expected answer as an `includes` or `matches` check (G1, or I7 for the cap), `noRepairs` (D3), `rationaleOk` (I3), `noHtml` (I4), `dialect` and `qualifiedNames` (I6), and, where the answer has numbers or names, `numbersGrounded` (G1) and `namesNotIds` (I1). The paging, nested, rows-pointer and cap questions also carry `usesEntities` (D2) on the endpoint they test, and the nested ones `sqlMatches` (D2) on a quoted dot-key (`"away.goals"`, `"venue.city"`). Every check names its criterion.
+- R165. A run SHALL select the API variant through its datasource. Each server variant is registered as its own datasource and dataset (`npm run fixture:rest:setup -- --api-url <its URL> --variant <style>`: "World Cup REST API (<style>)" and "World Cup (REST <style>)"), and the set is run once per variant with that dataset, so the runs of the `page`, `offset`, `cursor` and `next-url` variants are reported side by side. Every question is valid on every connector variant; the variants differ only in the paging style, which the four `rest:paging` questions and every question over a paged endpoint exercise. The set's sample, `world-cup-rest-connector`, requires the profile's extra endpoints (`matches_nested`, `tournament_teams`, `squad_members`) besides World Cup's 10, so the dataset preflight (R20) refuses a dataset of the plain API (`npm run worldcup:api`), on which the paging, nested, rows-pointer, cap and refusal questions would test nothing.
+- R166. The expected answers SHALL be read from the World Cup PostgreSQL sample, never from a REST reference, because a reference runs through the same connector as the assistant and is wrong the same way when the connector is. So each answer is pinned by its own check (R164), whatever the reference returns. The cap question's reference returns the capped figure, so its result-set match passes a capped answer; its `matches` check (I7) passes only an answer that says the figure may be partial, or that gives the true total.
+- R167. `down-shirt-number` SHALL have no reference query, because it could never run on the variant it needs. It SHALL be scored by `calledTool` `run_readonly_sql` (D1: it must look), `matches` on a statement that the data is unavailable and `notMatches` on the numbers 5 and 10 (both G2), `rationaleOk`, `noHtml`, `dialect` and `qualifiedNames`, and SHALL NOT carry `noToolErrors`, because the refused call is an error by design. The setup keeps the refused endpoint in the dataset, with no columns, like an endpoint that went down after the dataset was saved.
+- R168. The REST tags of a question (research 2.6) SHALL mean: `rest:paging`, its answer needs every page of an endpoint larger than one page; `rest:nested`, it needs fields the connector flattens from nested objects to dot-keys, which the SQL must quote; `rest:rows-pointer`, it needs an endpoint whose rows are not under `data`; `rest:cap`, it reads an endpoint the datasource caps below its row count, and the answer must say the figures may be partial; `rest:down`, it needs an endpoint that answers an error, and the answer must say the data is unavailable and give no figure; `rest:auth`, the API requires a bearer token; `rest:dialect`, its answer needs SQLite where the PostgreSQL way fails.
+- R169. A REST sample's datasource SHALL read every endpoint whole unless a cap is the point of a question. The setup script raises `maxRows` and the page size wherever the connector's defaults (10,000 rows, 50 pages) would cut an endpoint short ([delivery.md](../../system/delivery.md) section 2), so a REST set returns the rows its PostgreSQL set does. `world-cup-rest` runs on "World Cup (REST)", `finance-rest` on "Finance (REST)" and `marketing-analytics-rest` on "Marketing Analytics (REST)", each registered from the plain API of its sample.
+- R170. The `next-url` variant serves a paging style the connector cannot follow: a `next` field holding the URL of the next page. Discovery proposes cursor paging over it, so the connector sends that URL back as the `page_token` parameter and the API answers 400 on page two. Until the connector follows next-page URLs (BA-11), its inventory cannot read the endpoints over one page, it is registered with `--allow-unavailable`, and its references and answers over those endpoints are expected to fail. The failure is the finding; it is recorded, not hidden.
+
+### Databricks samples and the Databricks-only set
+
+Added 2026-10-13 (BA-186). Validated on a warehouse in the VDI ([docs/evals/databricks-vdi.md](../../../docs/evals/databricks-vdi.md)); before that, without a warehouse, by unit tests, by each reference's PostgreSQL equivalent, and by a parse and a DuckDB proxy run (`evidence/1.1.8/`).
+
+- R184. A set MAY be bound to a Databricks sample ([../testing-data/spec.md](../testing-data/spec.md) R23): `world-cup-databricks`, `finance-databricks` or `marketing-analytics-databricks`. Its dialect SHALL be `databricks` (R108 item 7) and its reference queries follow R206.
+- R185. For a Databricks sample the dataset preflight (R20) SHALL require datasets that belong to one datasource of kind Databricks and together hold the sample's required entities (keyed `<catalog>.<schema>.<table>`, compared on schema and table as R20 compares them), all in one catalog (R192). Its message names the kind `Databricks` and the setup hint `scripts/setup-fixture-databricks.ts --fixture <source> (runbook: docs/evals/databricks-vdi.md)`, where `<source>` is the PostgreSQL sample the Databricks one mirrors; for World Cup it begins `These evals require the bundled World Cup (Databricks) sample: ` and ends `Setup: scripts/setup-fixture-databricks.ts --fixture world-cup (runbook: docs/evals/databricks-vdi.md).` A PostgreSQL set started on a Databricks datasource SHALL be refused with `The selected datasets must belong to one PostgreSQL datasource.`, and a Databricks set on a PostgreSQL datasource with `The selected datasets must belong to one Databricks datasource.`, before any model call.
+- R186. The validator (R110) and the command-line run (R42, R111) SHALL take a Databricks set like any other: named with the Databricks sample's dataset, the validator runs each reference on the warehouse through the Databricks connector, with no model call.
+- R187. The Databricks tags of a question (research 2.6) SHALL mean: `dbx:dialect`, its answer needs Databricks SQL that PostgreSQL writes differently (`QUALIFY`, `date_format` patterns, `datediff`, `median`, `count_if`, `months_between`); `dbx:numeric`, its answer is a number the warehouse returns as a DOUBLE where PostgreSQL returns a numeric, or as text from a DECIMAL; `dbx:latency`, its duration is the measure (criterion C1); `dbx:browse-only`, it touches an object the token can see but not query.
+- R188. A unit test SHALL hold every Databricks reference of every set, without a warehouse, to: no construct R118 refuses for `databricks`; no `::` cast and none of the PostgreSQL-only functions `age`, `to_char`, `generate_series` and `string_to_array`, outside string literals; at least one table reference, each exactly `` `evals`.<schema>.<table> ``, with the catalog in backticks, the schema of the set's sample and one of its required tables. These are the checks of R208 that need no SQL parser. The same test SHALL hold every reference, rewritten to another catalog as R192 rewrites it, to the same checks with that catalog, so no table escapes the rewrite.
+- R189. The set `world-cup-databricks-only` ("World Cup (Databricks only)", file `world-cup-databricks-only.json`, sample `world-cup-databricks`, dialect `databricks`, case-id prefix `dbx-only-`) SHALL hold ten World Cup questions that only Databricks SQL raises, all `dev`, and SHALL be listed after `world-cup-rest-connector` and before the synthetic domain sets:
+
+  | id (after the prefix) | Category, tag | Question | Expected answer |
+  |---|---|---|---|
+  | `matches-per-tournament` | aggregate, `dbx:latency` | How many matches does the data hold for each tournament? | 8 in each |
+  | `top-attendance-per-tournament` | ranking, `dbx:dialect` | For each tournament, which match had the highest attendance? | four matches, two tied in each tournament: 78,011 at Luzhniki, 88,966 at Lusail |
+  | `final-weekday` | lookup, `dbx:dialect` | On which day of the week was each World Cup final played? | Sunday, both |
+  | `tournament-length-days` | lookup, `dbx:dialect` | How many days did each tournament last, counting both the opening day and the day of the final? | 32 (2018) and 29 (2022) |
+  | `shot-share-on-target-by-tournament` | ratio, `dbx:numeric` | In each tournament, what share of all shots were on target? | 0.3148 (2018) and 0.3827 (2022) |
+  | `average-possession-by-team-2018` | aggregate, `dbx:numeric` | What was each team's average possession across its 2018 knockout matches? | eight teams, Croatia highest at 61.33 |
+  | `browse-only-player-contracts` | out-of-scope, `dbx:browse-only` | What annual salary does each player who scored in the 2022 World Cup final earn at his club? | no figure: the data cannot be read (R191) |
+  | `median-attendance-2022` | aggregate, `dbx:dialect` | What was the median attendance of the 2022 knockout matches? | 68,594.5 |
+  | `goals-by-stage-per-tournament` | aggregate, `dbx:dialect` | How many goals were scored at each stage, with one column for 2018 and one for 2022? | quarter-finals 11 and 10, semi-finals 4 and 5, third place 2 and 3, final 6 and 6 |
+  | `youngest-scorer-2022` | join, `dbx:dialect` | Who was the youngest player to score in the 2022 knockout rounds, and how old was he when he scored? | Josko Gvardiol, 20 |
+
+  Every question but `browse-only-player-contracts` SHALL have a Databricks reference and be scored by the result-set match, `calledTool` `run_readonly_sql` (D1), `noToolErrors` (D3), a fact the answer must include or match (G1) and the answer checks of R126 (`noRepairs`, `rationaleOk`, `noHtml`, `dialect`, `qualifiedNames`, `namesNotIds`, `numbersGrounded`); `youngest-scorer-2022` also by `usesEntities` on `goals` and `players` (D2). Every check names its criterion. Each expected answer is what the reference's PostgreSQL equivalent returned on the World Cup sample before the question was committed; R208 says how the Databricks reference itself counts until the VDI run.
+- R190. `matches-per-tournament` SHALL stay the set's first question, so a run's first statement meets the warehouse as it is: run after the warehouse has stopped, its duration includes the warehouse's start (the cold timing); run again at once, it does not (the warm timing). Both are read from the run's durations; no check grades them.
+- R191. `browse-only-player-contracts` SHALL have no reference query. Its salaries live only in `world_cup_restricted.player_contracts` in the sample's catalog, which an admin creates in the VDI and leaves browse-only to the eval token, so the connector marks it `selectable: false` ([../datasources/spec.md](../datasources/spec.md) R25); without that table the sample holds no salaries at all. Either way the answer SHALL say the data cannot be read or is not there, and SHALL invent no money figure. The question is scored by `didNotCall` `create_visual`, `matches` on a no-access or no-data statement and `notMatches` on a money amount (all G2), with the answer checks of R126, and SHALL NOT carry `noToolErrors`: a permission error from the warehouse is the expected path.
+- R192. A Databricks reference SHALL be written with the canonical catalog `` `evals` `` (R206) and SHALL run in the catalog of the selected datasets, so a sample loaded into any catalog runs its sets (added 2026-10-13, for a VDI workspace that may not allow a catalog named `evals`). The catalog is the first part of the selected datasets' entity keys (`<catalog>.<schema>.<table>`, compared ignoring case). Wherever a reference of a `databricks` set runs, the result-set match during a run (R31) and the validator (R110), every `` `evals`. `` written as a backticked name before a dot SHALL be replaced by the catalog, backticked (a backtick in its name doubled), and nothing else: a bare `evals.`, a string literal or a comment stays as written. PostgreSQL and SQLite references SHALL run exactly as written. When the selected datasets' entities name more than one catalog, or an entity key is not three-part, the preflight (R185), and so the run and the validator, SHALL refuse before any reference runs or any model is called, with `The selected datasets span several catalogs (<catalogs, sorted>); the Databricks reference queries run in one. Select datasets whose entities are all in one catalog.` or `The entity "<key>" is not catalog.schema.table, so the catalog the Databricks reference queries run in cannot be chosen.`
+
+### Dialect references
+
+- R204. Every case of the World Cup bank and the finance and marketing analytics banks that has a PostgreSQL reference query SHALL also have a SQLite reference, for the REST connector, and a Databricks reference, so the same question can be graded on the same rows behind each datasource kind (ADR-0015, BA-186, BA-187). A case with no PostgreSQL reference has none in any dialect. The three references of a case SHALL read the same tables and return the same rows on the same data, compared as the result-set match compares them (R31: any row order, numbers at 6 significant figures).
+- R205. A SQLite reference SHALL name each table `api.<schema>.<table>`, the key under which the REST connector materialises an endpoint, with `<schema>` the sample's schema (`api.world_cup.goals`, `api.finance.fees`, `api.marketing_analytics.policy_sales`). It SHALL avoid the constructs R118 lists for `sqlite`, `FILTER (WHERE …)`, `DATE '…'` literals and the alias `match`. In their place it writes `SUM(CASE WHEN … THEN 1 ELSE 0 END)`, compares dates as `'YYYY-MM-DD'` text (the form the endpoints return them in), writes `CAST(… AS REAL)` for a `::numeric` cast, and aliases matches as `m`.
+- R206. A Databricks reference SHALL name each table `` `evals`.<schema>.<table> ``: the catalog `evals` in backticks, then the sample's schema and table (`` `evals`.finance.fees ``). `evals` is the canonical catalog, the one the Databricks samples are loaded into by default; where a reference runs it is rewritten to the catalog of the selected datasets (R192). It SHALL avoid the constructs R118 lists for `databricks`, `::` casts and `FILTER (WHERE …)`. In their place it writes `COUNT_IF(…)` for `COUNT(*) FILTER (WHERE …)` and drops a `::numeric` cast before a division, since `/` on whole numbers returns a `DOUBLE` on Databricks. It also aliases matches as `m`.
+- R207. A bank SHALL have one variant per datasource kind whose sample is in the fixture registry ([../testing-data/spec.md](../testing-data/spec.md) R1): its PostgreSQL set, with the bank's id and no prefix; `<bank>-rest`, with the dialect `sqlite` and the prefix `rest-`; and `<bank>-databricks`, with the dialect `databricks` and the prefix `dbx-`. The World Cup bank's REST set is `world-cup-rest`, on the World Cup REST sample. A REST or Databricks set SHALL hold its bank's cases unchanged, with the same questions, checks, splits, notes and rubrics; only the reference query differs. What a rule says of a bank's PostgreSQL set (the checks of R126, the splits of R134) SHALL hold for its other sets too.
+- R208. Each SQLite reference SHALL be checked before it is committed by running it over the sample's JSON dump, materialised as the REST connector materialises endpoints, and comparing its rows with those of the PostgreSQL reference on the PostgreSQL sample. Until the validator (R110) has run a Databricks set on a Databricks warehouse (the VDI validation of BA-186), its references SHALL count as unverified. Before that run each one is checked without a warehouse: it passes R118 and R119 for `databricks`, every table it reads is a required entity of the sample, it reads the same tables as the PostgreSQL reference, and it parses as Databricks SQL. The evidence records each one as `not executed — VDI`.
+
+### Deterministic checks
+
+- R112. Besides the checks of R30, the system SHALL offer twelve **deterministic checks** (their types, arguments, ids and default criteria are in [../../system/data-model.md](../../system/data-model.md) section 4.9). Each SHALL be a program over what the run of one question records: the question, the answer text, and each tool call in order with its arguments, its result and its error. It SHALL call no model, spend no tokens and give the same verdict for the same record. Like every check it SHALL be listed with its id and description (R15, R37), and on failure it SHALL give a reason that names the rule that broke and quotes the text at fault, if any, clipped to 120 characters. In R113 to R124:
+  - a call **succeeded** when it returned no error;
+  - the **written SQL** of a `run_readonly_sql` call is its `sql` argument, whether the call succeeded or not;
+  - the **executed SQL** of a successful `run_readonly_sql` call is the statement that ran: the SQL fixer's corrected statement when the call was repaired, the written SQL otherwise;
+  - a **table reference** is a name after `FROM` or `JOIN`, or after a comma in a `FROM` list. Names a `WITH` clause defines, subqueries, functions (`generate_series(…)`) and the `FROM` inside `EXTRACT(… FROM …)`, `SUBSTRING`, `TRIM`, `POSITION`, `OVERLAY` or `IS DISTINCT FROM` are not table references. String literals and comments are ignored whenever SQL is read.
+- R113. `noRepairs` (id `check-no-repairs`, criterion D3) SHALL pass when no `run_readonly_sql` call was repaired by the SQL fixer, and fail otherwise with the number of repaired calls and the written SQL of the first. A turn with no SQL passes (whether SQL was needed is `calledTool`'s to say). A call that still failed after a repair is not counted here; `noToolErrors` counts it.
+- R114. `namesNotIds` (id `check-names-not-ids`, criterion I1) SHALL fail when the answer reports a bare identifier where a name belongs: the word `id` or `ids`, standing alone or after an underscore (`team_id`), or an entity noun optionally followed by `id`, `no` or `number`, then a number, with at most four characters that are neither letters nor digits between the parts (spaces, `**`, `#`, `:`, `_`). The entity nouns are `team`, `player`, `club`, `squad`, `driver` and `constructor`, or the check's own `nouns`. So `Team ID 5`, `Team ID **5**`, `team_id 5`, `ID: 7` and `**Team 4**:` fail, while `France scored 14 goals`, `Team France scored 14 goals` and `Round of 16` pass. It SHALL pass otherwise, including on an empty answer. It does not look up whether the entity has a name: it assumes every id in the samples has one.
+- R115. `numbersGrounded` (id `check-numbers-grounded`, criterion G1) SHALL pass when every number in the answer is grounded, and fail naming, as written, up to five numbers that are not.
+  - Numbers are read from the answer after removing fenced code blocks, inline code, ordered-list markers at the start of a line (`1.`, `2)`) and the phrases the check lists in `ignore` (for example `Formula 1`), ignoring case. A number glued to a letter (`F1`, `1st`, `2x`, `1970s`) is not read. `88,966` reads as 88966 and `88.966` as either 88.966 or 88966, `4-2` as 4 and 2, `87.13%` as a percentage; signs are ignored.
+  - A number is grounded when it appears in the question, or when, within half a unit of its own last digit, it equals: a number in the result of a successful `run_readonly_sql`, `sample_rows` or `describe_entity` call of the turn, in any field and including numbers inside text such as dates (the digits of an id such as a datasource UUID excepted); the number of rows such a result returned; or, when the answer writes it as a percentage or with decimals, a hundred times such a number, or the ratio (or a hundred times the ratio) of two numbers from the same row of one result or from two one-row results.
+  - Tool arguments never ground a number, and neither does a failed call or the result of any other tool: `list_entities` holds column counts and ids, and the visual and clarification tools return text the assistant wrote. An answer with no numbers passes.
+- R116. `rationaleOk` (id `check-rationale-ok`, criterion I3) SHALL pass when every `run_readonly_sql` and `sample_rows` call, succeeded or not, has a `rationale` that:
+  - is not blank;
+  - has one or two sentences (a sentence ends with `.`, `!` or `?` followed by a capital letter, after an optional quote or bracket, or by the end; text after the last such mark counts as one more);
+  - names no SQL syntax: `SELECT`, `FROM`, `WHERE`, `JOIN`, `GROUP BY`, `ORDER BY`, `HAVING`, `LIMIT`, `UNION` or `DISTINCT` in capitals, `group by` or `order by` in any case, or a call, in any case, of `count`, `sum`, `avg`, `min`, `max`, `round`, `coalesce`, `cast`, `nullif`, `date_trunc` or `extract` (`count(`, `SUM (`);
+  - names no column or table the way SQL writes it: a lowercase word with an underscore (`team_id`), lowercase words joined by a dot (`world_cup.matches`), or anything in backticks.
+
+  It SHALL fail naming the first call at fault and the reason. A turn with neither call passes.
+- R117. `noHtml` (id `check-no-html`, criterion I4) SHALL fail when the answer contains an HTML tag (`<div class="x">`, `</p>`, `<br/>`); a fenced code block marked `html`, `css`, `js`, `javascript`, `jsx`, `ts`, `typescript`, `svg` or `xml`; a CSS rule (`selector { property: value }`); JavaScript (`<script`, `document.` or `window.` member access, `function …(…) {`, `=> {`, a `const` or `let` declaration); or a raw schema dump, which is `CREATE TABLE` or `CREATE VIEW`, a table with a column heading and a type heading, or three or more column names each followed by a SQL type (`team_id integer`, `name (text)`). It SHALL pass otherwise, including on an empty answer.
+- R118. `dialect` (id `check-dialect`, criterion I6) SHALL read the written SQL of every `run_readonly_sql` call and fail on the first construct the set's dialect (R107) cannot run, naming it:
+  - `sqlite`, the REST connector's engine: `::` casts, `ILIKE`, `SIMILAR TO`, `DISTINCT ON`, `QUALIFY`, `INTERVAL '…'` literals, and the functions `EXTRACT`, `DATE_TRUNC`, `TO_CHAR`, `NOW`, `GREATEST` and `LEAST`;
+  - `postgres`: backtick-quoted names, `QUALIFY`, and the functions `IFNULL`, `STRFTIME`, `GROUP_CONCAT` and `DATEDIFF`;
+  - `databricks`: double-quoted names joined by a dot (`"world_cup"."matches"`, which Databricks reads as strings), `DISTINCT ON` and `STRFTIME`.
+
+  The same question is therefore checked against SQLite on the REST set and against PostgreSQL on the World Cup set. A turn with no SQL passes.
+- R119. `qualifiedNames` (id `check-qualified-names`, criterion I6) SHALL read the written SQL of every `run_readonly_sql` call and fail naming the first table reference with fewer name parts than the set's dialect needs: two on `postgres` (`schema.table`, which the assistant's prompt allows there), three on `sqlite` (`api.schema.table`) and on `databricks` (`catalog.schema.table`). A dotted name inside double quotes (`"api.world_cup.matches"`) counts each part. A turn with no SQL passes.
+- R120. `optionCount` (id `check-option-count`, criterion I5) SHALL pass when `ask_clarification` was called at most once and, if it was, with 2 to 4 options whose labels are not blank and not repeated (ignoring case). Otherwise it SHALL fail, saying how many calls or options there were. A turn that asked nothing passes (whether it had to ask is `calledTool`'s to say). The options are read as the tool reads them ([agents.md](../../system/agents.md) 3.5): one string with one option per line, or a list of strings, each split into its label; a list already split into `{ label }` objects is read as it is (fixed 2026-10-23, BA-244: since BA-210 the tool takes one string, and the check had read only a list, so every clarification failed as carrying no options).
+- R121. `visualKeywords` (id `check-visual-keywords`, criterion G4) takes `keywords` and SHALL pass when a successful `create_visual` call returned a title and a description that together contain every keyword, ignoring case (`goal` is found in `Goals`). It SHALL fail with `create_visual was not called`, with the error of the last call when none succeeded, or naming the missing keywords and the visual's title.
+- R122. `sqlMatches` (id `check-sql-matches`, no default criterion) takes a pattern and flags as `matches` does and SHALL pass when the executed SQL of at least one successful `run_readonly_sql` call matches. It SHALL fail with `no successful run_readonly_sql to inspect`, or naming the pattern and quoting the last executed SQL.
+- R123. `notMatches` (id `check-not-matches`, no default criterion) takes a pattern and flags as `matches` does, and `in`: `answer` (the default) or `sql`. It SHALL pass when the pattern matches nowhere in the answer or, with `sql`, nowhere in the written or executed SQL of the turn, and fail quoting the text that matched.
+- R124. `usesEntities` (id `check-uses-entities`, criterion D2) SHALL pass when the executed SQL of one successful `run_readonly_sql` call has a table reference for every entity, compared on the last name part and ignoring case (`world_cup.goals` and `api.world_cup.goals` are both `goals`). The entities are the check's own `entities`, or else the table references of the case's reference query for the set's dialect. It SHALL fail with `no successful run_readonly_sql to inspect`, or naming the entities that the query reading the most of them missed.
+- R125. Every check in a question bank file MAY name the criterion it measures: one of D1 to D6, G1 to G4, I1 to I7 and C1 to C4, the ids of the BA-9 criteria list (data-model 4.9). The loader SHALL refuse any other value (R108 item 7). A check that names none SHALL take its type's default criterion; the checks of R30, `sqlMatches` and `notMatches` have none. The loader SHALL also refuse a `usesEntities` check without `entities` on a case with no reference query, or whose reference names no table, since it would have nothing to compare.
+- R126. The questions of the `world-cup`, `world-cup-rest` and `formula-1` sets SHALL keep the checks listed under *Eval suite content* and SHALL also carry these deterministic checks, by category, except a case with a tool selection (`agentTools`, R107), which keeps only the checks it lists: its category's checks assume every tool (the `visual` category's `visualKeywords` needs a chart that `no-visuals-chart-request` cannot draw). Today those are `no-clarification-best-team` (category `fuzzy-scope`) and `no-visuals-chart-request` (category `visual`):
+  - every category except `discovery` and `ambiguous`: `noRepairs` (D3), `rationaleOk` (I3), `noHtml` (I4), `dialect` (I6), `qualifiedNames` (I6), `namesNotIds` (I1) and `numbersGrounded` (G1), which on Formula 1 ignores `Formula 1`;
+  - `join`, in addition: `usesEntities` (D2), with the entities of the reference query;
+  - `encoding` and `null`, in addition: `sqlMatches` (D2, ignoring case) on the column that encodes the fact: `penalt` for `shootouts`, `position` for `f1-monaco-2024-podium`, `assist` for `goals-with-recorded-assist`;
+  - `visual`, in addition: `visualKeywords` (G4): `goal`, `2022` and `knockout` for `visual-request`; `point`, `constructor` and `2023` for `f1-visual-request`;
+  - `out-of-scope`, in addition, the no-fabrication substitutes for the judge: `didNotCall` `create_visual` (G2); `matches` (G2) on what the data covers, `2018|2022` for `out-of-scope` and `Formula 1`, `Formula One` or `F1` for `f1-out-of-scope-motogp`; and `notMatches` (G2) on a figure the data cannot hold, any number other than 1970, 2018 and 2022 for `out-of-scope` and the names `Bagnaia`, `Quartararo` and `Márquez` for `f1-out-of-scope-motogp`;
+  - `discovery`: `noHtml` (I4) and `rationaleOk` (I3);
+  - `ambiguous`: `optionCount` (I5) and `noHtml` (I4).
+
+  Every check of these three sets SHALL name its criterion. The checks of R30 carry: an expected fact the answer must include or match, G1; `calledTool` `run_readonly_sql`, D1; `noToolErrors`, D3; on an ambiguous question `calledTool` `ask_clarification` and `didNotCall` `run_readonly_sql`, D5; on a discovery question `didNotCall` `run_readonly_sql`, I4 (a discovery question no longer requires `list_entities`, since the session context already lists the entities, BA-209); the possession and pole patterns of the reasoning questions, G3; `toolOrder` and `calledTool` `create_visual`, G4.
+
+### Judge option, statuses and the run summary
+
+Added 2026-10-13 (BA-184). The deterministic checks are the gate; the judge costs tokens and can vary between runs, so it is a run option, off by default, and a check it did not grade is reported as a gap, never as a pass ([the BA-9 research, section 2.3](../../../docs/research/BA-9.md#23-deterministic-checks-and-the-judge-what-the-judge-costs-and-what-you-lose-without-it)).
+
+- R144. A run SHALL take a **judge option**: `off`, the default when none is given; `on`; or `categories` with a list of one or more categories, which judges only the questions of those categories. The system SHALL refuse a start (R19 step 8) with `Unknown judge option "<value>"` for any other value; with `Pick at least one category to judge` for `categories` without a non-empty list; and with `Unknown judge category "<value>". Known categories: <the eighteen, comma-separated>.` for a listed value that is not a category (data-model 4.9). A list sent with `off` or `on` SHALL be ignored. The run SHALL record its option as `judge`: `{ mode }`, plus `categories` for `categories`, without repeats and in the order of the category list. A run saved before the option existed SHALL read as `{ mode: 'on' }`, since every earlier run called the judge. The Evals tab offers `off` and `on` (R149); `categories` is offered by the API ([../../system/api.md](../../system/api.md) endpoint 36) and the command line (R154).
+- R145. The LLM judge SHALL run on a question that has a rubric only when the run's judge option is `on`, or is `categories` and lists the question's category. For any other question with a rubric the system SHALL make no judge call and SHALL record the judge check as not scored: id `llm-judge`, the usual description `LLM judge: <rubric>`, score 0, status `not-scored` and the reason `Judge off for this run`. A question without a rubric has no judge check, whatever the option. This holds for the RFP Builder's `rfp` set too: with the judge off, the default, its rubric checks are not scored; `categories` never judges them, since its cases have no category and `uncategorised` is not a category the option accepts; only `on` does.
+- R146. Every check result SHALL carry a **status**: `passed` when it scored 1, `failed` when it did not, and `not-scored` only for a judge check the run did not call (R145). A judge that was called and errored or returned no usable verdict is `failed` (R32). A check result SHALL also carry its **criterion** when it has one: a file check's criterion (R125); `D1` for the result-set match; and for the judge, the criterion of the question's category: `I5` for `ambiguous`, `G2` for `out-of-scope` and `non-existent`, `G3` for `reasoning`, `G4` for `visual`, `I7` for `fuzzy-scope`, `I2` for `default-filter`, and `G1` for any other category or none ([the research, sections 2.3 and 2.5](../../../docs/research/BA-9.md#25-the-criteria-list-for-this-app)).
+- R147. Every question result SHALL carry its case's **category** when the case has one (a case defined in code, such as every `rfp` case, has none) and a **status**: `failed` when its run threw (R29); otherwise `not-scored` when none of its checks was scored; `passed` when at least one check was scored and every scored check passed; `failed` otherwise. Its `passed` flag SHALL be true exactly when its status is `passed`, so a not-scored question never counts as passed, in the "<passed>/<total>" figures of R26, R35 and R38 or anywhere else. A result saved before statuses existed SHALL read as `passed` when its `passed` flag is true and `failed` otherwise, each of its checks the same way, and it has no category.
+- R148. Every run SHALL carry a **summary** of its finished results, updated after every question while it runs and recomputed whenever a run is read, so older runs have one too:
+  - `passed`, `failed` and `notScored`: the number of questions with each status;
+  - `byCategory`: one entry per category with at least one finished question, with its `passed`, `failed` and `notScored` questions and their `total`, in the order of the category list (data-model 4.9), then any other category in order of first appearance; a question with no category (one saved before categories, or a case defined in code such as every `rfp` case) counts under `uncategorised`, which comes last;
+  - `byCriterion`: one entry per criterion named by at least one scored check, with the number of those checks that `passed` and `failed` and their `total`, in the order D1 to D6, G1 to G4, I1 to I7, C1 to C4, then any other in order of first appearance. It counts checks, not questions, over every attempt of every question (R211); a not-scored check and a check without a criterion are not counted.
+  - `flaky`, `bySplit`, and in each `byCategory` entry `flaky`, `dev` and `heldOut`: R213 (added 2026-10-20, BA-242). A question's status is its verdict over all of its attempts (R211).
+- R149. An open set's run controls SHALL include a select labelled **Judge** with the options **Off** and **On**. It SHALL read Off each time an agent's detail view opens, keep the user's choice while they move between that agent's sets, and be disabled while a run is starting or running. Starting a run SHALL send `off` or `on` as its judge option (R144).
+- R150. The eval sets of R12 SHALL serve every case with a category and a split: a question bank case's own, and for a case defined in code (the RFP Builder's `rfp` set) `uncategorised` and `dev`. Each question row SHALL show a chip with its category id (for example `lookup`, or `uncategorised`).
+- R151. A not-scored question (R147) SHALL show **Not scored** as its verdict in the open set's question list, in an execution's result rows and in the Details panel. In the Details panel a not-scored check SHALL show "Not scored" in place of its score, with its reason.
+- R152. An execution with at least one finished question SHALL show, when expanded, its summary (R148) as two tables: **By category**, with the columns Category, Dev, Held-out, Flaky, Not scored and Total and one row per `byCategory` entry, its Dev and Held-out cells as R216 writes them (changed 2026-10-20, BA-242: before, the columns were Category, Passed, Failed, Not scored and Total); and **By criterion**, with the columns Criterion, Passed, Failed and Total and one row per `byCriterion` entry, left out when it has no row (a run saved before criteria). While the run is going, the tables SHALL follow its finished questions.
+- R153. The Markdown report (R38) SHALL show, after its "**<passed>/<total> questions passed**" line, the judge line `Judge: off`, `Judge: on` or `Judge: on for <categories, comma-separated>`, then `Not scored: <n>` when n is above 0, then the lines of R218. After the list of run details and any run error it SHALL have `## By category`, a table `| Category | Dev | Held-out | Flaky | Not scored | Total |` with one row per `byCategory` entry and its cells as R218 writes them (changed 2026-10-20, BA-242: before, `| Category | Passed | Failed | Not scored | Total |`), and `## By criterion`, a table `| Criterion | Passed | Failed | Total |` with one row per `byCriterion` entry. A section with no entry SHALL read `No finished questions yet.` (By category) or `No scored check names a criterion.` (By criterion) instead of a table.
+- R154. The command-line run (R42) SHALL read the judge option from the setting `EVAL_JUDGE` (`off`, `on` or `categories`; unset or blank means `off`) and, for `categories`, the categories from `EVAL_JUDGE_CATEGORIES` (comma-separated, blanks ignored). It SHALL refuse a bad value with the messages of R144 before the backend boots and before any model call. It SHALL print the judge line of R153 and the repeats line of R222 before the first question; `PASS`, `FAIL` or `NOT SCORED`, the question id, its attempts when Repeats is above 1 (R222) and its duration for each question, followed by each of its checks marked `pass`, `FAIL` or `not scored`, with the reason under any check that has one ([agents.md](../../system/agents.md) 8.5); then the "<passed>/<total> questions passed" line, `Not scored: <n>` when n is above 0, the lines and tables of R222, and the run id and comparison of R223. It SHALL exit with code 0 only when no question failed and at least one passed, so a judge-only question left unscored is a gap that does not fail the run, and a run with nothing scored does not pass. With Repeats above 1 a question failed when any of its attempts failed (R211), so a flaky question fails the run (changed 2026-10-20, BA-242).
+
+### Repeats, dev and held-out, tokens and cost
+
+Added 2026-10-20 (BA-242, roadmap 1.1.20). A category of ten questions moves ten points when one question flips, and one run of a question is a sample of one from a flaky distribution. So a run can ask each question more than once, reports the dev and held-out splits side by side, each with its interval, and records what every question cost. The supervised improvement loop of [the BA-9 plan, section 3.6](../../../docs/plans/BA-9.md#36-the-improvement-loop) reads these numbers.
+
+- R209. A run SHALL take a **repeats** option, the number of attempts per question: `1`, the default when none is given (or `null`), `3` or `5`. The system SHALL refuse a start (R19 step 9) with `Repeats must be 1, 3 or 5 (got "<value>")` for any other value, `<value>` as sent: a string as written, anything else JSON-encoded (`"2"`, `"three"`, `"true"`). The API takes a number; the command line reads `EVAL_REPEATS` as text (R222). The run SHALL record its option as `repeats`. A run saved before the option existed SHALL read as `repeats: 1`. The Evals tab offers the option in R214.
+- R210. With Repeats k, a run SHALL ask each question k times, as k **attempts**, question by question: every attempt of one question, one after another, then the next question, in set order, never two at once (R23). Each attempt SHALL be a fresh run of the question as R24 describes, in the run's one throwaway session, with its own tool records and its own usage (R219), so nothing an attempt did reaches another attempt's input. An attempt that throws SHALL fail with its error, and the question's other attempts still run. The run SHALL be persisted after every question, once all of its attempts have finished (R25). While a question runs, the run SHALL carry the question (`currentQuestion`) and the attempt in flight (`currentAttempt`, 1 to k), both removed when the run ends.
+- R211. A question's verdict over its attempts SHALL be **pass^k**: `passed` only when every attempt passed, `not-scored` when every attempt was not scored, `failed` otherwise. A question with at least one passed and at least one failed attempt SHALL be **flaky**, and counts as failed. The result SHALL carry that status (its `passed` flag true exactly when the status is `passed`, R147), `passes` (the attempts that passed), `runs` (k) and `flaky`; its `usage` and `costUsd` SHALL be the sums over its attempts (R221). Its other fields (checks, scores, answer, tool calls, error and duration) SHALL be those of its **representative attempt**: the first failed attempt, else the first. With k above 1 the result SHALL also hold `attempts`: every attempt in order, with its number, status, checks, scores, answer, tool calls (truncated as R33), error, duration, usage and cost. With k = 1 there is no `attempts` list, since the result is its one attempt ([data-model.md](../../system/data-model.md) 3.8). The regression comparison (R40) SHALL compare these verdicts whatever the repeats of the two runs; the report notes when they differ (R218).
+- R212. A pass rate SHALL be reported with its 95% interval: Wilson's score interval of the passed questions over the scored ones (passed plus failed; a not-scored question is in neither), with z = 1.959963984540054. It SHALL be shown as whole percents joined by an en dash (`61–91%`), and, with no scored question, as `—`. So 9 passed of 10 scored is `60–98%` (0.596 to 0.982), 0 of 5 starts at exactly 0 and 5 of 5 ends at exactly 1. The interval counts questions, not attempts: with Repeats k a question is one trial, passed under pass^k (R211).
+- R213. The run summary (R148) SHALL also carry:
+  - `flaky`: the number of flaky questions (R211);
+  - `bySplit`: `dev` and `heldOut`, each with its `passed`, `failed`, `notScored` and `flaky` questions, their `total` and, when at least one of them was scored, the `interval` of R212 (`{ low, high }`, from 0 to 1). Both SHALL be present, with zeros when the run has no question of that split;
+  - in each `byCategory` entry, `flaky` and the same `dev` and `heldOut` counts, over the category's questions.
+
+  A question counts under its result's split (R215).
+- R214. An open set's run controls SHALL include a select labelled **Repeats**, after the **Judge** select, with the options **1**, **3** and **5**. It SHALL read 1 each time an agent's detail view opens, keep the user's choice while they move between that agent's sets, and be disabled while a run is starting or running. Starting a run SHALL send its value as the run's repeats (R209). While a question runs on a run with Repeats above 1, the progress line (R26) SHALL end with ` · attempt <a>/<k>`.
+- R215. Every question result SHALL carry its case's **split**, `dev` or `held-out` (R12, R150; a case defined in code, such as every `rfp` case, `dev`). A result saved before results carried a split SHALL read the split of the question bank case with its id, else `dev`, without rewriting the record ([data-model.md](../../system/data-model.md) 3.8); its category stays as R147 says. Each question row of an open set (R15) SHALL show the chip `held-out` on a held-out question, and no split chip on a dev one.
+- R216. Each execution in the Executions list (R35) SHALL show, after "<passed>/<total> passed":
+  - `Repeat <k>` when its repeats are above 1;
+  - `<n> flaky` when n of its questions are flaky, n above 0;
+  - its cost, `$<dollars to 4 decimals>`, or `Not priced` with the title `No price for <models, comma-separated>` (R221); nothing on a run saved before usage was recorded.
+
+  Expanded, after "Scoped to <datasets>", it SHALL show the split line `Dev <passed>/<scored> (<interval>) · Held-out <passed>/<scored> (<interval>)` (R212, R213), a side with no scored question reading `Dev —` or `Held-out —`. Its By category table (R152) SHALL write each Dev and Held-out cell as `<passed>/<scored> (<interval>)`, or `—` when the category has no scored question of that split; its Flaky cell is the number of flaky questions, and its Not scored and Total cells are those of R148. Each result row SHALL show the chip `held-out` on a held-out question and, with Repeats above 1, `<passes>/<k>` (such as `2/3`) before its duration.
+- R217. The Details panel (R37) SHALL show, for a question that has a result:
+  - its split, `Dev` or `Held-out`, after the verdict and duration;
+  - with Repeats above 1, **Attempts**: `<p> of <k> attempts passed`, one line per attempt (`Attempt <a>`, its verdict and its duration), and `Checks, steps and answer below are from attempt <r>.`, where r is the representative attempt (R211), whose checks, failed checks, executed steps and answer the panel shows;
+  - when the result has usage (R219), **Tokens**: one line per agent and model, the agent as `Assistant`, `SQL fixer`, `Designer` or `Judge`, then the model, its input tokens, its cached input tokens when above 0, its output tokens, its reasoning tokens when above 0, and `<n> calls reported no usage` (`1 call reported no usage`) when any did;
+  - when the result has usage, **Cost**: `$<dollars to 4 decimals>` or `Not priced` (R221).
+
+  A result saved before this story shows its split and none of the rest.
+- R218. The Markdown report (R38) SHALL show, after the judge and not-scored lines of R153, in this order:
+  - `Repeats: <k>`;
+  - `Dev: <passed>/<scored> passed · 95% interval <interval>` and `Held-out: <passed>/<scored> passed · 95% interval <interval>` (R212); a side with no scored question reads `Dev: 0/0 passed · 95% interval —` (and `Held-out: 0/0 passed · 95% interval —`);
+  - `Flaky: <n>` when n is above 0;
+  - `Tokens: <input> in (<cached> cached) · <output> out (<reasoning> reasoning) · <calls> calls` (`1 call` for one), `<calls>` counting every call, followed by ` · <n> without usage` when n of them reported no usage, each number with thousands separators; or `Tokens: not recorded` for a run saved before usage was recorded;
+  - `Cost: $<run cost to 4 decimals> · $<cost per question to 4 decimals> per question`, where the cost per question is the run's cost over its finished questions, each question's attempts included, and the second part is left out while no question has finished; or `Cost: not priced (<models without a rate, comma-separated>)`; or `Cost: not recorded`.
+
+  Its `## By category` table (R153) SHALL write the cells as R216 does. Its `## Summary` table SHALL be `| # | Question | Split | Result | Duration |`, the split as `dev` or `held-out`, and, with Repeats above 1, the result followed by ` <passes>/<k>`. Each question's section SHALL show `- **Split:** <dev|held-out>` after its id; with Repeats above 1, `- **Attempts:** <p> of <k> passed`, followed by `, flaky` when it is flaky; and, after its duration, `- **Tokens:** …` and `- **Cost:** …` in the forms above. Its checks table, executed steps and answer are its representative attempt's (R211). When the run is compared with a run of other repeats (R40, R41), `## Compared to previous run` SHALL add `Note: the previous run used Repeats <k>.`, the repeats read from the compared run, looked up by its id (`previousRunId`, [data-model.md](../../system/data-model.md) 3.8) when the report is rendered; when that run has been deleted, the note is left out.
+
+Usage and cost
+- R219. Each attempt SHALL record the **usage** of every model call made for it, as one entry per agent and model:
+  - `assistant`: the generate of the agent the run evaluates (the assistant, or the RFP Builder on an `rfp` run), over all of its steps, and its tool-only synthesis (R33);
+  - `sql-fixer`: each repair the SQL fixer makes inside `run_readonly_sql`;
+  - `designer`: each generate of the visual designer behind `create_visual` and `update_visual`;
+  - `judge`: the judge's call (R32).
+
+  An entry SHALL hold the input tokens, the cached input tokens (part of the input), the output tokens, the reasoning tokens (part of the output), the calls that reported tokens (`calls`) and the calls that reported none (`unreportedCalls`): the tokens of a call whose result carries no token count are unknown, never 0. A call that throws before returning a result is an unreported call. The model SHALL be the one the call ran on, without its provider prefix and in lower case (`gpt-4o-mini`), or the run's model when the caller cannot tell. The eval gives each attempt a recorder on its calls' request context ([agents.md](../../system/agents.md) 8.3); outside an eval nothing is recorded. Recording SHALL NOT change what a model receives: every prompt, tool description and tool input schema stays byte for byte as it was. A question's usage is the sum over its attempts and a run's the sum over its questions; the run also records the model its agent runs on (`model`, such as `openai/gpt-4o-mini`).
+- R220. Prices SHALL come from the **price table** bundled with the app ([data-model.md](../../system/data-model.md) 4.11): per model, the dollars per million input tokens, per million cached input tokens (optional) and per million output tokens, with where and on which day each rate was read. A model SHALL be looked up by its id without the provider prefix, ignoring case; a dated snapshot with no rate of its own (`gpt-4o-mini-2024-07-18`) takes the rate of its model. The table prices `gpt-4o-mini` ($0.15 input, $0.075 cached input and $0.60 output per million tokens, read from developers.openai.com/api/docs/pricing on 2026-10-20) and `gpt-5.6-luna` ($0.20, $0.02 and $1.20, the same page's standard tier for short contexts, read on 2026-10-21; added for the improvement loop's model) and `gpt-4.1-mini` ($0.40, $0.10 and $1.60, the same page, read on 2026-10-21; the visual designer's model whenever the assistant runs on a gpt-5 family model, [agents.md](../../system/agents.md) 1.5, so a run on gpt-5.6-luna that draws a chart is priced). Prompt-cache writes, which some models bill apart, have no rate in the table, so the cost of such a model leaves them out. A run SHALL keep the rates of the models it used (`rates`), so its cost reads the same after the table changes. A malformed price table SHALL stop the backend from starting, with an error naming the model at fault.
+- R221. The **cost** of an agent's usage on a model SHALL be (input − cached input) × the input rate + cached input × the cached rate (the input rate when the model has none) + output × the output rate, per million tokens; reasoning tokens are part of the output and SHALL NOT be added again. An attempt's, a question's and a run's cost SHALL be the sum over their entries, kept to six decimals and shown to four (`$0.0123`). A cost SHALL be **not priced** (`costUsd: null`) when any model that ran for it has no rate, even when the others do (decision of 2026-10-20); its tokens are still counted and shown, and the report names the models without a rate. Calls that reported no usage add nothing, so a cost with unreported calls is a lower bound, and the token lines say how many there were (R217, R218). A run saved before usage was recorded has neither usage nor cost: the report says `not recorded` (R218) and the Evals tab shows neither (R216, R217).
+
+The command line and run files
+- R222. The command-line run (R42) SHALL also read:
+  - `EVAL_REPEATS`: `1`, `3` or `5` (unset or blank: 1), refused otherwise with the message of R209;
+  - `EVAL_SPLIT`: `dev` or `held-out` (unset or blank: both), refused otherwise with `Unknown EVAL_SPLIT "<value>"; use dev or held-out`;
+  - `EVAL_CATEGORY`: categories, comma-separated (blanks ignored), each one of the eighteen of data-model 4.9, refused otherwise with `Unknown EVAL_CATEGORY "<value>". Known categories: <the eighteen, comma-separated>.`.
+
+  `EVAL_SPLIT` and `EVAL_CATEGORY` SHALL narrow the questions that `EVAL_SET` or `EVAL_CASES` selects (R111) to those of that split and of one of those categories. When none is left the run SHALL be refused with `No question of <set "<id>" or the listed cases> matches <each of the two variables that is set, as NAME=value, space-separated>`, such as `No question of set "formula-1" matches EVAL_SPLIT=held-out`. These refusals SHALL come before the backend boots and before any model call, after those of R111 and R154. The run SHALL print `Repeats: <k>` under the judge line; with Repeats above 1, `<p>/<k> attempts` after each question's id and `flaky` after the duration of a flaky question; and at the end, after the not-scored line, `Flaky: <n>` when n is above 0, the Dev and Held-out lines of R218, the By category and By criterion tables of R218, and its Tokens and Cost lines. The exact lines are in [agents.md](../../system/agents.md) 8.5.
+- R223. A command-line run SHALL be saved as a run started in the app is ([data-model.md](../../system/data-model.md) 3.8), in the data directory the command runs with (`APP_DATA_DIR`, else `data` in the backend folder), with the source `cli` (a run started in the app has `app`, and a run saved before sources has none and reads as `app`), the datasource of its datasets, and the datasets `EVAL_DATASETS` names. It is persisted after every question, listed under Executions by an app that uses the same data directory, compared with the most recent earlier comparable run (R40), and downloadable as a report (R38). After the summary it SHALL print `Run id: <jobId>`, then the comparison as the report writes it (R41), or `No comparable earlier run.`. With `EVAL_RUN_FILE` set to a path it SHALL also write the saved run there as JSON (the response of endpoint 38 without `ok` and `message`), and with `EVAL_RESULTS_FILE` the bare results, as before. A relative path in either SHALL be read against the folder npm was started from (`INIT_CWD`) when it is set, else the working directory, as the loop tools read the paths typed to them (*Improvement loop tools* below), so `npm --prefix backend run evals:assistant` from the repository root writes beside the caller, not in `backend/`. One process does not see another's run: R28 holds within a process, so two runs on one data directory at the same time share its database, and the loop runs its sets one after another.
+- R224. An **exported run file**, the input of the loop tools (R225 to R228), SHALL be one of: a run as `EVAL_RUN_FILE` writes it; a response of endpoint 38 (`ok: true`; a refused poll is refused with its message); or a results array as `EVAL_RESULTS_FILE` writes it, which has no run id, model, judge option or repeats (its repeats read from its results' `runs`, else 1). Any other content SHALL be refused with `<file> is not an eval run: expected a run record, a poll response or a results array`. A file SHALL be read with the read-time defaults of data-model 3.8, and a result's missing split and category taken from the question bank case with its id, else `dev` and `uncategorised`.
+
+### Improvement loop tools
+
+Added 2026-10-20 (BA-242). Developer tooling for the supervised improvement loop of [the BA-9 plan, section 3.6](../../../docs/plans/BA-9.md#36-the-improvement-loop): commands run from the repository, not part of the app ([delivery.md](../../system/delivery.md) section 2, *Improvement loop*). The loop's roles, round steps, levers, budget and stop rule are in [docs/evals/loop/program.md](../../../docs/evals/loop/program.md); the rules below say what the tools do. The tools run through `npm --prefix backend run …`, so in `backend/`; a relative path given to one is read against the folder npm was started from (`INIT_CWD`), else the working directory.
+
+- R225. `eval:diff` SHALL compare a **before** and an **after** side, given by `--before` and `--after`, each one or more runs, comma-separated. A run is a run id, whole or its first 8 characters as report file names carry them (R38), read without writing from `app.sqlite` in the data directory (`--data-dir`, else `APP_DATA_DIR`, else `data` in the backend folder); or the path of an exported run file (R224). A value that names an existing file SHALL be read as a file; a value that looks like a path (it has a `/` or `\`, or ends in `.json`) and names no file SHALL be refused with `No such run file: <path>`, not as an unknown run id. The runs of one side SHALL be combined, and a question in two runs of one side refused with `Question "<id>" is in two runs of the <before|after> side (<id8>, <id8>)`. An unknown id SHALL be refused with `No eval run "<id>" in <path of app.sqlite>`, and a prefix that matches several runs with `Run id "<prefix>" matches <n> runs (<id8s>); give more characters`; these refusals and a bad argument SHALL exit with code 2. It SHALL print one row per split (`dev`, then `held-out`) and category with a scored question on either side, in the order of the category list (data-model 4.9), then an `all` row for each split, each row with: the before and after rates as `<passed>/<scored> (<interval>)` (R212); the change in whole points (`+12 pts`); the 95% interval of the change, Newcombe's hybrid score interval of the after rate minus the before rate, built from their two Wilson intervals (Newcombe 1998, method 10: 56/70 after 48/80 is +20 points, from 0.0524 to 0.3339, printed `+5 to +33 pts`); and a flag, `up` when that interval lies above 0, `down` when it lies below 0, else `within`. A row with no scored question on one side SHALL have `—` for its change, interval and flag. Each side counts its own scored questions.
+- R226. `eval:diff` SHALL then print:
+  - the questions whose verdict flipped, by split, under `Now passing:` (failed before, passed after) and `Now failing:` (passed before, failed after), each as `<id> (<category>)`;
+  - the questions only on the before side and only on the after side;
+  - each side's cost and cost per question (R218), or `not priced` or `not recorded`, and the change in cost per question in percent;
+  - a warning for each of these that differs between the sides, or within one: the sets the questions belong to, the model, the repeats (`pass^k is not comparable across repeats`) and the judge option;
+  - a draft change-log line, `Round <n>: <lever>. <hypothesis> Dev <before all> → <after all>, held-out <before all> → <after all>; <each target category with its dev flag>; cost per question <before> → <after>. Runs <before id8s> → <after id8s>.`, from `--round`, `--lever`, `--hypothesis` and `--target`, a missing one left as `<…>`.
+
+  With `--tsv` it SHALL also print a draft row of [docs/evals/loop/results.tsv](../../../docs/evals/loop/results.tsv), in the columns [docs/evals/loop/program.md](../../../docs/evals/loop/program.md) lists: its dev and held-out cells as `<category>:<passed>/<scored>`, one per target category and then `all`, joined by `;` (`join:4/8;all:20/48`); the categories `down` on either split joined by `;`, `all` among them when an `all` row is down; `round_cost_usd` drafted as the after side's cost, to which the supervisor adds the target slice's runs; the run ids as 8-character prefixes joined by `;`; and the decision and reason left empty for the supervisor. It SHALL NOT write held-out content other than these counts into the row.
+- R227. With `--target <categories, comma-separated>`, `eval:diff` SHALL check the **accept rule** (confirmed by the user on 2026-10-20). The change is accepted only when all of these hold:
+  1. on dev, every target category is `up`;
+  2. on held-out, no target category is `down` (`held-out <category> is down`); a target category with no scored held-out question on one side, or on both, does not meet this (`held-out <category> has no scored question before`, `… after`, or with none on either side `held-out <category> has no scored question`);
+  3. the held-out `all` row is not `down`;
+  4. no category is `down` on either split, and neither `all` row is;
+  5. the cost per question rose by at most 10%; a side whose cost is not priced or not recorded does not meet this; when the cost per question before is $0 and after is not, the reason reads `cost per question rose from $0.0000 to $<after, to 4 decimals> (limit 10%)`.
+
+  It SHALL print `Accept rule: met` and exit with code 0, or `Accept rule: not met (<reasons, separated by "; ">)` and exit with code 1, each reason naming the condition and the split and category at fault, such as `dev join is within, not up`, `held-out join is down` or `cost per question rose 14% (limit 10%)`. Until 2026-10-21 condition 2 also refused a target whose held-out rate fell at all; the user dropped that part after a rerun of the same code, an A/A run, made three small held-out categories fall by chance with none `down` ([results.tsv](../../../docs/evals/loop/results.tsv) round 4). Without `--target` it SHALL check nothing and exit with code 0.
+- R228. `eval:export-failures --run <run> --out <folder>` (the run as in R225, with its `--data-dir`) SHALL write what the improvement loop's fixer may read about one run, and nothing else:
+  - `<folder>/README.md`: the run id, sets, model, repeats, judge option and date; a dev table with the columns Category, Dev (`<passed>/<scored> (<interval>)`, R212, or `—` with no scored question), Flaky, Not scored and Total; a held-out table with the columns Category, Passed, Failed, Not scored and Total, and nothing else of the held-out questions; each table with one row per category and an `all` row; and the list of files;
+  - one `<folder>/<case id>.md` per failed dev question: its question, category, tags and attempts (`<p>/<k>`); its failed checks with their reasons, each reason once with the attempts it came from; the tool calls of its representative attempt (R211) in order, with input, and output or error, each cut to 800 characters; and its final answer, cut to 2,000 characters.
+
+  It SHALL NOT write a case's notes or reference query, nor any held-out question's id, question, answer or check reason. It SHALL refuse a folder that is not empty with `<folder> is not empty; pass --force to replace an earlier export`. With `--force` it SHALL replace only an earlier export, which it recognises by its marker file `.eval-export` (JSON naming the run and listing the files the export wrote): it deletes only those files, so a file the user added stays, and it refuses any other non-empty folder with `<folder> is not empty and holds no earlier export (no .eval-export file); refusing to replace it`. With no failed dev question it SHALL write the README alone, saying `No dev question failed.`. While tuning, the loop reads failures only through this export: the fixer works in a temporary worktree with every file that carries held-out content deleted ([delivery.md](../../system/delivery.md) section 2, *Improvement loop*).
+- R229. `eval:leak-check` SHALL read the lines a change adds to the **lever files**: `backend/src/mastra/agents/`, `backend/src/mastra/skills/`, `backend/src/mastra/tools/`, `backend/src/mastra/context-blocks.ts`, `backend/src/mastra/tool-section.ts`, `backend/src/modules/sessions/sessions.service.ts` and `backend/src/modules/testing-data/fixtures/knowledge/`, unit test files and test fixtures in `__fixtures__/` excluded. The change is `git diff -U0` against `--base <ref>` (default `HEAD`, so the uncommitted change), the staged change with `--staged`, or a patch file with `--diff-file <path>`. Without `--staged` or `--diff-file` it SHALL also read the untracked lever files, whole, every line added: a new skill or seed file is untracked until it is committed. It SHALL compare those lines, after normalising both sides (Unicode NFKD, accents removed, lower case, curly quotes and dashes made straight), with the literals of every question bank file, dev and held-out alike, and of both planted-facts files ([data-model.md](../../system/data-model.md) 4.10). A word SHALL be **common** when it is a stopword, appears in the lever files at the base, or is the name of a sample's schema entity or column; any other word is **distinctive**.
+- R230. The leak check SHALL reject an added line that holds:
+  1. a question's words: the whole question; 4 or more consecutive words of it, at least 2 of them distinctive; or 6 or more consecutive words of it of any kind;
+  2. an entity name, as a whole word, unless it is common: a capitalised span of a question that does not start its sentence, an `includes` value, a run of 4 or more letters of a `matches` or `notMatches` pattern, or a name-like string of a facts file;
+  3. a number of 3 or more significant digits from a question, a check argument or a facts file, compared without separators (`88,966` is `88966`), as itself or as 100 times itself (`0.3827` against `38.27%`); years from 1900 to 2100 and numbers already in the file at the base are skipped;
+  4. a quoted value that holds a letter (numbers are rule 3's), unless it is common: a quoted string of a question, an `includes` value, or a string of a facts file of 4 or more characters.
+
+  A name or value of several words is common when it appears whole in the lever files at the base, or is only stopwords and schema names.
+
+  A string literal of a reference query SHALL only warn. An added line identical to a line the change removes from the same file (a move), and a literal listed in [docs/evals/loop/leak-allowlist.txt](../../../docs/evals/loop/leak-allowlist.txt) (one per line, with its reason), SHALL be ignored. Each finding SHALL print as `<file>:<line> [<kind>] "<literal>" ← <set file> case <id> (<split>) <field>`, a facts source as `<facts file> <JSON path>`, a warning marked as one; a literal with several sources SHALL print the first (dev first, then held-out, then facts) and ` (and <n> more)`. A finding whose literal sits inside a longer one on the same line SHALL be folded into it, with its sources, so one leaked question gives one finding, not one per overlapping phrase or name; a rejection is never folded into a warning. `--json` SHALL print the findings as JSON instead; `--fixer` SHALL write every held-out source as `a held-out case`, and every facts source as `a planted-facts file`, since facts values answer held-out questions too, so a report shown to the fixer names no held-out case. The check SHALL exit with code 1 on any rejection, and with 0 otherwise.
+
+
 ## Edge cases and errors
 
 - Pinning while the backend is unreachable: the card moves, then moves back, and the error toast reads "Backend unreachable".
@@ -286,6 +629,30 @@ Four Official agents built into the app to show further US Health use cases befo
 - A failed individual question (model error, tool crash) records a run error on that question and the run continues with the next.
 - If the backend stops while a run is going, the run was persisted after its last finished question and stays marked `running` in history (see Open questions).
 - A question present in an old run but no longer in the suite (the suite changed) is not clickable from the Executions list (no details to open).
+- A question bank file the loader refuses (R108) stops the backend from starting. The error reads `Eval set file <file>, <case or variant>: <what is wrong>`, for example `Eval set file world-cup.json, case "champion-2022": "category" is required`. No set from any file is offered.
+- A reference query that fails (a renamed column, a typo, a dialect mistake) shows in the validator as `✗ <case id>  <dialect>  <reason>` with the database's error as the reason; the other cases still run and the validator exits non-zero (R110).
+- A reference query that reads a table or view the selected datasets do not hold (a table missing from the sample's required entities) fails in the validator as `✗ <case id>  <dialect>  the reference reads <entity>, which is not in the selected datasets`, without being run, even when the database has that table (R110).
+- A deterministic check reads only what the run recorded. A question the assistant answered without SQL passes the SQL checks of R113, R118 and R119 and fails those that need a successful query (R122, R124); a clarification turn passes `optionCount` with one call of 2 to 4 options; a failed tool call grounds no number (R115) and is not executed SQL (R122, R124), but its written SQL is still read for the dialect and qualified names (R118, R119).
+- The validator against datasets that miss part of the sample, or that belong to a datasource of another kind, prints the preflight message of R20, runs no reference query and exits non-zero.
+- The command-line run with neither a set id nor case ids is refused before the backend boots and before any model call, with `Set EVAL_SET to one question set (<set ids>) or EVAL_CASES to comma-separated case ids` (R111; [agents.md](../../system/agents.md) 8.5).
+- With the judge off, a question whose deterministic checks all pass passes, and its judge check shows "Not scored" beside them (R145 to R147). A question whose only check is the judge is not scored: it is neither passed nor failed, counts under `notScored` and in its category's Not scored column, and is skipped by the regression comparison (R40).
+- With `categories`, a question whose category is not listed is treated as with the judge off; a listed category that none of the selected questions has is accepted and changes nothing.
+- A judge that was called and failed (`judge error: …`) is a failed check, not a not-scored one (R146).
+- A run saved before BA-184 reads as judged (`Judge: on`), its questions and checks keep the verdicts they were stored with, its questions count under `uncategorised`, and its checks name no criterion, so its By criterion section is empty (R144, R147, R148).
+- A run saved before BA-242 reads as `Repeats: 1`, each question as its one attempt (passed 1 of 1 or 0 of 1, never flaky), each result with the split of the question bank case with its id, else `dev`; its report says `Tokens: not recorded` and `Cost: not recorded`, and the Evals tab shows no cost for it (R209, R211, R215, R218).
+- `repeats` sent as `2`, `"3"` or `true` is refused with `Repeats must be 1, 3 or 5 (got "2")` (`"3"`, `"true"`) and no run is recorded; `EVAL_REPEATS=2` is refused the same way before the backend boots (R209, R222).
+- An attempt whose run throws fails with its error and the question's other attempts still run: with Repeats 3, a question that threw once and passed twice is flaky and failed, and its representative attempt is the one that threw (R210, R211).
+- The attempts of one question share its checks and the run's judge option, so either all of them are not scored or none is; an attempt that threw is failed, never not scored (R211).
+- The backend stopping in the middle of a question loses that question's finished attempts; the run keeps the questions finished before it (R25, R210).
+- A model with no price makes the cost `Not priced`, and the report's `Cost: not priced (<models>)` names it; the tokens are still shown. A run whose designer ran on a model with no price while the assistant's model has one is not priced as a whole (R221).
+- A call whose result carries no token count is counted under `unreportedCalls`, adds no tokens and no cost, and is reported as `<n> calls reported no usage` in the Details panel and `<n> without usage` in the report (R219, R221).
+- A run compared with an earlier run of other repeats is compared verdict by verdict as always, and its report notes `Note: the previous run used Repeats <k>.` (R40, R218).
+- `EVAL_SPLIT=held-out` on a set with no held-out question (`formula-1`, or the RFP Builder's `rfp`, whose cases are `dev`) is refused before the backend boots with `No question of set "formula-1" matches EVAL_SPLIT=held-out`; `EVAL_CATEGORY=uncategorised` is refused as an unknown category (R222).
+- A command-line run and a run in the app on the same data directory at the same time are not kept apart: each process guards only its own runs (R28, R223).
+- `eval:diff` on two runs that ran different sets, models, repeats or judge options still prints its table, with a warning for each difference; a run id prefix that matches two runs is refused and the command exits with code 2 (R225, R226).
+- `eval:diff --target join` where `join` has no held-out question on either side does not meet the accept rule, whatever its dev rows say (R227).
+- `eval:export-failures` into a non-empty folder that holds no earlier export (no `.eval-export`) is refused even with `--force`, and `--force` on an earlier export deletes only the files it lists, so a mistyped `--out` never deletes a file the export did not write (R228).
+- The leak check ignores a line moved unchanged within a file, a literal in the allowlist and a common word, and only warns on a string literal of a reference query (R230).
 
 ## Contracts
 
@@ -293,18 +660,20 @@ Four Official agents built into the app to show further US Health use cases befo
 - Skills endpoints `GET /agents/:key/skills` and `GET /agents/:key/skills/:name/file`: [../../system/api.md](../../system/api.md) section 2.6. How skills load and are checked: [../../system/agents.md](../../system/agents.md) 7.3; the old user skill folder: [../../system/data-model.md](../../system/data-model.md) 4.8; decision ADR-0021.
 - The `agents` collection (user agents) and the built-in pins document: [../../system/data-model.md](../../system/data-model.md) sections 3.10 and 3.2; decision ADR-0008 in [../../system/architecture.md](../../system/architecture.md).
 - Endpoints `GET /agents`, `GET /agents/:key`, `GET /agents/:key/evals`, `POST /agents/:key/evals/run`, `GET /agents/:key/evals/runs`, `GET|DELETE /agents/:key/evals/runs/:jobId`, `GET /agents/:key/evals/runs/:jobId/download`: [../../system/api.md](../../system/api.md).
-- Eval run documents (run, per-question result, check result, tool call, regression summary): [../../system/data-model.md](../../system/data-model.md).
+- Eval run documents (run, per-question result, attempt, check result, tool call, usage entry, regression summary): [../../system/data-model.md](../../system/data-model.md) section 3.8; the bundled price table (R220): section 4.11.
+- Question bank files (variants, cases, checks, reference queries, the allowed categories, splits and dialects): [../../system/data-model.md](../../system/data-model.md) section 4.9. The command-line run (R42, R111, R222, R223) and the validator (R110), with their settings: [../../system/delivery.md](../../system/delivery.md) and [../../system/api.md](../../system/api.md) section 6.1; how a set is loaded, a case scored and its usage recorded: [../../system/agents.md](../../system/agents.md) section 8.
+- The improvement loop tools `eval:diff`, `eval:export-failures` and `eval:leak-check` (R225 to R230), the loop's runbook and the fixer's isolation: [../../system/delivery.md](../../system/delivery.md) section 2, *Improvement loop*.
 - The eleven registered agents (the four showcase agents included, R106), the assistant's tools and memory settings, and the judge's prompt: [../../system/agents.md](../../system/agents.md).
 - Sample fixtures and their required entities: [../testing-data/spec.md](../testing-data/spec.md).
 - Terms: [../../product/glossary.md](../../product/glossary.md).
 
 ## UI
 
-Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Hub cards and agent detail also carry **Start chat** (R53); a user agent's detail carries **Edit**. Agent editor (R54-R61, R81-R86): new and edit titles, the form with the link editor and its menu, saving, publishing, the unsaved-changes confirmation, and the preview chat in the Details panel (empty, no-dataset, running, reset). Agent detail: loading, error, its tabs (the Chat Box tab, the System Prompt tab in its read and edit states, the inline Skills tab of a user agent (R90-R96); the Graph tab for user agents; the LLM Config tab; the read-only Skills tab: loading, error, no skills, skill list, an expanded skill, a file that isn't shown), and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
+Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Hub cards and agent detail also carry **Start chat** (R53); a user agent's detail carries **Edit**. Agent editor (R54-R61, R81-R86): new and edit titles, the form with the link editor and its menu, saving, publishing, the unsaved-changes confirmation, and the preview chat in the Details panel (empty, no-dataset, running, reset). Agent detail: loading, error, its tabs (the Chat Box tab, the System Prompt tab in its read and edit states, the inline Skills tab of a user agent (R90-R96); the Graph tab for user agents; the LLM Config tab; the read-only Skills tab: loading, error, no skills, skill list, an expanded skill, a file that isn't shown), and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running with ` · attempt <a>/<k>` when Repeats is above 1, finished; the Judge select, R149; the Repeats select, R214; a category chip per question, R150, and a `held-out` chip on each held-out question, R215), Executions (loading, empty, populated, each row with its `Repeat <k>`, `<n> flaky` and cost or `Not priced`, R216; expanded with the dev and held-out line, the By category table with its Dev, Held-out, Flaky, Not scored and Total columns and the By criterion table, R152, R216, and result rows with a `held-out` chip and `<passes>/<k>`). A not-scored question reads "Not scored" in the question list, the execution's rows and the Details panel (R151). The Details panel adds a question's split and, when it has them, its attempts, tokens and cost (R217).
 
 ## Flows
 
-E2E: `frontend/e2e/agents.spec.ts` for the Feature below (first moved from the repository `gherkin.md`; the System steps now open "Show more", R3).
+E2E: `frontend/e2e/agents.spec.ts` for the Feature below (first moved from the repository `gherkin.md`; the System steps now open "Show more", R3). A run that reached its end needs a model, which the E2E suite does not have, so the "finished run" of the scenarios that need one is seeded rather than run. That the backend writes such a run (statuses, the not-scored judge check with no judge call, the summary; and since BA-242 the attempts, pass^k, splits, usage and cost) is proven by the backend unit tests `backend/src/mastra/evals/assistant.evals.spec.ts`, `backend/src/mastra/evals/eval-summary.spec.ts`, `backend/src/mastra/evals/eval-attempts.spec.ts`, `backend/src/mastra/evals/eval-usage.spec.ts`, `backend/src/mastra/evals/eval-stats.spec.ts` and `backend/src/modules/agents/eval-runs.service.spec.ts`. Every seeded run is stored without a summary, so the scenarios that read one also prove the summary and its intervals are computed on read; a run "saved before repeats" is stored as runs were before BA-242, with no repeats, split, usage or cost, so it also proves the read-time defaults (data-model 3.8). The scenarios that start a run hold the model's calls open with the local LLM stub, so a question is still running when the test looks at it. The repeats refusal is checked through the API, since the Repeats select offers only 1, 3 and 5 (R209, R214).
 
 ```gherkin
 Feature: Agents
@@ -326,13 +695,15 @@ Feature: Agents
     When I open the LLM Config tab
     Then I see "Provider"
     When I open the Evals tab
-    Then I see the "world-cup" set listed with "12 questions"
+    Then I see the "world-cup" set listed with "63 questions"
     And no individual question is shown
     And the run button is hidden
     When I open the "world-cup" set
     Then the "champion-2022" question shows "Who won the 2022 World Cup?"
+    And it shows the category chip "lookup" and no "held-out" chip
     And it lists the check "Checks if output includes "Argentina""
-    And 12 questions are listed
+    And the "shot-conversion-2022" question shows the chip "held-out"
+    And 63 questions are listed, each with a category chip
     When I click the open "world-cup" set again
     Then no questions are listed
     When I click "All agents"
@@ -357,19 +728,19 @@ Feature: Agents
     And I open the "Questions to Insights Assistant" agent
     And I open the Evals tab and the "world-cup" set
     Then the datasource picker offers "World Cup PostgreSQL" and "PostgreSQL"
-    And the run button reads "Run 10 selected"
+    And the run button reads "Run 63 selected"
     When I click the run button
     Then the run button reads "Running…"
-    And I see "0/10 done"
+    And I see "0/63 done"
 
   Scenario: Runs only the ticked questions
     Given a "World Cup PostgreSQL" datasource exists
     And I am on the "world-cup" set in the agent's Evals tab
-    Then the run button reads "Run 10 selected"
+    Then the run button reads "Run 63 selected"
     When I untick the "champion-2022" question
-    Then the run button reads "Run 9 selected"
+    Then the run button reads "Run 62 selected"
     When I click select-all
-    Then the run button reads "Run 10 selected"
+    Then the run button reads "Run 63 selected"
     When I click select-all again
     Then the run button reads "Run 0 selected"
     And the run button is disabled
@@ -407,15 +778,15 @@ Feature: Agents
     Given a "World Cup PostgreSQL" datasource exists
     And a dataset containing the World Cup tables and views exists
     And I am on the "world-cup" set in the agent's Evals tab
-    Then the Questions sub-tab is shown with 12 questions
+    Then the Questions sub-tab is shown with 63 questions
     When I open the executions sub-tab
     Then I see "No eval runs yet"
     And no questions are listed
     When I return to the Questions sub-tab and click the run button
     And I open the executions sub-tab
-    Then the first execution shows "0/12 passed"
+    Then the first execution shows "0/63 passed"
     When I return to the Questions sub-tab
-    Then 12 questions are listed
+    Then 63 questions are listed
 
   Scenario: Downloads an execution as a Markdown report
     Given a "World Cup PostgreSQL" datasource exists
@@ -426,8 +797,148 @@ Feature: Agents
     When I click the download button
     Then the download succeeds as a Markdown file named "eval-run-assistant-….md"
     And the report contains "# Eval run — assistant"
+    And the report contains "Judge: off"
+    And the report contains "Repeats: 1", "Dev:", "Held-out:" and "Cost:"
+    And the report contains "## By category" and "## By criterion"
     And the report contains "## Summary"
     And the report contains "Who won the 2022 World Cup?"
+
+  Scenario: Lists every question set, the former golden set inside the World Cup sets
+    When I click "Agents"
+    And I open the "Questions to Insights Assistant" agent
+    And I open the Evals tab
+    Then I see 15 sets
+    And the "world-cup" set shows "World Cup" and "63 questions"
+    And the "world-cup-rest" set shows "World Cup (REST API)" and "63 questions"
+    And the "world-cup-databricks" set shows "World Cup (Databricks)" and "63 questions"
+    And the "formula-1" set shows "Formula 1" and "10 questions"
+    And no "World Cup (golden set)" set is listed
+    And the "world-cup-rest-connector" set shows "World Cup (REST connector)" and "12 questions"
+    And the "world-cup-databricks-only" set shows "World Cup (Databricks only)" and "10 questions"
+    And the "finance" set shows "Finance" and "68 questions"
+    And the "finance-rest" set shows "Finance (REST API)" and "68 questions"
+    And the "finance-databricks" set shows "Finance (Databricks)" and "68 questions"
+    And the "health-insurance" set shows "Health Insurance" and "42 questions"
+    And the "genomics" set shows "Genomics" and "49 questions"
+    And the "supply-chain" set shows "Supply Chain" and "20 questions"
+    And the "marketing-analytics" set shows "Marketing Analytics" and "50 questions"
+    And the "marketing-analytics-rest" set shows "Marketing Analytics (REST API)" and "50 questions"
+    And the "marketing-analytics-databricks" set shows "Marketing Analytics (Databricks)" and "50 questions"
+    When I open the "world-cup" set
+    Then 63 questions are listed
+    And the last 11 include "Which teams scored exactly four goals in total?" and "What share of the disciplinary cards shown were yellow?"
+    And every one of the last 11 lists the checks "Checks that "run_readonly_sql" was called" and "Checks that no tool calls resulted in errors"
+
+  Scenario: Runs with the judge off by default
+    Given a "World Cup PostgreSQL" datasource exists
+    And a dataset containing the World Cup tables and views exists
+    And a finished run of the "world-cup" set with the judge off, in which one question had only a judge check
+    And I am on the "world-cup" set in the agent's Evals tab
+    Then the "Judge" select reads "Off" and offers "Off" and "On"
+    When I click the run button
+    Then the run is started with the judge option "off"
+    When I open the executions sub-tab and expand the finished run
+    Then the judge-only question's row shows "Not scored"
+    When I click that row
+    Then the Details panel shows "Not scored"
+    And its "LLM judge" check shows "Not scored" with "Judge off for this run"
+
+  Scenario: Reports pass rate by category
+    Given a finished run of the "world-cup" set in which questions passed, failed and were not scored
+    And I am on the agent's Evals tab
+    When I open the executions sub-tab and expand that run
+    Then I see a "By category" table with the columns "Category", "Dev", "Held-out", "Flaky", "Not scored" and "Total"
+    And it has a row per category of its questions, such as "lookup" with "1/1" and its interval under "Dev" and "—" under "Held-out"
+    And I see a "By criterion" table with a row per criterion its scored checks measure, such as "D1", each with its Passed, Failed and Total counts
+
+  Scenario: Runs every question three times when Repeats is 3
+    Given a "World Cup PostgreSQL" datasource exists
+    And a dataset containing the World Cup tables and views exists
+    And I am on the "world-cup" set in the agent's Evals tab
+    Then the "Repeats" select reads "1" and offers "1", "3" and "5"
+    When I choose "3" in the "Repeats" select
+    And I click the run button
+    Then the run is started with repeats 3
+    And the "Repeats" select is disabled while the run is going
+
+  # R211, R212, R213, R216, R217, R221
+  Scenario: Shows dev and held-out side by side, with repeats, flaky questions and cost
+    Given a finished run of the "world-cup" set with Repeats 3 on "gpt-4o-mini", in which a held-out question passed attempts 1 and 3 and failed attempt 2
+    And I am on the agent's Evals tab
+    When I open the executions sub-tab
+    Then the run shows "Repeat 3", "1 flaky" and its cost in dollars
+    When I expand the run
+    Then I see its split line with "Dev" and "Held-out", each with its passed questions and interval
+    And the "By category" table has the columns "Dev", "Held-out" and "Flaky"
+    And the flaky question's row shows the chip "held-out" and "2/3"
+    When I click that row
+    Then the Details panel shows "Held-out" and "2 of 3 attempts passed"
+    And it lists "Attempt 1", "Attempt 2" and "Attempt 3", each with its verdict and duration
+    And it says "Checks, steps and answer below are from attempt 2."
+    And "Why it failed" gives the reason attempt 2 failed
+    And it shows the tokens of the assistant and of the SQL fixer
+    And it shows the question's cost in dollars
+
+  # R216, R217, R218, R219, R221
+  Scenario: Says "Not priced" for a model with no price
+    Given a finished run of the "world-cup" set on a model the price table does not list, one of whose calls reported no usage
+    And I am on the agent's Evals tab
+    When I open the executions sub-tab
+    Then the run shows "Not priced", titled "No price for" and the model
+    When I expand the run and click one of its questions
+    Then the Details panel shows the question's tokens with "1 call reported no usage", and "Not priced"
+    When I download the run's report
+    Then the report contains "Cost: not priced" followed by the model in brackets
+    And its "Tokens:" line counts the call without usage, ending with "3 calls · 1 without usage"
+
+  # R26, R210, R214
+  Scenario: Shows which attempt of a question is running when Repeats is 3
+    Given a "World Cup PostgreSQL" datasource exists
+    And a dataset containing the World Cup tables and views exists
+    And the model answers its first call and holds every later call open
+    And I am on the "world-cup" set in the agent's Evals tab
+    When I choose "3" in the "Repeats" select
+    And I click the run button
+    Then the progress line reads "0/63 done · 0 passed · attempt 2/3" once the first attempt has finished
+
+  # R40, R41, R218, R223
+  Scenario: Downloads the report of a command-line run with Repeats 3, compared with a run of Repeats 1
+    Given a finished run of the "world-cup" set saved before repeats, so with Repeats 1
+    And a later run of the same set saved from the command line with Repeats 3 and compared with it, in which a held-out question passed 2 of its 3 attempts
+    And I am on the agent's Evals tab
+    When I open the executions sub-tab
+    Then both runs are listed, the command-line run first
+    When I download the command-line run's report
+    Then the report contains "Repeats: 3" and "Flaky: 1"
+    And its "Tokens:" line sums every call of the run, and its "Cost:" line gives the run's cost and its cost per question
+    And its "## Summary" table has the columns "#", "Question", "Split", "Result" and "Duration", the flaky question reading "held-out" and "❌ 2/3"
+    And the flaky question's section shows "- **Split:** held-out", "- **Attempts:** 2 of 3 passed, flaky", and its "- **Tokens:**" and "- **Cost:**" lines
+    And its "## Compared to previous run" section says "Note: the previous run used Repeats 1."
+
+  # R209, R215, R216, R217, R218, R221
+  Scenario: Shows a run saved before repeats and costs with its splits and nothing it did not record
+    Given a finished run of the "world-cup" set saved before repeats, splits, tokens and costs were recorded, with the held-out question "shot-conversion-2022"
+    And I am on the agent's Evals tab
+    When I open the executions sub-tab
+    Then the run shows no "Repeat", no flaky count and no cost
+    When I expand the run
+    Then its split line reads "Dev 1/1 (21–100%) · Held-out 0/1 (0–79%)", each question's split read from the question bank
+    And the "shot-conversion-2022" row shows the chip "held-out" and no attempts
+    When I click that row
+    Then the Details panel shows "Held-out"
+    And it shows no attempts, no tokens and no cost
+    When I download the run's report
+    Then the report contains "Repeats: 1", "Tokens: not recorded" and "Cost: not recorded", and no "Flaky:" line
+    And the question's section shows "- **Split:** held-out" and no "**Attempts:**" line
+
+  # R19, R209
+  Scenario: Refuses repeats other than 1, 3 or 5 from the API
+    Given a "World Cup PostgreSQL" datasource exists
+    And a dataset containing the World Cup tables and views exists
+    When a run of "champion-2022" is requested through the API with repeats 2, then "3", then true
+    Then each request is refused with 'Repeats must be 1, 3 or 5 (got "2")', then '(got "3")', then '(got "true")'
+    When I open the executions sub-tab of the agent's Evals tab
+    Then I see "No eval runs yet"
 ```
 
 E2E: `frontend/e2e/agent-hub.spec.ts`
@@ -1202,13 +1713,226 @@ Feature: Agent definitions (API)
     Then its Live copy carries the new body
 ```
 
+E2E: none yet
+
+The Feature below runs from the command line, not in the app, so it is not covered by Playwright. The validator scenarios are covered by the backend unit test `backend/src/mastra/evals/validate-eval-sets.spec.ts`; the loader's refusal by the unit tests of the loader, `backend/src/mastra/evals/eval-set-files.ts`, and the choice of a set or of case ids by `backend/src/mastra/evals/eval-cli-selection.spec.ts`.
+
+```gherkin
+Feature: Question sets from the command line
+
+  Scenario: Validates a question set without a model
+    Given the World Cup PostgreSQL datasource and a dataset containing the World Cup tables and views
+    When I run the validator for the "world-cup" set against that dataset
+    Then it prints a "✓" line with the case id, "postgres" and the row count for each of the 5 questions that have a reference query
+    And it exits with code 0
+    And no model was called
+
+  Scenario: A broken reference query fails the validator, naming the case
+    Given the reference query of "champion-2022" names a column that does not exist
+    When I run the validator for the "world-cup" set
+    Then it prints "✗ champion-2022  postgres" followed by the database's error
+    And the other cases still print their lines
+    And it exits with code 1
+
+  Scenario: The validator stops at the dataset preflight
+    Given a dataset containing only the "matches" table
+    When I run the validator for the "world-cup" set against that dataset
+    Then it prints "Missing entities: world_cup.tournaments"
+    And it runs no reference query and exits with code 1
+
+  Scenario: Refuses a question bank file with an incomplete case
+    Given a question bank file with a case that has no category
+    When the backend starts
+    Then it fails to start with an error naming the file and the case
+
+  Scenario: Runs one set from the command line
+    When I run the suite from the command line with the set "world-cup" against the World Cup dataset
+    Then only that set's 63 questions run
+    When I run it with neither a set nor case ids
+    Then it is refused with "Set EVAL_SET to one question set" before the backend starts
+    And no model was called
+
+  Scenario: Chooses the judge option from the command line
+    When I run the "world-cup" set from the command line with no judge setting
+    Then it prints "Judge: off" before the first question
+    And no judge model call is made
+    And the judge checks of "ambiguous-best-team", "possession-vs-result", "out-of-scope" and "visual-request" are not scored
+    And it prints the "## By category" and "## By criterion" tables after the final line
+    When I run it with "EVAL_JUDGE=categories" and "EVAL_JUDGE_CATEGORIES=ambiguous,out-of-scope"
+    Then it prints "Judge: on for ambiguous, out-of-scope"
+    And only "ambiguous-best-team" and "out-of-scope" are judged
+    When I run it with "EVAL_JUDGE=sometimes"
+    Then it is refused with 'Unknown judge option "sometimes"' before any model call
+
+  # R209, R222
+  Scenario: Refuses bad repeats, a bad split or category, or a filter that leaves no question
+    When I run the "world-cup" set from the command line with "EVAL_REPEATS=2"
+    Then it is refused with 'Repeats must be 1, 3 or 5 (got "2")'
+    When I run it with "EVAL_SPLIT=test"
+    Then it is refused with 'Unknown EVAL_SPLIT "test"; use dev or held-out'
+    When I run it with "EVAL_CATEGORY=lookup,joins"
+    Then it is refused with 'Unknown EVAL_CATEGORY "joins". Known categories:' and the eighteen categories
+    When I run the "formula-1" set with "EVAL_SPLIT=held-out"
+    Then it is refused with 'No question of set "formula-1" matches EVAL_SPLIT=held-out'
+    And each time the backend did not start and no model was called
+
+  # R154, R211, R222
+  Scenario: Repeats each question and narrows the set from the command line
+    When I run the "world-cup" set from the command line with "EVAL_REPEATS=3", "EVAL_SPLIT=held-out" and "EVAL_CATEGORY=ratio"
+    Then only its held-out ratio question "shot-conversion-2022" runs, three times
+    And it prints "Repeats: 3" under the judge line
+    And it prints the question with "2/3 attempts" after its id and "flaky" after its duration
+    And after the final line it prints "Flaky: 1", the "Dev:" and "Held-out:" lines, the "## By category" table, and the "Tokens:" and "Cost:" lines
+    And it exits with code 1, since a flaky question failed
+
+  # R40, R41, R218, R223
+  Scenario: Saves a command-line run like a run started in the app
+    When I run the "world-cup" set from the command line with "EVAL_RUN_FILE=run.json" and "EVAL_RESULTS_FILE=results.json"
+    Then the run is saved in the data directory with the source "cli", the datasource of its datasets and the datasets
+    And it prints "Run id: <jobId>" and "No comparable earlier run."
+    And it writes the saved run to "run.json" and its results to "results.json" in the folder npm was started from
+    When the run is compared with an earlier run that used Repeats 1, and it used Repeats 3
+    Then it prints the comparison as the report writes it, with "Note: the previous run used Repeats 1."
+    And an app on the same data directory lists the run under Executions and downloads it as a report
+```
+
+The judge scenario's setting parsing and gating are covered by the unit tests `backend/src/mastra/evals/judge-option.spec.ts` and `backend/src/mastra/evals/assistant.evals.spec.ts`. The last three scenarios (BA-245) run the command's entry point, `main` of `run-assistant-evals.ts`, with no backend and no model: `backend/src/mastra/evals/run-assistant-evals.spec.ts` covers the refusals ("refuses … before the backend boots", "refuses a set the split leaves empty"), the narrowed run with repeats and its lines ("runs the narrowed selection through the run service, prints the lines and writes the run file"), the run id, the comparison and its note ("prints the comparison as the report writes it, noting other repeats") and where the files go ("writes relative run files where npm was started"); `backend/src/mastra/evals/repeats-option.spec.ts` and `eval-cli-selection.spec.ts` cover the setting parsing and the narrowing. That the run is saved with the source `cli` is covered by `backend/src/modules/agents/eval-runs.service.spec.ts` ("saves the run with the source cli and the datasource of the named datasets"), and that an app on the same data directory lists and downloads it by the `agents.spec.ts` scenario "Downloads the report of a command-line run with Repeats 3, compared with a run of Repeats 1", whose seeded run carries the source `cli`.
+
+### Feature: Improvement loop tools
+
+E2E: none yet. The tools run from the command line, not in the app (R225 to R230). Each scenario is covered by backend unit tests under `backend/src/mastra/evals/loop/` that run the tool's entry function (`evalDiffMain`, `exportFailuresMain`, `leakCheckMain`) on run files, on an `app.sqlite` in a temp data directory or on a temp git repository, with the bundled question banks, no model call and no network; they are listed after the Feature.
+
+```gherkin
+Feature: Improvement loop tools
+
+  # R224, R225, R226
+  Scenario: Compares the runs before and after a change with eval:diff
+    Given a data directory whose app.sqlite holds a run before a change and a run after it, of the same set, model, repeats and judge option
+    When I run "eval:diff" with "--before" and "--after" set to the first 8 characters of the two run ids, and "--data-dir" set to that directory
+    Then it prints one row per split and category with a scored question, then an "all" row per split
+    And each row shows the before and after rates as "<passed>/<scored> (<interval>)", the change in points, its 95% interval and the flag "up", "down" or "within"
+    And it lists the questions whose verdict flipped under "Now passing:" and "Now failing:", and the questions on one side only
+    And it prints each side's cost and cost per question, and the change in cost per question in percent
+    And app.sqlite is left as it was
+
+  # R226
+  Scenario: Warns when the two sides cannot be compared, and drafts the round's records
+    Given the before run used Repeats 1 and the after run Repeats 3, another model and the judge on
+    When I run "eval:diff" on them
+    Then it warns that the model, the repeats ("pass^k is not comparable across repeats") and the judge option differ
+    When I add "--round", "--lever", "--hypothesis", "--target" and "--tsv"
+    Then it prints a draft change-log line and a draft results.tsv row
+    And the row's held-out cells hold only "<category>:<passed>/<scored>" counts
+
+  # R227
+  Scenario: Checks the accept rule for the target categories
+    When I run "eval:diff" with "--target join" on runs in which dev join is up, no category is down and the cost per question rose by at most 10%
+    Then it prints "Accept rule: met" and exits with code 0
+    When dev join is only within its interval, another category is down, or the cost per question rose by more than 10%
+    Then it prints "Accept rule: not met (<reasons>)", each reason naming the condition, the split and the category, and exits with code 1
+    And a target with no scored held-out question on a side does not meet the rule
+
+  # R224, R225
+  Scenario: Refuses a run it cannot read
+    When I run "eval:diff" with a run id that no saved run has
+    Then it is refused with 'No eval run "<id>" in <path of app.sqlite>' and exits with code 2
+    And a prefix that matches two runs is refused with 'Run id "<prefix>" matches 2 runs (…); give more characters'
+    And a path that names no file is refused with "No such run file: <path>"
+    And a file that is not an eval run is refused with "<file> is not an eval run: expected a run record, a poll response or a results array"
+    And a question in two runs of one side is refused with 'Question "<id>" is in two runs of the before side (…)'
+
+  # R224, R228
+  Scenario: Exports a run's dev failures for the fixer, with only the counts of the held-out questions
+    Given a run of the "world-cup" set saved in app.sqlite before results carried a split, in which the dev question "final-score-2018" and the held-out question "shot-conversion-2022" failed
+    When I run "eval:export-failures" with "--run" set to its first 8 characters and "--out" set to a new folder
+    Then the folder holds a README, with the dev table and the counts of the held-out questions, and one file for "final-score-2018"
+    And no file holds the held-out question's id, question, answer or check reasons, nor any case's notes or reference query
+    When I run it again into the same folder
+    Then it is refused with "<folder> is not empty; pass --force to replace an earlier export" and exits with code 2
+    When I run it with "--force"
+    Then it replaces only the files the earlier export wrote
+    And "--force" on a folder that holds no earlier export is refused
+
+  # R229, R230
+  Scenario: Rejects a lever change that quotes a question bank
+    Given a change to the assistant's prompt that adds a held-out question of the "world-cup" set word for word
+    When I run "eval:leak-check"
+    Then it prints the finding as "<file>:<line> [question] "<literal>" ← <source>", a dev source before a held-out one, and exits with code 1
+    And with "--json" its sources include "world-cup.json" case "shot-conversion-2022" (held-out)
+    When I run it with "--fixer"
+    Then every held-out source reads "a held-out case" and no held-out case id is printed
+    And it reads the uncommitted change with the untracked lever files, the staged change with "--staged", and a patch file with "--diff-file"
+    And a change with no quote passes with code 0
+
+  # R229, R230
+  Scenario: Lets through what is not a leak
+    Given a change to a lever file
+    When it only moves a line within the file, or adds a literal of the allowlist, a common word, a year, or four question words with fewer than two distinctive
+    Then the leak check rejects nothing
+    When it adds a string literal of a reference query
+    Then the leak check only warns
+    When the same quote is added to a unit test of a lever file
+    Then the leak check does not read it
+```
+
+Covered by (backend unit tests, `backend/src/mastra/evals/loop/`):
+- *Compares the runs before and after a change*: `eval-diff.spec.ts` "evalDiffMain on runs saved in app.sqlite" (added by BA-245: both sides by prefix from `app.sqlite`, the rows, the flips, the costs, the database unchanged), "eval:diff rows" and "eval:diff flips, sides, cost and warnings"; `run-source.spec.ts` "saved runs, read without writing from app.sqlite" and "the three shapes of an exported run file".
+- *Warns … and drafts the round's records*: `eval-diff.spec.ts` "warns when sets, model, repeats or judge differ, between or within sides" and "eval:diff drafts".
+- *Checks the accept rule*: `eval-diff.spec.ts` "the accept rule", "evalDiffMain exit codes" and "evalDiffMain on runs saved in app.sqlite".
+- *Refuses a run it cannot read*: `run-source.spec.ts` ("refuses a prefix that matches several runs, and an unknown id", "refuses anything else", "reads a value that names a file as a file, anything else as an id"), `eval-diff.spec.ts` ("combines the runs of a side and refuses a question in two of them", "exits 2 on a bad argument, a missing run or an unknown category") and `cli-args.spec.ts`.
+- *Exports a run's dev failures*: `failure-export.spec.ts`, its "exports a run saved in app.sqlite before splits, taking each split from the question bank" added by BA-245.
+- *Rejects a lever change that quotes a question bank*: `leak-check.spec.ts` "leakCheckMain against a git repository", its "rejects a held-out question, and with --fixer names no held-out case" added by BA-245, and "leak check report".
+- *Lets through what is not a leak*: `leak-check.spec.ts` "leak check false-positive guards" and "only warns on a string literal of a reference query"; `common-words.spec.ts`.
+
+### Feature: Databricks samples
+
+E2E: none yet. Validated in the VDI, not by Playwright: the E2E suite has no Databricks warehouse. The refusal is covered by the backend unit test `backend/src/mastra/evals/assistant-eval-datasets.spec.ts`; the run and the validator are checked on a real warehouse by the steps of [docs/evals/databricks-vdi.md](../../../docs/evals/databricks-vdi.md), whose evidence goes to `evidence/1.1.8/vdi/`.
+
+```gherkin
+Feature: Databricks samples
+
+  Background:
+    Given the World Cup sample is loaded into Databricks and registered by "npm run fixture:databricks -- --fixture world-cup"
+
+  Scenario: Refuses a PostgreSQL set on a Databricks datasource
+    Given the only datasource is "World Cup Databricks", with the dataset "World Cup (Databricks)"
+    When I open the "world-cup" set and click the run button
+    Then I see "The selected datasets must belong to one PostgreSQL datasource."
+    And no run appears under Executions
+
+  Scenario: Runs the World Cup set on the Databricks sample
+    Given an LLM configuration is saved
+    When I pick the "World Cup Databricks" datasource
+    And I open the "world-cup-databricks" set, select every question and click the run button
+    Then the run starts and shows "0/63 done"
+    And when it finishes every question shows its verdict, its checks and its executed steps
+    And the SQL in the executed steps names tables as <catalog>.world_cup.<table>, the catalog of the "World Cup (Databricks)" dataset
+
+  Scenario: Runs the references in the datasource's catalog
+    Given the World Cup sample is loaded into the catalog "dev_sandbox" and registered
+    When I run the validator for the "world-cup-databricks-only" set against the "World Cup (Databricks)" dataset
+    Then each reference runs with `dev_sandbox` in place of `evals`
+    And it prints a "✓" line for each of the 9 questions that have a reference query
+
+  Scenario: Validates a Databricks set without a model
+    When I run the validator for the "world-cup-databricks-only" set against the "World Cup (Databricks)" dataset
+    Then it prints a "✓" line with the case id, "databricks" and the row count for each of the 9 questions that have a reference query
+    And it exits with code 0
+    And no model was called
+```
+
 ## Acceptance
 
-- The nine `agents.spec.ts` scenarios pass, the nine `agent-hub.spec.ts` scenarios pass, and the `agent-editor.spec.ts` scenarios pass, with the axe scans of the hub and the editor clean in both themes.
+- One real `world-cup` run on PostgreSQL with the judge off reports a pass rate per category and per criterion in its report and in the Evals tab, makes no judge call, and shows every judge check as not scored (BA-184).
+- The nineteen `agents.spec.ts` scenarios pass, the nine `agent-hub.spec.ts` scenarios pass, and the `agent-editor.spec.ts` scenarios pass, with the axe scans of the hub and the editor clean in both themes.
+- The validator (R110) passes for `world-cup` (its last 11 questions the former golden set, R109) against the World Cup PostgreSQL datasource and for `world-cup-rest` against the World Cup REST datasource, and fails, naming the case, when one reference query is broken on purpose. A run of each moved set gives the same verdicts as a run before the move, within the run-to-run variation.
 - Running the `world-cup` set against the bundled sample with a working model finishes, records one result per ticked question, and every question's Details panel shows its checks and executed steps.
 - A second completed run on the same datasource and datasets produces a Markdown report with a "Compared to previous run" section; a run on a different datasource or dataset set does not.
 - Starting against a datasource with no datasets, or with datasets missing required entities, never spends model tokens and never leaves a run in history.
 - The report downloaded from the Executions list opens as readable Markdown and contains the title, summary, per-question checks, executed steps and answers.
+- A command-line run of `world-cup` with `EVAL_REPEATS=3` on gpt-4o-mini makes three attempts per question, saves the run with its run id, shows dev and held-out side by side with their intervals, flags its flaky questions, and records tokens per agent and a cost in dollars; the same run in the Evals tab shows the same figures. Refusals of `EVAL_REPEATS`, `EVAL_SPLIT` and `EVAL_CATEGORY` cost no model call (BA-242).
+- `eval:diff` between two saved runs prints the rows of R225 and the accept rule of R227 with its exit code; `eval:export-failures` writes no held-out id, question, answer or check reason; `eval:leak-check` rejects an added line that quotes a held-out question and passes one that only moves a line (BA-242).
+- The prompt of the assistant and the descriptions and input schemas of its tools are byte for byte the same before and after BA-242 (R219), so its evals need no new run for this story.
 
 ## Open questions
 
@@ -1218,5 +1942,9 @@ Feature: Agent definitions (API)
 - The browser saves the report as `eval-run-<agent>-<8-char id>.md` (no date) while the server's attachment name includes the date and time. The gherkin file pattern "eval-run-assistant-…" matches both.
 - A code comment says runs are in-memory and forgotten on restart; in fact they are persisted and survive restarts (R25). The spec follows the behaviour.
 - A failed (not just partial) run or a partial pass is drawn with the same red cross in Executions.
+- A case's category has been shown and reported since BA-184 (R150, R152, R153), and its split since BA-242 (R215 to R218). Open: the accept rule (R227) is the default of 2026-10-20 and may still change.
+- The interval of a change (R225) treats the before and after runs as independent samples, although they ask the same questions, so it is wider than a paired test's; and a `-reworded` question is correlated with the question it rephrases, so the intervals of R212 are somewhat narrower than the questions justify. With about ten questions per category, few changes will be flagged `up` or `down`.
+- The cost per question with Repeats k covers k attempts, so it is comparable only between runs of the same repeats; `eval:diff` warns when they differ (R226).
+- That cached input tokens are part of the input tokens and reasoning tokens part of the output (R219, R221) follows the AI SDK and is to be checked against the provider's own figures after the first baseline run.
 
-<!-- sources: backend/src/modules/agents/{agents.controller,agents.service,eval-runs.service,eval-regression,eval-report}.ts, backend/src/modules/agents/repositories/eval-runs.repository.ts, backend/src/mastra/evals/{assistant.evals,assistant-eval-datasets,result-set-check,run-assistant-evals}.ts, backend/src/mastra/agents/eval-judge.agent.ts, backend/src/modules/sessions/result-compare.ts, backend/src/modules/testing-data/fixtures/registry.ts, frontend/src/app/features/agents/, frontend/e2e/agents.spec.ts, frontend/e2e/agent-hub.spec.ts -->
+<!-- sources: backend/src/modules/agents/{agents.controller,agents.service,eval-runs.service,eval-regression,eval-report}.ts, backend/src/modules/agents/repositories/eval-runs.repository.ts, backend/src/mastra/evals/{assistant.evals,assistant-eval-datasets,result-set-check,run-assistant-evals,validate-eval-sets,eval-stats,eval-usage,eval-case-index,eval-attempts,repeats-option}.ts, backend/src/mastra/evals/pricing.json, backend/src/mastra/evals/loop/, backend/src/mastra/usage-sink.ts, backend/scripts/{eval-diff,eval-export-failures,eval-leak-check}.ts, backend/src/mastra/evals/sets/*.json, backend/src/mastra/agents/eval-judge.agent.ts, backend/src/modules/sessions/result-compare.ts, backend/src/modules/testing-data/fixtures/registry.ts, frontend/src/app/features/agents/, frontend/e2e/agents.spec.ts, frontend/e2e/agent-hub.spec.ts -->

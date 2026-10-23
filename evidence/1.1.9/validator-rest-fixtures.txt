@@ -1,0 +1,149 @@
+=== EVAL_SET=world-cup-rest EVAL_DATASETS="World Cup (REST)"
+Validating World Cup (REST API) (world-cup-rest, sqlite) on World Cup (REST)
+
+✓ rest-champion-2022  sqlite  1 rows
+✓ rest-final-score-2018  sqlite  1 rows
+✓ rest-top-scorer-2022  sqlite  1 rows
+✓ rest-shootouts  sqlite  4 rows
+✓ rest-biggest-venue  sqlite  1 rows
+
+world-cup-rest: 5 of 5 reference queries passed; 5 cases have no reference query.
+exit 0
+(1 s)
+
+=== EVAL_SET=world-cup-golden-rest EVAL_DATASETS="World Cup (REST)"
+Validating World Cup (golden set, REST API) (world-cup-golden-rest, sqlite) on World Cup (REST)
+
+✓ rest-pass-accuracy-by-team  sqlite  3 rows
+✓ rest-shot-accuracy-by-team  sqlite  3 rows
+✓ rest-top-scoring-team  sqlite  1 rows
+✓ rest-teams-tied-on-four-goals  sqlite  2 rows
+✓ rest-card-types-recorded  sqlite  1 rows
+✓ rest-goals-with-recorded-assist  sqlite  1 rows
+✓ rest-goals-by-type  sqlite  5 rows
+✓ rest-attendance-by-tournament  sqlite  2 rows
+✓ rest-matches-by-stage  sqlite  4 rows
+✓ rest-pass-completion-by-team  sqlite  12 rows
+✓ rest-yellow-card-share  sqlite  1 rows
+
+world-cup-golden-rest: 11 of 11 reference queries passed.
+exit 0
+(0 s)
+
+=== EVAL_SET=finance-rest EVAL_DATASETS="Finance (REST)"
+Validating Finance (REST API) (finance-rest, sqlite) on Finance (REST)
+
+✓ rest-wealth-client-count  sqlite  1 rows
+✓ rest-aum-fy2025-end  sqlite  1 rows
+✓ rest-fee-revenue-fy2025-by-type  sqlite  4 rows
+✓ rest-fee-revenue-fy2026-q2  sqlite  1 rows
+✓ rest-average-aum-per-client-fy2025-end  sqlite  1 rows
+✓ rest-completed-transactions-december-2025  sqlite  1 rows
+✓ rest-portfolios-opened-2024  sqlite  1 rows
+✓ rest-largest-portfolio-2025-end  sqlite  1 rows
+✓ rest-discretionary-portfolios-open  sqlite  1 rows
+✓ rest-advisory-fees-billed-march-2025  sqlite  1 rows
+✓ rest-positions-held-2024-end  sqlite  1 rows
+✓ rest-refunded-fees-2025  sqlite  1 rows
+✓ rest-unbilled-fees-2025-end  sqlite  1 rows
+✓ rest-collected-fees-fy2026-q1  sqlite  1 rows
+✓ rest-advisory-fee-rates  sqlite  6 rows
+✓ rest-bond-holdings-2025-end-millions  sqlite  1 rows
+✓ rest-most-held-securities-fy2025-end  sqlite  2 rows
+✓ rest-top-three-fee-clients-fy2025  sqlite  3 rows
+✓ rest-branch-most-assets-2025-end  sqlite  1 rows
+✓ rest-largest-security-by-value-2025-end  sqlite  1 rows
+✓ rest-top-equity-sectors-fy2025-end  sqlite  3 rows
+✓ rest-fee-revenue-by-region-fy2025  sqlite  4 rows
+✓ rest-aum-by-segment-fy2025-end  sqlite  3 rows
+✓ rest-aum-by-asset-class-2025-end  sqlite  4 rows
+✓ rest-open-portfolios-by-region  sqlite  4 rows
+✓ rest-wealth-clients-with-mortgage  sqlite  1 rows
+✓ rest-waived-share-advisory-fy2025  sqlite  1 rows
+✓ rest-advisory-fee-rate-by-mandate-fy2025  sqlite  3 rows
+✓ rest-unrealized-gain-percent-fy2025-end  sqlite  1 rows
+✓ rest-equity-share-by-risk-profile-2025-end  sqlite  3 rows
+✓ rest-performance-share-fee-revenue-fy2025  sqlite  1 rows
+✓ rest-quietest-fee-month-2025  sqlite  1 rows
+✓ rest-positions-without-cost-fy2025-end  sqlite  1 rows
+✓ rest-unrealized-gain-fy2025-end  sqlite  1 rows
+✓ rest-portfolios-by-base-currency  sqlite  1 rows
+✓ rest-open-portfolios-by-mandate  sqlite  3 rows
+✓ rest-fiscal-2026-q2-months  sqlite  3 rows
+✓ rest-fee-revenue-latest-quarter  sqlite  1 rows
+✓ rest-chart-aum-by-quarter-end  sqlite  8 rows
+✓ rest-wealth-client-count-casual  sqlite  1 rows
+✓ rest-aum-fy2025-end-typo  sqlite  1 rows
+✓ rest-largest-portfolio-2025-end-casual  sqlite  1 rows
+✓ rest-interest-share-of-loan-payments-by-product  sqlite  3 rows
+✓ rest-outstanding-share-of-principal-by-product  sqlite  3 rows
+✓ rest-loans-by-currency  sqlite  1 rows
+✓ rest-transactions-with-merchant-category  sqlite  1 rows
+✓ rest-branches-opened-12-accounts-2024  sqlite  2 rows
+✓ rest-non-performing-loans  sqlite  1 rows
+✓ rest-customer-most-card-purchases-2025  sqlite  1 rows
+✓ rest-net-customer-flow-by-branch-2025  sqlite  8 rows
+✓ rest-transactions-march-2025  sqlite  1 rows
+✓ rest-accounts-opened-by-region-2024  sqlite  4 rows
+✓ rest-deposit-accounts-per-branch  sqlite  8 rows
+✓ rest-customer-deposits-2025-usd  sqlite  1 rows
+✓ rest-euro-deposits-2025  sqlite  1 rows
+✓ rest-card-spend-december-2025  sqlite  1 rows
+✓ rest-customers-per-segment  sqlite  3 rows
+✓ rest-branches-per-region  sqlite  4 rows
+✓ rest-loans-per-product  sqlite  3 rows
+
+finance-rest: 59 of 59 reference queries passed; 9 cases have no reference query.
+exit 0
+(2 s)
+
+=== EVAL_SET=marketing-analytics-rest EVAL_DATASETS="Marketing Analytics (REST)"
+Validating Marketing Analytics (REST API) (marketing-analytics-rest, sqlite) on Marketing Analytics (REST)
+
+✓ rest-fiscal-quarter-of-july-2024  sqlite  1 rows
+✓ rest-digital-channels  sqlite  2 rows
+✓ rest-latest-final-quarter  sqlite  1 rows
+✓ rest-spring-home-refresh-dates  sqlite  1 rows
+✓ rest-harborline-headquarters  sqlite  1 rows
+✓ rest-harborline-pet-launch  sqlite  1 rows
+✓ rest-harborline-policies-sold-2025-q2  sqlite  1 rows
+✓ rest-market-premium-by-line-2025  sqlite  5 rows
+✓ rest-harborline-premium-by-currency-2025  sqlite  1 rows
+✓ rest-harborline-campaign-spend-2025  sqlite  1 rows
+✓ rest-market-policies-by-channel-2025  sqlite  4 rows
+✓ rest-harborline-earned-premium-by-quarter-2025  sqlite  4 rows
+✓ rest-gov-auto-premium-vs-market-q2-2025  sqlite  1 rows
+✓ rest-gov-pinecrest-pet-vs-rest-2025  sqlite  1 rows
+✓ rest-harborline-premium-by-region-2025  sqlite  4 rows
+✓ rest-market-premium-by-family-and-region-2025  sqlite  12 rows
+✓ rest-harborline-leads-by-line-2025  sqlite  5 rows
+✓ rest-northeast-auto-policies-q4-2025  sqlite  3 rows
+✓ rest-harborline-spend-by-channel-2025  sqlite  4 rows
+✓ rest-top-auto-state-q4-2025  sqlite  2 rows
+✓ rest-top-three-campaigns-by-leads-2025  sqlite  3 rows
+✓ rest-fastest-growing-line-2024-to-2025  sqlite  1 rows
+✓ rest-top-five-states-2025  sqlite  5 rows
+✓ rest-lowest-premium-channel-2025  sqlite  1 rows
+✓ rest-gov-fastest-growing-competitor  sqlite  1 rows
+✓ rest-top-ctr-campaigns-2025  sqlite  3 rows
+✓ rest-best-lead-to-policy-channel-2025  sqlite  1 rows
+✓ rest-top-budget-share-campaigns-2025  sqlite  3 rows
+✓ rest-largest-market-share-line-2025  sqlite  1 rows
+✓ rest-premium-per-policy-top-line-2025  sqlite  1 rows
+✓ rest-highest-digital-share-region-2025  sqlite  1 rows
+✓ rest-harborline-revenue-2025  sqlite  1 rows
+✓ rest-highest-walk-away-rate-channel-2025  sqlite  1 rows
+✓ rest-lowest-cost-per-acquisition-channel-2025  sqlite  1 rows
+✓ rest-harborline-walk-aways-2025  sqlite  1 rows
+✓ rest-harborline-premium-fiscal-2025  sqlite  1 rows
+✓ rest-top-promo-code-by-leads  sqlite  1 rows
+✓ rest-quarter-without-campaign-spend  sqlite  1 rows
+✓ rest-top-channel-q2-2025  sqlite  1 rows
+✓ rest-harborline-policies-all-periods  sqlite  1 rows
+✓ rest-chart-harborline-premium-by-quarter  sqlite  8 rows
+✓ rest-campaign-freeze-impact  sqlite  3 rows
+
+marketing-analytics-rest: 42 of 42 reference queries passed; 8 cases have no reference query.
+exit 0
+(2 s)
+

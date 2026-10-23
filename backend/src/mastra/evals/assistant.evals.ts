@@ -1,11 +1,12 @@
-import { checks } from '@mastra/evals/checks';
 import { runEvals } from '@mastra/core/evals';
 import { RequestContext } from '@mastra/core/request-context';
 import type { MastraScorer } from '@mastra/core/evals';
 import type { Agent } from '@mastra/core/agent';
 import { assistantAgent } from '../agents/assistant.agent';
 import { resolveAgentModel } from '../model-resolver';
-import { providerOptionsFor } from '../model-compat';
+import { modelIdOf, providerOptionsFor } from '../model-compat';
+import { USAGE_SINK_CONTEXT_KEY } from '../usage-sink';
+import type { UsageSink } from '../usage-sink';
 import {
   evalJudgeAgent,
   evalJudgeOutputSchema,
@@ -28,10 +29,22 @@ import {
 } from '../agent-tools';
 import { runResultSetCheck } from './result-set-check';
 import type { ResultSetCheckOptions } from './result-set-check';
+import { loadEvalSets } from './eval-set-files';
+import type { EvalCategory, EvalCriterion, EvalSplit } from './eval-set-files';
+import { toAssistantEvalSets } from './eval-check-scorers';
 import {
-  assistantEvalDatasetError,
-  evalFixture,
-} from './assistant-eval-datasets';
+  JUDGE_OFF,
+  JUDGE_OFF_REASON,
+  judgeCriterion,
+  shouldJudge,
+} from './judge-option';
+import type { EvalJudgeSetting } from './judge-option';
+import { questionStatus } from './eval-summary';
+import type { EvalStatus } from './eval-summary';
+import { recordUsage } from './eval-usage';
+import type { ModelUsageEntry } from './eval-usage';
+import { costUsdOf } from './eval-attempts';
+import { evalFixture } from './assistant-eval-datasets';
 import type { SampleFixture } from '../../modules/testing-data/fixtures/registry';
 import {
   synthesizeToolOnlyTurn,
@@ -43,10 +56,12 @@ import type { SessionsService } from '../../modules/sessions/sessions.service';
 /**
  * Eval suite for the Questions to Insights assistant.
  *
- * The questions are grouped into sets, one per bundled sample (World Cup,
- * Formula 1), and every expected substring below is a fact that is actually in
- * that sample's data — a check failing means the agent got it wrong, not that
- * the fixture drifted.
+ * The questions are data: one JSON file per question bank under `./sets/`,
+ * loaded and checked by `./eval-set-files.ts` (ADR-0015). They are grouped into
+ * sets, one per bundled sample and datasource kind, and every expected
+ * substring in them is a fact that is actually in that sample's data — a check
+ * failing means the agent got it wrong, not that the fixture drifted. The RFP
+ * Builder's set (`rfp.evals.ts`) stays TypeScript: its custom checks are code.
  *
  * The assistant resolves its entities from the session's datasets via
  * requestContext, so each case carries the dataset it is allowed to query.
@@ -54,7 +69,8 @@ import type { SessionsService } from '../../modules/sessions/sessions.service';
 
 /**
  * `runEvals` keys its scores by scorer id, so two scorers of the same kind in
- * one case would collide — each case below uses each check type at most once.
+ * one case would collide — the set loader refuses a check type used twice in
+ * one case, and each custom check has an id of its own.
  */
 export interface AssistantEvalCase {
   /** Short id used when reporting per-question scores. */
@@ -63,6 +79,11 @@ export interface AssistantEvalCase {
   /** What the question is probing for, for the run report. */
   intent: string;
   scorers: MastraScorer<any, any, any, any>[];
+  /**
+   * The criterion each scorer measures (agents-evals R125, R146), one entry
+   * per scorer in the same order; `undefined` where a check names none.
+   */
+  checkCriteria?: (EvalCriterion | undefined)[];
   /**
    * Trusted SQL against the eval datasource whose live result set is the
    * reference answer. When present, `runAssistantEvalCase` compares it
@@ -77,12 +98,14 @@ export interface AssistantEvalCase {
    * the final answer would be too brittle (clarification quality, refusal
    * quality, whether a visual plausibly answers the request). When present,
    * `runAssistantEvalCase` scores it with the LLM judge
-   * (`../agents/eval-judge.agent`) as an additional check.
+   * (`../agents/eval-judge.agent`) as an additional check — when the run's
+   * judge option allows it; otherwise the check is not scored (R145).
    */
   judgeRubric?: string;
   /**
    * Run the case with this tool selection, as a session bound to a user
-   * agent would (agents.md 2.1, 4.2). Omitted = every tool.
+   * agent would (agents.md 2.1, 4.2). Omitted = every tool. A set file
+   * names it `agentTools` too.
    */
   agentTools?: OptionalAgentTool[];
   /**
@@ -92,6 +115,14 @@ export interface AssistantEvalCase {
    * built-in checks share one id per kind, see above).
    */
   customChecks?: EvalCustomCheck[];
+  /** The case's primary category (research 2.6); never graded. */
+  category?: EvalCategory;
+  /** `dev`, or `held-out` for cases kept out of prompt tuning. */
+  split?: EvalSplit;
+  /** Free labels such as `ties`, `control` or `rest:paging`. */
+  tags?: string[];
+  /** Why the case exists and what it guards; for people, never graded. */
+  notes?: string;
 }
 
 /** One tool call as the agent made it, with its parsed input and output. */
@@ -167,586 +198,18 @@ export interface AssistantEvalSet {
   cases: AssistantEvalCase[];
 }
 
-const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
-  {
-    id: 'champion-2022',
-    question: 'Who won the 2022 World Cup?',
-    intent: 'Single-hop lookup against tournaments — the simplest happy path.',
-    scorers: [
-      checks.includes('Argentina'),
-      checks.calledTool('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
-    expectedSql:
-      'SELECT champion.common_name AS champion ' +
-      'FROM world_cup.tournaments tournament ' +
-      'JOIN world_cup.teams champion ON champion.id = tournament.champion_team_id ' +
-      'WHERE tournament.tournament_year = 2022',
-  },
-  {
-    id: 'final-score-2018',
-    question: 'What was the score of the 2018 World Cup final?',
-    intent:
-      'Filter matches by stage and tournament, then read both goal columns.',
-    scorers: [
-      checks.matches(/4\s*[-–:]\s*2/),
-      checks.includes('France'),
-      checks.calledTool('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
-    expectedSql:
-      'SELECT home.common_name AS home_team, away.common_name AS away_team, ' +
-      'match.home_goals, match.away_goals ' +
-      'FROM world_cup.matches match ' +
-      'JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id ' +
-      'JOIN world_cup.teams home ON home.id = match.home_team_id ' +
-      'JOIN world_cup.teams away ON away.id = match.away_team_id ' +
-      "WHERE tournament.tournament_year = 2018 AND match.stage = 'final'",
-  },
-  {
-    id: 'top-scorer-2022',
-    question: 'Who scored the most goals in the 2022 World Cup, and how many?',
-    intent:
-      'Aggregate over goals joined to players, excluding own goals — the classic GROUP BY question.',
-    scorers: [
-      checks.includes('Messi'),
-      checks.matches(/\b4\b/),
-      checks.calledTool('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
-    expectedSql:
-      'SELECT player, goals FROM world_cup.v_player_goal_totals ' +
-      'WHERE tournament_year = 2022 ORDER BY goals DESC, player LIMIT 1',
-  },
-  {
-    id: 'shootouts',
-    question:
-      'Which knockout matches went to a penalty shootout, and who advanced?',
-    intent:
-      'Requires noticing that shootouts are encoded as non-null penalty columns, not a flag.',
-    scorers: [
-      checks.includes('Croatia'),
-      checks.matches(/Argentina/i),
-      checks.calledTool('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
-    expectedSql:
-      'SELECT tournament_year, home_team, away_team, winner ' +
-      'FROM world_cup.v_match_results WHERE home_penalties IS NOT NULL ' +
-      'ORDER BY tournament_year, match_number',
-  },
-  {
-    id: 'biggest-venue',
-    // Several matches can tie at the same venue and attendance. The question
-    // asks for the distinct venue/attendance fact, not the number of matches.
-    resultSetOptions: { distinctRows: true },
-    question:
-      'Which stadium hosted the best-attended match, and what was the attendance?',
-    intent: 'Join matches to venues and order by a nullable measure.',
-    scorers: [
-      checks.includes('Lusail'),
-      checks.matches(/88[,.]?966/),
-      checks.calledTool('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
-    expectedSql:
-      'SELECT DISTINCT venue, attendance FROM world_cup.v_match_results ' +
-      'WHERE attendance = (SELECT MAX(attendance) FROM world_cup.v_match_results)',
-  },
-  {
-    id: 'schema-discovery',
-    question: 'What data do I have available to analyse?',
-    intent:
-      'Pure discovery — must inspect the session datasets rather than invent entities or run SQL.',
-    scorers: [
-      // The session context already lists the entities, so calling
-      // list_entities is not required (agents-evals, BA-209).
-      checks.includes('matches'),
-      checks.didNotCall('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
-  },
-  {
-    id: 'ambiguous-best-team',
-    question: 'Which team performed best?',
-    intent:
-      'Ambiguous on both metric and tournament — the agent must ask instead of guessing.',
-    scorers: [
-      checks.calledTool('ask_clarification'),
-      checks.didNotCall('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
-    // Regex can confirm ask_clarification fired; it cannot judge whether the
-    // question itself is well-formed, so that quality dimension goes to the
-    // judge instead of a brittle text check.
-    judgeRubric:
-      'The question ("Which team performed best?") is ambiguous on both the ' +
-      'performance metric (goals? wins? possession?) and the scope ' +
-      '(which tournament/year). Score pass=true only if the final answer is ' +
-      'itself a clarifying question — not an attempt to answer with data — ' +
-      'that offers 2-4 concrete, well-formed options grounded in this World ' +
-      'Cup dataset (e.g. naming an actual metric like goals/wins/possession, ' +
-      'or an actual tournament year in the data such as 2018 or 2022), and ' +
-      'that does not state any performance figures as if they were the ' +
-      'answer. Score pass=false if it guesses an answer, invents a metric ' +
-      'or scope not in the data, or asks a vague open-ended question with no ' +
-      'concrete options.',
-  },
-  {
-    id: 'possession-vs-result',
-    question:
-      'In the 2022 knockout rounds, did the team with more possession usually win?',
-    intent:
-      'Two-table reasoning over match_team_statistics — the answer must be a judgement backed by counts, not a row dump.',
-    scorers: [
-      checks.calledTool('run_readonly_sql'),
-      checks.matches(/\b(possession|%)\b/i),
-      checks.noToolErrors(),
-    ],
-    // No expectedSql: the reference answer here is two scalar counts, and
-    // `runResultSetCheck` compares row sets positionally, so it cannot tell
-    // that a wide reference row ({won: 2, lost: 6}) and the equivalent long
-    // aggregate ([{outcome, matches}, …]) state the same fact. A correct
-    // agent that grouped by outcome instead of pivoting scored 0 against a
-    // reference it actually agreed with. Both orientations answer the
-    // question, so the counts are graded in the rubric below instead.
-    judgeRubric:
-      'The question asks whether, in the 2022 knockout rounds, the team with ' +
-      'more possession usually won. In this dataset the answer is NO: of the ' +
-      '8 knockout matches, the team with higher possession won 2 and lost 6. ' +
-      'Score pass=true only if the final answer concludes that more ' +
-      'possession did NOT usually win, and backs it with counts or ' +
-      'percentages consistent with 2 of 8 won / 6 of 8 lost (equivalently ' +
-      '25% / 75%). Any query shape is acceptable — per-stage breakdowns, ' +
-      'per-match tables or a single pivoted row all count, as do minor ' +
-      'rewordings. Score pass=false if it concludes more possession usually ' +
-      'won, gives no counts at all, or states counts that contradict 2 won / ' +
-      '6 lost.',
-  },
-  {
-    id: 'out-of-scope',
-    question: 'How many goals did Pelé score in the 1970 World Cup?',
-    intent:
-      'The fixture only covers 2018 and 2022 — the agent must say so instead of fabricating a number.',
-    // The regex/excludes text checks this case used to run were brittle (a
-    // refusal phrased without any of the listed words would fail, and a
-    // fabricated answer that avoided the exact phrase "Pelé scored 4" would
-    // pass) — a judge reads the actual claim instead of matching words.
-    scorers: [checks.noToolErrors()],
-    judgeRubric:
-      'The question asks about 1970, a year this dataset does not cover (it ' +
-      'only has 2018 and 2022). Score pass=true only if the final answer ' +
-      'clearly states it cannot answer for 1970 AND explicitly states what ' +
-      'the data DOES cover (2018 and/or 2022), without inventing any goal ' +
-      'count, statistic or claim about Pelé or the 1970 tournament. Score ' +
-      'pass=false if it states or implies any 1970 statistic, or fails to ' +
-      'state what the data actually covers.',
-  },
-  {
-    id: 'visual-request',
-    question: 'Chart the goals scored by each team in the 2022 knockout stage.',
-    intent:
-      'Answer first, then build a visual — checks the SQL → create_visual ordering.',
-    scorers: [
-      checks.toolOrder(['run_readonly_sql', 'create_visual']),
-      checks.calledTool('create_visual'),
-      checks.noToolErrors(),
-    ],
-    judgeRubric:
-      'The user asked for a chart of goals scored by each team in the 2022 ' +
-      'World Cup knockout stage. Score pass=true only if a create_visual (or ' +
-      'update_visual) tool call succeeded and its title/description ' +
-      'plausibly describes a chart of goals per team for the 2022 knockout ' +
-      'matches (not an unrelated metric, an unrelated tournament/year, or a ' +
-      'chart that clearly covers something else). Score pass=false if no ' +
-      'visual tool call succeeded, or the visual it produced does not match ' +
-      'this request.',
-  },
-  {
-    id: 'no-clarification-best-team',
-    question: 'Which team performed best?',
-    intent:
-      'The ambiguous question again, for an agent without ask_clarification — it must pick a reading, answer it and state the assumption.',
-    agentTools: ['sample_rows', 'visuals'],
-    scorers: [
-      checks.calledTool('run_readonly_sql'),
-      checks.didNotCall('ask_clarification'),
-      checks.noToolErrors(),
-    ],
-    judgeRubric:
-      'The question ("Which team performed best?") does not say what "best" ' +
-      'means, and this assistant cannot ask the user a question back, so it ' +
-      'must pick a reading itself and answer it. Score pass=true only if the ' +
-      'final answer explicitly names the measure it took as "best" (e.g. ' +
-      'matches won, final placing, goals scored) and gives figures for that ' +
-      'measure that come from the queries it ran, naming the team or teams ' +
-      'that come out on top. Covering several measures is fine as long as ' +
-      'each is named and backed by figures. Score pass=false if the answer ' +
-      'asks the user which measure they mean instead of answering, gives no ' +
-      'figures, does not say which measure it used, or states figures the ' +
-      'tool calls do not support.',
-  },
-  {
-    id: 'no-visuals-chart-request',
-    question: 'Show me a chart of goals scored per World Cup tournament.',
-    intent:
-      'A chart request for an agent without visuals — it must say it cannot draw one here and give the numbers instead.',
-    agentTools: ['sample_rows', 'ask_clarification'],
-    scorers: [
-      checks.calledTool('run_readonly_sql'),
-      checks.didNotCall('create_visual'),
-      checks.noToolErrors(),
-    ],
-    judgeRubric:
-      'The user asked for a chart of goals scored per World Cup tournament, ' +
-      'but this assistant cannot create visuals. In this dataset the ' +
-      'knockout matches of 2018 have 23 goals and those of 2022 have 24 ' +
-      '(penalty shootouts not counted). Score pass=true only if the final ' +
-      'answer says, briefly, that it cannot draw a chart or visual here AND ' +
-      'gives the goals per tournament with figures consistent with 23 for ' +
-      '2018 and 24 for 2022 (a table or list is fine; shootout penalties ' +
-      'shown separately are fine). Score pass=false if it claims to have ' +
-      'created a chart, pastes HTML, CSS or JavaScript, gives no figures, or ' +
-      'states totals that contradict 23 and 24.',
-  },
-];
-
 /**
- * The same World Cup data behind a REST API. The connector materialises the
- * endpoints a statement references into in-memory SQLite tables named by their
- * dotted key, so the reference SQL below is SQLite reading `api.world_cup.*`
- * (not PostgreSQL reading `world_cup.*`). Only `expectedSql` differs from the
- * PostgreSQL cases: questions, scorers and rubrics are shared, so the two sets
- * grade the same behaviour over two datasource kinds.
- *
- * The `match` alias becomes `m` (MATCH is a SQLite operator keyword) and the
- * views arrive precomputed from the API, so nothing here needs PostgreSQL-only
- * syntax (`::` casts, `ILIKE`, `FILTER`). Semantics match the originals.
+ * Every question set the assistant suite offers, in the order of
+ * `EVAL_SET_FILES`: World Cup, then its REST API and Databricks variants,
+ * Formula 1, the REST- and Databricks-only sets and the
+ * synthetic domains. The questions are data under `./sets/` (ADR-0015), read
+ * and checked by `loadEvalSets` when this module loads, so a set file the
+ * loader refuses stops the backend instead of running a broken case. Adding
+ * a question is an edit to a set file, not to this module or the questions
+ * tab.
  */
-const WORLD_CUP_REST_SQL: Record<string, string> = {
-  'champion-2022':
-    'SELECT champion.common_name AS champion ' +
-    'FROM api.world_cup.tournaments tournament ' +
-    'JOIN api.world_cup.teams champion ON champion.id = tournament.champion_team_id ' +
-    'WHERE tournament.tournament_year = 2022',
-  'final-score-2018':
-    'SELECT home.common_name AS home_team, away.common_name AS away_team, ' +
-    'm.home_goals, m.away_goals ' +
-    'FROM api.world_cup.matches m ' +
-    'JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id ' +
-    'JOIN api.world_cup.teams home ON home.id = m.home_team_id ' +
-    'JOIN api.world_cup.teams away ON away.id = m.away_team_id ' +
-    "WHERE tournament.tournament_year = 2018 AND m.stage = 'final'",
-  'top-scorer-2022':
-    'SELECT player, goals FROM api.world_cup.v_player_goal_totals ' +
-    'WHERE tournament_year = 2022 ORDER BY goals DESC, player LIMIT 1',
-  shootouts:
-    'SELECT tournament_year, home_team, away_team, winner ' +
-    'FROM api.world_cup.v_match_results WHERE home_penalties IS NOT NULL ' +
-    'ORDER BY tournament_year, match_number',
-  'biggest-venue':
-    'SELECT DISTINCT venue, attendance FROM api.world_cup.v_match_results ' +
-    'WHERE attendance = (SELECT MAX(attendance) FROM api.world_cup.v_match_results)',
-};
-
-/**
- * Derive the REST variant of each base case: `rest-` id prefix, and the
- * `expectedSql` swapped for its SQLite port. A case with no port must have had
- * no reference SQL to begin with — the check throws otherwise, so a new
- * PostgreSQL reference cannot silently go ungraded here.
- */
-function restVariants(
-  base: AssistantEvalCase[],
-  sql: Record<string, string>,
-): AssistantEvalCase[] {
-  const unknown = Object.keys(sql).filter(
-    (id) => !base.some((evalCase) => evalCase.id === id),
-  );
-  if (unknown.length > 0) {
-    throw new Error(
-      `REST SQL overrides for unknown cases: ${unknown.join(', ')}`,
-    );
-  }
-  return base.map(({ id, expectedSql, ...evalCase }) => {
-    if (expectedSql && !sql[id]) {
-      throw new Error(`Case "${id}" has expectedSql but no REST port`);
-    }
-    return {
-      ...evalCase,
-      id: `rest-${id}`,
-      ...(expectedSql ? { expectedSql: sql[id] } : {}),
-    };
-  });
-}
-
-const WORLD_CUP_REST_EVAL_CASES: AssistantEvalCase[] = restVariants(
-  WORLD_CUP_EVAL_CASES,
-  WORLD_CUP_REST_SQL,
-);
-
-/**
- * Grounded in the Formula 1 fixture (`formula1` schema, 1950-2026). Every
- * figure below was run against that database before it was written down, so a
- * failing check means the agent got it wrong rather than the fixture drifting.
- *
- * The `expectedSql` references are deliberately narrow — usually the single
- * figure that settles the question. `runResultSetCheck` compares
- * width-tolerantly, so a narrow reference matches any wider agent result that
- * carries the same fact, which keeps the check from failing merely because the
- * agent projected `driver.full_name` where the reference used `driver.name`.
- */
-const FORMULA_1_EVAL_CASES: AssistantEvalCase[] = [
-  {
-    id: 'f1-champion-2023',
-    question:
-      "Who won the 2023 Formula 1 drivers' championship, and how many points " +
-      'did they finish on?',
-    intent:
-      'Single-hop lookup against the season standings — the simplest happy path.',
-    scorers: [
-      checks.includes('Verstappen'),
-      checks.matches(/575/),
-      checks.calledTool('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
-    // Reference is the points total alone: the champion's name lives in
-    // `driver` under both `name` and `full_name`, and either projection is a
-    // correct answer, so the points are what the comparison pins down.
-    expectedSql:
-      'SELECT standing.points ' +
-      'FROM formula1.season_driver_standing standing ' +
-      'WHERE standing.year = 2023 AND standing.position_number = 1',
-  },
-  {
-    id: 'f1-british-gp-2023',
-    question:
-      'At which circuit was the 2023 British Grand Prix held, and how many ' +
-      'laps did the race run to?',
-    intent:
-      'Filter a race by season and grand prix, which needs the race/grand_prix (and circuit) join rather than a single table.',
-    scorers: [
-      checks.includes('Silverstone'),
-      checks.matches(/\b52\b/),
-      checks.calledTool('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
-    expectedSql:
-      'SELECT race.laps ' +
-      'FROM formula1.race race ' +
-      'JOIN formula1.grand_prix grand_prix ON grand_prix.id = race.grand_prix_id ' +
-      "WHERE race.year = 2023 AND grand_prix.name = 'Great Britain'",
-  },
-  {
-    id: 'f1-most-race-wins',
-    question:
-      'Which driver has won the most Grands Prix in Formula 1 history, and ' +
-      'how many did they win?',
-    intent:
-      'A "most" question with a verifiable number — the answer is the same whether it is read off the driver totals or aggregated from race results.',
-    scorers: [
-      checks.includes('Hamilton'),
-      checks.matches(/\b106\b/),
-      checks.calledTool('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
-    expectedSql:
-      'SELECT driver.total_race_wins AS wins ' +
-      'FROM formula1.driver driver ' +
-      'ORDER BY driver.total_race_wins DESC LIMIT 1',
-  },
-  {
-    id: 'f1-most-titles-tie',
-    question:
-      "Which drivers have won the most Formula 1 drivers' championships, and " +
-      'how many each?',
-    intent:
-      'A genuine tie at the top (two drivers on seven titles) — a LIMIT 1 answer is wrong here, so this catches agents that rank instead of handling ties.',
-    scorers: [
-      checks.includes('Schumacher'),
-      checks.matches(/Hamilton/i),
-      checks.calledTool('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
-    expectedSql:
-      'SELECT driver.name AS driver, COUNT(*) AS championships ' +
-      'FROM formula1.season_driver_standing standing ' +
-      'JOIN formula1.driver driver ON driver.id = standing.driver_id ' +
-      'WHERE standing.position_number = 1 ' +
-      'GROUP BY driver.name ' +
-      'HAVING COUNT(*) = (SELECT MAX(title_count) FROM (' +
-      'SELECT COUNT(*) AS title_count FROM formula1.season_driver_standing ' +
-      'WHERE position_number = 1 GROUP BY driver_id) counts) ' +
-      'ORDER BY driver',
-  },
-  {
-    id: 'f1-monaco-2024-podium',
-    question: 'Who finished on the podium at the 2024 Monaco Grand Prix?',
-    intent:
-      'Needs the race_result view (or the `type` discriminator on race_data) rather than a base table — reading race_data without filtering its type returns every session, not the race.',
-    scorers: [
-      checks.includes('Leclerc'),
-      checks.matches(/Piastri/i),
-      checks.calledTool('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
-    expectedSql:
-      'SELECT driver.name AS driver ' +
-      'FROM formula1.race_result race_result ' +
-      'JOIN formula1.race race ON race.id = race_result.race_id ' +
-      'JOIN formula1.driver driver ON driver.id = race_result.driver_id ' +
-      "WHERE race.year = 2024 AND race.grand_prix_id = 'monaco' " +
-      'AND race_result.position_number <= 3 ' +
-      'ORDER BY race_result.position_number',
-  },
-  {
-    id: 'f1-schema-discovery',
-    question: 'What Formula 1 data do I have available to analyse?',
-    intent:
-      'Pure discovery — must inspect the session datasets rather than invent entities or run SQL.',
-    scorers: [
-      // The session context already lists the entities (BA-209).
-      checks.includes('driver'),
-      checks.didNotCall('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
-  },
-  {
-    id: 'f1-ambiguous-dominant-driver',
-    question: 'Which driver was the most dominant?',
-    intent:
-      'Ambiguous on both metric and era — 77 seasons of data, and the agent must ask instead of guessing.',
-    scorers: [
-      checks.calledTool('ask_clarification'),
-      checks.didNotCall('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
-    judgeRubric:
-      'The question ("Which driver was the most dominant?") is ambiguous on ' +
-      'both the metric (race wins? championships? pole positions? points? ' +
-      'win rate?) and the scope (this dataset covers every season from 1950 ' +
-      'to 2026, so "dominant" could mean a single season, an era, or a whole ' +
-      'career). Score pass=true only if the final answer is itself a ' +
-      'clarifying question — not an attempt to answer with data — that ' +
-      'offers 2-4 concrete, well-formed options grounded in this Formula 1 ' +
-      'dataset (e.g. naming an actual metric such as race wins, ' +
-      'championships won, pole positions or points, or an actual season or ' +
-      'era in the data such as 2023 or the 2010s), and that does not state ' +
-      'any driver as the answer or quote any figures as if they were the ' +
-      'answer. Score pass=false if it guesses an answer, invents a metric or ' +
-      'scope not in the data, or asks a vague open-ended question with no ' +
-      'concrete options.',
-  },
-  {
-    id: 'f1-pole-to-win-2023',
-    question:
-      'In the 2023 season, did the driver who started on pole usually go on ' +
-      'to win the race?',
-    intent:
-      'Joins the grid/pole position to the race result across 22 races — the answer must be a judgement backed by counts, not a row dump.',
-    scorers: [
-      checks.calledTool('run_readonly_sql'),
-      checks.matches(/\b(pole|grid)\b/i),
-      checks.noToolErrors(),
-    ],
-    // No expectedSql: the reference answer is two scalar counts, and
-    // `runResultSetCheck` compares row sets positionally, so it cannot tell
-    // that a wide reference row ({won: 14, races: 22}) and the equivalent long
-    // aggregate ([{outcome, races}, …]) state the same fact — see the
-    // `possession-vs-result` note above. The counts are graded in the rubric.
-    judgeRubric:
-      'The question asks whether, in the 2023 Formula 1 season, the driver ' +
-      'who started on pole usually won the race. In this dataset the answer ' +
-      'is YES: of the 22 races in 2023, the pole-sitter won 14 and failed to ' +
-      'win 8 (about 64%). Both readings of "pole" — the pole_position flag ' +
-      'and grid position 1 — give the same 14 of 22. Score pass=true only if ' +
-      'the final answer concludes that the pole-sitter DID usually win, and ' +
-      'backs it with counts or percentages consistent with 14 of 22 wins ' +
-      '(equivalently 8 non-wins, or roughly 64%). Any query shape is ' +
-      'acceptable — a per-race table, a grouped aggregate or a single pivoted ' +
-      'row all count, as do minor rewordings and rounding (63%-64%). Score ' +
-      'pass=false if it concludes the pole-sitter usually did not win, gives ' +
-      'no counts at all, or states counts that contradict 14 of 22.',
-  },
-  {
-    id: 'f1-out-of-scope-motogp',
-    question: 'Who won the 2023 MotoGP world championship?',
-    intent:
-      'The fixture covers Formula 1 only — the agent must say so instead of fabricating a MotoGP result.',
-    scorers: [checks.noToolErrors()],
-    judgeRubric:
-      'The question asks about MotoGP, a motorcycle racing series this ' +
-      'dataset does not contain — it holds Formula 1 world championship data ' +
-      'only, for the seasons 1950 to 2026. Score pass=true only if the final ' +
-      'answer clearly states it cannot answer the MotoGP question from this ' +
-      'data AND explicitly states what the data DOES cover (Formula 1, and ' +
-      'ideally its 1950-2026 season range or the kind of entities it holds ' +
-      'such as drivers, constructors, races and standings), without naming a ' +
-      'MotoGP champion or inventing any MotoGP fact. Score pass=false if it ' +
-      'states or implies any 2023 MotoGP result, or fails to state what the ' +
-      'data actually covers.',
-  },
-  {
-    id: 'f1-visual-request',
-    question:
-      'Chart the total points scored by each constructor in the 2023 season.',
-    intent:
-      'Answer first, then build a visual — checks the SQL → create_visual ordering.',
-    scorers: [
-      checks.toolOrder(['run_readonly_sql', 'create_visual']),
-      checks.calledTool('create_visual'),
-      checks.noToolErrors(),
-    ],
-    judgeRubric:
-      'The user asked for a chart of the total points scored by each ' +
-      'constructor in the 2023 Formula 1 season (ten constructors scored, ' +
-      'from Red Bull on 860 down to Haas on 12). Score pass=true only if a ' +
-      'create_visual (or update_visual) tool call succeeded and its ' +
-      'title/description plausibly describes a chart of points per ' +
-      'constructor for the 2023 season (not an unrelated metric, an ' +
-      'unrelated season, or drivers instead of constructors). Score ' +
-      'pass=false if no visual tool call succeeded, or the visual it produced ' +
-      'does not match this request.',
-  },
-];
-
-/**
- * Every question set the assistant suite offers. Adding another means
- * appending a set here, not touching the questions tab.
- */
-export const ASSISTANT_EVAL_SETS: AssistantEvalSet[] = [
-  {
-    id: 'world-cup',
-    name: 'World Cup',
-    description:
-      'Questions against the bundled World Cup sample (2018 and 2022). ' +
-      'Select its PostgreSQL datasource with a saved dataset containing the ' +
-      'world_cup tables and views.',
-    fixtureId: 'world-cup',
-    cases: WORLD_CUP_EVAL_CASES,
-  },
-  {
-    id: 'world-cup-rest',
-    name: 'World Cup (REST API)',
-    description:
-      'The same World Cup questions against the sample served by a local ' +
-      "REST API ('npm run worldcup:api'). Select its REST API datasource " +
-      'with a saved dataset containing the api.world_cup endpoints; reference ' +
-      'SQL runs in SQLite over the fetched endpoints.',
-    fixtureId: 'world-cup-rest',
-    cases: WORLD_CUP_REST_EVAL_CASES,
-  },
-  {
-    id: 'formula-1',
-    name: 'Formula 1',
-    description:
-      'Questions against the bundled Formula 1 sample (1950 to 2026) — ' +
-      'seasons, drivers, constructors, circuits, races, standings and the ' +
-      'per-session result views. Select its PostgreSQL datasource with a ' +
-      'saved dataset containing the formula1 tables and views.',
-    fixtureId: 'formula-1',
-    cases: FORMULA_1_EVAL_CASES,
-  },
-];
+export const ASSISTANT_EVAL_SETS: AssistantEvalSet[] =
+  toAssistantEvalSets(loadEvalSets());
 
 /**
  * Every case across every set, flattened. Case ids are unique suite-wide, so
@@ -831,8 +294,8 @@ export interface EvalToolCall {
   error?: string;
 }
 
-/** One scorer's verdict on a question, with why it landed there. */
-export interface EvalCheckResult {
+/** What a check produces before the runner gives it a status. */
+export interface ScoredCheckResult {
   id: string;
   /** The scorer's own description, e.g. 'Checks if output includes "X"'. */
   description: string;
@@ -842,10 +305,28 @@ export interface EvalCheckResult {
   reason?: string;
 }
 
-/** Outcome of one question. */
+/** One check's verdict on a question, with why it landed there. */
+export interface EvalCheckResult extends ScoredCheckResult {
+  /** `not-scored` only for a judge check the run did not call (R146). */
+  status: EvalStatus;
+  /** The criterion the check measures, when it has one (R146). */
+  criterion?: string;
+}
+
+/**
+ * Outcome of one question: of one attempt as `runAssistantEvalCase` returns
+ * it, and of all its attempts once `foldAttempts` (pass^k, R211) has folded
+ * them. With more than one attempt, the scores, checks, answer, tool calls,
+ * error and duration are the representative attempt's.
+ */
 export interface AssistantEvalCaseResult {
   id: string;
+  /** The question as sent, after any setup the target's case needed. */
   question: string;
+  /** The case's category (R147); absent on runs saved before BA-184. */
+  category?: string;
+  /** The case's split (R215); `dev` for a case that names none. */
+  split: EvalSplit;
   /** Score per scorer id, 0..1. Empty when the run threw. */
   scores: Record<string, number>;
   /** Per-check verdicts, in the order the case declares them. */
@@ -854,12 +335,42 @@ export interface AssistantEvalCaseResult {
   answer: string;
   /** The tool calls the agent made, in order — the executed process. */
   toolCalls: EvalToolCall[];
-  /** True when every scorer scored 1. */
+  /** Passed, failed or not scored (R147). */
+  status: EvalStatus;
+  /** True exactly when `status` is `passed`: a not-scored question is not. */
   passed: boolean;
   /** Set when the agent run itself failed (connection, model, tool crash). */
   error?: string;
   /** Wall time for the question, in milliseconds. */
   durationMs: number;
+  /** The attempts that passed, and the attempts made (R211). */
+  passes: number;
+  runs: number;
+  /** Some attempts passed and some failed; the question counts as failed. */
+  flaky: boolean;
+  /** Every attempt in order; only when `runs` is above 1. */
+  attempts?: EvalAttempt[];
+  /** Tokens per agent and model, over every attempt (R219). */
+  usage?: ModelUsageEntry[];
+  /** US dollars over every attempt; `null` when not priced (R221). */
+  costUsd?: number | null;
+}
+
+/** One attempt of a question (R210), as a result's `attempts` holds it. */
+export interface EvalAttempt {
+  /** 1-based. */
+  attempt: number;
+  status: EvalStatus;
+  passed: boolean;
+  scores: Record<string, number>;
+  checkResults: EvalCheckResult[];
+  answer: string;
+  toolCalls: EvalToolCall[];
+  error?: string;
+  durationMs: number;
+  /** This attempt's tokens alone, and their cost (`null`: not priced). */
+  usage: ModelUsageEntry[];
+  costUsd: number | null;
 }
 
 /** Tool payloads can be whole result sets; keep the trace readable. */
@@ -1095,14 +606,17 @@ export function fixtureForCases(
  * plus, when a throwaway eval session exists, the same `session-id` and a
  * live turn-records array `create_visual`/`update_visual` read via
  * `TURN_RECORDS_CONTEXT_KEY` in a real chat turn (see
- * `SessionsService.streamMessage`).
+ * `SessionsService.streamMessage`), and the attempt's usage sink, which the
+ * SQL fixer, the visual designer and the tool-only synthesis report their
+ * model calls to (agents.md 8.3). The sink is not part of any prompt.
  */
 function evalRequestContext(
   datasets: string[],
   sessionId: string | undefined,
   turnRecords: ToolDataRecord[],
   question: string,
-  agentTools?: readonly OptionalAgentTool[],
+  agentTools: readonly OptionalAgentTool[] | undefined,
+  usageSink: UsageSink,
 ): RequestContext {
   const requestContext = new RequestContext();
   requestContext.set(DATASETS_CONTEXT_KEY, datasets);
@@ -1114,6 +628,7 @@ function evalRequestContext(
   if (agentTools && !isFullSelection(agentTools)) {
     requestContext.set(AGENT_TOOLS_CONTEXT_KEY, [...agentTools]);
   }
+  requestContext.set(USAGE_SINK_CONTEXT_KEY, usageSink);
   return requestContext;
 }
 
@@ -1162,12 +677,11 @@ const EVAL_SESSION_PLACEHOLDER_ANSWER =
 /**
  * A real, disposable session so `create_visual`/`update_visual` — which read
  * `session-id` from requestContext and look up session state — behave the
- * same way they do in a real chat turn. Both callers of the eval suite
- * (`EvalRunsService`, the in-app runner, and `run-assistant-evals.ts`, the
- * CLI) boot the full Nest app and can hand this a `SessionsService`; callers
- * that cannot (e.g. a lightweight unit test) simply omit it and the suite
- * still runs — `create_visual` then reports "No session in context", scored
- * like any other tool error.
+ * same way they do in a real chat turn. The one runner of the eval suite,
+ * `EvalRunsService`, serves both the app and the CLI (`run-assistant-evals.ts`
+ * boots the full Nest app); a run that cannot create one still runs, and
+ * `create_visual` then reports "No session in context", scored like any
+ * other tool error.
  */
 export async function createEvalSession(
   sessions: SessionsService,
@@ -1214,13 +728,27 @@ function parseJsonObject(text: string | undefined): unknown {
 /** Scorer id for the LLM-judge check, shown in the report's checks table. */
 const LLM_JUDGE_CHECK_ID = 'llm-judge';
 
+/** A scored check with its status from its verdict, and its criterion. */
+function withStatus(
+  check: ScoredCheckResult,
+  criterion: string | undefined,
+): EvalCheckResult {
+  return {
+    ...check,
+    status: check.passed ? 'passed' : 'failed',
+    ...(criterion !== undefined ? { criterion } : {}),
+  };
+}
+
 /**
  * Score a case's tool calls + final answer against its `judgeRubric` with
  * one structured-output `generate` call on `evalJudgeAgent` (same configured
  * model the assistant runs on, via `resolveAgentModel`). Returns `undefined`
  * when the case has no rubric. A judge that errors or returns unparseable
  * JSON scores 0 rather than crashing the run — the run's other checks and
- * remaining cases must still complete.
+ * remaining cases must still complete. The judge's call is reported to
+ * `usageSink` (R219): its result, or none when the call threw, which counts
+ * as a call that reported no tokens.
  */
 async function runJudgeCheck(
   evalCase: AssistantEvalCase,
@@ -1230,9 +758,11 @@ async function runJudgeCheck(
   question: string = evalCase.question,
   /** Earlier turns sent before the question, if any. */
   history: EvalHistoryMessage[] = [],
-): Promise<EvalCheckResult | undefined> {
+  usageSink?: UsageSink,
+): Promise<ScoredCheckResult | undefined> {
   if (!evalCase.judgeRubric) return undefined;
   const description = `LLM judge: ${evalCase.judgeRubric}`;
+  let called = false;
   try {
     const prompt = [
       ...(history.length
@@ -1263,20 +793,23 @@ async function runJudgeCheck(
       answer || '(the assistant produced no answer text)',
     ].join('\n');
 
+    // Deterministic-ish grading: low temperature where the provider
+    // supports it, via providerOptions rather than a top-level field the
+    // structured-output call overload does not accept.
+    const providerOptions = providerOptionsFor(await resolveAgentModel(), {
+      temperature: 0,
+    });
+    called = true;
     const result = await evalJudgeAgent.generate(prompt, {
       maxSteps: 1,
       toolChoice: 'none',
-      // Deterministic-ish grading: low temperature where the provider
-      // supports it, via providerOptions rather than a top-level field the
-      // structured-output call overload does not accept.
-      providerOptions: providerOptionsFor(await resolveAgentModel(), {
-        temperature: 0,
-      }),
+      providerOptions,
       structuredOutput: {
         schema: evalJudgeOutputSchema,
         jsonPromptInjection: 'inline',
       },
     });
+    usageSink?.('judge', result);
     const parsed = evalJudgeOutputSchema.safeParse(
       (result as { object?: unknown }).object ??
         parseJsonObject((result as { text?: string }).text),
@@ -1298,6 +831,7 @@ async function runJudgeCheck(
       reason: parsed.data.pass ? undefined : parsed.data.reason,
     };
   } catch (err) {
+    if (called) usageSink?.('judge', undefined);
     return {
       id: LLM_JUDGE_CHECK_ID,
       description,
@@ -1309,9 +843,74 @@ async function runJudgeCheck(
 }
 
 /**
- * Run one question. Each case is its own `runEvals` call because `runEvals`
- * keys and averages scores across the data items of a single call — one call
- * for all ten questions would collapse them into one set of numbers.
+ * The judge check of a case with a rubric (R145, R146): the judge's verdict
+ * when the run's option lets it grade this case's category, else a not-scored
+ * check, with no model call. Its criterion follows the case's category.
+ */
+async function judgeCheckFor(
+  evalCase: AssistantEvalCase,
+  judge: Readonly<EvalJudgeSetting>,
+  answer: string,
+  toolCalls: EvalToolCall[],
+  question: string,
+  history: EvalHistoryMessage[],
+  usageSink?: UsageSink,
+): Promise<EvalCheckResult | undefined> {
+  if (!evalCase.judgeRubric) return undefined;
+  const criterion = judgeCriterion(evalCase.category);
+  if (!shouldJudge(judge, evalCase.category)) {
+    return {
+      id: LLM_JUDGE_CHECK_ID,
+      description: `LLM judge: ${evalCase.judgeRubric}`,
+      score: 0,
+      passed: false,
+      status: 'not-scored',
+      reason: JUDGE_OFF_REASON,
+      criterion,
+    };
+  }
+  const check = await runJudgeCheck(
+    evalCase,
+    answer,
+    toolCalls,
+    question,
+    history,
+    usageSink,
+  );
+  return check ? withStatus(check, criterion) : undefined;
+}
+
+/** What one attempt needs to know about the run it belongs to. */
+export interface EvalAttemptOptions {
+  /**
+   * The router id of the model the run's agent runs on (`EvalRunView.model`),
+   * recorded for every call whose producer names no model (R219). Resolved
+   * for the attempt when omitted.
+   */
+  model?: string;
+}
+
+/**
+ * The router id of the model the evaluated agent runs on now
+ * (`openai/gpt-4o-mini`), as a run records it (R22, R219); undefined when it
+ * cannot be resolved, which never fails a run.
+ */
+export async function evalRunModel(): Promise<string | undefined> {
+  try {
+    const config = await resolveAgentModel();
+    return config ? modelIdOf(config) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Run one question once: one attempt (R210). Each case is its own `runEvals`
+ * call because `runEvals` keys and averages scores across the data items of
+ * a single call — one call for all ten questions would collapse them into
+ * one set of numbers. The result is the attempt's alone (`runs` 1), with the
+ * tokens of every model call made for it (R219); `runCaseAttempts` folds a
+ * question's attempts.
  */
 export async function runAssistantEvalCase(
   evalCase: AssistantEvalCase,
@@ -1320,13 +919,16 @@ export async function runAssistantEvalCase(
   /**
    * The curated-knowledge system block (`KnowledgeService.definitionBlock`)
    * for these datasets — same block a real chat turn gets from
-   * `SessionsService.agentContext`. Both callers (`EvalRunsService`, the CLI
-   * in `run-assistant-evals.ts`) populate this from `KnowledgeService`;
-   * omitted (or empty) when neither wires one in.
+   * `SessionsService.agentContext`. `EvalRunsService`, which runs the suite
+   * for the app and the CLI, populates this from `KnowledgeService`; omitted
+   * (or empty) when no caller wires one in.
    */
   knowledgeBlock?: string,
   /** The agent the case runs on; the assistant when omitted (agents.md 8.1). */
   target: EvalTarget = ASSISTANT_EVAL_TARGET,
+  /** The run's judge option (R144); off unless the caller says otherwise. */
+  judge: Readonly<EvalJudgeSetting> = JUDGE_OFF,
+  options: EvalAttemptOptions = {},
 ): Promise<AssistantEvalCaseResult> {
   const startedAt = Date.now();
   // The question sent: the case's own, unless the target's setup fills it.
@@ -1341,8 +943,33 @@ export async function runAssistantEvalCase(
   // Populated live via onStepFinish as the run executes — the same records a
   // real turn would have threaded through TURN_RECORDS_CONTEXT_KEY.
   const turnRecords: ToolDataRecord[] = [];
+  // Every model call made for this attempt, by agent and model (R219). A
+  // producer that names no model ran on the run's.
+  const usage: ModelUsageEntry[] = [];
+  let runModel = options.model;
+  const usageSink: UsageSink = (agent, result, model) => {
+    try {
+      recordUsage(usage, agent, model ?? runModel, result);
+    } catch {
+      // Recording tokens never fails the attempt it measures.
+    }
+  };
+  // The agent's own generate: started, and whether its result was recorded.
+  let assistantCalled = false;
+  let assistantRecorded = false;
+  /** The fields every attempt result carries, whatever happened. */
+  const attemptFields = (status: EvalStatus) => ({
+    id: evalCase.id,
+    question,
+    ...(evalCase.category !== undefined ? { category: evalCase.category } : {}),
+    split: evalCase.split ?? 'dev',
+    passes: status === 'passed' ? 1 : 0,
+    runs: 1,
+    flaky: false,
+  });
 
   try {
+    runModel ??= await evalRunModel();
     const datasetSnapshots =
       await getDatasetToolServices().getDatasets(datasets);
     if (target.prepareQuestion) {
@@ -1364,6 +991,7 @@ export async function runAssistantEvalCase(
       turnRecords,
       question,
       evalCase.agentTools,
+      usageSink,
     );
     target.configureContext?.(requestContext);
     const orientation = await target.orientation({
@@ -1373,6 +1001,7 @@ export async function runAssistantEvalCase(
       vars,
     });
 
+    assistantCalled = true;
     const result = await runEvals({
       data: [
         {
@@ -1398,6 +1027,9 @@ export async function runAssistantEvalCase(
         onStepFinish: (step: unknown) => captureStepRecords(step, turnRecords),
       },
       onItemComplete: ({ targetResult, scorerResults }) => {
+        // The agent's generate, every step included (`totalUsage`).
+        usageSink('assistant', targetResult);
+        assistantRecorded = true;
         answer = String(targetResult?.text ?? '');
         toolCalls = extractToolCalls(targetResult);
         rawToolCalls = extractRawToolCalls(targetResult).map((call) => ({
@@ -1439,18 +1071,23 @@ export async function runAssistantEvalCase(
       scores[id] = typeof value === 'number' ? value : Number(value ?? 0);
     }
 
-    const checkResults: EvalCheckResult[] = evalCase.scorers.map((scorer) => {
-      const id = String(scorer.id ?? '');
-      const score = scores[id] ?? 0;
-      const passed = score === 1;
-      return {
-        id,
-        description: String(scorer.description ?? scorer.name ?? id),
-        score,
-        passed,
-        reason: passed ? undefined : checkReason(scorerPayloads[id]),
-      };
-    });
+    const checkResults: EvalCheckResult[] = evalCase.scorers.map(
+      (scorer, index) => {
+        const id = String(scorer.id ?? '');
+        const score = scores[id] ?? 0;
+        const passed = score === 1;
+        return withStatus(
+          {
+            id,
+            description: String(scorer.description ?? scorer.name ?? id),
+            score,
+            passed,
+            reason: passed ? undefined : checkReason(scorerPayloads[id]),
+          },
+          evalCase.checkCriteria?.[index],
+        );
+      },
+    );
 
     // Result-set comparison (Feature 1) — primary correctness signal for
     // cases with expectedSql, on top of the text/tool scorers above.
@@ -1461,24 +1098,30 @@ export async function runAssistantEvalCase(
       turnRecords,
       evalCase.resultSetOptions,
     );
-    if (resultSetCheck) checkResults.push(resultSetCheck);
+    if (resultSetCheck) checkResults.push(withStatus(resultSetCheck, 'D1'));
 
-    // Custom checks: tool arguments, call order, state read back.
+    // Custom checks: tool arguments, call order, state read back. They name
+    // no criterion.
     for (const check of evalCase.customChecks ?? []) {
       checkResults.push(
-        await runCustomCheck(check, {
-          answer,
-          toolCalls: rawToolCalls,
-          datasets,
-          vars,
-        }),
+        withStatus(
+          await runCustomCheck(check, {
+            answer,
+            toolCalls: rawToolCalls,
+            datasets,
+            vars,
+          }),
+          undefined,
+        ),
       );
     }
 
     // LLM-judge (Feature 2) — for cases where a regex/text check on the
-    // final answer would be too brittle.
-    const judgeCheck = await runJudgeCheck(
+    // final answer would be too brittle. Not called, and not scored, when
+    // the run's judge option leaves this case out (R145).
+    const judgeCheck = await judgeCheckFor(
       evalCase,
+      judge,
       answer,
       target.judgeTraceChars
         ? rawToolCalls.map((call) => ({
@@ -1495,31 +1138,41 @@ export async function runAssistantEvalCase(
         : toolCalls,
       question,
       history,
+      usageSink,
     );
     if (judgeCheck) checkResults.push(judgeCheck);
 
+    const status = questionStatus(checkResults);
     return {
-      id: evalCase.id,
-      question,
+      ...attemptFields(status),
       scores,
       checkResults,
       answer,
       toolCalls,
-      passed:
-        checkResults.length > 0 && checkResults.every((check) => check.passed),
+      status,
+      passed: status === 'passed',
       durationMs: Date.now() - startedAt,
+      usage,
+      costUsd: costUsdOf(usage),
     };
   } catch (err) {
+    // The generate threw before its result was recorded: a call whose
+    // tokens are unknown, never a free one (R219).
+    if (assistantCalled && !assistantRecorded) {
+      usageSink('assistant', undefined);
+    }
     return {
-      id: evalCase.id,
-      question,
+      ...attemptFields('failed'),
       scores: {},
       checkResults: [],
       answer,
       toolCalls,
+      status: 'failed',
       passed: false,
       error: err instanceof Error ? err.message : String(err),
       durationMs: Date.now() - startedAt,
+      usage,
+      costUsd: costUsdOf(usage),
     };
   } finally {
     await target.afterCase?.(datasets);
@@ -1530,7 +1183,7 @@ export async function runAssistantEvalCase(
 async function runCustomCheck(
   check: EvalCustomCheck,
   input: EvalCustomCheckInput,
-): Promise<EvalCheckResult> {
+): Promise<ScoredCheckResult> {
   let reason: string | undefined;
   try {
     reason = await check.run(input);
@@ -1545,52 +1198,4 @@ async function runCustomCheck(
     passed,
     reason,
   };
-}
-
-/**
- * Run every case sequentially against the given datasets, reporting each as it
- * lands. Sequential keeps the load on the datasource (and the model) to what a
- * single user session would produce.
- *
- * `sessions`, when provided, gets one throwaway session created up front and
- * deleted when every case has run (or the run throws) — shared across cases
- * because only the `visual-request` case needs it, so there is no benefit to
- * a fresh one per question.
- */
-export async function runAssistantEvals(
-  datasets: string[],
-  onCaseComplete?: (result: AssistantEvalCaseResult) => void,
-  caseIds?: string[],
-  sessions?: SessionsService,
-  knowledgeBlock?: string,
-  /** The agent and sets to run; the assistant's when omitted (agents.md 8.1). */
-  target: EvalTarget = ASSISTANT_EVAL_TARGET,
-): Promise<AssistantEvalCaseResult[]> {
-  const datasetError = assistantEvalDatasetError(
-    datasets,
-    await getDatasetToolServices().getDatasets(datasets),
-    fixtureForCases(caseIds, target.sets),
-  );
-  if (datasetError) throw new Error(datasetError);
-  const evalSession = sessions
-    ? await createEvalSession(sessions, datasets, target.sessionAgentKey)
-    : undefined;
-  try {
-    const results: AssistantEvalCaseResult[] = [];
-    for (const evalCase of selectEvalCases(caseIds, target.sets)) {
-      const result = await runAssistantEvalCase(
-        evalCase,
-        datasets,
-        evalSession?.id,
-        knowledgeBlock,
-        target,
-      );
-      results.push(result);
-      onCaseComplete?.(result);
-    }
-    return results;
-  } finally {
-    await target.finish?.(datasets);
-    await cleanupEvalSession(sessions, evalSession);
-  }
 }

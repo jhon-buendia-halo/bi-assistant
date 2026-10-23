@@ -1697,3 +1697,55 @@ describe('focusRecords (agents.md 6.2)', () => {
     expect(kept).toEqual([stageCounts, teams, matches]);
   });
 });
+
+describe('VisualizationService usage sink (agents-evals R219)', () => {
+  it('reports each designer call, with the raw result and the designer model', async () => {
+    const { service, agent } = build();
+    const result = { object: specOutput };
+    agent.generate.mockResolvedValue(result);
+    const sink = jest.fn();
+
+    await service.create(
+      sessionWithRows(3, 3),
+      undefined,
+      undefined,
+      undefined,
+      sink,
+    );
+
+    expect(sink).toHaveBeenCalledTimes(1);
+    expect(sink).toHaveBeenCalledWith(
+      'designer',
+      result,
+      'openai/gpt-4.1-mini',
+    );
+  });
+
+  it('reports the tailor path too', async () => {
+    const { service } = build();
+    const sink = jest.fn();
+
+    await service.update(
+      withVisual(sessionWithRows(3, 3)),
+      'visual-1',
+      'add a table',
+      undefined,
+      sink,
+    );
+
+    expect(sink).toHaveBeenCalledWith(
+      'designer',
+      expect.anything(),
+      'openai/gpt-4.1-mini',
+    );
+  });
+
+  it('designs the same without a sink', async () => {
+    const { service, agent } = build();
+    agent.generate.mockResolvedValue({ object: specOutput });
+
+    await expect(
+      service.create(sessionWithRows(3, 3), undefined),
+    ).resolves.toBeDefined();
+  });
+});

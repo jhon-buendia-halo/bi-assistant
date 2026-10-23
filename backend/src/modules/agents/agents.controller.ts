@@ -114,16 +114,33 @@ export class AgentsController {
     }));
   }
 
-  /** Start a run against one datasource. Long-running: poll the job below. */
+  /**
+   * Start a run against one datasource. Long-running: poll the job below.
+   * `judge` (`off` when absent), `judgeCategories` and `repeats` (1 when
+   * absent) are checked by the service, after the dataset preflight
+   * (agents-evals R19 steps 8 and 9, R144, R209).
+   */
   @Post(':key/evals/run')
   async runEvals(
     @Param('key') key: string,
-    @Body() body: { datasourceId?: string; caseIds?: string[] },
+    @Body()
+    body: {
+      datasourceId?: string;
+      caseIds?: string[];
+      judge?: unknown;
+      judgeCategories?: unknown;
+      repeats?: unknown;
+    },
   ): Promise<{ ok: boolean; message: string; jobId?: string }> {
     const result = await this.evalRuns.start(
       key,
       body?.datasourceId ?? '',
       Array.isArray(body?.caseIds) ? body.caseIds.map(String) : undefined,
+      {
+        judge: body?.judge,
+        judgeCategories: body?.judgeCategories,
+        repeats: body?.repeats,
+      },
     );
     if ('error' in result) return { ok: false, message: result.error };
     if ('conflictWith' in result) {
@@ -165,6 +182,8 @@ export class AgentsController {
     const markdown = renderEvalRunMarkdown(
       view,
       await this.evalRuns.datasourceName(view.datasourceId),
+      // So the comparison can note a run of other repeats (R218).
+      await this.evalRuns.comparedRunRepeats(view),
     );
     const filename = evalRunFilename(view);
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
