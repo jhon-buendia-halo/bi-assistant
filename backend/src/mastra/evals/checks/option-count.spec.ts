@@ -32,6 +32,24 @@ describe('optionCount (R120, I5)', () => {
     }
   });
 
+  it('reads the options as the tool takes them: one per line, or a list of strings', () => {
+    for (const options of [
+      'Most titles — count of championships\nMost wins\nMost goals',
+      '- Most titles\n- Most wins',
+      ['Most titles', 'Most wins'],
+    ]) {
+      expect(optionCount.evaluate(turn(ask(options)), {}, context)).toEqual({
+        passed: true,
+      });
+    }
+    expect(
+      optionCount.evaluate(turn(ask('Only one option')), {}, context).reason,
+    ).toBe('the clarification offered 1 option; it needs 2 to 4');
+    expect(
+      optionCount.evaluate(turn(ask('Goals\ngoals')), {}, context).reason,
+    ).toBe('the clarification offers "goals" twice');
+  });
+
   it('passes a turn that asked nothing', () => {
     expect(optionCount.evaluate(turn(), {}, context).passed).toBe(true);
   });

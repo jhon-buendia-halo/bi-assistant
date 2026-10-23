@@ -1,6 +1,25 @@
 import { fail, PASS } from './check';
 import type { DeterministicCheck } from './check';
 import { callsOf } from './turn';
+import {
+  clarificationOptions,
+  optionLines,
+} from '../../tools/clarification.tool';
+
+/**
+ * The options as the tool reads them (agents.md 3.5): one string with one
+ * option per line, or a list of strings, split into labels; a list already
+ * split into `{ label }` objects is read as it is. Undefined when there is
+ * nothing to read.
+ */
+function optionsOf(value: unknown): unknown[] | undefined {
+  const list: unknown[] | undefined = Array.isArray(value) ? value : undefined;
+  if (list?.some((option) => option !== null && typeof option === 'object')) {
+    return list;
+  }
+  const text = optionLines(value);
+  return typeof text === 'string' ? clarificationOptions(text) : undefined;
+}
 
 /**
  * `optionCount` (agents-evals R120, criterion I5): at most one clarification,
@@ -27,8 +46,8 @@ export const optionCount: DeterministicCheck = {
     const [call] = calls;
     // A stored record clipped past parsing cannot be judged.
     if (!call.argsReadable) return PASS;
-    const options = call.args.options;
-    if (!Array.isArray(options)) {
+    const options = optionsOf(call.args.options);
+    if (!options) {
       return fail('the clarification carried no options');
     }
     if (options.length < 2 || options.length > 4) {
