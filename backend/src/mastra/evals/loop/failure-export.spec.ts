@@ -1,3 +1,4 @@
+import BetterSqlite3 from 'better-sqlite3';
 import {
   existsSync,
   mkdirSync,
@@ -221,6 +222,85 @@ describe('eval:export-failures (agents-evals R228)', () => {
       await expect(
         exportFailuresMain(['--run', 'a,b', '--out', 'y'], env, io),
       ).resolves.toBe(2);
+    });
+
+    it('exports a run saved in app.sqlite before splits, taking each split from the question bank (R224)', async () => {
+      // Two failed questions of the bundled World Cup bank, stored as runs
+      // were before BA-242: no split, no attempt counts. The bank holds
+      // final-score-2018 as dev, with notes and reference queries, and
+      // shot-conversion-2022 as held-out.
+      const before242 = (result: Record<string, unknown>) => {
+        const stored = { ...result };
+        for (const key of ['split', 'passes', 'runs', 'flaky']) {
+          delete stored[key];
+        }
+        return stored;
+      };
+      const run = storedRun(JOB, [
+        before242(
+          storedResult('final-score-2018', 'failed', {
+            category: 'join',
+            question: 'What was the score of the 2018 World Cup final?',
+            checkResults: [
+              check('check-includes', 'failed', 'expected "France"'),
+            ],
+          }),
+        ),
+        before242(
+          storedResult('shot-conversion-2022', 'failed', {
+            category: 'ratio',
+            question:
+              'Which team turned the highest share of its shots into goals at the 2022 World Cup?',
+            answer: 'Morocco, from its shots on target.',
+            checkResults: [
+              check('check-includes', 'failed', 'expected "Netherlands"'),
+            ],
+          }),
+        ),
+        before242(storedResult('champion-2022', 'passed')),
+      ]);
+      for (const key of ['repeats', 'model', 'source']) delete run[key];
+      const db = new BetterSqlite3(join(dir, 'app.sqlite'));
+      db.exec(
+        'CREATE TABLE "eval_runs" (rid INTEGER PRIMARY KEY AUTOINCREMENT, doc TEXT NOT NULL)',
+      );
+      db.prepare('INSERT INTO "eval_runs" (doc) VALUES (?)').run(
+        JSON.stringify(run),
+      );
+      db.close();
+      const io = { out: () => undefined, err: () => undefined };
+
+      await expect(
+        exportFailuresMain(
+          ['--run', JOB.slice(0, 8), '--out', 'export', '--data-dir', dir],
+          { INIT_CWD: dir },
+          io,
+        ),
+      ).resolves.toBe(0);
+
+      const folder = join(dir, 'export');
+      expect(readdirSync(folder).sort()).toEqual([
+        EXPORT_MARKER,
+        'README.md',
+        'final-score-2018.md',
+      ]);
+      const readme = readFileSync(join(folder, 'README.md'), 'utf8');
+      expect(readme).toContain('- Repeats: 1');
+      // The held-out question counts under its category, and nothing else.
+      expect(readme).toContain('| ratio | 0 | 1 | 0 | 1 |');
+      const written = [
+        readme,
+        readFileSync(join(folder, 'final-score-2018.md'), 'utf8'),
+      ];
+      for (const content of written) {
+        expect(content).not.toContain('shot-conversion-2022');
+        expect(content).not.toContain('highest share of its shots');
+        expect(content).not.toContain('Morocco');
+        expect(content).not.toContain('Netherlands');
+        // Nor the dev case's notes or reference query (R228).
+        expect(content).not.toContain('MATCH is a SQLite operator keyword');
+        expect(content).not.toContain('AS home_team');
+      }
     });
   });
 });

@@ -438,4 +438,47 @@ describe('leakCheckMain against a git repository', () => {
     ).resolves.toBe(2);
     expect(err.join('\n')).toContain('Unknown --base "nope"');
   });
+
+  it('rejects a held-out question, and with --fixer names no held-out case', async () => {
+    // A held-out question of the bundled World Cup bank, quoted whole.
+    write(
+      LEVER,
+      'export const PROMPT = `Answer from the data.`;\n' +
+        'export const EXAMPLE = `Which team turned the highest share of its shots into goals at the 2022 World Cup?`;\n',
+    );
+    type Report = {
+      rejected: number;
+      findings: { line: number; kind: string; sources: object[] }[];
+    };
+    // Its words are in dev questions too, so the text report names a dev
+    // source first; the JSON report lists every source.
+    await expect(leakCheckMain(['--json'], {}, io, root)).resolves.toBe(1);
+    const report = JSON.parse(out[out.length - 1]) as Report;
+    expect(report.rejected).toBe(1);
+    expect(report.findings[0]).toMatchObject({ line: 2, kind: 'question' });
+    expect(report.findings[0].sources).toContainEqual(
+      expect.objectContaining({
+        file: 'world-cup.json',
+        caseId: 'shot-conversion-2022',
+        split: 'held-out',
+        field: 'question',
+      }),
+    );
+
+    out.length = 0;
+    await expect(
+      leakCheckMain(['--fixer', '--json'], {}, io, root),
+    ).resolves.toBe(1);
+    const redacted = JSON.parse(out[out.length - 1]) as Report;
+    expect(redacted.rejected).toBe(1);
+    expect(redacted.findings[0].sources).toContainEqual({
+      redacted: 'a held-out case',
+    });
+    expect(out.join('\n')).not.toContain('shot-conversion-2022');
+
+    out.length = 0;
+    await expect(leakCheckMain(['--fixer'], {}, io, root)).resolves.toBe(1);
+    expect(out.join('\n')).toContain(`${LEVER}:2 [question]`);
+    expect(out.join('\n')).not.toContain('shot-conversion-2022');
+  });
 });

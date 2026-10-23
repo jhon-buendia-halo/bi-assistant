@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import BetterSqlite3 from 'better-sqlite3';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import {
@@ -411,5 +412,86 @@ describe('evalDiffMain exit codes', () => {
     expect(err.join('\n')).toContain(
       `No eval run "deadbeef" in ${join(dir, 'app.sqlite')}`,
     );
+  });
+});
+
+describe('evalDiffMain on runs saved in app.sqlite (R225 to R227)', () => {
+  let dir: string;
+  const out: string[] = [];
+  const io = {
+    out: (l: string) => out.push(l),
+    err: (l: string) => out.push(l),
+  };
+
+  // Newcombe's sides, held-out join up and the cost per question flat, as
+  // the app and the command line save them in the data directory.
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'eval-diff-db-'));
+    const db = new BetterSqlite3(join(dir, 'app.sqlite'));
+    db.exec(
+      'CREATE TABLE "eval_runs" (rid INTEGER PRIMARY KEY AUTOINCREMENT, doc TEXT NOT NULL)',
+    );
+    const insert = db.prepare('INSERT INTO "eval_runs" (doc) VALUES (?)');
+    for (const run of [
+      storedRun(
+        BEFORE,
+        [
+          ...results('join', 80, 48, dev('join')),
+          ...results('ho-join', 4, 3, heldOut('join')),
+        ],
+        { costUsd: 0.84 },
+      ),
+      storedRun(
+        AFTER,
+        [
+          ...results('join', 70, 56, dev('join')),
+          ...results('ho-join', 4, 4, heldOut('join')),
+        ],
+        { costUsd: 0.74 },
+      ),
+    ]) {
+      insert.run(JSON.stringify(run));
+    }
+    db.close();
+  });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('reads both sides by 8-character prefix without writing, and exits 0 when the accept rule is met', async () => {
+    const database = join(dir, 'app.sqlite');
+    const stored = readFileSync(database);
+    await expect(
+      evalDiffMain(
+        [
+          '--before',
+          BEFORE.slice(0, 8),
+          '--after',
+          AFTER.slice(0, 8),
+          '--data-dir',
+          dir,
+          '--target',
+          'join',
+        ],
+        {},
+        io,
+      ),
+    ).resolves.toBe(0);
+    expect(out).toContainEqual(
+      expect.stringMatching(
+        /^dev\s+join\s+48\/80 \(49–70%\)\s+56\/70 \(69–88%\)\s+\+20 pts\s+\+5 to \+33 pts\s+up$/,
+      ),
+    );
+    expect(out).toContainEqual(expect.stringMatching(/^held-out\s+all\s+3\/4/));
+    // join-49 to join-56 failed before and pass after; 71 to 80 are gone.
+    expect(out).toContainEqual(
+      expect.stringMatching(/^ {2}Now passing: join-49 \(join\), join-50 /),
+    );
+    expect(out).toContainEqual(
+      expect.stringMatching(/^Only before: join-71 \(join\), /),
+    );
+    expect(out).toContain('Cost before: $0.8400 · $0.0100 per question');
+    expect(out).toContain('Cost per question: 0%');
+    expect(out[out.length - 1]).toBe('Accept rule: met');
+    // Read only: the data directory's database is byte for byte the same.
+    expect(readFileSync(database).equals(stored)).toBe(true);
   });
 });

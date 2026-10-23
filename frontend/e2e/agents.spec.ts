@@ -11,6 +11,7 @@ import {
   followOsTheme,
 } from './helpers/app-actions';
 import { appSql } from './helpers/app-db';
+import { apiJson } from './helpers/api';
 
 /**
  * The questions tab opens on the set list — a set has to be clicked before its
@@ -174,7 +175,10 @@ function storeRun(appDataDir: string, run: object): void {
   );
 }
 
-/** One agent's usage on one model (agents-evals R219), no reasoning tokens. */
+/**
+ * One agent's usage on one model (agents-evals R219), no reasoning tokens:
+ * `calls` reported tokens, `unreportedCalls` reported none.
+ */
 function usageEntry(
   agent: 'assistant' | 'sql-fixer',
   model: string,
@@ -182,6 +186,7 @@ function usageEntry(
   cachedInputTokens: number,
   outputTokens: number,
   calls: number,
+  unreportedCalls = 0,
 ) {
   return {
     agent,
@@ -191,7 +196,7 @@ function usageEntry(
     outputTokens,
     reasoningTokens: 0,
     calls,
-    unreportedCalls: 0,
+    unreportedCalls,
   };
 }
 
@@ -247,9 +252,17 @@ const REPEATS_RUN = 'seeded-repeats-3';
  * above it is stored without a summary. The costs are what the backend's
  * own `costUsdOf`, `foldAttempts` and `sumCostUsd` give for these tokens at
  * the bundled price table's gpt-4o-mini rates (computed with
- * `backend/dist/mastra/evals/`, not by hand).
+ * `backend/dist/mastra/evals/`, not by hand). `source` is where it was
+ * started (R223), and `comparedWith` the earlier run its regression
+ * comparison names (R40), with champion-2022 unchanged.
  */
-function seedRepeatsRun(appDataDir: string): void {
+function seedRepeatsRun(
+  appDataDir: string,
+  {
+    source = 'app',
+    comparedWith,
+  }: { source?: 'app' | 'cli'; comparedWith?: string } = {},
+): void {
   const shotPassed = [
     seededCheck(
       'check-includes',
@@ -287,7 +300,19 @@ function seedRepeatsRun(appDataDir: string): void {
     judge: { mode: 'off' },
     repeats: 3,
     model: `openai/${GPT_4O_MINI}`,
-    source: 'app',
+    source,
+    ...(comparedWith
+      ? {
+          comparison: {
+            previousRunId: comparedWith,
+            regressions: [],
+            improvements: [],
+            unchanged: [
+              { id: 'champion-2022', question: 'Who won the 2022 World Cup?' },
+            ],
+          },
+        }
+      : {}),
     results: [
       {
         ...seededResult(
@@ -411,11 +436,12 @@ const UNPRICED_MODEL = 'llama-3.3-70b';
 
 /**
  * Stores a finished run of the world-cup set, Repeats 1, whose one question
- * ran on a model with no price: its tokens are recorded, its cost and the
- * run's are not priced (`costUsd: null`) and the run keeps no rate (R221).
+ * ran on a model with no price: its tokens are recorded, one of its three
+ * calls reported none (R219), its cost and the run's are not priced
+ * (`costUsd: null`) and the run keeps no rate (R221).
  */
 function seedUnpricedRun(appDataDir: string): void {
-  const usage = [usageEntry('assistant', UNPRICED_MODEL, 5100, 0, 180, 2)];
+  const usage = [usageEntry('assistant', UNPRICED_MODEL, 5100, 0, 180, 2, 1)];
   storeRun(appDataDir, {
     jobId: UNPRICED_RUN,
     agentKey: 'assistant',
@@ -453,6 +479,82 @@ function seedUnpricedRun(appDataDir: string): void {
     createdAt: '2026-10-03T09:00:00.000Z',
     updatedAt: '2026-10-03T09:00:30.000Z',
   });
+}
+
+/** Job id of the seeded run saved before repeats, splits and usage. */
+const BEFORE_REPEATS_RUN = 'seeded-before-repeats';
+
+/**
+ * Stores a finished run of the world-cup set as runs were saved before
+ * BA-242: no repeats, model or source, no split, attempt counts, usage or
+ * cost on its results, and none on the run (data-model 3.8). Its held-out
+ * question, `shot-conversion-2022`, failed; `champion-2022` (dev) passed.
+ */
+function seedBeforeRepeatsRun(appDataDir: string): void {
+  storeRun(appDataDir, {
+    jobId: BEFORE_REPEATS_RUN,
+    agentKey: 'assistant',
+    datasourceId: 'seeded-datasource',
+    datasets: [WORLD_CUP_DATASET],
+    caseIds: ['champion-2022', 'shot-conversion-2022'],
+    status: 'completed',
+    totalCases: 2,
+    startedAt: '2026-09-30T09:00:00.000Z',
+    finishedAt: '2026-09-30T09:01:00.000Z',
+    judge: { mode: 'off' },
+    results: [
+      seededResult(
+        'champion-2022',
+        'Who won the 2022 World Cup?',
+        'lookup',
+        'passed',
+        CHAMPION_CHECKS,
+      ),
+      seededResult(
+        'shot-conversion-2022',
+        'Which team turned the highest share of its shots into goals at the 2022 World Cup?',
+        'ratio',
+        'failed',
+        [
+          seededCheck(
+            'check-includes',
+            'Checks if output includes "Netherlands"',
+            'G1',
+            'failed',
+            'expected "Netherlands" in the answer — answer was "Brazil"',
+          ),
+        ],
+      ),
+    ],
+    createdAt: '2026-09-30T09:00:00.000Z',
+    updatedAt: '2026-09-30T09:01:00.000Z',
+  });
+}
+
+/**
+ * Downloads a run's Markdown report with its download button, and answers
+ * the report (the response that feeds the save, as in the download test).
+ */
+async function downloadReport(page: Page, jobId: string): Promise<string> {
+  const [response] = await Promise.all([
+    page.waitForResponse((res) =>
+      new URL(res.url()).pathname.endsWith(`/evals/runs/${jobId}/download`),
+    ),
+    page.getByTestId(`eval-run-download-${jobId}`).click(),
+  ]);
+  expect(response.status()).toBe(200);
+  return response.text();
+}
+
+/** Opens the assistant's Evals tab on its Executions sub-tab. */
+async function openAssistantExecutions(page: Page): Promise<void> {
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
+  await page.getByTestId('agent-assistant').click();
+  await page.getByTestId('agent-tab-evals').click();
+  await page.getByTestId('eval-subtab-runs').click();
 }
 
 /** axe violations on the page in Light then Dark, one line per node. */
@@ -1166,8 +1268,21 @@ test('shows dev and held-out side by side, with repeats, flaky questions and cos
     'Which team turned the highest share of its shots into goals at the 2022 World Cup?',
   );
   await expect(panel.getByTestId('eval-trace-split')).toContainText('Held-out');
-  await expect(panel.getByTestId('eval-trace-attempts')).toContainText(
-    '2 of 3 attempts passed',
+  const attempts = panel.getByTestId('eval-trace-attempts');
+  await expect(attempts).toContainText('2 of 3 attempts passed');
+  // One line per attempt, with its verdict and duration, and the attempt
+  // whose checks, steps and answer the panel shows: the first that failed
+  // (R211).
+  await expect(attempts.locator(':scope > div')).toHaveText([
+    /^\s*Attempt 1\s*Passed\s*1\.5s\s*$/,
+    /^\s*Attempt 2\s*Failed\s*2\.1s\s*$/,
+    /^\s*Attempt 3\s*Passed\s*1\.4s\s*$/,
+  ]);
+  await expect(attempts).toContainText(
+    /Checks, steps and answer below are from attempt\s+2\./,
+  );
+  await expect(panel.getByTestId('eval-trace-failed-checks')).toContainText(
+    'expected "Netherlands" in the answer — answer was "Brazil"',
   );
   const assistantTokens = panel.getByTestId('eval-trace-tokens-assistant');
   await expect(assistantTokens).toContainText('Assistant');
@@ -1206,7 +1321,8 @@ test('says "Not priced" for a model with no price', async ({
   await expect(cost).toHaveText('Not priced');
   await expect(cost).toHaveAttribute('title', `No price for ${UNPRICED_MODEL}`);
 
-  // The question's tokens are still shown, and its cost is not priced (R217).
+  // The question's tokens are still shown, with the call that reported
+  // none, and its cost is not priced (R217).
   await page
     .getByTestId(`eval-run-${UNPRICED_RUN}`)
     .getByRole('button', { name: /passed/ })
@@ -1218,6 +1334,237 @@ test('says "Not priced" for a model with no price', async ({
   await expect(panel).toContainText('Who won the 2022 World Cup?');
   const tokens = panel.getByTestId('eval-trace-tokens-assistant');
   await expect(tokens).toContainText(UNPRICED_MODEL);
-  await expect(tokens).toContainText('5,100 in · 180 out');
+  await expect(tokens).toContainText(
+    '5,100 in · 180 out · 1 call reported no usage',
+  );
   await expect(panel.getByTestId('eval-trace-cost')).toHaveText('Not priced');
+
+  // The report names the model without a rate, and counts every call, the
+  // one without usage too (R218, R221).
+  const report = await downloadReport(page, UNPRICED_RUN);
+  expect(report).toMatch(/^Cost: not priced \(llama-3\.3-70b\)$/m);
+  expect(report).toMatch(
+    /^Tokens: 5,100 in \(0 cached\) · 180 out \(0 reasoning\) · 3 calls · 1 without usage$/m,
+  );
+});
+
+test('shows which attempt of a question is running when Repeats is 3', async ({
+  page,
+}) => {
+  // The stub stands in for the model. It answers the run's first call, so
+  // the first attempt of the first question finishes (its checks fail on
+  // the stub's answer), and holds every later call open, so the second
+  // attempt is still running when the test looks (R210, R214).
+  const stub = await startLlmStub();
+  try {
+    await saveLenaiSettings(page, stub.baseUrl);
+    await createWorldCupDatasource(page);
+    await createWorldCupDataset(page, WORLD_CUP_EVAL_TABLES);
+
+    await page
+      .getByRole('complementary', { name: 'Navigation rail' })
+      .getByRole('button', { name: 'Agents' })
+      .click();
+    await page.getByTestId('agent-assistant').click();
+    await page.getByTestId('agent-tab-evals').click();
+    await openWorldCupSet(page);
+    await page.getByLabel('Repeats', { exact: true }).selectOption('3');
+
+    const callsBefore = stub.requests.length;
+    stub.hold = () =>
+      stub.requests.length > callsBefore + 1
+        ? new Promise<void>(() => undefined)
+        : undefined;
+    await page.getByTestId('eval-run').click();
+
+    // The progress line ends with the attempt in flight (R26, R214). No
+    // question has finished: its result lands once all three attempts have.
+    await expect(
+      page.getByText(/^\s*0\/63 done\s+·\s+0 passed\s+·\s+attempt 2\/3\s*$/),
+    ).toBeVisible({ timeout: 20_000 });
+    expect(stub.requests.length - callsBefore).toBe(2);
+  } finally {
+    await stub.close();
+  }
+});
+
+test('downloads the report of a command-line run with Repeats 3, compared with a run of Repeats 1', async ({
+  page,
+  appDataDir,
+}) => {
+  // The earlier run reads as Repeats 1 (R209); the later one carries the
+  // source a command-line run is saved with (R223) and its comparison with
+  // the earlier one (R40).
+  seedFinishedRun(appDataDir);
+  seedRepeatsRun(appDataDir, { source: 'cli', comparedWith: SEEDED_RUN });
+
+  await openAssistantExecutions(page);
+
+  // An app on the same data directory lists both runs, newest first.
+  const cards = page.locator(
+    `[data-testid="eval-run-${REPEATS_RUN}"], [data-testid="eval-run-${SEEDED_RUN}"]`,
+  );
+  await expect(cards).toHaveCount(2);
+  await expect(cards.nth(0)).toHaveAttribute(
+    'data-testid',
+    `eval-run-${REPEATS_RUN}`,
+  );
+
+  const report = await downloadReport(page, REPEATS_RUN);
+  // The run lines (R218): 35,410 input tokens, 15,360 of them cached, 1,325
+  // output tokens and 17 calls over both agents; $0.004954 over 2 questions.
+  expect(report).toMatch(/^Repeats: 3$/m);
+  expect(report).toMatch(/^Dev: 1\/1 passed · 95% interval 21–100%$/m);
+  expect(report).toMatch(/^Held-out: 0\/1 passed · 95% interval 0–79%$/m);
+  expect(report).toMatch(/^Flaky: 1$/m);
+  expect(report).toMatch(
+    /^Tokens: 35,410 in \(15,360 cached\) · 1,325 out \(0 reasoning\) · 17 calls$/m,
+  );
+  expect(report).toMatch(/^Cost: \$0\.0050 · \$0\.0025 per question$/m);
+
+  // The summary table, with the split and, with Repeats 3, the passed
+  // attempts after each result.
+  expect(report).toContain('| # | Question | Split | Result | Duration |');
+  expect(report).toContain(
+    '| 1 | Who won the 2022 World Cup? | dev | ✅ 3/3 | 1.3s |',
+  );
+  expect(report).toContain(
+    '| 2 | Which team turned the highest share of its shots into goals at the 2022 World Cup? | held-out | ❌ 2/3 | 2.1s |',
+  );
+
+  // The flaky question's section: its split, attempts, tokens and cost.
+  const flaky = report.slice(report.indexOf('### 2. Which team turned'));
+  expect(flaky).toContain('- **Split:** held-out');
+  expect(flaky).toContain('- **Attempts:** 2 of 3 passed, flaky');
+  expect(flaky).toContain(
+    '- **Tokens:** 21,000 in (8,192 cached) · 875 out (0 reasoning) · 11 calls',
+  );
+  expect(flaky).toContain('- **Cost:** $0.0031');
+
+  // The comparison notes the other repeats, read from the earlier run.
+  const compared = report.slice(report.indexOf('## Compared to previous run'));
+  expect(compared).toContain(`_Compared to run \`${SEEDED_RUN}\`._`);
+  expect(compared).toContain('Note: the previous run used Repeats 1.');
+  expect(compared).toContain('No change from the previous run.');
+});
+
+test('shows a run saved before repeats and costs with its splits and nothing it did not record', async ({
+  page,
+  appDataDir,
+}) => {
+  seedBeforeRepeatsRun(appDataDir);
+
+  await openAssistantExecutions(page);
+
+  // No repeats, flaky count or cost: the run recorded none (R216).
+  const card = page.getByTestId(`eval-run-${BEFORE_REPEATS_RUN}`);
+  await expect(card).toContainText('1/2 passed');
+  await expect(
+    page.getByTestId(`eval-run-repeats-${BEFORE_REPEATS_RUN}`),
+  ).toHaveCount(0);
+  await expect(
+    page.getByTestId(`eval-run-flaky-${BEFORE_REPEATS_RUN}`),
+  ).toHaveCount(0);
+  await expect(
+    page.getByTestId(`eval-run-cost-${BEFORE_REPEATS_RUN}`),
+  ).toHaveCount(0);
+
+  // Expanded: each split read from the question bank (R215), with the
+  // held-out chip on the held-out question's row, and no attempts with
+  // Repeats 1 (R216).
+  await card.getByRole('button', { name: /passed/ }).click();
+  await expect(
+    page.getByTestId(`eval-run-splits-${BEFORE_REPEATS_RUN}`),
+  ).toHaveText('Dev 1/1 (21–100%) · Held-out 0/1 (0–79%)');
+  const row = page.getByTestId(
+    `eval-run-result-${BEFORE_REPEATS_RUN}-shot-conversion-2022`,
+  );
+  await expect(
+    row.getByTestId(
+      `eval-run-result-split-${BEFORE_REPEATS_RUN}-shot-conversion-2022`,
+    ),
+  ).toHaveText('held-out');
+  await expect(row).not.toContainText('/');
+  await expect(
+    page.getByTestId(
+      `eval-run-result-split-${BEFORE_REPEATS_RUN}-champion-2022`,
+    ),
+  ).toHaveCount(0);
+
+  // The Details panel shows its split and none of the rest (R217).
+  await row.click();
+  const panel = page.getByLabel('Details panel');
+  await expect(panel).toContainText(
+    'Which team turned the highest share of its shots into goals at the 2022 World Cup?',
+  );
+  await expect(panel.getByTestId('eval-trace-split')).toContainText('Held-out');
+  await expect(panel.getByTestId('eval-trace-attempts')).toHaveCount(0);
+  await expect(
+    panel.locator('[data-testid^="eval-trace-tokens-"]'),
+  ).toHaveCount(0);
+  await expect(panel.getByTestId('eval-trace-cost')).toHaveCount(0);
+
+  // The report reads it as Repeats 1, with no tokens or cost recorded and
+  // no flaky question (R218, R221).
+  const report = await downloadReport(page, BEFORE_REPEATS_RUN);
+  expect(report).toMatch(/^Repeats: 1$/m);
+  expect(report).toMatch(/^Tokens: not recorded$/m);
+  expect(report).toMatch(/^Cost: not recorded$/m);
+  expect(report).not.toMatch(/^Flaky:/m);
+  expect(report).toContain(
+    '| 2 | Which team turned the highest share of its shots into goals at the 2022 World Cup? | held-out | ❌ | 1.2s |',
+  );
+  const question = report.slice(report.indexOf('### 2. Which team turned'));
+  expect(question).toContain('- **Split:** held-out');
+  expect(question).toContain('- **Tokens:** not recorded');
+  expect(question).toContain('- **Cost:** not recorded');
+  expect(report).not.toContain('**Attempts:**');
+});
+
+test('refuses repeats other than 1, 3 or 5 from the API', async ({ page }) => {
+  // Every earlier check of the start passes (R19 steps 1 to 8), so the
+  // repeats are the reason for each refusal (step 9).
+  await createWorldCupDatasource(page);
+  await createWorldCupDataset(page, WORLD_CUP_EVAL_TABLES);
+  const { datasources } = await apiJson<{
+    datasources: { id: string; name: string }[];
+  }>(page, 'GET', '/datasources');
+  const datasource = datasources.find(
+    (each) => each.name === WORLD_CUP_DATASOURCE,
+  );
+  expect(datasource).toBeDefined();
+
+  // The value as sent: a string as written, anything else JSON-encoded
+  // (R209).
+  for (const [repeats, written] of [
+    [2, '2'],
+    ['3', '3'],
+    [true, 'true'],
+  ] as const) {
+    const refused = await apiJson<{ ok: boolean; message: string }>(
+      page,
+      'POST',
+      '/agents/assistant/evals/run',
+      {
+        datasourceId: datasource?.id,
+        caseIds: ['champion-2022'],
+        judge: 'off',
+        repeats,
+      },
+    );
+    expect(refused).toEqual({
+      ok: false,
+      message: `Repeats must be 1, 3 or 5 (got "${written}")`,
+    });
+  }
+
+  // No run was recorded.
+  const { runs } = await apiJson<{ runs: unknown[] }>(
+    page,
+    'GET',
+    '/agents/assistant/evals/runs',
+  );
+  expect(runs).toEqual([]);
+  await openAssistantExecutions(page);
+  await expect(page.getByText(/No eval runs yet/)).toBeVisible();
 });
