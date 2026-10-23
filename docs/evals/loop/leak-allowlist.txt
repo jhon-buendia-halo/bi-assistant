@@ -17,3 +17,4 @@ december | month name of the Finance fiscal calendar (fiscal quarter 2 ends in D
 custody | a stored value of fees.fee_type (finance-policy.md fee table), the column vocabulary in the finance knowledge seed (round 7)
 trading | a stored value of fees.fee_type (finance-policy.md fee table), the column vocabulary in the finance knowledge seed (round 7)
 premier | a stored value of customers.segment (finance-policy.md section 6: not a wealth segment), finance knowledge seed (round 7)
+week | a SQL date-part keyword in the word list of the LEFT JOIN filter check (left-join-filter.ts, round 12), not text of a question

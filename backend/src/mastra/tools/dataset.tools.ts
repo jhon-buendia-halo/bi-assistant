@@ -7,6 +7,10 @@ import {
   DatasetSnapshot,
 } from '../tool-services';
 import { usageSinkFrom } from '../usage-sink';
+import {
+  ineffectiveLeftJoinFilters,
+  IneffectiveJoinFilter,
+} from './left-join-filter';
 
 /** requestContext key carrying the session's dataset names. */
 export const DATASETS_CONTEXT_KEY = 'datasets';
@@ -137,6 +141,58 @@ function isBreakdown(sql: string, rows: unknown[]): boolean {
   return rows.length > 1 && /\bgroup\s+by\b/i.test(sql);
 }
 
+/**
+ * The snapshot columns of the session entities a table name as written in SQL
+ * points at (`schema.table` matches the end of `catalog.schema.table`).
+ */
+function snapshotColumns(
+  datasets: DatasetSnapshot[],
+): (table: string) => string[] {
+  const entities = allowedEntities(datasets);
+  return (table) => {
+    const parts = table
+      .replace(/[\s"`]/g, '')
+      .toLowerCase()
+      .split('.');
+    return entities
+      .filter((access) => {
+        const key = access.entity.toLowerCase().split('.');
+        const tail = key.slice(Math.max(0, key.length - parts.length));
+        return tail.join('.') === parts.join('.');
+      })
+      .flatMap((access) => access.columns?.map((column) => column.name) ?? []);
+  };
+}
+
+/**
+ * A filter in the ON clause of a LEFT JOIN whose table nothing else reads
+ * removes no row, and the result gives no sign of it. The statement still
+ * runs (a refusal would be a tool error), and a warning on its result says
+ * where the filter has to go, leaving ON as the place for a filter on a table
+ * the query does read (it keeps groups with no matching rows).
+ */
+function ineffectiveFilterWarning(found: IneffectiveJoinFilter[]): string {
+  const places = found
+    .map(
+      ({ join, conditions }) =>
+        `\`${conditions.join(' AND ')}\` is in the ON clause of \`${join}\``,
+    )
+    .join('; ');
+  const names = found.map(({ alias }) => alias).join(', ');
+  const alias = found[0].alias;
+  return [
+    `${places}, and nothing else in the query reads ${names}.`,
+    'A LEFT JOIN keeps every row of the tables before it, so that condition',
+    'removed no row and rows outside it were counted. Put it where it',
+    'filters and run the query again: in WHERE (or make that join an INNER',
+    'JOIN) when only rows inside it count; to keep groups with no matching',
+    'rows, in the ON clause of the LEFT JOIN whose rows the measure reads',
+    '(<its key> IN (SELECT <key> FROM <that table> WHERE <condition>)), or read',
+    `the table in the measure (SUM(CASE WHEN ${alias}.<key> IS NOT NULL THEN …`,
+    'END)). A condition in ON filters only on a table the query reads.',
+  ].join(' ');
+}
+
 export const listEntitiesTool = createTool({
   id: 'list_entities',
   description:
@@ -261,9 +317,16 @@ export const runReadOnlySqlTool = createTool({
           ? (result as { correctedSql: string }).correctedSql
           : sql;
       const rows = (result as { rows?: Record<string, unknown>[] }).rows ?? [];
-      const warnings = inspectResult(executed, rows, rowLimit).map(
-        (warning) => warning.message,
+      const deadFilters = ineffectiveLeftJoinFilters(
+        executed,
+        snapshotColumns(datasets),
       );
+      const warnings = [
+        ...inspectResult(executed, rows, rowLimit).map(
+          (warning) => warning.message,
+        ),
+        ...(deadFilters.length ? [ineffectiveFilterWarning(deadFilters)] : []),
+      ];
       // Joined like the service's own notes, so the agent reads one note.
       const notes = [
         ...(result.note ? [result.note] : []),

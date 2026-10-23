@@ -136,3 +136,53 @@ describe('run_readonly_sql note on a grouped result (agents.md 5.3)', () => {
     expect((await run('SELECT g, n FROM t')).note).toBeUndefined();
   });
 });
+
+describe('run_readonly_sql warning on a LEFT JOIN filter that removes no row (agents.md 5.4)', () => {
+  const execute = runReadOnlySqlTool.execute as unknown as Execute;
+  let runReadOnlySql: jest.Mock;
+  let requestContext: RequestContext;
+  const deadFilter =
+    'SELECT r.name, SUM(f.amount) AS total FROM s.regions r LEFT JOIN s.fees f ON f.region_id = r.id LEFT JOIN s.periods p ON p.id = f.period_id AND p.year = 2025 GROUP BY r.name';
+
+  beforeEach(() => {
+    runReadOnlySql = jest
+      .fn()
+      .mockResolvedValue({ columns: ['name', 'total'], rows: [] });
+    setDatasetToolServices({
+      getDatasets: jest
+        .fn()
+        .mockResolvedValue([
+          { name: 'claims', datasourceId: 'ds-1', tables: [] },
+        ]),
+      runReadOnlySql,
+    } as unknown as DatasetToolServices);
+    requestContext = new RequestContext();
+    requestContext.set(DATASETS_CONTEXT_KEY, ['claims']);
+  });
+
+  const run = (sql: string) =>
+    execute({ sql, rationale: 'because' }, { requestContext }) as Promise<{
+      error?: string;
+      warnings?: string[];
+    }>;
+
+  it('still runs the statement and says where the filter has to go', async () => {
+    const result = await run(deadFilter);
+
+    expect(runReadOnlySql).toHaveBeenCalledTimes(1);
+    expect(result.error).toBeUndefined();
+    expect(result.warnings).toEqual([
+      expect.stringMatching(
+        /^`p\.year = 2025` is in the ON clause of `LEFT JOIN s\.periods p`, and nothing else in the query reads p\. .*in WHERE/,
+      ),
+    ]);
+  });
+
+  it('adds no warning when the filter is in WHERE', async () => {
+    const result = await run(
+      'SELECT r.name, SUM(f.amount) AS total FROM s.regions r LEFT JOIN s.fees f ON f.region_id = r.id LEFT JOIN s.periods p ON p.id = f.period_id WHERE p.year = 2025 GROUP BY r.name',
+    );
+
+    expect(result.warnings).toBeUndefined();
+  });
+});
