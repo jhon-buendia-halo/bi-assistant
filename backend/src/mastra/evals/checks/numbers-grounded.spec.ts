@@ -1,4 +1,8 @@
-import { numbersGrounded, statedNumbers } from './numbers-grounded';
+import {
+  numbersGrounded,
+  statedNumbers,
+  withoutStageNames,
+} from './numbers-grounded';
 import type { CheckToolCall, CheckTurn } from './turn';
 
 const context = { dialect: 'postgres' as const };
@@ -132,6 +136,68 @@ describe('numbersGrounded (R115, G1)', () => {
     ).toBe(
       'the answer states 1, which no tool result of this turn holds or rounds to',
     );
+  });
+
+  it('does not read the number of a stage name (BA-188, possession-vs-result)', () => {
+    // Every figure came from the query; the 16 named a stage the sample lacks.
+    expect(
+      verdict(
+        turn(
+          'The team with more possession won 2 of 8 (25%) and lost 6. The dataset records 2022 knockout matches from the quarter-finals onward; no round-of-16 matches are present.',
+          [rows([{ won: 2, lost: 6, matches: 8 }])],
+          'In the 2022 knockout rounds, did the team with more possession usually win?',
+        ),
+      ),
+    ).toEqual({ passed: true });
+    for (const stage of [
+      'Japan went out in the round of 16.',
+      'Japan went out in the Round of 16.',
+      'Japan went out in the round-of-16 tie.',
+      'Japan went out in the round_of_16.',
+      'Japan went out in the ROUND OF 32.',
+      'Japan reached the last 16.',
+      'Japan reached the last 16',
+      'Japan reached the **last 16**.',
+      'Japan reached the last 16!',
+      'Japan went out at the last 16 stage.',
+      'Japan lost a last-16 tie.',
+      'Japan lost its last 16 match to Croatia.',
+      '- Last 16\n- Quarter-finals',
+    ]) {
+      expect([stage, statedNumbers(withoutStageNames(stage))]).toEqual([
+        stage,
+        [],
+      ]);
+      expect([stage, verdict(turn(stage, [])).passed]).toEqual([stage, true]);
+    }
+  });
+
+  it('still checks a count that only looks like a stage name', () => {
+    for (const [count, stated] of [
+      ['Japan won 9 of the last 16 matches.', '16'],
+      ['Japan qualified in the last 16 years.', '16'],
+      ['Japan played the last 16 games at home.', '16'],
+      ['Japan lost the last 16 rounds.', '16'],
+      ['Japan reached the last 16.5 km.', '16.5'],
+      [
+        'Japan and 15 other sides, 16 teams, reached the round of 16.',
+        '15, 16',
+      ],
+    ]) {
+      expect([count, verdict(turn(count, [rows([{ n: 9 }])])).reason]).toEqual([
+        count,
+        `the answer states ${stated}, which no tool result of this turn holds or rounds to`,
+      ]);
+    }
+    // In the question or a result, a stage name still grounds its number.
+    expect(
+      verdict(turn('16 teams play it.', [], 'Who played in the round of 16?'))
+        .passed,
+    ).toBe(true);
+    expect(
+      verdict(turn('16 teams play it.', [rows([{ stage: 'Round of 16' }])]))
+        .passed,
+    ).toBe(true);
   });
 
   it('grounds nothing on tool arguments, failed calls or list_entities', () => {

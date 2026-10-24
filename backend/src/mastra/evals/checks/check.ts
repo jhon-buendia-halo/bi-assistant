@@ -9,12 +9,25 @@
 import type { EvalCriterion, EvalDialect } from '../eval-set-files';
 import type { CheckTurn } from './turn';
 
+/**
+ * The views of a sample by name, each with the tables and views its
+ * definition reads; every name is a last name part, lowercased
+ * (`v_match_results` → `matches`, `tournaments`, `venues`, `teams`).
+ */
+export type ViewTables = ReadonlyMap<string, readonly string[]>;
+
 /** What a check knows besides the turn: bound when the set is built. */
 export interface CheckContext {
   /** The set's dialect (R107), for `dialect` and `qualifiedNames`. */
   dialect: EvalDialect;
   /** The case's reference query in that dialect, for `usesEntities`. */
   expectedSql?: string;
+  /**
+   * The views of the set's sample, for `usesEntities` (R124). A function,
+   * called on first use, because they come from the sample's seed SQL,
+   * which can be large. Absent or empty: no view is opened.
+   */
+  views?: () => ViewTables;
 }
 
 /** A check's verdict: on failure, the rule that broke and the text at fault. */

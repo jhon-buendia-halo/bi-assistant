@@ -1858,12 +1858,13 @@
       ],
       "question": "How many of our loans are non-performing?",
       "intent": "Map a lending term onto the two stored statuses it covers — there is no NON_PERFORMING value to filter on.",
-      "notes": "Loan status is CURRENT 56, DELINQUENT 8, DEFAULTED 4, PAID_OFF 39 or CHARGED_OFF 3 (110 loans; CHECK constraint). Non-performing means DELINQUENT or DEFAULTED, which the dataset's loan-status knowledge entry states. Verified against the live fixture 2026-09-28 (seed 20260929, psql): 1 row — 12. trapSql counts DELINQUENT only and returns 8 (differs). Folding in CHARGED_OFF gives 15, but a charged-off loan has been written off with 0 outstanding and is no longer a performing-or-not asset on the books; filtering on the question's own word returns 0. Loans carry no test flag. The count is checked by the result set; the matches check asks the answer to name both statuses it counted. Guards against a status vocabulary invented from the question's wording, and against half of a two-value definition.\n\nTrap query (must return different rows): SELECT COUNT(*) AS non_performing_loans FROM finance.loans loan WHERE loan.status = 'DELINQUENT'\n\nParaphrases: What's the number of non-performing loans on our books?\n\nMoved from feat/engine-eval-loop (branch category value-vocabulary, provenance model-drafted-verified).\n\nThe banking rows are identical in the finance fixture (same seed and draw order); re-run on ba9_finance on 2026-10-13.",
+      "notes": "Loan status is CURRENT 56, DELINQUENT 8, DEFAULTED 4, PAID_OFF 39 or CHARGED_OFF 3 (110 loans; CHECK constraint). Non-performing means DELINQUENT or DEFAULTED, which the dataset's loan-status knowledge entry states. Verified against the live fixture 2026-09-28 (seed 20260929, psql): 1 row — 12. trapSql counts DELINQUENT only and returns 8 (differs). Folding in CHARGED_OFF gives 15, but a charged-off loan has been written off with 0 outstanding and is no longer a performing-or-not asset on the books; filtering on the question's own word returns 0. Loans carry no test flag. The count is checked by the result set; the matches check asks the answer to name both statuses it counted. Guards against a status vocabulary invented from the question's wording, and against half of a two-value definition. The pattern ignores case since 2026-10-24 (BA-188): an answer naming the statuses as stored (DELINQUENT, DEFAULTED) had failed it.\n\nTrap query (must return different rows): SELECT COUNT(*) AS non_performing_loans FROM finance.loans loan WHERE loan.status = 'DELINQUENT'\n\nParaphrases: What's the number of non-performing loans on our books?\n\nMoved from feat/engine-eval-loop (branch category value-vocabulary, provenance model-drafted-verified).\n\nThe banking rows are identical in the finance fixture (same seed and draw order); re-run on ba9_finance on 2026-10-13.",
       "checks": [
         {
           "type": "matches",
           "args": {
-            "pattern": "^(?=[\\s\\S]*delinquen)(?=[\\s\\S]*default)"
+            "pattern": "^(?=[\\s\\S]*delinquen)(?=[\\s\\S]*default)",
+            "flags": "i"
           },
           "criterion": "G1"
         },

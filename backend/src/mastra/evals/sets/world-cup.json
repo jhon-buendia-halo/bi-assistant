@@ -3598,9 +3598,9 @@
       "id": "matches-by-stage",
       "category": "aggregate",
       "tags": ["ties"],
-      "question": "How many matches were played at each stage of the tournaments?",
+      "question": "How many matches were played at each stage, counting both tournaments together?",
       "intent": "A full breakdown whose smallest groups tie (final and third place, 2 matches each).",
-      "notes": "From the former World Cup golden set (world-cup-golden, merged into this bank on 2026-10-20). Ties at the bottom (final and third_place both 2) — a 'least common stage' phrasing would be ambiguous, so the question asks for the full breakdown.",
+      "notes": "From the former World Cup golden set (world-cup-golden, merged into this bank on 2026-10-20). Ties at the bottom (final and third_place both 2) — a 'least common stage' phrasing would be ambiguous, so the question asks for the full breakdown. Reworded on 2026-10-24 (BA-188): 'at each stage of the tournaments' read as per tournament as well as both together, and a right per-tournament breakdown failed the result set (2 of 18 attempts passed in loop rounds 8 to 13); the reference counts both tournaments together.",
       "checks": [
         {
           "type": "calledTool",

@@ -75,6 +75,26 @@ export function statedNumbers(
   return found;
 }
 
+/**
+ * Stage names whose number is not a figure (R115): `round of 16` in any case,
+ * its words joined by spaces, hyphens or underscores; and `last 16` or
+ * `last-16`, but only when a singular stage word follows (`the last 16
+ * stage`, `a last-16 tie`) or the sentence or line ends (`reached the last
+ * 16.`), so `the last 16 matches` and `the last 16 years` stay counts.
+ */
+const STAGE_NAMES = [
+  /\bround[\s_-]+of[\s_-]+\d+(?![\p{L}\p{N}_]|[.,]\d)/giu,
+  /\blast[\s-]+\d+(?=[\s-]+(?:stage|round|phase|tie|match|game)\b|[*_]*[ \t]*(?:[.!?](?!\d)|$))/gimu,
+];
+
+/** The answer without the numbers of its stage names (R115). */
+export function withoutStageNames(text: string): string {
+  return STAGE_NAMES.reduce(
+    (prose, pattern) => prose.replace(pattern, ' '),
+    text ?? '',
+  );
+}
+
 /** A datasource or row id: its digit runs are not figures. */
 const UUID =
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
@@ -193,7 +213,9 @@ export function isGrounded(
  * `numbersGrounded` (agents-evals R115, criterion G1): every number in the
  * answer is in the question or follows from what a tool returned this turn.
  * It catches an invented figure; it cannot catch a real figure given to the
- * wrong subject (research 2.3).
+ * wrong subject (research 2.3). The number of a stage name in the answer
+ * (`round of 16`) is not a figure; in the question or a result it still
+ * grounds, as any number there does.
  */
 export const numbersGrounded: DeterministicCheck<NumbersGroundedArgs> = {
   type: 'numbersGrounded',
@@ -207,7 +229,7 @@ export const numbersGrounded: DeterministicCheck<NumbersGroundedArgs> = {
       ? `Checks that every number in the answer comes from a tool result (ignoring ${quotedList(args.ignore)})`
       : 'Checks that every number in the answer comes from a tool result',
   evaluate: (turn, args) => {
-    const stated = statedNumbers(turn.answer, args.ignore);
+    const stated = statedNumbers(withoutStageNames(turn.answer), args.ignore);
     if (stated.length === 0) return PASS;
     const questionNumbers = statedNumbers(turn.question).flatMap(
       (number) => number.values,

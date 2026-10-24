@@ -4,10 +4,15 @@ import type { MastraScorer } from '@mastra/core/evals';
 // stack that `assistant.evals.ts` pulls in.
 import type { AssistantEvalCase, AssistantEvalSet } from './assistant.evals';
 import { checkRegExp } from './eval-set-files';
-import type { EvalCheckSpec, EvalSetDefinition } from './eval-set-files';
+import type {
+  EvalCaseDefinition,
+  EvalCheckSpec,
+  EvalSetDefinition,
+} from './eval-set-files';
 import { DETERMINISTIC_CHECKS } from './checks';
 import type { CheckContext } from './checks';
 import { checkScorer } from './checks/check-scorer';
+import { sampleViews } from './sample-views';
 
 /**
  * The Mastra scorer a set file's check stands for. The six helper types call
@@ -16,7 +21,8 @@ import { checkScorer } from './checks/check-scorer';
  * if output includes "Argentina"') are exactly what the Evals tab and stored
  * runs showed when the cases were TypeScript. The deterministic checks
  * (agents-evals R112 to R124) are `./checks/` wrapped with `createScorer`;
- * `context` binds the set's dialect and the case's reference query.
+ * `context` binds the set's dialect, the case's reference query and the
+ * views of the set's sample (`checkContext`).
  */
 export function scorerForCheck(
   spec: EvalCheckSpec,
@@ -44,6 +50,25 @@ export function scorerForCheck(
   }
 }
 
+/**
+ * What a case's deterministic checks know besides the turn (R112): the set's
+ * dialect, the case's reference query in it, and the views of the set's
+ * sample (R124), read from the sample's seed SQL on the first check that
+ * asks, never when the set is built.
+ */
+export function checkContext(
+  set: Pick<EvalSetDefinition, 'dialect' | 'fixtureId'>,
+  evalCase: Pick<EvalCaseDefinition, 'expectedSql'>,
+): CheckContext {
+  return {
+    dialect: set.dialect,
+    ...(evalCase.expectedSql !== undefined
+      ? { expectedSql: evalCase.expectedSql }
+      : {}),
+    views: () => sampleViews(set.fixtureId),
+  };
+}
+
 /** The suite's sets, with each case's checks built into Mastra scorers. */
 export function toAssistantEvalSets(
   definitions: EvalSetDefinition[],
@@ -58,12 +83,7 @@ export function toAssistantEvalSets(
       question: evalCase.question,
       intent: evalCase.intent,
       scorers: evalCase.checks.map((check) =>
-        scorerForCheck(check, {
-          dialect: set.dialect,
-          ...(evalCase.expectedSql !== undefined
-            ? { expectedSql: evalCase.expectedSql }
-            : {}),
-        }),
+        scorerForCheck(check, checkContext(set, evalCase)),
       ),
       // One per scorer, same order: what each check measures (R146).
       checkCriteria: evalCase.checks.map((check) => check.criterion),

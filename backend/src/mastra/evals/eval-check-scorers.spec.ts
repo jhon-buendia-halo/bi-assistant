@@ -24,7 +24,9 @@ jest.mock('@mastra/core/evals', () => ({
 }));
 
 import { loadEvalSets } from './eval-set-files';
-import { toAssistantEvalSets } from './eval-check-scorers';
+import { checkContext, toAssistantEvalSets } from './eval-check-scorers';
+import { usesEntities } from './checks/uses-entities';
+import type { CheckTurn } from './checks';
 
 describe('toAssistantEvalSets criteria (agents-evals R146)', () => {
   const definitions = loadEvalSets();
@@ -48,5 +50,42 @@ describe('toAssistantEvalSets criteria (agents-evals R146)', () => {
       ?.cases.find((evalCase) => evalCase.id === 'champion-2022');
     expect(champion).toMatchObject({ category: 'lookup', split: 'dev' });
     expect(champion?.checkCriteria?.[0]).toBe('G1');
+  });
+});
+
+describe('checkContext (agents-evals R124)', () => {
+  const definitions = loadEvalSets();
+
+  /** A turn whose one successful query is `sql`. */
+  const turn = (sql: string): CheckTurn => ({
+    question: 'What was the score of the 2018 World Cup final?',
+    answer: 'France beat Croatia 4-2.',
+    toolCalls: [
+      {
+        name: 'run_readonly_sql',
+        args: { sql, rationale: 'Read the final.' },
+        argsReadable: true,
+        result: { rows: [] },
+      },
+    ],
+  });
+
+  it('opens the World Cup views for final-score-2018 on every datasource kind (BA-188)', () => {
+    for (const [setId, view] of [
+      ['world-cup', 'world_cup.v_match_results'],
+      ['world-cup-rest', 'api.world_cup.v_match_results'],
+      ['world-cup-databricks', '`evals`.world_cup.v_match_results'],
+    ]) {
+      const set = definitions.find((candidate) => candidate.id === setId);
+      const evalCase = set?.cases.find((candidate) =>
+        candidate.id.endsWith('final-score-2018'),
+      );
+      if (!set || !evalCase) throw new Error(`no final-score-2018 in ${setId}`);
+      const sql = `SELECT home_team, away_team, home_goals, away_goals FROM ${view} WHERE tournament_year = 2018 AND LOWER(stage) = 'final'`;
+      expect([
+        setId,
+        usesEntities.evaluate(turn(sql), {}, checkContext(set, evalCase)),
+      ]).toEqual([setId, { passed: true }]);
+    }
   });
 });

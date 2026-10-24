@@ -1,5 +1,5 @@
 import { fail, PASS, quotedList, stringListProblem } from './check';
-import type { DeterministicCheck } from './check';
+import type { DeterministicCheck, ViewTables } from './check';
 import { tableName, tableReferences } from './sql-text';
 import { executedStatements } from './turn';
 
@@ -27,10 +27,34 @@ export function expectedEntities(
 }
 
 /**
+ * The names a statement reads (R124): its table references, and for each
+ * one that is a view, the tables and views the view reads, and theirs in
+ * turn. A name already read is not opened again, so a cycle ends.
+ */
+export function readEntities(
+  sql: string,
+  views: ViewTables | undefined,
+): Set<string> {
+  const read = new Set(tableReferences(sql).map(tableName));
+  if (!views?.size) return read;
+  const pending = Array.from(read);
+  for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
+    for (const table of views.get(name) ?? []) {
+      if (read.has(table)) continue;
+      read.add(table);
+      pending.push(table);
+    }
+  }
+  return read;
+}
+
+/**
  * `usesEntities` (agents-evals R124, criterion D2, schema linking): one query
  * that ran reads every entity the answer needs, by default those the
  * reference reads. Compared on the table name alone, because the dialects
- * qualify it differently (`world_cup.goals`, `api.world_cup.goals`).
+ * qualify it differently (`world_cup.goals`, `api.world_cup.goals`). A view
+ * of the sample counts as reading what its definition reads, so a query on
+ * `v_match_results` reads `matches`, `tournaments`, `venues` and `teams`.
  */
 export const usesEntities: DeterministicCheck<UsesEntitiesArgs> = {
   type: 'usesEntities',
@@ -62,9 +86,10 @@ export const usesEntities: DeterministicCheck<UsesEntitiesArgs> = {
     if (statements.length === 0) {
       return fail('no successful run_readonly_sql to inspect');
     }
+    const views = context.views?.();
     let fewestMissing: string[] = wanted;
     for (const sql of statements) {
-      const read = new Set(tableReferences(sql).map(tableName));
+      const read = readEntities(sql, views);
       const missing = wanted.filter((entity) => !read.has(entity));
       if (missing.length === 0) return PASS;
       if (missing.length < fewestMissing.length) fewestMissing = missing;

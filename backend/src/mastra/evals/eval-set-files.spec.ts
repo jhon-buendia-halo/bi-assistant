@@ -302,7 +302,7 @@ describe('eval set files', () => {
       'How many goals have a recorded assisting player?',
       'How many goals were scored of each goal type?',
       'What was the total match attendance for each tournament year?',
-      'How many matches were played at each stage of the tournaments?',
+      'How many matches were played at each stage, counting both tournaments together?',
       'What share of their attempted passes did each team complete?',
       'What share of the disciplinary cards shown were yellow?',
     ]);
