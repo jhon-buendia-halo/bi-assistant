@@ -419,6 +419,20 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 - **Acceptance:** each listed behaviour has a Gherkin scenario and a passing test; `check-specs` is green.
 - **Notes:** added 2026-10-23 at the user's request. Needs 1.1.20. Jira: [BA-245](https://halo-powered.atlassian.net/browse/BA-245). Done on 2026-10-23: `agents.spec.ts` scenarios 16 to 19 added and 14 and 15 extended (19 of 19 pass on the web target); the command-line behaviour is covered by backend tests the Gherkin names, three of them new; no production code changed. Evidence: [evidence/1.1.23/](evidence/1.1.23/).
 
+#### 1.1.24 — Checks and questions that failed right answers ([BA-188](https://halo-powered.atlassian.net/browse/BA-188))  `🚧 In progress`
+- **Intent:** the evals stop failing answers that are right, so the loop and the 100% gate measure the assistant, not the exam.
+- **Scope:** `check-uses-entities` counts the tables a view reads as read by the query that reads the view; `check-numbers-grounded` ignores the number inside a stage name ("round of 16", "round-of-16", "last 16"); the `matches` pattern of `non-performing-loans` ignores case; `matches-by-stage` asks for both tournaments counted together; a new loop baseline (round 14) under them.
+- **Out of scope:** other questions or checks; the loop's accept rule; BA-243's investigation questions.
+- **Acceptance:** unit tests for both check changes; the bank validates; in round 14 none of the four questions fails for the reason the review found (a view counted as no join, the 16 of a stage name, the case of a status, the per-tournament reading); round 14 recorded in `results.tsv` with its `eval:diff`; `check-specs` green.
+- **Notes:** decided by the user on 2026-10-24, decisions 1 to 4 of the "Para decidir" section of the loop's log page (for decision 1, option B: the check opens the views, rather than dropping the check from the question). Found in the dev failures of rounds 8 to 13 (BA-244, 1.1.22). Jira: [BA-188](https://halo-powered.atlassian.net/browse/BA-188).
+
+#### 1.1.25 — Marketing Analytics knowledge seed ([BA-188](https://halo-powered.atlassian.net/browse/BA-188))  `🚧 In progress`
+- **Intent:** the assistant gets the Marketing Analytics sample's business definitions the way it gets Finance's, so its answers count what the business counts (written premium on bound sales only, for one).
+- **Scope:** a knowledge seed for the Marketing Analytics sample, created when the sample is loaded (testing-data R26, R27), with the rules of `docs/evals/domains/marketing-analytics-policy.md`, each verified by SQL against the sample; measured as loop round 15 against round 14.
+- **Out of scope:** anything that answers BA-243's investigation questions (the 2024-Q3 campaign pause); seeds for other samples.
+- **Acceptance:** the seed is created when the sample loads; its unit test (R27: no question id or wording) passes; every fact in it verified by SQL; round 15 recorded with its `eval:diff`.
+- **Notes:** decided by the user on 2026-10-24, decision 5 of the same page. Closes the gap 1.1.10 left for Marketing Analytics (Finance, Health Insurance, Genomics and Supply Chain ship a seed). Jira: [BA-188](https://halo-powered.atlassian.net/browse/BA-188).
+
 ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2))
 
 The structure the assistant reasons over, as a single, versionable source of truth.

@@ -35,7 +35,7 @@ The two process stories come first; five stories cover the plan's steps; two mor
 | [BA-128](https://halo-powered.atlassian.net/browse/BA-128) | Execution plan | 1.1.3 |
 | [BA-182](https://halo-powered.atlassian.net/browse/BA-182) | Foundation: one format, deterministic checks, report by category, domain databases (Steps 1a-1d) | 1.1.4-1.1.7 |
 | [BA-186](https://halo-powered.atlassian.net/browse/BA-186) | Databricks and REST evals (Steps 2-3) | 1.1.8-1.1.9 |
-| [BA-188](https://halo-powered.atlassian.net/browse/BA-188) | More questions and numbers you can trust (Steps 4-5) | 1.1.10-1.1.11 |
+| [BA-188](https://halo-powered.atlassian.net/browse/BA-188) | More questions and numbers you can trust (Steps 4-5) | 1.1.10-1.1.11, 1.1.24-1.1.25 |
 | [BA-190](https://halo-powered.atlassian.net/browse/BA-190) | Judge validation, arms and component checks (Steps 6-8, after the beta) | 1.1.12-1.1.14 |
 | [BA-193](https://halo-powered.atlassian.net/browse/BA-193) | Evals on the user's own data (Steps 9-12, after the beta) | 1.1.15-1.1.18 |
 | [BA-212](https://halo-powered.atlassian.net/browse/BA-212) | Intellify sample as a Testing Data fixture (Done; shipped on `main` in PR #77) | 1.1.19 |
