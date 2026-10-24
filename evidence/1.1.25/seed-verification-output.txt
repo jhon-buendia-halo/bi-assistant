@@ -1,0 +1,108 @@
+== V1 sale_status vocabulary
+BOUND | 5957 | 561390
+NTU | 4445 | 22214
+PENDING | 420 | 1913
+== V2 PENDING only in the PRELIMINARY quarter
+FINAL | BOUND | 5223
+FINAL | NTU | 3906
+PRELIMINARY | BOUND | 734
+PRELIMINARY | NTU | 539
+PRELIMINARY | PENDING | 420
+== V3 rows are totals (non-test rows, policies per row)
+BOUND | 9 | 641 | 92.0
+NTU | 1 | 36 | 5.0
+PENDING | 1 | 21 | 4.6
+== V4 the real case: every status over BOUND non-test, Harborline Mutual written premium 2024 and 2025
+1.0444
+== V5 test flag: which tables have is_test
+policy_sales
+== V6 test rows by status
+f | BOUND | 5951
+f | NTU | 4445
+f | PENDING | 420
+t | BOUND | 6
+== V7 market_benchmarks rows against the BOUND non-test sales of the carrier each label masks (rows, rows that differ)
+955 | 0
+== V8 the same against every status and test rows (rows that differ)
+955
+== V9 carriers, and carriers that report sales
+HBM | Harborline Mutual | MUTUAL
+CRV | Crestview Insurance | NATIONAL
+NGA | Northgate Assurance | NATIONAL
+BFG | Bluefield General | REGIONAL
+PCC | Pinecrest Casualty | REGIONAL
+TWG | Tidewater Insurance Group | NATIONAL
+6
+== V10 market = the viewer own BOUND non-test written premium + its benchmark rows, per viewer, line and quarter (cells, cells that differ)
+240 | 0
+== V11 labels per viewer, and carriers behind each label across viewers
+6 | Competitor A, Competitor B, Competitor C, Competitor D, Competitor E
+Competitor A | 5
+Competitor B | 4
+Competitor C | 4
+Competitor D | 3
+Competitor E | 5
+0
+== V12 competitor visibility per carrier, and benchmark rows of each viewer
+Bluefield General | AGGREGATE_ONLY | 1
+Crestview Insurance | MASKED | 2
+Harborline Mutual | MASKED | 3
+Northgate Assurance | MASKED | 2
+Pinecrest Casualty | AGGREGATE_ONLY | 2
+Tidewater Insurance Group | MASKED | 2
+Bluefield General | 167
+Crestview Insurance | 151
+Harborline Mutual | 152
+Northgate Assurance | 159
+Pinecrest Casualty | 167
+Tidewater Insurance Group | 159
+== V13 carriers that load campaigns
+Crestview Insurance | 6
+Harborline Mutual | 14
+Pinecrest Casualty | 6
+== V14 money columns and currency
+campaign_results | budget_cents | bigint
+campaign_results | spend_cents | bigint
+market_benchmarks | written_premium_cents | bigint
+policy_sales | written_premium_cents | bigint
+revenue_by_period | earned_premium_cents | bigint
+revenue_by_period | fee_income_cents | bigint
+policy_sales | currency_code
+USD | 10822
+== V15 revenue_by_period grain and fee income
+191 | 191 | 159
+== V16 periods: code format and fiscal rule (rows, rows that follow it)
+9 | 9 | 9
+1 | 3 | Jan
+2 | 4 | Apr
+3 | 1 | Jul
+4 | 2 | Oct
+== V17 coverage start: first period and first row of each fact table
+periods | 2024-01-01
+policy_sales | 2024-01-01
+revenue_by_period | 2024-01-01
+campaign_results | 2024-01-01
+market_benchmarks | 2024-01-01
+== V18 reporting status vocabulary, and rows in a NOT_REPORTED quarter
+FINAL | 7
+NOT_REPORTED | 1
+PRELIMINARY | 1
+0 | 0 | 0 | 0
+t
+== V19 campaign_results grain, funnel columns, overspend rows
+51 | 51 | 17
+id
+campaign_id
+period_id
+budget_cents
+spend_cents
+impressions
+clicks
+leads
+quotes
+policies_bound
+== V20 metric expressions over the whole table
+547290
+645783096.44000000
+0.0390
+606193891.54000000
