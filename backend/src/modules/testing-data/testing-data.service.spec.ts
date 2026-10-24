@@ -882,7 +882,7 @@ describe('TestingDataService.load — knowledge seeds (R26)', () => {
     expect(metrics.docs).toHaveLength(METRICS);
   });
 
-  it.each(['finance', 'genomics', 'supply-chain'])(
+  it.each(['finance', 'genomics', 'supply-chain', 'marketing-analytics'])(
     'creates the %s seed on its own database',
     async (id) => {
       const fixture = findFixture(id) as SampleFixture;

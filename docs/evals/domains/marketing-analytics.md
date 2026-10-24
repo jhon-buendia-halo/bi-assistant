@@ -12,6 +12,7 @@ A synthetic eval domain shaped on the marketing-insight product (BA-9 plan [3.4]
 | JSON dump | `backend/scripts/fixtures/marketing-analytics/data/`: 14 relations, gzipped, 0.16 MB, the input of the Databricks loader and the REST server ([evidence](../../../evidence/1.1.7/dump-marketing-analytics.txt)) |
 | Questions | `backend/src/mastra/evals/sets/marketing-analytics.json`, 50 questions |
 | Datasource and dataset | "Marketing Analytics PostgreSQL", "Marketing Analytics" (Settings, Testing Data loads both) |
+| Knowledge seed | `backend/src/modules/testing-data/fixtures/knowledge/marketing-analytics.ts`: the policy's rules, created when the sample is loaded (testing-data R26; roadmap 1.1.25, each rule checked by SQL in `evidence/1.1.25/seed-verification.md`) |
 | References run | [`evidence/1.1.7/references-marketing-analytics.txt`](../../../evidence/1.1.7/references-marketing-analytics.txt) |
 
 ## The persona
@@ -151,7 +152,7 @@ Changing the seed or a knob changes the figures: rerun every reference, update t
 
 ## Not done yet
 
-- No knowledge seed: the glossary, default filters and policy are not loaded as knowledge entries (plan 3.4 step 4). The business-term questions are written to be answerable from the schema's cues, and the governance questions state the rule; with the policy loaded as knowledge, the set measures the knowledge-on arm (BA-80).
+- The knowledge seed (added 2026-10-24, roadmap 1.1.25) holds the policy's rules only, each checked by SQL: 13 entries (a default filter on test rows, four instructions on the viewer, masked competitors, aggregate-only plans and private campaign data, eight terms) and four metrics. It leaves out the glossary terms the policy does not state (digital channels, product families, promo codes), join paths, and the policy's "best with no measure" default, which the `ambiguous` questions test (testing-data R27). The business-term questions are still written to be answerable from the schema's cues, and the governance questions still state the rule; with the seed loaded, the set measures the knowledge-on arm (BA-80).
 - PostgreSQL only. Databricks and REST variants come with Steps 2 and 3 from the dump of this fixture.
 - No baseline run with a model yet.
 

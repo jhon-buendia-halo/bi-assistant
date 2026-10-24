@@ -16,6 +16,7 @@
 import { FINANCE_KNOWLEDGE } from './knowledge/finance';
 import { GENOMICS_KNOWLEDGE } from './knowledge/genomics';
 import { HEALTH_INSURANCE_KNOWLEDGE } from './knowledge/health-insurance';
+import { MARKETING_ANALYTICS_KNOWLEDGE } from './knowledge/marketing-analytics';
 import { SUPPLY_CHAIN_KNOWLEDGE } from './knowledge/supply-chain';
 import type { KnowledgeSeed } from './knowledge/types';
 
@@ -68,8 +69,8 @@ export interface SampleFixture {
   /**
    * Knowledge entries and metrics about the sample's data, created by the
    * loader after a successful load from the panel (testing-data R26). Only
-   * the Finance, Health Insurance, Genomics and Supply Chain samples carry
-   * one; World Cup deliberately has none.
+   * the Finance, Health Insurance, Genomics, Supply Chain and Marketing
+   * Analytics samples carry one; World Cup deliberately has none.
    */
   knowledge?: KnowledgeSeed;
 }
@@ -502,6 +503,7 @@ const MARKETING_ANALYTICS: SampleFixture = {
     'competitor_masks',
     'analyst_access',
   ],
+  knowledge: MARKETING_ANALYTICS_KNOWLEDGE,
 };
 
 /**

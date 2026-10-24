@@ -113,12 +113,13 @@ function metricsService(): MetricsService {
 }
 
 describe('sample knowledge seeds', () => {
-  it('ship with the Finance, Health Insurance, Genomics and Supply Chain samples only', () => {
+  it('ship with the Finance, Health Insurance, Genomics, Supply Chain and Marketing Analytics samples only', () => {
     expect(SEEDED.map((fixture) => fixture.id)).toEqual([
       'finance',
       'health-insurance',
       'genomics',
       'supply-chain',
+      'marketing-analytics',
     ]);
     for (const fixture of SEEDED) {
       expect(fixture.datasourceKind ?? 'postgres').toBe('postgres');
@@ -126,7 +127,7 @@ describe('sample knowledge seeds', () => {
     }
   });
 
-  it('give every metric its own name, so all four samples can be loaded into one app', async () => {
+  it('give every metric its own name, so all five samples can be loaded into one app', async () => {
     const service = metricsService();
     const names = SEEDED.flatMap((fixture) =>
       seedOf(fixture).metrics.map((metric) => metric.name),
