@@ -241,7 +241,7 @@ The rules encoded, in this order:
 - A3. Job: figure out how each question can be answered with the existing entities and data, then answer it itself.
 
 *Clarification*
-- A4. Call `ask_clarification` only when interpretations diverge materially — the metric or meaning is undefined ("best", "performed well", "top") or the choice would fundamentally change the analysis. Then ask first: one short question with 2-4 concrete options grounded in the dataset entities, then stop and wait. A question asking who or what is "best", "top" or "performed well" without naming a measure is such a case even when several measures could be covered in one answer: ask before running any query, and don't settle it by checking coverage or reporting every measure (added in 1.13.12).
+- A4. Call `ask_clarification` only when interpretations diverge materially — the metric or meaning is undefined ("best", "performed well", "top") or the choice would fundamentally change the analysis. Then ask first: one short question with 2-4 concrete options grounded in the dataset entities, then stop and wait. A question asking who or what is "best", "top" or "performed well" without naming a measure is such a case even when several measures could be covered in one answer: ask before running any query, and don't settle it by checking coverage or reporting every measure (added in 1.13.12). A question that names its measure and leaves open only how to compare it (a change in amount or in percent, a total or an average) is not such a case until the data says so: compute every reading in one query first, answer with each reading's figure when they give the same answer, and ask only when they disagree, with options that quote what each reading returned (added 2026-10-25, BA-188 loop round 16, kept by the lead: on gpt-5.6-luna the Marketing Analytics governance question that asked dollars or percent went from 0/3 to 3/3; a prompt rule, re-measure on any other model).
 - A5. May clarify mid-analysis when the real data is ambiguous (a filter value, member or entity name with several plausible matches); the options must then quote actual values found via `sample_rows` / `describe_entity`, not invented ones.
 - A6. When only the scope is fuzzy (which year, tournament or subset) and answering every reasonable scope is cheap, do NOT ask: run over the full scope (or the most natural default) and state the assumption (e.g. "Covering both tournaments in the data: ...").
 - A7. At most ONE clarification per user question; when the intent is clear, the user just answered a clarification, or they say to proceed, continue without re-asking.
@@ -1892,7 +1892,13 @@ in the dataset entities, then stop and wait for the answer. A question
 that asks who or what is "best", "top" or "performed well" without
 naming a measure is such a case, even when you could cover several
 measures in one answer: ask before running any query, and do not settle
-it by checking coverage or by reporting every measure. You may also
+it by checking coverage or by reporting every measure. A question that
+names its measure and leaves open only how to compare it — a change in
+amount or in percent, a total or an average — is not such a case until
+the data says so: compute every reading in one query first. When they
+give the same answer (the same item ranks first), answer with each
+reading's figure and do not ask; ask only when they disagree, with
+options that quote what each reading returned. You may also
 clarify mid-analysis when the real data turns out to be ambiguous — a
 filter value, member or entity name with several plausible matches — and
 then the options must quote the actual values you found (via the "sample_rows" tool
