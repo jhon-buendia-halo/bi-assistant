@@ -156,9 +156,9 @@ Changing the seed or a knob changes the figures: rerun every reference, update t
 - PostgreSQL only. Databricks and REST variants come with Steps 2 and 3 from the dump of this fixture.
 - No baseline run with a model yet.
 
-## Investigation brief: Harborline's Q3 2024 sales dip (draft, awaiting approval)
+## Investigation brief: Harborline's Q3 2024 sales dip (approved, awaiting the held-out wording)
 
-Status: drafted by Claude on 2026-10-23; the user approves the brief and writes the held-out wording before any question enters a set.
+Status: drafted by Claude on 2026-10-23; approved by the user on 2026-10-26 as drafted (*What approval decides*, below). No question enters a set until the user writes the held-out wording.
 
 A why question for the investigation questions of roadmap 1.1.21 ([BA-243](https://halo-powered.atlassian.net/browse/BA-243)). The story is trap M7, already in the data: the generator writes no Harborline campaign result for 2024-Q3 and scales Harborline's sales that quarter by 0.86 (`FREEZE_PERIOD` and `FREEZE_SALES_FACTOR` in `docker/postgres/generate/marketing-analytics.ts`). No fixture, generator or facts.json change is needed. The existing case `campaign-freeze-impact` names the pause in its question; the questions of this brief do not.
 
@@ -750,5 +750,12 @@ _Placeholder: the held-out questions of this brief are written by the user. None
   - `why-harborline-q3-2024-dip` has the same reference as `campaign-freeze-impact`.
   - The leak check (R230 rule 2) takes every run of 4 or more letters of a `matches` or `notMatches` pattern as a literal. These patterns add 69 words that are not literals yet, generic ones such as *driven*, *explained* and *mostly* among them. Put the generic ones on `docs/evals/loop/leak-allowlist.txt` with a reason when the cases enter the set; keep the story's words (*seasonal*, *summer*, *recovered*) as literals.
 - The held-out wording.
+
+Decided by the user on 2026-10-26 (decision 6 of the loop's log page):
+
+- The brief is approved as drafted.
+- All four dev drafts stay as drafted. The rest-of-market reference stays: a Harborline compared with a market that includes Harborline is the analyst's mistake the questions are meant to catch. `why-harborline-q3-2024-dip` stays beside `campaign-freeze-impact`, because that case names the cause in its question and this one does not.
+- When the cases enter the set, the generic words go on the leak check's allowlist with a reason, and the story's words stay literals, as proposed above.
+- The held-out wording is still the user's to write. Until it exists, no case of this brief enters a set.
 
 Adding the cases also changes the question counts in the agents-evals spec (R11 and *Eval suite content*), agents.md 8.1, the README of this folder and `EVAL_SETS` in `frontend/e2e/agents.spec.ts`.

@@ -2,6 +2,19 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-26
+
+### Added
+- **Marketing Analytics knowledge seed** (roadmap 1.1.25, [BA-188](https://halo-powered.atlassian.net/browse/BA-188), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)). Loading the sample now creates 13 knowledge entries and 4 metrics from its business policy, each checked by SQL against the sample: written premium and policies sold count bound sales only, test rows are left out, competitors stay masked, and money, quarters and the fiscal year are defined (testing-data R26). Loop round 15 kept it: Marketing Analytics held-out went from 9/16 to 14/16. Evidence: [evidence/1.1.25/](evidence/1.1.25/).
+
+### Changed
+- **Working rule A4 asks how to compare only when the readings disagree** (agents.md Appendix A, loop round 16, BA-188): a question that names its measure and leaves open only how to compare it (amount or percent, total or average) computes every reading in one query first. It answers with each reading's figure when they agree, and asks, quoting each figure, only when they disagree. The Marketing Analytics governance question that round 15 made ask "dollars or percent?" went from 0/3 to 3/3. It is a prompt rule, so it is measured again on any other model.
+- **The eval gate of the BA-9 PR (#81)**, by the user's decision: the three loop sets run on `main` and on the branch on the beta's Claude model, and the PR passes when no category is `down` and every `out-of-scope` and `non-existent` question passes 3 of 3, instead of every question 3 of 3. It applies to this PR only and waits for the Anthropic keys ([specs/epics/BA-9/spec.md](specs/epics/BA-9/spec.md), the `verify` skill, delivery.md section 2).
+- **Investigation briefs approved** (roadmap 1.1.21, [BA-243](https://halo-powered.atlassian.net/browse/BA-243)): the user approved the Marketing Analytics brief (Harborline's 2024-Q3 dip) and the Finance brief (no wealth fees billed in August 2025), with their eight dev drafts as written ([docs/evals/domains/](docs/evals/domains/)). No question enters a set until the user writes the held-out wording.
+
+### Fixed
+- **Checks and questions that failed right answers** (roadmap 1.1.24, BA-188). `check-uses-entities` counts the tables a sample's view reads (agents-evals R124). `check-numbers-grounded` no longer reads the 16 of "round of 16" as a figure (R115). `non-performing-loans` matches its statuses in any case. `matches-by-stage` asks for both tournaments counted together. In loop round 14 all four questions pass 3 of 3: dev went from 113/130 to 119/130, and held-out from 35/51 to 32/51, within its interval. One acceptance gate covered 1.1.24 and 1.1.25: no E2E scenario changed, and the impacted specs passed 34 of 34 on the web target. Evidence: [evidence/1.1.24/](evidence/1.1.24/).
+
 ## 2026-10-23
 
 ### Added

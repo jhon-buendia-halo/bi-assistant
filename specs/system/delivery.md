@@ -178,6 +178,8 @@ cd backend && npm run build:all && npm run start:web # web mode from the working
 
 `test:e2e` builds the backend with the web UI and drives the web app; its global setup starts the World Cup Postgres itself (see section 6). The desktop target (`test:e2e:desktop`) runs only when a desktop run is requested, and refuses to launch the app if port 3000 is taken. Which target to test, and how skipped desktop-only scenarios are reported, is the *Test target convention* in the [`workflow-e2e`](../../.claude/skills/workflow-e2e/SKILL.md) project skill (section 10).
 
+A change to what an agent receives (its prompt, skills, tools, context blocks or model routing) also needs its eval set at 100% on the branch, every question 3 of 3, with a run on the base commit beside it (`evals:assistant`, section 1; the [`verify`](../../.claude/skills/verify/SKILL.md) project skill). The BA-9 epic's PR has the one exception, a comparison with `main` on the beta's Claude model, decided by the user on 2026-10-26 ([specs/epics/BA-9/spec.md](../epics/BA-9/spec.md), *Dependencies, risks and open questions*).
+
 ## 3. Desktop packaging (electron-builder)
 
 Configuration lives in the `build` block of `frontend/package.json`.

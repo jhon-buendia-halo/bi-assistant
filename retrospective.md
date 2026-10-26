@@ -14,6 +14,29 @@ Entry template:
 
 ---
 
+## 2026-10-26 — 1.1.24 Checks and questions that failed right answers, and 1.1.25 Marketing Analytics knowledge seed (BA-188)
+
+### What went well
+- The four check and question decisions went to the user with real data from the runs (the question, the assistant's SQL and answer, the check's message) and a recommendation. Each was decided in one message, and each fix made its question pass 3 of 3 in one baseline round (round 14, $1.02).
+- Every rule of the Marketing Analytics seed was checked by SQL before round 15, and the seed left out the 2024-Q3 campaign pause, so BA-243's investigation brief stays a real investigation.
+- Round 15's side effect was caught by reading the flipped question, not only the totals: one governance question started asking "dollars or percent?" when both readings named the same competitor. Round 16 fixed it the next day.
+- One acceptance gate covered both features of the story: one E2E run (34 of 34) and one evidence folder. It ran on the running compose Postgres (`E2E_SKIP_DOCKER=1`) and ran only the listing scenario of `testing-data.spec.ts`, so the Intellify scenarios did not touch the shared 55432.
+- The frontend unit-test command from the 1.1.22 retrospective (`CHROME_BIN` with ChromeHeadless) passed on its first run.
+
+### What went wrong
+- The user could not tell what was left to decide from the loop's log page. Its decision 7 still said "after deciding 1, 2 and 4" two days after those were decided. It also mixed two questions in one card: which model the gate runs on (Claude needs the keys) and what bar it sets (100% or no regression). A plain-language walk-through in the chat was needed before the user could decide.
+- The repo's 100% gate was never checked against the noise the loop had already measured. A flaky tail of 1 or 2 attempts in 3 makes every question 3 of 3 out of reach on any model. This is the same mistake as the accept rule in 1.1.20, now for the merge gate.
+- Round 16 changed the prompt (rule A4) under 1.1.25. 1.1.25's scope said nothing about a prompt rule until it was marked Done.
+- The re-run of `builtin-agent-prompts.spec.ts` rewrote two screenshots under `evidence/1.14.11/` again, as in 1.1.20 and 1.1.22. They were restored with `git checkout`.
+- `sets/finance.json` and `sets/world-cup.json` are not Prettier-clean. This was already true on `938c6a2`, and the repo's format script covers `.ts` files only.
+
+### What to do differently
+- When a decision on a log page is taken, update every card that depends on it in the same edit. A decision card names one question; when a choice has two independent parts, split it into two cards.
+- Before adopting or keeping any pass bar (an accept rule, a merge gate), compare it with the A/A flips of the same model. If the bar is out of reach under that noise alone, take it to the user with the numbers before anyone relies on it.
+- When a loop round fixes a side effect of a feature's earlier round, add that round to the feature's Scope in the roadmap in the same commit.
+- After any E2E re-run, run `git status --short evidence/` and restore every file under another feature's folder before writing this feature's evidence.
+- Promoted: the headless frontend unit-test command is now in the `verify` skill's step 9. The 1.1.22 retrospective asked for it.
+
 ## 2026-10-23 — 1.1.22 Improvement loop rounds 10 to 13, and rule A40 on a second model (BA-244)
 
 ### What went well

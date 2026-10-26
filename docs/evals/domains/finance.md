@@ -97,9 +97,9 @@ The banking traps B1 to B15 come with the branch's generator unchanged (describe
 
 Business-term and default-filter questions assume the assistant knows this glossary and these filters; until the domain's knowledge is seeded, they measure what the assistant infers from the schema and its comments.
 
-## Investigation brief: no wealth fees billed in August 2025 (draft, awaiting approval)
+## Investigation brief: no wealth fees billed in August 2025 (approved, awaiting the held-out wording)
 
-Status: drafted by Claude on 2026-10-23; the user approves the brief and writes the held-out wording before any question enters a set.
+Status: drafted by Claude on 2026-10-23; approved by the user on 2026-10-26 as drafted (*What approval decides*, below). No question enters a set until the user writes the held-out wording.
 
 A why question for the investigation questions of roadmap 1.1.21 ([BA-243](https://halo-powered.atlassian.net/browse/BA-243)). The story is trap W1, already in the data: the generator bills July 2025's advisory fees on 2025-09-05 instead of 2025-08-05 and writes no trading fee for August 2025 (`EMPTY_MONTH` in `docker/postgres/generate/finance.ts`). [finance-policy.md](finance-policy.md) section 7 gives the reason: the billing platform was replaced that month. The finance knowledge seed says only that `charged_on` can fall after the fee's period, not that August was skipped, so the assistant has to find the shift in the data. The existing case `quietest-fee-month-2025` asks which month was lowest; none asks why. No fixture, generator or facts.json change is needed.
 
@@ -629,5 +629,13 @@ _Placeholder: the held-out questions of this brief are written by the user. None
   - `september-2025-fee-billing-spike` takes September's billing by fee type as its reference, so an answer that splits September only by the month covered passes the text checks and fails the result-set match.
   - The leak check: these patterns add 75 words that are not literals yet, generic ones such as *delay*, *higher* and *assets* among them. Allowlist the generic ones with a reason when the cases enter the set; keep the story's words (*outflows*, *attrition*, *waivers*, *refunds*) as literals.
 - The held-out wording.
+
+Decided by the user on 2026-10-26 (decision 6 of the loop's log page):
+
+- The brief is approved as drafted.
+- All four dev drafts stay as drafted. "Billed" keeps counting every status, as policy section 7 defines it; the finance knowledge seed already tells the assistant that every status is a recorded fee and that `charged_on` is the billing date. `september-2025-fee-billing-spike` keeps its breakdown by fee type.
+- When the cases enter the set, the generic words go on the leak check's allowlist with a reason, and the story's words stay literals, as proposed above.
+- The August billing change stays out of the finance knowledge seed.
+- The held-out wording is still the user's to write. Until it exists, no case of this brief enters a set.
 
 If a later round puts the August billing change into the finance knowledge seed (a lever file), the brief turns into a lookup: keep it out of the seed, or retire the brief. Adding the cases also changes the question counts in the agents-evals spec, agents.md 8.1, the README of this folder and `EVAL_SETS` in `frontend/e2e/agents.spec.ts`.
