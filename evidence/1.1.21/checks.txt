@@ -1,0 +1,30 @@
+# 1.1.21 (BA-243) — the twelve investigation cases enter the Finance and Marketing Analytics sets, 2026-10-26
+# Worktree feat/BA-9-golden-dataset-evals, on top of 4bd9484.
+
+What changed
+- backend/src/mastra/evals/sets/marketing-analytics.json: 50 → 56 cases (18 held out, 7 reasoning): the four approved dev drafts of the brief and two held-out cases.
+- backend/src/mastra/evals/sets/finance.json: 68 → 74 cases (22 held out, 6 reasoning): the four approved dev drafts and two held-out cases.
+- docs/evals/loop/leak-allowlist.txt: 83 generic pattern words allowlisted with their reason (leak-check-allowlist.txt).
+- Counts: agents-evals R11, the Finance and Marketing Analytics paragraphs of Eval suite content and the Gherkin of the set list; agents.md 8.1; docs/evals/domains/README.md and both briefs; program.md (193 questions, 579 attempts); EVAL_SETS in frontend/e2e/agents.spec.ts.
+- Both briefs: the Held-out wording sections now hold the wording and its provenance.
+
+Reference validation (references-ba243.txt, validate-ba243.txt)
+- PostgreSQL: the 12 references and their 12 trap queries ran read-only on loop_marketing_analytics and loop_finance (55433); every trap returns other rows.
+- SQLite: the 12 references ran over the committed dumps materialised as the REST connector does; each returns the PostgreSQL rows.
+- Databricks: static checks (R118 dialect rules, R119 name parts, R110 required tables, R204 same tables in the three dialects): 12 of 12.
+- The repo's loader (loadEvalSets) accepts every set file (24 sets).
+- The checks on simulated answers through the repo's check code: 39 scenarios, every correct answer passes, every answer that gives the wrong explanation fails (validate-ba243.txt, section 3).
+
+Quick checks (fast loop)
+- backend: npx jest src/mastra/evals src/modules/testing-data/fixtures/knowledge → 44 suites, 684 tests passed (the knowledge seeds name no question id and repeat no question's wording, testing-data R27).
+- python3 scripts/check-specs.py → ALL CHECKS PASSED.
+- eval:leak-check on a synthetic patch of the 312 pattern words: 134 BA-243 words flagged before the allowlist, 57 after (the 51 story words and 6 older ones); see leak-check-allowlist.txt.
+- frontend/e2e/agents.spec.ts (web target): 19 passed (e2e-results.txt); no other evidence folder touched.
+
+Round 17, the baseline with the new cases (r17-diff.txt; docs/evals/loop/results.tsv row 17; the twelve questions attempt by attempt in r17-investigation-questions.txt)
+- gpt-5.6-luna at low effort, the three sets at once from the r17 build snapshot, repeat 3, judge off; runs c31a6d82 (World Cup 47/63), 9c5fc989 (Finance 65/74), dde23e7f (Marketing Analytics 48/56); $1.2417, $0.0064 per question (+16.1%: the investigations run 6 to 18 tool calls per attempt).
+- Dev 113/130 → 120/138 and held-out 40/51 → 40/55, both within; the earlier questions moved as in round 4's A/A run (15 dev and 4 held-out flips).
+- The twelve investigation questions pass 7 of 36 attempts: dev reasoning 2/10 (two of the eight flaky, six at 0 of 3), held-out reasoning 0/4.
+- Marketing story (18 attempts, 2 passed): the assistant breaks the dip down by channel, product and premium per policy and never reads campaign_results in 13 attempts, so it names no cause and the matches check fails; rest-of-market and quarterly totals are often worked out in the text or pivoted into one row, so the result-set match fails; one attempt described the pause as "$0 recorded campaign spend" and "neither had a recorded Q3 campaign-results row", which the matches pattern does not recognise.
+- Finance story (18 attempts, 5 passed): the assistant finds that August's fees were billed on 5 September, but mostly misses that July's were too; it counts settled fees only (policy: billed means every status) or sums the statuses in the text, so the result-set match fails; the shared matches pattern has no "timing" wording ("billing-timing gap/issue") and no "monthly" form ("two legitimate monthly advisory fees ... both charged on September 5"), so eight right answers failed the text check. One attempt had a tool error of its own making (update_workflow called with a malformed todo).
+- Spend: $21.37 of the loop's $22.
