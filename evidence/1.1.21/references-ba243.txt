@@ -1,0 +1,66 @@
+# BA-243 cases: reference and trap queries on the loop databases (loop_marketing_analytics, loop_finance on 55433), read-only, 2026-10-26
+
+why-harborline-q3-2024-dip
+  reference (3 rows): [['11337'], ['10028'], ['11457']]
+  trap      (3 rows): [['11836'], ['10410'], ['11921']]
+  trap differs: True
+harborline-q3-2024-dip-summer-claim
+  reference (2 rows): [['59195'], ['58257']]
+  trap      (2 rows): [['70532'], ['68285']]
+  trap differs: True
+harborline-q3-2024-dip-campaign-calendar
+  reference (2 rows): [['163790.430000000000'], ['208825.540000000000']]
+  trap      (3 rows): [['2024-Q2', '4'], ['2024-Q3', '2'], ['2024-Q4', '4']]
+  trap differs: True
+harborline-q4-2024-rebound
+  reference (2 rows): [['58257'], ['55395']]
+  trap      (2 rows): [['58257'], ['58995']]
+  trap differs: True
+harborline-q3-2024-board-review
+  reference (3 rows): [['11337'], ['10028'], ['11457']]
+  trap      (3 rows): [['11836'], ['10410'], ['11921']]
+  trap differs: True
+harborline-q3-2024-premium-shortfall
+  reference (3 rows): [['13238929.460000000000'], ['11947899.700000000000'], ['13237616.430000000000']]
+  trap      (3 rows): [['1323892946'], ['1194789970'], ['1323761643']]
+  trap differs: True
+why-no-wealth-fees-billed-august-2025
+  reference (2 rows): [['47988.900000000000'], ['50824.740000000000']]
+  trap      (2 rows): [['45095.900000000000'], ['42451.440000000000']]
+  trap differs: True
+august-2025-fees-lost-clients-claim
+  reference (2 rows): [['85727112.350000000000'], ['86279750.700000000000']]
+  trap      (2 rows): [['116698305.40000000'], ['117796750.90000000']]
+  trap differs: True
+september-2025-fee-billing-spike
+  reference (2 rows): [['98813.640000000000'], ['653.8000000000000000']]
+  trap      (2 rows): [['150432.300000000000'], ['653.8000000000000000']]
+  trap differs: True
+wealth-fee-revenue-august-2025
+  reference (2 rows): [['45529.750000000000'], ['42451.440000000000']]
+  trap      (1 rows): [['115956.540000000000']]
+  trap differs: True
+august-2025-wealth-fee-report-gap
+  reference (2 rows): [['47988.900000000000'], ['50824.740000000000']]
+  trap      (2 rows): [['45095.900000000000'], ['42451.440000000000']]
+  trap differs: True
+buchanan-two-advisory-fees-claim
+  reference (2 rows): [['5258.0800000000000000'], ['5258.0800000000000000']]
+  trap      (1 rows): [['2025-09-05', '5258.0800000000000000', '2']]
+  trap differs: True
+
+# SQLite references over the committed dumps, materialised as the REST connector does, compared with the PostgreSQL rows
+
+SQLite 3.51.0
+✓ why-harborline-q3-2024-dip  sqlite 3 rows: [[11337.0], [10028.0], [11457.0]]  equal to PostgreSQL: True
+✓ harborline-q3-2024-dip-summer-claim  sqlite 2 rows: [[59195.0], [58257.0]]  equal to PostgreSQL: True
+✓ harborline-q3-2024-dip-campaign-calendar  sqlite 2 rows: [[163790.43], [208825.54]]  equal to PostgreSQL: True
+✓ harborline-q4-2024-rebound  sqlite 2 rows: [[58257.0], [55395.0]]  equal to PostgreSQL: True
+✓ harborline-q3-2024-board-review  sqlite 3 rows: [[11337.0], [10028.0], [11457.0]]  equal to PostgreSQL: True
+✓ harborline-q3-2024-premium-shortfall  sqlite 3 rows: [[13238929.46], [11947899.7], [13237616.43]]  equal to PostgreSQL: True
+✓ why-no-wealth-fees-billed-august-2025  sqlite 2 rows: [[47988.9], [50824.74]]  equal to PostgreSQL: True
+✓ august-2025-fees-lost-clients-claim  sqlite 2 rows: [[85727112.35], [86279750.7]]  equal to PostgreSQL: True
+✓ september-2025-fee-billing-spike  sqlite 2 rows: [[98813.64], [653.8]]  equal to PostgreSQL: True
+✓ wealth-fee-revenue-august-2025  sqlite 2 rows: [[45529.75], [42451.44]]  equal to PostgreSQL: True
+✓ august-2025-wealth-fee-report-gap  sqlite 2 rows: [[47988.9], [50824.74]]  equal to PostgreSQL: True
+✓ buchanan-two-advisory-fees-claim  sqlite 2 rows: [[5258.08], [5258.08]]  equal to PostgreSQL: True

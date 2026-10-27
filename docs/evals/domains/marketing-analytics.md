@@ -10,7 +10,7 @@ A synthetic eval domain shaped on the marketing-insight product (BA-9 plan [3.4]
 | Generator | `docker/postgres/generate/marketing-analytics.ts`, seed 20261013 |
 | Planted facts | `backend/scripts/fixtures/marketing-analytics/facts.json` |
 | JSON dump | `backend/scripts/fixtures/marketing-analytics/data/`: 14 relations, gzipped, 0.16 MB, the input of the Databricks loader and the REST server ([evidence](../../../evidence/1.1.7/dump-marketing-analytics.txt)) |
-| Questions | `backend/src/mastra/evals/sets/marketing-analytics.json`, 50 questions |
+| Questions | `backend/src/mastra/evals/sets/marketing-analytics.json`, 56 questions (50 of BA-185 and the six investigation questions of BA-243, below) |
 | Datasource and dataset | "Marketing Analytics PostgreSQL", "Marketing Analytics" (Settings, Testing Data loads both) |
 | Knowledge seed | `backend/src/modules/testing-data/fixtures/knowledge/marketing-analytics.ts`: the policy's rules, created when the sample is loaded (testing-data R26; roadmap 1.1.25, each rule checked by SQL in `evidence/1.1.25/seed-verification.md`) |
 | References run | [`evidence/1.1.7/references-marketing-analytics.txt`](../../../evidence/1.1.7/references-marketing-analytics.txt) |
@@ -117,7 +117,7 @@ Which schema feature serves which category ([research 2.6](../../research/BA-9.m
 
 ## The question set
 
-50 questions in one PostgreSQL variant, 16 held out (32%):
+56 questions in one PostgreSQL variant, 18 held out (32%; 50 and 16 until the BA-243 investigation questions entered on 2026-10-26):
 
 | Category | Questions | Held out |
 |---|---:|---:|
@@ -133,7 +133,8 @@ Which schema feature serves which category ([research 2.6](../../research/BA-9.m
 | discovery | 2 | 1 |
 | ambiguous | 2 | 1 |
 | out-of-scope | 3 | 1 |
-| non-existent, fuzzy-scope, visual, reasoning | 1 each | 0 |
+| reasoning | 7 | 2 |
+| non-existent, fuzzy-scope, visual | 1 each | 0 |
 
 Four questions carry the tag `governance`. Three are asked as Harborline (its auto premium against the market; which competitor grew fastest, answered with the masked label "Competitor C"; a request to unmask "Competitor B") and one as Pinecrest Casualty, whose plan shows competitors only in aggregate. Each is scored with a `notMatches` check on every other carrier's name and code, so the answer fails if it names one. Each question states the user's carrier and licence, so it can be judged without the policy loaded as knowledge.
 
@@ -156,9 +157,9 @@ Changing the seed or a knob changes the figures: rerun every reference, update t
 - PostgreSQL only. Databricks and REST variants come with Steps 2 and 3 from the dump of this fixture.
 - No baseline run with a model yet.
 
-## Investigation brief: Harborline's Q3 2024 sales dip (approved, awaiting the held-out wording)
+## Investigation brief: Harborline's Q3 2024 sales dip (approved; in the set since 2026-10-26)
 
-Status: drafted by Claude on 2026-10-23; approved by the user on 2026-10-26 as drafted (*What approval decides*, below). No question enters a set until the user writes the held-out wording.
+Status: drafted by Claude on 2026-10-23; approved by the user on 2026-10-26 as drafted (*What approval decides*, below); its six cases (four dev, two held out) entered `marketing-analytics.json` the same day, with the held-out wording of *Held-out wording* below.
 
 A why question for the investigation questions of roadmap 1.1.21 ([BA-243](https://halo-powered.atlassian.net/browse/BA-243)). The story is trap M7, already in the data: the generator writes no Harborline campaign result for 2024-Q3 and scales Harborline's sales that quarter by 0.86 (`FREEZE_PERIOD` and `FREEZE_SALES_FACTOR` in `docker/postgres/generate/marketing-analytics.ts`). No fixture, generator or facts.json change is needed. The existing case `campaign-freeze-impact` names the pause in its question; the questions of this brief do not.
 
@@ -735,12 +736,17 @@ Validated on 2026-10-23:
 
 ### Held-out wording
 
-_Placeholder: the held-out questions of this brief are written by the user. None exists yet._
+Two held-out questions, in the set since 2026-10-26. The user did not write the wording: Claude (Fable 5.1, a model that had not written the dev drafts) wrote candidates from this brief, and the user chose one per slot the same day. Neither is derived from a dev case, and the fixer never sees them (the set file and this file are held-out paths).
 
-- **How many:** two. With the four drafts and `campaign-freeze-impact`, the set's `reasoning` category would hold 5 dev and 2 held-out questions (29%, the about 30% of R134).
-- **What they test:** the investigation from cold. One asks the natural question of *How they ask*. The other comes at the story from an angle no dev variant takes, for example the dip in written premium rather than in policies ($13,238,929.46, $11,947,899.70 and $13,237,616.43 for 2024-Q2 to Q4, bound, test rows out). Each must be answerable only by finding the pause in the campaign results and checking the rest of the market.
-- **What they must not copy:** four or more consecutive words of a dev question or of `campaign-freeze-impact`; a dev framing (a colleague's claim, the campaign calendar, the Q4 rebound); a word of the cause (campaign, marketing, pause, spend) or of the wrong explanation (summer, seasonal) unless the angle needs it. State Harborline Mutual and the quarter, so the question stands alone.
-- **What each needs before it enters the set:** category `reasoning`, split `held-out` (never moved to dev afterwards, R134), tag `investigation`, references in all three dialects validated as the drafts were, a trap query in the notes, and checks taken from the drafts (their patterns may be reused: they are not wording).
+| Id | Angle | Wording | The reference returns |
+|---|---|---|---|
+| `harborline-q3-2024-board-review` | the natural question of *How they ask* | Harborline Mutual's board saw our policy sales fall in Q3 2024 and wants a reason before the 2025 budget is set. What happened? | Harborline's policies, 2024-Q2 to Q4 (as `why-harborline-q3-2024-dip`) |
+| `harborline-q3-2024-premium-shortfall` | the dip in written premium, not in policies (trap M1, cents) | Harborline Mutual's gross written premium for Q3 2024 was roughly 10% below Q2 2024. What was behind the drop? | Harborline's written premium in dollars, 2024-Q2 to Q4: $13,238,929.46, $11,947,899.70 (-9.75%) and $13,237,616.43 (bound, test rows out) |
+
+- **How many:** two. With the four drafts and `campaign-freeze-impact`, `reasoning` holds 5 dev and 2 held-out questions (29%, the about 30% of R134).
+- **What they test:** the investigation from cold; each is answerable only by finding the pause in the campaign results and checking the rest of the market.
+- **What they do not copy:** no four consecutive words of a dev question or of `campaign-freeze-impact`, no dev framing (a colleague's claim, the campaign calendar, the Q4 rebound), no word of the cause (campaign, marketing, pause, spend) or of the wrong explanation (summer, seasonal); checked by the reviewer of the held-out guide and by the leak check's rule 1 against the set file.
+- **Validated on 2026-10-26** as the drafts were: PostgreSQL references and trap queries on `loop_marketing_analytics` (each trap returns other rows; the premium trap sums cents), SQLite references over the committed dump (the PostgreSQL rows), Databricks references by the static checks, the repo's loader on the set file, and the checks on simulated answers (every correct answer passes, every wrong explanation fails). Each has category `reasoning`, split `held-out` (never moved to dev, R134), tag `investigation`, the checks of `why-harborline-q3-2024-dip` (patterns are not wording) and a trap query in its notes.
 
 ### What approval decides
 
@@ -756,6 +762,6 @@ Decided by the user on 2026-10-26 (decision 6 of the loop's log page):
 - The brief is approved as drafted.
 - All four dev drafts stay as drafted. The rest-of-market reference stays: a Harborline compared with a market that includes Harborline is the analyst's mistake the questions are meant to catch. `why-harborline-q3-2024-dip` stays beside `campaign-freeze-impact`, because that case names the cause in its question and this one does not.
 - When the cases enter the set, the generic words go on the leak check's allowlist with a reason, and the story's words stay literals, as proposed above.
-- The held-out wording is still the user's to write. Until it exists, no case of this brief enters a set.
+- The held-out wording: on 2026-10-26, later the same day, the user asked Claude (Fable 5.1) for candidates and chose one per slot (*Held-out wording* above); the six cases entered the set that day.
 
-Adding the cases also changes the question counts in the agents-evals spec (R11 and *Eval suite content*), agents.md 8.1, the README of this folder and `EVAL_SETS` in `frontend/e2e/agents.spec.ts`.
+Adding the cases changed the question counts in the agents-evals spec (R11 and *Eval suite content*), agents.md 8.1, the README of this folder and `EVAL_SETS` in `frontend/e2e/agents.spec.ts` (2026-10-26), and the generic words of the patterns went on the leak check's allowlist with their reasons (83 literals across both briefs; the 51 story words stay literals).

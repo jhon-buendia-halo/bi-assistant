@@ -82,7 +82,7 @@ The banking traps B1 to B15 come with the branch's generator unchanged (describe
 
 ## Question bank
 
-`backend/src/mastra/evals/sets/finance.json`: 68 questions, 48 new and the branch's 20 banking questions (two of them now state their precision), 20 held out. Each new question carries its trap, a trap query and paraphrases in its notes, and every reference was run on 2026-10-13 and checked against `facts.json` where a fact applies: [evidence/1.1.7/references-finance.txt](../../../evidence/1.1.7/references-finance.txt).
+`backend/src/mastra/evals/sets/finance.json`: 74 questions, 48 new, the six investigation questions of BA-243 (*Investigation brief*, below; added 2026-10-26) and the branch's 20 banking questions (two of them now state their precision), 22 held out. Each new question carries its trap, a trap query and paraphrases in its notes, and every reference was run on 2026-10-13 and checked against `facts.json` where a fact applies: [evidence/1.1.7/references-finance.txt](../../../evidence/1.1.7/references-finance.txt).
 
 | Category | Questions | Held out |
 |---|---|---|
@@ -90,6 +90,7 @@ The banking traps B1 to B15 come with the branch's generator unchanged (describe
 | encoding | 8 | 2 |
 | default-filter, ranking, ratio | 7 each | 2 each |
 | join, aggregate | 6 each | 2 each |
+| reasoning | 6 | 2 |
 | null | 4 | 1 |
 | ambiguous, paraphrase | 3 each | 1 each (a paraphrase takes its base question's split) |
 | out-of-scope, non-existent, discovery | 2 each | 1, 1 and 1 |
@@ -97,9 +98,9 @@ The banking traps B1 to B15 come with the branch's generator unchanged (describe
 
 Business-term and default-filter questions assume the assistant knows this glossary and these filters; until the domain's knowledge is seeded, they measure what the assistant infers from the schema and its comments.
 
-## Investigation brief: no wealth fees billed in August 2025 (approved, awaiting the held-out wording)
+## Investigation brief: no wealth fees billed in August 2025 (approved; in the set since 2026-10-26)
 
-Status: drafted by Claude on 2026-10-23; approved by the user on 2026-10-26 as drafted (*What approval decides*, below). No question enters a set until the user writes the held-out wording.
+Status: drafted by Claude on 2026-10-23; approved by the user on 2026-10-26 as drafted (*What approval decides*, below); its six cases (four dev, two held out) entered `finance.json` the same day, with the held-out wording of *Held-out wording* below.
 
 A why question for the investigation questions of roadmap 1.1.21 ([BA-243](https://halo-powered.atlassian.net/browse/BA-243)). The story is trap W1, already in the data: the generator bills July 2025's advisory fees on 2025-09-05 instead of 2025-08-05 and writes no trading fee for August 2025 (`EMPTY_MONTH` in `docker/postgres/generate/finance.ts`). [finance-policy.md](finance-policy.md) section 7 gives the reason: the billing platform was replaced that month. The finance knowledge seed says only that `charged_on` can fall after the fee's period, not that August was skipped, so the assistant has to find the shift in the data. The existing case `quietest-fee-month-2025` asks which month was lowest; none asks why. No fixture, generator or facts.json change is needed.
 
@@ -614,12 +615,17 @@ Validated on 2026-10-23 as the marketing drafts were: on `loop_finance`, over th
 
 ### Held-out wording
 
-_Placeholder: the held-out questions of this brief are written by the user. None exists yet._
+Two held-out questions, in the set since 2026-10-26. The user did not write the wording: Claude (Fable 5.1, a model that had not written the dev drafts) wrote candidates from this brief, and the user chose one per slot the same day. Neither is derived from a dev case, and the fixer never sees them (the set file and this file are held-out paths).
 
-- **How many:** two. The set has no other `reasoning` question, so the category would hold 4 dev and 2 held-out (33%, the about 30% of R134).
-- **What they test:** the investigation from cold. One asks the natural question of *How they ask*. The other comes at the story from an angle no dev variant takes, for example one client's statement: Alistair Buchanan was billed two advisory fees of $5,258.08 on 2025-09-05, one for July and one for August (FY2026-P01 and FY2026-P02). Each must be answerable only by comparing when fees were billed with the period they cover.
-- **What they must not copy:** four or more consecutive words of a dev question or of `quietest-fee-month-2025` and `collected-fees-fy2026-q1`; a dev framing (lost clients, the September spike, "did revenue fall"); a word of the cause (late, delay, July, September) unless the angle needs it; the platform change, which only the policy states. Name the wealth fees and the month, so the question stands alone.
-- **What each needs before it enters the set:** category `reasoning`, split `held-out` (never moved to dev afterwards, R134), tag `investigation`, references in all three dialects validated as the drafts were, a trap query in the notes, and checks taken from the drafts.
+| Id | Angle | Wording | The reference returns |
+|---|---|---|---|
+| `august-2025-wealth-fee-report-gap` | the natural question of *How they ask* | Our wealth fee report shows nothing billed in August 2025. What went wrong that month? | September's advisory billing by the month covered, $47,988.90 for July and $50,824.74 for August (as `why-no-wealth-fees-billed-august-2025`) |
+| `buchanan-two-advisory-fees-claim` | one client's statement | One of our wealth clients, Alistair Buchanan, has two advisory fees of $5,258.08 dated 2025-09-05 on his statement. Was he billed twice by mistake? | Buchanan's two advisory fees of 2025-09-05, $5,258.08 each, one per period covered: FY2026-P01 and FY2026-P02 (customer C-301280, portfolio 11, both SETTLED; his next one, for September, is dated 2025-10-05; read on `loop_finance` on 2026-10-26) |
+
+- **How many:** two; `reasoning` holds 4 dev and 2 held-out questions (33%, the about 30% of R134).
+- **What they test:** the investigation from cold; each is answerable only by comparing when fees were billed with the period they cover (`sqlMatches` `fiscal_period`).
+- **What they do not copy:** no four consecutive words of a dev question or of `quietest-fee-month-2025` and `collected-fees-fy2026-q1`, no dev framing (lost clients, the September spike, "did revenue fall"), no word of the cause (late, delay, July; the second names 2025-09-05 because its angle needs the date), nothing of the platform change; checked by the reviewer of the held-out guide and by the leak check's rule 1 against the set file.
+- **Validated on 2026-10-26** as the drafts were: PostgreSQL references and trap queries on `loop_finance` (each trap returns other rows; Buchanan's trap is the duplicate reading, one row with a count of 2), SQLite references over the committed dump (the PostgreSQL rows), Databricks references by the static checks, the repo's loader on the set file, and the checks on simulated answers (every correct answer passes, every wrong explanation fails). Each has category `reasoning`, split `held-out` (never moved to dev, R134), tag `investigation` and a trap query in its notes. The first takes the checks of `why-no-wealth-fees-billed-august-2025`; the second has its own `notMatches`, the client statement's wrong explanation asserted (a duplicate or double charge, a billing error, a refund due; a denial or an absence passes), with the drafts' `matches` on the timing shift.
 
 ### What approval decides
 
@@ -636,6 +642,6 @@ Decided by the user on 2026-10-26 (decision 6 of the loop's log page):
 - All four dev drafts stay as drafted. "Billed" keeps counting every status, as policy section 7 defines it; the finance knowledge seed already tells the assistant that every status is a recorded fee and that `charged_on` is the billing date. `september-2025-fee-billing-spike` keeps its breakdown by fee type.
 - When the cases enter the set, the generic words go on the leak check's allowlist with a reason, and the story's words stay literals, as proposed above.
 - The August billing change stays out of the finance knowledge seed.
-- The held-out wording is still the user's to write. Until it exists, no case of this brief enters a set.
+- The held-out wording: on 2026-10-26, later the same day, the user asked Claude (Fable 5.1) for candidates and chose one per slot (*Held-out wording* above); the six cases entered the set that day.
 
-If a later round puts the August billing change into the finance knowledge seed (a lever file), the brief turns into a lookup: keep it out of the seed, or retire the brief. Adding the cases also changes the question counts in the agents-evals spec, agents.md 8.1, the README of this folder and `EVAL_SETS` in `frontend/e2e/agents.spec.ts`.
+If a later round puts the August billing change into the finance knowledge seed (a lever file), the brief turns into a lookup: keep it out of the seed, or retire the brief. Adding the cases changed the question counts in the agents-evals spec, agents.md 8.1, the README of this folder and `EVAL_SETS` in `frontend/e2e/agents.spec.ts` (2026-10-26), and the generic words of the patterns went on the leak check's allowlist with their reasons (83 literals across both briefs; the 51 story words stay literals).

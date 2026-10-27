@@ -1,0 +1,106 @@
+== 1. Loader (loadEvalSets) on the set files (the 12 cases already in them; any missing one appended to a scratch copy)
+  marketing-analytics.json: 56 cases + 6 drafts = 56 (copy at /private/tmp/claude-501/-Users-selbver-Developer-question-to-insights-bi-assistant--claude-worktrees-BA-9-golden-dataset-evals/7a8ff320-b947-417f-aa76-b4d4a2a2ddd4/scratchpad/ba243-run/copy-marketing-analytics.json)
+  finance.json: 74 cases + 6 drafts = 74 (copy at /private/tmp/claude-501/-Users-selbver-Developer-question-to-insights-bi-assistant--claude-worktrees-BA-9-golden-dataset-evals/7a8ff320-b947-417f-aa76-b4d4a2a2ddd4/scratchpad/ba243-run/copy-finance.json)
+✓ set finance (postgres): loaded 74 cases, 6 drafts, each with its postgres reference, split dev or held-out, category reasoning
+✓ set finance-rest (sqlite): loaded 74 cases, 6 drafts, each with its sqlite reference, split dev or held-out, category reasoning
+✓ set finance-databricks (databricks): loaded 74 cases, 6 drafts, each with its databricks reference, split dev or held-out, category reasoning
+✓ set marketing-analytics (postgres): loaded 56 cases, 6 drafts, each with its postgres reference, split dev or held-out, category reasoning
+✓ set marketing-analytics-rest (sqlite): loaded 56 cases, 6 drafts, each with its sqlite reference, split dev or held-out, category reasoning
+✓ set marketing-analytics-databricks (databricks): loaded 56 cases, 6 drafts, each with its databricks reference, split dev or held-out, category reasoning
+✓ loadEvalSets accepted every set file (15 sets)
+
+== 2. Static reference checks (R118 dialect rules, R119 name parts, R110 required tables, R204 same tables)
+✓ why-harborline-q3-2024-dip postgres: no dialect problem; 3 table references, all 2-part; all required tables
+✓ why-harborline-q3-2024-dip sqlite: no dialect problem; 3 table references, all 3-part; all required tables
+✓ why-harborline-q3-2024-dip databricks: no dialect problem; 3 table references, all 3-part; all required tables
+✓ why-harborline-q3-2024-dip: same tables in all three dialects (carriers,periods,policy_sales)
+✓ harborline-q3-2024-dip-summer-claim postgres: no dialect problem; 3 table references, all 2-part; all required tables
+✓ harborline-q3-2024-dip-summer-claim sqlite: no dialect problem; 3 table references, all 3-part; all required tables
+✓ harborline-q3-2024-dip-summer-claim databricks: no dialect problem; 3 table references, all 3-part; all required tables
+✓ harborline-q3-2024-dip-summer-claim: same tables in all three dialects (carriers,periods,policy_sales)
+✓ harborline-q3-2024-dip-campaign-calendar postgres: no dialect problem; 4 table references, all 2-part; all required tables
+✓ harborline-q3-2024-dip-campaign-calendar sqlite: no dialect problem; 4 table references, all 3-part; all required tables
+✓ harborline-q3-2024-dip-campaign-calendar databricks: no dialect problem; 4 table references, all 3-part; all required tables
+✓ harborline-q3-2024-dip-campaign-calendar: same tables in all three dialects (campaign_results,campaigns,carriers,periods)
+✓ harborline-q4-2024-rebound postgres: no dialect problem; 3 table references, all 2-part; all required tables
+✓ harborline-q4-2024-rebound sqlite: no dialect problem; 3 table references, all 3-part; all required tables
+✓ harborline-q4-2024-rebound databricks: no dialect problem; 3 table references, all 3-part; all required tables
+✓ harborline-q4-2024-rebound: same tables in all three dialects (carriers,periods,policy_sales)
+✓ harborline-q3-2024-board-review postgres: no dialect problem; 3 table references, all 2-part; all required tables
+✓ harborline-q3-2024-board-review sqlite: no dialect problem; 3 table references, all 3-part; all required tables
+✓ harborline-q3-2024-board-review databricks: no dialect problem; 3 table references, all 3-part; all required tables
+✓ harborline-q3-2024-board-review: same tables in all three dialects (carriers,periods,policy_sales)
+✓ harborline-q3-2024-premium-shortfall postgres: no dialect problem; 3 table references, all 2-part; all required tables
+✓ harborline-q3-2024-premium-shortfall sqlite: no dialect problem; 3 table references, all 3-part; all required tables
+✓ harborline-q3-2024-premium-shortfall databricks: no dialect problem; 3 table references, all 3-part; all required tables
+✓ harborline-q3-2024-premium-shortfall: same tables in all three dialects (carriers,periods,policy_sales)
+✓ why-no-wealth-fees-billed-august-2025 postgres: no dialect problem; 3 table references, all 2-part; all required tables
+✓ why-no-wealth-fees-billed-august-2025 sqlite: no dialect problem; 3 table references, all 3-part; all required tables
+✓ why-no-wealth-fees-billed-august-2025 databricks: no dialect problem; 3 table references, all 3-part; all required tables
+✓ why-no-wealth-fees-billed-august-2025: same tables in all three dialects (fees,fiscal_periods,portfolios)
+✓ august-2025-fees-lost-clients-claim postgres: no dialect problem; 2 table references, all 2-part; all required tables
+✓ august-2025-fees-lost-clients-claim sqlite: no dialect problem; 2 table references, all 3-part; all required tables
+✓ august-2025-fees-lost-clients-claim databricks: no dialect problem; 2 table references, all 3-part; all required tables
+✓ august-2025-fees-lost-clients-claim: same tables in all three dialects (holdings,portfolios)
+✓ september-2025-fee-billing-spike postgres: no dialect problem; 2 table references, all 2-part; all required tables
+✓ september-2025-fee-billing-spike sqlite: no dialect problem; 2 table references, all 3-part; all required tables
+✓ september-2025-fee-billing-spike databricks: no dialect problem; 2 table references, all 3-part; all required tables
+✓ september-2025-fee-billing-spike: same tables in all three dialects (fees,portfolios)
+✓ wealth-fee-revenue-august-2025 postgres: no dialect problem; 3 table references, all 2-part; all required tables
+✓ wealth-fee-revenue-august-2025 sqlite: no dialect problem; 3 table references, all 3-part; all required tables
+✓ wealth-fee-revenue-august-2025 databricks: no dialect problem; 3 table references, all 3-part; all required tables
+✓ wealth-fee-revenue-august-2025: same tables in all three dialects (fees,fiscal_periods,portfolios)
+✓ august-2025-wealth-fee-report-gap postgres: no dialect problem; 3 table references, all 2-part; all required tables
+✓ august-2025-wealth-fee-report-gap sqlite: no dialect problem; 3 table references, all 3-part; all required tables
+✓ august-2025-wealth-fee-report-gap databricks: no dialect problem; 3 table references, all 3-part; all required tables
+✓ august-2025-wealth-fee-report-gap: same tables in all three dialects (fees,fiscal_periods,portfolios)
+✓ buchanan-two-advisory-fees-claim postgres: no dialect problem; 4 table references, all 2-part; all required tables
+✓ buchanan-two-advisory-fees-claim sqlite: no dialect problem; 4 table references, all 3-part; all required tables
+✓ buchanan-two-advisory-fees-claim databricks: no dialect problem; 4 table references, all 3-part; all required tables
+✓ buchanan-two-advisory-fees-claim: same tables in all three dialects (customers,fees,fiscal_periods,portfolios)
+
+== 3. The drafts' checks on simulated answers (repo check code; matches = RegExp.test as @mastra/evals does)
+✓ why-harborline-q3-2024-dip / correct: matches pass, notMatches pass, usesEntities pass
+✓ why-harborline-q3-2024-dip / correct, names the wrong cause only to deny it: matches pass, notMatches pass, usesEntities pass
+✓ why-harborline-q3-2024-dip / wrong explanation: matches fail, notMatches fail (the answer matches /(?<!(?:\b(?:not|never|nor|neither|rather than|instead of|unlikely|doub), usesEntities fail
+✓ why-harborline-q3-2024-dip / both causes, wrong one asserted: matches pass, notMatches fail (the answer matches /(?<!(?:\b(?:not|never|nor|neither|rather than|instead of|unlikely|doub), usesEntities pass
+✓ harborline-q3-2024-dip-summer-claim / correct: matches pass, notMatches pass, usesEntities pass
+✓ harborline-q3-2024-dip-summer-claim / correct, partly concedes: matches pass, notMatches pass, usesEntities pass
+✓ harborline-q3-2024-dip-summer-claim / agrees with the director: matches fail, notMatches fail (the answer matches /^\W*(?:yes|yeah|agreed)\b|(?<!(?:\b(?:not|never|nor|neither|rather tha), usesEntities fail
+✓ harborline-q3-2024-dip-summer-claim / refutes but finds no cause: matches fail, notMatches pass, usesEntities fail
+✓ harborline-q3-2024-dip-campaign-calendar / correct: matches pass, notMatches pass, usesEntities pass
+✓ harborline-q3-2024-dip-campaign-calendar / correct, describes the calendar first: matches pass, notMatches pass, usesEntities pass
+✓ harborline-q3-2024-dip-campaign-calendar / reads the calendar as activity: matches fail, notMatches fail (the answer matches /^\W*(?:yes|yeah|agreed)\b|(?<!(?:\b(?:not|never|nor|neither|rather tha), usesEntities fail
+✓ harborline-q4-2024-rebound / correct: matches pass, notMatches pass, usesEntities pass
+✓ harborline-q4-2024-rebound / correct, echoes the question: matches pass, notMatches pass, usesEntities pass
+✓ harborline-q4-2024-rebound / market recovery (the test-row reading): matches fail, notMatches fail (the answer matches /(?<!(?:\b(?:not|never|nor|neither|rather than|instead of|unlikely|doub), usesEntities fail
+✓ why-no-wealth-fees-billed-august-2025 / correct: matches pass, notMatches pass, sqlMatches pass
+✓ why-no-wealth-fees-billed-august-2025 / correct, short: matches pass, notMatches pass, sqlMatches pass
+✓ why-no-wealth-fees-billed-august-2025 / lost clients: matches fail, notMatches fail (the answer matches /(?<!(?:\b(?:not|never|nor|neither|rather than|instead of|unlikely|doub), sqlMatches fail
+✓ why-no-wealth-fees-billed-august-2025 / waived fees: matches fail, notMatches fail (the answer matches /(?<!(?:\b(?:not|never|nor|neither|rather than|instead of|unlikely|doub), sqlMatches fail
+✓ august-2025-fees-lost-clients-claim / correct: matches pass, notMatches pass, sqlMatches pass
+✓ august-2025-fees-lost-clients-claim / agrees: matches fail, notMatches fail (the answer matches /^\W*(?:yes|yeah|agreed)\b|(?<!(?:\b(?:not|never|nor|neither|rather tha), sqlMatches fail
+✓ august-2025-fees-lost-clients-claim / denies but finds no cause: matches fail, notMatches pass, sqlMatches fail
+✓ september-2025-fee-billing-spike / correct: matches pass, notMatches pass, sqlMatches pass
+✓ september-2025-fee-billing-spike / performance fees: matches fail, notMatches fail (the answer matches /(?<!(?:\b(?:not|never|nor|neither|rather than|instead of|unlikely|doub), sqlMatches fail
+✓ september-2025-fee-billing-spike / new clients: matches fail, notMatches fail (the answer matches /(?<!(?:\b(?:not|never|nor|neither|rather than|instead of|unlikely|doub), sqlMatches fail
+✓ wealth-fee-revenue-august-2025 / correct: matches pass, notMatches pass, sqlMatches pass
+✓ wealth-fee-revenue-august-2025 / correct, names the illusion: matches pass, notMatches pass, sqlMatches pass
+✓ wealth-fee-revenue-august-2025 / revenue fell to zero: matches fail, notMatches fail (the answer matches /(?<!(?:\b(?:not|never|nor|neither|rather than|instead of|unlikely|doub), sqlMatches fail
+✓ harborline-q3-2024-board-review / correct: matches pass, notMatches pass, usesEntities pass
+✓ harborline-q3-2024-board-review / wrong explanation: matches fail, notMatches fail (the answer matches /(?<!(?:\b(?:not|never|nor|neither|rather than|instead of|unlikely|doub), usesEntities fail
+✓ harborline-q3-2024-premium-shortfall / correct: matches pass, notMatches pass, usesEntities pass
+✓ harborline-q3-2024-premium-shortfall / wrong explanation: matches fail, notMatches fail (the answer matches /(?<!(?:\b(?:not|never|nor|neither|rather than|instead of|unlikely|doub), usesEntities fail
+✓ august-2025-wealth-fee-report-gap / correct: matches pass, notMatches pass, sqlMatches pass
+✓ august-2025-wealth-fee-report-gap / lost clients and waivers: matches fail, notMatches fail (the answer matches /(?<!(?:\b(?:not|never|nor|neither|rather than|instead of|unlikely|doub), sqlMatches fail
+✓ buchanan-two-advisory-fees-claim / correct: matches pass, notMatches pass, sqlMatches pass
+✓ buchanan-two-advisory-fees-claim / correct, other words: matches pass, notMatches pass, sqlMatches pass
+✓ buchanan-two-advisory-fees-claim / correct, echoes the question: matches pass, notMatches pass, sqlMatches pass
+✓ buchanan-two-advisory-fees-claim / duplicate charge: matches fail, notMatches fail (the answer matches /(?<!(?:\b(?:not|never|nor|neither|rather than|instead of|unlikely|doub), sqlMatches fail
+✓ buchanan-two-advisory-fees-claim / finds the shift but still calls it a duplicate: matches pass, notMatches fail (the answer matches /(?<!(?:\b(?:not|never|nor|neither|rather than|instead of|unlikely|doub), sqlMatches pass
+
+== 4. Pattern words the drafts add to the leak check (R230 rule 2), against lever files at HEAD
+  marketing-analytics: 153 pattern words, 68 distinctive, 0 not yet a leak literal: 
+  finance: 199 pattern words, 85 distinctive, 0 not yet a leak literal: 
+
+ALL PASSED

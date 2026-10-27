@@ -90,7 +90,7 @@ With about ten questions per category, a single run rarely flags `up`: one flip 
 
 ## The budget
 
-$25 in all. A full run of the three sets at repeat 3 is 181 questions (63 World Cup, 68 Finance, 50 Marketing Analytics), so 543 attempts. The first estimate, about $3.30 with gpt-4o-mini at about 34,000 tokens per attempt (the plan's measure on `feat/engine-eval-loop`), was 2.3 times the measured baseline: $1.44, about 22,800 tokens per attempt with 66% of the input cached. On gpt-5.6-luna at low effort the probe of 2026-10-21 puts a full run at about $1.15 to $1.25, and at about 16.6 seconds per attempt, which is why the sets run at once. A round adds its target slice, a few dozen attempts, so about $1.35 a round; the judge stays off inside the loop.
+$25 in all. A full run of the three sets at repeat 3 is 193 questions (63 World Cup, 74 Finance, 56 Marketing Analytics; 181 until the BA-243 investigation questions entered on 2026-10-26), so 579 attempts. The first estimate, about $3.30 with gpt-4o-mini at about 34,000 tokens per attempt (the plan's measure on `feat/engine-eval-loop`), was 2.3 times the measured baseline: $1.44, about 22,800 tokens per attempt with 66% of the input cached. On gpt-5.6-luna at low effort the probe of 2026-10-21 puts a full run at about $1.15 to $1.25, and at about 16.6 seconds per attempt, which is why the sets run at once. A round adds its target slice, a few dozen attempts, so about $1.35 a round; the judge stays off inside the loop.
 
 ## results.tsv
 

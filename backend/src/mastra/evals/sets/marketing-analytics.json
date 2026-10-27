@@ -1863,6 +1863,348 @@
         "databricks": "SELECT SUM(s.policy_count) AS policies_sold FROM `evals`.marketing_analytics.policy_sales s JOIN `evals`.marketing_analytics.carriers c ON c.id = s.carrier_id JOIN `evals`.marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code"
       },
       "judgeRubric": "Harborline Mutual paused all campaigns in Q3 2024 (no campaign spend that quarter). It sold 11,337 policies in Q2 2024, 10,028 in Q3 2024 and 11,457 in Q4 2024. Score pass=true only if the answer identifies Q3 2024 as the paused quarter, concludes that sales dropped that quarter, and backs it with counts or percentages consistent with these figures (about 11% fewer than Q2, recovering in Q4). Saying the drop is consistent with the pause, or that other causes cannot be ruled out, is fine. Score pass=false if it picks another quarter, says sales did not drop, or gives no figures."
+    },
+    {
+      "id": "why-harborline-q3-2024-dip",
+      "category": "reasoning",
+      "split": "dev",
+      "tags": [
+        "investigation",
+        "trap:empty-period",
+        "trap:wrong-explanation",
+        "difficulty:hard"
+      ],
+      "question": "Harborline Mutual sold fewer policies in Q3 2024 than in the quarter before or the quarter after. What explains the dip?",
+      "intent": "An investigation: size the dip, check it against the rest of the market, and find what changed for Harborline that quarter (no campaign had any results).",
+      "notes": "Investigation, planted story M7. Harborline sold 11,337 policies in 2024-Q2, 10,028 in 2024-Q3 and 11,457 in 2024-Q4 (bound, test rows out). The other five carriers fell only 1.6% (59,195 to 58,257), so the dip is Harborline's own. Harborline's campaigns have results in every quarter from 2024-Q1 to 2025-Q4 except 2024-Q3, although two were scheduled through it. The reference projects only the three counts, as campaign-freeze-impact does.\n\nWrong explanation planted: a seasonal or market-wide summer slowdown. The notMatches check fails an answer that asserts it in a causal frame (due to, driven by, reflects ...) or says the dip was seasonal; a denial (not seasonal, rather than the market) passes.\n\nChecked against facts.json: campaignFreeze.harborlinePolicies and campaignFreeze.quarterWithoutSpend.\n\nTrap query (must return different rows): SELECT SUM(s.policy_count) AS policies FROM marketing_analytics.policy_sales s JOIN marketing_analytics.carriers c ON c.id = s.carrier_id JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code\n\nParaphrases: none written. The held-out wording of this brief is written by the user, not derived from this case.\n\nBrief: docs/evals/domains/marketing-analytics.md, Investigation brief: Harborline's Q3 2024 sales dip (facts MF1 to MF9).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "(?:campaign|marketing)s?\\b[^.\\n]{0,60}?\\b(?:paus\\w*|stopp\\w*|stop|halt\\w*|froze|frozen|freez\\w*|suspend\\w*|went dark|dark|zero|absent|inactive|idle|ceased|did not run|didn['’]t run|were not running|weren['’]t running|not running|no (?:spend|activity|results|data|rows))\\b|\\b(?:paus\\w*|stopp\\w*|halt\\w*|froze|frozen|freez\\w*|suspend\\w*|no|zero|without|absence of|lack of|ceased)\\s+(?:\\w+\\s+){0,3}?(?:campaign|marketing)",
+            "flags": "i"
+          },
+          "criterion": "G3"
+        },
+        {
+          "type": "notMatches",
+          "args": {
+            "pattern": "(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that))\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\b(?:due to|because of|caused by|driven by|explained by|attributable to|(?:the|a) result of|reflects?|reflected|reflecting|down to|thanks to|stems? from|came from|comes from)\\s+(?:an?\\s+|the\\s+)?(?:\\w+[\\s-]+){0,2}?(?:seasonal\\w*|summer|market[\\s-]wide|industry[\\s-]wide|(?:overall|broader|general|wider|whole)\\s+market|market\\s+(?:slowdown|softness|weakness|decline|downturn|dip|slump))|(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that))\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\b(?:it|this|the (?:dip|drop|decline|fall))\\s+(?:was|is)\\s+(?:just\\s+|simply\\s+|only\\s+|mostly\\s+|largely\\s+|mainly\\s+)?(?:an?\\s+|the\\s+)?(?:normal\\s+|typical\\s+|usual\\s+|expected\\s+)?(?:seasonal|summer)",
+            "flags": "i"
+          },
+          "criterion": "G3"
+        },
+        {
+          "type": "usesEntities",
+          "args": {
+            "entities": [
+              "campaign_results"
+            ]
+          },
+          "criterion": "D2"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT SUM(s.policy_count) AS policies_sold FROM marketing_analytics.policy_sales s JOIN marketing_analytics.carriers c ON c.id = s.carrier_id JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code",
+        "sqlite": "SELECT SUM(s.policy_count) AS policies_sold FROM api.marketing_analytics.policy_sales s JOIN api.marketing_analytics.carriers c ON c.id = s.carrier_id JOIN api.marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code",
+        "databricks": "SELECT SUM(s.policy_count) AS policies_sold FROM `evals`.marketing_analytics.policy_sales s JOIN `evals`.marketing_analytics.carriers c ON c.id = s.carrier_id JOIN `evals`.marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code"
+      }
+    },
+    {
+      "id": "harborline-q3-2024-dip-summer-claim",
+      "category": "reasoning",
+      "split": "dev",
+      "tags": [
+        "investigation",
+        "trap:wrong-explanation",
+        "difficulty:hard"
+      ],
+      "question": "Our sales director says Harborline Mutual's drop in policies sold in Q3 2024 was just the summer slowdown the whole market had. Do the numbers back that up?",
+      "intent": "The user offers the planted wrong explanation: compare Harborline with the rest of the market, decline the seasonal story, and name what changed for Harborline.",
+      "notes": "Investigation, planted story M7. Harborline fell 11.5% from 2024-Q2 to 2024-Q3 (11,337 to 10,028); the other five carriers together fell 1.6% (59,195 to 58,257), and the whole market including Harborline 3.2% (70,532 to 68,285), more than half of it Harborline's own 1,309. Harborline rose from Q2 to Q3 in 2025 (12,415 to 12,700, test rows out). What changed: no campaign results at all in 2024-Q3. The reference is the rest of the market (the masked benchmark sums to the same 59,195 and 58,257), so an answer that compares only with the whole market passes the text check but not the result-set match.\n\nThe matches check needs both a market figure (1.6%, 58,257, 938, 3.2% or 68,285) and the campaign pause. The notMatches check fails a seasonal or market-wide cause asserted, or an answer that opens by agreeing (Yes ...).\n\nChecked against facts.json: campaignFreeze.harborlinePolicies. The rest-of-market figures are not in facts.json; they were read on loop_marketing_analytics on 2026-10-23.\n\nTrap query (must return different rows): SELECT SUM(s.policy_count) AS market_policies FROM marketing_analytics.policy_sales s JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE p.period_code IN ('2024-Q2', '2024-Q3') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code\n\nParaphrases: none written. The held-out wording of this brief is written by the user, not derived from this case.\n\nBrief: docs/evals/domains/marketing-analytics.md, Investigation brief: Harborline's Q3 2024 sales dip (facts MF1 to MF9).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*?(?:\\b1[.,](?:6|5[5-9])\\d*\\s*(?:%|percent|per cent|pct)|\\b58[,.\\s]?257\\b|\\b938\\b|\\b59[,.\\s]?195\\b|\\b3[.,](?:2|19)\\d*\\s*(?:%|percent|per cent|pct)|\\b68[,.\\s]?285\\b|\\b2[,.\\s]?247\\b|\\b(?:about|around|roughly|under|less than|only|just)\\s+2\\s*(?:%|percent)))(?=[\\s\\S]*?(?:(?:campaign|marketing)s?\\b[^.\\n]{0,60}?\\b(?:paus\\w*|stopp\\w*|stop|halt\\w*|froze|frozen|freez\\w*|suspend\\w*|went dark|dark|zero|absent|inactive|idle|ceased|did not run|didn['’]t run|were not running|weren['’]t running|not running|no (?:spend|activity|results|data|rows))\\b|\\b(?:paus\\w*|stopp\\w*|halt\\w*|froze|frozen|freez\\w*|suspend\\w*|no|zero|without|absence of|lack of|ceased)\\s+(?:\\w+\\s+){0,3}?(?:campaign|marketing)))",
+            "flags": "i"
+          },
+          "criterion": "G3"
+        },
+        {
+          "type": "notMatches",
+          "args": {
+            "pattern": "^\\W*(?:yes|yeah|agreed)\\b|(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that))\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\b(?:due to|because of|caused by|driven by|explained by|attributable to|(?:the|a) result of|reflects?|reflected|reflecting|down to|thanks to|stems? from|came from|comes from)\\s+(?:an?\\s+|the\\s+)?(?:\\w+[\\s-]+){0,2}?(?:seasonal\\w*|summer|market[\\s-]wide|industry[\\s-]wide|(?:overall|broader|general|wider|whole)\\s+market|market\\s+(?:slowdown|softness|weakness|decline|downturn|dip|slump))|(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that))\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\b(?:it|this|the (?:dip|drop|decline|fall))\\s+(?:was|is)\\s+(?:just\\s+|simply\\s+|only\\s+|mostly\\s+|largely\\s+|mainly\\s+)?(?:an?\\s+|the\\s+)?(?:normal\\s+|typical\\s+|usual\\s+|expected\\s+)?(?:seasonal|summer)",
+            "flags": "i"
+          },
+          "criterion": "G3"
+        },
+        {
+          "type": "usesEntities",
+          "args": {
+            "entities": [
+              "campaign_results"
+            ]
+          },
+          "criterion": "D2"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT SUM(s.policy_count) AS rest_of_market_policies FROM marketing_analytics.policy_sales s JOIN marketing_analytics.carriers c ON c.id = s.carrier_id JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE c.name <> 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code",
+        "sqlite": "SELECT SUM(s.policy_count) AS rest_of_market_policies FROM api.marketing_analytics.policy_sales s JOIN api.marketing_analytics.carriers c ON c.id = s.carrier_id JOIN api.marketing_analytics.periods p ON p.id = s.period_id WHERE c.name <> 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code",
+        "databricks": "SELECT SUM(s.policy_count) AS rest_of_market_policies FROM `evals`.marketing_analytics.policy_sales s JOIN `evals`.marketing_analytics.carriers c ON c.id = s.carrier_id JOIN `evals`.marketing_analytics.periods p ON p.id = s.period_id WHERE c.name <> 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code"
+      }
+    },
+    {
+      "id": "harborline-q3-2024-dip-campaign-calendar",
+      "category": "reasoning",
+      "split": "dev",
+      "tags": [
+        "investigation",
+        "trap:empty-period",
+        "trap:wrong-explanation",
+        "difficulty:hard"
+      ],
+      "question": "Harborline Mutual's campaign calendar has campaigns scheduled right through 2024. Can we rule marketing out as the reason our policy sales dipped in Q3 2024?",
+      "intent": "A false premise from a lookalike: the calendar lists two campaigns across Q3 2024, but no campaign has results that quarter. Read the results, not the dates.",
+      "notes": "Investigation, planted story M7. Agent Bundle Days (2024-04-15 to 2024-12-31) and Loyalty Renewal Reminder (2024-01-15 to 2024-12-31) span 2024-Q3 by their dates, but Harborline has no campaign_results row in 2024-Q3: spend $163,790.43 in 2024-Q2, none in 2024-Q3, $208,825.54 in 2024-Q4. Sales: 11,337, 10,028, 11,457. So marketing cannot be ruled out: it is the one thing that stopped. The reference projects only the spend, so a query of spend by quarter that covers Q2 and Q4 matches.\n\nThe notMatches check fails an answer that says the campaigns were running or active in Q3 (unless the clause says scheduled, calendar or dates), that marketing can be ruled out, that opens by agreeing, or that asserts a seasonal or market-wide cause.\n\nChecked against facts.json: campaignFreeze.quarterWithoutSpend. The spend figures were read on loop_marketing_analytics on 2026-10-23.\n\nTrap query (must return different rows): SELECT p.period_code, COUNT(*) AS campaigns FROM marketing_analytics.campaigns cm JOIN marketing_analytics.carriers c ON c.id = cm.carrier_id JOIN marketing_analytics.periods p ON cm.starts_on <= p.ends_on AND cm.ends_on >= p.starts_on WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') GROUP BY p.period_code ORDER BY p.period_code\n\nParaphrases: none written. The held-out wording of this brief is written by the user, not derived from this case.\n\nBrief: docs/evals/domains/marketing-analytics.md, Investigation brief: Harborline's Q3 2024 sales dip (facts MF1 to MF9).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "(?:campaign|marketing)s?\\b[^.\\n]{0,60}?\\b(?:paus\\w*|stopp\\w*|stop|halt\\w*|froze|frozen|freez\\w*|suspend\\w*|went dark|dark|zero|absent|inactive|idle|ceased|did not run|didn['’]t run|were not running|weren['’]t running|not running|no (?:spend|activity|results|data|rows))\\b|\\b(?:paus\\w*|stopp\\w*|halt\\w*|froze|frozen|freez\\w*|suspend\\w*|no|zero|without|absence of|lack of|ceased)\\s+(?:\\w+\\s+){0,3}?(?:campaign|marketing)",
+            "flags": "i"
+          },
+          "criterion": "G3"
+        },
+        {
+          "type": "notMatches",
+          "args": {
+            "pattern": "^\\W*(?:yes|yeah|agreed)\\b|(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that)|although|though|calendar|scheduled|planned|listed|on paper|nominally|dates?)\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\bcampaigns?\\b[^.\\n]{0,40}?\\b(?:were|was|kept|stayed|remained)\\s+(?:still\\s+|fully\\s+|all\\s+)?(?:running|active|live|in market|in-market|underway)\\b|(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that))\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\b(?:marketing|campaigns?)\\s+(?:can|could)\\s+(?:be\\s+)?(?:safely\\s+)?(?:ruled out|excluded|eliminated)|(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that))\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\b(?:due to|because of|caused by|driven by|explained by|attributable to|(?:the|a) result of|reflects?|reflected|reflecting|down to|thanks to|stems? from|came from|comes from)\\s+(?:an?\\s+|the\\s+)?(?:\\w+[\\s-]+){0,2}?(?:seasonal\\w*|summer|market[\\s-]wide|industry[\\s-]wide|(?:overall|broader|general|wider|whole)\\s+market|market\\s+(?:slowdown|softness|weakness|decline|downturn|dip|slump))|(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that))\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\b(?:it|this|the (?:dip|drop|decline|fall))\\s+(?:was|is)\\s+(?:just\\s+|simply\\s+|only\\s+|mostly\\s+|largely\\s+|mainly\\s+)?(?:an?\\s+|the\\s+)?(?:normal\\s+|typical\\s+|usual\\s+|expected\\s+)?(?:seasonal|summer)",
+            "flags": "i"
+          },
+          "criterion": "G3"
+        },
+        {
+          "type": "usesEntities",
+          "args": {
+            "entities": [
+              "campaign_results"
+            ]
+          },
+          "criterion": "D2"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT SUM(r.spend_cents) / 100.0 AS spend_dollars FROM marketing_analytics.campaign_results r JOIN marketing_analytics.campaigns cm ON cm.id = r.campaign_id JOIN marketing_analytics.carriers c ON c.id = cm.carrier_id JOIN marketing_analytics.periods p ON p.id = r.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') GROUP BY p.period_code ORDER BY p.period_code",
+        "sqlite": "SELECT SUM(r.spend_cents) / 100.0 AS spend_dollars FROM api.marketing_analytics.campaign_results r JOIN api.marketing_analytics.campaigns cm ON cm.id = r.campaign_id JOIN api.marketing_analytics.carriers c ON c.id = cm.carrier_id JOIN api.marketing_analytics.periods p ON p.id = r.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') GROUP BY p.period_code ORDER BY p.period_code",
+        "databricks": "SELECT SUM(r.spend_cents) / 100.0 AS spend_dollars FROM `evals`.marketing_analytics.campaign_results r JOIN `evals`.marketing_analytics.campaigns cm ON cm.id = r.campaign_id JOIN `evals`.marketing_analytics.carriers c ON c.id = cm.carrier_id JOIN `evals`.marketing_analytics.periods p ON p.id = r.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') GROUP BY p.period_code ORDER BY p.period_code"
+      }
+    },
+    {
+      "id": "harborline-q4-2024-rebound",
+      "category": "reasoning",
+      "split": "dev",
+      "tags": [
+        "investigation",
+        "trap:test-rows",
+        "trap:wrong-explanation",
+        "difficulty:hard"
+      ],
+      "question": "Harborline Mutual's policy sales picked up again in Q4 2024. Was that the market recovering, or something on our side?",
+      "intent": "Two hypotheses, one wrong: the rest of the market fell further in Q4 (only test rows make it look up), while Harborline's campaigns came back after a quarter with none.",
+      "notes": "Investigation, planted story M7 with trap M2. Harborline rose 14.3% from 2024-Q3 to 2024-Q4 (10,028 to 11,457) while the other five carriers fell 4.9% (58,257 to 55,395). Crestview's two 2024-Q4 test rows (3,600 policies) make the others look up 1.3% (58,257 to 58,995). Harborline's campaigns: no results in 2024-Q3, $208,825.54 of spend in 2024-Q4. The reference is the rest of the market without test rows; the masked benchmark sums to the same 58,257 and 55,395.\n\nThe matches check takes the campaigns' return in Q4 or their pause in Q3. The notMatches check fails an answer that says the market (or the other carriers) recovered, rose or rebounded, or puts the rise down to a market or seasonal recovery.\n\nChecked against facts.json: campaignFreeze.harborlinePolicies. The rest-of-market figures were read on loop_marketing_analytics on 2026-10-23.\n\nTrap query (must return different rows): SELECT SUM(s.policy_count) AS rest_of_market_policies FROM marketing_analytics.policy_sales s JOIN marketing_analytics.carriers c ON c.id = s.carrier_id JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE c.name <> 'Harborline Mutual' AND p.period_code IN ('2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' GROUP BY p.period_code ORDER BY p.period_code\n\nParaphrases: none written. The held-out wording of this brief is written by the user, not derived from this case.\n\nBrief: docs/evals/domains/marketing-analytics.md, Investigation brief: Harborline's Q3 2024 sales dip (facts MF1 to MF9).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "(?:campaign|marketing)s?\\b[^.\\n]{0,60}?\\b(?:paus\\w*|stopp\\w*|stop|halt\\w*|froze|frozen|freez\\w*|suspend\\w*|went dark|dark|zero|absent|inactive|idle|ceased|did not run|didn['’]t run|were not running|weren['’]t running|not running|no (?:spend|activity|results|data|rows))\\b|\\b(?:paus\\w*|stopp\\w*|halt\\w*|froze|frozen|freez\\w*|suspend\\w*|no|zero|without|absence of|lack of|ceased)\\s+(?:\\w+\\s+){0,3}?(?:campaign|marketing)|(?:campaign|marketing)s?\\b[^.\\n]{0,60}?\\b(?:resum\\w*|restart\\w*|return\\w*|relaunch\\w*|re-launch\\w*|reactivat\\w*|back|again|picked up)\\b|\\b(?:resum\\w*|restart\\w*|relaunch\\w*|reactivat\\w*|return of)\\s+(?:\\w+\\s+){0,3}?(?:campaign|marketing)",
+            "flags": "i"
+          },
+          "criterion": "G3"
+        },
+        {
+          "type": "notMatches",
+          "args": {
+            "pattern": "(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that))\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\b(?:due to|because of|caused by|driven by|explained by|attributable to|(?:the|a) result of|reflects?|reflected|reflecting|down to|thanks to|stems? from|came from|comes from)\\s+(?:an?\\s+|the\\s+)?(?:\\w+[\\s-]+){0,2}?(?:market|industry|seasonal\\w*|year-end|holiday)\\b[^.\\n]{0,30}?\\b(?:recover\\w*|rebound\\w*|upturn|upswing|pick-?up|demand|growth|strength|surge|rush)|(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that))\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\b(?:market|industry|rest of the market|other carriers|competitors|peers)\\s+(?:also\\s+|as a whole\\s+)?(?:recovered|rebounded|picked up|bounced back|grew|rose|improved|strengthened)\\b|(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that))\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\b(?:it|this|that|the (?:rebound|recovery|increase|rise|pick-?up))\\s+(?:was|is)\\s+(?:just\\s+|simply\\s+|mostly\\s+|largely\\s+|mainly\\s+)?(?:an?\\s+|the\\s+)?(?:market|seasonal|industry)[\\s-]?(?:wide\\s+)?(?:recovery|rebound|upturn|effect|trend)",
+            "flags": "i"
+          },
+          "criterion": "G3"
+        },
+        {
+          "type": "usesEntities",
+          "args": {
+            "entities": [
+              "campaign_results"
+            ]
+          },
+          "criterion": "D2"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT SUM(s.policy_count) AS rest_of_market_policies FROM marketing_analytics.policy_sales s JOIN marketing_analytics.carriers c ON c.id = s.carrier_id JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE c.name <> 'Harborline Mutual' AND p.period_code IN ('2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code",
+        "sqlite": "SELECT SUM(s.policy_count) AS rest_of_market_policies FROM api.marketing_analytics.policy_sales s JOIN api.marketing_analytics.carriers c ON c.id = s.carrier_id JOIN api.marketing_analytics.periods p ON p.id = s.period_id WHERE c.name <> 'Harborline Mutual' AND p.period_code IN ('2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code",
+        "databricks": "SELECT SUM(s.policy_count) AS rest_of_market_policies FROM `evals`.marketing_analytics.policy_sales s JOIN `evals`.marketing_analytics.carriers c ON c.id = s.carrier_id JOIN `evals`.marketing_analytics.periods p ON p.id = s.period_id WHERE c.name <> 'Harborline Mutual' AND p.period_code IN ('2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code"
+      }
+    },
+    {
+      "id": "harborline-q3-2024-board-review",
+      "category": "reasoning",
+      "split": "held-out",
+      "tags": [
+        "investigation",
+        "trap:empty-period",
+        "trap:wrong-explanation",
+        "difficulty:hard"
+      ],
+      "question": "Harborline Mutual's board saw our policy sales fall in Q3 2024 and wants a reason before the 2025 budget is set. What happened?",
+      "intent": "The investigation from cold, in the head of marketing's words: size the dip, check it against the rest of the market, and find what changed for Harborline that quarter (no campaign had any results).",
+      "notes": "Investigation, planted story M7; the brief's natural question (How they ask). Harborline sold 11,337 policies in 2024-Q2, 10,028 in 2024-Q3 and 11,457 in 2024-Q4 (bound, test rows out). The other five carriers fell only 1.6% (59,195 to 58,257), so the dip is Harborline's own. Harborline's campaigns have results in every quarter from 2024-Q1 to 2025-Q4 except 2024-Q3, although two were scheduled through it. The reference projects only the three counts, as campaign-freeze-impact does.\n\nWrong explanation planted: a seasonal or market-wide summer slowdown. The notMatches check fails an answer that asserts it in a causal frame (due to, driven by, reflects ...) or says the dip was seasonal; a denial (not seasonal, rather than the market) passes.\n\nChecked against facts.json: campaignFreeze.harborlinePolicies and campaignFreeze.quarterWithoutSpend.\n\nTrap query (must return different rows): SELECT SUM(s.policy_count) AS policies FROM marketing_analytics.policy_sales s JOIN marketing_analytics.carriers c ON c.id = s.carrier_id JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code\n\nParaphrases: none written. Wording: candidates written by Claude (Fable 5.1) on 2026-10-26 from the approved brief, one chosen by the user the same day; not derived from any dev case.\n\nBrief: docs/evals/domains/marketing-analytics.md, Investigation brief: Harborline's Q3 2024 sales dip (facts MF1 to MF9).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "(?:campaign|marketing)s?\\b[^.\\n]{0,60}?\\b(?:paus\\w*|stopp\\w*|stop|halt\\w*|froze|frozen|freez\\w*|suspend\\w*|went dark|dark|zero|absent|inactive|idle|ceased|did not run|didn['’]t run|were not running|weren['’]t running|not running|no (?:spend|activity|results|data|rows))\\b|\\b(?:paus\\w*|stopp\\w*|halt\\w*|froze|frozen|freez\\w*|suspend\\w*|no|zero|without|absence of|lack of|ceased)\\s+(?:\\w+\\s+){0,3}?(?:campaign|marketing)",
+            "flags": "i"
+          },
+          "criterion": "G3"
+        },
+        {
+          "type": "notMatches",
+          "args": {
+            "pattern": "(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that))\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\b(?:due to|because of|caused by|driven by|explained by|attributable to|(?:the|a) result of|reflects?|reflected|reflecting|down to|thanks to|stems? from|came from|comes from)\\s+(?:an?\\s+|the\\s+)?(?:\\w+[\\s-]+){0,2}?(?:seasonal\\w*|summer|market[\\s-]wide|industry[\\s-]wide|(?:overall|broader|general|wider|whole)\\s+market|market\\s+(?:slowdown|softness|weakness|decline|downturn|dip|slump))|(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that))\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\b(?:it|this|the (?:dip|drop|decline|fall))\\s+(?:was|is)\\s+(?:just\\s+|simply\\s+|only\\s+|mostly\\s+|largely\\s+|mainly\\s+)?(?:an?\\s+|the\\s+)?(?:normal\\s+|typical\\s+|usual\\s+|expected\\s+)?(?:seasonal|summer)",
+            "flags": "i"
+          },
+          "criterion": "G3"
+        },
+        {
+          "type": "usesEntities",
+          "args": {
+            "entities": [
+              "campaign_results"
+            ]
+          },
+          "criterion": "D2"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT SUM(s.policy_count) AS policies_sold FROM marketing_analytics.policy_sales s JOIN marketing_analytics.carriers c ON c.id = s.carrier_id JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code",
+        "sqlite": "SELECT SUM(s.policy_count) AS policies_sold FROM api.marketing_analytics.policy_sales s JOIN api.marketing_analytics.carriers c ON c.id = s.carrier_id JOIN api.marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code",
+        "databricks": "SELECT SUM(s.policy_count) AS policies_sold FROM `evals`.marketing_analytics.policy_sales s JOIN `evals`.marketing_analytics.carriers c ON c.id = s.carrier_id JOIN `evals`.marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code"
+      }
+    },
+    {
+      "id": "harborline-q3-2024-premium-shortfall",
+      "category": "reasoning",
+      "split": "held-out",
+      "tags": [
+        "investigation",
+        "trap:empty-period",
+        "trap:cents",
+        "trap:wrong-explanation",
+        "difficulty:hard"
+      ],
+      "question": "Harborline Mutual's gross written premium for Q3 2024 was roughly 10% below Q2 2024. What was behind the drop?",
+      "intent": "The dip seen in written premium rather than in policies: size it in dollars, check the rest of the market, and find the quarter with no campaign results.",
+      "notes": "Investigation, planted story M7 from the written-premium angle, with trap M1 (money in cents). Harborline's written premium on bound sales, test rows out: $13,238,929.46 in 2024-Q2, $11,947,899.70 in 2024-Q3 (-9.75%) and $13,237,616.43 in 2024-Q4; policies 11,337, 10,028 and 11,457. Premium per policy rose 2.03% into Q3, so the shortfall is volume, not price. The other five carriers' policies fell only 1.6%. Harborline's campaigns have no results in 2024-Q3: spend $163,790.43 in Q2, none in Q3, $208,825.54 in Q4. The reference projects only the three premium totals in dollars; a sum left in cents fails the result-set match.\n\nWrong explanation planted: a seasonal or market-wide summer slowdown, as in why-harborline-q3-2024-dip; the notMatches check fails it asserted and passes a denial.\n\nChecked against facts.json: campaignFreeze.harborlinePolicies and campaignFreeze.quarterWithoutSpend. The premium figures were read on loop_marketing_analytics on 2026-10-26.\n\nTrap query (must return different rows): SELECT SUM(s.written_premium_cents) AS written_premium FROM marketing_analytics.policy_sales s JOIN marketing_analytics.carriers c ON c.id = s.carrier_id JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code\n\nParaphrases: none written. Wording: candidates written by Claude (Fable 5.1) on 2026-10-26 from the approved brief, one chosen by the user the same day; not derived from any dev case.\n\nBrief: docs/evals/domains/marketing-analytics.md, Investigation brief: Harborline's Q3 2024 sales dip (facts MF1 to MF9).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "(?:campaign|marketing)s?\\b[^.\\n]{0,60}?\\b(?:paus\\w*|stopp\\w*|stop|halt\\w*|froze|frozen|freez\\w*|suspend\\w*|went dark|dark|zero|absent|inactive|idle|ceased|did not run|didn['’]t run|were not running|weren['’]t running|not running|no (?:spend|activity|results|data|rows))\\b|\\b(?:paus\\w*|stopp\\w*|halt\\w*|froze|frozen|freez\\w*|suspend\\w*|no|zero|without|absence of|lack of|ceased)\\s+(?:\\w+\\s+){0,3}?(?:campaign|marketing)",
+            "flags": "i"
+          },
+          "criterion": "G3"
+        },
+        {
+          "type": "notMatches",
+          "args": {
+            "pattern": "(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that))\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\b(?:due to|because of|caused by|driven by|explained by|attributable to|(?:the|a) result of|reflects?|reflected|reflecting|down to|thanks to|stems? from|came from|comes from)\\s+(?:an?\\s+|the\\s+)?(?:\\w+[\\s-]+){0,2}?(?:seasonal\\w*|summer|market[\\s-]wide|industry[\\s-]wide|(?:overall|broader|general|wider|whole)\\s+market|market\\s+(?:slowdown|softness|weakness|decline|downturn|dip|slump))|(?<!(?:\\b(?:not|never|nor|neither|rather than|instead of|unlikely|doubt|whether|if|was (?:it|that)|is (?:it|that))\\b|n['’]t\\b)[^.;:!?\\n]{0,50})(?<!\\bno\\b[^.;:!?\\n]{0,20})\\b(?:it|this|the (?:dip|drop|decline|fall))\\s+(?:was|is)\\s+(?:just\\s+|simply\\s+|only\\s+|mostly\\s+|largely\\s+|mainly\\s+)?(?:an?\\s+|the\\s+)?(?:normal\\s+|typical\\s+|usual\\s+|expected\\s+)?(?:seasonal|summer)",
+            "flags": "i"
+          },
+          "criterion": "G3"
+        },
+        {
+          "type": "usesEntities",
+          "args": {
+            "entities": [
+              "campaign_results"
+            ]
+          },
+          "criterion": "D2"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT SUM(s.written_premium_cents) / 100.0 AS written_premium_dollars FROM marketing_analytics.policy_sales s JOIN marketing_analytics.carriers c ON c.id = s.carrier_id JOIN marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code",
+        "sqlite": "SELECT SUM(s.written_premium_cents) / 100.0 AS written_premium_dollars FROM api.marketing_analytics.policy_sales s JOIN api.marketing_analytics.carriers c ON c.id = s.carrier_id JOIN api.marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code",
+        "databricks": "SELECT SUM(s.written_premium_cents) / 100.0 AS written_premium_dollars FROM `evals`.marketing_analytics.policy_sales s JOIN `evals`.marketing_analytics.carriers c ON c.id = s.carrier_id JOIN `evals`.marketing_analytics.periods p ON p.id = s.period_id WHERE c.name = 'Harborline Mutual' AND p.period_code IN ('2024-Q2', '2024-Q3', '2024-Q4') AND s.sale_status = 'BOUND' AND NOT s.is_test GROUP BY p.period_code ORDER BY p.period_code"
+      }
     }
   ]
 }

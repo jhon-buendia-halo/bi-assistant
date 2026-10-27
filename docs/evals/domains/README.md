@@ -4,8 +4,8 @@ Databases the model has never seen, shaped like a customer's, with traps planted
 
 | Domain | Fixture and set id | Schema | Brief | Policy | Questions | Origin |
 |---|---|---|---|---|---|---|
-| Finance | `finance` | `finance` | [finance.md](finance.md) | [finance-policy.md](finance-policy.md) | `backend/src/mastra/evals/sets/finance.json` (68 questions: 48 new, the branch's 20 banking ones) | the branch's banking domain, extended (BA-185) |
-| Marketing analytics | `marketing-analytics` | `marketing_analytics` | [marketing-analytics.md](marketing-analytics.md) | [marketing-analytics-policy.md](marketing-analytics-policy.md) | `backend/src/mastra/evals/sets/marketing-analytics.json` (50 questions, 4 on governance) | new (BA-185) |
+| Finance | `finance` | `finance` | [finance.md](finance.md) | [finance-policy.md](finance-policy.md) | `backend/src/mastra/evals/sets/finance.json` (74 questions: 48 new, 6 investigation questions of BA-243, the branch's 20 banking ones) | the branch's banking domain, extended (BA-185) |
+| Marketing analytics | `marketing-analytics` | `marketing_analytics` | [marketing-analytics.md](marketing-analytics.md) | [marketing-analytics-policy.md](marketing-analytics-policy.md) | `backend/src/mastra/evals/sets/marketing-analytics.json` (56 questions, 4 on governance, 6 investigation questions of BA-243) | new (BA-185) |
 | Health insurance | `health-insurance` | `health_insurance` | `docs/evals/synthetic-domains.md` on `feat/engine-eval-loop` | none yet | `backend/src/mastra/evals/sets/health-insurance.json` (42 questions) | copied as is from `feat/engine-eval-loop` |
 | Genomics | `genomics` | `genomics` | as above | none yet | `backend/src/mastra/evals/sets/genomics.json` (49 questions) | copied as is |
 | Supply chain | `supply-chain` | `supply_chain` | as above | none yet | `backend/src/mastra/evals/sets/supply-chain.json` (20 questions) | copied as is |

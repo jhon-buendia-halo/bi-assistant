@@ -948,15 +948,15 @@ const EVAL_SETS: ReadonlyArray<[id: string, name: string, questions: number]> =
     ['formula-1', 'Formula 1', 10],
     ['world-cup-rest-connector', 'World Cup (REST connector)', 12],
     ['world-cup-databricks-only', 'World Cup (Databricks only)', 10],
-    ['finance', 'Finance', 68],
-    ['finance-rest', 'Finance (REST API)', 68],
-    ['finance-databricks', 'Finance (Databricks)', 68],
+    ['finance', 'Finance', 74],
+    ['finance-rest', 'Finance (REST API)', 74],
+    ['finance-databricks', 'Finance (Databricks)', 74],
     ['health-insurance', 'Health Insurance', 42],
     ['genomics', 'Genomics', 49],
     ['supply-chain', 'Supply Chain', 20],
-    ['marketing-analytics', 'Marketing Analytics', 50],
-    ['marketing-analytics-rest', 'Marketing Analytics (REST API)', 50],
-    ['marketing-analytics-databricks', 'Marketing Analytics (Databricks)', 50],
+    ['marketing-analytics', 'Marketing Analytics', 56],
+    ['marketing-analytics-rest', 'Marketing Analytics (REST API)', 56],
+    ['marketing-analytics-databricks', 'Marketing Analytics (Databricks)', 56],
   ];
 
 test('lists every question set, the former golden set inside the World Cup sets', async ({
