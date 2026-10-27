@@ -14,6 +14,31 @@ Entry template:
 
 ---
 
+## 2026-10-27 — 1.1.21 Investigation questions with planted insights (BA-243)
+
+### What went well
+- Every fact in both briefs was checked by SQL on the loop's databases before the user saw the brief. The user approved both briefs and all eight dev drafts as drafted, in one message.
+- Each case was validated outside the suite before it entered a set:
+  - PostgreSQL references with a trap query that returns other rows;
+  - SQLite references that return the PostgreSQL rows;
+  - the Databricks static checks;
+  - 39 simulated answers run through the repo's own check code.
+- The held-out wording came from a different model (Fable 5.1) and the user chose it, and each brief records that provenance. The held-out questions were not written by the session that wrote the dev variants.
+- Reading round 17's 36 attempts one by one, not only the totals, separated the check's defect from the assistant's failures. Eight right answers failed the text check: missing "timing" and "monthly" wording. The re-score ran on the stored answers and cost nothing.
+- The acceptance gate needed no new scenario: the only Gherkin step the change touched (the set-list counts) had been updated in the fast loop.
+
+### What went wrong
+- The `matches` patterns were written from the brief's own wording, and so were the 39 simulated answers that tested them. They shared that wording's blind spots, so eight right answers failed in round 17, after a $1.24 baseline. The real phrasings showed up only in the model's answers.
+- In the status reply of 2026-10-27, I said the widened patterns would lift the twelve questions to 17 of 36. The re-score moved the `matches` check (14 to 24 of 36 attempts); the questions stay at 7 of 36, because the result-set match and the missing `campaign_results` reads are the assistant's failures. I quoted "10 fail to pass" from my notes without checking which check it counted. I caught it only while writing this evidence.
+- The plan assumed the user writes the held-out wording. The story waited three days on that step until the user asked Claude for candidates.
+- The first frontend unit-test run failed 4 tests that pass on re-runs (PromptEditor's `collapseToEnd` with no selection, three UiPreferencesService tests with an open `PUT /ui-preferences`). I recorded them as flaky but did not look into them.
+
+### What to do differently
+- For a case scored by a text pattern, write the simulated answers in other words than the pattern's author: at least three phrasings per true cause, from another model or a person. Before the baseline round, run each case once on the loop's model and check the pattern against those real answers.
+- When quoting a re-score, give the check that moved and the question-level count separately, and take both from the evidence's `checks.txt`, not from session notes.
+- When a plan step waits on the user for wording, offer candidates from another model at the same time, with the user choosing, as was done here.
+- When a frontend unit test fails and then passes on a re-run, name it in the evidence and raise it to the user as a BA-11 bug candidate.
+
 ## 2026-10-26 — 1.1.24 Checks and questions that failed right answers, and 1.1.25 Marketing Analytics knowledge seed (BA-188)
 
 ### What went well

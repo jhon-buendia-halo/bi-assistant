@@ -34,3 +34,19 @@ Pattern fix, 2026-10-27 (a supervisor change to the banks; the rounds may not to
 - Re-scored on the 36 answers of round 17 with RegExp.test as the checks do (pattern-fix-recheck.txt): matches passes 24 of 36 attempts (14 before), 10 attempts from fail to pass, none from pass to fail; each flipped answer gives the true cause. Simulated answers through the repo's check code (validate-ba243.txt, regenerated): 39 scenarios, every wrong explanation still fails.
 - Leak check on a synthetic patch of the 342 pattern words: 6 new generic words allowlisted (batch, earning, mismatch, processed, shift, unrecorded); 57 words still rejected, the 51 story words and 6 older ones (leak-check-allowlist.txt).
 - The briefs' draft blocks were synced with the set files. Not re-run: the loop has $0.63 left; the widened checks count from the next baseline (the Claude gate runs of PR #81). Had they been in place in round 17, the twelve questions would have passed 7 of 36 attempts still: the result-set match and the missing campaign_results reads are the assistant's failures, not the checks'.
+
+Acceptance gate, 2026-10-27, on 198e438 (the user accepted the change by hand the same day)
+python3 scripts/check-specs.py                         ALL CHECKS PASSED
+backend: npx jest                                      135 suites, 2191 tests passed
+backend: npm run lint                                  0 errors, 8 warnings (none in a file this feature touched; it touched no .ts file)
+backend: npx prettier --check on the two set files     not clean, as on 4bd9484 before this feature; the repo's
+         format script covers .ts files only (same note as evidence/1.1.24/checks.txt)
+builds:  npm run test:e2e (backend build:all with the web UI)   exit 0
+frontend unit tests: CHROME_BIN=<Playwright's Chromium 1243> npx ng test --watch=false --browsers=ChromeHeadless
+         run 1: 362 of 366 (4 failed: PromptEditor "inserts the chosen link as [[kind:name]]", an uncaught
+         'collapseToEnd' with no selection, and three UiPreferencesService tests left with an open
+         PUT /ui-preferences); runs 2 and 3: 366 of 366. Flaky, not this feature: it changed no frontend source.
+E2E:     e2e-results.txt (second block)                agents.spec.ts 19 of 19 passed (web)
+E2E impact analysis: e2e-impact.md (one scenario updated in the fast loop, the rest re-run as-is)
+Evals on a model: not run for the gate. This feature changes no agent input; round 17 measured the banks,
+         and the widened patterns count from the next baseline (the Claude gate runs of PR #81).

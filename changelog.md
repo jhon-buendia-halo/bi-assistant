@@ -2,6 +2,19 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-27
+
+### Added
+- **Investigation questions with planted insights** (roadmap 1.1.21, [BA-243](https://halo-powered.atlassian.net/browse/BA-243), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)). Twelve "why did this happen" questions join the banks. Each one asks about a story planted in the sample data, and a planted wrong explanation acts as a distractor.
+  - Finance: six questions on the month with no wealth fees billed, August 2025. July's and August's fees were billed together on 5 September; the wrong explanation is lost clients or waived fees.
+  - Marketing Analytics: six questions on Harborline's 2024-Q3 sales dip. Every Harborline campaign paused that quarter; the wrong explanation is a market-wide slowdown.
+  - Each set has four dev questions written by Claude from the user's approved briefs and two held-out questions whose wording the user chose. Finance now holds 74 questions (22 held out) and Marketing Analytics 56 (18 held out).
+  - Each question is scored by `matches` on the true cause, `notMatches` on the wrong one, the tables the answer must read, `noToolErrors` and the result-set match. Every reference and trap query was validated on PostgreSQL, SQLite and the Databricks static checks.
+  - Loop round 17 measured the banks on gpt-5.6-luna: dev 120/138, held-out 40/55. The assistant answered the investigations right in 7 of 36 attempts: it rarely reads the campaign results, and it miscounts the billed fees.
+  - The `matches` patterns were then widened to the wording of right answers that had failed them. Re-scored on round 17's answers, 10 attempts go from fail to pass and none the other way; the new patterns count from the next baseline.
+  - The leak check allowlists 89 generic words of the patterns. The acceptance gate re-ran `agents.spec.ts`: 19 of 19 on the web target.
+  - Evidence: [evidence/1.1.21/](evidence/1.1.21/) (e2e-impact.md, e2e-results.txt, checks.txt, the validation and round 17 files).
+
 ## 2026-10-26
 
 ### Added
