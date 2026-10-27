@@ -12,22 +12,84 @@
     @if (result(); as result) {
       <!-- Verdict -->
       <div class="flex items-center gap-2">
-        @if (result.passed) {
-          <span class="flex items-center gap-1.5 text-[13px] text-on-success-soft">
-            <lucide-angular [img]="CircleCheck" [size]="15" />
-            <span>Passed</span>
-          </span>
-        } @else {
-          <span class="flex items-center gap-1.5 text-[13px] text-on-danger-soft">
-            <lucide-angular [img]="CircleX" [size]="15" />
-            <span>Failed</span>
-          </span>
+        @switch (status()) {
+          @case ("passed") {
+            <span
+              class="flex items-center gap-1.5 text-[13px] text-on-success-soft"
+            >
+              <lucide-angular [img]="CircleCheck" [size]="15" />
+              <span>{{ statusLabels.passed }}</span>
+            </span>
+          }
+          @case ("failed") {
+            <span
+              class="flex items-center gap-1.5 text-[13px] text-on-danger-soft"
+            >
+              <lucide-angular [img]="CircleX" [size]="15" />
+              <span>{{ statusLabels.failed }}</span>
+            </span>
+          }
+          @default {
+            <span class="flex items-center gap-1.5 text-[13px] text-fg-muted">
+              <lucide-angular [img]="CircleMinus" [size]="15" />
+              <span>{{ statusLabels["not-scored"] }}</span>
+            </span>
+          }
         }
         <span class="flex items-center gap-1 text-[12px] text-fg-muted">
           <lucide-angular [img]="Clock" [size]="12" />
           <span>{{ durationLabel(result.durationMs) }}</span>
         </span>
+        <span data-testid="eval-trace-split" class="text-[12px] text-fg-muted"
+          >· {{ splitLabel() }}</span
+        >
       </div>
+
+      <!-- Every attempt, when the run repeated the question -->
+      @if (attemptCount() > 1) {
+        <div data-testid="eval-trace-attempts" class="flex flex-col gap-1.5">
+          <p class="text-[11px] tracking-wider text-fg-muted uppercase">
+            Attempts
+          </p>
+          <p class="text-[12px] text-fg">
+            {{ attemptsPassed() }} of {{ attemptCount() }} attempts passed
+          </p>
+          @for (attempt of result.attempts ?? []; track attempt.attempt) {
+            <div class="flex items-center gap-2 text-[12px]">
+              <span class="text-fg">Attempt {{ attempt.attempt }}</span>
+              @switch (attempt.status) {
+                @case ("passed") {
+                  <span class="flex items-center gap-1 text-on-success-soft">
+                    <lucide-angular [img]="CircleCheck" [size]="12" />
+                    <span>{{ statusLabels.passed }}</span>
+                  </span>
+                }
+                @case ("failed") {
+                  <span class="flex items-center gap-1 text-on-danger-soft">
+                    <lucide-angular [img]="CircleX" [size]="12" />
+                    <span>{{ statusLabels.failed }}</span>
+                  </span>
+                }
+                @default {
+                  <span class="flex items-center gap-1 text-fg-muted">
+                    <lucide-angular [img]="CircleMinus" [size]="12" />
+                    <span>{{ statusLabels["not-scored"] }}</span>
+                  </span>
+                }
+              }
+              <span class="ml-auto text-fg-muted">{{
+                durationLabel(attempt.durationMs)
+              }}</span>
+            </div>
+          }
+          @if (representativeAttempt(); as attemptNumber) {
+            <p class="text-[12px] text-fg-muted">
+              Checks, steps and answer below are from attempt
+              {{ attemptNumber }}.
+            </p>
+          }
+        </div>
+      }
 
       <!-- Why it failed -->
       @if (result.error) {
@@ -42,13 +104,18 @@
           </p>
         </div>
       } @else if (failedChecks().length > 0) {
-        <div class="flex flex-col gap-1.5">
+        <div
+          data-testid="eval-trace-failed-checks"
+          class="flex flex-col gap-1.5"
+        >
           <p class="text-[11px] tracking-wider text-fg-muted uppercase">
             Why it failed
           </p>
-          @for (check of failedChecks(); track check.id) {
+          @for (check of failedChecks(); track $index) {
             <div class="rounded-md bg-danger-soft px-3 py-2">
-              <p class="text-[12px] text-on-danger-soft">{{ check.description }}</p>
+              <p class="text-[12px] text-on-danger-soft">
+                {{ check.description }}
+              </p>
               @if (check.reason) {
                 <p class="mt-1 text-[11px] text-on-danger-soft">
                   {{ check.reason }}
@@ -62,23 +129,52 @@
       <!-- Every check -->
       <div class="flex flex-col gap-1.5">
         <p class="text-[11px] tracking-wider text-fg-muted uppercase">Checks</p>
-        @for (check of result.checkResults; track check.id) {
+        @for (check of result.checkResults; track $index) {
+          @let checkState = checkStatus(check);
           <div
+            [attr.data-testid]="'eval-trace-check-' + check.id"
             class="flex items-start gap-2 rounded-md bg-surface-muted px-2.5 py-1.5"
           >
-            <lucide-angular
-              [img]="check.passed ? CircleCheck : CircleX"
-              [size]="13"
-              class="mt-0.5 shrink-0"
-              [class.text-on-success-soft]="check.passed"
-              [class.text-on-danger-soft]="!check.passed"
-            />
-            <span class="min-w-0 flex-1 text-[12px] text-fg">{{
-              check.description
-            }}</span>
-            <span class="shrink-0 font-mono text-[11px] text-fg-muted">{{
-              check.score
-            }}</span>
+            @switch (checkState) {
+              @case ("passed") {
+                <lucide-angular
+                  [img]="CircleCheck"
+                  [size]="13"
+                  class="mt-0.5 shrink-0 text-on-success-soft"
+                />
+              }
+              @case ("failed") {
+                <lucide-angular
+                  [img]="CircleX"
+                  [size]="13"
+                  class="mt-0.5 shrink-0 text-on-danger-soft"
+                />
+              }
+              @default {
+                <lucide-angular
+                  [img]="CircleMinus"
+                  [size]="13"
+                  class="mt-0.5 shrink-0 text-fg-muted"
+                />
+              }
+            }
+            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span class="text-[12px] text-fg">{{ check.description }}</span>
+              @if (checkState === "not-scored" && check.reason) {
+                <span class="text-[11px] text-fg-muted">{{
+                  check.reason
+                }}</span>
+              }
+            </span>
+            @if (checkState === "not-scored") {
+              <span class="shrink-0 text-[11px] text-fg-muted">{{
+                statusLabels["not-scored"]
+              }}</span>
+            } @else {
+              <span class="shrink-0 font-mono text-[11px] text-fg-muted">{{
+                check.score
+              }}</span>
+            }
           </div>
         }
       </div>
@@ -138,6 +234,42 @@
           <p class="text-[12px] text-fg-muted">The agent returned no text.</p>
         }
       </div>
+
+      <!-- Tokens and cost, on a result that recorded them -->
+      @if (result.usage; as usage) {
+        <div class="flex flex-col gap-1.5">
+          <p class="text-[11px] tracking-wider text-fg-muted uppercase">
+            Tokens
+          </p>
+          @for (entry of usage; track entry.agent) {
+            <div
+              [attr.data-testid]="'eval-trace-tokens-' + entry.agent"
+              class="flex flex-wrap items-baseline gap-x-2 text-[12px]"
+            >
+              <span class="text-fg">{{ agentLabels[entry.agent] }}</span>
+              <span class="font-mono text-[11px] text-fg-muted">{{
+                entry.model
+              }}</span>
+              <span class="text-fg-muted tabular-nums">{{
+                usageLabel(entry)
+              }}</span>
+            </div>
+          }
+        </div>
+      }
+      @if (resultCostLabel(result); as cost) {
+        <div class="flex flex-col gap-1.5">
+          <p class="text-[11px] tracking-wider text-fg-muted uppercase">Cost</p>
+          <p
+            data-testid="eval-trace-cost"
+            class="text-[12px] tabular-nums"
+            [class.text-fg]="result.costUsd !== null"
+            [class.text-fg-muted]="result.costUsd === null"
+          >
+            {{ cost }}
+          </p>
+        </div>
+      }
     } @else {
       <!-- Not run yet: show what it will be scored on -->
       <div class="flex flex-col gap-1.5">

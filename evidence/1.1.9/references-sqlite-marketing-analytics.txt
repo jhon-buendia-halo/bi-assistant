@@ -1,0 +1,55 @@
+SQLite references (the REST connector's engine): marketing-analytics.json
+Checked 2026-10-13 by the BA-187 dialect work. Every case of the file with a PostgreSQL reference (42).
+The set that grades against them: marketing-analytics-rest (fixture marketing-analytics-rest).
+
+How each reference was checked
+- PostgreSQL: the case's PostgreSQL reference on database ba9_marketing_analytics (127.0.0.1:55432, schema marketing_analytics).
+- SQLite: the dump in backend/scripts/fixtures/marketing-analytics/data materialised as rest.connector.ts materialises endpoints: one table per relation named by its key "api.marketing_analytics.<table>", column affinity from the first non-null JSON value (number REAL, boolean INTEGER 1/0, string TEXT); every unquoted api.marketing_analytics.<table> in the reference rewritten to the quoted key, as the connector does. Run on Python's sqlite3 (SQLite 3.51.0) and on better-sqlite3 (the engine the connector bundles, SQLite 3.53.4).
+- Precondition for the REST set: these references read every row of an endpoint, and policy_sales (10,822 rows) exceeds what the connector fetches by default (50 pages of 100 rows, at most 10,000 rows: MAX_PAGES, DEFAULT_PAGE_SIZE and DEFAULT_MAX_ROWS in rest.connector.ts). The REST datasource must set a page size and maxRows on those endpoints that cover them, or the SQLite references sum a partial table.
+- Comparison: as backend/src/modules/sessions/result-compare.ts compares (the result-set match): same row count and column count, rows in any order, each row's values normalised (numbers at 6 significant figures, dates as YYYY-MM-DD, text trimmed and case-folded) and sorted.
+- Static: the Step 1b check modules (backend/src/mastra/evals/checks/): dialectProblem(sql, 'sqlite') finds nothing (agents-evals R74); every table reference has 3 parts (R75), is api.marketing_analytics.<table> and a required table of the sample; the reference reads the same tables as the PostgreSQL one.
+
+✓ fiscal-quarter-of-july-2024  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 2025, 1
+✓ digital-channels  sqlite  2 rows, equal to the PostgreSQL reference on both engines: Direct online; Mobile app
+✓ latest-final-quarter  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 2025-Q3
+✓ spring-home-refresh-dates  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 2025-03-01, 2025-05-31
+✓ harborline-headquarters  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Massachusetts
+✓ harborline-pet-launch  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Paws Plus, 2024-05-13
+✓ harborline-policies-sold-2025-q2  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 12415
+✓ market-premium-by-line-2025  sqlite  5 rows, equal to the PostgreSQL reference on both engines: 183070264.13; 115984907.14; 13845526.06; … (5 rows)
+✓ harborline-premium-by-currency-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: USD, 55064556.78
+✓ harborline-campaign-spend-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 678055.93
+✓ market-policies-by-channel-2025  sqlite  4 rows, equal to the PostgreSQL reference on both engines: 115902; 83985; 42025; … (4 rows)
+✓ harborline-earned-premium-by-quarter-2025  sqlite  4 rows, equal to the PostgreSQL reference on both engines: 12253213.09; 12452710.33; 13086078.05; … (4 rows)
+✓ gov-auto-premium-vs-market-q2-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 7706049.37, 51837930.58
+✓ gov-pinecrest-pet-vs-rest-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 369903.65, 6795824.44
+✓ harborline-premium-by-region-2025  sqlite  4 rows, equal to the PostgreSQL reference on both engines: 18671935.67; 13416857.07; 12421641.26; … (4 rows)
+✓ market-premium-by-family-and-region-2025  sqlite  12 rows, equal to the PostgreSQL reference on both engines: 82715341.75; 80116858.24; 75417360.79; … (12 rows)
+✓ harborline-leads-by-line-2025  sqlite  5 rows, equal to the PostgreSQL reference on both engines: 11076; 4102; 1971; … (5 rows)
+✓ northeast-auto-policies-q4-2025  sqlite  3 rows, equal to the PostgreSQL reference on both engines: 1062; 523; 356
+✓ harborline-spend-by-channel-2025  sqlite  4 rows, equal to the PostgreSQL reference on both engines: 232004.23; 204602.8; 174259.8; … (4 rows)
+✓ top-auto-state-q4-2025  sqlite  2 rows, equal to the PostgreSQL reference on both engines: 1062; 1062
+✓ top-three-campaigns-by-leads-2025  sqlite  3 rows, equal to the PostgreSQL reference on both engines: Drive Smart Rewards, 6170; Pet Parents Week, 4102; Agent Referral Drive, 3414
+✓ fastest-growing-line-2024-to-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Pet health
+✓ top-five-states-2025  sqlite  5 rows, equal to the PostgreSQL reference on both engines: California, 38043; Florida, 32189; New York, 31183; … (5 rows)
+✓ lowest-premium-channel-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Call center, 7824261.43
+✓ gov-fastest-growing-competitor  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Competitor C
+✓ top-ctr-campaigns-2025  sqlite  3 rows, equal to the PostgreSQL reference on both engines: Renters Campus Push; Drive Smart Rewards; Pet Parents Week
+✓ best-lead-to-policy-channel-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Call center
+✓ top-budget-share-campaigns-2025  sqlite  3 rows, equal to the PostgreSQL reference on both engines: Renters Campus Push; Year-End Life Check; Spring Home Refresh
+✓ largest-market-share-line-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Pet health
+✓ premium-per-policy-top-line-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Homeowners
+✓ highest-digital-share-region-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: West
+✓ harborline-revenue-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 51761131.22
+✓ highest-walk-away-rate-channel-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Mobile app
+✓ lowest-cost-per-acquisition-channel-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Call center
+✓ harborline-walk-aways-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 1995
+✓ harborline-premium-fiscal-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 51360607.47
+✓ top-promo-code-by-leads  sqlite  1 rows, equal to the PostgreSQL reference on both engines: PETPAL, 5004
+✓ quarter-without-campaign-spend  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 2024-Q3
+✓ top-channel-q2-2025  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Independent agents, 4419
+✓ harborline-policies-all-periods  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 89954
+✓ chart-harborline-premium-by-quarter  sqlite  8 rows, equal to the PostgreSQL reference on both engines: 10549776.53; 13238929.46; 11947899.7; … (8 rows)
+✓ campaign-freeze-impact  sqlite  3 rows, equal to the PostgreSQL reference on both engines: 11337; 10028; 11457
+
+marketing-analytics: 42 of 42 SQLite references return the rows of their PostgreSQL reference and pass the static checks.

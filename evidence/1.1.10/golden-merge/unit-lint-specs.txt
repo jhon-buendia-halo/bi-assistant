@@ -1,0 +1,31 @@
+# backend: npx jest
+Test Suites: 117 passed, 117 total
+Tests:       1886 passed, 1886 total
+
+# backend: npx eslint "{src,apps,libs,test}/**/*.ts" (no --fix)
+✖ 8 problems (0 errors, 8 warnings)
+# the 8 warnings are in files this change does not touch:
+  backend/src/intellify-api/api-key.guard.spec.ts
+  backend/src/main.ts
+  backend/src/mastra/tools/assistant-tools.spec.ts
+  backend/src/modules/llm/retry-fetch.ts
+
+# backend: npx tsc --noEmit -p tsconfig.json -> clean (code agent run); npm run build:all -> exit 0
+
+# frontend: ng test --watch=false --browsers=ChromeHeadless
+TOTAL: 345 SUCCESS
+
+# python3 scripts/check-specs.py
+PASS every product and system spec exists
+PASS specs/README.md lists exactly the capability specs on disk
+PASS specs/README.md lists exactly the epic specs on disk
+PASS relative links in 63 files resolve
+PASS every capability spec has the required sections
+PASS 24 Playwright specs each mirror a Feature in exactly one capability spec
+PASS 112 backend routes appear in specs/system/api.md
+PASS 13 collections appear in specs/system/data-model.md
+PASS 11 registered agents appear in specs/system/agents.md
+PASS 18 roadmap milestone epics have a spec in specs/epics/
+PASS every epic spec has a Status of Draft or Confirmed
+
+ALL CHECKS PASSED

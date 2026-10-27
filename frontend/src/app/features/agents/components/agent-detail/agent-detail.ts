@@ -15,6 +15,7 @@ import {
   Bot,
   Brain,
   CircleCheck,
+  CircleMinus,
   CircleX,
   Cpu,
   Network,
@@ -39,9 +40,30 @@ import {
   AgentEvalSet,
   AgentSkillsView,
   AgentsApiService,
+  EvalJudgeChoice,
+  EvalRepeats,
   EvalRunView,
+  EvalStatus,
 } from '../../services/agents-api.service';
 import { EvalSelectionService } from '../../services/eval-selection.service';
+import {
+  EVAL_STATUS_LABELS,
+  checkResultFor,
+  checkStatus,
+  evalRunSummary,
+  resultPasses,
+  resultRuns,
+  resultSplit,
+  resultStatus,
+  runCost,
+  runCounts,
+  runFlakyCount,
+  runHeadline,
+  runRepeats,
+  runVerdict,
+  splitLine,
+} from '../../services/eval-run.util';
+import { EvalRunSummaryTables } from '../eval-run-summary/eval-run-summary';
 import {
   canStartChat,
   startChatBlockedReason,
@@ -92,6 +114,7 @@ type EvalTab = 'questions' | 'runs';
     AgentChatBox,
     AgentSkillsInline,
     AgentSystemPrompt,
+    EvalRunSummaryTables,
   ],
   templateUrl: './agent-detail.html',
   styleUrl: './agent-detail.scss',
@@ -102,6 +125,7 @@ export class AgentDetail implements OnDestroy {
   readonly Bot = Bot;
   readonly Brain = Brain;
   readonly CircleCheck = CircleCheck;
+  readonly CircleMinus = CircleMinus;
   readonly CircleX = CircleX;
   readonly Cpu = Cpu;
   readonly Network = Network;
@@ -240,6 +264,8 @@ export class AgentDetail implements OnDestroy {
       this.evalTab.set('questions');
       this.evalRuns.set([]);
       this.expandedRunId.set(null);
+      this.judge.set('off');
+      this.repeats.set(1);
       this.evalSelection.clear();
       this.publishing.set(false);
       this.deleting.set(false);
@@ -577,9 +603,29 @@ export class AgentDetail implements OnDestroy {
     this.evalSelection.select({ evalCase, result });
   }
 
-  passedIn(run: EvalRunView): number {
-    return run.results.filter((result) => result.passed).length;
+  readonly statusLabels = EVAL_STATUS_LABELS;
+  readonly resultStatus = resultStatus;
+  readonly runHeadline = runHeadline;
+  readonly runVerdict = runVerdict;
+  readonly runRepeatsOf = runRepeats;
+  readonly runFlakyCount = runFlakyCount;
+  readonly runCost = runCost;
+  readonly splitLine = splitLine;
+  readonly resultSplit = resultSplit;
+  readonly resultRuns = resultRuns;
+  readonly resultPasses = resultPasses;
+
+  /** A check's status on a finished question; undefined when it has none. */
+  checkStatusIn(
+    result: AgentEvalCaseResult,
+    checkId: string,
+  ): EvalStatus | undefined {
+    const check = checkResultFor(result, checkId);
+    return check ? checkStatus(check) : undefined;
   }
+
+  /** A run's tables by category and criterion, once a question finished. */
+  readonly runSummary = evalRunSummary;
 
   runDuration(run: EvalRunView): string {
     if (!run.finishedAt) return '—';
@@ -634,6 +680,22 @@ export class AgentDetail implements OnDestroy {
     );
   }
 
+  /** Whether the run asks the LLM judge to score its judge checks. */
+  readonly judge = signal<EvalJudgeChoice>('off');
+
+  onJudgeChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    this.judge.set(value === 'on' ? 'on' : 'off');
+  }
+
+  /** Attempts per question the run asks for (agents-evals R214). */
+  readonly repeats = signal<EvalRepeats>(1);
+
+  onRepeatsChange(event: Event): void {
+    const value = Number((event.target as HTMLSelectElement).value);
+    this.repeats.set(value === 3 || value === 5 ? value : 1);
+  }
+
   /** Datasources offered in the run dropdown. */
   readonly datasources = signal<Datasource[]>([]);
   readonly selectedDatasourceId = signal<string>('');
@@ -646,13 +708,18 @@ export class AgentDetail implements OnDestroy {
   );
   readonly runResults = signal<AgentEvalCaseResult[]>([]);
   readonly runCurrentQuestion = signal<string | null>(null);
+  /** The attempt of the question in flight, and the run's attempts each. */
+  readonly runCurrentAttempt = signal<number | null>(null);
+  readonly runRepeats = signal<EvalRepeats>(1);
   readonly runDatasets = signal<string[]>([]);
   private pollTimer: ReturnType<typeof setTimeout> | undefined;
 
   readonly running = computed(() => this.runStatus() === 'running');
-  readonly passedCount = computed(
-    () => this.runResults().filter((result) => result.passed).length,
+  private readonly runResultCounts = computed(() =>
+    runCounts(this.runResults()),
   );
+  readonly passedCount = computed(() => this.runResultCounts().passed);
+  readonly notScoredCount = computed(() => this.runResultCounts().notScored);
 
   /** Result for a question, once it has finished. */
   resultFor(caseId: string): AgentEvalCaseResult | undefined {
@@ -685,25 +752,35 @@ export class AgentDetail implements OnDestroy {
     this.runError.set(null);
     this.runResults.set([]);
     this.runCurrentQuestion.set(null);
+    this.runCurrentAttempt.set(null);
+    this.runRepeats.set(this.repeats());
     this.syncSelection();
 
-    this.api.startEvalRun(this.agentKey(), datasourceId, caseIds).subscribe({
-      next: (res) => {
-        this.runStarting.set(false);
-        if (!res.ok || !res.jobId) {
-          this.runError.set(res.message);
+    this.api
+      .startEvalRun(
+        this.agentKey(),
+        datasourceId,
+        caseIds,
+        this.judge(),
+        this.repeats(),
+      )
+      .subscribe({
+        next: (res) => {
+          this.runStarting.set(false);
+          if (!res.ok || !res.jobId) {
+            this.runError.set(res.message);
+            this.runStatus.set('idle');
+            return;
+          }
+          this.runStatus.set('running');
+          this.pollRun(res.jobId);
+        },
+        error: (err) => {
+          this.runStarting.set(false);
           this.runStatus.set('idle');
-          return;
-        }
-        this.runStatus.set('running');
-        this.pollRun(res.jobId);
-      },
-      error: (err) => {
-        this.runStarting.set(false);
-        this.runStatus.set('idle');
-        this.runError.set(err?.error?.message ?? 'Backend unreachable');
-      },
-    });
+          this.runError.set(err?.error?.message ?? 'Backend unreachable');
+        },
+      });
   }
 
   /** Poll until the job leaves `running`; each question lands as it finishes. */
@@ -717,7 +794,10 @@ export class AgentDetail implements OnDestroy {
         }
         this.runResults.set(view.results ?? []);
         this.syncSelection();
+        this.refreshListedRun(view);
         this.runCurrentQuestion.set(view.currentQuestion ?? null);
+        this.runCurrentAttempt.set(view.currentAttempt ?? null);
+        this.runRepeats.set(view.repeats ?? 1);
         this.runDatasets.set(view.datasets ?? []);
         if (view.status === 'running') {
           this.pollTimer = setTimeout(() => this.pollRun(jobId), 1500);
@@ -733,6 +813,23 @@ export class AgentDetail implements OnDestroy {
         this.runError.set(err?.error?.message ?? 'Backend unreachable');
       },
     });
+  }
+
+  /**
+   * Keep the run's card in Executions current while it goes, so its headline
+   * and summary follow its finished questions (R152).
+   */
+  private refreshListedRun(
+    view: { ok: boolean; message: string } & Partial<EvalRunView>,
+  ): void {
+    // The poll's own `ok` and `message` are not part of the run.
+    const { ok: _ok, message: _message, ...run } = view;
+    const runs = this.evalRuns();
+    const index = runs.findIndex((listed) => listed.jobId === run.jobId);
+    if (index === -1) return;
+    const next = [...runs];
+    next[index] = { ...runs[index], ...run };
+    this.evalRuns.set(next);
   }
 
   /** Re-point the panel at the selected question's latest result. */

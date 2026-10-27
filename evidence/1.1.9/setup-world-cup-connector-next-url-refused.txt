@@ -1,0 +1,47 @@
+Fixture API: http://127.0.0.1:55093
+Backend:     http://127.0.0.1:55099
+✔ API reachable: world-cup, switches {"profile":"connector","paging":"next-url","defaultPageSize":20,"maxPageSize":20,"nested":["matches_nested"],"wrapped":["tournament_teams"],"refused":["squad_members"],"retryAfter":null,"tokenRequired":true}
+✔ backend reachable and signed in
+✔ discovery: 15 endpoints
+    confederations               cursor size 20 cursor /next rows /data
+    countries                    cursor size 20 cursor /next rows /data
+    disciplinary_events          cursor size 20 cursor /next rows /data
+    goals                        cursor size 20 cursor /next rows /data
+    match_team_statistics        cursor size 20 cursor /next rows /data maxRows 20
+    matches                      cursor size 20 cursor /next rows /data
+    players                      cursor size 20 cursor /next rows /data
+    squad_members                cursor size 20 cursor /next rows /data
+    teams                        cursor size 20 cursor /next rows /data
+    tournament_teams             cursor size 20 cursor /result/next rows /result/items
+    tournaments                  cursor size 20 cursor /next rows /data
+    v_match_results              cursor size 20 cursor /next rows /data
+    v_player_goal_totals         cursor size 20 cursor /next rows /data
+    venues                       cursor size 20 cursor /next rows /data
+    matches_nested               cursor size 20 cursor /next rows /data
+  · match_team_statistics: capped at 20 rows on the datasource (the API serves 32)
+✔ datasource "World Cup REST API (next-url)" updated (b279cd39-b84f-497b-9e1b-59e6e0461b83)
+
+  api.world_cup.confederations  2 columns
+  api.world_cup.countries  3 columns
+  api.world_cup.disciplinary_events  8 columns
+  api.world_cup.goals  UNREADABLE
+  api.world_cup.match_team_statistics  UNREADABLE
+  api.world_cup.matches  16 columns
+  api.world_cup.players  UNREADABLE
+  api.world_cup.squad_members  refused by the API (expected)
+  api.world_cup.teams  4 columns
+  api.world_cup.tournament_teams  6 columns
+  api.world_cup.tournaments  8 columns
+  api.world_cup.v_match_results  14 columns
+  api.world_cup.v_player_goal_totals  UNREADABLE
+  api.world_cup.venues  5 columns
+  api.world_cup.matches_nested  20 columns
+
+
+✖ Inventory check failed:
+  - api.world_cup.goals: not selectable (endpoint fetch failed)
+  - api.world_cup.match_team_statistics: not selectable (endpoint fetch failed)
+  - api.world_cup.players: not selectable (endpoint fetch failed)
+  - api.world_cup.v_player_goal_totals: not selectable (endpoint fetch failed)
+  (--allow-unavailable registers unreadable endpoints anyway, to run evals that show the failure)
+

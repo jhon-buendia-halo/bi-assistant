@@ -1,0 +1,334 @@
+# genomics: every reference query, run before it counts (BA-185, 2026-10-13)
+
+Database: ba9_genomics on the shared compose PostgreSQL (127.0.0.1:55432), seeded through TestingDataService.load (the Testing Data panel's path) from backend/src/modules/testing-data/fixtures/ in a throwaway app data dir; validator from a scratch compile of the epic branch (dist untouched).
+
+## 1. The validator: EVAL_SET=genomics npm run eval:validate
+
+```
+Validating Genomics (genomics, postgres) on Genomics
+✓ allele-fraction-by-gene  postgres  5 rows
+✓ allele-fraction-by-genotype  postgres  3 rows
+✓ allele-fraction-by-significance  postgres  5 rows
+✓ variants-by-assembly  postgres  1 rows
+✓ pathogenic-variants-by-assembly  postgres  1 rows
+✓ pathogenic-share-by-assembly  postgres  1 rows
+✓ variants-with-rsid  postgres  1 rows
+✓ rsid-share-by-significance  postgres  5 rows
+✓ genes-most-rsid-variants  postgres  3 rows
+✓ genes-with-seven-pathogenic  postgres  2 rows
+✓ largest-ancestry-group  postgres  3 rows
+✓ rarest-phenotypes  postgres  4 rows
+✓ damaging-variant-count  postgres  1 rows
+✓ tumour-sample-count  postgres  1 rows
+✓ loss-of-function-variant-count  postgres  1 rows
+✓ most-called-genes  postgres  5 rows
+✓ most-common-phenotypes  postgres  3 rows
+✓ genes-longest-canonical-transcripts  postgres  3 rows
+✓ mean-allele-fraction  postgres  1 rows
+✓ high-confidence-rate-by-sequencer  postgres  4 rows
+✓ allele-fraction-by-tissue  postgres  4 rows
+✓ cohort-sample-count  postgres  1 rows
+✓ cohort-variant-call-total  postgres  1 rows
+✓ samples-collected-2024  postgres  1 rows
+✓ subjects-by-superpopulation  postgres  8 rows
+✓ samples-by-superpopulation  postgres  8 rows
+✓ neoplasm-subject-samples  postgres  1 rows
+✓ pathogenic-carrier-samples  postgres  1 rows
+✓ pathogenic-carriers-by-gene  postgres  3 rows
+✓ mean-expression-by-gene  postgres  5 rows
+✓ genes-silent-in-most-samples  postgres  9 rows
+✓ high-confidence-calls  postgres  2 rows
+✓ high-confidence-calls-by-assay  postgres  3 rows
+✓ high-confidence-calls-by-gene  postgres  5 rows
+✓ coverage-by-assay  postgres  3 rows
+✓ dmd-gene-span-mb  postgres  1 rows
+✓ canonical-transcript-length-kb  postgres  1 rows
+✓ variants-by-type  postgres  4 rows
+✓ samples-per-collection-year  postgres  2 rows
+✓ genes-by-biotype  postgres  2 rows
+genomics: 40 of 40 reference queries passed; 9 cases have no reference query.
+```
+
+## 2. Rows of each reference and its trap query (psql)
+
+
+Summary: 40 references ran, 0 failed, 0 returned 0 rows; trap queries: 34 differ, 0 same or broken, 6 none written
+
+## allele-fraction-by-gene  (ratio, dev)
+5 rows: gene, mean_allele_fraction
+  MUTYH | 0.5325
+  SCN5A | 0.5068
+  SMAD4 | 0.5066
+  TSC2 | 0.4943
+  XIST | 0.4921
+trap: differs (5 rows: APC | 1.0000 ; APOB | 1.0000 ; ATM | 1.0000)
+
+## allele-fraction-by-genotype  (ratio, held-out)
+3 rows: genotype, mean_allele_fraction
+  0/0 | 0.022
+  0/1 | 0.480
+  1/1 | 0.950
+trap: differs (3 rows: 0/0 | 1.000 ; 0/1 | 1.000 ; 1/1 | 1.000)
+
+## allele-fraction-by-significance  (ratio, dev)
+5 rows: clinical_significance, mean_allele_fraction
+  BENIGN | 0.425
+  LIKELY_BENIGN | 0.432
+  LIKELY_PATHOGENIC | 0.423
+  PATHOGENIC | 0.283
+  VUS | 0.416
+trap: differs (5 rows: BENIGN | 1.000 ; LIKELY_BENIGN | 1.000 ; LIKELY_PATHOGENIC | 1.000)
+
+## variants-by-assembly  (aggregate, dev)
+1 rows: assembly, variants
+  GRCh38 | 450
+trap: none written
+
+## pathogenic-variants-by-assembly  (aggregate, held-out)
+1 rows: pathogenic_variants
+  96
+trap: none written
+
+## pathogenic-share-by-assembly  (aggregate, dev)
+1 rows: pathogenic_pct
+  21.3
+trap: none written
+
+## variants-with-rsid  (null, dev)
+1 rows: variants_with_rsid
+  46
+trap: differs (47 rows:  | 404 ; rs14648295 | 1 ; rs1519758 | 1)
+
+## rsid-share-by-significance  (null, held-out)
+5 rows: clinical_significance, pct_with_rsid
+  BENIGN | 10.3
+  LIKELY_BENIGN | 8.1
+  LIKELY_PATHOGENIC | 9.4
+  PATHOGENIC | 6.3
+  VUS | 13.8
+trap: differs (5 rows: BENIGN | 15.2 ; LIKELY_BENIGN | 13.0 ; LIKELY_PATHOGENIC | 10.9)
+
+## genes-most-rsid-variants  (null, dev)
+3 rows: gene, variants_with_rsid
+  BRCA1 | 6
+  BRCA2 | 4
+  CFTR | 4
+trap: differs (3 rows: BRCA1 | 34 ; TP53 | 24 ; MLH1 | 18)
+
+## genes-with-seven-pathogenic  (ranking, dev)
+2 rows: gene, pathogenic_variants
+  MLH1 | 7
+  PTEN | 7
+trap: differs (1 rows: MLH1 | 7)
+
+## largest-ancestry-group  (ranking, held-out)
+3 rows: subjects
+  10
+  10
+  10
+trap: differs (1 rows: Papuan Highlanders | 10)
+
+## rarest-phenotypes  (ranking, dev)
+4 rows: subjects
+  3
+  3
+  3
+  3
+trap: differs (1 rows: Autosomal dominant inheritance | 3)
+
+## damaging-variant-count  (encoding, dev)
+1 rows: damaging_variants
+  149
+trap: differs (1 rows: 96)
+
+## tumour-sample-count  (encoding, held-out)
+1 rows: tumour_samples
+  10
+trap: differs (1 rows: 0)
+
+## loss-of-function-variant-count  (encoding, dev)
+1 rows: loss_of_function_variants
+  82
+trap: differs (1 rows: 56)
+
+## most-called-genes  (ranking, dev)
+5 rows: gene, variant_calls
+  CFTR | 566
+  TP53 | 208
+  XIST | 205
+  MUTYH | 201
+  NF2 | 187
+trap: differs (5 rows: 6 | 566 ; 3 | 208 ; 38 | 205)
+
+## most-common-phenotypes  (ranking, held-out)
+3 rows: phenotype, subjects
+  Anemia | 11
+  Autosomal recessive inheritance | 10
+  Neoplasm | 10
+trap: differs (3 rows: 21 | 11 ; 2 | 10 ; 4 | 10)
+
+## genes-longest-canonical-transcripts  (ranking, dev)
+3 rows: gene, length_bp
+  APC | 10737
+  VHL | 10114
+  PMS2 | 10020
+trap: differs (3 rows: 11 | 10737 ; 14 | 10114 ; 10 | 10020)
+
+## mean-allele-fraction  (business-term, dev)
+1 rows: eligible_calls, mean_allele_fraction
+  3640 | 0.4158
+trap: differs (1 rows: 4675 | 0.3795)
+
+## high-confidence-rate-by-sequencer  (business-term, held-out)
+4 rows: sequencer, high_confidence_pct
+  HiSeq 4000 | 85.03
+  NextSeq 2000 | 84.30
+  NovaSeq 6000 | 83.36
+  NovaSeq X Plus | 84.75
+trap: differs (4 rows: HiSeq 4000 | 91.88 ; NextSeq 2000 | 92.08 ; NovaSeq 6000 | 91.77)
+
+## allele-fraction-by-tissue  (business-term, dev)
+4 rows: tissue, mean_allele_fraction
+  BLOOD | 0.414
+  BUCCAL | 0.435
+  SALIVA | 0.407
+  TUMOR | 0.422
+trap: differs (4 rows: BLOOD | 0.377 ; BUCCAL | 0.389 ; SALIVA | 0.380)
+
+## cohort-sample-count  (default-filter, dev)
+1 rows: cohort_samples
+  125
+trap: differs (1 rows: 140)
+
+## cohort-variant-call-total  (default-filter, held-out)
+1 rows: variant_calls
+  4675
+trap: differs (1 rows: 5263)
+
+## samples-collected-2024  (default-filter, dev)
+1 rows: samples
+  66
+trap: differs (1 rows: 72)
+
+## subjects-by-superpopulation  (join, dev)
+8 rows: superpopulation_code, superpopulation, subjects
+  AFR | African | 36
+  AMR | Admixed American | 16
+  EAS | East Asian | 16
+  EUR | European | 16
+  SAS | South Asian | 16
+  OCE | Oceanian | 10
+  MID | Middle Eastern | 5
+  OTH | Other or Unassigned | 5
+trap: differs (22 rows: LWK | Luhya in Webuye, Kenya | 10 ; PNG | Papuan Highlanders | 10 ; YRI | Yoruba in Ibadan, Nigeria | 10)
+
+## samples-by-superpopulation  (join, held-out)
+8 rows: samples
+  16
+  17
+  14
+  5
+  16
+  11
+  40
+  6
+trap: differs (22 rows: Mexican Ancestry in Los Angeles | 3 ; British in England and Scotland | 4 ; Utah Residents with Northern European Ancestry | 7)
+
+## neoplasm-subject-samples  (join, dev)
+1 rows: samples
+  22
+trap: differs (1 rows: 30)
+
+## pathogenic-carrier-samples  (business-term, dev)
+1 rows: carrier_samples
+  67
+trap: differs (1 rows: 97)
+
+## pathogenic-carriers-by-gene  (business-term, dev)
+3 rows: gene, carrier_subjects
+  TP53 | 13
+  APC | 11
+  MLH1 | 11
+trap: differs (3 rows: TP53 | 22 ; MLH1 | 19 ; APC | 15)
+
+## mean-expression-by-gene  (business-term, held-out)
+5 rows: gene, mean_tpm
+  ATM | 97.106
+  BRCA1 | 98.742
+  CFTR | 195.585
+  EGFR | 247.390
+  TP53 | 127.665
+trap: differs (5 rows: ATM | 183.422 ; BRCA1 | 172.165 ; CFTR | 260.780)
+
+## genes-silent-in-most-samples  (business-term, dev)
+9 rows: gene, silent_samples, samples_measured
+  RET | 43 | 68
+  F8 | 42 | 68
+  MLH1 | 41 | 68
+  TSC2 | 40 | 68
+  TP53 | 38 | 68
+  KRAS | 37 | 68
+  PMS2 | 37 | 68
+  NF2 | 36 | 68
+  NF1 | 35 | 68
+trap: differs (0 rows: )
+
+## high-confidence-calls  (default-filter, dev)
+2 rows: filter_status, calls
+  PASS | 3943
+  LOW_QUAL | 732
+trap: differs (2 rows: high-confidence | 4294 ; low-confidence | 381)
+
+## high-confidence-calls-by-assay  (default-filter, held-out)
+3 rows: assay, high_confidence_calls
+  PANEL | 741
+  WES | 1702
+  WGS | 1500
+trap: differs (3 rows: PANEL | 880 ; WES | 2041 ; WGS | 1754)
+
+## high-confidence-calls-by-gene  (default-filter, dev)
+5 rows: gene, high_confidence_calls
+  CFTR | 477
+  MUTYH | 177
+  TP53 | 174
+  XIST | 168
+  NF2 | 162
+trap: differs (5 rows: CFTR | 566 ; TP53 | 208 ; XIST | 205)
+
+## coverage-by-assay  (encoding, dev)
+3 rows: assay, samples, avg_mean_coverage
+  PANEL | 23 | 408.4
+  WES | 55 | 110.3
+  WGS | 47 | 35.8
+trap: differs (3 rows: PANEL | 23 | 9393.4 ; WES | 55 | 6068.5 ; WGS | 47 | 1683.5)
+
+## dmd-gene-span-mb  (encoding, held-out)
+1 rows: span_mb
+  2.24
+trap: differs (1 rows: 2241765)
+
+## canonical-transcript-length-kb  (encoding, dev)
+1 rows: mean_length_kb
+  5.9
+trap: differs (1 rows: 5947.8)
+
+## variants-by-type  (aggregate, dev)
+4 rows: variant_type, variants
+  SNV | 371
+  DELETION | 34
+  INSERTION | 30
+  INDEL | 15
+trap: none written
+
+## samples-per-collection-year  (aggregate, held-out)
+2 rows: collection_year, samples
+  2023 | 68
+  2024 | 72
+trap: none written
+
+## genes-by-biotype  (aggregate, dev)
+2 rows: biotype, genes
+  protein_coding | 37
+  lncRNA | 3
+trap: none written
+

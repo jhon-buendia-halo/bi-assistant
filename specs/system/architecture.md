@@ -481,6 +481,27 @@ flowchart LR
   - A renderer whose cache disagrees with the backend (another renderer changed the choice) shows its cached theme for one frame, then switches.
   - Existing users who never chose a theme move from System to Light.
 
+#### ADR-0015 — Golden dataset as data files with one reference query per dialect; Databricks as a register-only fixture kind
+- **Status:** Accepted (2026-10-13, with the BA-9 epic spec)
+- **Date:** 2026-10-12
+- **Context:**
+  - Three eval harnesses exist, each with its own format: the in-app suite (30 cases written as TypeScript in `backend/src/mastra/evals/assistant.evals.ts`), the golden set (`backend/eval/golden-set.json`, 9 cases, `npm run eval`) and the answer-quality gate (`backend/scripts/check-answers.ts`, 4 checks). They give no shared number and carry no category; adding a question is a code change; a wrong reference query is found only during a run that has already spent model tokens ([research 2.1](../../docs/research/BA-9.md#21-what-exists-on-main-at-v0300)).
+  - The same questions must run on PostgreSQL, Databricks SQL and SQLite (the REST connector's engine), so that a regression on one datasource kind shows as that kind's regression. Today a case holds one reference query, the REST set swaps in SQLite references for 5 of its 10 cases, and the dataset preflight rejects a Databricks datasource.
+  - A Databricks warehouse is external and billed per second; Docker Compose cannot start it the way it starts the World Cup PostgreSQL. The REST fixture already solves the same problem: it is register-only and names a setup script ([BA-9](https://halo-powered.atlassian.net/browse/BA-9), plan in [docs/plans/BA-9.md](../../docs/plans/BA-9.md)).
+- **Decision:**
+  - **Cases are data, not code.** One file per question set under `backend/src/mastra/evals/sets/`, loaded by the suite. A case is `{ id, category, tags, question, intent, checks: [{ type, args, criterion }], judgeRubric, expectedSql: { postgres, databricks, sqlite }, resultSetOptions, knowledge, turns }`, plus its dev or held-out split. The loader refuses a case without a category, or one missing a reference for a dialect its set supports.
+  - **One reference query per dialect**, each run on its fixture by a validator (`npm run eval:validate`) with no model call, before it is committed.
+  - **Databricks is a fixture kind.** `SampleFixture.datasourceKind` gains `'databricks'`. Like REST, the fixture is register-only: the Testing Data panel refuses to load it and names the setup script, `backend/scripts/setup-fixture-databricks.ts`, which loads a fixture's rows into `<catalog>.<schema>` and registers the datasource and dataset in a running backend. The eval preflight accepts the kind.
+  - **One source of truth per fixture, the same rows on every kind** (added 2026-10-13). World Cup, finance and marketing analytics each run on PostgreSQL, Databricks and REST. The fixture's seeded PostgreSQL generator writes the rows; a dump script exports the schema to JSON; the local REST server serves that dump (`--fixture <name>`, with the same behaviour switches) and the Databricks loader, `backend/scripts/setup-fixture-databricks.ts --fixture <name>` in place of a World Cup-only script, loads it into `<catalog>.<schema>`.
+- **Consequences:**
+  - A question is added and reviewed in a pull request without reading code, and a broken reference fails in seconds at no token cost.
+  - Every case needs up to three reference queries; a set declares which dialects it supports, and the validator holds it to that.
+  - A difference between kinds on the same question points at the connector or the dialect, not at the data, because the rows are identical by construction. Every domain fixture costs a dump and a reference per dialect.
+  - Databricks runs depend on a workspace, warehouse, token and catalog outside the repository, and stay on demand rather than in the nightly CI because of cost.
+  - The case shape and the new run fields are recorded in [data-model.md](data-model.md) when they land; runs made before them compare on verdicts only, as today.
+  - `npm run eval` and `backend/eval/` are removed when the cases move; `check-answers.ts` retires once runs have repeats.
+  - Cases stored as inputs plus expectations keep an export to Databricks Genie benchmarks or MLflow evaluation datasets possible later.
+
 #### ADR-0018 — Agent know-how as app-owned skills with progressive disclosure, declared per agent
 - **Status:** Accepted; partly superseded by ADR-0019 (where skills come from, and scripts) and ADR-0020 (how on-demand skills are listed and read). ADR-0021 supersedes ADR-0019, so skills again come only from the bundle.
 - **Date:** 2026-10-13

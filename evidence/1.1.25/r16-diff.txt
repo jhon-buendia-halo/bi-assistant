@@ -1,0 +1,55 @@
+Before: ac70baf6 (63 questions, openai/gpt-5.6-luna, repeats 3, judge off); 0d21e3f3 (68 questions, openai/gpt-5.6-luna, repeats 3, judge off); 5177143c (50 questions, openai/gpt-5.6-luna, repeats 3, judge off)
+After:  ea4629af (63 questions, openai/gpt-5.6-luna, repeats 3, judge off); 5edb3e2a (68 questions, openai/gpt-5.6-luna, repeats 3, judge off); b7f90752 (50 questions, openai/gpt-5.6-luna, repeats 3, judge off)
+
+Split     Category        Before            After             Change   95% interval of change  Flag
+dev       lookup          6/6 (61–100%)     5/6 (44–97%)      −17 pts  −56 to +25 pts          within
+dev       aggregate       14/15 (70–99%)    14/15 (70–99%)    0 pts    −24 to +24 pts          within
+dev       join            8/9 (57–98%)      7/9 (45–94%)      −11 pts  −45 to +25 pts          within
+dev       ranking         15/16 (72–99%)    14/16 (64–97%)    −6 pts   −30 to +18 pts          within
+dev       ratio           14/14 (78–100%)   12/14 (60–96%)    −14 pts  −40 to +10 pts          within
+dev       null            5/6 (44–97%)      5/6 (44–97%)      0 pts    −42 to +42 pts          within
+dev       encoding        9/10 (60–98%)     8/10 (49–94%)     −10 pts  −42 to +24 pts          within
+dev       reasoning       1/2 (9–91%)       2/2 (34–100%)     +50 pts  −27 to +91 pts          within
+dev       discovery       4/4 (51–100%)     4/4 (51–100%)     0 pts    −49 to +49 pts          within
+dev       ambiguous       5/5 (57–100%)     5/5 (57–100%)     0 pts    −43 to +43 pts          within
+dev       fuzzy-scope     3/3 (44–100%)     3/3 (44–100%)     0 pts    −56 to +56 pts          within
+dev       out-of-scope    4/5 (38–96%)      5/5 (57–100%)     +20 pts  −26 to +62 pts          within
+dev       non-existent    2/2 (34–100%)     2/2 (34–100%)     0 pts    −66 to +66 pts          within
+dev       business-term   9/10 (60–98%)     10/10 (72–100%)   +10 pts  −19 to +40 pts          within
+dev       default-filter  6/6 (61–100%)     5/6 (44–97%)      −17 pts  −56 to +25 pts          within
+dev       visual          3/4 (30–95%)      3/4 (30–95%)      0 pts    −49 to +49 pts          within
+dev       paraphrase      9/13 (42–87%)     9/13 (42–87%)     0 pts    −32 to +32 pts          within
+dev       all             117/130 (84–94%)  113/130 (80–92%)  −3 pts   −11 to +5 pts           within
+held-out  lookup          2/2 (34–100%)     2/2 (34–100%)     0 pts    −66 to +66 pts          within
+held-out  aggregate       4/4 (51–100%)     4/4 (51–100%)     0 pts    −49 to +49 pts          within
+held-out  join            4/5 (38–96%)      4/5 (38–96%)      0 pts    −45 to +45 pts          within
+held-out  ranking         5/6 (44–97%)      6/6 (61–100%)     +17 pts  −25 to +56 pts          within
+held-out  ratio           5/5 (57–100%)     5/5 (57–100%)     0 pts    −43 to +43 pts          within
+held-out  null            2/2 (34–100%)     2/2 (34–100%)     0 pts    −66 to +66 pts          within
+held-out  encoding        2/4 (15–85%)      2/4 (15–85%)      0 pts    −49 to +49 pts          within
+held-out  discovery       0/3 (0–56%)       0/3 (0–56%)       0 pts    −56 to +56 pts          within
+held-out  ambiguous       3/3 (44–100%)     3/3 (44–100%)     0 pts    −56 to +56 pts          within
+held-out  out-of-scope    2/3 (21–94%)      2/3 (21–94%)      0 pts    −53 to +53 pts          within
+held-out  non-existent    1/1 (21–100%)     1/1 (21–100%)     0 pts    −79 to +79 pts          within
+held-out  business-term   3/4 (30–95%)      3/4 (30–95%)      0 pts    −49 to +49 pts          within
+held-out  default-filter  2/2 (34–100%)     2/2 (34–100%)     0 pts    −66 to +66 pts          within
+held-out  paraphrase      4/7 (25–84%)      4/7 (25–84%)      0 pts    −42 to +42 pts          within
+held-out  all             39/51 (63–86%)    40/51 (65–88%)    +2 pts   −14 to +18 pts          within
+
+Flips, dev:
+  Now passing: possession-vs-result (reasoning), extra-time-goals (business-term), group-stage-goals-2022 (out-of-scope), goals-by-defenders-reworded (paraphrase), gov-fastest-growing-competitor (ranking)
+  Now failing: busiest-stadium (ranking), semi-final-goals-2022 (encoding), extra-time-goals-reworded (paraphrase), top-scoring-team (ranking), yellow-card-share (ratio), advisory-fees-billed-march-2025 (default-filter), fee-revenue-by-region-fy2025 (join), fiscal-2026-q2-months (lookup), highest-digital-share-region-2025 (ratio)
+Flips, held-out:
+  Now passing: argentina-draws-2022-reworded (paraphrase), lowest-premium-channel-2025 (ranking)
+  Now failing: quickest-goal-scorer-reworded (paraphrase)
+Only before: none
+Only after: none
+
+Cost before: $1.0365 · $0.0057 per question
+Cost after: $1.0028 · $0.0055 per question
+Cost per question: −3.3%
+
+Draft change log: Round 16: prompt: the clarification rule, a question that names its measure and leaves open only how to compare it (amount or percent, total or average) computes every reading first, answers when they agree and asks only when they disagree. The assistant asks a clarification when two readings of a question lead to the same answer, instead of computing both and answering. Dev 117/130 → 113/130, held-out 39/51 → 40/51; dev ranking within; cost per question $0.0057 → $0.0055. Runs ac70baf6, 0d21e3f3, 5177143c → ea4629af, 5edb3e2a, b7f90752.
+Draft results.tsv row:
+16	2026-10-25	The assistant asks a clarification when two readings of a question lead to the same answer, instead of computing both and answering.	prompt: the clarification rule, a question that names its measure and leaves open only how to compare it (amount or percent, total or average) computes every reading first, answers when they agree and asks only when they disagree		ranking	ranking:15/16;all:117/130	ranking:14/16;all:113/130	ranking:5/6;all:39/51	ranking:6/6;all:40/51		0.0057	0.0055	1.0028			ac70baf6;0d21e3f3;5177143c	ea4629af;5edb3e2a;b7f90752
+Accept rule: not met (dev ranking is within, not up)

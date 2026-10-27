@@ -1,0 +1,204 @@
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Demo User[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Uma User[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Mark Maker[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Dana Data Owner[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Avery Approver[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Demo User[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Uma User[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Mark Maker[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Dana Data Owner[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Avery Approver[39m
+[33m[Nest] 1820  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[SignInService] [39m[33mSign-in refused: user ada is bound to another subject[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Demo User[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Uma User[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Mark Maker[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Dana Data Owner[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Avery Approver[39m
+[33m[Nest] 1820  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[SignInService] [39m[33mSign-in refused: user ada is bound to another subject[39m
+[33m[Nest] 1820  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[SignInService] [39m[33mSign-in refused: the ID token's tenant (tid) is not the issuer's[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Demo User[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Uma User[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Mark Maker[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Dana Data Owner[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Avery Approver[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Demo User[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Uma User[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Mark Maker[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Dana Data Owner[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Avery Approver[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Demo User[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Uma User[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Mark Maker[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Dana Data Owner[39m
+[32m[Nest] 1826  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Avery Approver[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] lenai/gpt-5-deployment via https://lenai.example.com/openai/v1/deployments/gpt-5-deployment/chat/completions (effort minimal)[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] lenai/mmc-tech-gpt-52-272k-2025-12-11 via https://lenai.example.com/openai/v1/deployments/mmc-tech-gpt-52-272k-2025-12-11/chat/completions (effort none)[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] lenai/mmc-tech-gpt-41-nano-1m-2025-04-14 via https://lenai.example.com/openai/v1/deployments/mmc-tech-gpt-41-nano-1m-2025-04-14/chat/completions[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4o-mini via https://api.openai.com/v1/chat/completions[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4o-mini via https://api.openai.com/v1/chat/completions[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4o-mini via https://api.openai.com/v1/chat/completions[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4o-mini via https://api.openai.com/v1/chat/completions[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4o-mini via https://api.openai.com/v1/chat/completions[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4o-mini via https://api.openai.com/v1/chat/completions[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] lenai/wrong-deployment via https://lenai.example.com/openai/v1/deployments/wrong-deployment/chat/completions (effort low)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4o-mini via https://api.openai.com/v1/chat/completions[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] anthropic/claude-sonnet-5-5[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] anthropic/claude-sonnet-5-5[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] anthropic/claude-sonnet-5-5[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-5 via https://api.openai.com/v1/chat/completions (effort minimal)[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32mRe-encrypted the stored LLM API key with the current app secret[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] lenai/my-deployment via https://lenai.example.com/openai/v1/deployments/my-deployment/chat/completions (effort low)[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-5 via https://api.openai.com/v1/chat/completions (effort minimal)[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4.1 via https://api.openai.com/v1/chat/completions[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] anthropic/claude-sonnet-5-5[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-5 via https://api.openai.com/v1/chat/completions (effort minimal)[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-5-mini via https://api.openai.com/v1/chat/completions (effort minimal)[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-5.1 via https://api.openai.com/v1/chat/completions (effort none)[39m
+[32m[Nest] 1816  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[33m[Nest] 1817  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[DeepAnalysisService] [39m[33mDeep analysis a598c2e0-2a3d-4106-a921-4e087122a3fc failed: the planner returned no usable investigation plan[39m
+[33m[Nest] 1817  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[DeepAnalysisService] [39m[33mDeep analysis aebc7201-4c01-49c6-bb0c-9f9d4ee412fc failed: no model[39m
+[33m[Nest] 1817  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[DeepAnalysisService] [39m[33mDeep analysis angle "By payer" failed: warehouse timeout[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec does not match the data: chart.y: column "amount" is not in the selected result set [month, n][39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec does not match the data: chart.y: column "amount" is not in the selected result set [month, n][39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[32m[Nest] 1813  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[SessionsService] [39m[32mCross-check agree[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[32m[Nest] 1813  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[SessionsService] [39m[32mCross-check disagree: missing [64]; unexpected [63][39m
+[33m[Nest] 1813  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mCross-check failed: verifier unavailable[39m
+[33m[Nest] 1813  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mCross-check failed: table not found[39m
+[33m[Nest] 1813  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mCross-check skipped: answer hit the row cap[39m
+[33m[Nest] 1813  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mGrounding guard corrective pass failed: provider unavailable[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mRefresh failed for a query: timed out[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: gateway exploded[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: gateway exploded[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 1813  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mCould not record the agent error of session session-1: store is down[39m
+[33m[Nest] 1812  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: Structured output validation failed: title: expected string, received undefined; description: expected string, received undefined; spec: expected object, received undefined. Received: {"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"title":"Claims by month","description":"Volume climbs through the year.","spec":{"spec":1,"kpis":[{"label":"Total claims","select":["month","n"],"column":"n","agg":"sum"}],"chart":{"form":"line","select":["month","n"],"x":"month","y":"n"},"table":{"select":["month","n"],"columns":["month","n"],"collapsed":true}}}}[39m
+[33m[Nest] 1813  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Column claimid cannot be resolved — SQL: SELECT count(claimid) AS n FROM main.health.claims[39m
+[33m[Nest] 1813  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): first — SQL: SELECT bad FROM main.health.claims[39m
+[33m[Nest] 1813  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 2): second — SQL: SELECT 1 FROM main.health.claims[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Demo User[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Uma User[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Mark Maker[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Dana Data Owner[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Avery Approver[39m
+[32m[Nest] 1825  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[AuthSessionsService] [39m[32mSwept 1 ended auth session(s)[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Demo User[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Uma User[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Mark Maker[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Dana Data Owner[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Avery Approver[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Demo User[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Uma User[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Mark Maker[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Dana Data Owner[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Avery Approver[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Demo User[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Uma User[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Mark Maker[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Dana Data Owner[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Avery Approver[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Mark Maker[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Demo User[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Uma User[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Mark Maker[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Dana Data Owner[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Avery Approver[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Demo User[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Uma User[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Mark Maker[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Dana Data Owner[39m
+[32m[Nest] 1824  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[LocalDirectoryService] [39m[32mCreated local persona Avery Approver[39m
+[32m[Nest] 1815  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[CryptoService] [39m[32mAPP_SECRET not set — created /var/folders/6z/bcj0xfxn3tzb8s83t2z13kyc0000gn/T/qti-crypto-9Nf2S9/.app-secret[39m
+[32m[Nest] 1815  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[CryptoService] [39m[32mAPP_SECRET not set — created /var/folders/6z/bcj0xfxn3tzb8s83t2z13kyc0000gn/T/qti-crypto-qXkzpe/.app-secret[39m
+[32m[Nest] 1815  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[CryptoService] [39m[32mAPP_SECRET not set — created /var/folders/6z/bcj0xfxn3tzb8s83t2z13kyc0000gn/T/qti-crypto-LkM3AP/.app-secret[39m
+[32m[Nest] 1815  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[CryptoService] [39m[32mAPP_SECRET not set — created /var/folders/6z/bcj0xfxn3tzb8s83t2z13kyc0000gn/T/qti-crypto-6IXiE8/.app-secret[39m
+[32m[Nest] 1815  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[CryptoService] [39m[32mAPP_SECRET not set — created /var/folders/6z/bcj0xfxn3tzb8s83t2z13kyc0000gn/T/qti-crypto-8SMQxb/.app-secret[39m
+[33m[Nest] 1817  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[DatasetsService] [39m[33mDeclared foreign keys unavailable: this.datasources.foreignKeys is not a function[39m
+[33m[Nest] 1817  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[DatasetsService] [39m[33mSample-value enrichment skipped for main.health.claims: no access[39m
+[33m[Nest] 1817  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[DatasetsService] [39m[33mDeclared foreign keys unavailable: this.datasources.foreignKeys is not a function[39m
+[32m[Nest] 1822  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[TestingDataService] [39m[32mSeeding world_cup on 127.0.0.1:55432/world_cup as "world_cup" (database created)[39m
+[32m[Nest] 1822  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[TestingDataService] [39m[32mSeeding world_cup on 127.0.0.1:55432/world_cup as "world_cup"[39m
+[32m[Nest] 1822  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[TestingDataService] [39m[32mSeeding world_cup on 127.0.0.1:55432/world_cup as "world_cup"[39m
+[32m[Nest] 1822  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[TestingDataService] [39m[32mSeeding world_cup on 127.0.0.1:55432/world_cup as "world_cup"[39m
+[33m[Nest] 1822  - [39m10/13/2026, 1:20:03 PM [33m   WARN[39m [38;5;3m[TestingDataService] [39m[33mWorld Cup seeding finished but the inventory is incomplete: world_cup.world_cup.v_player_goal_totals[39m
+[32m[Nest] 1822  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[TestingDataService] [39m[32mSeeding world_cup on 127.0.0.1:55432/wc_demo as "world_cup"[39m
+[32m[Nest] 1822  - [39m10/13/2026, 1:20:03 PM [32m    LOG[39m [38;5;3m[TestingDataService] [39m[32mRegistering Register Only on db.internal:5432/huge as "reader" without seeding (no bundled SQL)[39m
+
+Test Suites: 63 passed, 63 total
+Tests:       1077 passed, 1077 total
+Snapshots:   0 total
+Time:        0.88 s, estimated 1 s
+Ran all test suites.

@@ -1,0 +1,17 @@
+Databricks references: world-cup.json
+Checked 2026-10-13 by the BA-186 dialect work. Every case of the file with a PostgreSQL reference (5).
+The set that grades against them: world-cup-databricks (fixture world-cup-databricks).
+None was executed on a Databricks warehouse: that run is the VDI validation of BA-186 (agents-evals R164). Every line below is "not executed — VDI".
+
+How each reference was checked without a warehouse
+- Static: the Step 1b check modules (backend/src/mastra/evals/checks/): dialectProblem(sql, 'databricks') finds nothing (agents-evals R74); every table reference has 3 parts (R75), is `evals`.world_cup.<table> and a required table of the sample; the reference reads the same tables as the PostgreSQL one. Also no '::' cast and no FILTER clause.
+- Parse: sqlglot 30.22.0 parses it with its Databricks dialect, raising on any error.
+- Proxy run: the parsed statement, transpiled by sqlglot to DuckDB 1.5.6, runs on DuckDB tables in catalog evals, schema world_cup, created with the PostgreSQL column types and loaded from the same dump (backend/scripts/worldcup-rest-api/data). DuckDB, like Databricks, divides whole numbers into a fraction. Its rows are compared with the PostgreSQL reference's rows as the result-set match compares them (any row order, 6 significant figures). This shows the translation keeps the meaning; it does not show the warehouse accepts the text.
+
+✓ champion-2022  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ final-score-2018  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ top-scorer-2022  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ shootouts  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 4 rows equal to PostgreSQL; not executed — VDI
+✓ biggest-venue  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+
+world-cup: 5 of 5 Databricks references pass the static checks, parse as Databricks SQL and return the PostgreSQL rows on the DuckDB proxy; 0 of 5 executed on a warehouse (VDI).

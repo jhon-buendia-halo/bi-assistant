@@ -1,0 +1,77 @@
+[
+  {
+    "id": "world-cup",
+    "name": "World Cup",
+    "questions": 63
+  },
+  {
+    "id": "world-cup-rest",
+    "name": "World Cup (REST API)",
+    "questions": 63
+  },
+  {
+    "id": "world-cup-databricks",
+    "name": "World Cup (Databricks)",
+    "questions": 63
+  },
+  {
+    "id": "formula-1",
+    "name": "Formula 1",
+    "questions": 10
+  },
+  {
+    "id": "world-cup-rest-connector",
+    "name": "World Cup (REST connector)",
+    "questions": 12
+  },
+  {
+    "id": "world-cup-databricks-only",
+    "name": "World Cup (Databricks only)",
+    "questions": 10
+  },
+  {
+    "id": "finance",
+    "name": "Finance",
+    "questions": 68
+  },
+  {
+    "id": "finance-rest",
+    "name": "Finance (REST API)",
+    "questions": 68
+  },
+  {
+    "id": "finance-databricks",
+    "name": "Finance (Databricks)",
+    "questions": 68
+  },
+  {
+    "id": "health-insurance",
+    "name": "Health Insurance",
+    "questions": 42
+  },
+  {
+    "id": "genomics",
+    "name": "Genomics",
+    "questions": 49
+  },
+  {
+    "id": "supply-chain",
+    "name": "Supply Chain",
+    "questions": 20
+  },
+  {
+    "id": "marketing-analytics",
+    "name": "Marketing Analytics",
+    "questions": 50
+  },
+  {
+    "id": "marketing-analytics-rest",
+    "name": "Marketing Analytics (REST API)",
+    "questions": 50
+  },
+  {
+    "id": "marketing-analytics-databricks",
+    "name": "Marketing Analytics (Databricks)",
+    "questions": 50
+  }
+]

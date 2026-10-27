@@ -1,4 +1,5 @@
 import type { DatasourceKind } from '../modules/datasources/entities/datasource.entity';
+import type { UsageSink } from './usage-sink';
 
 // DI bridge for Mastra tools, same pattern as model-resolver: tools are
 // constructed at module load with no Nest DI, so SessionsService installs the
@@ -144,6 +145,7 @@ export interface DatasetToolServices {
     sourceMessageAt: string | undefined,
     instruction: string | undefined,
     turnRecords?: DatasetToolTurnRecord[],
+    usageSink?: UsageSink,
   ): Promise<VisualToolResult>;
   /**
    * Produce a new version of an existing visual from a tailoring request.
@@ -155,6 +157,7 @@ export interface DatasetToolServices {
     visualId: string,
     instruction: string,
     turnRecords?: DatasetToolTurnRecord[],
+    usageSink?: UsageSink,
   ): Promise<VisualToolResult>;
   /**
    * Show something in the session's right panel: validate it, store it as a
@@ -183,13 +186,15 @@ export interface DatasetToolServices {
   ): Promise<{ columns: string[]; rows: Record<string, unknown>[] }>;
   /**
    * Runs the statement and repairs it on execution errors — `datasets` names
-   * the datasets whose schema the fixer may draw on.
+   * the datasets whose schema the fixer may draw on. `usageSink`, set only
+   * inside an eval attempt, hears each fixer call (agents-evals R219).
    */
   runReadOnlySql(
     datasourceId: string,
     sql: string,
     limit: number,
     datasets: string[],
+    usageSink?: UsageSink,
   ): Promise<SqlRunResult>;
   /**
    * The base URL and headers of a REST datasource, secrets resolved on the

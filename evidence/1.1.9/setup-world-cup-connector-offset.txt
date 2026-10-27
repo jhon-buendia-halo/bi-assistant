@@ -1,0 +1,47 @@
+Fixture API: http://127.0.0.1:55091
+Backend:     http://127.0.0.1:55099
+✔ API reachable: world-cup, switches {"profile":"connector","paging":"offset","defaultPageSize":20,"maxPageSize":20,"nested":["matches_nested"],"wrapped":["tournament_teams"],"refused":["squad_members"],"retryAfter":null,"tokenRequired":true}
+✔ backend reachable and signed in
+✔ discovery: 15 endpoints
+    confederations               offset size 20 rows /data
+    countries                    offset size 20 rows /data
+    disciplinary_events          offset size 20 rows /data
+    goals                        offset size 20 rows /data
+    match_team_statistics        offset size 20 rows /data maxRows 20
+    matches                      offset size 20 rows /data
+    players                      offset size 20 rows /data
+    squad_members                offset size 20 rows /data
+    teams                        offset size 20 rows /data
+    tournament_teams             offset size 20 rows /result/items
+    tournaments                  offset size 20 rows /data
+    v_match_results              offset size 20 rows /data
+    v_player_goal_totals         offset size 20 rows /data
+    venues                       offset size 20 rows /data
+    matches_nested               offset size 20 rows /data
+  · match_team_statistics: capped at 20 rows on the datasource (the API serves 32)
+✔ datasource "World Cup REST API (offset)" updated (3947c6d1-dbf6-43c6-800c-2843c89dac20)
+
+  api.world_cup.confederations  2 columns
+  api.world_cup.countries  3 columns
+  api.world_cup.disciplinary_events  8 columns
+  api.world_cup.goals  10 columns
+  api.world_cup.match_team_statistics  11 columns
+  api.world_cup.matches  16 columns
+  api.world_cup.players  5 columns
+  api.world_cup.squad_members  refused by the API (expected)
+  api.world_cup.teams  4 columns
+  api.world_cup.tournament_teams  6 columns
+  api.world_cup.tournaments  8 columns
+  api.world_cup.v_match_results  14 columns
+  api.world_cup.v_player_goal_totals  7 columns
+  api.world_cup.venues  5 columns
+  api.world_cup.matches_nested  20 columns
+
+✔ Dataset "World Cup (REST offset)" saved — 15 entities
+
+Done.
+  datasource: World Cup REST API (offset) (3947c6d1-dbf6-43c6-800c-2843c89dac20)
+  dataset:    World Cup (REST offset)
+  entities:   15
+
+Run an eval set bound to the "world-cup-rest-connector" sample with the dataset "World Cup (REST offset)" (Agents → assistant → Evals, or EVAL_DATASETS="World Cup (REST offset)").

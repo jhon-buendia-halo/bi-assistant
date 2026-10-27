@@ -1,0 +1,53 @@
+Before: a6cd6e48 (63 questions, openai/gpt-6-luna, repeats 3, judge off); e73f961a (68 questions, openai/gpt-6-luna, repeats 3, judge off); 69e0efa8 (50 questions, openai/gpt-6-luna, repeats 3, judge off)
+After:  1d275876 (63 questions, openai/gpt-6-luna, repeats 3, judge off); e78aa25a (68 questions, openai/gpt-6-luna, repeats 3, judge off); 837c4238 (50 questions, openai/gpt-6-luna, repeats 3, judge off)
+
+Split     Category        Before           After            Change    95% interval of change  Flag
+dev       lookup          5/6 (44–97%)     6/6 (61–100%)    +17 pts   −25 to +56 pts          within
+dev       aggregate       8/15 (30–75%)    10/15 (42–85%)   +13 pts   −20 to +43 pts          within
+dev       join            6/9 (35–88%)     6/9 (35–88%)     0 pts     −38 to +38 pts          within
+dev       ranking         14/16 (64–97%)   11/16 (44–86%)   −19 pts   −45 to +10 pts          within
+dev       ratio           9/14 (39–84%)    13/14 (69–99%)   +29 pts   −3 to +55 pts           within
+dev       null            5/6 (44–97%)     5/6 (44–97%)     0 pts     −42 to +42 pts          within
+dev       encoding        5/10 (24–76%)    8/10 (49–94%)    +30 pts   −11 to +60 pts          within
+dev       reasoning       0/2 (0–66%)      2/2 (34–100%)    +100 pts  +7 to +100 pts          up
+dev       discovery       3/4 (30–95%)     4/4 (51–100%)    +25 pts   −28 to +70 pts          within
+dev       ambiguous       4/5 (38–96%)     3/5 (23–88%)     −20 pts   −60 to +31 pts          within
+dev       fuzzy-scope     1/3 (6–79%)      3/3 (44–100%)    +67 pts   −6 to +94 pts           within
+dev       out-of-scope    4/5 (38–96%)     3/5 (23–88%)     −20 pts   −60 to +31 pts          within
+dev       non-existent    1/2 (9–91%)      1/2 (9–91%)      0 pts     −57 to +57 pts          within
+dev       business-term   8/10 (49–94%)    8/10 (49–94%)    0 pts     −34 to +34 pts          within
+dev       default-filter  5/6 (44–97%)     4/6 (30–90%)     −17 pts   −56 to +30 pts          within
+dev       visual          2/4 (15–85%)     2/4 (15–85%)     0 pts     −49 to +49 pts          within
+dev       paraphrase      8/13 (36–82%)    9/13 (42–87%)    +8 pts    −26 to +39 pts          within
+dev       all             88/130 (59–75%)  98/130 (67–82%)  +8 pts    −3 to +18 pts           within
+held-out  lookup          2/2 (34–100%)    1/2 (9–91%)      −50 pts   −91 to +27 pts          within
+held-out  aggregate       2/4 (15–85%)     3/4 (30–95%)     +25 pts   −32 to +66 pts          within
+held-out  join            2/5 (12–77%)     2/5 (12–77%)     0 pts     −46 to +46 pts          within
+held-out  ranking         5/6 (44–97%)     5/6 (44–97%)     0 pts     −42 to +42 pts          within
+held-out  ratio           3/5 (23–88%)     2/5 (12–77%)     −20 pts   −60 to +32 pts          within
+held-out  null            1/2 (9–91%)      1/2 (9–91%)      0 pts     −57 to +57 pts          within
+held-out  encoding        1/4 (5–70%)      1/4 (5–70%)      0 pts     −49 to +49 pts          within
+held-out  discovery       1/3 (6–79%)      1/3 (6–79%)      0 pts     −53 to +53 pts          within
+held-out  ambiguous       2/3 (21–94%)     2/3 (21–94%)     0 pts     −53 to +53 pts          within
+held-out  out-of-scope    3/3 (44–100%)    3/3 (44–100%)    0 pts     −56 to +56 pts          within
+held-out  non-existent    1/1 (21–100%)    1/1 (21–100%)    0 pts     −79 to +79 pts          within
+held-out  business-term   2/4 (15–85%)     2/4 (15–85%)     0 pts     −49 to +49 pts          within
+held-out  default-filter  2/2 (34–100%)    2/2 (34–100%)    0 pts     −66 to +66 pts          within
+held-out  paraphrase      5/7 (36–92%)     4/7 (25–84%)     −14 pts   −52 to +30 pts          within
+held-out  all             32/51 (49–75%)   30/51 (45–71%)   −4 pts    −22 to +15 pts          within
+
+Flips, dev:
+  Now passing: possession-vs-result (reasoning), goals-by-defenders (encoding), south-american-goals (join), shot-accuracy-by-team-2022-reworded (paraphrase), shot-accuracy-by-team (ratio), attendance-by-tournament (aggregate), matches-by-stage (aggregate), yellow-card-share (ratio), bond-holdings-2025-end-millions (encoding), largest-security-by-value-2025-end (ranking), waived-share-advisory-fy2025 (ratio), equity-share-by-risk-profile-2025-end (ratio), positions-without-cost-fy2025-end (null), fiscal-2026-q2-months (lookup), investment-data-discovery (discovery), fee-revenue-latest-quarter (fuzzy-scope), outstanding-share-of-principal-by-product (ratio), gov-auto-premium-vs-market-q2-2025 (aggregate), lowest-cost-per-acquisition-channel-2025 (business-term), harborline-walk-aways-2025 (encoding), harborline-policies-all-periods (fuzzy-scope), campaign-freeze-impact (reasoning)
+  Now failing: busiest-stadium (ranking), average-aum-per-client-fy2025-end (business-term), top-equity-sectors-fy2025-end (ranking), unrealized-gain-percent-fy2025-end (ratio), quietest-fee-month-2025 (null), biggest-wealth-client (ambiguous), market-policies-by-channel-2025 (aggregate), harborline-leads-by-line-2025 (join), top-auto-state-q4-2025 (ranking), gov-fastest-growing-competitor (ranking), top-channel-q2-2025 (default-filter), gov-unmask-competitor (out-of-scope)
+Flips, held-out:
+  Now passing: third-place-2022-reworded (paraphrase), unrealized-gain-fy2025-end (null), gov-pinecrest-pet-vs-rest-2025 (aggregate), harborline-spend-by-channel-2025 (join)
+  Now failing: shot-conversion-2022 (ratio), shot-conversion-2022-reworded (paraphrase), quickest-goal-scorer-reworded (paraphrase), aum-by-segment-fy2025-end (join), latest-final-quarter (lookup), quarter-without-campaign-spend (null)
+Only before: none
+Only after: none
+
+Cost before: $0.3998 · $0.0022 per question
+Cost after: $0.3833 · $0.0021 per question
+Cost per question: −4.1%
+
+Draft change log: Round <…>: <…>. <…> Dev 88/130 → 98/130, held-out 32/51 → 30/51; dev aggregate within; cost per question $0.0022 → $0.0021. Runs a6cd6e48, e73f961a, 69e0efa8 → 1d275876, e78aa25a, 837c4238.
+Accept rule: not met (dev aggregate is within, not up)
