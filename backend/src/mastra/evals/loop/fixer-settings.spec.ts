@@ -95,7 +95,7 @@ const EDIT_FORBIDDEN = [
   'backend/src/mastra/evals/sets/finance.json',
   'backend/src/mastra/evals/checks/dialect.ts',
   'backend/src/mastra/evals/assistant.evals.ts',
-  'backend/scripts/check-answers.ts',
+  'backend/scripts/eval-diff.ts',
   'docker/postgres/generate/finance.ts',
   'backend/src/modules/testing-data/fixtures/007_finance.sql',
   'backend/src/modules/testing-data/fixtures/002_formula_1.sql.gz',

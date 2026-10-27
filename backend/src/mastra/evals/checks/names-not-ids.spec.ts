@@ -9,8 +9,8 @@ const answer = (text: string): CheckTurn => ({
 });
 
 describe('namesNotIds (R114, I1)', () => {
-  // The shapes `check-answers.ts` pinned from real answers, plus the ones
-  // the baseline produced ("represented by ID 2", "Team ID **6**").
+  // The shapes the retired `check-answers.ts` pinned from real answers, plus
+  // the ones the baseline produced ("represented by ID 2", "Team ID **6**").
   it.each([
     'Team ID 5 scored the most.',
     'Team ID **5** scored the most.',

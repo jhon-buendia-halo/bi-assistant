@@ -21,8 +21,8 @@ function escape(word: string): string {
 }
 
 /**
- * A bare identifier standing in for a name, the pattern `check-answers.ts`
- * pinned against observed answers (`Team ID **5**`, `1. Team ID 5 2. Team ID
+ * A bare identifier standing in for a name, the pattern the retired
+ * `check-answers.ts` pinned against observed answers (`Team ID **5**`, `1. Team ID 5 2. Team ID
  * 2`, `- **Team 4**: 87.13%`, `team_id 5`), with its noun list made a
  * parameter. Two branches: an entity noun with an optional id word, or a bare
  * `id`/`ids`. `(?![a-z])` instead of `\b` after each word, so `team_id` is
