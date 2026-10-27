@@ -104,3 +104,10 @@ sept | ordinary billing or asset vocabulary of the BA-243 finance investigation 
 shifted | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
 shrinking | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
 slipp | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+# Widened on 2026-10-27 after round 17 (the matches patterns accept 'billing-timing gap', 'billed late', 'two monthly fees ... September', '$0 recorded campaign spend'):
+batch | ordinary billing vocabulary of the BA-243 investigation checks' patterns, widened on 2026-10-27 to the wording of right answers (evidence/1.1.21/checks.txt), not the planted cause or explanation
+earning | ordinary billing vocabulary of the BA-243 investigation checks' patterns, widened on 2026-10-27 to the wording of right answers (evidence/1.1.21/checks.txt), not the planted cause or explanation
+mismatch | ordinary billing vocabulary of the BA-243 investigation checks' patterns, widened on 2026-10-27 to the wording of right answers (evidence/1.1.21/checks.txt), not the planted cause or explanation
+processed | ordinary billing vocabulary of the BA-243 investigation checks' patterns, widened on 2026-10-27 to the wording of right answers (evidence/1.1.21/checks.txt), not the planted cause or explanation
+shift | ordinary billing vocabulary of the BA-243 investigation checks' patterns, widened on 2026-10-27 to the wording of right answers (evidence/1.1.21/checks.txt), not the planted cause or explanation
+unrecorded | ordinary billing vocabulary of the BA-243 investigation checks' patterns, widened on 2026-10-27 to the wording of right answers (evidence/1.1.21/checks.txt), not the planted cause or explanation

@@ -15,3 +15,5 @@ The story words kept as literals: the planted cause (paus, freez, froze, suspend
 the marketing wrong explanation (seasonal, summer, slowdown, slump, softness, downturn, weakness, holiday, recover, recovered, recovery, rebound, rebounded, bounced, upturn, upswing, surge, rush),
 the finance wrong explanation (attrition, churn, outflows, redemptions, reversals, waivers, refunds, refund, reimburs, withdrawals, withdrew, departures, departing, exits, closures, pulled)
 and the client statement's (duplicated, overcharged, erroneous, accidental, glitch).
+
+Second pass, 2026-10-27, after the matches patterns were widened (342 pattern words): 63 rejections, 6 of them new generic words, allowlisted with their reason (batch, earning, mismatch, processed, shift, unrecorded); after that, 57 rejections, the same story words and older ones as above.
