@@ -14,6 +14,26 @@ Entry template:
 
 ---
 
+## 2026-10-29 — 1.3.5 and 1.3.6 closed: research and plan merged, ADR-0031 (BA-123, BA-124)
+
+### What went well
+- Rebasing PR #60 on `main` without PR #59 freed the close from a PR that conflicts with `main` in 8 files. The conflicts were only in append-only files and in the roadmap and spec lines #59 had added. A script resolved them, and the line counts matched the original commits (+5, +23, +14, +3).
+- The October text was kept, with a dated status section added to the research and the plan. The history of the Hindsight recommendation stays readable next to the change.
+- The three decisions only the user can make (confirm the epic spec, the second ADR, BA-78) went in one question before any branch was touched.
+- The ADR number was checked against every open branch, so 0031 collides with nothing.
+
+### What went wrong
+- Both PRs sat open for 22 days, stacked on another person's PR that was never reviewed. By the time they merged, the plan's dates and the memory recommendation were out of date and needed a status section.
+- Per-dataset eval numbers from the session artifacts (Finance 29/48 to 43/48, Marketing Analytics 9/16 to 14/16) could not be re-checked from `results.tsv`, which keeps totals only. The repo text uses the totals instead.
+- "Merge the PRs" could not finish in the session: `main` needs one approval from someone else and auto-merge is off. This was found after the work started, not before.
+- The first conflict resolution of the retrospective dropped a blank line before an entry; it was fixed in the next commit.
+
+### What to do differently
+- Do not stack a PR on someone else's unreviewed PR. Branch from `main` and carry the few lines needed, or ask the owner to merge first.
+- When a docs PR is more than two weeks old, add a dated status section before asking for review, rather than rewriting it.
+- Quote eval numbers in repo documents only from a file in the repo (`results.tsv` or an evidence diff), never from a session artifact. This repeats the 2026-10-27 lesson on session notes; it is a candidate for the `workflow-ship` skill under BA-119.
+- Before promising a merge, read the rulesets (`gh api repos/<owner>/<repo>/rulesets`) and `allow_auto_merge`, and tell the user who must approve.
+
 ## 2026-10-16 — 0.4.2 Jira MCP tool in `.claude/tools` (BA-237)
 
 ### What went well
@@ -781,6 +801,26 @@ Entry template:
 ### What to do differently
 - At the start of a Jira task, run `command -v jq` along with `jira.sh whoami`. If `jq` is missing, put the static jq-1.7.1 binary on `PATH` for the session before any Jira call.
 - Before starting any story, look for its epic's open branch (`git branch -a --list '*/<EPIC-ID>-*'`, `git worktree list`) and continue there. Only create a branch for the epic's first story.
+
+## 2026-10-07 — 1.3.6 Knowledge Store execution plan, the two plan files (BA-124, partial)
+
+### What went well
+- The functional and the technical plan were written in parallel from one brief each, with the same verified `main` inventory, the same step names and the same done-when sentences, so they agree without a reconciliation pass.
+- Every "on `main`" claim in the technical plan names the file or symbol it was checked against (`contextFor`, `KNOWLEDGE_BLOCK_CHARS`, `MAX_BOOTSTRAP_DRAFTS`, `apiKeyCiphertext`, `parseArgs` in `cli.ts`), and a spot check of nine of them held. The status-check notes turn them into 40 checkbox lines a later review can re-run.
+- Writing against `main` only showed, in one table, that Step 1 cannot start on `main` until the DSL lands and that the three engine branches are local only. The artifact's "merge first" became an open decision instead of an assumption.
+- Stacking the branch on the research branch made the plan's links to `docs/research/BA-4.md` resolve and let the shared files (roadmap, changelog, retrospective) take one entry each without conflicts.
+
+### What went wrong
+- BA-124 is not Done by this change: the epic spec confirmation, the ADR (whose number collides with the BA-2 branch's 0007) and the roadmap text alignment remain. The roadmap entry lists them and stays In progress.
+- Both plan files came out above the size asked for (70 and 65 thousand characters against 25 to 55). The overrun is verbatim shapes, the 28-row inventory and the Part 4 story, not padding, but a reader after the steps alone has to scroll.
+- The artifact's own numbers disagree on how many eval questions depend on a business word (fourteen in the text, eight in the category table). The plan keeps both and asks the team to confirm.
+- `scripts/check-specs.py` does not scan `docs/`, so the plan files' links were checked by a session script and recorded in evidence instead of CI.
+
+### What to do differently
+- When a plan carries verbatim shapes and tables, keep a one-page steps table near the top (section 4 of the functional plan) so the length does not hide the sequence.
+- When two numbers in a source disagree, write both into an open question with where each comes from; never pick one silently.
+- When a story's deliverables are wider than the change at hand, list what remains in the roadmap Notes and in the changelog bullet in the same words, so the next session finds them without reading the PR.
+- Under a harness story, extend `scripts/check-specs.py` to resolve relative links in `docs/**/*.md` as well (one glob), so plan and research links are CI-checked.
 
 ## 2026-10-07 — 1.3.5 Knowledge Store research (BA-123)
 
