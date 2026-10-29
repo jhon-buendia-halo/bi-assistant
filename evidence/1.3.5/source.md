@@ -6,3 +6,4 @@
 - **Figures:** redrawn as Mermaid flowcharts where the figure is a graph or a flow, otherwise described in words or rebuilt as a table.
 - **Link verification:** external URLs were opened on 2026-10-06 and 2026-10-07 by the artifact's author as its sources section states; this story re-verified the relative links (`link-check.txt`) and ran the spec check (`check-specs.txt`).
 - **No code or UI change:** the E2E suite was not run.
+- **2026-10-29:** the branch was rebased on `main` (ea78278, v0.36.0) without PR #59, and section 8 "Status 2026-10-29" was added to the file. `check-specs-2026-10-29.txt` is the spec check on the rebased branch.

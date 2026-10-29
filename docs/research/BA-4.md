@@ -1,7 +1,7 @@
 # BA-4 — Knowledge Store: research
 
 - **Jira:** [BA-123](https://halo-powered.atlassian.net/browse/BA-123) (research story) · serves the decision record asked by [BA-78](https://halo-powered.atlassian.net/browse/BA-78) · **Epic:** [BA-4](https://halo-powered.atlassian.net/browse/BA-4) · **Roadmap:** feature 1.3.5 in [roadmap.md](../../roadmap.md) · **Epic spec:** [specs/epics/BA-4/spec.md](../../specs/epics/BA-4/spec.md)
-- **Status:** Draft, for team review
+- **Status:** Reviewed by the user on 2026-10-29, which closes BA-123. Sections 1 to 7 are kept as written on 2026-10-07; what changed since then is in section 8.
 - **Source:** converted from the artifact [Knowledge Store Ontology](https://claude.ai/artifact/Q4DtSwSqv7yi8VBqjrn9BN), version 3 of 2026-10-07. Every external link in it was opened on 2026-10-06 or 2026-10-07 as stated in its sources section.
 - **Repository baseline:** `main` at commit 3012e34 (v0.24.2, 2026-10-07) plus the branches named in section 3. The artifact said v0.20.6; the releases since then (developer observability, BA-111; the app-secret fix, BA-106) do not touch the knowledge store, so the inventory in section 3 was re-checked against main on 2026-10-07 and still holds.
 - **Companion documents:** the execution plan `docs/plans/BA-4.md` and its technical companion `docs/plans/BA-4-technical.md` (story [BA-124](https://halo-powered.atlassian.net/browse/BA-124)).
@@ -771,3 +771,15 @@ Vendor claims that could not be reproduced from a paper: Snowflake reports "90%+
 
 - Part 3 of the artifact, the execution (where knowledge lives, the four steps with their data shapes, endpoints, flows, examples and screens, the "Later" table, the have / need / done / not-now table and the open questions), is in `docs/plans/BA-4.md` (functional plan) and `docs/plans/BA-4-technical.md` (technical plan), delivered by story BA-124.
 - Part 4 of the artifact, how it should work after this (the story of one project from an empty database to answers everyone trusts, and the five situations), is in `docs/plans/BA-4.md`.
+
+## 8. Status 2026-10-29
+
+Sections 1 to 7 are kept as written. This section records what changed between 2026-10-07 and 2026-10-29, when the user closed BA-123 and BA-124. Baseline now: `main` at ea78278 (v0.36.0, 2026-10-16), plus the open evals branch `feat/BA-9-golden-dataset-evals` (PR #81).
+
+- **The meaning layer was measured, as text.** The evals epic (BA-9, on the PR #81 branch, not on `main` yet) built 138 dev and 55 held-out questions over the World Cup, Finance and Marketing Analytics samples, and a supervised improvement loop with an acceptance rule. Knowledge seeds written by hand from each sample's policy moved the totals: round 7 (Finance seed) dev 83/130 to 97/130; round 15 (Marketing Analytics seed) held-out 32/51 to 39/51. The knowledge block grew from 2,000 to 7,000 characters (round 6). Source: `docs/evals/loop/results.tsv` on that branch.
+- **Mastra now ships its own memory.** The installed `@mastra/memory` 1.29.0 offers message history, working memory, semantic recall and observational memory. Only message history is on (the last 40 messages), and every call uses `thread = resource = session id`, so nothing crosses sessions.
+- **Hindsight moved to 1.x.** Version 1.1.0 was published on 2026-10-21; this file describes 0.10.2. It still has no Mastra integration. The branch `feat/hindsight-memory` has not moved since v0.20.6.
+- **The memory recommendation changed.** Option (e) in section 1 and section 3.5 chose Hindsight. Cross-session memory is now built first with Mastra's own memory behind the same `LearningStore` port ("Mastra only"). Hindsight is added beside it ("Hindsight + Mastra") only if a three-arm eval shows it is better beyond noise, under the rule written in ADR-0031 (Proposed, added by BA-124). The rules of section 3.5 stand: only verified signals, no row values, memory never writes to Knowledge, curated knowledge wins on conflict.
+- **A lesson from the 2026-10-05 smoke test.** The reviewer's correction signal carried the corrected SQL under the label `Final SQL`. Hindsight stored it as a plain fact, and later consolidated an observation that mixed the wrong join with the correction. Signals must label corrected SQL as not to be reused, whichever memory runs.
+- **Unchanged:** the recommendation on meaning as code (a concept with *words* and a *binding*, constraints, packs changed only by pull request). The Data Model DSL (BA-2) is still not on `main`; the plan's status section says how the first steps bind to physical columns until it lands.
+- **BA-78** closes as covered by this file and the execution plan (user decision, 2026-10-29).
