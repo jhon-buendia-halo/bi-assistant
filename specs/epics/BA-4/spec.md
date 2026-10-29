@@ -1,6 +1,6 @@
 # BA-4 — Knowledge Store
 
-- **Jira:** [BA-4](https://halo-powered.atlassian.net/browse/BA-4) · **Roadmap:** Milestone 1.3 · **Status:** Draft — confirmation waived by the user on 2026-10-04 (one-time exception); work on its stories may start
+- **Jira:** [BA-4](https://halo-powered.atlassian.net/browse/BA-4) · **Roadmap:** Milestone 1.3 · **Status:** Confirmed by the user on 2026-10-29 (BA-124)
 
 ## Goal
 Curated knowledge the assistant treats as authoritative: business-glossary terms, standing instructions and default filters, scoped to a datasource or dataset. Analysts author and curate it, suggestions are mined from past sessions, and the relevant knowledge is injected into each turn, so terms like "revenue" always mean the same thing.
@@ -27,7 +27,7 @@ Curated knowledge the assistant treats as authoritative: business-glossary terms
 
 ## Specs touched
 - Capabilities: [knowledge](../../capabilities/knowledge/spec.md) (concept/relation model, retrieval, curation), [verified-queries](../../capabilities/verified-queries/spec.md) and [metrics](../../capabilities/metrics/spec.md) (linked to concepts), [sessions-chat](../../capabilities/sessions-chat/spec.md) (retrieval, provenance in the answer panel), [agents-evals](../../capabilities/agents-evals/spec.md) (knowledge on/off eval).
-- System: [data-model](../../system/data-model.md) (concept/relation collections, snippet migration), [api](../../system/api.md) (knowledge endpoints), [agents](../../system/agents.md) (`knowledge-bootstrap`, `sql-verifier`, `sql-fixer`), [ui](../../system/ui.md) (curation surface). Needs an ADR (BA-78).
+- System: [data-model](../../system/data-model.md) (concept/relation collections, snippet migration), [api](../../system/api.md) (knowledge endpoints), [agents](../../system/agents.md) (`knowledge-bootstrap`, `sql-verifier`, `sql-fixer`), [ui](../../system/ui.md) (curation surface). ADRs: [ADR-0031](../../system/architecture.md) (cross-session memory, Proposed, BA-124); the ADR "knowledge as code in packs" comes with BA-79, before its code.
 
 ## Acceptance
 Per story, from Jira and the roadmap:
@@ -37,8 +37,9 @@ Per story, from Jira and the roadmap:
 - An analyst can fix a wrong answer by editing a concept and the next answer cites it (BA-81).
 
 ## Dependencies, risks and open questions
-- **Research:** [docs/research/BA-4.md](../../../docs/research/BA-4.md) (BA-123) holds the findings, options and recommendation, and the decision record BA-78 asks for. The ADR itself is still to be written (BA-124).
-- **Execution plan:** [docs/plans/BA-4.md](../../../docs/plans/BA-4.md) (functional) and [docs/plans/BA-4-technical.md](../../../docs/plans/BA-4-technical.md) (technical), BA-124, written against `main` only; branch-only work is listed there as a prerequisite with the merge-or-rebuild decision open. Still open for BA-124: this spec's confirmation and the ADR.
+- **Research:** [docs/research/BA-4.md](../../../docs/research/BA-4.md) (BA-123) holds the findings, options and recommendation, and the decision record BA-78 asks for; BA-78 closed as covered on 2026-10-29. Section 8 records what changed since 2026-10-07.
+- **Execution plan:** [docs/plans/BA-4.md](../../../docs/plans/BA-4.md) (functional) and [docs/plans/BA-4-technical.md](../../../docs/plans/BA-4-technical.md) (technical), BA-124, written against `main` only; branch-only work is listed there as a prerequisite with the merge-or-rebuild decision open. Section 9 of the functional plan records what changed by 2026-10-29.
+- **Memory:** [ADR-0031](../../system/architecture.md) (Proposed). Cross-session memory is built first with Mastra's own memory behind a `LearningStore` port ("Mastra only"); Hindsight is added ("Hindsight + Mastra") only if a three-arm eval shows it is better. The eval pieces are in [BA-190](https://halo-powered.atlassian.net/browse/BA-190) (epic [BA-9](../BA-9/spec.md)); the cases, the implementation and the decision in BA-81.
 - **Partly built already:** `backend/src/modules/knowledge` and `frontend/src/app/features/knowledge` exist (snippets of kind instruction / term / default_filter with scope, synonyms, entities, enabled flag, a `knowledge-bootstrap` agent, and a per-turn injected block). Open: which of BA-79 to BA-81 is genuinely new versus an extension of this?
 - BA-79 depends on BA-78; BA-80 depends on BA-79 and the golden dataset ([BA-9](../BA-9/spec.md)); BA-81's provenance display ties into [BA-12](../BA-12/spec.md).
 - Depends on the DSL's logical references ([BA-2](../BA-2/spec.md)), which are not on `main` yet.

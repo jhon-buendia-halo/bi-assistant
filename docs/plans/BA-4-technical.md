@@ -1,6 +1,6 @@
 # BA-4 — Knowledge Store: execution plan (technical)
 
-- **Jira:** [BA-124](https://halo-powered.atlassian.net/browse/BA-124) · **Epic:** [BA-4](https://halo-powered.atlassian.net/browse/BA-4) · **Roadmap:** feature 1.3.6 in [roadmap.md](../../roadmap.md) · **Epic spec:** [specs/epics/BA-4/spec.md](../../specs/epics/BA-4/spec.md) · **Status:** Draft, for team review · **Source:** [Knowledge Store Ontology](https://claude.ai/artifact/Q4DtSwSqv7yi8VBqjrn9BN), version 3, 2026-10-07 · **Baseline:** `main` at 3012e34 (v0.24.2), checked 2026-10-07 · **Companions:** [BA-4.md](BA-4.md) (functional plan), [../research/BA-4.md](../research/BA-4.md) (research)
+- **Jira:** [BA-124](https://halo-powered.atlassian.net/browse/BA-124) · **Epic:** [BA-4](https://halo-powered.atlassian.net/browse/BA-4) · **Roadmap:** feature 1.3.6 in [roadmap.md](../../roadmap.md) · **Epic spec:** [specs/epics/BA-4/spec.md](../../specs/epics/BA-4/spec.md) · **Status:** Accepted by the user on 2026-10-29; section 9 "Status 2026-10-29" of [BA-4.md](BA-4.md) overrides this file where they differ (memory now follows [ADR-0031](../../specs/system/architecture.md)) · **Source:** [Knowledge Store Ontology](https://claude.ai/artifact/Q4DtSwSqv7yi8VBqjrn9BN), version 3, 2026-10-07 · **Baseline:** `main` at 3012e34 (v0.24.2), checked 2026-10-07 · **Companions:** [BA-4.md](BA-4.md) (functional plan), [../research/BA-4.md](../research/BA-4.md) (research)
 
 ## 1. Scope and how to use this file
 

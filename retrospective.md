@@ -14,6 +14,26 @@ Entry template:
 
 ---
 
+## 2026-10-29 — 1.3.5 and 1.3.6 closed: research and plan merged, ADR-0031 (BA-123, BA-124)
+
+### What went well
+- Rebasing PR #60 on `main` without PR #59 freed the close from a PR that conflicts with `main` in 8 files. The conflicts were only in append-only files and in the roadmap and spec lines #59 had added. A script resolved them, and the line counts matched the original commits (+5, +23, +14, +3).
+- The October text was kept, with a dated status section added to the research and the plan. The history of the Hindsight recommendation stays readable next to the change.
+- The three decisions only the user can make (confirm the epic spec, the second ADR, BA-78) went in one question before any branch was touched.
+- The ADR number was checked against every open branch, so 0031 collides with nothing.
+
+### What went wrong
+- Both PRs sat open for 22 days, stacked on another person's PR that was never reviewed. By the time they merged, the plan's dates and the memory recommendation were out of date and needed a status section.
+- Per-dataset eval numbers from the session artifacts (Finance 29/48 to 43/48, Marketing Analytics 9/16 to 14/16) could not be re-checked from `results.tsv`, which keeps totals only. The repo text uses the totals instead.
+- "Merge the PRs" could not finish in the session: `main` needs one approval from someone else and auto-merge is off. This was found after the work started, not before.
+- The first conflict resolution of the retrospective dropped a blank line before an entry; it was fixed in the next commit.
+
+### What to do differently
+- Do not stack a PR on someone else's unreviewed PR. Branch from `main` and carry the few lines needed, or ask the owner to merge first.
+- When a docs PR is more than two weeks old, add a dated status section before asking for review, rather than rewriting it.
+- Quote eval numbers in repo documents only from a file in the repo (`results.tsv` or an evidence diff), never from a session artifact. This repeats the 2026-10-27 lesson on session notes; it is a candidate for the `workflow-ship` skill under BA-119.
+- Before promising a merge, read the rulesets (`gh api repos/<owner>/<repo>/rulesets`) and `allow_auto_merge`, and tell the user who must approve.
+
 ## 2026-10-16 — 0.4.2 Jira MCP tool in `.claude/tools` (BA-237)
 
 ### What went well
@@ -781,6 +801,7 @@ Entry template:
 ### What to do differently
 - At the start of a Jira task, run `command -v jq` along with `jira.sh whoami`. If `jq` is missing, put the static jq-1.7.1 binary on `PATH` for the session before any Jira call.
 - Before starting any story, look for its epic's open branch (`git branch -a --list '*/<EPIC-ID>-*'`, `git worktree list`) and continue there. Only create a branch for the epic's first story.
+
 ## 2026-10-07 — 1.3.6 Knowledge Store execution plan, the two plan files (BA-124, partial)
 
 ### What went well
@@ -800,7 +821,6 @@ Entry template:
 - When two numbers in a source disagree, write both into an open question with where each comes from; never pick one silently.
 - When a story's deliverables are wider than the change at hand, list what remains in the roadmap Notes and in the changelog bullet in the same words, so the next session finds them without reading the PR.
 - Under a harness story, extend `scripts/check-specs.py` to resolve relative links in `docs/**/*.md` as well (one glob), so plan and research links are CI-checked.
-
 
 ## 2026-10-07 — 1.3.5 Knowledge Store research (BA-123)
 

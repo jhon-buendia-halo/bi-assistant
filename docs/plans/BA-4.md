@@ -4,7 +4,7 @@
 - **Epic:** [BA-4](https://halo-powered.atlassian.net/browse/BA-4) — Knowledge Store
 - **Roadmap:** feature 1.3.6, Milestone 1.3 in [roadmap.md](../../roadmap.md)
 - **Epic spec:** [specs/epics/BA-4/spec.md](../../specs/epics/BA-4/spec.md)
-- **Status:** Draft, for team review
+- **Status:** Accepted by the user on 2026-10-29, which closes BA-124. Sections 1 to 8 are kept as written on 2026-10-07; section 9 records what changed since then and overrides them where they differ.
 - **Source:** the artifact [Knowledge Store Ontology](https://claude.ai/artifact/Q4DtSwSqv7yi8VBqjrn9BN), version 3, 2026-10-07
 - **Baseline:** `main` at 3012e34 (v0.24.2), checked 2026-10-07
 - **Companions:** [BA-4-technical.md](BA-4-technical.md) (data shapes, schemas, endpoints, flows, migration, agent rules, screens) · [../research/BA-4.md](../research/BA-4.md) (the research behind the plan)
@@ -534,3 +534,22 @@ The epic spec's open question, "which of BA-79 to BA-81 is genuinely new versus 
 - **Hindsight hosting is undecided.** The memory lever stays off, so everything in Steps 1 and 3 that depends on memory is optional, and Week 3 of the story in section 5 cannot happen before the team server exists.
 - **Dates.** The Jira window for Milestone 1.3 ends on October 16; the artifact proposes Step 3 by October 23. The team decides whether the story or the window moves.
 - **Feature number 1.3.6 is used twice.** The branch `feat/hindsight-memory` numbers its memory feature 1.3.6 and keeps its evidence under `evidence/1.3.6/`; PR #59 gave 1.3.6 to BA-124, this plan. Whichever merges second renumbers its feature and its evidence folder.
+
+## 9. Status 2026-10-29
+
+Sections 1 to 8 are kept as written. Where this section differs from them, this section holds. Baseline now: `main` at ea78278 (v0.36.0, 2026-10-16), plus the open evals branch `feat/BA-9-golden-dataset-evals` (PR #81).
+
+- **Step 0 is done** with this merge: the research (BA-123) and this plan (BA-124) are on `main`, the epic spec is `Status: Confirmed`, BA-78 is closed as covered, and [ADR-0031](../../specs/system/architecture.md) is Proposed.
+- **The ADR "knowledge as code in packs"** moves to Step 1 (BA-79, roadmap 1.3.2). It is written before Step 1's code.
+- **Memory.** Everything sections 2 to 8 say about Hindsight is replaced by ADR-0031. The memory proposes and never writes, as before; what changes is how it is built:
+  - Cross-session memory is built first with Mastra's own memory behind the `LearningStore` port. This is "Mastra only".
+  - Hindsight is added beside it ("Hindsight + Mastra") only if a three-arm eval (no memory, Mastra only, Hindsight + Mastra) shows it is better, under the rule written in the ADR before the first run.
+  - The pack's `memory.yaml` Hindsight seed and the "Hindsight team server" in the Later table wait for that result.
+- **Who does the memory work.** The arm option and the two-part eval cases go to BA-190 (evals epic BA-9). The 36 cases, the Mastra-only implementation and the decision go to BA-81 (Step 3).
+- **Dates.** The dates in section 4 have passed and none of Steps 1 to 3 has started. They start after the beta of 2026-10-31; each story's dates are set in the roadmap and Jira when it starts.
+- **The Data Model DSL** is still not on `main` (`origin/feat/BA-2-data-model-dsl`, last commit 2026-10-11). Open, to decide when BA-79 starts: whether Step 1 waits for it, or binds concepts to physical columns first (as the knowledge seeds' `entities` do) and moves to logical references when the DSL merges.
+- **What the evals showed.** The knowledge seeds, written by hand and checked by SQL, raised the eval scores (research section 8). So the epic's open question is no longer whether knowledge helps. It is how a customer without a seed gets it, how it is chosen per question, how it is checked, and how it is kept.
+- **Open questions in section 8 that are now closed:**
+  - The ADR number: ADR-0031, the next number free on every open branch.
+  - Feature 1.3.6 is BA-124. The memory branch's own 1.3.6 is renumbered if that branch is ever merged; it is not merged as it is.
+  - Hindsight hosting: decided only if Hindsight + Mastra wins the eval.

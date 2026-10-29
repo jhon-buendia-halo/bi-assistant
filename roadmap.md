@@ -296,16 +296,16 @@ Curated knowledge the assistant treats as authoritative: glossary terms, standin
 - **Scope:** [docs/research/BA-4.md](docs/research/BA-4.md): findings, options and a recommendation for the epic, converted from the *Knowledge Store Ontology* artifact (version 3, 2026-10-07) and re-checked against `main` at 3012e34 (v0.24.2): theory and the market, the five layers as they exist in this app (on `main`, on a branch, or missing), the eval questions that need meaning, Hindsight memory, the concept and relation design, further reading, every source by type and the vendor appendix.
 - **Out of scope:** the execution plan and product code. The artifact's execution part and its "how it should work after" story go to `docs/plans/BA-4.md` under 1.3.6.
 - **Acceptance:** [docs/research/BA-4.md](docs/research/BA-4.md) exists and the user has reviewed it.
-- **Notes:** the Research story of the epic, from the rule proposed by PR #59 (BA-120), which is not on `main`; 1.3.6 follows it. The file also serves as the decision record 1.3.1 ([BA-78](https://halo-powered.atlassian.net/browse/BA-78)) asks for; whether BA-78 closes as covered or keeps only the ADR is an open Jira decision. Branch `docs/BA-123-knowledge-store-research`, rebased on `main` on 2026-10-29 (it was stacked on PR #59). Reviewed by the user on 2026-10-29; section 8 of the file records what changed since 2026-10-07. Evidence: [evidence/1.3.5/](evidence/1.3.5/).
+- **Notes:** the Research story of the epic, from the rule proposed by PR #59 (BA-120), which is not on `main`; 1.3.6 follows it. The file also serves as the decision record 1.3.1 ([BA-78](https://halo-powered.atlassian.net/browse/BA-78)) asks for; BA-78 closed as covered on 2026-10-29 (1.3.1). Branch `docs/BA-123-knowledge-store-research`, rebased on `main` on 2026-10-29 (it was stacked on PR #59). Reviewed by the user on 2026-10-29; section 8 of the file records what changed since 2026-10-07. Evidence: [evidence/1.3.5/](evidence/1.3.5/).
 
-#### 1.3.6 — Knowledge Store — Execution plan ([BA-124](https://halo-powered.atlassian.net/browse/BA-124))  `🚧 In progress`
+#### 1.3.6 — Knowledge Store — Execution plan ([BA-124](https://halo-powered.atlassian.net/browse/BA-124))  `✅ Done`
 - **Intent:** every story of the epic is sequenced and specified before any of them is built.
 - **Scope:** the confirmed epic spec, this milestone with one feature per story, any ADRs, and the plan in two files: [docs/plans/BA-4.md](docs/plans/BA-4.md) (functional: the steps, what a user can do after each, dependencies, done-when, the "after" story, the have/need inventory and the open questions) and [docs/plans/BA-4-technical.md](docs/plans/BA-4-technical.md) (pack format, record shapes, schemas, endpoints, flows, migration, agent rules, screens, Gherkin). Both are written against `main` only: anything that exists on another branch is a prerequisite with a merge-or-rebuild decision left open, and each file carries status-check notes to compare the app against the plan at later reviews.
 - **Out of scope:** product code; merging any branch.
 - **Acceptance:** [docs/plans/BA-4.md](docs/plans/BA-4.md) exists, [specs/epics/BA-4/spec.md](specs/epics/BA-4/spec.md) is `Status: Confirmed`, and every story of the epic has a feature in this milestone.
-- **Notes:** starts after 1.3.5 is Done. No other story in the epic branches until it is Done, except stories already in progress on 2026-10-06. Done so far: the two plan files, on branch `docs/BA-124-knowledge-store-execution-plan` stacked on 1.3.5's branch. Still open before the story is Done: the user confirms the epic spec (`Status: Confirmed`); the ADR "knowledge as code in packs" with a fresh number (the next free on `main` is 0007, which the BA-2 branch already uses); the texts of 1.3.2 to 1.3.4 aligned with the plan; whether 1.3.1 (BA-78) closes as covered or keeps only the ADR. Evidence: [evidence/1.3.6/](evidence/1.3.6/).
+- **Notes:** starts after 1.3.5 is Done. Done on 2026-10-29: the two plan files (written 2026-10-07 against v0.24.2) with section 9 "Status 2026-10-29" in [docs/plans/BA-4.md](docs/plans/BA-4.md); [ADR-0031](specs/system/architecture.md) (Proposed), the hypothesis and decision rule for cross-session memory; the epic spec confirmed by the user; 1.3.1 closed as covered. The ADR "knowledge as code in packs" moved to 1.3.2. Branch `docs/BA-124-knowledge-store-execution-plan`, rebased on `main` on 2026-10-29. Evidence: [evidence/1.3.6/](evidence/1.3.6/).
 
-#### 1.3.1 — Research and ontology design ([BA-78](https://halo-powered.atlassian.net/browse/BA-78))  `📋 Planned`
+#### 1.3.1 — Research and ontology design ([BA-78](https://halo-powered.atlassian.net/browse/BA-78))  `✅ Done`
 - **Intent:** an evidence-based design for how the knowledge store models business meaning, so query generation follows each data store's ontology.
 - **Scope:**
   - Compare Databricks Genie, Snowflake Cortex Analyst semantic models, the dbt Semantic Layer, Cube and knowledge-graph text-to-SQL research.
@@ -314,7 +314,7 @@ Curated knowledge the assistant treats as authoritative: glossary terms, standin
   - Plan the snippet migration: terms become concepts, default filters become concept constraints, instructions are kept.
 - **Out of scope:** implementation.
 - **Acceptance:** the decision record is merged in `docs/` (as an ADR in [specs/system/architecture.md](specs/system/architecture.md)) and the model is agreed.
-- **Notes:** the research is in [docs/research/BA-4.md](docs/research/BA-4.md) (1.3.5) and the design in Step 0 of [docs/plans/BA-4.md](docs/plans/BA-4.md); the ADR is still to be written (1.3.6). Overlaps 1.3.5 and 1.3.6: open whether this story closes as covered or keeps only the ADR.
+- **Notes:** closed as covered by 1.3.5 and 1.3.6 on 2026-10-29 (user decision): [docs/research/BA-4.md](docs/research/BA-4.md) is the decision record and [docs/plans/BA-4.md](docs/plans/BA-4.md) holds the design. The ontology-model ADR ("knowledge as code in packs") moved to 1.3.2; the memory decision is [ADR-0031](specs/system/architecture.md).
 
 #### 1.3.2 — Ontology model, knowledge graph and bootstrap ([BA-79](https://halo-powered.atlassian.net/browse/BA-79))  `📋 Planned`
 - **Intent:** business concepts and their relations live in one graph and are drafted automatically, so setup takes minutes.
@@ -325,7 +325,7 @@ Curated knowledge the assistant treats as authoritative: glossary terms, standin
   - Extend the `knowledge-bootstrap` agent to propose concepts and relations from schema, sample values, relationships and past thumbs-up answers. Drafts arrive disabled for review.
 - **Out of scope:** the curation UI (1.3.4).
 - **Acceptance:** a dataset can be bootstrapped into a reviewed ontology, and the graph returns a concept with its metric, mappings and example queries.
-- **Notes:** depends on 1.3.1. Plan: Step 1 in [docs/plans/BA-4.md](docs/plans/BA-4.md) and [docs/plans/BA-4-technical.md](docs/plans/BA-4-technical.md). Needs the Data Model DSL on `main` first (1.2.1, branch `ba-2-epic-kickoff`): the plan's mapping target is its logical references.
+- **Notes:** depends on 1.3.1. Plan: Step 1 in [docs/plans/BA-4.md](docs/plans/BA-4.md) and [docs/plans/BA-4-technical.md](docs/plans/BA-4-technical.md). Write the ADR "knowledge as code in packs" before its code (moved from 1.3.6 on 2026-10-29). Open when it starts: wait for the DSL, or bind concepts to physical columns first (plan section 9). Needs the Data Model DSL on `main` first (1.2.1, branch `ba-2-epic-kickoff`): the plan's mapping target is its logical references.
 
 #### 1.3.3 — Ontology-grounded retrieval and SQL generation, measured by evals ([BA-80](https://halo-powered.atlassian.net/browse/BA-80))  `📋 Planned`
 - **Intent:** each answer is built from the knowledge relevant to the question and checked against it, so terms like "revenue" always mean the same thing.
@@ -347,7 +347,7 @@ Curated knowledge the assistant treats as authoritative: glossary terms, standin
   - The answer panel shows which concepts and definitions were used.
 - **Out of scope:** —
 - **Acceptance:** an analyst can fix a wrong answer by editing a concept, and the next answer cites it.
-- **Notes:** a new UI surface, so it needs Gherkin scenarios and E2E specs first. The provenance display ties into 1.4.1. Plan: Step 3 in [docs/plans/BA-4.md](docs/plans/BA-4.md) and [docs/plans/BA-4-technical.md](docs/plans/BA-4-technical.md).
+- **Notes:** a new UI surface, so it needs Gherkin scenarios and E2E specs first. The provenance display ties into 1.4.1. Plan: Step 3 in [docs/plans/BA-4.md](docs/plans/BA-4.md) and [docs/plans/BA-4-technical.md](docs/plans/BA-4-technical.md). Memory: the provider is chosen by the three-arm eval of [ADR-0031](specs/system/architecture.md); its cases, the Mastra-only implementation and the decision belong here, the eval option to [BA-190](https://halo-powered.atlassian.net/browse/BA-190).
 
 ### Milestone 1.4 — Response Reliability Signals ([BA-12](https://halo-powered.atlassian.net/browse/BA-12))
 
