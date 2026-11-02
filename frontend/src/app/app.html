@@ -382,6 +382,13 @@
                       <app-llm-config class="w-full max-w-[480px]" />
                     </div>
                   }
+                  @case ("memory") {
+                    <div
+                      class="flex flex-1 justify-center overflow-y-auto px-6 py-6"
+                    >
+                      <app-memory-settings class="w-full max-w-[560px]" />
+                    </div>
+                  }
                   @case ("testing-data") {
                     <div
                       class="flex flex-1 justify-center overflow-y-auto px-6 py-6"

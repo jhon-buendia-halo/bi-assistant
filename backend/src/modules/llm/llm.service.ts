@@ -209,6 +209,22 @@ export class LlmService implements OnModuleInit {
     return { id: `openai/${model}`, apiKey };
   }
 
+  /**
+   * The saved key when the saved provider is OpenAI, for the cross-session
+   * memory's embeddings (agents.md 2.1); undefined for another provider, no
+   * settings, or a key the current app secret cannot read.
+   */
+  async openAiApiKey(): Promise<string | undefined> {
+    const doc = await this.repository.get();
+    if (doc?.provider !== 'openai') return undefined;
+    try {
+      return this.crypto.decrypt(doc.apiKeyCiphertext) || undefined;
+    } catch (err) {
+      if (err instanceof UnreadableSecretError) return undefined;
+      throw err;
+    }
+  }
+
   async getView(): Promise<LlmSettingsView> {
     const doc = await this.repository.get();
     if (!doc) {

@@ -57,6 +57,17 @@ export interface DocStoreTransactions {
 
 export const DOC_STORE_TRANSACTIONS = 'DOC_STORE_TRANSACTIONS';
 
+/**
+ * Upkeep of the application store's file. `compact` rewrites it so that the
+ * text of deleted documents no longer stays in its free pages (data-model
+ * 3.15: after a memory Forget or a datasource delete).
+ */
+export interface DocStoreMaintenance {
+  compact(): Promise<void>;
+}
+
+export const DOC_STORE_MAINTENANCE = 'DOC_STORE_MAINTENANCE';
+
 /** One injection token per application collection. */
 export const CONNECTIONS_STORE = 'DOC_STORE_connections';
 export const SETTINGS_STORE = 'DOC_STORE_settings';
@@ -71,6 +82,7 @@ export const AGENTS_STORE = 'DOC_STORE_agents';
 export const SKILLS_STORE = 'DOC_STORE_skills';
 export const SKILL_OVERRIDES_STORE = 'DOC_STORE_skill_overrides';
 export const AGENT_PROMPT_OVERRIDES_STORE = 'DOC_STORE_agent_prompt_overrides';
+export const MEMORY_SIGNALS_STORE = 'DOC_STORE_memory_signals';
 
 export function isExistsCondition(v: FilterValue): v is ExistsCondition {
   return typeof v === 'object' && v !== null && '$exists' in v;

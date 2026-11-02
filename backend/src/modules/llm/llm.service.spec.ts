@@ -659,3 +659,34 @@ describe('reasoning effort per model', () => {
     });
   });
 });
+
+describe('the OpenAI key for the memory embeddings (agents.md 2.1)', () => {
+  const saved = (provider: LlmSettingsDoc['provider']): LlmSettingsDoc => ({
+    key: 'llm',
+    provider,
+    model: 'gpt-4.1-mini',
+    baseUrl: '',
+    apiKeyCiphertext: 'enc(sk-saved)',
+  });
+
+  it('hands back the saved key when the saved provider is OpenAI', async () => {
+    const service = serviceWith({
+      settings: saved('openai'),
+      decryptedKey: 'sk-saved',
+    });
+    await expect(service.openAiApiKey()).resolves.toBe('sk-saved');
+  });
+
+  it('has none for another provider, no settings or an unreadable key', async () => {
+    await expect(
+      serviceWith({ settings: saved('anthropic') }).openAiApiKey(),
+    ).resolves.toBeUndefined();
+    await expect(serviceWith().openAiApiKey()).resolves.toBeUndefined();
+    await expect(
+      serviceWith({
+        settings: saved('openai'),
+        unreadable: true,
+      }).openAiApiKey(),
+    ).resolves.toBeUndefined();
+  });
+});

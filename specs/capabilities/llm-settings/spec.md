@@ -94,6 +94,7 @@ Availability
 - Endpoints `GET /llm/settings`, `PUT /llm/settings`, `PUT /llm/reasoning`, `POST /llm/test-connection`: [../../system/api.md](../../system/api.md).
 - Persisted single settings document (key `llm`; provider, model, base URL, encrypted key, reasoning effort, timestamps): [../../system/data-model.md](../../system/data-model.md).
 - Model routing per agent, the visual-designer exception and the connection-probe prompt: [../../system/agents.md](../../system/agents.md).
+- The saved key also embeds the memory of past sessions when the provider is OpenAI, and `OPENAI_API_KEY` does when it is not: [../../system/agents.md](../../system/agents.md) 2.1 ([knowledge](../knowledge/spec.md) R30).
 - App secret handling and key-at-rest policy: [../../product/non-functional.md](../../product/non-functional.md).
 
 ## UI

@@ -102,6 +102,12 @@ import {
 } from './sessions.service';
 import type { SessionDoc } from './entities/session.entity';
 import { setAgentPromptOverrides } from '../../mastra/agent-prompt-overrides';
+import BetterSqlite3 from 'better-sqlite3';
+import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
+import { MemoryOutboxService } from '../memory/memory-outbox.service';
+import { MemoryService } from '../memory/memory.service';
+import { MemorySettingsRepository } from '../memory/repositories/memory-settings.repository';
+import { MemorySignalsRepository } from '../memory/repositories/memory-signals.repository';
 
 describe('SessionsService streaming', () => {
   /** A service wired to one streamed turn, with everything else stubbed. */
@@ -133,6 +139,10 @@ describe('SessionsService streaming', () => {
       };
       /** The session is an agent editor's preview (agents-evals R60). */
       preview?: boolean;
+      /** The verified reference block (Block 4) the turn gets. */
+      verifiedBlock?: string;
+      /** The memory service the session service is given (knowledge R30). */
+      memory?: unknown;
       /** Careful mode: what the verifier replies and what its SQL returns. */
       crossCheck?: {
         sql?: string;
@@ -196,7 +206,7 @@ describe('SessionsService streaming', () => {
       }),
     };
     const verifiedQueries = {
-      referenceBlock: jest.fn().mockResolvedValue(undefined),
+      referenceBlock: jest.fn().mockResolvedValue(options.verifiedBlock),
       isVerifiedSql: jest.fn().mockResolvedValue(options.verified ?? false),
     };
     const metrics = {
@@ -272,6 +282,8 @@ describe('SessionsService streaming', () => {
       metrics as never,
       knowledge as never,
       userAgents as never,
+      undefined,
+      options.memory as never,
     );
     return {
       service,
@@ -459,6 +471,163 @@ describe('SessionsService streaming', () => {
       expect(options.context.map((m) => m.content).join('\n')).not.toContain(
         'Curated knowledge:',
       );
+    });
+  });
+
+  describe('Block 3b, learned from past sessions (agents.md 4.1; knowledge R36 to R38)', () => {
+    const KNOWLEDGE =
+      'Curated dataset knowledge (user-authored — treat as authoritative over anything you infer from schema):\n- [instruction] Coverage: only 2018 and 2022.';
+    const VERIFIED =
+      'Verified reference queries (approved by an analyst):\n- Who won? → SELECT 1';
+    const SIGNAL =
+      '[verified_query · 2026-10-01]\nQuestion: Who won the 2022 final?\nApproved SQL: SELECT winner FROM matches';
+    const LEARNED = {
+      block: `Learned from past sessions (not curated; curated knowledge wins on conflict):\n${SIGNAL}`,
+      used: [
+        {
+          id: 'rating:s0:2026-10-01T10:00:00.000Z',
+          kind: 'verified_query',
+          title: 'verified_query · 2026-10-01',
+          body: SIGNAL,
+          source: 'memory',
+        },
+      ],
+    };
+    const snippet = {
+      id: 'k1',
+      kind: 'instruction',
+      title: 'Coverage',
+      body: 'Only 2018 and 2022.',
+      datasetId: 'football',
+    };
+    type Context = { role: string; content: string }[];
+    const memoryRecalling = (learned: unknown) => ({
+      learnedContext: jest.fn().mockResolvedValue(learned),
+      recordRating: jest.fn().mockResolvedValue(undefined),
+    });
+    const streamed = (agent: { stream: jest.Mock }) =>
+      ((agent.stream.mock.calls as unknown[][])[0][1] as { context: Context })
+        .context;
+
+    it('sends it after curated knowledge and before the verified reference queries', async () => {
+      const memory = memoryRecalling(LEARNED);
+      const { service, agent } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+        { knowledgeBlock: KNOWLEDGE, verifiedBlock: VERIFIED, memory },
+      );
+
+      await service.streamMessage('session-1', 'Who won?', () => {});
+
+      expect(memory.learnedContext).toHaveBeenCalledWith(['ds-1'], 'Who won?');
+      const contents = streamed(agent).map((m) => m.content);
+      const at = (text: string) => contents.indexOf(text);
+      expect(at(LEARNED.block)).toBeGreaterThan(at(KNOWLEDGE));
+      expect(at(VERIFIED)).toBe(at(LEARNED.block) + 1);
+      expect(at(KNOWLEDGE)).toBeGreaterThanOrEqual(0);
+    });
+
+    it('records its entries on the answer after the snippets', async () => {
+      const { service, session } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+        {
+          knowledgeBlock: KNOWLEDGE,
+          knowledgeUsed: [snippet],
+          memory: memoryRecalling(LEARNED),
+        },
+      );
+
+      await service.streamMessage('session-1', 'Who won?', () => {});
+
+      expect(session.messages.at(-1)?.knowledge).toEqual([
+        snippet,
+        ...LEARNED.used,
+      ]);
+    });
+
+    it('resends the same block in the grounding pass without recalling again', async () => {
+      const memory = memoryRecalling(LEARNED);
+      const { service, agent } = buildStreaming(answerStream([]), {
+        answer: 'France won.',
+        memory,
+      });
+
+      await service.streamMessage('session-1', 'Who won?', () => {});
+
+      expect(memory.learnedContext).toHaveBeenCalledTimes(1);
+      const [, corrective] = (agent.generate.mock.calls as unknown[][])[0] as [
+        string,
+        { context: Context },
+      ];
+      expect(
+        corrective.context.filter((m) => m.content === LEARNED.block),
+      ).toHaveLength(1);
+    });
+
+    it('gives a deep-analysis call none, and recalls nothing for it', async () => {
+      const memory = memoryRecalling(LEARNED);
+      const { service, session } = buildStreaming(answerStream([]), { memory });
+
+      const options = await service.backgroundAgentOptions(session, 'Why?');
+
+      expect(memory.learnedContext).not.toHaveBeenCalled();
+      expect(options.context.map((m) => m.content)).not.toContain(
+        LEARNED.block,
+      );
+    });
+
+    it('with the lever off, sends exactly the context of a turn without memory', async () => {
+      const db = new BetterSqlite3(':memory:');
+      try {
+        const settings = new MemorySettingsRepository(
+          new SqliteDocStore(db, 'settings') as never,
+        );
+        const signals = new MemorySignalsRepository(
+          new SqliteDocStore(db, 'memory_signals') as never,
+        );
+        const store = {
+          retain: jest.fn(),
+          recall: jest.fn(),
+          mentalModels: jest.fn(),
+          forget: jest.fn(),
+          items: jest.fn(),
+          settle: jest.fn(),
+          onUsage: jest.fn(),
+        };
+        const memory = new MemoryService(
+          settings,
+          signals,
+          new MemoryOutboxService(signals, store),
+          store,
+          {} as never,
+          {} as never,
+          {} as never,
+        );
+        const turn = () =>
+          answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]);
+        const without = buildStreaming(turn(), {
+          knowledgeBlock: KNOWLEDGE,
+          knowledgeUsed: [snippet],
+          verifiedBlock: VERIFIED,
+        });
+        const off = buildStreaming(turn(), {
+          knowledgeBlock: KNOWLEDGE,
+          knowledgeUsed: [snippet],
+          verifiedBlock: VERIFIED,
+          memory,
+        });
+
+        await without.service.streamMessage('session-1', 'Who won?', () => {});
+        await off.service.streamMessage('session-1', 'Who won?', () => {});
+
+        expect(JSON.stringify(streamed(off.agent))).toBe(
+          JSON.stringify(streamed(without.agent)),
+        );
+        expect(off.session.messages.at(-1)?.knowledge).toEqual([snippet]);
+        expect(store.recall).not.toHaveBeenCalled();
+        expect(store.mentalModels).not.toHaveBeenCalled();
+      } finally {
+        db.close();
+      }
     });
   });
 
@@ -1645,7 +1814,7 @@ describe('SessionsService visual tool bridge (turn records)', () => {
 });
 
 describe('SessionsService answer feedback', () => {
-  function build(session: SessionDoc) {
+  function build(session: SessionDoc, memory?: { recordRating: jest.Mock }) {
     const repository = {
       get: jest.fn().mockResolvedValue(session),
       update: jest.fn().mockImplementation((_id, patch) => {
@@ -1674,8 +1843,10 @@ describe('SessionsService answer feedback', () => {
       {} as never,
       {} as never,
       userAgentsStub as never,
+      undefined,
+      memory as never,
     );
-    return { service, verifiedQueries };
+    return { service, verifiedQueries, repository };
   }
 
   const answered = (): SessionDoc => ({
@@ -1775,6 +1946,126 @@ describe('SessionsService answer feedback', () => {
 
     expect(verifiedQueries.save).not.toHaveBeenCalled();
     expect(session.messages.at(-1)?.feedback).toBe('up');
+  });
+
+  describe('the thumbs-down note (api.md 7)', () => {
+    const AT = '2024-01-01T00:00:03.000Z';
+
+    it('keeps the note of a thumbs-down, trimmed, and replaces or removes it', async () => {
+      const session = answered();
+      const { service } = build(session);
+
+      await service.recordFeedback('session-1', AT, 'down', '  Wrong year.  ');
+      expect(session.messages.at(-1)?.feedbackNote).toBe('Wrong year.');
+
+      await service.recordFeedback('session-1', AT, 'down', 'Wrong table.');
+      expect(session.messages.at(-1)?.feedbackNote).toBe('Wrong table.');
+
+      await service.recordFeedback('session-1', AT, 'down', '   ');
+      expect(session.messages.at(-1)).not.toHaveProperty('feedbackNote');
+
+      await service.recordFeedback('session-1', AT, 'down', 'Again.');
+      await service.recordFeedback('session-1', AT, 'up');
+      expect(session.messages.at(-1)).not.toHaveProperty('feedbackNote');
+      expect(session.messages.at(-1)?.feedback).toBe('up');
+    });
+
+    it('refuses a note with a thumbs-up', async () => {
+      const { service } = build(answered());
+
+      await expect(
+        service.recordFeedback('session-1', AT, 'up', 'Looks right.'),
+      ).rejects.toThrow(
+        new BadRequestException("note is only allowed with rating 'down'"),
+      );
+    });
+
+    it('refuses a note over 4,000 characters', async () => {
+      const { service } = build(answered());
+
+      await expect(
+        service.recordFeedback('session-1', AT, 'down', 'x'.repeat(4_001)),
+      ).rejects.toThrow(
+        new BadRequestException('note must be at most 4000 characters'),
+      );
+      await expect(
+        service.recordFeedback(
+          'session-1',
+          AT,
+          'down',
+          ` ${'x'.repeat(4_000)} `,
+        ),
+      ).resolves.toBeDefined();
+    });
+  });
+
+  describe('what the memory is told (knowledge R30, R31, R39)', () => {
+    const AT = '2024-01-01T00:00:03.000Z';
+
+    it('hands it the rating, the question and the SQL once the transcript is saved', async () => {
+      const session = answered();
+      const order: string[] = [];
+      const memory = {
+        recordRating: jest.fn().mockImplementation(() => {
+          order.push('memory');
+          return Promise.resolve();
+        }),
+      };
+      const { service, repository } = build(session, memory);
+      repository.update.mockImplementation((_id, patch) => {
+        order.push('saved');
+        Object.assign(session, patch);
+        return Promise.resolve(session);
+      });
+
+      await service.recordFeedback('session-1', AT, 'down', 'Wrong year.');
+
+      expect(order).toEqual(['saved', 'memory']);
+      expect(memory.recordRating).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        messageAt: AT,
+        rating: 'down',
+        note: 'Wrong year.',
+        question: 'How many claims were denied last year?',
+        sql: 'SELECT count(*) FROM main.health.claims',
+        datasourceId: 'ds-1',
+        datasetIds: ['claims'],
+        entities: ['main.health.claims'],
+      });
+    });
+
+    it('gives no question, SQL or datasource for an answer that ran no SQL', async () => {
+      const session = answered();
+      delete session.messages[3].data;
+      const memory = { recordRating: jest.fn().mockResolvedValue(undefined) };
+      const { service } = build(session, memory);
+
+      await service.recordFeedback('session-1', AT, 'up');
+
+      expect(memory.recordRating).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        messageAt: AT,
+        rating: 'up',
+        question: 'How many claims were denied last year?',
+        datasourceId: undefined,
+        datasetIds: ['claims'],
+        entities: ['main.health.claims'],
+      });
+    });
+
+    it('never fails the rating when the memory fails', async () => {
+      jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const session = answered();
+      const memory = {
+        recordRating: jest.fn().mockRejectedValue(new Error('disk full')),
+      };
+      const { service } = build(session, memory);
+
+      await expect(
+        service.recordFeedback('session-1', AT, 'up'),
+      ).resolves.toBeDefined();
+      expect(session.messages.at(-1)?.feedback).toBe('up');
+    });
   });
 });
 

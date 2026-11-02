@@ -46,8 +46,8 @@ Build facts: the Angular production build has budgets (initial 500 kB warn / 1 M
 | `reflect-metadata`, RxJS | ^0.2.2, ^7.8.1 | Nest runtime requirements. |
 | Zod | 4.6.5 | Schemas for agent tool inputs and structured model output. |
 | Mastra `@mastra/core` | 1.66.0 | Agent harness: agents, tools, workspaces, model routing (ADR-0004). |
-| `@mastra/memory` | 1.29.0 | Agent memory; each session is its own thread/resource. |
-| `@mastra/libsql` | 1.22.5 | LibSQL storage for agent memory and runtime data (`<APP_DATA_DIR>/mastra.sqlite`). |
+| `@mastra/memory` | 1.29.0 | Agent memory; each session is its own thread/resource. Also the learning memories of the memory of past sessions ([agents.md](agents.md) 2.1, ADR-0031): one learning thread per datasource; semantic recall with `scope: 'thread'`, `topK`, `messageRange: 0` and the typed `threshold`, `lastMessages: false`; `saveMessages` for a new signal and `updateMessages` for a stored one; `deleteMessages` / `deleteThread` then `settled()`, which waits for the background vector delete; the summary kept as the learning thread's working memory. |
+| `@mastra/libsql` | 1.22.5 | LibSQL storage for agent memory and runtime data (`<APP_DATA_DIR>/mastra.sqlite`), and `LibSQLVector` for the memory's vector index `memory_messages` (1536 dimensions) in the same file ([data-model.md](data-model.md) 5.2). |
 | `@mastra/duckdb` | 1.8.0 | DuckDB storage for observability: traces, metrics, logs (`<APP_DATA_DIR>/observability.duckdb`; limits: 512MB memory, 2 threads). |
 | `@mastra/observability` | 1.17.8 | Tracing / observability wiring. |
 | `@opentelemetry/sdk-node` | 0.222.0 | Developer observability only (ADR-0006): the OpenTelemetry Node SDK, started by the entry points when the developer setting is on. It is never imported when the setting is off. |
@@ -73,9 +73,9 @@ Build facts: the Angular production build has budgets (initial 500 kB warn / 1 M
 | ESLint 9 + `typescript-eslint` ^8.20.0 + Prettier ^3.4.2 | | Lint and format (the `lint` script runs with `--fix`). |
 | `@nestjs/cli` | ^11.0.0 | `nest build` / `nest start`. `nest-cli.json` copies non-TS assets: `mastra/skills/**/*`, `modules/testing-data/fixtures/**/*.sql*` and `intellify-api/db/migrations/**/*.sql`. |
 
-The LLM providers (OpenAI-compatible endpoints including LenAI, Anthropic) are reached through Mastra's model router; there is no direct provider SDK dependency. See [agents.md](agents.md) for model resolution.
+The LLM providers (OpenAI-compatible endpoints including LenAI, Anthropic) are reached through Mastra's model router; there is no direct provider SDK dependency. See [agents.md](agents.md) for model resolution. The memory's embeddings go the same way: `ModelRouterEmbeddingModel` (`@mastra/core/llm`) for OpenAI `text-embedding-3-small`, with the key of [agents.md](agents.md) 2.1; no local embedding model is installed.
 
-Persistence in one line: SQLite documents (better-sqlite3) for app data, LibSQL for agent memory, DuckDB for observability, plain files for session workspaces. The data model is in [data-model.md](data-model.md).
+Persistence in one line: SQLite documents (better-sqlite3) for app data, LibSQL for agent memory and its vector index, DuckDB for observability, plain files for session workspaces. The data model is in [data-model.md](data-model.md).
 
 ## Code layout
 

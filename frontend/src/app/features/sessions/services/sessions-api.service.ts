@@ -276,15 +276,26 @@ export class SessionsApiService {
     );
   }
 
-  /** Rate an assistant answer; `up` saves it to the verified query library. */
+  /**
+   * Rate an assistant answer; `up` saves it to the verified query library. A
+   * thumbs-down may carry a note (an empty one clears it).
+   */
   sendMessageFeedback(
     sessionId: string,
     messageAt: string,
     rating: MessageFeedback,
+    note?: string,
   ): Observable<SessionActionResult> {
     return this.http.post<SessionActionResult>(
       `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/messages/feedback`,
-      { messageAt, rating },
+      note === undefined ? { messageAt, rating } : { messageAt, rating, note },
+    );
+  }
+
+  /** Forget one remembered signal (a memory entry of "Knowledge in context"). */
+  forgetMemorySignal(documentId: string): Observable<void> {
+    return this.http.delete<void>(
+      `${API_BASE_URL}/memory/signals/${encodeURIComponent(documentId)}`,
     );
   }
 

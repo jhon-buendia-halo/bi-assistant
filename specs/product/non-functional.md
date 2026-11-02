@@ -93,8 +93,10 @@ Open question: the desktop main window has no explicit restriction on navigation
   - queries and metadata reads against the user's configured datasources (Databricks workspace and Unity Catalog API, PostgreSQL, REST API),
   - for REST datasources, fetching the optional OpenAPI spec URL the user typed,
   - for the REST/OpenAPI discovery, nothing else,
+  - with the *memory of past sessions* on, requests to OpenAI's embeddings API, even when the LLM provider is another one: the text of each signal it retains and of each chat question it recalls for ([../system/agents.md](../system/agents.md) 2.1),
 - N31. The product SHALL NOT send analytics, usage telemetry or crash reports to Halo or any third party, and SHALL NOT auto-update itself. Installers are fetched manually from the release page.
 - N32. Data sent to the LLM provider includes: the user's questions and chat history; schema names and column types; sample values (up to 5 distinct values per column, 40 characters each) captured when a dataset is saved; sample rows (up to 5 per entity) for knowledge bootstrap; and result rows of queries the assistant ran (up to the row caps in section 5). Users SHOULD be told that data returned by their queries is shared with their LLM provider.
+- N70. The memory of past sessions SHALL be off by default, and SHALL never keep a row value: a signal holds a question, its SQL with every string literal that could be a row value replaced, and the person's note ([../capabilities/knowledge/spec.md](../capabilities/knowledge/spec.md) R30 to R32). Forgetting a signal or deleting its datasource SHALL remove its text from the files on disk too (knowledge R40, R41).
 - N33. Agent observability data (traces, which include prompts and tool results, plus metrics and logs) SHALL stay in the local data directory.
 - N34. The diagnostics report SHALL be created only on user action (export) and saved where the user chooses.
 
@@ -128,6 +130,7 @@ All values are the ones in the code today.
 | Curated knowledge | 2,000 |
 | Governed metrics | 4,000 |
 | Verified-query reference (3 pairs at most) | 3,000 |
+| Learned from past sessions (memory on; summaries, then signals) | 6,000 |
 | Schema block handed to the SQL fixer | 4,000 |
 | Schema block handed to the SQL verifier | 6,000 |
 | Schema block handed to knowledge bootstrap | 6,000 (sample rows 4,000) |

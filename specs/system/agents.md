@@ -154,7 +154,7 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 ### 1.7 Storage and observability
 
-- **Conversation memory** (assistant only) lives in a local SQL store at `<APP_DATA_DIR>/mastra.sqlite` (fallback `<launch dir>/data/mastra.sqlite`).
+- **Conversation memory** (assistant only) lives in a local SQL store at `<APP_DATA_DIR>/mastra.sqlite` (fallback `<launch dir>/data/mastra.sqlite`). So do the learning memories of the cross-session memory and their embeddings (2.1, [data-model.md](data-model.md) 5.2), once the memory lever has been on.
 - **Traces, metrics and logs** of every agent call go to a columnar store at `<APP_DATA_DIR>/observability.duckdb` (512 MB memory limit, 2 threads), service name `questions-to-insights`.
 - **Developer observability** ([../capabilities/developer-settings/spec.md](../capabilities/developer-settings/spec.md) R21–R23): when the active developer setting is on, every agent trace is *also* exported to Arize Phoenix at `<Phoenix endpoint>/v1/traces` (OpenInference attributes, OTLP protobuf, project name `questions-to-insights`). The local store above keeps receiving every trace. When the setting is off, the exporter's package is never loaded.
 - The launch directory is `INIT_CWD`, else `PWD`, else the process cwd (so a developer studio process that changes cwd still finds the same files).
@@ -173,9 +173,9 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| Streamed chat turn (`POST /sessions/:id/messages/stream`) | stream | session thread | all | 15 |
-| Non-streamed chat turn (`POST /sessions/:id/messages`) | generate | session thread | all | 15 |
-| Grounding-guard corrective pass (5.6) | generate | **none** | all | 15 |
+| Streamed chat turn (`POST /sessions/:id/messages/stream`) | stream | session thread; with the memory lever on, recall from the learning memories (below) | all | 15 |
+| Non-streamed chat turn (`POST /sessions/:id/messages`) | generate | session thread; with the memory lever on, recall from the learning memories (below) | all | 15 |
+| Grounding-guard corrective pass (5.6) | generate | **none** (it resends the turn's Block 3b, no second recall) | all | 15 |
 | Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
 | Deep analysis planner / angle investigator / report writer (2.7) | generate | none | none / all / none | 1 / 15 / 1 |
 | Assistant eval suite (8) | generate | none | all | 15 |
@@ -216,7 +216,45 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 The prompt and tools depend only on the selection, so there are eight variants; the links never change them, only the selection they produce. The prompt and the tool set are cached variants; a call's skills are resolved per call by the framework's `skills` function (7.3), not through the prompt. The deep-analysis calls (2.7), the grounding pass (5.6) and the tool-only synthesis pass (5.5) run with the turn's requestContext and so with the same selection.
 
-**Memory.** One persistent thread per session: `thread = resource = <session id>`. The last **40** messages are replayed into each turn; semantic recall off; working memory off; auto-generated thread titles off. Deleting a session deletes its thread. The Agents UI shows "Recent messages replayed" / "40 messages" (asserted by E2E).
+**Memory.** Two kinds, both kept by the agent framework in `mastra.sqlite` (1.7) and never mixed:
+
+- **Message history**, on every chat turn. One persistent thread per session: `thread = resource = <session id>`. The last **40** messages are replayed into each turn; semantic recall off; working memory off; auto-generated thread titles off. Deleting a session deletes its thread. The Agents UI shows "Recent messages replayed" / "40 messages" (asserted by E2E). The cross-session memory below changes none of this.
+- **Cross-session memory** ([ADR-0031](architecture.md), Proposed): what people's ratings of answers taught (a reviewer's note would add corrections; the app has no such action yet, [knowledge](../capabilities/knowledge/spec.md) R31), kept per datasource ([knowledge](../capabilities/knowledge/spec.md) R35, decided 2026-11-02) and recalled into later sessions. Behaviour: knowledge R30 to R43; nothing of it runs unless the `memory` lever is on (knowledge R30), forgetting aside. The app reaches it only through one port, so a second implementation can replace the first without touching sessions or Knowledge:
+
+  ```
+  LearningStore
+    retain(scope, signals)   store signals (the text of knowledge R33, each at its own time); a signal whose document id
+                             is already stored replaces it, leaving one copy. Resolves once they can be recalled;
+                             throws when refused.
+    recall(scope, question)  the stored signals relevant to the question after the relevance filter below, oldest
+                             first. Never throws: an error, or the cut-off at 2.5 seconds, is "nothing".
+    mentalModels(scope)      the scope's summary as last written (knowledge R42), or none. Never waits for a
+                             rewrite; never throws.
+    forget(scope, id?)       delete one signal by its document id, or with no id the whole scope, with every copy of
+                             their text the store keeps (embeddings and the index's copy of the text) and, for a
+                             whole scope, the summary; resolves once the store's background deletes are done.
+                             Never throws. Compacting the file is the caller's, after a user's Forget or a
+                             datasource delete only (data-model 5.2). (The caller deletes the outbox rows first, 3.15.)
+    items(scope)             every item the store holds for the scope, as text: its signals as stored, every other
+                             copy of their text (the vector index's), its summary and, for a store that extracts
+                             facts, its facts and observations. For audits and the memory eval's row-value check.
+    settle(scope)            resolves once the scope's background work (signals being stored, a summary rewrite)
+                             is done. For the memory eval and tests.
+    onUsage(listener)        subscribe to the store's model usage: one MemoryModelUsage event per model call the
+                             store makes (each embedding at retain and at recall, each summary rewrite); returns the
+                             function that unsubscribes. Never throws, and a listener that throws does not break
+                             the store. For the memory eval's usage per attempt; the app itself does not record it.
+
+  MemoryModelUsage           { scope, purpose: 'embedding' | 'summary', model, inputTokens, outputTokens,
+                               cachedInputTokens?, reasoningTokens? }; model is the model id without its provider
+                               prefix (text-embedding-3-small).
+  ```
+
+  A **scope** is an opaque key: the datasource id for a user's memory (knowledge R35), or the key of one eval attempt ([BA-190](https://halo-powered.atlassian.net/browse/BA-190)). `items`, `settle` and `onUsage` are not among ADR-0031's four operations (`retain`, `recall`, `mentalModels`, `forget`); they are added for the eval, and the ADR names them when it is accepted (open). Ratings reach `retain` through the outbox ([data-model.md](data-model.md) 3.15), never through a turn; a turn calls only `recall` and `mentalModels` (Block 3b, 4.1).
+
+  - **"Mastra only"**, the first implementation. One **learning thread** per scope, in the same store as the chat threads but never one of them ([data-model.md](data-model.md) 5.2). A new signal is saved as one message of that thread, its id the signal's document id, with the framework's `saveMessages`: no language-model call, only the embedding of its text. A signal whose id the thread already holds is replaced with `updateMessages`, never saved again: a second `saveMessages` with the same id replaces the message but adds one more embedding each time, which leaves the old text searchable and duplicates that take recall slots (spike of 2026-10-30). So `retain` reads which of its ids are stored first, and an outbox replay of a stored signal updates it. `recall` is the framework's semantic recall on that thread alone, with `lastMessages: false` and `semanticRecall: { scope: 'thread', topK: 4, messageRange: 0, threshold: 0.4 }`: at most 4 messages whose similarity to the question is at least 0.4, no neighbouring messages, no recent messages, a text found twice kept once (the newest). The threshold is the framework's own typed option, so the relevance filter needs no code of ours beyond the values, which are measured defaults to recalibrate on the memory set's dev questions (open). Scope `thread` matters: a resource-scoped recall reads a resource's store from any thread id, even one that does not exist. The framework's recall returns no scores and lists messages oldest first; the block keeps that order (4.1). The summary is the working memory of the scope's resource, written by the summary step below (data-model 5.2). One embedding model serves `retain` and `recall`, OpenAI `text-embedding-3-small` (1536 dimensions), the same for every arm of the eval (decided 2026-10-30); it needs an OpenAI key even when the chat runs on Claude. That key (decided 2026-11-02): when the saved LLM settings' provider is `openai`, their saved key ([llm-settings](../capabilities/llm-settings/spec.md)); otherwise `OPENAI_API_KEY` from the environment ([api.md](api.md) 6.1), surrounding quotes stripped. With neither, the memory stores and recalls nothing: `retain` refuses before writing anything (no message is saved without its embedding, and a framework save that fails while embedding is rolled back, so a retried signal never sits unrecallable), `recall` returns nothing without touching the store, `mentalModels` still returns a summary written earlier (it needs no embedding), signals stay queued and end `failed` ([data-model.md](data-model.md) 3.15) with `lastError` `No OpenAI key for embeddings: choose OpenAI in LLM configuration or set OPENAI_API_KEY`, and Settings → Memory says so ([api.md](api.md) 108, `embeddingKey: "none"`; [ui.md](ui.md) 4.17). No local embedding model ships ([delivery.md](delivery.md) section 4).
+  - **Summary step.** A few seconds after the last signal of a scope is retained or forgotten, one call of the configured model (1.3), with no tools and no memory, rewrites the scope's summary from its stored signals: three parts headed `Known pitfalls`, `Table guide` and `Learned glossary`, at most 2,000 characters in all. Its instructions must say: write only what the signals say; never quote a row value or anything about a person; when two signals disagree, follow the later one; the SQL of a correction or a rejection is what not to do. It runs outside any turn and is not a registered agent (9).
+  - **"Hindsight + Mastra"**: a second implementation of the port over a Hindsight server, Mastra keeping the chat. It is built only when ADR-0031's decision rule asks for it; until then the port has one implementation, and nothing is called while the lever is off.
 
 **Max steps.** 15 (`ASSISTANT_MAX_STEPS`), shared by production turns and the eval harness so evals measure the same constraints.
 
@@ -1078,6 +1116,21 @@ Budget 2,000 characters; the first entry that doesn't fit ends the list. The lis
 
 No rules travel with the block. How to apply it is the on-demand `curated-knowledge` skill (7.4, rules A13–A18, Appendix B): the assistant's catalog always lists it, and its description tells the model to read it when the call carries this block. When no snippet applies, the block is not sent. Every caller that sends Block 3 sends it the same way: the chat turn, the grounding pass, deep-analysis calls and the eval suite.
 
+**Block 3b — learned from past sessions** (chat turns only, with the memory lever on, when a learning memory of the session has a summary or a signal relevant to the question; [knowledge](../capabilities/knowledge/spec.md) R30 to R43, ADR-0031):
+
+```
+Learned from past sessions (not curated; curated knowledge wins on conflict):
+Summary:                              ← one per learning memory with a summary (knowledge R42); left out when it has none
+<summary>
+
+<signal, as stored (knowledge R33)>
+
+<signal>
+…
+```
+
+Recall is one `recall` and one `mentalModels` call per learning memory of the session (one per datasource its datasets are bound to; 2.1), started in parallel with the construction of Blocks 2 to 4 and cut off after 2.5 seconds; a memory that fails or does not answer in time adds nothing. Up to 4 signals from each memory (2.1), all of them in time order, oldest first, so that a later signal comes after an earlier one it may contradict, each separated by a blank line; the framework's recall gives no scores to order them by (ordering by similarity would need a vector query of our own: open). Budget 6,000 characters of summary and signal text (the heading, the `Summary:` labels and the blank lines are not counted): summaries first, a summary that does not fit is left out; then signals from newest to oldest until one does not fit, and all older ones are left out; what is sent stays in time order, oldest first. A text found in two learning memories is sent once (the newest). The 2.5-second cut-off applies per learning memory to its `recall` and `mentalModels` together. Every summary and signal sent is appended to the turn's `knowledge-used` list (4.2) as `{id, kind, title, body, source: "memory"}`: for a signal its document id, its kind (`verified_query`, `correction` or `rejection`), `<kind> · <YYYY-MM-DD>` and its text; for a summary `summary:<scope>`, `summary`, `summary` and its text. The answer records them with its snippets ([data-model.md](data-model.md) 3.9). No rules travel with this block: its heading and the labels of knowledge R33 (`Approved SQL`, `Corrected SQL (do not reuse)`, `Rejected SQL (do not reuse)`, `Analyst note`) are the instruction (a skill rule instead: open). The grounding pass sends the turn's Block 3b again without recalling; deep-analysis calls, the tool-only synthesis pass and the RFP Builder send none; the eval suite sends it only under a memory arm ([BA-190](https://halo-powered.atlassian.net/browse/BA-190)).
+
 **Block 4 — verified reference queries** (only when the call has a question and stored verified pairs share vocabulary with it):
 
 ```
@@ -1124,7 +1177,7 @@ The datasource is the REST datasource the tools resolve (3.10); the active RFP i
 | `turn-question` | every assistant call that has a question (chat turn, grounding pass, deep analysis); evals (the case question) | the user's message for this turn | `create_visual`, as the instruction when the model passes none |
 | `turn-data-records` | streamed chat turn of every agent, the assistant's and the RFP Builder's (fresh empty array per turn), evals | **live** array of this turn's captured data records, appended as tool results arrive | `create_visual` / `update_visual` (merge into the visual's data); `show_in_panel` (the rows of a `table` item, 3.11) |
 | `session-workspace-id` | every session-scoped call; designer calls | `session-<id>` | workspace resolver (7.1) |
-| `knowledge-used` | every session-scoped call | the knowledge snippets put in Block 3 | persistence of the answer's `knowledge` field |
+| `knowledge-used` | every session-scoped call | the knowledge snippets put in Block 3, then the summaries and signals put in Block 3b (`source: "memory"`) | persistence of the answer's `knowledge` field |
 | `agent-overrides` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a preview session, its draft) sets an override | `{ model?: string; reasoningEffort?: 'low'\|'medium'\|'high' }` from the Live version | the `assistant`'s model function (1.3); the turn's provider options (1.4) |
 | `agent-skills` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version names skills (for a preview session, its draft) | the agent's skills as `{ id, name, description, body, files }`: the `liveSkills` copies, or for a preview the current skills the draft links | the `assistant`'s `skills` function (7.3), which gives them to the framework's skill tools (3.9) |
 | `agent-tools` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a preview session, its draft) has a `tools` list; its value is computed per call as the stored `tools` plus the optional tool groups its skills' bodies link (copies in `agent-skills`), and the assistant treats a selection of all three as no selection; eval cases with `agentTools` (8.1) | the effective optional tools, e.g. `['sample_rows']` (direct links and skill links, 2.1) | the `assistant`'s tools and instructions functions (2.1); Block 1 (4.1) |

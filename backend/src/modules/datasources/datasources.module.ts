@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MemoryModule } from '../memory/memory.module';
 import { DatasourcesController } from './datasources.controller';
 import { DatasourcesService } from './datasources.service';
 import { DatasourcesRepository } from './repositories/datasources.repository';
@@ -8,6 +9,7 @@ import { PostgresConnector } from './connectors/postgres.connector';
 import { RestConnector } from './connectors/rest.connector';
 
 @Module({
+  imports: [MemoryModule],
   controllers: [DatasourcesController],
   providers: [
     DatasourcesService,

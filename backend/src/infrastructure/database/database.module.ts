@@ -7,7 +7,9 @@ import {
   AGENTS_STORE,
   CONNECTIONS_STORE,
   DATASOURCE_INVENTORIES_STORE,
+  DOC_STORE_MAINTENANCE,
   DOC_STORE_TRANSACTIONS,
+  MEMORY_SIGNALS_STORE,
   METRICS_STORE,
   EVAL_RUNS_STORE,
   KNOWLEDGE_STORE,
@@ -20,6 +22,7 @@ import {
   VERIFIED_QUERIES_STORE,
 } from './doc-store';
 import { SqliteDocStore } from './sqlite-doc-store';
+import { SqliteMaintenance } from './sqlite-maintenance';
 import { SqliteTransactions } from './sqlite-transactions';
 
 /**
@@ -47,6 +50,7 @@ const COLLECTIONS = [
   { token: SKILLS_STORE, table: 'skills' },
   { token: SKILL_OVERRIDES_STORE, table: 'skill_overrides' },
   { token: AGENT_PROMPT_OVERRIDES_STORE, table: 'agent_prompt_overrides' },
+  { token: MEMORY_SIGNALS_STORE, table: 'memory_signals' },
 ];
 
 const sqliteDbProvider: Provider = {
@@ -303,9 +307,26 @@ const transactionsProvider: Provider = {
     new SqliteTransactions(db),
 };
 
+/** Compaction of `app.sqlite` (data-model 3.15). */
+const maintenanceProvider: Provider = {
+  provide: DOC_STORE_MAINTENANCE,
+  inject: [SQLITE_DB],
+  useFactory: (db: import('better-sqlite3').Database) =>
+    new SqliteMaintenance(db),
+};
+
 @Global()
 @Module({
-  providers: [sqliteDbProvider, ...storeProviders, transactionsProvider],
-  exports: [...COLLECTIONS.map((c) => c.token), DOC_STORE_TRANSACTIONS],
+  providers: [
+    sqliteDbProvider,
+    ...storeProviders,
+    transactionsProvider,
+    maintenanceProvider,
+  ],
+  exports: [
+    ...COLLECTIONS.map((c) => c.token),
+    DOC_STORE_TRANSACTIONS,
+    DOC_STORE_MAINTENANCE,
+  ],
 })
 export class DatabaseModule {}

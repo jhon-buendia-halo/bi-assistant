@@ -90,6 +90,7 @@ import { LlmService } from '../llm/llm.service';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
+import { MemoryService } from '../memory/memory.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
 import { SUPER_ADMIN } from '../../common/super-admin';
@@ -165,6 +166,8 @@ const EXPORT_RFP_PACKAGE_TOOLS = new Set([
  * answer without re-reading (and possibly disagreeing with) the store.
  */
 const KNOWLEDGE_USED_CONTEXT_KEY = 'knowledge-used';
+/** Longest note a thumbs-down keeps (api.md 7). */
+const FEEDBACK_NOTE_CHARS = 4_000;
 /** Repair attempts allowed per failed statement (3 executions at most). */
 const SQL_REPAIR_ATTEMPTS = 2;
 const SQL_REPAIRED_NOTE =
@@ -247,6 +250,9 @@ export class SessionsService implements OnModuleInit {
     private readonly userAgents: UserAgentsService,
     // The RFP Builder's REST target and package export (agents.md 3.10).
     @Optional() private readonly rfpPackages?: RfpPackagesService,
+    // The memory of past sessions (knowledge R30 to R43): Block 3b of a chat
+    // turn and what a rating retains. Only a unit test leaves it out.
+    @Optional() private readonly memory?: MemoryService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -328,19 +334,33 @@ export class SessionsService implements OnModuleInit {
    * requestContext scoping the tools to this session.
    *
    * Memory-free on purpose — `agentOptions` adds the session's conversation
-   * thread, `backgroundAgentOptions` deliberately does not.
+   * thread, `backgroundAgentOptions` deliberately does not. `recall` (chat
+   * turns only) adds what the session's learning memories recall, Block 3b
+   * (agents.md 4.1); with the memory lever off it adds nothing at all.
    */
   private async agentContext(
     session: SessionDoc,
     question?: string,
     abortSignal?: AbortSignal,
     activeVisualId?: string,
+    recall = false,
   ) {
     // A session started from a user agent runs with the agent's current Live
     // version (sessions-chat R54), a preview with its draft (agents-evals
     // R60); once the agent is gone it is the plain assistant (R59).
     const agent = await this.agentConfigFor(session);
     const datasets = await this.boundDatasets(session.datasets);
+    // Started now, so the recall runs while Blocks 2 to 4 are built; it
+    // never throws and gives up after 2.5 seconds.
+    const learned =
+      recall && question && this.memory
+        ? this.memory.learnedContext(
+            datasets
+              .map((dataset) => dataset.datasourceId)
+              .filter((id): id is string => !!id),
+            question,
+          )
+        : undefined;
     const visualLines = (session.visualizations ?? []).map(
       (v) =>
         `- ${v.id} — "${v.title}" v${this.visuals.currentVersion(v)} (from the answer at ${v.sourceMessageAt})`,
@@ -370,9 +390,14 @@ export class SessionsService implements OnModuleInit {
     // filters) for this session's datasets — authoritative over anything
     // the model would otherwise infer from schema alone.
     const knowledge = await this.knowledge.contextFor(session.datasets);
+    const memory = await learned;
     // Threaded on requestContext rather than returned alongside the options,
     // because the options object is spread straight into the agent call.
-    requestContext.set(KNOWLEDGE_USED_CONTEXT_KEY, knowledge.used);
+    // The learned block's entries follow the snippets (knowledge R38).
+    requestContext.set(
+      KNOWLEDGE_USED_CONTEXT_KEY,
+      memory ? [...knowledge.used, ...memory.used] : knowledge.used,
+    );
     const overrides: AgentOverrides = {
       ...(agent?.model ? { model: agent.model } : {}),
       ...(agent?.reasoningEffort
@@ -430,6 +455,8 @@ export class SessionsService implements OnModuleInit {
         // The knowledge block; its rules are the on-demand curated-knowledge
         // skill (ADR-0025).
         ...knowledgeContext(knowledge.block),
+        // Block 3b: after curated knowledge, which wins on conflict.
+        ...(memory ? [{ role: 'system' as const, content: memory.block }] : []),
         ...(verified ? [{ role: 'system' as const, content: verified }] : []),
         // Last, so the base prompt and every curated block come first.
         ...(agent?.instructions.trim()
@@ -507,6 +534,7 @@ export class SessionsService implements OnModuleInit {
         question,
         abortSignal,
         activeVisualId,
+        true,
       )),
       // Each session is an isolated, persistent Mastra conversation.
       memory: { thread: session.id, resource: session.id },
@@ -2230,17 +2258,29 @@ export class SessionsService implements OnModuleInit {
    * answer's question → SQL pair into the verified query library (Vanna
    * pattern) and badges the answer as verified; thumbs-down removes whatever
    * that answer contributed and clears the badge. An answer that ran no SQL
-   * just records the rating.
+   * just records the rating. A thumbs-down may carry a note, kept on the
+   * answer; any other rating removes it (api.md 7). Once saved, the memory
+   * retains or forgets the answer's signal (knowledge R30, R31, R39).
    */
   async recordFeedback(
     id: string,
     messageAt: string,
     rating: MessageFeedback,
+    note?: unknown,
   ): Promise<SessionDoc> {
     if (rating !== 'up' && rating !== 'down') {
       throw new BadRequestException("rating must be 'up' or 'down'");
     }
     if (!messageAt) throw new BadRequestException('messageAt is required');
+    const trimmedNote = typeof note === 'string' ? note.trim() : '';
+    if (trimmedNote && rating !== 'down') {
+      throw new BadRequestException("note is only allowed with rating 'down'");
+    }
+    if (trimmedNote.length > FEEDBACK_NOTE_CHARS) {
+      throw new BadRequestException(
+        `note must be at most ${FEEDBACK_NOTE_CHARS} characters`,
+      );
+    }
     const session = await this.get(id);
     const index = session.messages.findIndex(
       (m) => m.role === 'assistant' && m.at === messageAt,
@@ -2254,29 +2294,69 @@ export class SessionsService implements OnModuleInit {
     // it, rejecting it takes the badge away even if the SQL is still stored.
     if (rating === 'up') answer.verified = true;
     else delete answer.verified;
+    if (trimmedNote) answer.feedbackNote = trimmedNote;
+    else delete answer.feedbackNote;
     messages[index] = answer;
 
+    const sql = lastSuccessfulSql(answer.data);
+    const question = messages
+      .slice(0, index)
+      .reverse()
+      .find((m) => m.role === 'user');
     if (rating === 'down') {
       await this.verifiedQueries.removeForMessage(id, messageAt);
-    } else {
-      const sql = lastSuccessfulSql(answer.data);
-      const question = messages
-        .slice(0, index)
-        .reverse()
-        .find((m) => m.role === 'user');
-      if (sql && question?.content.trim()) {
-        await this.verifiedQueries.save({
-          question: question.content,
-          sql,
-          datasourceId: await this.soleDatasourceId(session),
-          entities: answer.entities ?? [],
-          sourceSessionId: id,
-          sourceMessageAt: messageAt,
-        });
-      }
+    } else if (sql && question?.content.trim()) {
+      await this.verifiedQueries.save({
+        question: question.content,
+        sql,
+        datasourceId: await this.soleDatasourceId(session),
+        entities: answer.entities ?? [],
+        sourceSessionId: id,
+        sourceMessageAt: messageAt,
+      });
     }
     const updated = await this.updateDoc(id, { messages });
+    await this.rememberRating(session, answer, rating, {
+      question: question?.content,
+      sql,
+      note: trimmedNote,
+    });
     return updated ?? { ...session, messages };
+  }
+
+  /**
+   * The memory side of a rating, after the transcript is saved: the signal
+   * takes the question and SQL a verified query takes, on the session's one
+   * datasource. Never fails the rating.
+   */
+  private async rememberRating(
+    session: SessionDoc,
+    answer: ChatMessage,
+    rating: MessageFeedback,
+    signal: { question?: string; sql?: string; note: string },
+  ): Promise<void> {
+    if (!this.memory) return;
+    try {
+      const question = signal.question?.trim();
+      await this.memory.recordRating({
+        sessionId: session.id,
+        messageAt: answer.at,
+        rating,
+        ...(signal.note ? { note: signal.note } : {}),
+        ...(question ? { question } : {}),
+        ...(signal.sql ? { sql: signal.sql } : {}),
+        datasourceId:
+          question && signal.sql
+            ? await this.soleDatasourceId(session)
+            : undefined,
+        datasetIds: session.datasets,
+        entities: answer.entities ?? [],
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Memory side of the rating at ${answer.at} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /** The session's datasource when it is unambiguous — provenance only. */

@@ -36,7 +36,7 @@ Terms are defined once in [the glossary](../../product/glossary.md); this capabi
 - R12. A test SHALL perform the cheapest real round trip for the kind: Databricks and PostgreSQL run `SELECT 1`; REST fetches one row (page size 1) from the first endpoint. REST additionally rejects an empty base URL (`baseUrl is required`) and an empty endpoint list (`At least one endpoint is required`).
 - R13. Saving SHALL be possible only after a successful test of the exact values in the form: any field edit, kind change, endpoint add/remove or opening a datasource for editing resets the "tested" state, and "Save datasource" / "Save changes" is disabled until the next successful test. Save is also disabled while the Name is empty. The backend itself does not require a prior test.
 - R14. Saving an existing datasource (edit) SHALL update it in place under the same id; saving without an id SHALL create one. The list is ordered by most recently updated first.
-- R15. Deleting a datasource SHALL ask for confirmation and, once confirmed, remove the datasource and its stored inventory snapshot. Datasets bound to it SHALL NOT be deleted or modified.
+- R15. Deleting a datasource SHALL ask for confirmation and, once confirmed, remove the datasource and its stored inventory snapshot, and forget its learning memory ([knowledge](../knowledge/spec.md) R41). Datasets bound to it SHALL NOT be deleted or modified.
 - R16. Test, save, delete and REST discovery SHALL report outcome as `{ ok, message }`; a failed operation is not an HTTP error. The UI shows `message` as a success or error toast.
 
 ### Credentials

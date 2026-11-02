@@ -64,17 +64,32 @@ export interface KnowledgeSnippetDraft {
 }
 
 /**
+ * The kind of a `KnowledgeUse`: a snippet's kind, or for an entry of the
+ * learned block a signal's kind or `summary` (data-model 3.9).
+ */
+export type KnowledgeUseKind =
+  | KnowledgeSnippetKind
+  | 'verified_query'
+  | 'correction'
+  | 'rejection'
+  | 'summary';
+
+/**
  * A snippet as it was handed to the assistant for one turn. Recorded at
  * context-assembly time, not inferred afterwards: only snippets that actually
  * fit inside the block's character budget are captured, so the trail can
- * never claim knowledge the model never saw.
+ * never claim knowledge the model never saw. The summaries and signals of
+ * the turn's learned block follow the snippets, marked `source: 'memory'`
+ * (knowledge R38).
  */
 export interface KnowledgeUse {
   id: string;
-  kind: KnowledgeSnippetKind;
+  kind: KnowledgeUseKind;
   title: string;
   /** The body exactly as it appeared in the block. */
   body: string;
-  /** Dataset the snippet is scoped to; absent for a global snippet. */
+  /** Dataset the snippet is scoped to; absent for a global or memory entry. */
   datasetId?: string;
+  /** `memory` on an entry of the learned block; absent on a snippet. */
+  source?: 'memory';
 }

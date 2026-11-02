@@ -383,13 +383,14 @@ export class SessionsController {
   @Post(':id/messages/feedback')
   async rateMessage(
     @Param('id') id: string,
-    @Body() body: { messageAt?: string; rating?: string },
+    @Body() body: { messageAt?: string; rating?: string; note?: unknown },
   ): Promise<{ ok: boolean; message: string; session?: SessionDoc }> {
     try {
       const session = await this.sessionsService.recordFeedback(
         id,
         body?.messageAt ?? '',
         body?.rating as MessageFeedback,
+        body?.note,
       );
       return {
         ok: true,

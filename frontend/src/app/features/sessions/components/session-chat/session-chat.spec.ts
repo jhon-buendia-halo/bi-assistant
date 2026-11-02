@@ -1,5 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
 import {
   ComponentFixture,
   TestBed,
@@ -890,5 +893,178 @@ describe('skillStepLabel', () => {
     expect(skillStepLabel('skill_read')).toBe('Reading skill file');
     expect(skillStepLabel('skill_search')).toBe('Searching skills');
     expect(skillStepLabel('get_rfp')).toBeNull();
+  });
+});
+
+describe('SessionChat memory and thumbs-down note', () => {
+  let fixture: ComponentFixture<SessionChat>;
+  let http: HttpTestingController;
+
+  const answer: ChatMessage = {
+    role: 'assistant',
+    content: 'Answer',
+    at: '2026-01-01T00:00:01.000Z',
+    data: [{ tool: 'run_readonly_sql', input: 'select 1', rowCount: 1 }],
+  };
+
+  async function render(message: ChatMessage): Promise<HTMLElement> {
+    await TestBed.configureTestingModule({
+      imports: [SessionChat],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(SessionChat);
+    fixture.componentRef.setInput('session', sessionWith(message));
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  function button(el: HTMLElement, text: string): HTMLButtonElement {
+    return Array.from(el.querySelectorAll<HTMLButtonElement>('button')).find(
+      (b) => b.textContent?.trim() === text,
+    ) as HTMLButtonElement;
+  }
+
+  describe('note form', () => {
+    const down: ChatMessage = { ...answer, feedback: 'down' };
+
+    it('offers Add a note only on a thumbs-down', async () => {
+      const el = await render(answer);
+      expect(button(el, 'Add a note')).toBeUndefined();
+    });
+
+    it('saves the note with the thumbs-down rating', async () => {
+      const el = await render(down);
+      button(el, 'Add a note').click();
+      fixture.detectChanges();
+      const area = el.querySelector('textarea') as HTMLTextAreaElement;
+      expect(area.maxLength).toBe(4000);
+      expect(el.textContent).toContain('What was wrong?');
+      area.value = '  Use net revenue  ';
+      area.dispatchEvent(new Event('input'));
+      button(el, 'Save note').click();
+      const req = http.expectOne((r) =>
+        r.url.endsWith('/sessions/session-1/messages/feedback'),
+      );
+      expect(req.request.body).toEqual({
+        messageAt: answer.at,
+        rating: 'down',
+        note: 'Use net revenue',
+      });
+      req.flush({ ok: true, message: 'Answer marked as wrong' });
+      fixture.detectChanges();
+      expect(el.textContent).toContain('Note: Use net revenue');
+      expect(button(el, 'Edit note')).toBeTruthy();
+    });
+
+    it('clears the note when the text is empty', async () => {
+      const el = await render({ ...down, feedbackNote: 'old' });
+      button(el, 'Edit note').click();
+      fixture.detectChanges();
+      const area = el.querySelector('textarea') as HTMLTextAreaElement;
+      expect(area.value).toBe('old');
+      area.value = '';
+      area.dispatchEvent(new Event('input'));
+      button(el, 'Save note').click();
+      const req = http.expectOne((r) => r.url.endsWith('/messages/feedback'));
+      expect(req.request.body.note).toBe('');
+      req.flush({ ok: true, message: 'ok' });
+      fixture.detectChanges();
+      expect(el.textContent).not.toContain('Note: old');
+      expect(button(el, 'Add a note')).toBeTruthy();
+    });
+
+    it('does nothing on Cancel', async () => {
+      const el = await render({ ...down, feedbackNote: 'old' });
+      button(el, 'Edit note').click();
+      fixture.detectChanges();
+      button(el, 'Cancel').click();
+      fixture.detectChanges();
+      http.expectNone((r) => r.url.endsWith('/messages/feedback'));
+      expect(el.querySelector('textarea[maxlength="4000"]')).toBeNull();
+      expect(el.textContent).toContain('Note: old');
+    });
+
+    it('posts a thumbs-up without a note', async () => {
+      const el = await render({ ...down, feedbackNote: 'old' });
+      (
+        el.querySelector('[aria-label="Save as verified query"]') as HTMLElement
+      ).click();
+      const req = http.expectOne((r) => r.url.endsWith('/messages/feedback'));
+      expect(req.request.body).toEqual({ messageAt: answer.at, rating: 'up' });
+    });
+  });
+
+  describe('memory entries in Knowledge in context', () => {
+    const memory = {
+      id: 'rating:session-0:2025-12-31T00:00:00.000Z',
+      kind: 'verified_query' as const,
+      title: 'verified_query · 2025-12-31',
+      body: 'Question: How many?\nSQL: select 1',
+      source: 'memory' as const,
+    };
+    const withMemory = (
+      kind: 'verified_query' | 'summary' = 'verified_query',
+    ) =>
+      ({
+        ...answer,
+        knowledge: [
+          {
+            id: 'k1',
+            kind: 'term',
+            title: 'Churn',
+            body: 'def',
+            datasetId: 'd1',
+          },
+          {
+            ...memory,
+            kind,
+            id: kind === 'summary' ? 'summary:ds' : memory.id,
+          },
+        ],
+      }) as ChatMessage;
+
+    it('shows the Memory badge, lines and the footer sentence', async () => {
+      const el = await render(withMemory());
+      expect(el.textContent).toContain('Knowledge in context (2)');
+      expect(el.textContent).toContain('Memory');
+      expect(el.textContent).not.toContain(
+        'verified_query · 2025-12-31 global',
+      );
+      expect(el.textContent).toContain('Question: How many?');
+      expect(el.textContent).toContain('SQL: select 1');
+      expect(el.textContent).toContain(
+        'Memory entries come from rated answers in past sessions',
+      );
+    });
+
+    it('calls the API only after confirm, then shows Forgotten', async () => {
+      const el = await render(withMemory());
+      const forget = el.querySelector(
+        `[aria-label="Forget memory ${memory.title}"]`,
+      ) as HTMLButtonElement;
+      const confirm = spyOn(window, 'confirm').and.returnValue(false);
+      forget.click();
+      expect(confirm).toHaveBeenCalledWith(
+        'Forget this memory? Later answers will not use it.',
+      );
+      http.expectNone((r) => r.url.includes('/memory/signals/'));
+      confirm.and.returnValue(true);
+      forget.click();
+      const req = http.expectOne(
+        (r) =>
+          r.method === 'DELETE' &&
+          r.url.endsWith(`/memory/signals/${encodeURIComponent(memory.id)}`),
+      );
+      req.flush(null, { status: 204, statusText: 'No Content' });
+      fixture.detectChanges();
+      expect(el.querySelector('[aria-label^="Forget memory"]')).toBeNull();
+      expect(el.textContent).toContain('Forgotten');
+    });
+
+    it('offers no Forget on the summary entry', async () => {
+      const el = await render(withMemory('summary'));
+      expect(el.querySelector('[aria-label^="Forget memory"]')).toBeNull();
+    });
   });
 });

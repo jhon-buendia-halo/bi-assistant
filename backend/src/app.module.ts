@@ -15,6 +15,7 @@ import { TestingDataModule } from './modules/testing-data/testing-data.module';
 import { DeveloperSettingsModule } from './modules/developer-settings/developer-settings.module';
 import { UiPreferencesModule } from './modules/ui-preferences/ui-preferences.module';
 import { SkillsModule } from './modules/skills/skills.module';
+import { MemoryModule } from './modules/memory/memory.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { SkillsModule } from './modules/skills/skills.module';
     VerifiedQueriesModule,
     MetricsModule,
     KnowledgeModule,
+    MemoryModule,
     SessionsModule,
     RfpPackagesModule,
     DeepAnalysisModule,

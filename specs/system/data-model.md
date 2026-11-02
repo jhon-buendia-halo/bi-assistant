@@ -30,8 +30,8 @@ The directory is created (recursively) at backend start if it does not exist.
 
 | Store | Location (relative to app data dir) | Technology (see Implementation note) | What goes in it | Owner |
 |---|---|---|---|---|
-| **App document store** | `app.sqlite` | Embedded SQLite, one table per collection, one JSON document per row | The application collections in section 3: connections, settings, datasets, sessions, inventories, verified queries, metrics, eval runs, knowledge, agents, skills and the overrides | App backend |
-| **Agent memory store** | `mastra.sqlite` | LibSQL file (Mastra runtime storage) | Conversation memory threads/messages for the `assistant` agent (section 5); any other Mastra runtime state | Agent framework |
+| **App document store** | `app.sqlite` | Embedded SQLite, one table per collection, one JSON document per row | The application collections in section 3: connections, settings, datasets, sessions, inventories, verified queries, metrics, eval runs, knowledge, agents, skills, the overrides and the memory outbox | App backend |
+| **Agent memory store** | `mastra.sqlite` | LibSQL file (Mastra runtime storage) | Conversation memory threads/messages for the `assistant` agent (section 5.1); the learning memories of the cross-session memory, with their embeddings and summaries (section 5.2); any other Mastra runtime state | Agent framework |
 | **Observability store** | `observability.duckdb` | DuckDB (memory limit 512 MB, 2 threads) | Agent traces, metrics and logs written by the framework's storage exporter (service name `questions-to-insights`, log level `info`) | Agent framework |
 | **Session workspaces** | `workspaces/session-<session-id>/` | Plain directories, a contained filesystem root per session | Visual bundles and deep-analysis reports (section 4) | App backend + agents (agents can create/edit files there but cannot delete) |
 | **Developer settings** | `developer-settings.json` | JSON file, written atomically (temp file + rename) | `{ observabilityEnabled: boolean, phoenixEndpoint: string, otlpEndpoint: string, updatedAt: ISO string }`. Absent until the first save, and absent means the defaults (`false`, `http://localhost:6006`, `http://localhost:4318`). Invalid or missing values fall back to their defaults. Read synchronously by the backend at startup, before any app module loads (ADR-0006). See [../capabilities/developer-settings/spec.md](../capabilities/developer-settings/spec.md). | App backend |
@@ -103,7 +103,7 @@ Summary:
 | Collection (table) | Purpose | Identity | Default order | Capability |
 |---|---|---|---|---|
 | `connections` | Saved datasources (data platform connections) | `id` | `updatedAt` desc | [datasources](../capabilities/datasources/spec.md) |
-| `settings` | Single-row app settings: the LLM settings, the built-in agent pins and the UI preferences | `key` (`"llm"`, `"builtin-agent-pins"`, `"ui-preferences"`) | n/a | [llm-settings](../capabilities/llm-settings/spec.md) |
+| `settings` | Single-row app settings: the LLM settings, the built-in agent pins, the UI preferences and the memory lever | `key` (`"llm"`, `"builtin-agent-pins"`, `"ui-preferences"`, `"memory"`) | n/a | [llm-settings](../capabilities/llm-settings/spec.md); the `memory` document [knowledge](../capabilities/knowledge/spec.md) R30 |
 | `datasets` | Named selections of entities with a schema snapshot | `name` (unique, upsert key) | `updatedAt` desc | [datasets](../capabilities/datasets/spec.md) |
 | `sessions` | Chat sessions with full transcript and visual metadata | `id` | `updatedAt` desc | [sessions-chat](../capabilities/sessions-chat/spec.md), [visuals](../capabilities/visuals/spec.md) |
 | `datasource_inventories` | Cached catalog/schema/table walk per datasource | `id` = datasource id | n/a | [datasources](../capabilities/datasources/spec.md) |
@@ -115,6 +115,7 @@ Summary:
 | `skills` | In-app skills a user writes and assigns to their agents | `id`; `name` unique | `updatedAt` desc | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `skill_overrides` | Org-wide overrides of built-in skills, edited in the app | `name` (a built-in skill's name) | n/a | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `agent_prompt_overrides` | Org-wide overrides of built-in agents' system prompts, edited in the app | `key` (a built-in agent's registry key) | n/a | [agents-evals](../capabilities/agents-evals/spec.md) |
+| `memory_signals` | Outbox of rating signals on their way to the cross-session memory, kept as the audit of what it was given | `id`; one row per `documentId` | `createdAt` asc (store order) | [knowledge](../capabilities/knowledge/spec.md) R30 to R43 |
 
 Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets`, `agents` and `skills` carry a legacy, inert `ownerId` (section 3.14). There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
 
@@ -202,6 +203,30 @@ No document stored = "not configured": agents fall back to model `openai/gpt-4o-
 
 Written by `PUT /ui-preferences` ([api.md](api.md) 57); ADR-0009.
 
+#### 3.2.2 `settings` document `memory`
+
+The memory lever of the memory of past sessions ([knowledge](../capabilities/knowledge/spec.md) R30, ADR-0031), keyed like the `llm` document.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `key` | string | yes | Identity: `"memory"`. One document. |
+| `enabled` | boolean | yes | `true` turns the memory on. Absent document = off (the default). |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+Written by `PUT /memory/settings` and read by `GET /memory/settings` ([api.md](api.md) 109, 108). The embedding key is not stored here: it is the LLM settings' key or the environment's ([agents.md](agents.md) 2.1).
+
+#### 3.2.3 `settings` document `memory-compaction`
+
+Where a compaction of the app's files after a forget (5.2) is remembered until it is done.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `key` | string | yes | Identity: `"memory-compaction"`. |
+| `pendingSince` | ISO | yes | Written before every compaction, so a stop mid-way counts. |
+| `lastError` | string | no | The last failure. |
+
+The document is deleted once both files are compacted; at start-up its presence runs the compaction.
+
 ### 3.3 `datasets`
 
 A named, saved selection of entities from one datasource, with a point-in-time schema snapshot so agent context needs no live round-trip. Upserted by `name` (saving an existing name replaces `tables`/`entities`/binding). The collection may also hold **legacy single-selection documents without a `name`** from the pre-dataset era; every read filters with `name $exists`, so they are invisible (and never deleted).
@@ -265,9 +290,10 @@ Deleting a session deletes the document, its agent memory thread and its workspa
 | `verified` | boolean | no | Always `true` when present. Set when the answer's final successful SQL matches a stored verified query, or on thumbs-up; removed on thumbs-down. |
 | `interpretation` | string | no | Deterministic provenance line built at persist time (never model output): `Computed from <n> quer(y\|ies) over <entities, comma-joined> — <rows> row(s) analyzed.` (` over …` omitted with no entities). Absent with no successful SQL. |
 | `feedback` | enum | no | `up` \| `down`. A thumbs-up also upserts a verified query (section 3.6). |
+| `feedbackNote` | string | no | The thumbs-down's note ([sessions-chat](../capabilities/sessions-chat/spec.md) R36): trimmed, at most 4,000 characters, present only with `feedback: "down"` and never empty. A later rating replaces it or, for `up`, removes it ([api.md](api.md) 7). |
 | `crossCheck` | object | no | Careful mode only: `{status: "agree" \| "disagree" \| "error", note?: string}`; `note` is a one-line tooltip text (clipped). `agree` = an independent re-derived query returned the same result set, `disagree` = it differed, `error` = the check could not complete. |
 | `reasoning` | `ReasoningStep[]` | no | The assistant's plain-language route to the answer (3.4.2); omitted when no call carried a rationale. Older transcripts lack it; readers derive it from `data[].rationale`. |
-| `knowledge` | `KnowledgeUse[]` | no | The enabled knowledge snippets that fit the turn's context budget (3.9). Records what the model was *given*. |
+| `knowledge` | `KnowledgeUse[]` | no | The enabled knowledge snippets that fit the turn's context budget, then the summaries and signals of the learned block, marked `source: "memory"` (3.9). Records what the model was *given*. |
 | `report` | `AnalysisReport` | no | `{jobId: string, title: string, path: string, angles: number}` — set on the message a finished deep-analysis job appends. `path` is workspace-relative (`reports/<jobId>.md`), `angles` the number of investigation angles covered. |
 | `rfpPackage` | `RfpPackageRef` | no | `{rfpId: string, title: string, files: {name: string, bytes: number}[], exportedAt: ISO, draft?: boolean}` — `draft: true` when the package is a draft stored under `rfp/<rfpId>/draft/` by `export_rfp_draft`, absent for the final package. Set on the answer of a turn whose `export_rfp_package` or `export_rfp_draft` call stored an RFP package in the session workspace (`rfp/<rfpId>/`, section 4.1). `files[].name` is relative to that folder (`rfp.md`, `rfp.pdf`, `exhibits/<name>.csv`, `manifest.json`). Rendered as the package card; downloaded through [api.md](api.md) #105. RFP Builder sessions only. |
 
@@ -430,7 +456,9 @@ Curated business-glossary terms, standing instructions and default filters injec
 
 Bootstrap-created snippets are always `{source: "mined", enabled: false, scope: {datasetId: <dataset name>}}`, capped at the agent's draft limit, and a draft whose case-insensitive trimmed title already exists in that dataset's scope is skipped.
 
-`KnowledgeUse` (embedded in messages, not a collection): `id`, `kind`, `title`, `body` (exactly as it appeared in the block), `datasetId` (string, no; absent for a global snippet). Context assembly: enabled snippets whose scope is global or whose `datasetId` is among the session's datasets, ordered dataset-scoped before global then `updatedAt` desc, accumulated into a 2000-character block until the next entry would not fit; only those that fit are recorded as `knowledge`.
+`KnowledgeUse` (embedded in messages, not a collection): `id`, `kind`, `title`, `body` (exactly as it appeared in the block), `datasetId` (string, no; absent for a global snippet and on a memory entry), `source` (`memory`, no; absent on a snippet). Context assembly: enabled snippets whose scope is global or whose `datasetId` is among the session's datasets, ordered dataset-scoped before global then `updatedAt` desc, accumulated into a 2000-character block until the next entry would not fit; only those that fit are recorded as `knowledge`.
+
+An entry with `source: "memory"` is no snippet: it is a summary or a signal the turn sent in the learned block ([agents.md](agents.md) 4.1, Block 3b; [knowledge](../capabilities/knowledge/spec.md) R38), recorded after the snippets. For a signal, `id` is its document id (3.15), `kind` its signal kind (`verified_query`, `correction` or `rejection`; no `correction` is retained until the reviewer's-note action exists, knowledge R31), `title` `<kind> · <YYYY-MM-DD>` (the date in its text, 3.15) and `body` its text as sent; for a summary, `id` is `summary:<scope>` and `kind` and `title` are `summary`. Answers recorded before the memory have no `source` on any entry, and none of theirs came from it.
 
 ### 3.10 `agents` — user agents
 
@@ -534,6 +562,8 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 | `sessions[].visualizations[]` | `id`, `path` | `workspaces/session-<id>/visuals/<id>/` | Files under the session workspace; both removed with the session. |
 | `sessions[].messages[]` | `visual.visualId`, `report.jobId` | visual id / report file | By value. |
 | session | `id` | agent memory thread id and resource id; workspace `session-<id>` | See section 5. |
+| `memory_signals` | `datasourceId` | `connections.id` | By value; the rows of a datasource are deleted explicitly with it, together with its learning memory (section 5.2, knowledge R41). |
+| `memory_signals` | `documentId` | the rated or noted answer (`rating:<sessionId>:<messageAt>`, `correction:<sessionId>:<messageAt>`) | By value, no cascade: deleting the session keeps its signals, as it keeps its verified queries. |
 
 ---
 
@@ -545,6 +575,33 @@ The app is single-user (ADR-0030): one built-in super admin, id `local`, is alwa
 - A document with no `ownerId` (written by code that predates the stamp) is read exactly like one with `local`.
 - **Uniqueness** that was per owner (agent names, skill names, metric names, the verified-query key `(sourceSessionId, sourceMessageAt)`) is now unique across the collection; M14 renames clashing skills (`-2`, `-3`, …).
 - No identity or access data is stored: the tables `users`, `groups`, `group_members`, `role_assignments`, `group_role_mappings`, `auth_sessions` and `activity_events` of earlier versions are dropped by M14.
+
+### 3.15 `memory_signals` — the memory outbox
+
+The persisted queue between a person's judgement of an answer (a rating, with the thumbs-down's note when it has one; a reviewer's note once that action exists, knowledge R31) and the cross-session memory ([ADR-0031](architecture.md), Proposed; behaviour: [knowledge](../capabilities/knowledge/spec.md) R30 to R43; the port: [agents.md](agents.md) 2.1). A rating, or a change to a thumbs-down's note, writes one row and returns; a background flush hands the row to the memory's `retain`, so a click never waits for the memory, and a memory that cannot store yet only delays what it learns. Rows are kept once stored, as the audit of what the memory was given, until their signal is forgotten. Rows are written only while the memory lever is on (knowledge R30).
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | |
+| `documentId` | string | yes | The signal's identity in the memory. `rating:<sessionId>:<messageAt>` for a thumbs-up or a thumbs-down, one per rated answer, so a later rating of the same answer, or a change to the thumbs-down's note, replaces it (knowledge R39); `correction:<sessionId>:<messageAt>` for a reviewer's note, one per answer, replaced when the note changes and forgotten when it is cleared; the app writes no row with this id until the reviewer's-note action exists (knowledge R31), but **Forget** and the port accept it. **Forget** deletes either (knowledge R40). |
+| `kind` | enum | yes | `verified_query` (a thumbs-up) \| `rejection` (a thumbs-down, with its note when it has one) \| `correction` (a reviewer's note on an answer; not written in this version). A thumbs-down is always a `rejection`, note or not (knowledge R31). |
+| `datasourceId` | string | yes | The session's one datasource (knowledge R31); it chooses the learning memory (knowledge R35). |
+| `datasetIds` | string[] | yes | The session's dataset names. |
+| `content` | string | yes | The signal exactly as the memory stores it: the text of knowledge R33, its SQL redacted and clipped by R32 (at most 2,000 characters of SQL and 1,000 of note). Never a row value. |
+| `occurredAt` | ISO | yes | The rated or noted answer's `at`. Its UTC day is the date in `content`, and the memory stores the signal at this time, so a later signal is known to be later. |
+| `entities` | string[] | yes | The answer's `entities` (`catalog.schema.table`), for provenance. |
+| `status` | enum | yes | `pending` (waiting or retrying) \| `stored` (the memory accepted it) \| `failed` (given up). |
+| `attempts` | number | yes | Failed store attempts so far; `0` at first. |
+| `lastError` | string | no | The last error, clipped to 500 characters. |
+| `nextAttemptAt` | ISO | no | Earliest next attempt, set after a failure. |
+| `storedAt` | ISO | no | Set when `status` becomes `stored`. |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+**States and retries.** Writing a row never fails the rating or note that caused it: an error is logged and the rating or note stands. A new signal whose `documentId` already has a row replaces that row's signal fields and sets it back to `pending` with `attempts` `0`, whatever its state, so an answer has at most two rows, one per document id. The outbox is flushed about 2 seconds after the last row was written, every 30 seconds and at start-up. Each flush takes the `pending` rows whose `nextAttemptAt` is absent or past, groups them by learning memory, and hands each group to one `retain`. A row may reach `retain` again for a signal the memory already stored (a replaced signal, or a replay after a flush that stored but did not record it); `retain` then updates the stored signal in place and never stores a second copy (5.2). A group that is stored becomes `stored` with `storedAt`. A group that fails adds one to each row's `attempts` and records `lastError`; a row is retried after 30 seconds, doubling each time up to 15 minutes, and after its fifth failed attempt it becomes `failed` and is never retried. Rows written while the lever was on are still flushed after it is turned off (knowledge R30 keeps what was retained).
+
+**Forget.** A forget (knowledge R39 to R41) deletes the signal's rows here, whatever their state, before it deletes the signal from the learning memory, so no flush can bring it back and no audit keeps its text. Deleting a datasource deletes every row with its `datasourceId`. Nothing else deletes a row. After a **Forget** or a datasource delete (knowledge R40, R41), `app.sqlite` is compacted as `mastra.sqlite` is (5.2), since a deleted row's text otherwise stays in the file's free pages.
+
+> Implementation note: one entry `MEMORY_SIGNALS_STORE` / `memory_signals` in the collection registry; the flush and the retry schedule follow `MemoryOutboxService` on the branch `feat/hindsight-memory`, with `sent` renamed `stored` and the Hindsight bank calls replaced by the port.
 
 ## 4. Files on disk
 
@@ -690,12 +747,26 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 
 ## 5. Agent memory
 
+### 5.1 Conversation threads (message history)
+
 - Only the `assistant` agent has conversation memory. Each session is one isolated memory thread: **thread id = session id** and **resource id = session id**. Configuration: the last 40 messages are replayed; semantic recall off; automatic thread-title generation off. The store is `mastra.sqlite` (section 1.2); its internal tables are owned by the framework and are not part of this contract.
 - What is stored: the user/assistant turns of chat as the framework records them (the framework writes new turns itself once the thread exists). Background jobs that fire many internal sub-calls (deep analysis) and the other agents (SQL repair, verifier, designer, knowledge bootstrap, eval judge) run **without** the memory thread so they never pollute the history a later chat question is answered from.
 - **Bootstrap of legacy transcripts.** When a turn is about to run and the thread does not yet exist (sessions created before memory was enabled, or a brand-new session), the agent input is the entire persisted transcript mapped to plain `{role, content}` text messages (structured fields such as `data` are not replayed); the framework then creates the thread from it. When the thread exists, the input is only the latest user message — except when the previous assistant message was a clarification (it ended its turn before memory saw the question), in which case the clarification text (as an assistant message) and the user's answer are both sent.
 - On session deletion the thread is deleted (`deleteThread(session id)`), the workspace is unregistered and destroyed, and the workspace directory is removed.
 - **Ownership.** Memory threads and workspaces carry no owner of their own. They are reached only through a session: every route and tool that touches a thread or workspace first loads the session by id, and an unknown id answers as not found. Session ids are random UUIDs but are not treated as secrets.
 - The session document's `messages` remain the source of truth for display and for everything with structured fields; memory is only the model's conversational context.
+
+### 5.2 Learning memories (cross-session memory)
+
+What the cross-session memory keeps ([ADR-0031](architecture.md), Proposed; rules: [knowledge](../capabilities/knowledge/spec.md) R30 to R43; the port and the "Mastra only" implementation: [agents.md](agents.md) 2.1). It sits in `mastra.sqlite` beside the conversation threads of 5.1, and the two never reach each other.
+
+- **One learning thread per scope.** A scope is one datasource (not one dataset: decided 2026-11-02, knowledge R35): thread id `learning-<scope>`, resource id `<scope>`, where `<scope>` is the datasource id. No conversation thread has a datasource id as its resource (a session's resource is its session id), and a chat's message history never reaches a learning thread. Recall is always scoped to the learning thread (scope `thread`), never to its resource: a resource-scoped recall reads a resource's store from any thread id, even one that does not exist. The thread is created by the first signal its scope stores.
+- **One message per signal.** Message id = the signal's `documentId`; role `user`; one text part, the signal's `content` from the outbox (3.15), which is the text of knowledge R33; created at the signal's `occurredAt` moved forward by the fewest milliseconds that make it unique in its thread (the framework's recall fetches a hit by its time, so two messages at one time would return the wrong one); an update keeps the stored time; metadata `{ documentId, kind, datasourceId, datasetIds, entities }`. Storing a signal whose id the thread already holds **updates** that message (`updateMessages`), which replaces its embedding too; saving it again (`saveMessages` with the same id) would replace the row but add one more embedding each time, the old text still searchable. So an answer has at most two messages, its rating's and, once the reviewer's-note action exists, its correction's, each with one embedding (knowledge R39). A message never holds a row value (knowledge R32), an answer's text or result rows.
+- **Embeddings.** Each message's text is embedded when it is stored or updated, by the memory's one embedding model, OpenAI `text-embedding-3-small` with 1536 dimensions (agents.md 2.1), into a vector index in the same file (the framework names it `memory_messages` at 1536 dimensions), one vector per message, keyed by the message id. Each vector's metadata holds a **second copy of the message's full text** (`metadata.content`) beside `message_id`, `thread_id` and `resource_id`: what a forget deletes and what an audit of the memory reads include it. `recall` embeds the question and searches that index restricted to the thread; it returns the messages oldest first, with no scores.
+- **Summary.** The working memory of the scope's resource (`<scope>`), not of the thread: the framework copies a thread's metadata into every vector it stores, so a summary kept there would leave copies a forget does not reach. The text of knowledge R42 (the three parts, at most 2,000 characters), with resource metadata `{ summaryWrittenAt, summaryStaleSince }`; the learning thread has no metadata. A one-signal forget empties the text at once and sets `summaryStaleSince`, so nothing is sent until the rewrite (knowledge R42); a whole-scope forget deletes the resource row. The rewrite runs 5 seconds after the scope's last retain or forget, is dropped when a retain or forget of the scope happened while the model wrote it (that one scheduled another), and with no signals left the summary is emptied.
+- **What a forget deletes** (knowledge R39 to R41). One signal: its message, the message's vector with the text copy in its metadata, and its outbox rows; the summary is then rewritten without it. A whole scope (a deleted datasource, or the end of an eval attempt): the thread, every message and vector of it, its working memory and its outbox rows. The framework deletes vectors in a background step after `deleteMessages` or `deleteThread` returns, so a forget waits for it (`settled()`) before it reports done. A deleted row's text still stays in the file's bytes (free pages and the write-ahead log) until the file is compacted, so a **Forget** or a datasource delete (knowledge R40, R41) then compacts `mastra.sqlite`: a write-ahead-log checkpoint (`PRAGMA wal_checkpoint(TRUNCATE)`) and a `VACUUM`; a compaction that fails is logged, kept as the `settings` document `memory-compaction` (3.2.3), and run again at the next start. Order: `mastra.sqlite` (checkpoint, `VACUUM`, checkpoint again; a checkpoint reporting busy is retried, then fails), then `app.sqlite` (`VACUUM`, after any running transaction ends). Re-rating (knowledge R39), the port's `forget` itself and the end of an eval attempt delete without compacting: the replaced or deleted text can no longer be recalled or read through the app, only found in the file's bytes until the next compaction.
+- **Eval scopes.** The memory eval ([BA-190](https://halo-powered.atlassian.net/browse/BA-190)) gives each attempt a scope of its own whose key starts `eval-` (so its thread is `learning-eval-…`), never a datasource id, and forgets it when the attempt ends. At start-up the backend deletes every learning thread whose id starts `learning-eval-` and every resource row whose id starts `eval-` (an eval scope's summary), each through the store's whole-scope forget and with raw SQL first, so nothing of the framework is built when there are none; a stopped run leaves nothing behind. An eval scope writes no outbox row: the eval calls the port directly.
+- The framework's own tables for these (threads, messages, vectors, working memory) stay outside this contract, as in 5.1. What a rebuild must keep is the content above: one learning memory per datasource, one signal per message with the text of knowledge R33, its embedding, and the summary.
 
 ---
 
@@ -725,6 +796,8 @@ None for `agents`: it is a new collection, and the store creates the table on fi
 None for the RFP Builder (BA-213, ADR-0028): `agentKey` and `rfpId` on sessions and `rfpPackage` on messages are new optional fields, and `rfp` is a new key in `agent_prompt_overrides`. The `rfp` schema in the Intellify database has its own versioned migrations (section 7.3).
 
 None for the agent panel (BA-231, ADR-0029): `panelItems` and `workflowState` on sessions are new optional fields; visuals made before are synthesized into the item list at read time (3.4.4), so no stored document is rewritten.
+
+None for the cross-session memory (ADR-0031): `memory_signals` is a new collection, `source` on `KnowledgeUse` a new optional field read as absent on older answers (3.9), `feedbackNote` on a message a new optional field (3.4.1), the `memory` settings document new and read as off when absent (3.2.2), and learning threads are new threads in `mastra.sqlite` (5.2).
 
 Tests: the table/field renames (M1-M3), M14 and M4/M5 are covered by `database.module.spec.ts` and the repository/workspace specs.
 
@@ -852,4 +925,5 @@ Columns map to the API's camelCase fields ([api.md](api.md) 2.16.4): `client_one
 - **Message identity is the `at` millisecond timestamp**; two assistant messages created in the same millisecond would collide as feedback/visual/verified-query keys. Not observed, not guarded.
 - **Legacy single-selection `datasets` documents** (pre-`name` era) are ignored by readers but their exact shape is not documented anywhere in the code. Open question: can they be dropped?
 - **Electron `userData` name when unpackaged**: the profile name is derived from the packaged `productName` (`Halo BI Assistant`); for an unpackaged `electron .` run the name derives from the package name (`frontend`), so dev data lands in a different directory. Not verified.
-- Mastra's own `mastra.sqlite` / `observability.duckdb` internals are intentionally not specified; a rebuild on another stack only needs equivalent conversation memory (last-40 replay, thread = resource = session id) and may drop the observability store.
+- Mastra's own `mastra.sqlite` / `observability.duckdb` internals are intentionally not specified; a rebuild on another stack only needs equivalent conversation memory (last-40 replay, thread = resource = session id), the learning memories of 5.2 once the cross-session memory is built, and may drop the observability store.
+- **Open (cross-session memory, ADR-0031):** whether the `memory_signals` rows of a stored signal are pruned after some time, since today nothing prunes them (3.15); what compacting both files after each forget costs on a large data directory (5.2). The draft defaults are in the text; the options are in the BA-4 memory prep notes (OD-20, OD-22). The embedding model, which fixes the index's 1536 dimensions, was decided on 2026-10-30 (OD-2); one learning memory per datasource, not per dataset, on 2026-11-02 (OD-1).

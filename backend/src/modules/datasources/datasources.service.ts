@@ -3,7 +3,9 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { MemoryService } from '../memory/memory.service';
 import { DatabricksConnector } from './connectors/databricks.connector';
 import { PostgresConnector } from './connectors/postgres.connector';
 import { RestConnector } from './connectors/rest.connector';
@@ -39,6 +41,9 @@ export class DatasourcesService {
     private readonly databricks: DatabricksConnector,
     private readonly postgres: PostgresConnector,
     private readonly rest: RestConnector,
+    // Forgets a deleted datasource's learning memory (knowledge R41); only
+    // a unit test leaves it out.
+    @Optional() private readonly memory?: MemoryService,
   ) {}
 
   connector(kind: DatasourceKind): DatasourceConnector {
@@ -124,6 +129,9 @@ export class DatasourcesService {
     const existing = await this.get(id);
     await this.repository.delete(id);
     await this.inventoryCache.delete(id);
+    // Its outbox rows, its learning memory, then the files compacted; a
+    // failure is logged there and never fails the delete.
+    await this.memory?.forgetDatasource(id);
     return existing;
   }
 

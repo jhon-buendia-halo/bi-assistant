@@ -40,6 +40,7 @@ Ownership
 ## Edge cases and errors
 
 - Re-clicking an already-selected thumb does nothing in the UI. Via the API, a second thumbs-up for the same answer replaces the stored pair (R4).
+- Saving the note of a thumbs-down ([sessions-chat](../sessions-chat/spec.md) R36) sends the thumbs-down again; the library is unchanged, since the answer's pair is already gone (R5).
 - Switching thumbs-down to thumbs-up on an answer re-saves its pair; thumbs-up to thumbs-down removes it.
 - Rating an answer that ran no SQL (a plain-text reply) is not offered in the UI: the thumbs are shown only on answers that carry retrieved data.
 - The rating request is answered successfully (HTTP 200) with a failure flag and message on error; the UI shows the message in an error toast (`Could not save feedback` if none) and rolls the thumb back to its previous state.

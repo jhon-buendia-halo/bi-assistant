@@ -1,0 +1,69 @@
+<div class="flex flex-col gap-4">
+  <div class="mb-1">
+    <h2 class="text-[15px] font-semibold text-fg-strong">Memory</h2>
+  </div>
+
+  @if (view(); as current) {
+    <div
+      class="flex items-start justify-between gap-4 rounded-xl border border-border p-3"
+    >
+      <div class="flex flex-col gap-1">
+        <span id="memory-enabled-label" class="text-[13px] font-medium text-fg"
+          >Remember what rated answers teach</span
+        >
+        <span class="text-[12px] text-fg-muted">
+          When on, a thumbs-up or thumbs-down on an answer that ran SQL is
+          remembered and offered to later sessions on the same datasource, after
+          curated knowledge. Off by default.
+        </span>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-label="Memory of past sessions"
+        [attr.aria-checked]="current.enabled"
+        [disabled]="saving()"
+        (click)="toggle()"
+        class="relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+        [class.bg-primary]="current.enabled"
+        [class.bg-border-strong]="!current.enabled"
+      >
+        <span
+          class="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-surface transition-transform"
+          [class.translate-x-4]="current.enabled"
+        ></span>
+      </button>
+    </div>
+
+    @switch (current.embeddingKey) {
+      @case ("llm-settings") {
+        <p data-testid="memory-embeddings" class="text-[12px] text-fg-muted">
+          Embeddings: OpenAI text-embedding-3-small, with the key saved in LLM
+          configuration.
+        </p>
+      }
+      @case ("environment") {
+        <p data-testid="memory-embeddings" class="text-[12px] text-fg-muted">
+          Embeddings: OpenAI text-embedding-3-small, with OPENAI_API_KEY from
+          the environment.
+        </p>
+      }
+      @default {
+        <p
+          data-testid="memory-embeddings"
+          class="flex items-start gap-2 rounded-md border border-on-warning-soft/30 bg-warning-soft px-3 py-2.5 text-[12px] text-on-warning-soft"
+        >
+          <lucide-angular
+            [img]="TriangleAlert"
+            [size]="14"
+            class="mt-0.5 shrink-0"
+          />
+          <span
+            >No OpenAI key for embeddings: choose OpenAI in LLM configuration or
+            set OPENAI_API_KEY. Until then nothing is remembered.</span
+          >
+        </p>
+      }
+    }
+  }
+</div>

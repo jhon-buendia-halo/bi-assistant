@@ -120,8 +120,10 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - Thumbs up stores the preceding question → last successful SQL as a verified query and sets the badge.
   - Thumbs down removes that answer's stored pair and clears the badge.
   - Repeating the same rating does nothing.
+  - An answer marked wrong offers an optional **note** saying what was wrong: "Add a note" ("Edit note" once one is set) opens an inline form, and "Save note" sends the thumbs-down again with the note, which replaces the one stored. The note is trimmed and holds at most 4,000 characters; saving it empty clears it. Only a thumbs-down carries a note: a thumbs-up afterwards removes it. The answer shows a set note under the thumbs, prefixed `Note: `.
+  - With the memory lever on, a rating and the thumbs-down's note teach the memory of past sessions: what each retains, replaces or forgets is [knowledge](../knowledge/spec.md) R31 and R39.
 
-  The rating is persisted on the answer. The library itself is specified in [verified-queries](../verified-queries/spec.md).
+  The rating and the note are persisted on the answer. The library itself is specified in [verified-queries](../verified-queries/spec.md).
 
 ### Careful mode (cross-check)
 
@@ -231,6 +233,10 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 | Rating succeeds | Toast "Answer saved as a verified query" (up) or "Answer marked as wrong" (down). |
 | Rating an unknown message | 404 "No assistant message at <at>". |
 | Invalid rating | 400 "rating must be 'up' or 'down'". |
+| Note sent with a thumbs-up | Rejected: "note is only allowed with rating 'down'". |
+| Note longer than 4,000 characters | Rejected: "note must be at most 4000 characters". The form's textarea stops at 4,000 characters. |
+| Note saved | Toast "Note saved", or "Note removed" when an empty note cleared one. The form closes. |
+| Note fails to save | Error toast with the server message. The stored note is unchanged. |
 | Copy to clipboard | "Copied to clipboard" / "SQL copied to clipboard" / "Copy failed". |
 | Session created | Toast `Session "<name>" created`. The session opens immediately and the list reloads. |
 | Start chat on an agent with some datasets missing | The session is created over the remaining datasets (R52). The hub card already shows `Missing dataset: <names>`. |
@@ -275,7 +281,7 @@ Shell placement and tokens are in [ui.md](../../system/ui.md).
   - follow-up chips from the open visual, specified in [visuals](../visuals/spec.md).
 - **Message kinds**:
   - user bubble;
-  - answer (Markdown plus the R32–R36 blocks, the "Generate interactive visuals" action from [visuals](../visuals/spec.md), and the badges and rating buttons);
+  - answer (Markdown plus the R32–R36 blocks, the "Generate interactive visuals" action from [visuals](../visuals/spec.md), the badges and rating buttons, and the thumbs-down's note with its form);
   - clarification card (R43);
   - visual event card (see [visuals](../visuals/spec.md));
   - deep-analysis report card;
@@ -523,6 +529,27 @@ Feature: Chat answers and reliability signals
     When I click "Mark answer as wrong"
     Then I see the toast "Answer marked as wrong"
     And the answer no longer shows "Verified"
+
+  Scenario: Adding, editing and clearing the note of a thumbs-down
+    Given an answer that ran SQL is shown
+    When I click "Mark answer as wrong"
+    Then I see "Add a note" under the answer
+    When I click "Add a note"
+    And I type "It counted penalty shoot-out wins as wins." into "What was wrong?"
+    And I click "Save note"
+    Then I see the toast "Note saved"
+    And the answer shows "Note: It counted penalty shoot-out wins as wins."
+    When I click "Edit note", type "Wrong season." into "What was wrong?" and click "Cancel"
+    Then the answer still shows "Note: It counted penalty shoot-out wins as wins."
+    When I click "Edit note", clear "What was wrong?" and click "Save note"
+    Then I see the toast "Note removed"
+    And the answer shows no note and offers "Add a note"
+
+  Scenario: A thumbs-up removes the note of a thumbs-down
+    Given an answer is marked wrong with the note "Wrong season."
+    When I click "Save as verified query"
+    Then I see the toast "Answer saved as a verified query"
+    And the answer shows no note and no "Add a note"
 
   Scenario: A failed turn can be retried
     Given the backend stream fails with "Stream disconnected"

@@ -42,11 +42,20 @@ export interface ReasoningStep {
  */
 export interface KnowledgeUse {
   id: string;
-  kind: 'instruction' | 'term' | 'default_filter';
+  kind:
+    | 'instruction'
+    | 'term'
+    | 'default_filter'
+    | 'verified_query'
+    | 'correction'
+    | 'rejection'
+    | 'summary';
   title: string;
   body: string;
   /** Dataset the snippet is scoped to; absent for a global snippet. */
   datasetId?: string;
+  /** `memory` for an entry recalled from past sessions; absent when curated. */
+  source?: 'memory';
 }
 
 export interface ChatMessage {
@@ -66,6 +75,8 @@ export interface ChatMessage {
   visual?: VisualEvent;
   /** User rating of this answer; `up` saves it as a verified query. */
   feedback?: MessageFeedback;
+  /** The optional note on a thumbs-down (at most 4,000 characters). */
+  feedbackNote?: string;
   /**
    * The answer's final SQL matches a stored verified query (or was promoted
    * via thumbs-up).

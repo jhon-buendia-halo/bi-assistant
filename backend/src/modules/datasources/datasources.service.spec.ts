@@ -24,7 +24,10 @@ const datasource: Datasource = {
 
 const catalogs: CatalogInfo[] = [{ name: 'main', schemas: [] }];
 
-function build(cached: { catalogs: CatalogInfo[]; fetchedAt: string } | null) {
+function build(
+  cached: { catalogs: CatalogInfo[]; fetchedAt: string } | null,
+  memory?: { forgetDatasource: jest.Mock },
+) {
   const repository = {
     list: jest.fn().mockResolvedValue([datasource]),
     get: jest.fn().mockResolvedValue(datasource),
@@ -47,6 +50,7 @@ function build(cached: { catalogs: CatalogInfo[]; fetchedAt: string } | null) {
     databricks as never,
     {} as never,
     {} as never,
+    memory as never,
   );
   return { service, repository, inventoryCache, databricks };
 }
@@ -109,6 +113,16 @@ describe('DatasourcesService inventory cache', () => {
     await service.delete('ds-1');
 
     expect(inventoryCache.delete).toHaveBeenCalledWith('ds-1');
+  });
+
+  it("forgets the datasource's learning memory when it is deleted (knowledge R41)", async () => {
+    const memory = { forgetDatasource: jest.fn().mockResolvedValue(undefined) };
+    const { service, repository } = build(null, memory);
+
+    await expect(service.delete('ds-1')).resolves.toEqual(datasource);
+
+    expect(repository.delete).toHaveBeenCalledWith('ds-1');
+    expect(memory.forgetDatasource).toHaveBeenCalledWith('ds-1');
   });
 });
 

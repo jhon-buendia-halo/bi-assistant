@@ -223,6 +223,7 @@ describe('App without sign-in or permissions (BA-232)', () => {
     expect(settingsLabels(element)).toEqual([
       'Datasource Configuration',
       'LLM Configuration',
+      'Memory',
       'Testing Data',
       'Developer',
       'Appearance',

@@ -540,6 +540,58 @@
                   </button>
                 }
               </div>
+              @if (message.feedback === "down" && message.data?.length) {
+                <div class="mt-1 flex flex-col items-start gap-1">
+                  @if (noteEditing() === message.at) {
+                    <form
+                      class="flex w-full max-w-[480px] flex-col gap-2"
+                      (submit)="$event.preventDefault(); saveNote(message)"
+                    >
+                      <label class="field-label" [for]="'note-' + message.at"
+                        >What was wrong?</label
+                      >
+                      <textarea
+                        [id]="'note-' + message.at"
+                        class="field"
+                        rows="3"
+                        maxlength="4000"
+                        placeholder="Optional: what the right reading is"
+                        [value]="noteDraft()"
+                        (input)="noteDraft.set($any($event.target).value)"
+                      ></textarea>
+                      <div class="flex gap-2">
+                        <button
+                          type="submit"
+                          class="btn btn-primary"
+                          [disabled]="feedbackPending() === message.at"
+                        >
+                          Save note
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn-ghost"
+                          (click)="cancelNote()"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  } @else {
+                    @if (message.feedbackNote) {
+                      <p class="text-[12px] text-fg-muted">
+                        Note: {{ message.feedbackNote }}
+                      </p>
+                    }
+                    <button
+                      type="button"
+                      class="btn btn-ghost !px-2 !py-0 text-[12px]"
+                      (click)="openNoteForm(message)"
+                    >
+                      {{ message.feedbackNote ? "Edit note" : "Add a note" }}
+                    </button>
+                  }
+                </div>
+              }
               @if (runsAssistant() && message.content.trim()) {
                 <div class="mt-2 flex flex-wrap items-start gap-2">
                   <button
@@ -894,24 +946,59 @@
         @for (item of message.knowledge; track item.id) {
           <li class="flex min-w-0 flex-col gap-0.5">
             <span class="flex flex-wrap items-center gap-1.5">
-              <span
-                class="shrink-0 text-[11px] font-medium"
-                [class]="knowledgeAccentClass(item.kind)"
-                [title]="knowledgeDescription(item.kind)"
-                >{{ knowledgeKindLabel(item.kind) }}</span
-              >
-              <span class="text-fg">{{ item.title }}</span>
-              <span class="text-[11px] text-fg-muted">{{
-                item.datasetId ?? "global"
-              }}</span>
+              @if (isMemory(item)) {
+                <span
+                  class="shrink-0 rounded-full bg-info-soft px-1.5 text-[11px] font-medium text-on-info-soft"
+                  >Memory</span
+                >
+                <span class="text-fg">{{ item.title }}</span>
+                @if (item.kind !== "summary") {
+                  @if (forgottenMemory().has(item.id)) {
+                    <span class="text-[11px] text-fg-muted">Forgotten</span>
+                  } @else {
+                    <button
+                      type="button"
+                      class="btn btn-ghost !px-2 !py-0 text-[11px]"
+                      [attr.aria-label]="'Forget memory ' + item.title"
+                      [disabled]="forgettingMemory() === item.id"
+                      (click)="forgetMemory(item)"
+                    >
+                      Forget
+                    </button>
+                  }
+                }
+              } @else {
+                <span
+                  class="shrink-0 text-[11px] font-medium"
+                  [class]="knowledgeAccentClass(item.kind)"
+                  [title]="knowledgeDescription(item.kind)"
+                  >{{ knowledgeKindLabel(item.kind) }}</span
+                >
+                <span class="text-fg">{{ item.title }}</span>
+                <span class="text-[11px] text-fg-muted">{{
+                  item.datasetId ?? "global"
+                }}</span>
+              }
             </span>
-            <span class="leading-5 text-fg-muted">{{ item.body }}</span>
+            @if (isMemory(item)) {
+              <span class="flex flex-col leading-5 text-fg-muted">
+                @for (line of bodyLines(item.body); track $index) {
+                  <span>{{ line }}</span>
+                }
+              </span>
+            } @else {
+              <span class="leading-5 text-fg-muted">{{ item.body }}</span>
+            }
           </li>
         }
       </ul>
       <p class="border-t border-border px-3 py-1.5 text-[11px] text-fg-muted">
         Curated knowledge the assistant was given before answering. Edit it
         under Knowledge; disabled snippets are never included.
+        @if (hasMemory(message)) {
+          Memory entries come from rated answers in past sessions; they are not
+          curated.
+        }
       </p>
     </details>
   }

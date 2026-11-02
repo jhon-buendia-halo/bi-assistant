@@ -13,6 +13,7 @@ import {
   LucideIconData,
   ArrowLeft,
   Bot,
+  Brain,
   BookOpen,
   ChevronDown,
   CircleCheck,
@@ -46,6 +47,7 @@ import { DatasourcesApiService } from './features/datasources/services/datasourc
 import { LlmConfig } from './features/llm/components/llm-config/llm-config';
 import { TestingDataConfig } from './features/testing-data/components/testing-data-config/testing-data-config';
 import { DeveloperSettingsConfig } from './features/developer/components/developer-settings/developer-settings';
+import { MemorySettings } from './features/memory/components/memory-settings/memory-settings';
 import { AppearanceSettings } from './features/appearance/components/appearance-settings/appearance-settings';
 import { ThemeService } from './core/theme/theme.service';
 import { UiPreferencesService } from './core/preferences/ui-preferences.service';
@@ -112,7 +114,13 @@ import { ToastService } from './core/toast/toast.service';
 import { APP_VERSION } from './core/config/app-version';
 
 type SettingsSection =
-  'datasources' | 'llm' | 'testing-data' | 'developer' | 'appearance' | null;
+  | 'datasources'
+  | 'llm'
+  | 'memory'
+  | 'testing-data'
+  | 'developer'
+  | 'appearance'
+  | null;
 type MainView =
   | 'home'
   | 'dataset'
@@ -180,6 +188,7 @@ export interface ComposerAgentRow {
     LlmConfig,
     TestingDataConfig,
     DeveloperSettingsConfig,
+    MemorySettings,
     AppearanceSettings,
     DatasetList,
     AgentHub,
@@ -210,6 +219,7 @@ export class App {
 
   readonly ArrowLeft = ArrowLeft;
   readonly Bot = Bot;
+  readonly Brain = Brain;
   readonly BookOpen = BookOpen;
   readonly ChevronDown = ChevronDown;
   readonly CircleCheck = CircleCheck;
@@ -1230,6 +1240,7 @@ export class App {
       label: 'LLM Configuration',
       icon: Bot,
     },
+    { key: 'memory', label: 'Memory', icon: Brain },
     {
       key: 'testing-data',
       label: 'Testing Data',

@@ -64,7 +64,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Exhibit.** A table attached to an *RFP package* as a CSV file with a header row, computed from the Intellify data for the RFP's client and lines in scope: A census, B plan designs, C financials and D carriers.
 
-**Feedback.** The user's thumbs-up or thumbs-down on an answer. Thumbs-up also saves a *verified query*. Thumbs-down only marks the answer as wrong.
+**Feedback.** The user's thumbs-up or thumbs-down on an answer. Thumbs-up also saves a *verified query*. Thumbs-down marks the answer as wrong and may carry a note saying what was wrong. With the *memory lever* on, each is also a *signal*.
 
 **Fixture.** See *Sample fixture*.
 
@@ -88,6 +88,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Knowledge used.** The list of knowledge entries that were actually included in the context of one answer, recorded when the context was built. It shows what the model was given, not what it applied.
 
+**Learning memory.** The *memory of past sessions* of one *datasource*: the *signals* retained from rated answers in its sessions, and a short summary of what they teach. Deleting the datasource forgets it. See [../capabilities/knowledge/spec.md](../capabilities/knowledge/spec.md) R35, R41 and R42.
+
 **Line of coverage.** A kind of employee benefit a client offers and a *carrier* insures, such as medical, dental, vision, life, disability, voluntary benefits or an employee assistance programme. The Intellify data has 12 (its *products*). Also called a *line*. An *RFP* markets one or more lines.
 
 **Link (skill or tool).** A reference written in an agent's instructions (or, for a tool, in an in-app skill's body) with `/` in the editor: shown as a chip, saved as `[[skill:<name>]]` or `[[tool:<name>]]`. The links decide which skills and optional tools the agent gets, and the model sees each as a plain mention (`the "x" tool`). See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R81-R86 and ADR-0024.
@@ -95,6 +97,10 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Live (agent).** The published version of a *user agent*. It is the version that starts sessions. Editing a Live agent changes only its *draft*, and the Live version keeps serving until the draft is published.
 
 **LLM provider.** The service the agents call. `openai`, `anthropic` or `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name). One global setting: provider, model, API key (stored encrypted, shown masked) and *reasoning effort*.
+
+**Memory lever.** The switch in Settings, Memory, that turns the *memory of past sessions* on. Off by default; turning it off keeps what was learned. See [../capabilities/knowledge/spec.md](../capabilities/knowledge/spec.md) R30.
+
+**Memory of past sessions.** What the app learns from the *feedback* people give answers, kept per *datasource* in a *learning memory* and offered to later sessions on the same datasource, after the curated *knowledge entries* and trusted less than them. It never writes knowledge entries, metrics or verified queries, and never keeps a row value. Off by default (*memory lever*). Also "the memory" or the cross-session memory; not the memory thread of a *session*, which replays its own last messages. See [../capabilities/knowledge/spec.md](../capabilities/knowledge/spec.md) R30 to R43 and ADR-0031 in [../system/architecture.md](../system/architecture.md).
 
 **Message.** One entry in a session's transcript, from the `user` or the `assistant`, with a timestamp that doubles as its identity (`at`). Assistant messages may carry data records, entities, a clarification, a visual event, feedback, a cross-check, a reasoning trail, knowledge used or a report.
 
@@ -141,6 +147,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Session panel.** The right-hand panel when the main view is a *session*'s chat. It shows one *panel item* at a time (the *visual* panel, a document, a file or a table), with a menu of everything shown in the session and a Download button. See [agent-panel](../capabilities/agent-panel/spec.md).
 
 **Showcase agent.** An *Official agent* shown to present a further US Health use case before it can chat: the Benchmarking Agent, the Survey Agent, the LAD COE Agent (Life, Absence and Disability Center of Excellence) and the Strategy Agent. It has a description and an editable system prompt, but no tools, dataset, skills or evals; its card carries a `Showcase` chip and its Start chat is always disabled with `Showcase agent: not available to chat yet.` See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R106 and [../system/agents.md](../system/agents.md) 2.9.
+
+**Signal.** One judgement of an answer as the *memory of past sessions* keeps it: an approval (`verified_query`, from a thumbs-up), a `rejection` (from a thumbs-down, with its note when it has one) or a `correction` (from a reviewer's note, an action the app does not have yet). Stored as a short text: the question, the SQL with possible row values replaced, and the note. See [../capabilities/knowledge/spec.md](../capabilities/knowledge/spec.md) R31 to R33.
 
 **Skill.** A folder of instructions an agent gets: a `SKILL.md` (a name, a "Use when…" description, then a short phase map or router) plus the `phases/` and `reference/` files it names. It loads *on demand* (the framework lists it in a catalog and the model loads it with the skill tool when a request matches) or *by the app* (code sends it when a condition holds). Built-in skills ship with the app (there are no user or project skills); a user can also write *in-app skills* for her agents, and edit a built-in skill's text, which overrides the bundled one. The agent page's Skills tab shows them (see [../system/agents.md](../system/agents.md) 7.3, [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R63-R67).
 

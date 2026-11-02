@@ -44,6 +44,7 @@ import {
   CrossCheck,
   DataPointSelection,
   DeepAnalysisStatus,
+  KnowledgeUse,
   MessageFeedback,
   Session,
   ReasoningStep,
@@ -229,6 +230,12 @@ export class SessionChat implements OnDestroy {
   readonly elapsed = signal(0);
   /** `at` of the message whose rating is being persisted right now. */
   readonly feedbackPending = signal<string | null>(null);
+  /** `at` of the answer whose thumbs-down note form is open. */
+  readonly noteEditing = signal<string | null>(null);
+  readonly noteDraft = signal('');
+  /** Memory entries forgotten in this view (ids), shown as `Forgotten`. */
+  readonly forgottenMemory = signal<ReadonlySet<string>>(new Set());
+  readonly forgettingMemory = signal<string | null>(null);
   /**
    * Deep-analysis job this conversation started. It runs in the background —
    * normal chat stays usable — and reports through polling until the report
@@ -892,8 +899,10 @@ export class SessionChat implements OnDestroy {
     if (message.feedback === rating) return;
     if (this.feedbackPending() === message.at) return;
     const previous = message.feedback;
+    const previousNote = message.feedbackNote;
     this.feedbackPending.set(message.at);
     this.patchFeedback(message.at, rating);
+    if (this.noteEditing() === message.at) this.noteEditing.set(null);
 
     this.api
       .sendMessageFeedback(this.session().id, message.at, rating)
@@ -901,7 +910,7 @@ export class SessionChat implements OnDestroy {
         next: (result) => {
           this.feedbackPending.set(null);
           if (!result.ok) {
-            this.patchFeedback(message.at, previous);
+            this.patchFeedback(message.at, previous, previousNote);
             this.toast.error(result.message || 'Could not save feedback');
             return;
           }
@@ -913,7 +922,7 @@ export class SessionChat implements OnDestroy {
         },
         error: (err) => {
           this.feedbackPending.set(null);
-          this.patchFeedback(message.at, previous);
+          this.patchFeedback(message.at, previous, previousNote);
           this.toast.error(err?.error?.message ?? 'Backend unreachable');
         },
       });
@@ -922,14 +931,92 @@ export class SessionChat implements OnDestroy {
   private patchFeedback(
     at: string,
     feedback: MessageFeedback | undefined,
+    feedbackNote?: string,
   ): void {
     this.messages.update((messages) =>
-      messages.map((message) =>
-        message.role === 'assistant' && message.at === at
-          ? { ...message, feedback }
-          : message,
-      ),
+      messages.map((message) => {
+        if (message.role !== 'assistant' || message.at !== at) return message;
+        // The note goes with a changed rating, as the backend does.
+        const next: ChatMessage = { ...message, feedback };
+        if (feedbackNote) next.feedbackNote = feedbackNote;
+        else delete next.feedbackNote;
+        return next;
+      }),
     );
+  }
+
+  openNoteForm(message: ChatMessage): void {
+    this.noteDraft.set(message.feedbackNote ?? '');
+    this.noteEditing.set(message.at);
+  }
+
+  cancelNote(): void {
+    this.noteEditing.set(null);
+  }
+
+  /** Save (or, when empty, clear) the note of a thumbs-down answer. */
+  saveNote(message: ChatMessage): void {
+    if (this.feedbackPending() === message.at) return;
+    const note = this.noteDraft().trim();
+    const previous = message.feedbackNote;
+    this.feedbackPending.set(message.at);
+    this.patchFeedback(message.at, 'down', note);
+    this.api
+      .sendMessageFeedback(this.session().id, message.at, 'down', note)
+      .subscribe({
+        next: (result) => {
+          this.feedbackPending.set(null);
+          if (!result.ok) {
+            this.patchFeedback(message.at, 'down', previous);
+            this.toast.error(result.message || 'Could not save the note');
+            return;
+          }
+          this.noteEditing.set(null);
+          if (result.session) {
+            if (!this.sending()) this.messages.set(result.session.messages);
+            this.sessionUpdated.emit(result.session);
+          }
+          this.toast.success(note ? 'Note saved' : 'Note removed');
+        },
+        error: (err) => {
+          this.feedbackPending.set(null);
+          this.patchFeedback(message.at, 'down', previous);
+          this.toast.error(err?.error?.message ?? 'Backend unreachable');
+        },
+      });
+  }
+
+  /** True when the entry is a recalled memory (not curated knowledge). */
+  isMemory(item: KnowledgeUse): boolean {
+    return item.source === 'memory';
+  }
+
+  hasMemory(message: ChatMessage): boolean {
+    return !!message.knowledge?.some((item) => this.isMemory(item));
+  }
+
+  /** The lines of a memory entry's body, rendered one per line. */
+  bodyLines(body: string): string[] {
+    return body.split('\n');
+  }
+
+  forgetMemory(item: KnowledgeUse): void {
+    if (this.forgettingMemory() === item.id) return;
+    if (!window.confirm('Forget this memory? Later answers will not use it.')) {
+      return;
+    }
+    this.forgettingMemory.set(item.id);
+    this.api.forgetMemorySignal(item.id).subscribe({
+      next: () => {
+        this.forgettingMemory.set(null);
+        this.forgottenMemory.update((ids) => new Set(ids).add(item.id));
+        this.toast.success('Memory forgotten');
+      },
+      error: (err) => {
+        this.forgettingMemory.set(null);
+        this.toast.error(err?.error?.message ?? 'Backend unreachable');
+      },
+    });
   }
 
   requestVisualization(message: ChatMessage): void {

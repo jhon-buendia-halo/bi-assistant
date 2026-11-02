@@ -88,6 +88,11 @@ export interface ChatMessage {
    */
   feedback?: MessageFeedback;
   /**
+   * The thumbs-down's note: what was wrong, trimmed, at most 4,000
+   * characters; present only with `feedback: 'down'` (data-model 3.4.1).
+   */
+  feedbackNote?: string;
+  /**
    * Careful mode only: an independent re-derivation of the question's SQL was
    * executed and its result set compared with this answer's.
    */

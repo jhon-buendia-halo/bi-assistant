@@ -184,6 +184,8 @@ Startup order matters: the CLI creates the data directory, sets `APP_DATA_DIR`, 
 
 First run needs an LLM provider in Settings (or `OPENAI_API_KEY` in the environment, which makes the backend fall back to `openai/gpt-4o-mini` when no settings are saved).
 
+**Memory embeddings.** Neither the installers nor the npm package ship a local embedding model: the memory of past sessions, off by default, embeds with OpenAI `text-embedding-3-small` over the network. When the saved LLM provider is not OpenAI, it needs `OPENAI_API_KEY` in the environment, which `.env.example` names; the rule is in [agents.md](agents.md) 2.1 and the variable in [api.md](api.md) 6.1.
+
 ## 5. Versioning and releases
 
 `frontend/package.json` `version` is the single source of truth. `backend/package.json` is kept in lockstep, and both lockfiles are committed with each bump. electron-builder reads the frontend version, the installers carry it through `artifactName`, and the app shows it (`APP_VERSION`). **Versioning is automatic; building is manual.**

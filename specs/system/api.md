@@ -42,7 +42,7 @@ interface ActionResult { ok: boolean; message: string; /* + endpoint-specific pa
 - On success: `{ ok: true, message: "<human sentence>", ...payload }`.
 - `message` is user-displayable and clients show it verbatim in toasts or inline errors. Exact success sentences are listed per endpoint because UI tests assert some of them.
 
-**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the deep-analysis download, and the whole knowledge controller.
+**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the deep-analysis download, the whole knowledge controller and `DELETE /memory/signals/:documentId` (110).
 
 ```ts
 interface HttpErrorBody { statusCode: number; message: string | string[]; error: string }   // NestJS default
@@ -59,7 +59,7 @@ Clients read the error text from `error.message` (Style B) or `body.message` wit
 
 ### 1.4 Success status codes
 
-POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56). GET/PUT/DELETE return **200**; `DELETE /knowledge/:id` returns **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
+POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56). GET/PUT/DELETE return **200**; `DELETE /knowledge/:id` and `DELETE /memory/signals/:documentId` (110) return **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
 
 ### 1.5 Validation
 
@@ -117,7 +117,7 @@ Controller prefix `/sessions`. Capability: sessions-chat, visuals, agent-panel, 
 | 4 | `DELETE /sessions/:id` | Delete a session and its Mastra state | yes |
 | 5 | `POST /sessions/:id/messages/stream` | Streamed chat turn (SSE) | yes |
 | 6 | `POST /sessions/:id/messages` | Non-streamed chat turn | **no** |
-| 7 | `POST /sessions/:id/messages/feedback` | Thumbs up/down on an answer | yes |
+| 7 | `POST /sessions/:id/messages/feedback` | Thumbs up/down on an answer, with an optional note on a thumbs-down | yes |
 | 8 | `POST /sessions/:id/visualizations` | Generate a visual from an answer | yes |
 | 9 | `GET /sessions/:id/visualizations/:vid` | Load a visual (document + metadata) | yes |
 | 10 | `POST /sessions/:id/visualizations/:vid/tailor` | Tailor from an instruction | yes |
@@ -168,11 +168,15 @@ See [section 3.1](#31-chat-stream-post-sessionsidmessagesstream).
 - Weaker than the stream path: no tool-data capture (`data`, `entities`, `interpretation`, `verified`), no clarification handling, no grounding guard, no careful mode. **Not called by the frontend** (the client method exists but is unused). Treat as legacy; see G2.
 
 #### 7. `POST /sessions/:id/messages/feedback`
-- Body: `{ messageAt: string; rating: "up" | "down" }`. Both required.
-- Success: `{ ok:true, message, session }` where `message` is `"Answer saved as a verified query"` for `up` and `"Answer marked as wrong"` for `down`. (The `up` sentence is returned even when no SQL was found to save.)
-- Failures (Style A): `"rating must be 'up' or 'down'"`, `"messageAt is required"`, `"No assistant message at <messageAt>"`, `"Session <id> not found"`.
-- Side effects on the matched assistant message: sets `feedback`; `up` sets `verified: true`, `down` removes `verified`. `up` additionally saves a **verified query** `{question, sql, datasourceId, entities, sourceSessionId, sourceMessageAt}` when the answer has a successful `run_readonly_sql` and a preceding user question (question = nearest earlier user message; sql = the last successful `run_readonly_sql` input; `datasourceId` only when all the session's datasets share one datasource). `down` deletes any verified query contributed by that message.
+- Body: `{ messageAt: string; rating: "up" | "down"; note?: string }`. `messageAt` and `rating` required. `note` is the thumbs-down's note ([sessions-chat](../capabilities/sessions-chat/spec.md) R36): a non-empty note (after trimming) is allowed only with `rating: "down"`, and is at most 4,000 characters after trimming; an empty or whitespace note, with either rating, or an absent note means "no note"; a non-string `note` is ignored (1.5).
+- Success: `{ ok:true, message, session }` where `message` is `"Answer saved as a verified query"` for `up` and `"Answer marked as wrong"` for `down`, with or without a note. (The `up` sentence is returned even when no SQL was found to save.)
+- Failures (Style A): `"rating must be 'up' or 'down'"`, `"messageAt is required"`, `"note is only allowed with rating 'down'"` (a `note` sent with `up`), `"note must be at most 4000 characters"`, `"No assistant message at <messageAt>"`, `"Session <id> not found"`.
+- Side effects on the matched assistant message: sets `feedback`; `up` sets `verified: true`, `down` removes `verified`. `down` with a non-empty note sets `feedbackNote` to the trimmed note; any other call removes `feedbackNote`, so posting `down` again with another note, or none, replaces it, and `up` clears it ([data-model.md](data-model.md) 3.4.1). `up` additionally saves a **verified query** `{question, sql, datasourceId, entities, sourceSessionId, sourceMessageAt}` when the answer has a successful `run_readonly_sql` and a preceding user question (question = nearest earlier user message; sql = the last successful `run_readonly_sql` input; `datasourceId` only when all the session's datasets share one datasource). `down` deletes any verified query contributed by that message.
 - Persists the updated transcript.
+- Memory side effects ([knowledge](../capabilities/knowledge/spec.md) R30, R31, R39), after the transcript is persisted; they never fail the request (an error is logged). The signal's document id is `rating:<sessionId>:<messageAt>`, and a signal exists only when the answer has a successful `run_readonly_sql` and a preceding user question (the same question and SQL a verified query takes) and the session's datasets resolve to exactly one datasource.
+  - Memory lever on (2.13): upserts the outbox row of that document id ([data-model.md](data-model.md) 3.15): `verified_query` for `up`, `rejection` for `down`, with an `Analyst note` only when the answer now has a note. Its content is the text of knowledge R33, redacted and clipped by R32.
+  - Memory lever on but no signal any more (the session's datasets now span several datasources, or none): forgets what an earlier rating of the answer retained, as the lever off does.
+  - Memory lever off: forgets that document id, if anything is stored for it (its outbox rows and the learning memory's copies, as #110 does without the compaction), and writes nothing.
 
 #### 8. `POST /sessions/:id/visualizations`
 - Body: `{ sourceMessageAt?: string }`. Empty/omitted = the latest completed (non-clarification, non-empty) assistant answer.
@@ -274,7 +278,7 @@ Route order matters: `test-connection` and `rest/discover` are declared before t
 
 #### 19. `DELETE /datasources/:id`
 - Success: `{ ok:true, message:"Datasource \"<name>\" deleted" }`. Failure (Style A): `"Datasource <id> not found"`.
-- Side effects: deletes the datasource and its cached inventory. **Does not cascade** to datasets that reference it (G6).
+- Side effects: deletes the datasource and its cached inventory. **Does not cascade** to datasets that reference it (G6). Also forgets the datasource's whole learning memory, whatever the memory lever's value ([knowledge](../capabilities/knowledge/spec.md) R41): its `memory_signals` rows, then everything the learning memory holds for it, then the same compaction as #110. A failure there is logged and never fails the delete.
 
 #### 20. `GET /datasources/:id/inventory`
 - Query: `refresh=true` (force a live walk and replace the snapshot); `cachedOnly=true` (never contact the datasource). `cachedOnly` takes precedence over `refresh` when both are present.
@@ -714,7 +718,8 @@ interface ChatMessage {
   data?: ToolDataRecord[]; entities?: string[];
   clarification?: { question: string; options: { label: string; description?: string }[] };
   visual?: VisualEvent; verified?: boolean; interpretation?: string;
-  feedback?: 'up' | 'down'; crossCheck?: { status: 'agree'|'disagree'|'error'; note?: string };
+  feedback?: 'up' | 'down'; feedbackNote?: string;          // feedbackNote only with feedback 'down'
+  crossCheck?: { status: 'agree'|'disagree'|'error'; note?: string };
   reasoning?: ReasoningStep[]; knowledge?: KnowledgeUse[]; report?: AnalysisReport;
 }
 interface ToolDataRecord {
@@ -786,6 +791,39 @@ interface UiPreferences { theme: ThemePreference | null; navExpanded: boolean | 
 - Body: `Partial<{ theme: ThemePreference; navExpanded: boolean }>`. Only the fields sent are changed.
 - Validation (Style A): `"theme must be one of: system, light, dark"`, `"navExpanded must be true or false"`.
 - Success: `{ ok:true, message:"Preferences saved", preferences: UiPreferences }`.
+
+### 2.13 Memory
+
+Controller prefix `/memory`. Capability: [knowledge](../capabilities/knowledge/spec.md) R30 to R43 (the memory of past sessions, ADR-0031). The lever is one `memory` settings document ([data-model.md](data-model.md) 3.2.2); the signals are the `memory_signals` outbox (3.15) and the learning memories (5.2). The feedback endpoint (#7) and the datasource delete (#19) also reach the memory, as side effects.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 108 | `GET /memory/settings` | Read the memory lever and where the embedding key comes from | yes |
+| 109 | `PUT /memory/settings` | Turn the memory on or off | yes |
+| 110 | `DELETE /memory/signals/:documentId` | Forget one signal (204) | yes |
+
+```ts
+interface MemorySettingsView {
+  enabled: boolean;                                       // false when no settings document exists
+  embeddingModel: 'text-embedding-3-small';
+  embeddingKey: 'llm-settings' | 'environment' | 'none';  // where the embedding key would come from now
+}
+```
+
+`embeddingKey` follows the rule of [agents.md](agents.md) 2.1: `llm-settings` when the saved LLM settings' provider is `openai`, else `environment` when `OPENAI_API_KEY` is set, else `none` (nothing is remembered or recalled until a key exists).
+
+#### 108. `GET /memory/settings`
+- Response `200`: `MemorySettingsView` (bare). Nothing stored: `enabled:false` (knowledge R30).
+
+#### 109. `PUT /memory/settings`
+- Body: `{ enabled: boolean }`. Anything else, `enabled` missing or not a boolean included, fails (Style A) with `{ ok:false, message:"enabled must be true or false" }`.
+- Success (Style A): `{ ok: true, message: "Memory turned on" | "Memory turned off", ...MemorySettingsView }` after the save.
+- Side effects: writes the `memory` settings document. Turning the memory off keeps what it holds (knowledge R30); rows already in the outbox are still flushed.
+
+#### 110. `DELETE /memory/signals/:documentId`
+- `documentId` is URL-encoded by the client (`encodeURIComponent`); it must start with `rating:` or `correction:`, else `400 "Unknown memory signal id"` (Style B).
+- Forgets the signal (knowledge R40): deletes its `memory_signals` rows first, then the learning memory's copies of it (the message, its embedding and the vector index's copy of its text) in the learning memory named by the row's `datasourceId` and in any learning memory that holds a message with that id (so a copy without an outbox row is forgotten too), waits for the store's background delete (`settled()`), marks that memory's summary stale (not sent until rewritten) and schedules the rewrite, then compacts `mastra.sqlite` (WAL checkpoint `TRUNCATE` and `VACUUM`) and `app.sqlite` (`VACUUM`) ([data-model.md](data-model.md) 3.15, 5.2).
+- Response `204` (empty) once all of that is done. Idempotent: an unknown or already forgotten id (neither the outbox nor any learning memory holds it) changes nothing, compacts nothing and still answers `204`. Works whatever the memory lever's value.
 
 ### 2.16 Intellify RFP API
 
@@ -1142,7 +1180,7 @@ The `Intellify API:` line carries the actual bound port of the embedded API (use
 | `WEB_ROOT` | `app-bootstrap.ts` | Directory holding the built web UI (`index.html`). | `<package>/public` |
 | `INIT_CWD`, `PWD` | Mastra storage | Launch directory used to place the fallback `data/` folder (Studio changes `cwd`). | process cwd |
 | `VISUAL_MODEL` | visual designer agent | Forces the designer model (router id `provider/model`). Unset: reasoning-family models are swapped for `openai/gpt-4.1-mini` and `nano` models upgraded to their `mini` sibling; others kept. | unset |
-| `OPENAI_API_KEY` | Mastra's env-bound model router (via model resolver) | Fallback model credential (`openai/gpt-4o-mini`) when no LLM settings are saved. | unset |
+| `OPENAI_API_KEY` | Mastra's env-bound model router (via model resolver); the memory's embedder | Fallback model credential (`openai/gpt-4o-mini`) when no LLM settings are saved. Also the key of the memory's embeddings (OpenAI `text-embedding-3-small`) when the saved LLM provider is not `openai`, surrounding quotes stripped ([agents.md](agents.md) 2.1; `embeddingKey` in 2.13). | unset |
 | `WORLD_CUP_DB_PORT` | testing-data fixture registry | Port of the sample PostgreSQL server in the form prefill and compose stack. | `55432` |
 | `INTELLIFY_API` | `app-bootstrap.ts` | `off` disables the embedded Intellify RFP API (2.16); any other value or unset starts it. The CLI's `--no-intellify-api` sets it. | unset (started) |
 | `INTELLIFY_API_HOST` | Intellify API config (`intellify-api/config.ts`) | Interface the Intellify RFP API binds. | `127.0.0.1` |
