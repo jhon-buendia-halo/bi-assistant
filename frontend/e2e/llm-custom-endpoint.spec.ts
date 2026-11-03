@@ -3,11 +3,12 @@ import { test, expect } from './fixtures/app.fixture';
 import {
   WORLD_CUP_SESSION,
   createWorldCupSession,
+  openSessions,
 } from './helpers/app-actions';
 import { seedWorldCupDataset } from './helpers/agents-api';
 import {
   AnthropicStub,
-  AnthropicStubRequest,
+  RecordedAnthropicRequest,
   startAnthropicStub,
 } from './helpers/anthropic-stub';
 import { rejectedKeyMessage } from '../../backend/src/modules/llm/custom-endpoint/messages';
@@ -75,15 +76,17 @@ test.describe('Anthropic-compatible', () => {
   }
 
   /** The requests that reached `/v1/<what>`, oldest first. */
-  const requestsTo = (what: 'messages' | 'models'): AnthropicStubRequest[] =>
+  const requestsTo = (
+    what: 'messages' | 'models',
+  ): RecordedAnthropicRequest[] =>
     stub.requests.filter((request) => request.path === `/v1/${what}`);
 
-  const probes = (): AnthropicStubRequest[] =>
+  const probes = (): RecordedAnthropicRequest[] =>
     requestsTo('messages').filter((request) => request.isProbe);
 
   /** Every request carries the Anthropic version and the key in its style. */
   function expectAnthropicHeaders(
-    requests: AnthropicStubRequest[],
+    requests: RecordedAnthropicRequest[],
     key: string | undefined,
   ): void {
     expect(requests.length).toBeGreaterThan(0);
@@ -138,8 +141,18 @@ test.describe('Anthropic-compatible', () => {
       '••••••••4c4c',
     );
 
+    // The composer chip names the model and the root's host (R53).
+    await openSessions(page);
+    await page
+      .locator('header')
+      .getByRole('button', { name: 'Start New Conversation' })
+      .click();
+    await expect(
+      page.getByText(`${MODEL} · ${new URL(stub.baseUrl).host}`),
+    ).toBeVisible();
+
     // A chat turn goes to <root>/v1/messages with the saved model and key.
-    stub.reply = () => ({ text: ANSWER });
+    stub.reply(ANSWER);
     await createWorldCupSession(page);
     await expect(
       page.getByRole('heading', { name: WORLD_CUP_SESSION }),
@@ -190,10 +203,14 @@ test.describe('Anthropic-compatible', () => {
   });
 
   test('reports a rejected key', async ({ page }) => {
-    stub.respondWith(401, {
-      type: 'error',
-      error: { type: 'authentication_error', message: 'invalid x-api-key' },
-    });
+    stub.respondWith(
+      401,
+      {},
+      {
+        type: 'error',
+        error: { type: 'authentication_error', message: 'invalid x-api-key' },
+      },
+    );
     await chooseAnthropicStyle(page, stub.baseUrl, 'wrong-key');
     await modelField(page).fill(MODEL);
 
