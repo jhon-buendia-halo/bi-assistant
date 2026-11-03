@@ -2,6 +2,21 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-02
+
+### Added
+- **Memory arms and the memory eval set** (roadmap 1.1.13 and 1.1.14, memory part; [BA-190](https://halo-powered.atlassian.net/browse/BA-190), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)). The eval can now measure a memory of past sessions, for BA-81's decision under ADR-0031.
+  - **The arm.** A run takes a memory arm: `none`, `mastra` or `hindsight-mastra` (`EVAL_MEMORY` on the command line, `arm` in the API). The Evals tab shows it as `Memory <arm>`, and a run is compared only with runs of the same arm.
+    - `mastra` needs BA-81's store, so on this branch alone it is refused as not built. `hindsight-mastra` is not built.
+  - **The set.** `memory.json` holds 36 two-step cases in six memory categories, 4 dev and 2 held out each, in three sets: World Cup 30, Finance 3, Marketing Analytics 3 (agents-evals R231 to R246).
+    - Each attempt stores its teach signals through the memory's port in a scope of its own, with no assistant turn. It then asks the probe as the first turn of a new session and deletes the scope.
+    - The checks are M1 (no row value kept), M2 (the rejected SQL is not reused) and M3 (nothing taught is recalled for an unrelated question). The validator also runs every trap and teach query.
+  - **The report.** The memory's own embedding and summary calls are priced under `Memory`, and the recall time is shown per question and as p50/p90 per run.
+  - **Case changes before the first run.** One dev case and two held-out cases read tables outside the World Cup dataset. The dev case was rewritten on `matches.winner_team_id`. The two held-out cases were replaced by two of four Fable 5.1 candidates, which the user chose.
+  - **First use.** BA-81's decision runs, on a local build that merges both branches: "Mastra only" 48/48 against no memory's 24/48 on the learning categories, and 0/12 against 12/12 on `memory-abstain` (ADR-0031 on the BA-4 branch).
+  - **Acceptance gate.** It updated the set-list scenario (18 sets) and added "Shows a memory run's arm and a question's recall time". `agents.spec.ts` passes 20 of 20 on the web target.
+  - Evidence: [evidence/1.1.13/](evidence/1.1.13/) (e2e-impact.md, e2e-results.txt, checks.txt, the validator and smoke outputs).
+
 ## 2026-10-27
 
 ### Added

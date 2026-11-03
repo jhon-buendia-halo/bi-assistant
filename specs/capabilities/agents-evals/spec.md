@@ -855,7 +855,7 @@ Feature: Agents
     When I click "Agents"
     And I open the "Questions to Insights Assistant" agent
     And I open the Evals tab
-    Then I see 15 sets
+    Then I see 18 sets
     And the "world-cup" set shows "World Cup" and "63 questions"
     And the "world-cup-rest" set shows "World Cup (REST API)" and "63 questions"
     And the "world-cup-databricks" set shows "World Cup (Databricks)" and "63 questions"
@@ -872,6 +872,9 @@ Feature: Agents
     And the "marketing-analytics" set shows "Marketing Analytics" and "56 questions"
     And the "marketing-analytics-rest" set shows "Marketing Analytics (REST API)" and "56 questions"
     And the "marketing-analytics-databricks" set shows "Marketing Analytics (Databricks)" and "56 questions"
+    And the "memory-world-cup" set shows "Memory (World Cup)" and "30 questions"
+    And the "memory-finance" set shows "Memory (Finance)" and "3 questions"
+    And the "memory-marketing-analytics" set shows "Memory (Marketing Analytics)" and "3 questions"
     When I open the "world-cup" set
     Then 63 questions are listed
     And the last 11 include "Which teams scored exactly four goals in total?" and "What share of the disciplinary cards shown were yellow?"
@@ -938,6 +941,18 @@ Feature: Agents
     When I download the run's report
     Then the report contains "Cost: not priced" followed by the model in brackets
     And its "Tokens:" line counts the call without usage, ending with "3 calls · 1 without usage"
+
+  # R245, R246
+  Scenario: Shows a memory run's arm and a question's recall time
+    Given a finished run of the "memory-world-cup" set under the memory arm "mastra", whose question recalled in 812 ms
+    And a finished run with no memory arm
+    And I am on the agent's Evals tab
+    When I open the executions sub-tab
+    Then the memory run shows "Memory mastra"
+    And the run with no memory arm shows no memory chip
+    When I expand the memory run and click its question
+    Then the Details panel shows "Recall: 812 ms"
+    And it shows the tokens of the assistant and of the memory, with the embedding model
 
   # R26, R210, R214
   Scenario: Shows which attempt of a question is running when Repeats is 3
@@ -1934,7 +1949,7 @@ Covered by (backend unit tests, `backend/src/mastra/evals/loop/`):
 
 ### Feature: Memory arms and memory sets
 
-E2E: none yet. The memory eval runs from the command line on a real model (R231 to R246, BA-190). Each scenario is to be covered by backend unit tests that run the command's entry point and the checks on recorded attempts, with a stub memory behind the port and no model call; the scenarios that teach and recall on the "Mastra only" memory need BA-81's memory and an embedding model.
+E2E: none (Playwright). The memory eval runs from the command line on a real model (R231 to R246, BA-190); what the app shows of a memory run, the `Memory <arm>` chip and the recall time, is the Evals tab scenario *Shows a memory run's arm and a question's recall time* in `frontend/e2e/agents.spec.ts`. Each scenario below is covered by backend unit tests that run the command's entry point and the checks on recorded attempts, with a stub memory behind the port (`learning-store.stub.ts`) and no model call, listed after the Feature. The teach and recall on the real "Mastra only" memory (BA-81) with OpenAI embeddings were run on a build that merges the BA-4 branch, and recorded as BA-81's decision runs.
 
 ```gherkin
 Feature: Memory arms and memory sets
@@ -2005,6 +2020,14 @@ Feature: Memory arms and memory sets
     And each question's tokens list "Memory" beside "Assistant", and each question shows its recall time
     And the run is compared only with an earlier run under "mastra"
 ```
+
+Covered by (backend unit tests):
+- *Refuses an unknown memory arm, or one this build does not have*: `memory-arm-option.spec.ts` (`parseMemoryArm`, `parseEvalArm`, `memoryArmFromEnv`); `run-assistant-evals.spec.ts` "refuses a memory arm the build has not after it boots, before any model call"; `eval-runs.service.spec.ts` "EvalRunsService memory arm": "refuses mastra on a build with no store for the memory port", "refuses a memory arm on the RFP Builder's set", "refuses bad repeats before a bad arm", "refuses a memory arm this build has not on the command line".
+- *Runs a memory set without memory, the control*: `eval-runs.service.spec.ts` "records the arm none when none is given, and reads no store"; `assistant.evals.spec.ts` "scores the memory checks on an empty record under none, with no store and no learned block"; `memory-arm-option.spec.ts` `LEGACY_ARM`.
+- *Teaches a memory, then asks in a new session*: `assistant.evals.spec.ts` "runAssistantEvalCase under a memory arm" (teach, recall into the learned block after the knowledge block, the record, the scope deleted, also when the teach step fails or the probe throws; no block when nothing is recalled or the recall is cut off); `eval-memory.spec.ts` (`teachSignals`, `teachMemory`, `recallForProbe`, the attempt's scope); `eval-runs.service.spec.ts` "runs mastra with the store it finds, each attempt in a scope of its own, and compares within the arm".
+- *Fails a question whose memory kept a row value*, *Fails a probe that runs the rejected SQL again*, *Fails an abstain question whose teach signal was recalled*: `checks/memory-checks.spec.ts` (`noRowValuesRetained`, `notRejectedSql`, `teachNotRecalled`); `eval-memory.spec.ts` `scoreMemoryChecks`.
+- *The validator refuses a trap that catches nothing*: `validate-eval-sets.spec.ts` "eval:validate on a memory set".
+- *Reports what the memory cost and how long it took to recall*: `eval-report.spec.ts` "renderEvalRunMarkdown — memory arms"; `run-assistant-evals.spec.ts` "runs a memory arm, printing it under the repeats and the recall times after the cost"; `eval-memory.spec.ts` `listenMemoryUsage`; `eval-diff.spec.ts` "warns when the memory arms differ".
 
 ### Feature: Databricks samples
 

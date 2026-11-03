@@ -14,6 +14,27 @@ Entry template:
 
 ---
 
+## 2026-11-02 — 1.1.13 and 1.1.14, memory part: memory arms and the memory eval set (BA-190)
+
+### What went well
+- The memory port, `signal-text.ts`, `learned-block.ts` and the `KnowledgeUse` hunk are byte-identical on both branches.
+  - The `mastra` arm finds BA-81's store through `moduleRef.get(LEARNING_STORE, { strict: false })` and is refused as not built when there is none.
+  - So BA-190 was built, tested and committed on its own branch, and the local build that merges BA-4 merged its code with no conflict. `merge-tree` was checked before starting.
+- The memory checks are scored by the runner rather than as Mastra scorers. They also run under `none`, so the control and the memory arm are scored by the same code.
+- The validator runs every trap and teach query, not only the reference. This found the case that read `tournament_teams`, before any model was paid for.
+- The two replacement held-out cases were checked three ways before the user chose: by the writer's psql, then by the real validator on a temporary copy of `memory.json`, and the set was restored byte for byte.
+
+### What went wrong
+- The step-5 spec work left the Gherkin of "Lists every question set" at 15 sets. R11 already listed the three memory sets, so `agents.spec.ts` failed in the fast loop. The Gherkin was fixed only at the gate.
+- No Playwright scenario covered the `Memory <arm>` chip or the recall line until the gate, although ui.md and the Feature's description named both.
+- Resolving the integration merge recorded `rerere` resolutions in the shared `.git/rr-cache`. They had to be deleted by hand, or the real merge of the two branches could have reused "BA-9 side wins" without anyone noticing.
+- Two validator unit tests used the defective real case as their example of a reference outside the dataset, so fixing the case broke them. They now use a synthetic case.
+
+### What to do differently
+- When a spec rule adds an item to a list the UI shows (sets, sections, tabs), grep the Gherkin and the E2E for the old count in the same step-5 pass.
+- For a throwaway local merge, run it as `git -c rerere.enabled=false merge …` so no resolution lands in the shared rr-cache.
+- A unit test that needs a defective example builds a synthetic one; it never points at a real case that may be fixed.
+
 ## 2026-10-27 — 1.1.21 Investigation questions with planted insights (BA-243)
 
 ### What went well

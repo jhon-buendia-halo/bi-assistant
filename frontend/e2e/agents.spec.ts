@@ -180,7 +180,7 @@ function storeRun(appDataDir: string, run: object): void {
  * `calls` reported tokens, `unreportedCalls` reported none.
  */
 function usageEntry(
-  agent: 'assistant' | 'sql-fixer',
+  agent: 'assistant' | 'sql-fixer' | 'memory',
   model: string,
   inputTokens: number,
   cachedInputTokens: number,
@@ -478,6 +478,94 @@ function seedUnpricedRun(appDataDir: string): void {
     rates: {},
     createdAt: '2026-10-03T09:00:00.000Z',
     updatedAt: '2026-10-03T09:00:30.000Z',
+  });
+}
+
+/** Job id of the seeded run under the "mastra" memory arm. */
+const MEMORY_RUN = 'seeded-memory-mastra';
+
+/** The memory question of the seeded memory run. */
+const MEMORY_CASE = 'top-scorer-2018-reused-approval-es';
+
+/**
+ * Stores a finished run of the memory-world-cup set under the memory arm
+ * "mastra" (agents-evals R231), Repeats 1, whose one question recalled its
+ * teach signal in 812 ms (R240) and carries the memory's own usage, the
+ * embedding model's, beside the assistant's (R245).
+ */
+function seedMemoryRun(appDataDir: string): void {
+  const usage = [
+    usageEntry('assistant', 'gpt-5.6-luna', 28571, 20676, 973, 1),
+    usageEntry('memory', 'text-embedding-3-small', 145, 0, 0, 2),
+  ];
+  const scope = `eval-${MEMORY_RUN}-${MEMORY_CASE}-1`;
+  storeRun(appDataDir, {
+    jobId: MEMORY_RUN,
+    agentKey: 'assistant',
+    datasourceId: 'seeded-datasource',
+    datasets: [WORLD_CUP_DATASET],
+    caseIds: [MEMORY_CASE],
+    status: 'completed',
+    totalCases: 1,
+    startedAt: '2026-11-02T09:00:00.000Z',
+    finishedAt: '2026-11-02T09:00:30.000Z',
+    judge: { mode: 'off' },
+    repeats: 1,
+    arm: { memory: 'mastra' },
+    model: 'openai/gpt-5.6-luna',
+    source: 'cli',
+    results: [
+      {
+        ...seededResult(
+          MEMORY_CASE,
+          '¿Quién fue el máximo goleador del Mundial 2018?',
+          'memory-reuse',
+          'passed',
+          [
+            seededCheck(
+              'check-called-tool',
+              'Checks that "run_readonly_sql" was called',
+              'D1',
+              'passed',
+            ),
+            seededCheck(
+              'check-no-row-values-retained',
+              'Checks that nothing the memory holds keeps a row value',
+              'M1',
+              'passed',
+            ),
+          ],
+        ),
+        split: 'dev',
+        passes: 1,
+        runs: 1,
+        flaky: false,
+        usage,
+        costUsd: 0.0031,
+        memory: {
+          scope,
+          held: [
+            {
+              kind: 'signal',
+              documentId: `${scope}:teach-1`,
+              text: '[verified_query · 2026-11-03]',
+            },
+          ],
+          recalled: [
+            {
+              documentId: `${scope}:teach-1`,
+              kind: 'verified_query',
+              content: '[verified_query · 2026-11-03]',
+            },
+          ],
+          recallMs: 812,
+        },
+      },
+    ],
+    usage,
+    costUsd: 0.0031,
+    createdAt: '2026-11-02T09:00:00.000Z',
+    updatedAt: '2026-11-02T09:00:30.000Z',
   });
 }
 
@@ -957,6 +1045,9 @@ const EVAL_SETS: ReadonlyArray<[id: string, name: string, questions: number]> =
     ['marketing-analytics', 'Marketing Analytics', 56],
     ['marketing-analytics-rest', 'Marketing Analytics (REST API)', 56],
     ['marketing-analytics-databricks', 'Marketing Analytics (Databricks)', 56],
+    ['memory-world-cup', 'Memory (World Cup)', 30],
+    ['memory-finance', 'Memory (Finance)', 3],
+    ['memory-marketing-analytics', 'Memory (Marketing Analytics)', 3],
   ];
 
 test('lists every question set, the former golden set inside the World Cup sets', async ({
@@ -1346,6 +1437,55 @@ test('says "Not priced" for a model with no price', async ({
   expect(report).toMatch(
     /^Tokens: 5,100 in \(0 cached\) · 180 out \(0 reasoning\) · 3 calls · 1 without usage$/m,
   );
+});
+
+test("shows a memory run's arm and a question's recall time", async ({
+  page,
+  appDataDir,
+}) => {
+  seedMemoryRun(appDataDir);
+  seedUnpricedRun(appDataDir);
+
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents' })
+    .click();
+  await page.getByTestId('agent-assistant').click();
+  await page.getByTestId('agent-tab-evals').click();
+  await page.getByTestId('eval-subtab-runs').click();
+
+  // The arm is shown when it is not "none"; a run with no arm reads as
+  // "none" and shows no chip (R231, R246).
+  await expect(page.getByTestId(`eval-run-memory-${MEMORY_RUN}`)).toHaveText(
+    'Memory mastra',
+  );
+  await expect(page.getByTestId(`eval-run-${UNPRICED_RUN}`)).toBeVisible();
+  await expect(page.getByTestId(`eval-run-memory-${UNPRICED_RUN}`)).toHaveCount(
+    0,
+  );
+
+  // The question's recall time and the memory's own tokens (R245).
+  await page
+    .getByTestId(`eval-run-${MEMORY_RUN}`)
+    .getByRole('button', { name: /passed/ })
+    .click();
+  await page
+    .getByTestId(`eval-run-result-${MEMORY_RUN}-${MEMORY_CASE}`)
+    .click();
+  const panel = page.getByLabel('Details panel');
+  await expect(panel).toContainText(
+    '¿Quién fue el máximo goleador del Mundial 2018?',
+  );
+  await expect(panel.getByTestId('eval-trace-recall')).toHaveText(
+    'Recall: 812 ms',
+  );
+  await expect(panel.getByTestId('eval-trace-tokens-assistant')).toContainText(
+    'gpt-5.6-luna',
+  );
+  const memoryTokens = panel.getByTestId('eval-trace-tokens-memory');
+  await expect(memoryTokens).toContainText('Memory');
+  await expect(memoryTokens).toContainText('text-embedding-3-small');
+  await expect(memoryTokens).toContainText('145 in');
 });
 
 test('shows which attempt of a question is running when Repeats is 3', async ({

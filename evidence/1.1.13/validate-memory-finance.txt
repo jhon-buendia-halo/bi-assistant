@@ -1,0 +1,5 @@
+Validating Memory (Finance) (memory-finance, postgres) on Finance
+✓ portfolios-opened-fy2025-calendar-year-memory  postgres  1 rows · trap 1 rows
+✓ growth-portfolios-opened-2024-test-filter-memory  postgres  1 rows · trap 1 rows
+✓ curated-accrued-fee-revenue-december-2025  postgres  1 rows · trap 1 rows
+memory-finance: 3 of 3 memory cases (reference, trap and teach queries) passed.
