@@ -14,6 +14,28 @@ Entry template:
 
 ---
 
+## 2026-11-03 — 1.17.1 to 1.17.20 acceptance gate of epic BA-281 (custom LLM endpoint)
+
+### What went well
+- Seeding one eval data dir through `POST /testing-data/world-cup/load` on the `main` build, then copying it for the branch, gave both builds the same dataset with no hand-written SQL, and forward migration made the copy safe.
+- Reading the base's Mastra bundle before running settled how to point `main` at the relay: the router's `createAnthropic` reads `ANTHROPIC_BASE_URL`, and it needs the `/v1` suffix. One-case probes on both builds proved the wiring before the 36-question runs.
+- Running the base alongside the branch, same model and data, turned "ambiguous-best-team fails on the branch" into "the judge fails identical answers on both builds", which pointed at the rubric, not at the custom route.
+- The live smoke script did in two minutes what the unit tests cannot: both API styles end to end against a real relay, plus a key scan of responses, data dir and log.
+
+### What went wrong
+- Units 15 and 17 both created `llm-custom-endpoint.spec.ts`; the add/add conflict had to be stitched by hand, and unit 15's top-level `beforeEach` would have started an OpenAI stub for the Anthropic tests too.
+- Two verified unit branches (05, 12) got a commit after they were merged into the epic. The brief named only the three unmerged branches, so this was found only by checking every `*-verified` branch with `git merge-base --is-ancestor`, after the evals and smoke had run.
+- The first Playwright run failed all 55 tests: the Chromium build Playwright expected was not installed.
+- I committed a placeholder "wip" commit before merging the late fixes and had to reset and redo the merges to keep the history clean.
+- The `ambiguous-best-team` judge rubric said "ambiguous on both" and then "a metric … or a year"; it failed about 1 run in 4 on `main` as well, and nobody had noticed because 3-run rounds rarely hit it.
+
+### What to do differently
+- At the start of a gate, list every `unit/<epic>-*-verified` branch and run `git merge-base --is-ancestor <branch> HEAD` on each; merge anything missing before running E2E, evals or the smoke.
+- When two parallel units add scenarios to one Feature, give one of them the file and the other a describe block to fill in, with hooks scoped to each describe.
+- Before the first Playwright run in a session, run `npx playwright install chromium chromium-headless-shell` from `frontend/`.
+- For a judge failure, compare the failing answer with a passing one from the base; if they are the same, fix the rubric so it states one pass condition, not two that disagree.
+- Never commit a placeholder message; set work aside with a properly named commit, or not at all.
+
 ## 2026-10-16 — 0.4.2 Jira MCP tool in `.claude/tools` (BA-237)
 
 ### What went well
