@@ -7,6 +7,9 @@ jest.mock('../agents/assistant.agent', () => ({
   assistantAgent: { id: 'assistant' },
 }));
 jest.mock('../agents/rfp.agent', () => ({ rfpAgent: { id: 'rfp-builder' } }));
+jest.mock('../agents/data-readiness.agent', () => ({
+  dataReadinessAgent: { id: 'data-readiness' },
+}));
 jest.mock('../agents/eval-judge.agent', () => ({
   evalJudgeAgent: {},
   evalJudgeOutputSchema: {},
@@ -209,6 +212,28 @@ describe('data readiness eval checks', () => {
     it('passes an answer with no score-like number', async () => {
       await expect(
         run(check, 'Scores come from the deterministic engine.', []),
+      ).resolves.toBeUndefined();
+    });
+
+    it('reads the summary of a raw { summary, report } result, not the report the model never saw', async () => {
+      const raw = {
+        summary: summary(),
+        report: { id: 'r-1', findings: [{ measured: '61.9% missing' }] },
+      };
+      await expect(
+        run(check, 'Overall score 87.4 (Managed).', [
+          call('assess_data_readiness', raw),
+        ]),
+      ).resolves.toBeUndefined();
+      await expect(
+        run(check, 'Overall score 87.4; 61.9% are missing.', [
+          call('assess_data_readiness', raw),
+        ]),
+      ).resolves.toContain('61.9');
+      await expect(
+        run(quotesOverallScore(), 'Overall score 87.4.', [
+          call('get_readiness_report', JSON.stringify(raw)),
+        ]),
       ).resolves.toBeUndefined();
     });
 

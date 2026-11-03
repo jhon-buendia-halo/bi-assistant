@@ -9,6 +9,9 @@ jest.mock('../agents/assistant.agent', () => ({
   assistantAgent: { id: 'assistant' },
 }));
 jest.mock('../agents/rfp.agent', () => ({ rfpAgent: { id: 'rfp-builder' } }));
+jest.mock('../agents/data-readiness.agent', () => ({
+  dataReadinessAgent: { id: 'data-readiness' },
+}));
 jest.mock('../agents/eval-judge.agent', () => ({
   evalJudgeAgent: {},
   evalJudgeOutputSchema: {},

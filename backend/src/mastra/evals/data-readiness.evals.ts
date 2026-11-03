@@ -2,6 +2,7 @@ import type { Agent } from '@mastra/core/agent';
 import { checks } from '@mastra/evals/checks';
 import { findFixture } from '../../modules/testing-data/fixtures/registry';
 import type { DatasetSnapshot } from '../tool-services';
+import { dataReadinessAgent } from '../agents/data-readiness.agent';
 import type {
   AssistantEvalCase,
   AssistantEvalSet,
@@ -241,19 +242,6 @@ export function readinessEvalOrientation(
 }
 
 /**
- * The agent, loaded on first use. `mastra/agents/data-readiness.agent.ts`
- * (`dataReadinessAgent`, agents.md 2.10) is loaded lazily so that listing the
- * sets never builds the agent.
- */
-function loadDataReadinessAgent(): Agent {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require('../agents/data-readiness.agent') as {
-    dataReadinessAgent: Agent;
-  };
-  return mod.dataReadinessAgent;
-}
-
-/**
  * The eval target of one `data-readiness` run (agents.md 8.1): the Data
  * Readiness Agent, Block D1 as orientation, no knowledge block, and a
  * throwaway session bound to the agent so the readiness tools resolve the
@@ -262,7 +250,7 @@ function loadDataReadinessAgent(): Agent {
  */
 export function dataReadinessEvalTarget(
   now: () => Date = () => new Date(),
-  loadAgent: () => Agent = loadDataReadinessAgent,
+  loadAgent: () => Agent = () => dataReadinessAgent,
 ): EvalTarget {
   const datasourceName =
     findFixture(DATA_READINESS_EVAL_FIXTURE_ID)?.datasourceName ??

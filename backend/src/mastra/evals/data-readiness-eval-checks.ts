@@ -3,6 +3,7 @@ import type {
   EvalCustomCheckInput,
   EvalRawToolCall,
 } from './assistant.evals';
+import { readinessModelOutput } from '../tools/readiness.tools';
 import { callInput, callsOf, fieldText } from './rfp-eval-checks';
 
 /**
@@ -61,7 +62,12 @@ function names(calls: EvalRawToolCall[]): string {
   return calls.map((call) => call.name).join(' → ') || 'no tool call';
 }
 
-/** A call's output as an object (a JSON string is parsed). */
+/**
+ * A call's output as an object (a JSON string is parsed), as the model saw
+ * it: `assess_data_readiness` and `get_readiness_report` return
+ * `{ summary, report }` raw, and the model is handed only `summary`
+ * (`readinessModelOutput`, agents.md 3.13), so the checks read that.
+ */
 function outputObject(call: EvalRawToolCall): Record<string, unknown> | null {
   let output = call.output;
   if (typeof output === 'string') {
@@ -71,6 +77,7 @@ function outputObject(call: EvalRawToolCall): Record<string, unknown> | null {
       return null;
     }
   }
+  output = readinessModelOutput(output);
   return output && typeof output === 'object'
     ? (output as Record<string, unknown>)
     : null;
