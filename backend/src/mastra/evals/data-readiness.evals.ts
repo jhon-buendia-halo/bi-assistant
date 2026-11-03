@@ -143,6 +143,10 @@ const DATA_READINESS_EVAL_CASES: AssistantEvalCase[] = [
       "fixes taken from findings in the tool result (that dimension's, or " +
       'the most severe findings of any dimension, as rule D9 orders an ' +
       'answer), naming tables and columns exactly as the tool gave them. ' +
+      'The worst dimension (lowest score) and what to fix first (the most ' +
+      'severe findings) may differ: an answer that names the worst ' +
+      'dimension and then advises fixing high-severity findings of another ' +
+      'dimension first is correct, not a contradiction. ' +
       'Score pass=false if it calls a dimension the worst that is not the ' +
       'lowest-scoring assessed one, or invents a finding, table or column.',
   },

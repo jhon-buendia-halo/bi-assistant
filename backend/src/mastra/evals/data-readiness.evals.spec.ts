@@ -143,6 +143,14 @@ describe('data readiness eval checks', () => {
       expect(quoted).toEqual([87.4, 40.3, 23.5]);
     });
 
+    it('skips ages in years, months or weeks, not in days', () => {
+      expect(
+        quotedNumbers('Timeliness: nearly 4 years ago (1,440 days old).').map(
+          (q) => q.value,
+        ),
+      ).toEqual([1440]);
+    });
+
     it('records the decimals as written', () => {
       expect(quotedNumbers('Completeness 72.50 %')).toEqual([
         expect.objectContaining({ value: 72.5, decimals: 2 }),

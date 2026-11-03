@@ -223,6 +223,9 @@ export function quotedNumbers(answer: string): QuotedNumber[] {
       ) {
         continue;
       }
+      // "nearly 4 years ago": a calendar reading of an age the engine gives
+      // in days, not a score, band, finding or count (D2). Days stay checked.
+      if (/^\s*(?:years?|months?|weeks?)\b/i.test(following)) continue;
       const isPercent = /^\s?%/.test(after);
       if (!isPercent && !SCORE_WORDS.test(window)) continue;
       const value = Number(raw.replace(/,/g, ''));
