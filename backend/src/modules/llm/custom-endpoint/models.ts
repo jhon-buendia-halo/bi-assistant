@@ -34,12 +34,21 @@ function modelsRequest(
   return { url, headers };
 }
 
-/** R50 text for a non-2xx answer. */
-function httpFailure(status: number, url: string, body: string): string {
+/** R50 text for a non-2xx answer; a key echoed in the body is redacted (R54). */
+function httpFailure(
+  status: number,
+  url: string,
+  body: string,
+  apiKey?: string,
+): string {
   if (status === 404) return notFoundMessage(url);
   if (status === 401 || status === 403) return rejectedKeyMessage(status);
   if (status === 429) return RATE_LIMITED_MESSAGE;
-  return otherHttpMessage(status, body);
+  const key = apiKey?.trim();
+  return otherHttpMessage(
+    status,
+    key ? body.split(key).join('[redacted]') : body,
+  );
 }
 
 /** The `data[].id` list in server order, de-duplicated; null when unreadable. */
@@ -99,13 +108,20 @@ export async function listEndpointModels(options: {
     try {
       text = await response.text();
     } catch {
-      return {
-        ok: false,
-        message: timedOut ? MODELS_TIMEOUT_MESSAGE : MODELS_UNREADABLE_MESSAGE,
-      };
+      if (timedOut) return { ok: false, message: MODELS_TIMEOUT_MESSAGE };
+      // A failed status keeps its R50 text even when its body is lost.
+      return response.ok
+        ? { ok: false, message: MODELS_UNREADABLE_MESSAGE }
+        : {
+            ok: false,
+            message: httpFailure(response.status, url, '', options.apiKey),
+          };
     }
     if (!response.ok) {
-      return { ok: false, message: httpFailure(response.status, url, text) };
+      return {
+        ok: false,
+        message: httpFailure(response.status, url, text, options.apiKey),
+      };
     }
     let body: unknown;
     try {

@@ -221,4 +221,73 @@ describe('listEndpointModels — failures (R50)', () => {
       listEndpointModels({ apiStyle: 'openai', baseUrl: 'http://h/v1' }),
     ).resolves.toEqual({ ok: false, message: unreachableMessage('h') });
   });
+
+  it('redacts a key the server echoes in an error body (R54)', async () => {
+    fetchMock.mockResolvedValue(
+      reply(400, 'bad request: Authorization: Bearer sk-secret'),
+    );
+    const result = await listEndpointModels({
+      apiStyle: 'openai',
+      baseUrl: 'http://h/v1',
+      apiKey: 'sk-secret',
+    });
+    expect(result).toEqual({
+      ok: false,
+      message: otherHttpMessage(
+        400,
+        'bad request: Authorization: Bearer [redacted]',
+      ),
+    });
+    expect(JSON.stringify(result)).not.toContain('sk-secret');
+  });
+
+  it('a failed status keeps its R50 text when the body cannot be read', async () => {
+    const response = reply(404, 'gone');
+    jest.spyOn(response, 'text').mockRejectedValue(new Error('reset'));
+    fetchMock.mockResolvedValue(response);
+    await expect(
+      listEndpointModels({ apiStyle: 'openai', baseUrl: 'http://h/v1' }),
+    ).resolves.toEqual({
+      ok: false,
+      message: notFoundMessage('http://h/v1/models'),
+    });
+  });
+
+  it('a 200 whose body cannot be read is an unreadable list', async () => {
+    const response = reply(200, '{}');
+    jest.spyOn(response, 'text').mockRejectedValue(new Error('reset'));
+    fetchMock.mockResolvedValue(response);
+    await expect(
+      listEndpointModels({ apiStyle: 'openai', baseUrl: 'http://h/v1' }),
+    ).resolves.toEqual({ ok: false, message: MODELS_UNREADABLE_MESSAGE });
+  });
+
+  it('times out when the body stalls after the headers', async () => {
+    jest.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    const response = reply(200, '{}');
+    jest.spyOn(response, 'text').mockImplementation(
+      () =>
+        new Promise<string>((_resolve, reject) => {
+          signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          );
+        }),
+    );
+    fetchMock.mockImplementation((_url, init) => {
+      signal = init.signal ?? undefined;
+      return Promise.resolve(response);
+    });
+    const pending = listEndpointModels({
+      apiStyle: 'anthropic',
+      baseUrl: 'http://h/v1',
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    jest.advanceTimersByTime(MODELS_TIMEOUT_MS);
+    await expect(pending).resolves.toEqual({
+      ok: false,
+      message: MODELS_TIMEOUT_MESSAGE,
+    });
+  });
 });
