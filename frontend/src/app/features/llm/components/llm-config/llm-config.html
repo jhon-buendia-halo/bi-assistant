@@ -10,27 +10,81 @@
     <span class="field-label">Provider</span>
     <select
       [value]="provider()"
-      (change)="provider.set($any($event.target).value); onFieldChange()"
+      (change)="setProvider($any($event.target).value)"
       class="field"
     >
       <option value="openai" class="bg-surface">OpenAI</option>
       <option value="anthropic" class="bg-surface">Anthropic</option>
       <option value="lenai" class="bg-surface">LenAI (Halo gateway)</option>
+      <option value="custom" class="bg-surface">Custom endpoint</option>
     </select>
   </label>
 
-  <label class="flex flex-col gap-1">
-    <span class="field-label">
+  <!-- Custom endpoint: style, base URL and key come before the model so its list can be loaded. -->
+  @if (provider() === 'custom') {
+    <div class="flex flex-col gap-1">
+      <label for="llm-api-style" class="field-label">API style</label>
+      <select
+        id="llm-api-style"
+        data-testid="llm-api-style"
+        [value]="apiStyle()"
+        (change)="apiStyle.set($any($event.target).value); onFieldChange()"
+        class="field"
+      >
+        <option value="openai" class="bg-surface">OpenAI-compatible</option>
+        <option value="anthropic" class="bg-surface">
+          Anthropic-compatible
+        </option>
+      </select>
+    </div>
+
+    <div class="flex flex-col gap-1">
+      <label for="llm-base-url" class="field-label">Base URL</label>
+      <input
+        id="llm-base-url"
+        data-testid="llm-base-url"
+        type="text"
+        [placeholder]="baseUrlPlaceholder()"
+        [value]="baseUrl()"
+        (input)="baseUrl.set($any($event.target).value); onFieldChange()"
+        aria-describedby="llm-base-url-hint"
+        class="field"
+      />
+      <span id="llm-base-url-hint" class="text-[10px] leading-4 text-fg-muted">
+        {{ baseUrlHint() }}
+      </span>
+    </div>
+
+    <label class="flex flex-col gap-1">
+      <span class="field-label">API key (optional)</span>
+      <input
+        type="password"
+        data-testid="llm-api-key"
+        [placeholder]="apiKeyPlaceholder()"
+        [value]="apiKey()"
+        (input)="apiKey.set($any($event.target).value); onFieldChange()"
+        class="field"
+      />
+    </label>
+  }
+
+  <div class="flex flex-col gap-1">
+    <label for="llm-model" class="field-label">
       {{ provider() === 'lenai' ? 'Deployment name' : 'Model' }}
-    </span>
-    <input
-      type="text"
-      [placeholder]="provider() === 'lenai' ? 'my-deployment' : provider() === 'anthropic' ? 'claude-sonnet-5-5' : 'gpt-4o-mini'"
-      [value]="model()"
-      (input)="model.set($any($event.target).value); onFieldChange()"
-      class="field"
-    />
-  </label>
+    </label>
+    <!-- Model row: the Load models picker (<app-llm-model-picker>) sits here for Custom endpoint. -->
+    <div data-testid="llm-model-row" class="relative flex items-center gap-2">
+      <input
+        id="llm-model"
+        data-testid="llm-model"
+        type="text"
+        [placeholder]="modelPlaceholder()"
+        [value]="model()"
+        (input)="setModel($any($event.target).value)"
+        class="field min-w-0 flex-1"
+      />
+    </div>
+  </div>
 
   <!-- Always shown so it can be discovered; disabled when the model has no levels. -->
   <!-- Not a wrapping <label>: its name would then include the option text. -->
@@ -78,16 +132,19 @@
     </label>
   }
 
-  <label class="flex flex-col gap-1">
-    <span class="field-label">API key</span>
-    <input
-      type="password"
-      [placeholder]="apiKeyPlaceholder()"
-      [value]="apiKey()"
-      (input)="apiKey.set($any($event.target).value); onFieldChange()"
-      class="field"
-    />
-  </label>
+  @if (provider() !== 'custom') {
+    <label class="flex flex-col gap-1">
+      <span class="field-label">API key</span>
+      <input
+        type="password"
+        data-testid="llm-api-key"
+        [placeholder]="apiKeyPlaceholder()"
+        [value]="apiKey()"
+        (input)="apiKey.set($any($event.target).value); onFieldChange()"
+        class="field"
+      />
+    </label>
+  }
 
   @if (keyUnreadable()) {
     <p
