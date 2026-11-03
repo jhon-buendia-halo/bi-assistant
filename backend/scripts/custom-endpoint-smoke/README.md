@@ -33,7 +33,7 @@ backend/scripts/custom-endpoint-smoke/run.sh
 
 | Variable | Required | Meaning |
 | --- | --- | --- |
-| `APP_PORT` | yes | Port of the isolated app. Refused: 3000, 3100, 3200, 4200, 55432, 8317. |
+| `APP_PORT` | yes | Port of the isolated app. Refused: 3000, 3100, 3200, 4200, 55432, 8317, and any port something already listens on (so the key is never sent to another running app). |
 | `CUSTOM_BASE_URL_OPENAI` | one of the two | OpenAI-style base URL, with the version path (R45), e.g. `http://127.0.0.1:8317/v1`. |
 | `CUSTOM_BASE_URL_ANTHROPIC` | one of the two | Anthropic-style server root (R46), e.g. `http://127.0.0.1:8317`. |
 | `CUSTOM_API_KEY` | no | Sent with every request when set. Without it the key scan is skipped (warning). |

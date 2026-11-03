@@ -21,6 +21,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
+import { connect, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -146,6 +147,35 @@ function appLogTail(lines = 30) {
   }
 }
 
+/**
+ * True when something already listens on APP_PORT. Checked before the app
+ * starts: otherwise the first readiness probe can reach that other server
+ * (the CLI only refuses a busy port after it has loaded) and the smoke would
+ * PUT the raw key into someone else's settings.
+ */
+function portInUse(port) {
+  const answers = new Promise((done) => {
+    const socket = connect({ port, host: '127.0.0.1' });
+    socket.setTimeout(1000);
+    socket.once('connect', () => {
+      socket.destroy();
+      done(true);
+    });
+    socket.once('timeout', () => {
+      socket.destroy();
+      done(false);
+    });
+    socket.once('error', () => done(false));
+  });
+  const bindable = new Promise((done) => {
+    const probe = createServer();
+    probe.once('error', () => done(false));
+    probe.once('listening', () => probe.close(() => done(true)));
+    probe.listen(port, '127.0.0.1');
+  });
+  return Promise.all([answers, bindable]).then(([a, b]) => a || !b);
+}
+
 async function waitReady() {
   const deadline = Date.now() + READY_TIMEOUT_MS;
   while (Date.now() < deadline) {
@@ -157,6 +187,11 @@ async function waitReady() {
         signal: AbortSignal.timeout(2000),
       });
       if (res.ok) {
+        if (appExited) {
+          throw new Error(
+            `the app exited and another server answered on ${BASE}:\n${appLogTail()}`,
+          );
+        }
         responses.push({
           label: 'ready GET /llm/settings',
           body: await res.text(),
@@ -533,6 +568,12 @@ function writeOutDir() {
 // ---------------------------------------------------------------- main
 
 async function main() {
+  if (await portInUse(APP_PORT)) {
+    rmSync(tmpRoot, { recursive: true, force: true });
+    configError(
+      `APP_PORT ${APP_PORT} is already in use; stop that server (by PID) or pick a free port`,
+    );
+  }
   startApp();
   try {
     await waitReady();
