@@ -166,6 +166,16 @@
           }
         }
       }
+      @case ("readiness") {
+        @if (item(); as readiness) {
+          @if (readiness.kind === "readiness") {
+            <app-panel-readiness-view
+              class="h-full"
+              [item]="readiness"
+            />
+          }
+        }
+      }
       @default {
         <div
           class="flex h-full flex-col items-center justify-center gap-3 px-6 text-center"
