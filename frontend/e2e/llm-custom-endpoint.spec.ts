@@ -2,7 +2,11 @@ import http from 'node:http';
 import { AddressInfo } from 'node:net';
 import { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
-import { createWorldCupSession, openSessions } from './helpers/app-actions';
+import {
+  WORLD_CUP_SESSION,
+  createWorldCupSession,
+  openSessions,
+} from './helpers/app-actions';
 import { apiBase, seedWorldCupDataset } from './helpers/agents-api';
 import {
   LlmStub,
@@ -11,40 +15,23 @@ import {
   turnRequests,
 } from './helpers/llm-stub';
 import {
+  AnthropicStub,
+  RecordedAnthropicRequest,
+  startAnthropicStub,
+} from './helpers/anthropic-stub';
+import {
   notFoundMessage,
+  rejectedKeyMessage,
   unreachableMessage,
 } from '../../backend/src/modules/llm/custom-endpoint/messages';
 
 /*
  * Mirrors the "Custom endpoint connection" Feature in
- * specs/capabilities/llm-settings/spec.md (BA-281), against a local stub
- * server that records each request's path and headers.
- *
- * ASSUMPTIONS TO CONFIRM AT INTEGRATION (drafted before the UI and the
- * backend units merged; type-checked only, never run):
- * - The LLM Configuration form follows specs/system/ui.md 4.9: the provider
- *   option value is `custom`; the API style select (`llm-api-style`) has the
- *   option values `openai` / `anthropic`; the fields are labelled "Base URL",
- *   "API key (optional)" and "Model" (exact); "Load models" is
- *   `llm-load-models`, and its list `llm-model-options` holds one
- *   `role="option"` per model id.
- * - The OpenAI-style probe (R49) first sends a `response_format` (strict JSON
- *   schema), so the stub answers it as a connection test with
- *   `{"status":"ok"}`, and the probe sends the model in the body's `model`.
- * - The pass toast contains `Connection successful — custom/<model> replied
- *   "ok"` (the latency follows it, R15).
- * - The model list is `GET <base URL>/models` (R45, R48), answered by the
- *   stub's `models`. The stub serves only paths under `/v1` here, so a base
- *   URL without `/v1` gets 404 from it.
- * - `PUT /llm/settings` saves a custom configuration without a test, like the
- *   LenAI seed in helpers/agents-api.ts.
- * - The composer chip shows `<model> · <host:port>` (R53, `endpointHost`).
- * - The message texts are imported from the backend's messages.ts; Playwright
- *   transpiles that plain module across the frontend/backend boundary.
- * - Not covered here: the Anthropic-compatible scenarios (unit 17 adds them
- *   under the describe block below), "Passes the test on a server without
- *   strict JSON-schema support", "Reports a rejected key" and "Reports a model
- *   list that times out" (they need stub modes not built yet).
+ * specs/capabilities/llm-settings/spec.md (BA-281), against local stub
+ * servers that record each request's path, headers and body: the OpenAI
+ * style against helpers/llm-stub.ts (served under /v1), the Anthropic style
+ * against helpers/anthropic-stub.ts. The message texts are imported from the
+ * backend's messages.ts, so a reworded message cannot drift from the test.
  */
 
 const MODEL = 'qwen3-8b';
@@ -136,20 +123,20 @@ async function closedPort(): Promise<number> {
 const endpointCalls = (stub: LlmStub) =>
   stub.calls.filter((call) => call.path.startsWith('/v1/'));
 
-let stub: LlmStub;
-/** The stub's OpenAI-compatible base URL, version path included. */
-let endpoint: string;
-
-test.beforeEach(async () => {
-  stub = await startLlmStub({ pathPrefix: '/v1', models: MODELS });
-  endpoint = `${stub.baseUrl}/v1`;
-});
-
-test.afterEach(async () => {
-  await stub.close();
-});
-
 test.describe('OpenAI-compatible', () => {
+  let stub: LlmStub;
+  /** The stub's OpenAI-compatible base URL, version path included. */
+  let endpoint: string;
+
+  test.beforeEach(async () => {
+    stub = await startLlmStub({ pathPrefix: '/v1', models: MODELS });
+    endpoint = `${stub.baseUrl}/v1`;
+  });
+
+  test.afterEach(async () => {
+    await stub.close();
+  });
+
   test('configures an OpenAI-compatible endpoint by loading models, testing and saving', async ({
     page,
   }, testInfo) => {
@@ -309,8 +296,206 @@ test.describe('OpenAI-compatible', () => {
 });
 
 test.describe('Anthropic-compatible', () => {
-  // Unit 17 (BA-281) adds the Anthropic-compatible scenarios here:
-  // "Configures an Anthropic-compatible endpoint by loading models, testing
-  // and saving" and "Removes trailing slashes and accepts /v1 in the
-  // Anthropic style".
+  const MODEL = 'claude-sonnet-5-5';
+  const KEY = 'sk-anthropic-4c4c';
+  const ANSWER = 'The Anthropic-compatible stub answered this question.';
+  const ANTHROPIC_HINT =
+    'Server root, e.g. http://127.0.0.1:8317; requests use <base URL>/v1/messages.';
+
+  let stub: AnthropicStub;
+
+  test.beforeEach(async () => {
+    stub = await startAnthropicStub();
+    stub.setModels([MODEL]);
+  });
+
+  test.afterEach(async () => {
+    await stub.close();
+  });
+
+  async function openLlmConfiguration(page: Page): Promise<void> {
+    await page.getByTitle('Settings').click();
+    await page
+      .getByRole('navigation', { name: 'Settings navigation' })
+      .getByRole('button', { name: 'LLM Configuration' })
+      .click();
+    await expect(
+      page.getByRole('heading', { name: 'LLM Configuration' }),
+    ).toBeVisible();
+  }
+
+  const apiStyleSelect = (page: Page) => page.getByTestId('llm-api-style');
+  const baseUrlField = (page: Page) => page.getByLabel('Base URL');
+  const apiKeyField = (page: Page) => page.getByLabel('API key (optional)');
+  const modelField = (page: Page) => page.getByLabel('Model', { exact: true });
+  const loadModelsButton = (page: Page) => page.getByTestId('llm-load-models');
+  const modelOptions = (page: Page) => page.getByTestId('llm-model-options');
+  const testButton = (page: Page) =>
+    page.getByRole('button', { name: 'Test connection' });
+  const saveButton = (page: Page) =>
+    page.getByRole('button', { name: 'Save connection' });
+  const passed = (page: Page) =>
+    page.getByText(`Connection successful — custom/${MODEL} replied "ok"`);
+
+  /** Chooses Custom endpoint in the Anthropic style and fills the base URL. */
+  async function chooseAnthropicStyle(
+    page: Page,
+    baseUrl: string,
+    apiKey?: string,
+  ): Promise<void> {
+    await openLlmConfiguration(page);
+    await page
+      .getByLabel('Provider')
+      .selectOption({ label: 'Custom endpoint' });
+    await apiStyleSelect(page).selectOption({ label: 'Anthropic-compatible' });
+    await expect(page.getByText(ANTHROPIC_HINT)).toBeVisible();
+    await baseUrlField(page).fill(baseUrl);
+    if (apiKey !== undefined) await apiKeyField(page).fill(apiKey);
+  }
+
+  /** The requests that reached `/v1/<what>`, oldest first. */
+  const requestsTo = (
+    what: 'messages' | 'models',
+  ): RecordedAnthropicRequest[] =>
+    stub.requests.filter((request) => request.path === `/v1/${what}`);
+
+  const probes = (): RecordedAnthropicRequest[] =>
+    requestsTo('messages').filter((request) => request.isProbe);
+
+  /** Every request carries the Anthropic version and the key in its style. */
+  function expectAnthropicHeaders(
+    requests: RecordedAnthropicRequest[],
+    key: string | undefined,
+  ): void {
+    expect(requests.length).toBeGreaterThan(0);
+    for (const request of requests) {
+      expect(request.headers['anthropic-version']).toBe('2023-06-01');
+      expect(request.headers['authorization']).toBeUndefined();
+      expect(request.headers['x-api-key']).toBe(key);
+    }
+  }
+
+  test('configures an Anthropic-compatible endpoint by loading models, testing and saving, then chats on it', async ({
+    page,
+  }, testInfo) => {
+    await seedWorldCupDataset(page);
+    await chooseAnthropicStyle(page, stub.baseUrl, KEY);
+
+    await loadModelsButton(page).click();
+    await expect(modelOptions(page).getByRole('option')).toHaveText([MODEL]);
+    expect(requestsTo('models')).toHaveLength(1);
+    expectAnthropicHeaders(requestsTo('models'), KEY);
+
+    await modelOptions(page).getByRole('option', { name: MODEL }).click();
+    await expect(modelField(page)).toHaveValue(MODEL);
+    await expect(modelOptions(page)).toHaveCount(0);
+
+    await testButton(page).click();
+    await expect(passed(page)).toBeVisible();
+    expectAnthropicHeaders(probes(), KEY);
+    expect(probes()[0].body['model']).toBe(MODEL);
+    await page.screenshot({
+      path: testInfo.outputPath('llm-custom-anthropic-tested.png'),
+    });
+
+    await saveButton(page).click();
+    await expect(page.getByText('Configuration saved')).toBeVisible();
+
+    // Reopened, the saved configuration keeps its style and masks the key.
+    await page
+      .getByRole('navigation', { name: 'Settings navigation' })
+      .getByRole('button', { name: 'Datasource Configuration' })
+      .click();
+    await page
+      .getByRole('navigation', { name: 'Settings navigation' })
+      .getByRole('button', { name: 'LLM Configuration' })
+      .click();
+    await expect(page.getByLabel('Provider')).toHaveValue('custom');
+    await expect(apiStyleSelect(page)).toHaveValue('anthropic');
+    await expect(baseUrlField(page)).toHaveValue(stub.baseUrl);
+    await expect(apiKeyField(page)).toHaveValue('');
+    await expect(apiKeyField(page)).toHaveAttribute(
+      'placeholder',
+      '••••••••4c4c',
+    );
+
+    // The composer chip names the model and the root's host (R53).
+    await openSessions(page);
+    await page
+      .locator('header')
+      .getByRole('button', { name: 'Start New Conversation' })
+      .click();
+    await expect(
+      page.getByText(`${MODEL} · ${new URL(stub.baseUrl).host}`),
+    ).toBeVisible();
+
+    // A chat turn goes to <root>/v1/messages with the saved model and key.
+    stub.reply(ANSWER);
+    await createWorldCupSession(page);
+    await expect(
+      page.getByRole('heading', { name: WORLD_CUP_SESSION }),
+    ).toBeVisible();
+    const question = 'How many matches were played in 2022?';
+    await page.getByPlaceholder('Ask a follow-up question…').fill(question);
+    await page.getByLabel('Send message').click();
+    await expect(page.getByText(ANSWER)).toBeVisible();
+
+    const turns = requestsTo('messages').filter((request) => !request.isProbe);
+    expect(turns.length).toBeGreaterThan(0);
+    expect(turns[0].body['model']).toBe(MODEL);
+    expectAnthropicHeaders(turns, KEY);
+  });
+
+  test('sends no x-api-key to an endpoint that needs no key', async ({
+    page,
+  }) => {
+    await chooseAnthropicStyle(page, stub.baseUrl);
+    await expect(apiKeyField(page)).toHaveValue('');
+    await expect(apiKeyField(page)).toHaveAttribute(
+      'placeholder',
+      'Leave blank if the server needs none',
+    );
+
+    await loadModelsButton(page).click();
+    await modelOptions(page).getByRole('option', { name: MODEL }).click();
+    await testButton(page).click();
+    await expect(passed(page)).toBeVisible();
+
+    expectAnthropicHeaders(requestsTo('models'), undefined);
+    expectAnthropicHeaders(probes(), undefined);
+
+    await saveButton(page).click();
+    await expect(page.getByText('Configuration saved')).toBeVisible();
+  });
+
+  test('removes trailing slashes and accepts /v1', async ({ page }) => {
+    await chooseAnthropicStyle(page, `${stub.baseUrl}/v1/`, KEY);
+    await modelField(page).fill(MODEL);
+
+    await testButton(page).click();
+    await expect(passed(page)).toBeVisible();
+    expect(probes().length).toBeGreaterThan(0);
+    expect(
+      stub.requests.filter((request) => request.path.startsWith('/v1/v1')),
+    ).toHaveLength(0);
+  });
+
+  test('reports a rejected key', async ({ page }) => {
+    stub.respondWith(
+      401,
+      {},
+      {
+        type: 'error',
+        error: { type: 'authentication_error', message: 'invalid x-api-key' },
+      },
+    );
+    await chooseAnthropicStyle(page, stub.baseUrl, 'wrong-key');
+    await modelField(page).fill(MODEL);
+
+    await testButton(page).click();
+    await expect(page.getByText(rejectedKeyMessage(401))).toBeVisible();
+    await expect(saveButton(page)).toBeDisabled();
+    // The error text never echoes the key the request carried (R54).
+    await expect(page.getByText('wrong-key')).toHaveCount(0);
+  });
 });
