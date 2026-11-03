@@ -83,17 +83,44 @@ function setBackendStatus(status) {
   }
 }
 
+// Redacts secrets from diagnostics text (llm-settings R54). Kept rule for rule
+// in step with backend/src/infrastructure/logging/redact-secrets.ts, and kept
+// self-contained (no module-scope references):
+// backend/src/infrastructure/logging/redact-secrets.parity.spec.ts lifts this
+// function's source and runs it against the backend helper.
 function redactDiagnosticText(value) {
+  const schemes =
+    "Bearer|Basic|Digest|Token|ApiKey|Api-Key|Key|Negotiate|NTLM|DPoP|HOBA|Mutual|OAuth|AWS4-HMAC-SHA256";
+  const param = `[\\w-]+=(?:"[^"]*"|[^"',\\s}\\\\]*)`;
+  const leadingScheme = new RegExp(`^(${schemes})\\s+\\S`, "i");
+  const maskAuthorization = (inner) => {
+    const scheme = leadingScheme.exec(inner);
+    return scheme ? `${scheme[1]} [REDACTED]` : "[REDACTED]";
+  };
   return String(value)
     .replace(
-      /((?:["']?(?:password|token|api[_-]?key|secret|authorization)["']?)\s*[:=]\s*)(["'])(.*?)\2/gi,
+      /(["']?authorization["']?\s*(?:=>|[:=])\s*)(["'])((?:\\.|(?!\2)[^\\\r\n])*)\2/gi,
+      (_match, prefix, quote, inner) =>
+        `${prefix}${quote}${maskAuthorization(inner)}${quote}`,
+    )
+    .replace(
+      new RegExp(
+        `(["']?authorization\\\\?["']?[ \\t]*(?:=>|[:=])[ \\t]*\\\\?["']?)(?:(${schemes})[ \\t]+)?(?!(?:null|true|false)(?:[,}\\]\\s]|$))(?:${param}(?:[ \\t]*,[ \\t]*${param})*|[^"',\\s}\\\\]+)`,
+        "gi",
+      ),
+      (_match, prefix, scheme) =>
+        `${prefix}${scheme ? `${scheme} ` : ""}[REDACTED]`,
+    )
+    .replace(
+      /((?:["']?(?:password|token|api[_-]?key|secret)["']?)\s*(?:=>|[:=])\s*)(["'])((?:\\.|(?!\2)[^\\\r\n])*)\2/gi,
       "$1$2[REDACTED]$2",
     )
     .replace(
-      /(["']?(?:password|token|api[_-]?key|secret|authorization)["']?\s*[:=]\s*["']?)[^"',\s}]+/gi,
+      /(["']?(?:password|token|api[_-]?key|secret)\\?["']?\s*(?:=>|[:=])\s*\\?["']?)(?!(?:null|true|false)(?:[,}\]\s]|$))[^"',\s}\\]+/gi,
       "$1[REDACTED]",
     )
-    .replace(/(bearer\s+)[a-z0-9._~+/-]+=*/gi, "$1[REDACTED]")
+    .replace(/\b(bearer[ \t]+)[a-z0-9._~+/-]+=*/gi, "$1[REDACTED]")
+    .replace(/\bsk-[A-Za-z0-9_-]{16,}/g, "[REDACTED]")
     .replace(/(postgres(?:ql)?:\/\/[^:\s/]+:)[^@\s]+@/gi, "$1[REDACTED]@");
 }
 

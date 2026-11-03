@@ -18,6 +18,7 @@ import { extname, join, resolve } from 'node:path';
 import { AppModule } from './app.module';
 import { DATA_DIR } from './infrastructure/database/database.module';
 import { startupDeveloperSettings } from './infrastructure/developer-settings/developer-settings.file';
+import { installNestLogRedaction } from './infrastructure/logging/redacting-nest-logger';
 import { setIntellifyApiInfo } from './intellify-api/api-info';
 import { createIntellifyApi } from './intellify-api/bootstrap';
 import { intellifyApiConfig, readOrCreateApiKey } from './intellify-api/config';
@@ -143,6 +144,8 @@ export async function createApp(
 ): Promise<CreatedApp> {
   const logger = new Logger('Bootstrap');
   installDeveloperLogExport();
+  // After the export, so it wraps it: exported records are redacted too (R54).
+  installNestLogRedaction();
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   if (options.cors) app.enableCors();
 
