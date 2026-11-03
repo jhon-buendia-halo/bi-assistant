@@ -178,7 +178,7 @@ Thresholds are fixed at these defaults, with no setting to change them:
 
   Two filters, **Dimension** and **Severity**, each default to `All` and narrow the table together. When a filter leaves no row, the table reads `No findings match these filters.`. A report with no findings reads `No findings: every check passed.`.
   - The readiness card on an answer SHALL show the datasource name, the overall score and the band, with **Open scorecard**, which shows that report in the panel.
-- R26. The scorecard SHALL offer **Past assessments**. It lists the stored reports of the scorecard's datasource, newest first, each with its generation time, its overall score and its band. Choosing one SHALL show it in the scorecard. With one report only, the list reads `No earlier assessments.`.
+- R26. The scorecard SHALL offer **Past assessments**. It lists the stored reports of the scorecard's datasource, newest first, each with its generation time, its overall score and its band. Choosing one SHALL show it in the scorecard. With no report or only the current one, the list reads `No earlier assessments.`. A failed list reads `Could not load past assessments.`; a failed open reads `Could not open that assessment.` and leaves the list open.
 
 ### Fidelity
 

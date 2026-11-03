@@ -85,14 +85,26 @@ describe('DatabricksProfiler', () => {
     expect(sqls[0]).toContain('c.`pid` = p.`id`');
   });
 
-  it('invalidFormatCount inlines an escaped pattern literal', async () => {
+  it('invalidFormatCount inlines the pattern as a raw, case-insensitive literal', async () => {
     responder = () => [{ invalid: '3' }];
     expect(
-      await profiler.invalidFormatCount(config, 'c.s', 't', 'col', "^a\\d'b$"),
+      await profiler.invalidFormatCount(
+        config,
+        'c.s',
+        't',
+        'col',
+        '^a\\d\\.\\s$',
+      ),
     ).toBe(3);
     expect(sqls[0]).toContain(
-      "NOT regexp_like(CAST(`col` AS STRING), '^a\\\\d\\'b$')",
+      "NOT regexp_like(CAST(`col` AS STRING), r'(?i)^a\\d\\.\\s$')",
     );
+  });
+
+  it('invalidFormatCount rejects a pattern with a single quote', async () => {
+    await expect(
+      profiler.invalidFormatCount(config, 'c.s', 't', 'col', "^a'b$"),
+    ).rejects.toThrow(/single quote/);
   });
 
   it('normalizedDistinctCount lowercases and trims', async () => {

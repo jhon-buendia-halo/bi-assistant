@@ -294,13 +294,14 @@ export class DatabricksProfiler implements ProfilingConnector<DatabricksConfig> 
     column: string,
     pattern: string,
   ): Promise<number> {
-    // executeStatement does no parameter binding: inline the escaped literal.
+    // executeStatement does no parameter binding: inline a raw literal.
+    // `(?i)` makes the match case-insensitive, as Postgres `!~*` does (R7).
     const col = qIdent(column);
     const rows = await this.query(
       config,
       `SELECT COUNT(*) AS invalid FROM ${qualify(schema, table)}
        WHERE ${col} IS NOT NULL
-         AND NOT regexp_like(CAST(${col} AS STRING), ${qStr(pattern)})`,
+         AND NOT regexp_like(CAST(${col} AS STRING), ${qRawStr(`(?i)${pattern}`)})`,
     );
     return num(rows[0]?.invalid);
   }
@@ -471,6 +472,19 @@ function qualify(schema: string, table: string): string {
 /** Spark string literal (backslashes first, then single quotes). */
 function qStr(value: string): string {
   return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+}
+
+/**
+ * Spark raw string literal `r'...'`: the pattern reaches Spark verbatim, so it
+ * does not depend on `spark.sql.parser.escapedStringLiterals`. A raw literal
+ * cannot hold its closing quote, and patterns come from a fixed internal
+ * table (spec R7) that has none, so a single quote is rejected, never escaped.
+ */
+function qRawStr(value: string): string {
+  if (value.includes("'")) {
+    throw new Error('A raw Spark regex literal cannot contain a single quote');
+  }
+  return `r'${value}'`;
 }
 
 function num(v: unknown): number {
