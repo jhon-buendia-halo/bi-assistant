@@ -115,6 +115,7 @@ Summary:
 | `skills` | In-app skills a user writes and assigns to their agents | `id`; `name` unique | `updatedAt` desc | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `skill_overrides` | Org-wide overrides of built-in skills, edited in the app | `name` (a built-in skill's name) | n/a | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `agent_prompt_overrides` | Org-wide overrides of built-in agents' system prompts, edited in the app | `key` (a built-in agent's registry key) | n/a | [agents-evals](../capabilities/agents-evals/spec.md) |
+| `readiness_reports` | Stored data-readiness assessments, one per run, never edited | `id` | `generatedAt` desc (per datasource) | [data-readiness](../capabilities/data-readiness/spec.md) |
 
 Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets`, `agents` and `skills` carry a legacy, inert `ownerId` (section 3.14). There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
 
@@ -239,8 +240,8 @@ A conversation. The largest document; the whole transcript is embedded.
 | `workspaceId` | string | no | `session-<id>`; the Mastra workspace owned one-to-one by this session. |
 | `datasets` | string[] | yes | Names of the datasets the session works over (at least one at creation). Renamed from `sandboxes` (section 6). |
 | `agentId` | uuid | no | The user agent the session was started from (section 3.10). Absent for a plain-assistant session. Set at creation, never changed. No migration: absent means the plain assistant (ADR-0008). |
-| `agentName` | string | no | Present with `agentId`. The agent's Live name, stamped at creation and re-stamped by every turn that applies the agent, so a deleted agent's sessions can still name it. Also present with `agentKey`: the built-in agent's name at creation (`RFP Builder`). |
-| `agentKey` | string | no | The registry key of the built-in agent the session is bound to (today only `rfp`, the RFP Builder; ADR-0028, [agents.md](agents.md) 2.8). Every turn runs that agent. Absent means the assistant (with or without `agentId`); never set together with `agentId`. Set at creation, never changed. No migration (new optional field). |
+| `agentName` | string | no | Present with `agentId`. The agent's Live name, stamped at creation and re-stamped by every turn that applies the agent, so a deleted agent's sessions can still name it. Also present with `agentKey`: the built-in agent's name at creation (`RFP Builder`, `Data Readiness Agent`). |
+| `agentKey` | string | no | The registry key of the built-in agent the session is bound to (today `rfp`, the RFP Builder, and `data-readiness`, the Data Readiness Agent; ADR-0028, ADR-0031, [agents.md](agents.md) 2.8, 2.10). Every turn runs that agent. Absent means the assistant (with or without `agentId`); never set together with `agentId`. Set at creation, never changed. No migration (new optional field). |
 | `rfpId` | uuid | no | `agentKey: "rfp"` sessions only: the active RFP record (an `rfp.rfps` id in the Intellify database, section 7), stamped by the turn whose `create_rfp` or `get_rfp` call succeeded, so a resumed chat starts at the right stage. Replaced when a later turn works on another RFP. No migration. |
 | `messages` | `ChatMessage[]` | yes | Transcript in order. Empty at creation. |
 | `visualizations` | `SessionVisualization[]` | no | Visual metadata (section 3.4.3); `[]` at creation. |
@@ -270,6 +271,7 @@ Deleting a session deletes the document, its agent memory thread and its workspa
 | `knowledge` | `KnowledgeUse[]` | no | The enabled knowledge snippets that fit the turn's context budget (3.9). Records what the model was *given*. |
 | `report` | `AnalysisReport` | no | `{jobId: string, title: string, path: string, angles: number}` — set on the message a finished deep-analysis job appends. `path` is workspace-relative (`reports/<jobId>.md`), `angles` the number of investigation angles covered. |
 | `rfpPackage` | `RfpPackageRef` | no | `{rfpId: string, title: string, files: {name: string, bytes: number}[], exportedAt: ISO, draft?: boolean}` — `draft: true` when the package is a draft stored under `rfp/<rfpId>/draft/` by `export_rfp_draft`, absent for the final package. Set on the answer of a turn whose `export_rfp_package` or `export_rfp_draft` call stored an RFP package in the session workspace (`rfp/<rfpId>/`, section 4.1). `files[].name` is relative to that folder (`rfp.md`, `rfp.pdf`, `exhibits/<name>.csv`, `manifest.json`). Rendered as the package card; downloaded through [api.md](api.md) #105. RFP Builder sessions only. |
+| `readinessReport` | `ReadinessReportRef` | no | `{reportId: string, datasourceName: string, overallScore: number, maturity: Maturity, generatedAt: ISO}`, the last report a turn's `assess_data_readiness` or `get_readiness_report` returned ([data-readiness](../capabilities/data-readiness/spec.md) R5, R25). Drives the readiness card. Data Readiness Agent sessions only. Additive, no migration. |
 
 Messages never carry an id; user messages have only `role`, `content`, `at`.
 
@@ -316,8 +318,8 @@ A `PanelItem` is one thing an agent showed with `show_in_panel` ([agents.md](age
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
-| `id` | string | yes | A uuid for `file`, `document` and `table` items; `visual:<visualId>` for a visual. |
-| `kind` | `file`, `document`, `table` or `visual` | yes | Which of the shapes below. |
+| `id` | string | yes | A uuid for `file`, `document` and `table` items; `visual:<visualId>` for a visual; `readiness:<reportId>` for a readiness report. |
+| `kind` | `file`, `document`, `table`, `visual` or `readiness` | yes | Which of the shapes below. |
 | `title` | string | yes | The heading shown in the panel (the default per kind, [agents.md](agents.md) 3.11). |
 | `shownAt` | ISO | yes | When it was last shown; the item with the latest `shownAt` is the one the panel opens on. |
 
@@ -326,6 +328,7 @@ Per kind, in addition:
 - `document`: `markdown` (string, at most 50,000 characters).
 - `table`: `tool` (string, the tool of the query result it was taken from), `input` (string, no; the SQL or the entity name of that record), `columns` (string[]), `rows` (object[], column name to value, at most 200, as in `ToolDataRecord`, 3.4.2), `rowCount` (number, before the cap) and `truncated` (boolean, no; `true` when rows were cut). The rows are copied at the time of the call, so the item stands on its own.
 - `visual`: `visualId` (string); the visual's own data stays in `visualizations` (3.4.3). One item per visual, upserted: its `shownAt` is stamped whenever the visual is created, updated, tailored, reverted or shown again.
+- `readiness`: `reportId` (string). One item per report, upserted: shown again, its `shownAt` is re-stamped. The report itself stays in `readiness_reports` (3.15) and is read when the item opens. Written by the orchestrator after a successful `assess_data_readiness` or `get_readiness_report` ([agents.md](agents.md) 3.13); its title is `Data readiness — <datasource name>`.
 - Retired kind `phases` (one item per session, the workflow tracker): no longer written by anything; the workflow lives in `workflowState` and is shown only in the workflow bar. A stored `phases` item of a session saved before BA-231 stays in the document untouched, but is dropped when the session is read (below), so there is no migration.
 
 `WorkflowState`: `current` (number, the step in progress, 1-based), `done` (number[], completed step numbers), `skipped` (number[], no; step numbers that do not apply), `waiting` (boolean, no; `true` while the current step waits for the user), `steps` (string[], no; the titles of steps the agent defined itself with `update_workflow`, 2 to 12, each at most 80 characters; only for an agent whose prompt has no `## Workflow` section), `note` (string, no; the Markdown of the current step's card, at most 2,000 characters), `todos` (object, no; step number as a string to the action the user must do, each at most 120 characters, set by `update_workflow`'s `todo`; kept across calls, dropped when new `steps` reset the state, kept by the RFP auto-drive) and `updatedAt` (ISO). `show_in_panel` never writes it. An `update_workflow` call changes only what it passes, with the keep and clear rules of [agents.md](agents.md) 3.12 (new `steps` reset the state); the RFP stage auto-drive drops `note` and `waiting` when the current step changes and keeps them when it does not. Steps from the prompt are never stored: they are read from the agent's prompt on every request, so a prompt edit reaches existing sessions; only agent-defined `steps` are stored.
@@ -502,7 +505,7 @@ One document per built-in agent whose system prompt was edited, (ADR-0026). Rule
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
-| `key` | string | yes | The built-in agent's registry key (`assistant`, `rfp`, `visualization`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`); the identity. An override of a key that is no longer built in is ignored. |
+| `key` | string | yes | The built-in agent's registry key (`assistant`, `rfp`, `data-readiness`, `visualization`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`); the identity. An override of a key that is no longer built in is ignored. |
 | `prompt` | string | yes | Not empty; at most 20,000 characters. For the `assistant` and `rfp` it is the editable text, without the generated `## Tools` section ([agents.md](agents.md) 2.1, 2.8); an `rfp` prompt must start with `You are the RFP Builder`. |
 | `baseHash` | string | yes | SHA-256 (hex) of the shipped editable text the override was saved against. A different hash for the shipped text means the built-in changed since. |
 | `updatedBy` | string | yes | Always `local` (the built-in super admin; kept for documents stored earlier). |
@@ -545,6 +548,27 @@ The app is single-user (ADR-0030): one built-in super admin, id `local`, is alwa
 - A document with no `ownerId` (written by code that predates the stamp) is read exactly like one with `local`.
 - **Uniqueness** that was per owner (agent names, skill names, metric names, the verified-query key `(sourceSessionId, sourceMessageAt)`) is now unique across the collection; M14 renames clashing skills (`-2`, `-3`, …).
 - No identity or access data is stored: the tables `users`, `groups`, `group_members`, `role_assignments`, `group_role_mappings`, `auth_sessions` and `activity_events` of earlier versions are dropped by M14.
+
+### 3.15 `readiness_reports` — data-readiness assessments
+
+One document per assessment ([data-readiness](../capabilities/data-readiness/spec.md) R24, ADR-0031). It is written once by `POST /data-readiness/assessments` or the agent's `assess_data_readiness`, and never updated. No delete route exists. A datasource deleted later leaves its reports in place (references by value, 3.13). Additive collection, no migration.
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | Identity. |
+| `datasourceId` | string | yes | The assessed datasource (`connections`, 3.1). |
+| `datasourceName` | string | yes | Its name at assessment time. |
+| `datasourceKind` | `postgres` \| `databricks` | yes | Its kind. |
+| `generatedAt` | ISO | yes | The engine's `now`; orders the per-datasource list (newest first). |
+| `entityCount` | number | yes | Entities actually assessed (missing ones dropped). |
+| `overallScore` | number | yes | 0..100, the rounded mean of the eight assessed dimension scores. |
+| `maturity` | `Initial` \| `Repeatable` \| `Defined` \| `Managed` \| `Optimised` | yes | The band of `overallScore`. |
+| `dimensionScores` | `DimensionScore[]` | yes | Ten entries, in the order completeness, accuracy, validity, consistency, integrity, uniqueness, timeliness, currency, reasonability, accessibility. Each is `{ dimension: Dimension, score: number, findingCount: number, maxSeverity: Severity \| null, assessed: boolean, totalChecks: number }`. `accuracy` and `currency` have `assessed: false`, score 100 and 0 checks. |
+| `findings` | `Finding[]` | yes | In engine order (R23). Each is `{ dimension: Dimension, level: 'entity' \| 'source', namespace?: string, entity?: string, field?: string, severity: 'info' \| 'low' \| 'medium' \| 'high', measured?: string, description: string, recommendation: string }`. `field` may name several columns, comma-separated, for a key or a column pair. |
+| `sessionId` | uuid | no | The chat session it was run from, when there was one. |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+`Dimension` is one of `completeness`, `validity`, `consistency`, `uniqueness`, `integrity`, `accessibility`, `timeliness`, `reasonability`, `accuracy`, `currency`. `Severity` is one of `info`, `low`, `medium`, `high`. The wire shape `ReadinessReport` ([api.md](api.md) 2.17) is this document without `createdAt` and `updatedAt`.
 
 ## 4. Files on disk
 

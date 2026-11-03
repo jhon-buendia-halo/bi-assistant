@@ -28,7 +28,8 @@ export class DataReadinessService {
     return Promise.resolve(notImplemented('DataReadinessService.assess'));
   }
 
-  list(datasourceId: string): Promise<ReadinessReportSummary[]> {
+  /** api.md 109: newest first; unknown datasource gives an empty list. */
+  list(datasourceId: string): Promise<{ reports: ReadinessReportSummary[] }> {
     void datasourceId;
     return Promise.resolve(notImplemented('DataReadinessService.list'));
   }

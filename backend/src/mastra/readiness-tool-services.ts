@@ -1,23 +1,51 @@
-// DI bridge for the data readiness tools (BA-251), same pattern as
-// tool-services.ts: tools are built at module load with no Nest DI, so the
-// sessions module installs the implementation at boot (unit 10, BA-261).
-// Types mirror modules/data-readiness/engine/types.ts without importing Nest code.
+// DI bridge for the data readiness tools (BA-251, agents.md 3.13), same
+// pattern as tool-services.ts: tools are built at module load with no Nest DI,
+// so SessionsService installs the implementation at boot (unit 10, BA-261).
+// Kept beside tool-services.ts so DatasetToolServices' implementers are untouched.
 
 import type {
   ReadinessReport,
-  ReadinessReportSummary,
+  ReadinessSummary,
 } from '../modules/data-readiness/engine/types';
 
+/** A report plus what the model may see; only `summary` reaches the model. */
+export interface ReadinessToolReport {
+  report: ReadinessReport;
+  summary: ReadinessSummary;
+}
+
+/** `list_readiness_reports` output (agents.md 3.13). */
+export interface ReadinessReportList {
+  datasourceName: string;
+  reports: {
+    reportId: string;
+    generatedAt: string;
+    overallScore: number;
+    maturity: ReadinessReport['maturity'];
+    entityCount: number;
+  }[];
+  total: number;
+}
+
+/**
+ * Every method resolves the dataset as agents.md 3.13 "Dataset resolution"
+ * says and throws an Error whose message is the text the model should see;
+ * the tools turn it into `{ error }`.
+ */
 export interface ReadinessToolServices {
-  /** Assess the datasource behind `datasourceId`; stores and returns the report. */
   assessReadiness(input: {
     sessionId: string;
-    datasourceId: string;
-    namespace?: string;
-    entity?: string;
-  }): Promise<ReadinessReport>;
-  getReadinessReport(id: string): Promise<ReadinessReport>;
-  listReadinessReports(datasourceId: string): Promise<ReadinessReportSummary[]>;
+    datasetName?: string;
+  }): Promise<ReadinessToolReport>;
+  getReadinessReport(input: {
+    sessionId: string;
+    reportId?: string;
+    datasetName?: string;
+  }): Promise<ReadinessToolReport>;
+  listReadinessReports(input: {
+    sessionId: string;
+    datasetName?: string;
+  }): Promise<ReadinessReportList>;
 }
 
 /** The stream event the session emits when a readiness tool returns a report. */

@@ -125,7 +125,31 @@ export type ReadinessReportSummary = Pick<
   | 'overallScore'
   | 'maturity'
   | 'entityCount'
-> & { findingCount: number };
+  | 'sessionId'
+>;
+
+/** What the readiness tools return to the model (agents.md 3.13). */
+export interface ReadinessSummary {
+  reportId: string;
+  datasourceName: string;
+  generatedAt: string;
+  entityCount: number;
+  overallScore: number;
+  maturity: Maturity;
+  dimensionScores: DimensionScore[];
+  findingCount: number;
+  /** At most 20, most severe first, then in report order. */
+  topFindings: Pick<
+    Finding,
+    | 'severity'
+    | 'dimension'
+    | 'entity'
+    | 'field'
+    | 'measured'
+    | 'description'
+    | 'recommendation'
+  >[];
+}
 
 export interface Thresholds {
   completeness: { medium: number; high: number };

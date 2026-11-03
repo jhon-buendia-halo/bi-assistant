@@ -1,9 +1,8 @@
-/** Body of `POST /data-readiness/assessments` (api.md). */
+/** Body of `POST /data-readiness/assessments` (api.md 108). */
 export interface AssessDto {
   datasourceId: string;
-  /** Optional narrowing: one schema, or one table within it. */
-  namespace?: string;
-  entity?: string;
-  /** Set when the agent runs the assessment from a chat. */
+  /** Inventory entity keys narrowing the scope; all entities when omitted. */
+  entities?: string[];
+  /** Recorded on the report when the assessment comes from a chat. */
   sessionId?: string;
 }

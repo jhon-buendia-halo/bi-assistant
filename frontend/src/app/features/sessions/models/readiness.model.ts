@@ -66,10 +66,14 @@ export interface ReadinessReportSummary {
   overallScore: number;
   maturity: ReadinessMaturity;
   entityCount: number;
-  findingCount: number;
+  sessionId?: string;
 }
 
-/** Payload of the `readiness-report` stream event. */
+/**
+ * Payload of the `readiness-report` stream event (api.md): `{ report, panelItem }`.
+ * `panelItem` is the session's PanelItem of kind `readiness` (unit 11 types it).
+ */
 export interface ReadinessReportEvent {
   report: ReadinessReport;
+  panelItem: unknown;
 }

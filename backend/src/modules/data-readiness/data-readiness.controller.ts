@@ -16,7 +16,7 @@ export class DataReadinessController {
   @Get()
   list(
     @Query('datasourceId') datasourceId: string,
-  ): Promise<ReadinessReportSummary[]> {
+  ): Promise<{ reports: ReadinessReportSummary[] }> {
     return this.service.list(datasourceId);
   }
 
