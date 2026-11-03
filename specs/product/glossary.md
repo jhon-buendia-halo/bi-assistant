@@ -14,6 +14,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Answer.** The assistant's final message in a *turn*, together with the evidence stored with it: result rows, SQL, entities, interpretation, reasoning trail, knowledge used and any badges.
 
+**API style.** Which API a *custom endpoint* speaks: `openai` (shown "OpenAI-compatible"; the base URL includes the version path, e.g. `http://127.0.0.1:8317/v1`, and the key is sent as `Authorization: Bearer`) or `anthropic` (shown "Anthropic-compatible"; the base URL is the server root, e.g. `http://127.0.0.1:8317`, and the key is sent as `x-api-key`). Required for a custom endpoint, ignored for the other providers. See [../capabilities/llm-settings/spec.md](../capabilities/llm-settings/spec.md).
+
 **App secret.** The key material from which the key that encrypts stored LLM API keys is derived. On desktop it is generated once and kept in a file in the data directory. See [non-functional.md](non-functional.md).
 
 **Assistant.** The main agent. It answers business questions over a session's datasets, runs SQL, calls the visual tools and asks clarifying questions.
@@ -29,6 +31,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Clarification.** A question the assistant asks the user, with 2 to 4 options, when interpretations diverge materially. The turn ends; the user's pick (or typed answer) arrives as the next message. At most one per user question.
 
 **Cross-check.** The result of *careful mode* on one answer: status `agree` (same results), `disagree` (results differ) or `error` (the check could not finish), plus a short note.
+
+**Custom endpoint.** The *LLM provider* `custom`: a model server the user chooses, such as a self-hosted model (Ollama, LM Studio, vLLM), a gateway (LiteLLM) or a relay, that speaks the OpenAI or Anthropic API. It is set by an *API style*, a base URL, an optional API key and a model, which the user can pick from the server's own model list. See [../capabilities/llm-settings/spec.md](../capabilities/llm-settings/spec.md).
 
 **Data directory.** The folder holding all app data: application database, agent memory, observability data, per-session *workspaces* and the *app secret* file. Desktop and web mode use different data directories on purpose.
 
@@ -94,7 +98,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Live (agent).** The published version of a *user agent*. It is the version that starts sessions. Editing a Live agent changes only its *draft*, and the Live version keeps serving until the draft is published.
 
-**LLM provider.** The service the agents call. `openai`, `anthropic` or `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name). One global setting: provider, model, API key (stored encrypted, shown masked) and *reasoning effort*.
+**LLM provider.** The service the agents call. `openai`, `anthropic`, `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name) or `custom` (a *custom endpoint*, which needs an *API style* and a base URL, and whose API key is optional). One global setting: provider, model, API key (stored encrypted, shown masked), *reasoning effort* and, for `lenai` and `custom`, the base URL (and for `custom` the API style).
 
 **Message.** One entry in a session's transcript, from the `user` or the `assistant`, with a timestamp that doubles as its identity (`at`). Assistant messages may carry data records, entities, a clarification, a visual event, feedback, a cross-check, a reasoning trail, knowledge used or a report.
 
