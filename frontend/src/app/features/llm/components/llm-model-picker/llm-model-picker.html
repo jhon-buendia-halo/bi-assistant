@@ -1,0 +1,42 @@
+<button
+  type="button"
+  class="btn btn-outline shrink-0 disabled:cursor-not-allowed disabled:opacity-60"
+  data-testid="llm-load-models"
+  [disabled]="!canLoad"
+  (click)="load()"
+>
+  @if (loading()) {
+    <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+    <span>Loading models…</span>
+  } @else {
+    <lucide-angular [img]="List" [size]="14" />
+    <span>Load models</span>
+  }
+</button>
+
+@if (open() && models(); as list) {
+  <!-- A click outside closes the list. -->
+  <div class="fixed inset-0 z-20" (click)="close()"></div>
+  <div
+    class="menu absolute top-full right-0 left-0 z-30 mt-1 max-h-[240px] overflow-y-auto"
+    role="listbox"
+    aria-label="Models"
+    data-testid="llm-model-options"
+  >
+    @for (model of list; track model) {
+      <button
+        type="button"
+        role="option"
+        aria-selected="false"
+        class="menu-item font-mono text-[13px]"
+        (click)="choose(model)"
+      >
+        {{ model }}
+      </button>
+    } @empty {
+      <p class="px-2.5 py-1.5 text-[13px] text-fg-muted">
+        The endpoint listed no models — type the model name.
+      </p>
+    }
+  </div>
+}
