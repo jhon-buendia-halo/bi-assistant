@@ -643,6 +643,7 @@
                           class="flex items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-surface-muted"
                           [class.text-fg]="llmModel()"
                           [class.text-fg-muted]="!llmModel()"
+                          [attr.title]="llmModelTitle()"
                         >
                           <lucide-angular [img]="Sparkle" [size]="13" />
                           <span>{{ llmModel() ?? "No model configured" }}</span>

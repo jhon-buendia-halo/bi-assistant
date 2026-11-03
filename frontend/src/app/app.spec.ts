@@ -289,6 +289,14 @@ describe('composerModelLabel (llm-settings R53)', () => {
   });
 });
 
+function modelChip(el: HTMLElement, text: string): HTMLButtonElement {
+  const chip = Array.from(el.querySelectorAll('button')).find(
+    (b) => b.textContent?.trim() === text,
+  );
+  if (!chip) throw new Error(`no model chip reading ${text}`);
+  return chip;
+}
+
 describe('Composer model chip (llm-settings R53)', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -319,6 +327,34 @@ describe('Composer model chip (llm-settings R53)', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain(
       'llama3.1:8b · localhost:11434',
     );
+    const chip = modelChip(
+      fixture.nativeElement as HTMLElement,
+      'llama3.1:8b · localhost:11434',
+    );
+    expect(chip.getAttribute('title')).toBe('http://localhost:11434/v1');
+  });
+
+  it('gives a built-in provider chip no base URL title', () => {
+    const fixture = TestBed.createComponent(App);
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    fixture.componentInstance.openComposer();
+    http
+      .match((r) => r.url.endsWith('/llm/settings'))
+      .forEach((r) =>
+        r.flush({
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          baseUrl: null,
+          apiKeyMasked: '****abcd',
+          reasoningEffort: 'high',
+          configured: true,
+          apiStyle: null,
+        }),
+      );
+    fixture.detectChanges();
+    const chip = modelChip(fixture.nativeElement as HTMLElement, 'gpt-4o-mini');
+    expect(chip.hasAttribute('title')).toBe(false);
   });
 });
 

@@ -455,6 +455,8 @@ export class App {
    * (`<model> · <host>` for a custom endpoint, llm-settings R53).
    */
   readonly llmModel = signal<string | null>(null);
+  /** The chip's title: the full base URL for a custom endpoint (ui.md). */
+  readonly llmModelTitle = signal<string | null>(null);
   readonly llmEffort = signal<ReasoningEffort>('high');
   readonly effortMenuOpen = signal(false);
   readonly reasoningEfforts: ReasoningEffort[] = ['low', 'medium', 'high'];
@@ -1177,9 +1179,15 @@ export class App {
     this.llmApi.getSettings().subscribe({
       next: (v) => {
         this.llmModel.set(composerModelLabel(v));
+        this.llmModelTitle.set(
+          v.configured && v.provider === 'custom' ? v.baseUrl : null,
+        );
         this.llmEffort.set(v.reasoningEffort);
       },
-      error: () => this.llmModel.set(null),
+      error: () => {
+        this.llmModel.set(null);
+        this.llmModelTitle.set(null);
+      },
     });
     this.datasetApi.getDatasets().subscribe({
       next: (res) => this.composerDatasets.set(res.datasets),
