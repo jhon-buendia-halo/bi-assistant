@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { assistantShippedPrompt } from './agents/assistant-prompt';
 import {
+  DATA_READINESS_PROMPT,
   EVAL_JUDGE_PROMPT,
   KNOWLEDGE_BOOTSTRAP_PROMPT,
   RFP_PROMPT,
@@ -17,8 +18,8 @@ import {
 
 /**
  * The shipped, editable system prompt of each built-in agent, by registry
- * key (ADR-0026, data-model 3.10.3): the assistant's and the RFP Builder's
- * without their generated `## Tools` section, a System agent's whole static
+ * key (ADR-0026, data-model 3.10.3): the assistant's, the RFP Builder's and
+ * the Data Readiness Agent's without their generated `## Tools` section, a System agent's whole static
  * instructions.
  */
 const SHIPPED: Readonly<Record<string, string>> = {
@@ -29,6 +30,7 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'knowledge-bootstrap': KNOWLEDGE_BOOTSTRAP_PROMPT,
   'assistant-eval-judge': EVAL_JUDGE_PROMPT,
   rfp: RFP_PROMPT,
+  'data-readiness': DATA_READINESS_PROMPT,
   benchmarking: BENCHMARKING_PROMPT,
   survey: SURVEY_PROMPT,
   'lad-coe': LAD_COE_PROMPT,

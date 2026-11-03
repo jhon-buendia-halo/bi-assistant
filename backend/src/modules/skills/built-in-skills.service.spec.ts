@@ -49,6 +49,7 @@ describe('BuiltInSkillsService', () => {
     const list = await service.list();
     expect(list.map((skill) => skill.name)).toEqual([
       'curated-knowledge',
+      'data-readiness',
       'deep-analysis',
       'interactive-visuals',
       'rfp-carriers',
@@ -66,7 +67,11 @@ describe('BuiltInSkillsService', () => {
       builtInChanged: false,
       updatedAt: null,
     });
-    expect(list[1]).toMatchObject({ loading: 'harness' });
+    expect(list[1]).toMatchObject({
+      loading: 'on-demand',
+      agents: ['data-readiness'],
+    });
+    expect(list[2]).toMatchObject({ loading: 'harness' });
   });
 
   it('names the tools a built-in body links, and nothing for one that links none', async () => {

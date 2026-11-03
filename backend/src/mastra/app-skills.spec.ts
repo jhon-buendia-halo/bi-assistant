@@ -10,6 +10,7 @@ import {
   appSkillBody,
   appSkillDocument,
   appSkillFile,
+  builtInOnDemandSkillNames,
   loadAppSkills,
   readSkillFile,
   skillBody,
@@ -261,6 +262,31 @@ describe('the bundled skills', () => {
     expect(catalogSkills('sql-fixer')).toEqual([]);
   });
 
+  it('serve the data-readiness skill on demand to the Data Readiness Agent only (agents.md 7.4)', () => {
+    expect(AGENT_SKILLS['data-readiness']).toEqual(['data-readiness']);
+    const skills = catalogSkills('data-readiness');
+    expect(skills.map((skill) => skill.name)).toEqual(['data-readiness']);
+    expect(skills[0].loading).toBe('on-demand');
+    expect(skills[0].agents).toEqual(['data-readiness']);
+    expect(skills[0].description).toMatch(
+      /^Use when assessing a dataset's data readiness/,
+    );
+    const body = appSkillBody('data-readiness');
+    expect(body.startsWith('# Data readiness\n')).toBe(true);
+    expect(body).toContain(
+      'Tools for this skill: [[tool:assess_data_readiness]], [[tool:get_readiness_report]], [[tool:list_readiness_reports]].',
+    );
+    expect(body).toContain('Never recompute them.');
+    // A single SKILL.md, no reference files; not linkable from the assistant.
+    expect(skillFiles(skills[0].dir).map((file) => file.path)).toEqual([
+      'SKILL.md',
+    ]);
+    expect(catalogSkills('assistant').map((skill) => skill.name)).not.toContain(
+      'data-readiness',
+    );
+    expect(builtInOnDemandSkillNames()).not.toContain('data-readiness');
+  });
+
   it('serve the curated-knowledge rules as an on-demand skill of the assistant', () => {
     const skill = loadAppSkills(skillsRoot()).get('curated-knowledge');
     expect(skill?.description).toMatch(/^Use when the turn carries a curated/);
@@ -372,6 +398,7 @@ describe('skill folders', () => {
         const fresh = require('./app-skills') as typeof import('./app-skills');
         expect([...fresh.appSkills().keys()].sort()).toEqual([
           'curated-knowledge',
+          'data-readiness',
           'deep-analysis',
           'interactive-visuals',
           'rfp-carriers',
