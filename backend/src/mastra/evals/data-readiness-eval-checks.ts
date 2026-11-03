@@ -197,6 +197,8 @@ export function quotedNumbers(answer: string): QuotedNumber[] {
   const text = answer
     // ISO dates and times are when a report ran, not a score.
     .replace(/\d{4}-\d{2}-\d{2}(?:[T ][\d:.]+Z?)?/g, ' ')
+    // Clock times ("23:21:22", "09:00") are when a report ran, not a score.
+    .replace(/\b\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?\b/g, ' ')
     // Denominators, not quoted values.
     .replace(/\s*(?:\/\s*100\b|out of 100\b)/gi, ' ')
     // Ordered list markers.

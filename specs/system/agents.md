@@ -906,7 +906,7 @@ The rules encoded (prefix D):
 - **D6** With several datasets and none named, it asks with `ask_clarification`.
 - **D7** It runs a new assessment only when asked or when none exists; otherwise it reads the latest. It lists reports to find or compare earlier ones.
 - **D8** The scorecard opens by itself, so the answer does not repeat the whole findings list.
-- **D9** Answer shape: overall score and band, then the weakest dimensions, then the most severe findings with recommendations. Answers are short, and use a table for more than three findings.
+- **D9** Answer shape: overall score and band, then the weakest dimensions (the assessed ones with the lowest scores, never the ones with the most or most severe findings), then the most severe findings with recommendations. Answers are short, and use a table for more than three findings.
 - **D10** Table and column names are given exactly as in the tool result.
 - **D11** Tool errors are its own to handle; it tells the user only when they must act.
 - **D12** Scope: only the readiness of this session's data; anything else is declined in one sentence. It has no SQL tool and says so if asked to query.
@@ -1860,7 +1860,7 @@ Built-in check types used by the cases (each exposes an id, name and a descripti
 | `data-readiness` | Data Readiness | `world-cup` (PostgreSQL) | 8, `agentKey: 'data-readiness'`: listed below |
 | `rfp` | RFP Builder | `intellify-api` (REST, self-registering) | 28, `agentKey: 'rfp'`: listed below |
 
-**The `data-readiness` set** runs on the Data Readiness Agent (2.10). Its cases have no `expectedSql` and expect no fixed score: the engine computes them, so the checks compare the answer with the readiness tool results of the same case. Each case gets Block D1 (4.1) as orientation and no knowledge block; the run's session is bound to the agent (`sessionAgentKey: 'data-readiness'`) and the judge reads up to 12,000 characters of each tool input and output, each readiness report result projected to the summary the model was handed (`readinessModelOutput`, 3.13). Reports are stored per datasource, so a case may find reports from earlier cases or runs. Custom checks: *numbers* (every score-like number in the answer, a percentage or a number within 40 characters of a score, band or dimension word, not an age in years, months or weeks, equals a number some successful readiness tool returned (a report result read as its summary), rounded no further than written, a count of a summary's `topFindings` in total, per dimension, per severity or per both when the list holds every finding, or a method constant of the skill), *overall* (the last summary's `overallScore` is quoted), *weakest* (the answer names a lowest-scoring assessed dimension of the last summary) and *unassessed* (accuracy and currency are paired with no score).
+**The `data-readiness` set** runs on the Data Readiness Agent (2.10). Its cases have no `expectedSql` and expect no fixed score: the engine computes them, so the checks compare the answer with the readiness tool results of the same case. Each case gets Block D1 (4.1) as orientation and no knowledge block; the run's session is bound to the agent (`sessionAgentKey: 'data-readiness'`) and the judge reads up to 12,000 characters of each tool input and output, each readiness report result projected to the summary the model was handed (`readinessModelOutput`, 3.13). Reports are stored per datasource, so a case may find reports from earlier cases or runs. Custom checks: *numbers* (every score-like number in the answer, a percentage or a number within 40 characters of a score, band or dimension word, not an age in years, months or weeks, a date or a clock time, equals a number some successful readiness tool returned (a report result read as its summary), rounded no further than written, a count of a summary's `topFindings` in total, per dimension, per severity or per both when the list holds every finding, or a method constant of the skill), *overall* (the last summary's `overallScore` is quoted), *weakest* (the answer names a lowest-scoring assessed dimension of the last summary) and *unassessed* (accuracy and currency are paired with no score).
 
 | Id | Question | Checks |
 |---|---|---|
@@ -2313,6 +2313,9 @@ Answers:
 - Lead with the overall score and maturity band, then the weakest
   dimensions with their scores, then the most severe findings (table,
   column, what was measured) with their recommendations.
+- The weakest dimension is the assessed one with the lowest score, never
+  the one with the most or the most severe findings. When the most severe
+  findings sit in another dimension, name the weakest first and say so.
 - Explain what a dimension measures in plain words when it helps. Keep
   answers short; use a table for more than three findings.
 - Name tables and columns exactly as the tool result gives them.

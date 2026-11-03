@@ -143,6 +143,14 @@ describe('data readiness eval checks', () => {
       expect(quoted).toEqual([87.4, 40.3, 23.5]);
     });
 
+    it('skips clock times', () => {
+      expect(
+        quotedNumbers('| 3 | 23:21:22 | 93 | Managed | 9 |').map(
+          (q) => q.value,
+        ),
+      ).toEqual([3, 93, 9]);
+    });
+
     it('skips ages in years, months or weeks, not in days', () => {
       expect(
         quotedNumbers('Timeliness: nearly 4 years ago (1,440 days old).').map(
