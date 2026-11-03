@@ -14,6 +14,30 @@ Entry template:
 
 ---
 
+## 2026-11-03 — 1.16.1 to 1.16.12 acceptance gate of the Data Readiness Agent (BA-251)
+
+### What went well
+- Drafting the Playwright spec early, in its own unit, with its UI guesses written as a numbered "assumptions to confirm" list made integration cheap: all 11 held and all five scenarios passed on the first integrated run.
+- Reading each failed eval case's answer and tool calls before changing anything (the 1.13.9 lesson) split the failures cleanly: four rounds produced five check or rubric faults and one real agent fault (Completeness called the worst dimension over a lower Timeliness). Each fix was made once and covered by a unit test.
+- Querying the stored report in the eval data dir's `app.sqlite` proved the model's "6 of them high" was true before I loosened the numbers check.
+- Hashing the assistant's and RFP Builder's compiled instructions and tool lists on a `git archive` build of `main` settled in a minute that their eval sets did not need to run.
+- Configuring the eval LLM through a throwaway CLI instance (`PUT /llm/settings`, `POST /testing-data/world-cup/load`, `POST /llm/test-connection`) with `ANTHROPIC_BASE_URL=…/v1` worked on the first try, and the key never touched the repo: it stayed in a mode-600 scratch file.
+
+### What went wrong
+- The eval unit's checks were written against a tool result shape (bare summary) that the merged tool no longer returned (`{ summary, report }`), and the judge was handed the raw result with the full report first, although `readiness.tools.ts` said the judge used `readinessModelOutput`. The documented projection had never been wired.
+- My first move from the lazy `require` to a static import broke two Jest suites on Mastra's ESM; the fix was the `jest.mock` every other eval spec already has for its agent.
+- The first eval rubric and numbers check were stricter than the rules they enforce (D2, D9): counts derived from a complete findings list, ages in years and clock times all failed as "invented scores". It took four 3-run rounds to reach 100 %.
+- `rfp-builder.spec.ts` failed 9 tests because `intellify_mercer_demo` did not exist on the shared embedded Postgres; an environment prerequisite that nothing checks up front.
+- The session-management test that read the Agent dropdown with `allInnerTexts()` raced the listbox and got `[]`; it had been passing by timing.
+- The evidence screenshot shows a header layout bug (agent chip empty, datasource overlapping the ID with the panel open). It was not caught in the fast loop and is left as a follow-up.
+
+### What to do differently
+- When a tool has `toModelOutput`, write the eval checks and the judge input against the model-facing projection, and add a unit test that feeds the raw tool result through the check.
+- Before running an eval round, write each custom check against the exact wording of the rule it enforces (D2 names scores, bands, findings and counts), and unit-test it on one real answer from a dry run.
+- Before running `rfp-builder.spec.ts` on a non-Docker Postgres, load the `intellify` fixture into `intellify_mercer_demo` (intellify-api skill, step 2).
+- Never read a list with `allInnerTexts()` until a known last item is visible.
+- When an agent-bound session is new, screenshot its header with the right panel open as part of the fast loop.
+
 ## 2026-10-16 — 0.4.2 Jira MCP tool in `.claude/tools` (BA-237)
 
 ### What went well
