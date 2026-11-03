@@ -1,0 +1,748 @@
+{
+  "sourceId": "gold-databricks-retail-medium-w6-08",
+  "sourceType": "databricks",
+  "entities": [
+    {
+      "namespace": "main.storefront",
+      "name": "products",
+      "rowCount": 102,
+      "fields": [
+        {
+          "name": "productId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 102,
+          "min": "1",
+          "max": "102"
+        },
+        {
+          "name": "productName",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 75,
+          "normalizedDistinctCount": 75
+        },
+        {
+          "name": "gtinCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 97,
+          "normalizedDistinctCount": 97
+        },
+        {
+          "name": "categoryCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6,
+          "normalizedDistinctCount": 6
+        },
+        {
+          "name": "unitPriceCents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 71,
+          "min": "0",
+          "max": "15841262"
+        },
+        {
+          "name": "marginPct",
+          "type": "double",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 102,
+          "min": "0",
+          "max": "78"
+        },
+        {
+          "name": "introducedAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 76,
+          "min": "2021-09-30",
+          "max": "2026-07-15"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "productId"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "gtinCode"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-03T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.storefront",
+      "name": "stores",
+      "rowCount": 410,
+      "fields": [
+        {
+          "name": "storeId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 410,
+          "min": "1",
+          "max": "410"
+        },
+        {
+          "name": "storeName",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 383,
+          "normalizedDistinctCount": 383
+        },
+        {
+          "name": "regionCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 20,
+          "normalizedDistinctCount": 20
+        },
+        {
+          "name": "formatCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12,
+          "normalizedDistinctCount": 12
+        },
+        {
+          "name": "managerEmail",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 337,
+          "normalizedDistinctCount": 337,
+          "formatRule": "email",
+          "invalidFormatCount": 0
+        },
+        {
+          "name": "openedAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 295,
+          "min": "2022-03-24T12:00:00.000Z",
+          "max": "2025-05-04T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "storeId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-14T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.storefront",
+      "name": "orders",
+      "rowCount": 5075,
+      "fields": [
+        {
+          "name": "orderId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 5075,
+          "min": "1",
+          "max": "5075"
+        },
+        {
+          "name": "storeId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 410,
+          "min": "1",
+          "max": "410"
+        },
+        {
+          "name": "orderStatus",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 31,
+          "normalizedDistinctCount": 31
+        },
+        {
+          "name": "channelCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7,
+          "normalizedDistinctCount": 7
+        },
+        {
+          "name": "totalCents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2837,
+          "min": "0",
+          "max": "35000195"
+        },
+        {
+          "name": "placedAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4418,
+          "min": "2022-11-23",
+          "max": "2026-08-04"
+        },
+        {
+          "name": "fulfilledAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 761,
+          "distinctCount": 3068,
+          "min": "2022-08-23T12:00:00.000Z",
+          "max": "2026-07-09T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "orderId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-11T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.storefront",
+      "name": "orderLines",
+      "rowCount": 2613,
+      "fields": [
+        {
+          "name": "orderLineId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2613,
+          "min": "1",
+          "max": "2613"
+        },
+        {
+          "name": "orderId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2081,
+          "min": "1",
+          "max": "5075"
+        },
+        {
+          "name": "productId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 102,
+          "min": "1",
+          "max": "102"
+        },
+        {
+          "name": "lineSeq",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 117,
+          "min": "0",
+          "max": "3299"
+        },
+        {
+          "name": "quantityUnits",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 69,
+          "min": "-330",
+          "max": "1026"
+        },
+        {
+          "name": "lineTotalCents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1918,
+          "min": "0",
+          "max": "69239623"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "orderLineId"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "natural",
+          "fields": [
+            "orderId",
+            "lineSeq"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-06T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.storefront",
+      "name": "loyaltyMembers",
+      "rowCount": 305,
+      "fields": [
+        {
+          "name": "loyaltyMemberId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 305,
+          "min": "1",
+          "max": "305"
+        },
+        {
+          "name": "memberName",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 211,
+          "normalizedDistinctCount": 211
+        },
+        {
+          "name": "contactEmail",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 189,
+          "distinctCount": 116,
+          "normalizedDistinctCount": 116,
+          "formatRule": "email",
+          "invalidFormatCount": 0
+        },
+        {
+          "name": "phoneNumber",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 244,
+          "normalizedDistinctCount": 244,
+          "formatRule": "phone",
+          "invalidFormatCount": 36
+        },
+        {
+          "name": "tierCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 29,
+          "normalizedDistinctCount": 26
+        },
+        {
+          "name": "enrolledAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 259,
+          "min": "2020-07-03",
+          "max": "2026-06-18"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "loyaltyMemberId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-09T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.storefront",
+      "name": "inventoryLevels",
+      "rowCount": 900,
+      "fields": [
+        {
+          "name": "inventoryLevelId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 900,
+          "min": "1",
+          "max": "900"
+        },
+        {
+          "name": "productId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 102,
+          "min": "1",
+          "max": "102"
+        },
+        {
+          "name": "storeId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 410,
+          "min": "1",
+          "max": "410"
+        },
+        {
+          "name": "onHandUnits",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 172,
+          "min": "0",
+          "max": "2417"
+        },
+        {
+          "name": "countedAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 459,
+          "min": "2022-02-14",
+          "max": "2026-07-29"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "inventoryLevelId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-07-25T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.storefront",
+      "name": "salesDaily",
+      "rowCount": 6887,
+      "fields": [
+        {
+          "name": "recordId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6677,
+          "min": "1",
+          "max": "6887"
+        },
+        {
+          "name": "storeId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6887,
+          "min": "1",
+          "max": "410"
+        },
+        {
+          "name": "revenueCents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3852,
+          "min": "-900",
+          "max": "31552919"
+        },
+        {
+          "name": "snapshotYear",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 17,
+          "min": "2019",
+          "max": "2026"
+        }
+      ],
+      "keys": [],
+      "readable": true,
+      "lastModifiedAt": "2026-08-06T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.storefront",
+      "name": "promoWindows",
+      "rowCount": 0,
+      "fields": [
+        {
+          "name": "promoWindowId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "productId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "discountPct",
+          "type": "double",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "promoStartAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "promoEndAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "promoWindowId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": false,
+      "lastModifiedAt": "2026-08-03T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.storefront",
+      "name": "catalogDocuments",
+      "rowCount": 525,
+      "fields": [
+        {
+          "name": "catalogDocumentId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 525,
+          "min": "1",
+          "max": "525"
+        },
+        {
+          "name": "productId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 102,
+          "min": "1",
+          "max": "102"
+        },
+        {
+          "name": "publishedDate",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 439,
+          "normalizedDistinctCount": 439,
+          "formatRule": "date-string",
+          "invalidFormatCount": 0
+        },
+        {
+          "name": "documentUuid",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 474,
+          "normalizedDistinctCount": 474,
+          "formatRule": "uuid",
+          "invalidFormatCount": 36
+        },
+        {
+          "name": "assetUrl",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 490,
+          "normalizedDistinctCount": 490,
+          "formatRule": "url",
+          "invalidFormatCount": 0
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "catalogDocumentId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2023-12-11T12:00:00.000Z"
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "main.storefront",
+      "fromEntity": "orders",
+      "fromField": "storeId",
+      "toNamespace": "main.storefront",
+      "toEntity": "stores",
+      "toField": "storeId",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.storefront",
+      "fromEntity": "orderLines",
+      "fromField": "orderId",
+      "toNamespace": "main.storefront",
+      "toEntity": "orders",
+      "toField": "orderId",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.storefront",
+      "fromEntity": "orderLines",
+      "fromField": "productId",
+      "toNamespace": "main.storefront",
+      "toEntity": "products",
+      "toField": "productId",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.storefront",
+      "fromEntity": "inventoryLevels",
+      "fromField": "productId",
+      "toNamespace": "main.storefront",
+      "toEntity": "products",
+      "toField": "productId",
+      "orphanCount": 12,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.storefront",
+      "fromEntity": "inventoryLevels",
+      "fromField": "storeId",
+      "toNamespace": "main.storefront",
+      "toEntity": "stores",
+      "toField": "storeId",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.storefront",
+      "fromEntity": "promoWindows",
+      "fromField": "productId",
+      "toNamespace": "main.storefront",
+      "toEntity": "products",
+      "toField": "productId",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.storefront",
+      "fromEntity": "catalogDocuments",
+      "fromField": "productId",
+      "toNamespace": "main.storefront",
+      "toEntity": "products",
+      "toField": "productId",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.storefront",
+      "fromEntity": "salesDaily",
+      "fromField": "storeId",
+      "toNamespace": "main.storefront",
+      "toEntity": "stores",
+      "toField": "storeId",
+      "orphanCount": 0,
+      "origin": "inferred"
+    }
+  ]
+}

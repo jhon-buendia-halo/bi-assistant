@@ -1,0 +1,1196 @@
+{
+  "sourceId": "pharma-supply-gold",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "supply",
+      "name": "sites",
+      "rowCount": 340,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "site_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "gln_cd"
+          ],
+          "duplicateCount": 6
+        }
+      ],
+      "fields": [
+        {
+          "name": "site_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 340,
+          "min": "1",
+          "max": "340"
+        },
+        {
+          "name": "gln_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 334
+        },
+        {
+          "name": "site_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 340
+        },
+        {
+          "name": "contact_email",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 41,
+          "distinctCount": 288,
+          "formatRule": "email",
+          "invalidFormatCount": 22
+        },
+        {
+          "name": "mobile_number",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 322,
+          "formatRule": "phone",
+          "invalidFormatCount": 14
+        },
+        {
+          "name": "site_type_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 9,
+          "normalizedDistinctCount": 9
+        },
+        {
+          "name": "qualified_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 320,
+          "min": "2004-03-01T00:00:00Z",
+          "max": "2026-06-18T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "supply",
+      "name": "products",
+      "rowCount": 12400,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "product_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "gtin"
+          ],
+          "duplicateCount": 40
+        }
+      ],
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12400,
+          "min": "1",
+          "max": "12400"
+        },
+        {
+          "name": "gtin",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12360
+        },
+        {
+          "name": "product_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12400
+        },
+        {
+          "name": "dosage_form_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 64,
+          "normalizedDistinctCount": 51
+        },
+        {
+          "name": "info_url",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 1984,
+          "distinctCount": 9600,
+          "formatRule": "url",
+          "invalidFormatCount": 340
+        },
+        {
+          "name": "shelf_life_months",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 14,
+          "min": "6",
+          "max": "60"
+        },
+        {
+          "name": "discontinued_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 610,
+          "min": "2009-04-01",
+          "max": "2099-12-31"
+        }
+      ]
+    },
+    {
+      "namespace": "supply",
+      "name": "batches",
+      "rowCount": 940000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "batch_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "batch_no"
+          ],
+          "duplicateCount": 1240
+        }
+      ],
+      "fields": [
+        {
+          "name": "batch_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 940000,
+          "min": "1",
+          "max": "940000"
+        },
+        {
+          "name": "product_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12380,
+          "min": "1",
+          "max": "12400"
+        },
+        {
+          "name": "site_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 336,
+          "min": "1",
+          "max": "340"
+        },
+        {
+          "name": "batch_no",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 938760
+        },
+        {
+          "name": "batch_uuid",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 940000,
+          "formatRule": "uuid",
+          "invalidFormatCount": 2400
+        },
+        {
+          "name": "release_status_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 84600,
+          "distinctCount": 6
+        },
+        {
+          "name": "qty_units",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 184000,
+          "min": "0",
+          "max": "4800000"
+        },
+        {
+          "name": "manufactured_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 840000,
+          "min": "2016-01-04T00:00:00Z",
+          "max": "2026-08-07T18:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "supply",
+      "name": "shipments",
+      "rowCount": 4100000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "shipment_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "shipment_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4100000,
+          "min": "1",
+          "max": "4100000"
+        },
+        {
+          "name": "site_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 338,
+          "min": "1",
+          "max": "340"
+        },
+        {
+          "name": "product_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12100,
+          "min": "1",
+          "max": "12400"
+        },
+        {
+          "name": "carrier_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 328000,
+          "distinctCount": 74
+        },
+        {
+          "name": "incoterm_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 11,
+          "normalizedDistinctCount": 11
+        },
+        {
+          "name": "dispatched_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3100000,
+          "min": "2018-01-02T00:00:00Z",
+          "max": "2026-08-11T20:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "supply",
+      "name": "shipment_lines",
+      "rowCount": 18400000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "line_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "line_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18400000,
+          "min": "1",
+          "max": "18400000"
+        },
+        {
+          "name": "shipment_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4080000,
+          "min": "1",
+          "max": "4100000"
+        },
+        {
+          "name": "batch_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 928000,
+          "min": "1",
+          "max": "940000"
+        },
+        {
+          "name": "qty_units",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 84000,
+          "min": "0",
+          "max": "240000"
+        },
+        {
+          "name": "customer_ref",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 3128000,
+          "distinctCount": 9400000
+        }
+      ]
+    },
+    {
+      "namespace": "supply",
+      "name": "cold_chain_readings",
+      "rowCount": 86000000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "reading_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "reading_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 86000000,
+          "min": "1",
+          "max": "86000000"
+        },
+        {
+          "name": "shipment_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2400000,
+          "min": "1",
+          "max": "4100000"
+        },
+        {
+          "name": "logger_serial",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 84000
+        },
+        {
+          "name": "excursion_flag_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 6880000,
+          "distinctCount": 4
+        },
+        {
+          "name": "recorded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 61000000,
+          "min": "2020-01-01T00:00:00Z",
+          "max": "2024-06-30T23:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "supply",
+      "name": "v_batch_status",
+      "rowCount": 940000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "batch_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 936400,
+          "min": "1",
+          "max": "940000"
+        },
+        {
+          "name": "status_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7,
+          "normalizedDistinctCount": 7
+        },
+        {
+          "name": "yield_pct",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 84000,
+          "min": "0",
+          "max": "112.6"
+        },
+        {
+          "name": "released_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 94000,
+          "distinctCount": 820000,
+          "min": "2016-02-01T00:00:00Z",
+          "max": "2026-08-08T09:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "supply",
+      "name": "stg_wms_receipts",
+      "rowCount": 6200000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "receipt_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6106400,
+          "min": "1",
+          "max": "6200000"
+        },
+        {
+          "name": "receipt_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2400,
+          "formatRule": "date-string",
+          "invalidFormatCount": 48000
+        },
+        {
+          "name": "qty_received",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 61000,
+          "min": "-9999",
+          "max": "240000"
+        },
+        {
+          "name": "posting_ts",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 5900000,
+          "min": "2024-01-01T00:00:00Z",
+          "max": "2087-03-01T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "supply",
+      "name": "stg_product_master",
+      "rowCount": 12400,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12286,
+          "min": "1",
+          "max": "12400"
+        },
+        {
+          "name": "launch_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4100,
+          "formatRule": "date-string",
+          "invalidFormatCount": 620
+        },
+        {
+          "name": "atc_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 640,
+          "normalizedDistinctCount": 640
+        },
+        {
+          "name": "loaded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 950,
+          "min": "2024-01-01T02:00:00Z",
+          "max": "2026-08-12T02:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "supply",
+      "name": "supply_contracts_vault",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [],
+      "fields": []
+    },
+    {
+      "namespace": "quality",
+      "name": "deviations",
+      "rowCount": 84000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "deviation_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "deviation_ref"
+          ],
+          "duplicateCount": 210
+        }
+      ],
+      "fields": [
+        {
+          "name": "deviation_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 84000,
+          "min": "1",
+          "max": "84000"
+        },
+        {
+          "name": "batch_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 12600,
+          "distinctCount": 61000,
+          "min": "1",
+          "max": "940000"
+        },
+        {
+          "name": "deviation_ref",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 83790
+        },
+        {
+          "name": "severity_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 14,
+          "normalizedDistinctCount": 9
+        },
+        {
+          "name": "raised_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6400,
+          "min": "1899-01-05",
+          "max": "2026-08-06"
+        }
+      ]
+    },
+    {
+      "namespace": "quality",
+      "name": "capa_actions",
+      "rowCount": 42000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "capa_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "capa_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 42000,
+          "min": "1",
+          "max": "42000"
+        },
+        {
+          "name": "deviation_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 38400,
+          "min": "1",
+          "max": "84000"
+        },
+        {
+          "name": "owner_dept",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 5040,
+          "distinctCount": 24
+        },
+        {
+          "name": "days_open",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1640,
+          "min": "-3",
+          "max": "1840"
+        },
+        {
+          "name": "opened_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3400,
+          "min": "2015-01-05T00:00:00Z",
+          "max": "2026-08-04T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "quality",
+      "name": "lab_tests",
+      "rowCount": 2400000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "test_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "test_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2400000,
+          "min": "1",
+          "max": "2400000"
+        },
+        {
+          "name": "batch_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 916000,
+          "min": "1",
+          "max": "940000"
+        },
+        {
+          "name": "method_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 940,
+          "normalizedDistinctCount": 940
+        },
+        {
+          "name": "result_value",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 184000,
+          "min": "-12.4",
+          "max": "118.9"
+        },
+        {
+          "name": "analyst_initials",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 192000,
+          "distinctCount": 1400
+        },
+        {
+          "name": "tested_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2100000,
+          "min": "2018-01-02T00:00:00Z",
+          "max": "2026-08-10T16:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "quality",
+      "name": "stability_studies",
+      "rowCount": 18400,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "study_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "study_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18400,
+          "min": "1",
+          "max": "18400"
+        },
+        {
+          "name": "deviation_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 16560,
+          "distinctCount": 1800,
+          "min": "1",
+          "max": "84000"
+        },
+        {
+          "name": "condition_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12,
+          "normalizedDistinctCount": 12
+        },
+        {
+          "name": "started_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6400,
+          "min": "2011-03-01",
+          "max": "2026-07-01"
+        },
+        {
+          "name": "ended_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6200,
+          "min": "2010-01-01",
+          "max": "2025-12-01"
+        }
+      ]
+    },
+    {
+      "namespace": "quality",
+      "name": "v_batch_release",
+      "rowCount": 940000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "batch_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 931600,
+          "min": "1",
+          "max": "940000"
+        },
+        {
+          "name": "decision_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 5,
+          "normalizedDistinctCount": 5
+        },
+        {
+          "name": "qp_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 47000,
+          "distinctCount": 84
+        },
+        {
+          "name": "decided_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 810000,
+          "min": "2016-02-01T00:00:00Z",
+          "max": "2026-08-08T09:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "quality",
+      "name": "stg_lab_import",
+      "rowCount": 2400000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "test_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2385600,
+          "min": "1",
+          "max": "2400000"
+        },
+        {
+          "name": "tested_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3100,
+          "formatRule": "date-string",
+          "invalidFormatCount": 26000
+        },
+        {
+          "name": "instrument_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 610,
+          "normalizedDistinctCount": 610
+        },
+        {
+          "name": "loaded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 950,
+          "min": "2024-01-01T03:00:00Z",
+          "max": "2026-08-12T03:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "quality",
+      "name": "legacy_lims_results",
+      "rowCount": 3100000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "result_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3078400,
+          "min": "1",
+          "max": "3100000"
+        },
+        {
+          "name": "spec_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 840
+        },
+        {
+          "name": "tested_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 8400,
+          "min": "1899-12-30",
+          "max": "2023-09-28"
+        },
+        {
+          "name": "reported_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2400000,
+          "min": "2001-01-08T00:00:00Z",
+          "max": "2023-09-29T17:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "quality",
+      "name": "quality_audit_vault",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [],
+      "fields": []
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "supply",
+      "fromEntity": "batches",
+      "fromField": "product_id",
+      "toNamespace": "supply",
+      "toEntity": "products",
+      "toField": "product_id",
+      "orphanCount": 6400,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "supply",
+      "fromEntity": "shipments",
+      "fromField": "site_id",
+      "toNamespace": "supply",
+      "toEntity": "sites",
+      "toField": "site_id",
+      "orphanCount": 12000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "supply",
+      "fromEntity": "shipment_lines",
+      "fromField": "shipment_id",
+      "toNamespace": "supply",
+      "toEntity": "shipments",
+      "toField": "shipment_id",
+      "orphanCount": 84000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "supply",
+      "fromEntity": "shipment_lines",
+      "fromField": "batch_id",
+      "toNamespace": "supply",
+      "toEntity": "batches",
+      "toField": "batch_id",
+      "orphanCount": 31000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "supply",
+      "fromEntity": "cold_chain_readings",
+      "fromField": "shipment_id",
+      "toNamespace": "supply",
+      "toEntity": "shipments",
+      "toField": "shipment_id",
+      "orphanCount": 1240000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "quality",
+      "fromEntity": "deviations",
+      "fromField": "batch_id",
+      "toNamespace": "supply",
+      "toEntity": "batches",
+      "toField": "batch_id",
+      "orphanCount": 3400,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "quality",
+      "fromEntity": "lab_tests",
+      "fromField": "batch_id",
+      "toNamespace": "supply",
+      "toEntity": "batches",
+      "toField": "batch_id",
+      "orphanCount": 18400,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "quality",
+      "fromEntity": "capa_actions",
+      "fromField": "deviation_id",
+      "toNamespace": "quality",
+      "toEntity": "deviations",
+      "toField": "deviation_id",
+      "orphanCount": 940,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "supply",
+      "fromEntity": "batches",
+      "fromField": "site_id",
+      "toNamespace": "supply",
+      "toEntity": "sites",
+      "toField": "site_id",
+      "orphanCount": 2100,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "supply",
+      "fromEntity": "shipments",
+      "fromField": "product_id",
+      "toNamespace": "supply",
+      "toEntity": "products",
+      "toField": "product_id",
+      "orphanCount": 8600,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "supply",
+      "fromEntity": "v_batch_status",
+      "fromField": "batch_id",
+      "toNamespace": "supply",
+      "toEntity": "batches",
+      "toField": "batch_id",
+      "orphanCount": 3600,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "supply",
+      "fromEntity": "stg_product_master",
+      "fromField": "product_id",
+      "toNamespace": "supply",
+      "toEntity": "products",
+      "toField": "product_id",
+      "orphanCount": 114,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "quality",
+      "fromEntity": "stability_studies",
+      "fromField": "deviation_id",
+      "toNamespace": "quality",
+      "toEntity": "deviations",
+      "toField": "deviation_id",
+      "orphanCount": 180,
+      "origin": "inferred"
+    }
+  ]
+}

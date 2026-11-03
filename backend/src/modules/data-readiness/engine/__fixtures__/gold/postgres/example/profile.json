@@ -1,0 +1,47 @@
+{
+  "sourceId": "pg-gold",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "public",
+      "name": "customers",
+      "rowCount": 20000,
+      "keys": [{ "kind": "primary", "fields": ["id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 20000 },
+        { "name": "email", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 2400, "distinctCount": 17550, "formatRule": "email", "invalidFormatCount": 18 },
+        { "name": "full_name", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 19800 },
+        { "name": "signup_date", "type": "date", "semanticType": "temporal", "nullable": true, "nullCount": 0, "min": "2019-02-11", "max": "2026-07-01" },
+        { "name": "country", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 190 }
+      ]
+    },
+    {
+      "namespace": "public",
+      "name": "orders",
+      "rowCount": 50000,
+      "keys": [
+        { "kind": "primary", "fields": ["id"], "duplicateCount": 0 },
+        { "kind": "natural", "fields": ["order_number"], "duplicateCount": 8 }
+      ],
+      "fields": [
+        { "name": "id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 50000 },
+        { "name": "customer_id", "type": "integer", "semanticType": "numeric", "nullable": true, "nullCount": 500, "distinctCount": 480 },
+        { "name": "order_number", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 49992 },
+        { "name": "created_at", "type": "timestamptz", "semanticType": "temporal", "nullable": true, "nullCount": 0, "min": "2019-06-01T00:00:00Z", "max": "2023-01-05T09:41:00Z" },
+        { "name": "amount", "type": "numeric", "semanticType": "numeric", "nullable": true, "nullCount": 0 }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "public",
+      "fromEntity": "orders",
+      "fromField": "customer_id",
+      "toNamespace": "public",
+      "toEntity": "customers",
+      "toField": "id",
+      "orphanCount": 30,
+      "origin": "declared"
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "sourceId": "general-ledger-gold",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "public",
+      "name": "accounts",
+      "rowCount": 5000,
+      "keys": [
+        { "kind": "primary", "fields": ["account_id"], "duplicateCount": 0 },
+        { "kind": "unique", "fields": ["account_code"], "duplicateCount": 4 }
+      ],
+      "fields": [
+        { "name": "account_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 5000 },
+        { "name": "account_code", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 4996 },
+        { "name": "account_name", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 550, "distinctCount": 4400 },
+        { "name": "account_type", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 8 },
+        { "name": "parent_account_id", "type": "integer", "semanticType": "numeric", "nullable": true, "nullCount": 0, "distinctCount": 400 }
+      ]
+    },
+    {
+      "namespace": "public",
+      "name": "fiscal_periods",
+      "rowCount": 120,
+      "keys": [{ "kind": "primary", "fields": ["period_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "period_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 120 },
+        { "name": "fiscal_year", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 10 },
+        { "name": "fiscal_month", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 12 },
+        { "name": "start_date", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "min": "2015-01-01", "max": "2026-01-01" },
+        { "name": "end_date", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "min": "2015-01-31", "max": "2099-12-31" },
+        { "name": "status", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 3 }
+      ]
+    },
+    {
+      "namespace": "public",
+      "name": "journal_entries",
+      "rowCount": 10000000,
+      "keys": [{ "kind": "primary", "fields": ["entry_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "entry_id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 10000000 },
+        { "name": "period_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 120 },
+        { "name": "entry_date", "type": "timestamptz", "semanticType": "temporal", "nullable": false, "nullCount": 0, "min": "2019-01-01T00:00:00Z", "max": "2024-07-08T00:00:00Z" },
+        { "name": "description", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 800000, "distinctCount": 8000000 },
+        { "name": "status", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 5, "normalizedDistinctCount": 3 },
+        { "name": "source_system", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 6 }
+      ]
+    },
+    {
+      "namespace": "public",
+      "name": "journal_lines",
+      "rowCount": 40000000,
+      "keys": [{ "kind": "primary", "fields": ["line_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "line_id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 40000000 },
+        { "name": "entry_id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 10000000 },
+        { "name": "account_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 5000 },
+        { "name": "debit_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "min": "-1500", "max": "50000000" },
+        { "name": "credit_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0 },
+        { "name": "cost_center", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 320 }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "public", "fromEntity": "journal_lines", "fromField": "entry_id",
+      "toNamespace": "public", "toEntity": "journal_entries", "toField": "entry_id",
+      "orphanCount": 350, "origin": "declared"
+    },
+    {
+      "fromNamespace": "public", "fromEntity": "journal_lines", "fromField": "account_id",
+      "toNamespace": "public", "toEntity": "accounts", "toField": "account_id",
+      "orphanCount": 80, "origin": "declared"
+    },
+    {
+      "fromNamespace": "public", "fromEntity": "journal_entries", "fromField": "period_id",
+      "toNamespace": "public", "toEntity": "fiscal_periods", "toField": "period_id",
+      "orphanCount": 0, "origin": "declared"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "industry": "energy",
+  "complexity": "low",
+  "wave": "W4",
+  "authoring": "generated",
+  "defectPlan": "plans/databricks/energy-low-w4-08.plan.json"
+}

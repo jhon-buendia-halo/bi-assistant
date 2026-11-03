@@ -1,0 +1,7 @@
+{
+  "industry": "logistics",
+  "complexity": "low",
+  "wave": "W5",
+  "authoring": "generated",
+  "defectPlan": "plans/postgres/logistics-low-w5-06.plan.json"
+}
