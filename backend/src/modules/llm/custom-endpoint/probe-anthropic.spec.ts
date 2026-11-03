@@ -204,6 +204,27 @@ describe('probeAnthropicStyle', () => {
     }
   });
 
+  it('reports a timeout when the aborted run resolves without an object', async () => {
+    jest.useFakeTimers();
+    try {
+      // Mastra resolves (does not throw) when the abort signal fires.
+      mockGenerate.mockImplementation(
+        (_prompt: string, options: { abortSignal: AbortSignal }) =>
+          new Promise((resolve) => {
+            options.abortSignal.addEventListener('abort', () =>
+              resolve({ object: undefined }),
+            );
+          }),
+      );
+      const pending = probeAnthropicStyle({ baseUrl: BASE, model: 'm' });
+      const assertion = expect(pending).rejects.toThrow(TIMEOUT_MESSAGE);
+      await jest.advanceTimersByTimeAsync(30_000);
+      await assertion;
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('never echoes the API key in an error', async () => {
     mockGenerate.mockRejectedValue(
       httpError(500, { responseBody: 'server error' }),
