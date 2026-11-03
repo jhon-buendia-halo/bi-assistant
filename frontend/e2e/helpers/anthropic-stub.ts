@@ -40,6 +40,11 @@ export interface AnthropicStub {
   /**
    * Sets the reply of every following agent call (not the probe). Also clears
    * a `respondWith` override. Default: `ANTHROPIC_STUB_ANSWER`.
+   *
+   * A `{ toolCalls }` reply answers only calls that do not carry tool results;
+   * the follow-up call that sends the tools' results back is answered with the
+   * last text reply (default `ANTHROPIC_STUB_ANSWER`), so an agent turn ends
+   * instead of calling the same tools until it runs out of steps.
    */
   reply(r: AnthropicStubReply): void;
   /**
@@ -102,6 +107,18 @@ function probeForm(body: any): 'outputFormat' | 'jsonTool' | null {
     Array.isArray(body?.tools) &&
     body.tools.some((tool: { name?: string }) => tool?.name === 'json');
   return forcedJson || offersJson ? 'jsonTool' : null;
+}
+
+/** True when the request's last message sends tool results back. */
+function carriesToolResults(body: any): boolean {
+  const messages = Array.isArray(body?.messages) ? body.messages : [];
+  const last = messages[messages.length - 1];
+  return (
+    Array.isArray(last?.content) &&
+    last.content.some(
+      (block: { type?: string }) => block?.type === 'tool_result',
+    )
+  );
 }
 
 function contentFor(reply: AnthropicStubReply): ContentBlock[] {
@@ -216,6 +233,7 @@ function respondOverride(res: http.ServerResponse, override: Override): void {
 
 export async function startAnthropicStub(): Promise<AnthropicStub> {
   let nextReply: AnthropicStubReply = ANTHROPIC_STUB_ANSWER;
+  let textReply = ANTHROPIC_STUB_ANSWER;
   let models = [...DEFAULT_MODELS];
   let override: Override | null = null;
 
@@ -224,6 +242,7 @@ export async function startAnthropicStub(): Promise<AnthropicStub> {
     requests: [],
     reply: (r) => {
       nextReply = r;
+      if (typeof r === 'string') textReply = r;
       override = null;
     },
     respondWith: (status, headers, body) => {
@@ -242,9 +261,13 @@ export async function startAnthropicStub(): Promise<AnthropicStub> {
     req.on('end', () => {
       const path = req.url ?? '/';
       const route = path.split('?')[0].replace(/\/+$/, '');
+      // A real server at the root 404s a doubled version path (`/v1/v1/…`),
+      // so the stub must too, or a base-URL bug would pass unnoticed.
+      const doubled = /\/v1\/v1\/(messages|models)$/.test(route);
       const isMessages =
-        req.method === 'POST' && route.endsWith('/v1/messages');
-      const isModels = req.method === 'GET' && route.endsWith('/v1/models');
+        !doubled && req.method === 'POST' && route.endsWith('/v1/messages');
+      const isModels =
+        !doubled && req.method === 'GET' && route.endsWith('/v1/models');
       if (!isMessages && !isModels) {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(
@@ -298,7 +321,9 @@ export async function startAnthropicStub(): Promise<AnthropicStub> {
           ? [toolUse('json', PROBE_ANSWER)]
           : form === 'outputFormat'
             ? [{ type: 'text', text: JSON.stringify(PROBE_ANSWER) }]
-            : contentFor(nextReply);
+            : typeof nextReply !== 'string' && carriesToolResults(body)
+              ? contentFor(textReply)
+              : contentFor(nextReply);
       respondMessage(res, stream, model, content);
     });
   });
