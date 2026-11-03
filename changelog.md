@@ -2,6 +2,20 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-03
+
+### Added
+- **Custom LLM endpoint provider** (epic [BA-281](https://halo-powered.atlassian.net/browse/BA-281), roadmap 1.17.1 to 1.17.20, stories [BA-282](https://halo-powered.atlassian.net/browse/BA-282) to [BA-301](https://halo-powered.atlassian.net/browse/BA-301), ADR-0032, [specs/epics/BA-281/spec.md](specs/epics/BA-281/spec.md)).
+  - A fourth provider, **Custom endpoint** (`custom`), with an API style: OpenAI-compatible (base URL with `/v1`, key as `Authorization: Bearer`) or Anthropic-compatible (server root, key as `x-api-key`, models built with `@ai-sdk/anthropic` outside Mastra's router). The key is optional, encrypted and masked; another provider's key is never sent to a custom endpoint (llm-settings R44 to R54).
+  - **Load models** lists the endpoint's models through `POST /llm/models` (api.md 32b); **Test connection** probes per API style, tolerates servers without strict JSON-schema output, and names the fix for an unreachable host, a 404 path, a rejected key, a rate limit and a timeout (1.17.1 to 1.17.6, 1.17.12, 1.17.13).
+  - Every agent, the visual designer, effort levels (by model name) and the eval runner (`EVAL_LLM_*`) use the custom endpoint; the agent page and the composer chip show "Custom endpoint" and `<model> · <host>`; chat errors on a failing endpoint name its host (1.17.7 to 1.17.10, 1.17.14, 1.17.19).
+  - API keys and auth headers are redacted in logs and diagnostics (1.17.11). A live smoke script (`backend/scripts/custom-endpoint-smoke/`) and user docs for common servers (1.17.18, 1.17.20).
+  - Playwright `llm-custom-endpoint.spec.ts` covers both API styles against local stubs (`helpers/llm-stub.ts` with `/models`, new `helpers/anthropic-stub.ts`) (1.17.15 to 1.17.17).
+  - Evidence: [evidence/1.17/](evidence/1.17/): impacted E2E 74 passed (1 desktop-only skipped), live smoke 18/18 against a real relay, World Cup evals on the custom Anthropic-compatible route 100% (each case at least 3 consecutive passes, final run 12/12) with a `main` baseline on the same model.
+
+### Fixed
+- **`ambiguous-best-team` eval judge** (1.17.19, [BA-300](https://halo-powered.atlassian.net/browse/BA-300)): the rubric now accepts a clarification with concrete options on one dimension (metric or year), as its example intended; the judge had failed identical metric-only clarifications about 1 run in 4 on `main` too. [specs/capabilities/agents-evals/spec.md](specs/capabilities/agents-evals/spec.md) eval table updated. Evidence: [evidence/1.17/](evidence/1.17/).
+
 ## 2026-10-16
 
 ### Changed

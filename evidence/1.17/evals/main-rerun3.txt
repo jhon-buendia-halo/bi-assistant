@@ -1,0 +1,11 @@
+PASS  ambiguous-best-team  (7030ms)
+      pass check-called-tool: Checks that "ask_clarification" was called
+      pass check-did-not-call: Checks that "run_readonly_sql" was NOT called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass llm-judge: LLM judge: The question ("Which team performed best?") is ambiguous on both the performance metric (goals? wins? possess
+PASS  possession-vs-result  (41713ms)
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-matches: Checks if output matches pattern /\b(possession|%)\b/i
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass llm-judge: LLM judge: The question asks whether, in the 2022 knockout rounds, the team with more possession usually won. In this da
+2/2 questions passed

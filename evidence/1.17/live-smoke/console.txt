@@ -1,0 +1,27 @@
+App started (PID 25729) on http://127.0.0.1:3473, data dir /var/folders/kq/9ys30yds3cv7zl58_xt2lcbh0000gn/T/custom-endpoint-smoke-nEuWdA/data
+[PASS] app · ready — http://127.0.0.1:3473
+
+=== API style openai — http://127.0.0.1:8317/v1 — model claude-sonnet-4-6
+[PASS] openai · POST /llm/models — 19 model(s) listed
+[PASS] openai · model listed — claude-sonnet-4-6
+[PASS] openai · POST /llm/test-connection — Connection successful — custom/claude-sonnet-4-6 replied "ok" in 889ms
+[PASS] openai · test route custom/<model> — custom/claude-sonnet-4-6
+[PASS] openai · PUT /llm/settings — Configuration saved
+[PASS] openai · GET /llm/settings — configured, custom/openai, key ••••••••68f5
+[PASS] openai · assistant turn — "pong" in 1707ms
+
+=== API style anthropic — http://127.0.0.1:8317 — model claude-sonnet-4-6
+[PASS] anthropic · POST /llm/models — 19 model(s) listed
+[PASS] anthropic · model listed — claude-sonnet-4-6
+[PASS] anthropic · POST /llm/test-connection — Connection successful — custom/claude-sonnet-4-6 replied "ok" in 1009ms
+[PASS] anthropic · test route custom/<model> — custom/claude-sonnet-4-6
+[PASS] anthropic · PUT /llm/settings — Configuration saved
+[PASS] anthropic · GET /llm/settings — configured, custom/anthropic, key ••••••••68f5
+[PASS] anthropic · assistant turn — "pong" in 1932ms
+App stopped (PID 25729)
+[PASS] key scan · API responses — 13 response(s) clean
+[PASS] key scan · data dir — 8 file(s) clean
+[PASS] key scan · app log — 203 line(s) clean
+Report written to /private/tmp/claude-501/-Users-jhonbuendia-Documents-projects-bi-assistant/106a9642-41bc-4d5f-a3a4-41557da45f07/scratchpad/smoke
+
+18 passed, 0 warning(s), 0 failed
