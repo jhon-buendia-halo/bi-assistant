@@ -251,10 +251,10 @@ Feature: LLM settings
     And the notice is gone
 ```
 
-Feature "Custom endpoint connection": E2E: none yet. The steps run against a local stub server that records each request's path and headers; the controls carry the test ids of [../../system/ui.md](../../system/ui.md) 4.9 (`llm-api-style`, `llm-load-models`, `llm-model-options`).
+E2E: `frontend/e2e/llm-custom-endpoint.spec.ts` for the Feature "Custom endpoint connection" covers, in the OpenAI style, "Configures an OpenAI-compatible endpoint by loading models, testing and saving", "A chat turn runs on the custom endpoint", "Uses an endpoint that needs no key", "Reports an unreachable endpoint", "Points at the version path when the endpoint answers 404" and "Never sends another provider's key to a custom endpoint"; the other scenarios are not automated yet. The steps run against a local stub server that records each request's path and headers; the controls carry the test ids of [../../system/ui.md](../../system/ui.md) 4.9 (`llm-api-style`, `llm-load-models`, `llm-model-options`).
 
 ```gherkin
-Feature: Custom endpoint connection (E2E: none yet)
+Feature: Custom endpoint connection
 
   Scenario: Configures an OpenAI-compatible endpoint by loading models, testing and saving
     Given an OpenAI-compatible server at "http://127.0.0.1:8317/v1" that lists the models "qwen3-8b" and "llama3.1:8b"
