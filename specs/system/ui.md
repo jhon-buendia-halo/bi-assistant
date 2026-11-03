@@ -563,7 +563,8 @@ Capability: [data-readiness](../capabilities/data-readiness/spec.md) R25, R26. I
 - **Past assessments** (`btn btn-secondary`, history icon, `data-testid="readiness-history"`) opens a `menu`.
   - It lists the datasource's reports newest first ([api.md](api.md) 109), each showing the time, `<score>/100` and the band. The current one is marked as selected.
   - Choosing one shows it in the scorecard; the panel item stays the same, and only the report shown changes.
-  - With one report the menu shows `No earlier assessments.`. While loading it shows `Loading…`.
+  - When the list is empty or holds only the current report, the menu shows `No earlier assessments.`. While loading it shows `Loading…`.
+  - If the list fails to load, the menu shows the error `Could not load past assessments.`. If opening one fails, the menu stays open and shows `Could not open that assessment.`.
 - **Dimension bars** (`data-testid="readiness-dimensions"`), one row per dimension in the order completeness, validity, consistency, uniqueness, integrity, accessibility, timeliness, reasonability, accuracy, currency (`data-testid="readiness-dimension-<dimension>"`). Each row holds:
   - the dimension label (13 px, 120 px wide);
   - a 6 px bar (track `surface-muted`, fill `primary`, width = score %);
