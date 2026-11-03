@@ -181,6 +181,9 @@ export async function probeAnthropicStyle(
     clearTimeout(timer);
   }
 
+  // Mastra resolves an aborted run without an object instead of throwing:
+  // that is the timeout, not a structured-output failure.
+  if (controller.signal.aborted) throw new Error(TIMEOUT_MESSAGE);
   if (typeof status !== 'string' || !status.trim()) {
     throw new Error(STRUCTURED_OUTPUT_MESSAGE);
   }
