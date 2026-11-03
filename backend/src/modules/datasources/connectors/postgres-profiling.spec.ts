@@ -118,19 +118,13 @@ describe('PostgresProfiler', () => {
     ]);
     query.mockClear();
     answer([
+      { schema: 's', table: 't', column: 'a', type: 'text', nullable: true },
       {
-        table_schema: 's',
-        table_name: 't',
-        column_name: 'a',
-        data_type: 'text',
-        is_nullable: 'YES',
-      },
-      {
-        table_schema: 's',
-        table_name: 't',
-        column_name: 'b',
-        data_type: 'int',
-        is_nullable: 'NO',
+        schema: 's',
+        table: 't',
+        column: 'b',
+        type: 'integer[]',
+        nullable: false,
       },
     ]);
     expect(await profiler.tables(config, 's')).toEqual([
@@ -139,11 +133,25 @@ describe('PostgresProfiler', () => {
         table: 't',
         columns: [
           { name: 'a', type: 'text', nullable: true },
-          { name: 'b', type: 'int', nullable: false },
+          { name: 'b', type: 'integer[]', nullable: false },
         ],
       },
     ]);
     expect(stmt()[1]).toEqual(['s']);
+  });
+
+  it('lists ordinary tables from pg_catalog, unreadable ones included', async () => {
+    answer([]);
+    await profiler.tables(config);
+    const [sql, params] = stmt();
+    // information_schema hides tables the role cannot read, so accessibility
+    // (R17) would never see them; pg_catalog lists them, views left out.
+    expect(sql).not.toContain('information_schema.columns');
+    expect(sql).toContain('FROM pg_attribute a');
+    expect(sql).toContain("c.relkind = 'r'");
+    expect(sql).toContain('NOT a.attisdropped');
+    expect(sql).toContain('format_type(a.atttypid, a.atttypmod)');
+    expect(params).toEqual([]);
   });
 
   it('never leaks the password in an error', async () => {
