@@ -1,3 +1,9 @@
+// The data-readiness service loads the Databricks driver (ESM-only deps)
+// at import time; the session specs never call it for real.
+jest.mock('../data-readiness/data-readiness.service', () => ({
+  DataReadinessService: class {},
+}));
+
 // Sessions bound to the Data Readiness Agent (BA-261; data-readiness R2, R5;
 // sessions-chat R52, R61): creation, the derived agent, the turn's context
 // and the readiness-report event.
