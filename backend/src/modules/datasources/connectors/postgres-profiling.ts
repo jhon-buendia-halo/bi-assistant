@@ -47,43 +47,52 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
   readonly kind = 'postgres' as const;
   private readonly logger = new Logger(PostgresProfiler.name);
 
+  /**
+   * Ordinary tables (relkind 'r') and their columns from pg_catalog, as the
+   * reference inventory reads them. Unlike information_schema, pg_catalog also
+   * lists tables the role cannot read, so accessibility (R17) can count them,
+   * and it leaves views out. Types come from format_type (e.g. `integer[]`).
+   */
   async tables(
     config: PostgresConfig,
     schema?: string,
   ): Promise<ProfiledTable[]> {
     const params: string[] = [];
-    let filter = `table_schema NOT IN ('pg_catalog', 'information_schema', 'pg_toast')`;
+    let filter = `n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')`;
     if (schema) {
       params.push(schema);
-      filter += ` AND table_schema = $1`;
+      filter += ` AND n.nspname = $1`;
     }
     const rows = await this.run<{
-      table_schema: string;
-      table_name: string;
-      column_name: string;
-      data_type: string;
-      is_nullable: string;
+      schema: string;
+      table: string;
+      column: string;
+      type: string;
+      nullable: boolean;
     }>(
       config,
-      `SELECT table_schema, table_name, column_name, data_type, is_nullable
-       FROM information_schema.columns
-       WHERE ${filter}
-       ORDER BY table_schema, table_name, ordinal_position`,
+      `SELECT n.nspname AS schema, c.relname AS "table", a.attname AS "column",
+              format_type(a.atttypid, a.atttypmod) AS type,
+              NOT a.attnotnull AS nullable
+       FROM pg_attribute a
+       JOIN pg_class c ON c.oid = a.attrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE c.relkind = 'r'
+         AND a.attnum > 0
+         AND NOT a.attisdropped
+         AND ${filter}
+       ORDER BY n.nspname, c.relname, a.attnum`,
       params,
     );
     const byKey = new Map<string, ProfiledTable>();
     for (const r of rows) {
-      const key = `${r.table_schema}\u0000${r.table_name}`;
+      const key = `${r.schema}\u0000${r.table}`;
       let t = byKey.get(key);
       if (!t) {
-        t = { schema: r.table_schema, table: r.table_name, columns: [] };
+        t = { schema: r.schema, table: r.table, columns: [] };
         byKey.set(key, t);
       }
-      t.columns.push({
-        name: r.column_name,
-        type: r.data_type,
-        nullable: r.is_nullable === 'YES',
-      });
+      t.columns.push({ name: r.column, type: r.type, nullable: r.nullable });
     }
     return Array.from(byKey.values());
   }

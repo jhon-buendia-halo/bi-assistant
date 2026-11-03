@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { NEVER, Subject, of, throwError } from 'rxjs';
 import {
   ReadinessReport,
   ReadinessReportSummary,
@@ -112,5 +112,57 @@ describe('ReadinessHistory', () => {
     openMenu(el);
     (el.querySelectorAll('[role="menuitem"]')[0] as HTMLElement).click();
     expect(api.get).not.toHaveBeenCalled();
+  });
+
+  it('does not emit a report that arrives after it is destroyed', async () => {
+    const el = await setup(
+      of({ reports: [summary('a', 80), summary('b', 60)] }),
+      'a',
+    );
+    const pending = new Subject<ReadinessReport>();
+    api.get.and.returnValue(pending);
+    const emitted: ReadinessReport[] = [];
+    fixture.componentInstance.openReport.subscribe((r) => emitted.push(r));
+    openMenu(el);
+    (el.querySelectorAll('[role="menuitem"]')[1] as HTMLElement).click();
+    expect(pending.observed).toBeTrue();
+    fixture.destroy();
+    expect(pending.observed).toBeFalse();
+    pending.next({ ...summary('b', 60) } as ReadinessReport);
+    expect(emitted).toEqual([]);
+  });
+
+  it('drops a stale list and choice when the datasource changes', async () => {
+    const el = await setup(
+      of({ reports: [summary('a', 80), summary('b', 60)] }),
+      'a',
+    );
+    const pending = new Subject<ReadinessReport>();
+    api.get.and.returnValue(pending);
+    const emitted: ReadinessReport[] = [];
+    fixture.componentInstance.openReport.subscribe((r) => emitted.push(r));
+    openMenu(el);
+    (el.querySelectorAll('[role="menuitem"]')[1] as HTMLElement).click();
+    fixture.componentRef.setInput('datasourceId', 'other');
+    fixture.detectChanges();
+    expect(pending.observed).toBeFalse();
+    expect(el.querySelector('[role="menu"]')).toBeNull();
+    expect(fixture.componentInstance.reports()).toEqual([]);
+    expect(fixture.componentInstance.choosing()).toBeNull();
+    expect(emitted).toEqual([]);
+    api.list.and.returnValue(of({ reports: [summary('c', 70)] }));
+    openMenu(el);
+    expect(api.list).toHaveBeenCalledWith('other');
+  });
+
+  it('cancels a pending list when the menu closes', async () => {
+    const el = await setup(NEVER);
+    const list = new Subject<{ reports: ReadinessReportSummary[] }>();
+    api.list.and.returnValue(list);
+    openMenu(el);
+    expect(list.observed).toBeTrue();
+    openMenu(el);
+    expect(list.observed).toBeFalse();
+    expect(fixture.componentInstance.loading()).toBeFalse();
   });
 });

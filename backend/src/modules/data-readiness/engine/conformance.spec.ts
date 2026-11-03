@@ -37,7 +37,7 @@ const DIMENSION_FLOORS: Partial<
   validity: { precision: 0.99, recall: 0.65, f1: 0.785 },
 };
 /** Dimensions the engine deliberately has no deterministic check for. */
-const EMITS_NO_FINDINGS: Dimension[] = ['accuracy'];
+const EMITS_NO_FINDINGS: Dimension[] = ['accuracy', 'currency'];
 
 interface Fixture {
   name: string;
@@ -47,8 +47,11 @@ interface Fixture {
 
 function load(dialect: string): Fixture[] {
   const dir = path.join(GOLD_DIR, dialect);
+  // Fixture folders only: stray files such as macOS .DS_Store are skipped.
   return fs
-    .readdirSync(dir)
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
     .sort()
     .map((name) => {
       const base = path.join(dir, name);
@@ -71,25 +74,7 @@ const postgres = load('postgres');
 const databricks = load('databricks');
 const fixtures = [...postgres, ...databricks];
 
-/** Until the engine lands (units 1-3) runAssessment is a stub: skip. */
-function engineIsStubbed(): boolean {
-  try {
-    runAssessment(fixtures[0].profile, {
-      thresholds: DEFAULT_THRESHOLDS,
-      now: NOW,
-    });
-    return false;
-  } catch (e) {
-    if (e instanceof Error && e.message.includes('not implemented')) {
-      return true;
-    }
-    throw e;
-  }
-}
-
-const suite = engineIsStubbed() ? describe.skip : describe;
-
-suite('golden conformance (R27)', () => {
+describe('golden conformance (R27)', () => {
   const run = (f: Fixture) =>
     runAssessment(f.profile, { thresholds: DEFAULT_THRESHOLDS, now: NOW });
 

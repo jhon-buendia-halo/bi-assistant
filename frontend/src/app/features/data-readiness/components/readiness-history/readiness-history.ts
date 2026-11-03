@@ -1,6 +1,16 @@
 import { DatePipe } from '@angular/common';
-import { Component, inject, input, output, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+  untracked,
+} from '@angular/core';
 import { History, LucideAngularModule } from 'lucide-angular';
+import { Subscription } from 'rxjs';
 import {
   ReadinessMaturity,
   ReadinessReport,
@@ -29,6 +39,9 @@ const BAND_CLASSES: Record<ReadinessMaturity, string> = {
 })
 export class ReadinessHistory {
   private readonly api = inject(ReadinessApiService);
+  /** In-flight list and report requests, cancelled when superseded. */
+  private listSub?: Subscription;
+  private getSub?: Subscription;
 
   readonly History = History;
 
@@ -43,9 +56,19 @@ export class ReadinessHistory {
   /** Id of the report being fetched after a choice. */
   readonly choosing = signal<string | null>(null);
 
+  constructor() {
+    // A new datasource makes the loaded list and any pending choice stale.
+    effect(() => {
+      this.datasourceId();
+      untracked(() => this.reset());
+    });
+    // Never emit or set state after the scorecard is gone.
+    inject(DestroyRef).onDestroy(() => this.cancel());
+  }
+
   toggle(): void {
     if (this.open()) {
-      this.open.set(false);
+      this.close();
       return;
     }
     this.open.set(true);
@@ -54,6 +77,8 @@ export class ReadinessHistory {
 
   close(): void {
     this.open.set(false);
+    this.listSub?.unsubscribe();
+    this.loading.set(false);
   }
 
   /** With only the current report saved there is nothing earlier to show. */
@@ -74,7 +99,8 @@ export class ReadinessHistory {
     if (r.id === this.currentReportId() || this.choosing()) return;
     this.choosing.set(r.id);
     this.error.set(null);
-    this.api.get(r.id).subscribe({
+    this.getSub?.unsubscribe();
+    this.getSub = this.api.get(r.id).subscribe({
       next: (report) => {
         this.choosing.set(null);
         this.open.set(false);
@@ -88,9 +114,10 @@ export class ReadinessHistory {
   }
 
   private load(): void {
+    this.listSub?.unsubscribe();
     this.loading.set(true);
     this.error.set(null);
-    this.api.list(this.datasourceId()).subscribe({
+    this.listSub = this.api.list(this.datasourceId()).subscribe({
       next: ({ reports }) => {
         this.reports.set(reports);
         this.loading.set(false);
@@ -101,5 +128,19 @@ export class ReadinessHistory {
         this.loading.set(false);
       },
     });
+  }
+
+  private cancel(): void {
+    this.listSub?.unsubscribe();
+    this.getSub?.unsubscribe();
+  }
+
+  private reset(): void {
+    this.cancel();
+    this.open.set(false);
+    this.loading.set(false);
+    this.choosing.set(null);
+    this.error.set(null);
+    this.reports.set([]);
   }
 }
