@@ -22,8 +22,9 @@ import { WORLD_CUP_DB, worldCupKey } from './helpers/world-cup-db';
  * number the UI shows is checked against the stored report the API returns,
  * never against a hard-coded value, since the scores depend on the data.
  *
- * ASSUMPTIONS TO CONFIRM AT INTEGRATION (ui.md is silent on these; drafted
- * before units 7-11 were wired, BA-251 unit 14):
+ * UI details this spec relies on (ui.md is silent on them). Drafted before
+ * units 7-11 were wired (BA-251 unit 14); every one was confirmed against the
+ * integrated app at the acceptance gate, where all five scenarios pass:
  *  1. The datasets API accepts a dataset whose entity snapshots carry no
  *     columns (`columns: []`); the assessment profiles the datasource itself,
  *     so the snapshot's columns are not needed.
