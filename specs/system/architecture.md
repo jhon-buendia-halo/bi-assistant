@@ -725,7 +725,7 @@ flowchart LR
   - Re-introducing multi-user access later needs a new ADR; ADR-0010 to ADR-0012 stay as the record of the design that was removed.
 
 #### ADR-0031 — Cross-session memory: Mastra's own memory first, behind a `LearningStore` port; Hindsight only if a three-arm eval shows it is better
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-02, with the outcome below: "Mastra only" stays, the lever stays off by default, no Hindsight arm)
 - **Date:** 2026-10-29
 - **Context:**
   - The assistant's only memory today is Mastra's message history: the last 40 messages of a thread, with `thread = resource = session id` on every call, stored in `mastra.sqlite` ([agents.md](agents.md) 2.1). Nothing crosses sessions. An approval or a correction made in one session is lost in the next, and verified queries are matched by word overlap, so a paraphrase or a question in another language finds nothing.
@@ -753,6 +753,20 @@ flowchart LR
     5. The winner is measured again on a second OpenAI model, gpt-6-luna, with an A/A run of its own (no memory twice, the winner twice), before it is on by default.
   - **Rule 5 amended on 2026-11-02, before any run** (the user's decision): it read "measured again on a Claude model". Every run of this eval is on OpenAI: the app's evals have no Anthropic API key (a Claude subscription is not one), and the eval's budget is an OpenAI balance. The re-measurement keeps the rule's purpose, a second model the loop never tuned on, as rule A40 was re-measured on gpt-6-luna (roadmap 1.1.22). What it gives up: the beta ships on a Claude model, and this eval says nothing about Claude; a later change that turns memory on by default for Claude needs its own run there.
   - The result moves this ADR to Accepted with the outcome written in, or a new ADR supersedes it.
+  - **Outcome (2026-11-02; [BA-81](https://halo-powered.atlassian.net/browse/BA-81); evidence: [evidence/1.3.7/](../../evidence/1.3.7/)).** Both built arms ran twice on the 36 memory questions, 3 attempts each, on a local build of the BA-9 and BA-4 branches. A question counts as passed when all three attempts pass (pass^3), the unit `eval:diff` compares; the script that applies the rule was fixed before the first run and is in the evidence.
+    1. Noise, on the 24 learning questions: no memory 12/24 and 12/24, Mastra only 24/24 and 24/24, a gap of 0 points for both arms on gpt-5.6-luna, although no memory moves by up to 33 points within one category.
+    2. Mastra only beats no memory on the learning categories: 48/48 against 24/48, +50 points (95% interval +35 to +64), in each of the four categories. The rest of rule 2 fails. `memory-abstain` fell from 12/12 to 0/12:
+       - in five of its six questions the answer stayed right, but the probe recalled the unrelated teach signal (M3);
+       - in the sixth nothing was recalled, but the summary, which goes to every turn, carried the rule into the answer.
+       `memory-vs-curated` went from 10/12 to 7/12. M1 held on all 216 attempts. So memory may not be on by default: the lever stays off by default, as shipped.
+    3. Mastra only reached 100% on the learning categories, so the Hindsight + Mastra arm is not built, and rule 4 does not arise.
+    5. On gpt-6-luna the pattern is the same: learning 22/48 → 43/48 (+44 points; noise 17 points), `memory-abstain` 12/12 → 0/12 for the same two reasons, `memory-vs-curated` 8/12 → 10/12, M1 216/216.
+    - **Recalibration on the dev questions only**, as planned. The similarity of every probe to its teach signals, measured with the memory's embedding model, shows no threshold that keeps the dev abstain signals out and the dev lessons in. Keeping all four out needs 0.54 or more; there the dev lessons recalled fall from 13 to 9 of 16, and one update question recalls the old approval without its correction. The best dev trade-off is the current 0.4, so it stays.
+    - **Cost per question**, no memory against Mastra only: $0.0040 against $0.0092 on gpt-5.6-luna (+131%), and $0.0016 against $0.0043 on gpt-6-luna.
+      - Most of the rise is the assistant's own calls: the learned block sits after the knowledge block, inside the prompt, so the cached share of its input fell from 94% to 67%.
+      - The memory's summary and embedding calls are about 13% of the arm's cost.
+      - The recall's 90th percentile stayed under 0.65 s.
+    - **Left open:** the memory's selectivity on questions of the same datasource and topic. Similarity alone cannot tell a near miss from a lesson that applies, and the summary reaches every turn. That is the work to do before the lever may be on by default, measured again with this eval. Cost is the second item: placing the learned block where it keeps the cached prefix.
 - **Consequences:**
   - No new container unless Hindsight wins. If it does, a new ADR at Level 2 records where its server runs (each machine or a team server).
   - Semantic recall needs an embedding model, and Anthropic offers none: with a Claude model the app needs an OpenAI key for embeddings or a local model. Decided before the code of [BA-81](https://halo-powered.atlassian.net/browse/BA-81): OpenAI `text-embedding-3-small` for the memory and every arm (the user, 2026-10-30, after a spike that measured it against two local models). Its key is the saved LLM key when the provider is OpenAI, otherwise `OPENAI_API_KEY` from the environment; with neither, the memory stores and recalls nothing ([agents.md](agents.md) 2.1).

@@ -2,6 +2,27 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-02
+
+### Added
+- **Memory of past sessions, "Mastra only"** (roadmap 1.3.7, [BA-81](https://halo-powered.atlassian.net/browse/BA-81), epic [BA-4](https://halo-powered.atlassian.net/browse/BA-4)). With the new **Settings → Memory** lever on, a rating teaches later sessions on the same datasource. The lever is off by default.
+  - What is learned: a thumbs-up stores a `verified_query`; a thumbs-down stores a `rejection`, with the note the thumbs-down now takes (knowledge R30 to R43).
+  - How it is stored: behind the `LearningStore` port, in one learning thread per datasource in `mastra.sqlite`, through a persisted outbox. OpenAI `text-embedding-3-small` embeds the signals. String literals are redacted, so no row value is kept.
+  - How it is used: recall takes at most 4 signals at 0.4 similarity or more. A summary is rewritten in the background. Both enter the turn after curated knowledge, as the learned block, and appear in "Knowledge in context" badged "Memory".
+  - How it is removed: **Forget** on an entry, or deleting its datasource; both compact the files.
+  - Accepted by hand. The acceptance gate added `memory.spec.ts`, 14 scenarios on the real memory with an embeddings stub reached through `OPENAI_BASE_URL`, and `chat-feedback.spec.ts`. It updated `navigation.spec.ts` and `layout-accessibility.spec.ts` (six Settings sections).
+  - Evidence: [evidence/1.3.7/](evidence/1.3.7/) (e2e-impact.md, e2e-results.txt).
+
+### Changed
+- **ADR-0031 Accepted with the eval's outcome** (roadmap 1.3.7, BA-81). The three-arm memory eval ran on BA-190's memory arms and 36 memory questions, with 3 attempts per question and two runs per arm. The decision rule was applied by a script fixed before the first run.
+  - "Mastra only" beats no memory on the four learning categories: 48/48 against 24/48 on gpt-5.6-luna, +50 points, beyond an A/A noise of 0 points. On gpt-6-luna it is 43/48 against 22/48, beyond a noise of 17 points.
+  - `memory-abstain` falls from 12/12 to 0/12 on both models. The probe recalls the unrelated teach signal, or the summary, which goes to every turn, carries the rule.
+  - So the lever stays off by default, and the Hindsight + Mastra arm is not built (rule 3: Mastra only is at or above 80%).
+  - A dev-only recalibration check found no recall threshold that keeps the abstain signals out, so it stays 0.4.
+  - Cost per question rises from $0.0040 to $0.0092 on gpt-5.6-luna, mostly because the learned block lowers the prompt cache's hit rate from 94% to 67%.
+  - The eval's OpenAI spend (the smoke, the 24 runs and the recalibration embeddings) was 1.39 USD.
+  - Evidence: [evidence/1.3.7/](evidence/1.3.7/) (README.md, decision.md and eval:diff per model, the run files, the recalibration check).
+
 ## 2026-10-29
 
 ### Added

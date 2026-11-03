@@ -1,0 +1,33 @@
+Before: 6ed4d5b3 (30 questions, openai/gpt-5.6-luna, repeats 3, judge off); 5d84cff0 (3 questions, openai/gpt-5.6-luna, repeats 3, judge off); 495ad032 (3 questions, openai/gpt-5.6-luna, repeats 3, judge off)
+After:  96fbe94b (30 questions, openai/gpt-5.6-luna, repeats 3, judge off); b70ff9a5 (3 questions, openai/gpt-5.6-luna, repeats 3, judge off); 1b95111d (3 questions, openai/gpt-5.6-luna, repeats 3, judge off)
+
+Split     Category           Before          After           Change   95% interval of change  Flag
+dev       memory-reuse       4/4 (51–100%)   4/4 (51–100%)   0 pts    −49 to +49 pts          within
+dev       memory-correction  4/4 (51–100%)   4/4 (51–100%)   0 pts    −49 to +49 pts          within
+dev       memory-update      4/4 (51–100%)   4/4 (51–100%)   0 pts    −49 to +49 pts          within
+dev       memory-rejected    4/4 (51–100%)   4/4 (51–100%)   0 pts    −49 to +49 pts          within
+dev       memory-abstain     0/4 (0–49%)     0/4 (0–49%)     0 pts    −49 to +49 pts          within
+dev       memory-vs-curated  3/4 (30–95%)    3/4 (30–95%)    0 pts    −49 to +49 pts          within
+dev       all                19/24 (60–91%)  19/24 (60–91%)  0 pts    −23 to +23 pts          within
+held-out  memory-reuse       2/2 (34–100%)   2/2 (34–100%)   0 pts    −66 to +66 pts          within
+held-out  memory-correction  2/2 (34–100%)   2/2 (34–100%)   0 pts    −66 to +66 pts          within
+held-out  memory-update      2/2 (34–100%)   2/2 (34–100%)   0 pts    −66 to +66 pts          within
+held-out  memory-rejected    2/2 (34–100%)   2/2 (34–100%)   0 pts    −66 to +66 pts          within
+held-out  memory-abstain     0/2 (0–66%)     0/2 (0–66%)     0 pts    −66 to +66 pts          within
+held-out  memory-vs-curated  1/2 (9–91%)     0/2 (0–66%)     −50 pts  −91 to +27 pts          within
+held-out  all                9/12 (47–91%)   8/12 (39–86%)   −8 pts   −40 to +26 pts          within
+
+Flips, dev:
+  Now passing: harborline-web-policies-q4-2025-pending-memory (memory-vs-curated)
+  Now failing: growth-portfolios-opened-2024-test-filter-memory (memory-vs-curated)
+Flips, held-out:
+  Now passing: none
+  Now failing: curated-market-share-includes-viewer-auto-2025 (memory-vs-curated)
+Only before: none
+Only after: none
+
+Cost before: $0.3322 · $0.0092 per question
+Cost after: $0.3289 · $0.0091 per question
+Cost per question: −1%
+
+Draft change log: Round <…>: <…>. <…> Dev 19/24 → 19/24, held-out 9/12 → 8/12; <…>; cost per question $0.0092 → $0.0091. Runs 6ed4d5b3, 5d84cff0, 495ad032 → 96fbe94b, b70ff9a5, 1b95111d.

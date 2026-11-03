@@ -1,0 +1,352 @@
+{
+  "usage": {
+    "prompt_tokens": 6119,
+    "total_tokens": 6119
+  },
+  "rows": [
+    {
+      "id": "top-scorer-2018-reused-approval-es",
+      "category": "memory-reuse",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.5140354413143755
+    },
+    {
+      "id": "argentina-penalties-2022-reused-approval",
+      "category": "memory-reuse",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.5613023367597368
+    },
+    {
+      "id": "goal-involvements-2022-reused-approval",
+      "category": "memory-reuse",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.6299052304113314
+    },
+    {
+      "id": "argentina-second-half-goals-2022-reused-approval-es",
+      "category": "memory-reuse",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.44172238323731267
+    },
+    {
+      "id": "sellout-99pct-2018-es",
+      "category": "memory-reuse",
+      "split": "held-out",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.4891181717307635
+    },
+    {
+      "id": "late-goals-85th-minute-2022-es",
+      "category": "memory-reuse",
+      "split": "held-out",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.5201615858410185
+    },
+    {
+      "id": "shootout-losses-brazil-es",
+      "category": "memory-correction",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.35516472002425503
+    },
+    {
+      "id": "belgium-pass-completion-2018-ratio-of-totals",
+      "category": "memory-correction",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.37165707297729544
+    },
+    {
+      "id": "croatia-extra-time-wins-shootouts-excluded",
+      "category": "memory-correction",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.5667540549303469
+    },
+    {
+      "id": "france-open-play-goals-2018-headers-es",
+      "category": "memory-correction",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.4160323052325169
+    },
+    {
+      "id": "knockout-excludes-third-place-croatia-conceded-2022",
+      "category": "memory-correction",
+      "split": "held-out",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.54231222342672
+    },
+    {
+      "id": "fouls-suffered-opponent-row-france-2022",
+      "category": "memory-correction",
+      "split": "held-out",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.5375060091855246
+    },
+    {
+      "id": "top-scorers-2018-own-goals-updated",
+      "category": "memory-update",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.632899992859563
+    },
+    {
+      "id": "top-scorers-2018-own-goals-updated",
+      "category": "memory-update",
+      "split": "dev",
+      "signal": "teach-2",
+      "kind": "correction",
+      "score": 0.5636536895445734
+    },
+    {
+      "id": "most-wins-2022-shootouts-updated",
+      "category": "memory-update",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.5153846159149679
+    },
+    {
+      "id": "most-wins-2022-shootouts-updated",
+      "category": "memory-update",
+      "split": "dev",
+      "signal": "teach-2",
+      "kind": "correction",
+      "score": 0.56818420580477
+    },
+    {
+      "id": "france-extra-time-goals-2022-updated-es",
+      "category": "memory-update",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.40613763099614625
+    },
+    {
+      "id": "france-extra-time-goals-2022-updated-es",
+      "category": "memory-update",
+      "split": "dev",
+      "signal": "teach-2",
+      "kind": "correction",
+      "score": 0.3920760682056411
+    },
+    {
+      "id": "croatia-open-play-goals-2018-updated",
+      "category": "memory-update",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.5576277864906091
+    },
+    {
+      "id": "croatia-open-play-goals-2018-updated",
+      "category": "memory-update",
+      "split": "dev",
+      "signal": "teach-2",
+      "kind": "correction",
+      "score": 0.5110857532289826
+    },
+    {
+      "id": "weekend-includes-friday-2022",
+      "category": "memory-update",
+      "split": "held-out",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.6579348466631717
+    },
+    {
+      "id": "weekend-includes-friday-2022",
+      "category": "memory-update",
+      "split": "held-out",
+      "signal": "teach-2",
+      "kind": "correction",
+      "score": 0.6350843462369189
+    },
+    {
+      "id": "big-win-margin-three-2022-es",
+      "category": "memory-update",
+      "split": "held-out",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.41226259152027256
+    },
+    {
+      "id": "big-win-margin-three-2022-es",
+      "category": "memory-update",
+      "split": "held-out",
+      "signal": "teach-2",
+      "kind": "correction",
+      "score": 0.4132722600132422
+    },
+    {
+      "id": "extra-time-goals-rejected-matches-filter",
+      "category": "memory-rejected",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "rejection",
+      "score": 0.6503805187770612
+    },
+    {
+      "id": "penalties-2022-rejected-shootout-kicks-es",
+      "category": "memory-rejected",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "rejection",
+      "score": 0.5421127958329776
+    },
+    {
+      "id": "lusail-quarter-final-fill-rejected-integer-division",
+      "category": "memory-rejected",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "rejection",
+      "score": 0.7200585050646977
+    },
+    {
+      "id": "second-half-goals-2022-final-rejected",
+      "category": "memory-rejected",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "rejection",
+      "score": 0.6398166423011677
+    },
+    {
+      "id": "kickoff-hour-local-time-2018-es",
+      "category": "memory-rejected",
+      "split": "held-out",
+      "signal": "teach-1",
+      "kind": "rejection",
+      "score": 0.5497424945335045
+    },
+    {
+      "id": "messi-matches-attendance-2022-join-fanout",
+      "category": "memory-rejected",
+      "split": "held-out",
+      "signal": "teach-1",
+      "kind": "rejection",
+      "score": 0.6543993702474405
+    },
+    {
+      "id": "stadium-goals-2022-defender-rule-abstain",
+      "category": "memory-abstain",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.43204726057463305
+    },
+    {
+      "id": "stadium-goals-2022-defender-rule-abstain",
+      "category": "memory-abstain",
+      "split": "dev",
+      "signal": "teach-2",
+      "kind": "verified_query",
+      "score": 0.5312737098017731
+    },
+    {
+      "id": "attendance-2018-extra-time-stats-rule-abstain-es",
+      "category": "memory-abstain",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.39484450959578077
+    },
+    {
+      "id": "yellow-cards-latest-tournament-rule-abstain",
+      "category": "memory-abstain",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.25632966287566555
+    },
+    {
+      "id": "top-scoring-team-2018-our-team-rule-abstain",
+      "category": "memory-abstain",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.5196527213981028
+    },
+    {
+      "id": "finals-term-does-not-touch-final-attendance-2022",
+      "category": "memory-abstain",
+      "split": "held-out",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.5234022058249095
+    },
+    {
+      "id": "neutral-venue-rule-does-not-touch-sochi-attendance-2018",
+      "category": "memory-abstain",
+      "split": "held-out",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.5541684459904829
+    },
+    {
+      "id": "portfolios-opened-fy2025-calendar-year-memory",
+      "category": "memory-vs-curated",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.7049440600820014
+    },
+    {
+      "id": "growth-portfolios-opened-2024-test-filter-memory",
+      "category": "memory-vs-curated",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.600458433374957
+    },
+    {
+      "id": "harborline-earned-premium-q1-2025-fiscal-quarter-memory-es",
+      "category": "memory-vs-curated",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "verified_query",
+      "score": 0.5004087459035936
+    },
+    {
+      "id": "harborline-web-policies-q4-2025-pending-memory",
+      "category": "memory-vs-curated",
+      "split": "dev",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.5179309892585024
+    },
+    {
+      "id": "curated-accrued-fee-revenue-december-2025",
+      "category": "memory-vs-curated",
+      "split": "held-out",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.6849931008366354
+    },
+    {
+      "id": "curated-market-share-includes-viewer-auto-2025",
+      "category": "memory-vs-curated",
+      "split": "held-out",
+      "signal": "teach-1",
+      "kind": "correction",
+      "score": 0.4950574212427665
+    }
+  ]
+}

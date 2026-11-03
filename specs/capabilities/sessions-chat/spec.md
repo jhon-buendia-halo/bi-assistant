@@ -450,7 +450,8 @@ Feature: Session management
 
 ### Feature: Chat answers and reliability signals
 
-E2E: `frontend/e2e/chat-clarification.spec.ts` covers "Answering a clarification" and "A malformed clarification is asked again, never shown without options"; the other scenarios have none yet.
+E2E: `frontend/e2e/chat-clarification.spec.ts` covers "Answering a clarification" and "A malformed clarification is asked again, never shown without options".
+E2E: `frontend/e2e/chat-feedback.spec.ts` covers "Saving an answer as a verified query", "Adding, editing and clearing the note of a thumbs-down" and "A thumbs-up removes the note of a thumbs-down", each also checking the answer as stored (`GET /sessions/:id`). The other scenarios have none yet. The note's refusals (with a thumbs-up, over 4,000 characters) are covered by `backend/src/modules/sessions/sessions.service.spec.ts` "the thumbs-down note (api.md 7)"; what a rating and a note teach the memory, by the Feature "Memory from past sessions" in [knowledge](../knowledge/spec.md) (`frontend/e2e/memory.spec.ts`).
 
 ```gherkin
 Feature: Chat answers and reliability signals

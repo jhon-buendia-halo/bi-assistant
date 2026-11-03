@@ -6,7 +6,7 @@ Analysts maintain a small library of **knowledge snippets**: business-glossary t
 
 Defined in [../../product/glossary.md](../../product/glossary.md): knowledge snippet, kind (instruction, term, default filter), scope (global or dataset), source (user or mined), pending suggestion, dataset, datasource, entity, session, assistant, knowledge bootstrap agent, feedback, memory of past sessions (the memory), signal, learning memory, memory lever.
 
-Capability-local vocabulary is limited to the UI words "Pending suggestions" (the review queue of mined, still-disabled snippets) and "Knowledge in context" (the per-answer provenance disclosure), and to these words of the memory of past sessions (R30 to R43, [ADR-0031](../../system/architecture.md), Proposed):
+Capability-local vocabulary is limited to the UI words "Pending suggestions" (the review queue of mined, still-disabled snippets) and "Knowledge in context" (the per-answer provenance disclosure), and to these words of the memory of past sessions (R30 to R43, [ADR-0031](../../system/architecture.md), Accepted):
 - **Reviewer's note** — a note a person would write on an answer to say what the right reading is, as an action of its own, apart from the thumbs; the one source of a `correction` (R31). The app has no such action in this version (Open questions).
 - **"Memory"** — the badge of a "Knowledge in context" entry the answer took from the memory (R38), and **"Learned from past sessions"** the block those entries were sent in (R36).
 
@@ -53,7 +53,7 @@ Bootstrap (drafting from data)
 Ownership
 - R29. Knowledge entries, including mined suggestions, SHALL belong to the one user (the built-in super admin; the stored `ownerId` is a legacy attribute, [data-model.md](../../system/data-model.md)). Every enabled entry SHALL be injected into turns. Every knowledge action is available.
 
-Memory from past sessions ([ADR-0031](../../system/architecture.md), Proposed; [BA-81](https://halo-powered.atlassian.net/browse/BA-81)). The port, the "Mastra only" implementation, its embedding key and the learned block: [agents.md](../../system/agents.md) 2.1 and 4.1; the lever's settings document, the outbox and the learning memories: [data-model.md](../../system/data-model.md) 3.2.2, 3.15 and 5.2; the endpoints: [api.md](../../system/api.md) 7, 19 and 108 to 110.
+Memory from past sessions ([ADR-0031](../../system/architecture.md), Accepted; [BA-81](https://halo-powered.atlassian.net/browse/BA-81)). The port, the "Mastra only" implementation, its embedding key and the learned block: [agents.md](../../system/agents.md) 2.1 and 4.1; the lever's settings document, the outbox and the learning memories: [data-model.md](../../system/data-model.md) 3.2.2, 3.15 and 5.2; the endpoints: [api.md](../../system/api.md) 7, 19 and 108 to 110.
 - R30. Memory SHALL be off by default: the memory lever, the one switch of Settings → Memory ([ui.md](../../system/ui.md) 4.17), stored as the `memory` settings document, reads `off` until the user turns it `on`, and no stored document means `off`. With it `off` the system SHALL recall nothing and retain no new signal, so no turn is slower or different from a turn without memory; only forgetting (R39 to R41) and the storing of signals queued while it was on (R34) still reach the memory. Turning it off SHALL keep what the memory holds, and turning it on again SHALL use it. Settings → Memory SHALL also say which key embeds the signals, or that there is none and nothing is remembered until one is set ([agents.md](../../system/agents.md) 2.1).
 - R31. With the lever on, the system SHALL retain a memory only from a **signal**: a judgement a person gave an answer that ran SQL. A thumbs-up SHALL retain a `verified_query` (the question and the SQL a verified query keeps, [verified-queries](../verified-queries/spec.md) R2). A thumbs-down SHALL retain a `rejection` (that question and SQL), with or without a note: the thumbs-down's note ([sessions-chat](../sessions-chat/spec.md) R36), when it has one, is the rejection's `Analyst note` (R33), and a thumbs-down never retains a correction. A reviewer's note SHALL retain a `correction` (that question and SQL, and the note); the app has no reviewer's-note action in this version, so it SHALL retain no correction until that action exists, while the memory's port and the memory eval still take corrections (Open questions). A rating SHALL retain nothing when its answer has no successful SQL or no question before it (verified-queries R3), or when the session's datasets do not resolve to exactly one datasource, as no single learning memory can be told (verified-queries R2 stores no datasource then). Nothing else SHALL be retained: not the questions asked, not the answers given, not deep analysis, previews or eval runs (an eval keeps a memory of its own, apart, [BA-190](https://halo-powered.atlassian.net/browse/BA-190)). Cross-check disagreements and Knowledge edits, which ADR-0031 also counts as verified signals, are not retained in this version (Open questions).
 - R32. A retained signal SHALL never hold a row value. Its SQL SHALL be stored with every single-quoted string literal replaced by `'?'`, unless the literal's text, ignoring case and `LIKE` wildcards at either end, appears in the signal's question, or the literal is a category code: one token of at most 24 characters, all lowercase or all uppercase, letters and digits with optional underscores (`'own_goal'`, `'SETTLED'`, `'DF'`), which is schema vocabulary rather than a row value. So a capitalised name (`'Lionel Messi'`) or an email is replaced unless the question holds it. Numbers SHALL be kept. The SQL SHALL be clipped to 2,000 characters and a note to 1,000, each cut marked `…`; a note is otherwise kept as the person wrote it.
@@ -232,10 +232,10 @@ Feature: Knowledge snippets (E2E: none yet)
     Then no "Knowledge in context" disclosure lists that snippet
 ```
 
-E2E: none yet for the Feature below. The scenarios that recall need an embedding model: they are to be covered by backend tests with a stub embedder, and measured on a real model by the memory eval of [BA-190](https://halo-powered.atlassian.net/browse/BA-190).
+E2E: `frontend/e2e/memory.spec.ts` covers every scenario of the Feature below. The app runs its real "Mastra only" memory, and the test reads what it holds straight from its two files: the `memory_signals` outbox in `app.sqlite` and the learning memories in `mastra.sqlite`. Two local stubs stand in for the models. The recording LLM stub, saved as the LenAI provider, answers each turn with one query on the World Cup database and writes the summary. An embeddings stub stands in for OpenAI `text-embedding-3-small`, reached through `OPENAI_BASE_URL` with the key from `OPENAI_API_KEY`; its vectors are a bag of a question's content words, so a paraphrase is found and an unrelated question is not. In "An approval in one session informs a question in another language" the stub gives both questions one vector, so the scenario proves the path from the rating to the disclosure, not that a real model finds the Spanish question: that, and whether the assistant follows curated knowledge over a contradicting memory, is measured on a real model by the memory eval of [BA-190](https://halo-powered.atlassian.net/browse/BA-190). "Turning memory on in Settings" and "No key for embeddings" seed the saved provider by rewriting the provider of the stored LenAI settings, since saving OpenAI or Anthropic tests the connection on that provider. The same rules are also covered by backend and frontend unit tests, listed after the Feature, which also cover what no scenario shows (R34's retries, R31 with several datasources, R43).
 
 ```gherkin
-Feature: Memory from past sessions (E2E: none yet)
+Feature: Memory from past sessions
 
   # R30
   Scenario: Memory is off by default
@@ -246,6 +246,7 @@ Feature: Memory from past sessions (E2E: none yet)
     When I give an answer a thumbs-up and ask a similar question in a new session on the same datasource
     Then nothing was retained in a memory
     And the new answer's "Knowledge in context" lists no entry badged "Memory"
+    And no text was sent to the embedding model
 
   # R30
   Scenario: Turning memory on in Settings
@@ -256,6 +257,12 @@ Feature: Memory from past sessions (E2E: none yet)
     And I see "Embeddings: OpenAI text-embedding-3-small, with the key saved in LLM configuration."
     When I turn it off
     Then I see the toast "Memory turned off"
+
+  # R30
+  Scenario: The key from the environment embeds when the provider is not OpenAI
+    Given the saved LLM configuration uses the provider LenAI and OPENAI_API_KEY is set
+    When I open Settings and click "Memory"
+    Then I see "Embeddings: OpenAI text-embedding-3-small, with OPENAI_API_KEY from the environment."
 
   # R30
   Scenario: No key for embeddings
@@ -321,13 +328,14 @@ Feature: Memory from past sessions (E2E: none yet)
   # R40, R42
   Scenario: Forget a memory
     Given an answer's "Knowledge in context" lists an entry badged "Memory" that holds a signal
+    And the entry titled "summary" beside it offers no "Forget"
     When I click "Forget" on it
     Then the confirmation dialog asks "Forget this memory? Later answers will not use it."
     When I accept it
     Then I see the toast "Memory forgotten"
     And the entry is still listed, and reads "Forgotten" where "Forget" was
     And the memory no longer holds that signal, its embedding or the index's copy of its text, nor any outbox row of it
-    And once the files are compacted, its note is in neither file's bytes
+    And once the files are compacted, no byte of mastra.sqlite holds its note and no byte of app.sqlite holds its outbox row
     And no later answer lists it, in the summary or as an entry
 
   # R41
@@ -352,6 +360,21 @@ Feature: Memory from past sessions (E2E: none yet)
     Then the approval is listed as a "Memory" entry
 ```
 
+Covered by (unit tests; backend under `backend/src/modules/memory/` unless another folder is named):
+- *Memory is off by default*: `memory.service.spec.ts` "reads off when no settings document exists", "neither builds nor calls a memory for a rating, a turn or a flush" and "recalls nothing and sends no block"; `backend/src/modules/sessions/sessions.service.spec.ts` "with the lever off, sends exactly the context of a turn without memory".
+- *Turning memory on in Settings*, *The key from the environment embeds when the provider is not OpenAI*, *No key for embeddings*: `memory.service.spec.ts` "saves the lever as the `memory` settings document" and "refuses anything but true or false"; `memory.controller.spec.ts`; `embedding-key.spec.ts`; `openai-embedder.spec.ts`; `backend/src/modules/llm/llm.service.spec.ts` "the OpenAI key for the memory embeddings"; `frontend/src/app/features/memory/components/memory-settings/memory-settings.spec.ts`.
+- *An approval in one session informs a question in another language*: `mastra-learning-store.spec.ts` "stores one message per signal and recalls it for a paraphrase", "drops an unrelated question with the 0.4 threshold" and "recalls from its own scope only"; `memory.service.spec.ts` "writes an approval for a thumbs-up, its SQL redacted" and "recalls each datasource once and builds the block"; `learned-block.spec.ts`; `sessions.service.spec.ts` "records its entries on the answer after the snippets" and "hands it the rating, the question and the SQL once the transcript is saved"; frontend `session-chat.spec.ts` "shows the Memory badge, lines and the footer sentence".
+- *A thumbs-down is kept as a rejection, with its note when it has one*: `signal-text.spec.ts` "writes a rejection with its note line only when it has a note"; `memory.service.spec.ts` "writes a rejection for a thumbs-down, with its note only when it has one"; `sessions.service.spec.ts` "keeps the note of a thumbs-down, trimmed, and replaces or removes it".
+- *Row values never reach the memory*: `signal-text.spec.ts`, the `redactSqlLiterals` tests (a name or an email replaced, category codes and the question's own literals kept, `LIKE` wildcards, numbers) and "clips the SQL at 2,000 characters and the note at 1,000".
+- *Curated knowledge comes first and is said to win*: `sessions.service.spec.ts` "sends it after curated knowledge and before the verified reference queries"; `learned-block.spec.ts` "puts the summaries first, then the signals oldest first, a blank line apart".
+- *Rating an answer again, or changing its note, replaces what it taught*: `memory.service.spec.ts` "replaces the answer’s one row when it is rated again"; `memory-outbox.service.spec.ts` "replaces the row of a document id whatever its state" and "keeps a row replaced during a flush pending for the next one"; `mastra-learning-store.spec.ts` "replaces a stored id in place: one message, one vector, the new text".
+- *With memory off, re-rating an answer forgets what it taught*: `memory.service.spec.ts` "forgets what an earlier rating of the answer retained, without compacting".
+- *Forget a memory*: `memory.service.spec.ts` "deletes the outbox rows, then the store’s copies, then compacts both files", "also forgets a copy the store holds with no outbox row", "changes nothing for an unknown or already forgotten id" and "runs a failed compaction again at the next start"; `mastra-learning-store.spec.ts` "forgets a signal: its message, its vector and the index copy of its text", "leaves no forgotten text in the file once compacted" and "is not sent after a forget until it is rewritten"; `backend/src/infrastructure/database/sqlite-maintenance.spec.ts` "leaves no text of a deleted document in the file"; frontend `session-chat.spec.ts` "calls the API only after confirm, then shows Forgotten" and "offers no Forget on the summary entry".
+- *Deleting a datasource forgets what its sessions taught*: `memory.service.spec.ts` "forgets its rows and its whole learning memory, then compacts" and "never throws"; `mastra-learning-store.spec.ts` "forgets a whole scope with its summary"; `backend/src/modules/datasources/datasources.service.spec.ts` "forgets the datasource's learning memory when it is deleted (knowledge R41)".
+- *A memory that does not answer in time does not hold up a turn*: `memory.service.spec.ts` "leaves out a memory that does not answer within 2.5 seconds"; `mastra-learning-store.spec.ts` "gives nothing when recall does not answer within the cut-off".
+- *Turning memory off keeps what it learned*: `memory.service.spec.ts` "saves the lever as the `memory` settings document" and "recalls nothing and sends no block".
+- In no scenario: the outbox's retries and giving up (R34), `memory-outbox.service.spec.ts` "retries after 30 s, doubling, and gives a row up after the 5th failure" and "flushes on its own 2 s after the last write"; a session over several datasources (R31, R35), `memory.service.spec.ts` "retains nothing without one datasource, a question or SQL"; the grounding pass and deep analysis (R43), `sessions.service.spec.ts` "resends the same block in the grounding pass without recalling again" and "gives a deep-analysis call none, and recalls nothing for it"; the summary's budget (R42), `mastra-learning-store.spec.ts` "is clipped to 2,000 characters".
+
 ## Acceptance
 
 - Every Gherkin scenario above passes against the running app (backend tests cover R1-R28 at service level).
@@ -359,7 +382,7 @@ Feature: Memory from past sessions (E2E: none yet)
 - With a default-filter snippet enabled, the generated SQL applies it and the answer names it.
 - A bootstrap run on the sample dataset yields at most 15 disabled, mined, dataset-scoped drafts and none duplicates an existing title for that dataset.
 - With the memory lever off, the default, answers and what is stored are the same as without the memory, and no memory is called (R30).
-- Whether memory may be on by default is decided by the three-arm eval of ADR-0031 (no memory, "Mastra only", "Hindsight + Mastra") on 36 memory questions in six categories, under the decision rule written in the ADR before the first run; the eval's arm option and two-part questions are [BA-190](https://halo-powered.atlassian.net/browse/BA-190)'s, the questions, the "Mastra only" memory and the decision this story's ([BA-81](https://halo-powered.atlassian.net/browse/BA-81)). Until the rule allows it, the lever stays off by default.
+- Whether memory may be on by default is decided by the three-arm eval of ADR-0031 (no memory, "Mastra only", "Hindsight + Mastra") on 36 memory questions in six categories, under the decision rule written in the ADR before the first run; the eval's arm option and two-part questions are [BA-190](https://halo-powered.atlassian.net/browse/BA-190)'s, the questions, the "Mastra only" memory and the decision this story's ([BA-81](https://halo-powered.atlassian.net/browse/BA-81)). Until the rule allows it, the lever stays off by default. Decided on 2026-11-02 (ADR-0031, Outcome): "Mastra only" beats no memory on the learning categories, but `memory-abstain` gets worse, so the lever stays off by default and no Hindsight arm is built.
 - In that eval no item the memory holds after a teach step holds a row value, on every question and every arm (R32).
 - Open question: parts of roadmap Milestone 1.3 Knowledge Store (BA-4) already exist in code: authoring of the three kinds, dataset/global scoping, bootstrap from schema and samples (reviewed as pending suggestions), newest-first injection under a character budget, and per-answer "Knowledge in context" provenance. Not yet built: the ontology/concept graph (1.3.2), question-relevance retrieval (1.3.3), mining from past sessions and thumbs-up answers, conflict detection and correction feedback (1.3.4).
 

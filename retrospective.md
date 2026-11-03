@@ -14,6 +14,27 @@ Entry template:
 
 ---
 
+## 2026-11-02 — 1.3.7 memory of past sessions, "Mastra only", and ADR-0031's decision (BA-81)
+
+### What went well
+- The decision script was written, dry-run on the smoke files and hashed before the first real run. Results that cut both ways (+50 points on learning, −100 on abstain) were then read off a fixed rule, with no room to choose the metric afterwards.
+- Every case was rerun three times on two models with an A/A pair per arm. That showed the abstain failure is structural, the same five recalls and one summary leak on both models, and not noise.
+- The dev-only recalibration was measured offline, by embedding every probe and teach signal for about $0.0001, instead of a $0.66 rerun. The offline scores matched what the runs recalled, and they showed no threshold could pass.
+- The hand test used invented terms ("kestrel win") and a house rule a model cannot guess, each with a memory-off control, at the user's request. A pass meant the memory and not the model's prior knowledge.
+- The acceptance gate's E2E runs the real memory end to end. An embeddings stub sits behind `OPENAI_BASE_URL`, and the tests read both SQLite files, so all 14 memory scenarios have a Playwright test, not only the UI ones.
+
+### What went wrong
+- The lead read the user's "Ok" as acceptance of BA-81 and logged it so. It was a question. The work stopped and was corrected, but only after the user said so.
+- Three World Cup memory cases read objects outside the World Cup dataset (`tournament_teams`, `v_seeded_team_performance`). The prep validation ran them on the database, not against the dataset's tables, so it missed them. They were found only when the repo's validator met the dataset.
+- The first hand-test questions were generic (a top scorer the model already knows), so passing them proved little. The user had to ask for a sharper test.
+- The cost of the memory arm was more than double. Most of it was the prompt cache, broken by the learned block's position, which nobody had predicted.
+
+### What to do differently
+- Before any eval case is run or chosen, check every SQL it holds (reference, trap and teach) against the tables of the saved dataset the assistant sees, not only against the database.
+- Design a hand test so the model cannot pass it from prior knowledge: an invented term or a house rule, and the same question asked first with the feature off.
+- Treat a one-word reply ("Ok") at a checkpoint as a question unless it names what it accepts. Ask, or restate what acceptance would mean, before logging it.
+- When a feature adds a block to the prompt, compare the cached-input share with and without it in the first smoke run, before the full runs.
+
 ## 2026-10-29 — 1.3.5 and 1.3.6 closed: research and plan merged, ADR-0031 (BA-123, BA-124)
 
 ### What went well

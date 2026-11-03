@@ -1,0 +1,34 @@
+Before: 2b2218a5 (30 questions, openai/gpt-6-luna, repeats 3, judge off); 897d1464 (3 questions, openai/gpt-6-luna, repeats 3, judge off); 4bd33b83 (3 questions, openai/gpt-6-luna, repeats 3, judge off)
+After:  baa68bda (30 questions, openai/gpt-6-luna, repeats 3, judge off); c530a3d4 (3 questions, openai/gpt-6-luna, repeats 3, judge off); 39a36f2a (3 questions, openai/gpt-6-luna, repeats 3, judge off)
+
+Split     Category           Before          After           Change    95% interval of change  Flag
+dev       memory-reuse       4/4 (51–100%)   4/4 (51–100%)   0 pts     −49 to +49 pts          within
+dev       memory-correction  3/4 (30–95%)    4/4 (51–100%)   +25 pts   −28 to +70 pts          within
+dev       memory-update      3/4 (30–95%)    3/4 (30–95%)    0 pts     −49 to +49 pts          within
+dev       memory-rejected    3/4 (30–95%)    3/4 (30–95%)    0 pts     −49 to +49 pts          within
+dev       memory-abstain     4/4 (51–100%)   0/4 (0–49%)     −100 pts  −100 to −31 pts         down
+dev       memory-vs-curated  4/4 (51–100%)   4/4 (51–100%)   0 pts     −49 to +49 pts          within
+dev       all                21/24 (69–96%)  18/24 (55–88%)  −12 pts   −34 to +10 pts          within
+held-out  memory-reuse       0/2 (0–66%)     2/2 (34–100%)   +100 pts  +7 to +100 pts          up
+held-out  memory-correction  0/2 (0–66%)     2/2 (34–100%)   +100 pts  +7 to +100 pts          up
+held-out  memory-update      0/2 (0–66%)     2/2 (34–100%)   +100 pts  +7 to +100 pts          up
+held-out  memory-rejected    0/2 (0–66%)     1/2 (9–91%)     +50 pts   −27 to +91 pts          within
+held-out  memory-abstain     2/2 (34–100%)   0/2 (0–66%)     −100 pts  −100 to −7 pts          down
+held-out  memory-vs-curated  0/2 (0–66%)     2/2 (34–100%)   +100 pts  +7 to +100 pts          up
+held-out  all                2/12 (5–45%)    9/12 (47–91%)   +58 pts   +18 to +78 pts          up
+
+Flips, dev:
+  Now passing: france-open-play-goals-2018-headers-es (memory-correction), croatia-open-play-goals-2018-updated (memory-update), second-half-goals-2022-final-rejected (memory-rejected)
+  Now failing: most-wins-2022-shootouts-updated (memory-update), lusail-quarter-final-fill-rejected-integer-division (memory-rejected), stadium-goals-2022-defender-rule-abstain (memory-abstain), attendance-2018-extra-time-stats-rule-abstain-es (memory-abstain), yellow-cards-latest-tournament-rule-abstain (memory-abstain), top-scoring-team-2018-our-team-rule-abstain (memory-abstain)
+Flips, held-out:
+  Now passing: sellout-99pct-2018-es (memory-reuse), late-goals-85th-minute-2022-es (memory-reuse), knockout-excludes-third-place-croatia-conceded-2022 (memory-correction), fouls-suffered-opponent-row-france-2022 (memory-correction), weekend-includes-friday-2022 (memory-update), big-win-margin-three-2022-es (memory-update), messi-matches-attendance-2022-join-fanout (memory-rejected), curated-accrued-fee-revenue-december-2025 (memory-vs-curated), curated-market-share-includes-viewer-auto-2025 (memory-vs-curated)
+  Now failing: finals-term-does-not-touch-final-attendance-2022 (memory-abstain), neutral-venue-rule-does-not-touch-sochi-attendance-2018 (memory-abstain)
+Only before: none
+Only after: none
+
+Cost before: $0.0588 · $0.0016 per question
+Cost after: $0.1517 · $0.0042 per question
+Cost per question: +158.1%
+Warning: the memory arm differs: none → mastra
+
+Draft change log: Round <…>: <…>. <…> Dev 21/24 → 18/24, held-out 2/12 → 9/12; <…>; cost per question $0.0016 → $0.0042. Runs 2b2218a5, 897d1464, 4bd33b83 → baa68bda, c530a3d4, 39a36f2a.

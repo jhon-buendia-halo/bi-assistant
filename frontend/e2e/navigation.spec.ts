@@ -182,6 +182,7 @@ test('opens Settings as an area with a section list', async ({ page }) => {
   await expect(sections).toHaveText([
     /Datasource Configuration/,
     /LLM Configuration/,
+    /Memory/,
     /Testing Data/,
     /Developer/,
     /Appearance/,
@@ -256,6 +257,7 @@ test('the app opens straight into the shell', async ({ page }) => {
   for (const section of [
     'Datasource Configuration',
     'LLM Configuration',
+    'Memory',
     'Testing Data',
     'Developer',
     'Appearance',

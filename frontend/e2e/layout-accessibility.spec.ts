@@ -139,6 +139,7 @@ test('has no automatically detectable accessibility violations on any screen in 
       () => settingsSection('Datasource Configuration'),
     ],
     ['LLM Configuration', () => settingsSection('LLM Configuration')],
+    ['Memory', () => settingsSection('Memory')],
     ['Testing Data', () => settingsSection('Testing Data')],
     ['Developer', () => settingsSection('Developer')],
     ['Appearance', () => settingsSection('Appearance')],

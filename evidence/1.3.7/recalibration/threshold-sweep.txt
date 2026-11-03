@@ -1,0 +1,12 @@
+t     | dev abstain M3 pass (of 4) | dev learning: lesson recalled (of 16) | update: correction recalled / old approval alone | held-out abstain (of 2) | held-out learning (of 8)
+0.40  | 2                          | 13                                    | 3 / 1                                            | 0                       | 8
+0.42  | 2                          | 12                                    | 3 / 0                                            | 0                       | 7
+0.44  | 2                          | 12                                    | 3 / 0                                            | 0                       | 7
+0.46  | 2                          | 11                                    | 3 / 0                                            | 0                       | 7
+0.48  | 2                          | 11                                    | 3 / 0                                            | 0                       | 7
+0.50  | 2                          | 11                                    | 3 / 0                                            | 0                       | 6
+0.52  | 3                          | 9                                    | 2 / 1                                            | 0                       | 6
+0.54  | 4                          | 9                                    | 2 / 1                                            | 1                       | 4
+0.56  | 4                          | 8                                    | 2 / 0                                            | 2                       | 2
+0.58  | 4                          | 4                                    | 0 / 1                                            | 2                       | 2
+0.60  | 4                          | 4                                    | 0 / 1                                            | 2                       | 2

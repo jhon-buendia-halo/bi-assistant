@@ -1,0 +1,33 @@
+Before: 9288c1a6 (30 questions, openai/gpt-6-luna, repeats 3, judge off); 4ccd416a (3 questions, openai/gpt-6-luna, repeats 3, judge off); 42de8423 (3 questions, openai/gpt-6-luna, repeats 3, judge off)
+After:  2b2218a5 (30 questions, openai/gpt-6-luna, repeats 3, judge off); 897d1464 (3 questions, openai/gpt-6-luna, repeats 3, judge off); 4bd33b83 (3 questions, openai/gpt-6-luna, repeats 3, judge off)
+
+Split     Category           Before          After           Change   95% interval of change  Flag
+dev       memory-reuse       2/4 (15–85%)    4/4 (51–100%)   +50 pts  −10 to +85 pts          within
+dev       memory-correction  2/4 (15–85%)    3/4 (30–95%)    +25 pts  −32 to +66 pts          within
+dev       memory-update      2/4 (15–85%)    3/4 (30–95%)    +25 pts  −32 to +66 pts          within
+dev       memory-rejected    3/4 (30–95%)    3/4 (30–95%)    0 pts    −49 to +49 pts          within
+dev       memory-abstain     4/4 (51–100%)   4/4 (51–100%)   0 pts    −49 to +49 pts          within
+dev       memory-vs-curated  4/4 (51–100%)   4/4 (51–100%)   0 pts    −49 to +49 pts          within
+dev       all                17/24 (51–85%)  21/24 (69–96%)  +17 pts  −7 to +38 pts           within
+held-out  memory-reuse       0/2 (0–66%)     0/2 (0–66%)     0 pts    −66 to +66 pts          within
+held-out  memory-correction  0/2 (0–66%)     0/2 (0–66%)     0 pts    −66 to +66 pts          within
+held-out  memory-update      0/2 (0–66%)     0/2 (0–66%)     0 pts    −66 to +66 pts          within
+held-out  memory-rejected    0/2 (0–66%)     0/2 (0–66%)     0 pts    −66 to +66 pts          within
+held-out  memory-abstain     2/2 (34–100%)   2/2 (34–100%)   0 pts    −66 to +66 pts          within
+held-out  memory-vs-curated  0/2 (0–66%)     0/2 (0–66%)     0 pts    −66 to +66 pts          within
+held-out  all                2/12 (5–45%)    2/12 (5–45%)    0 pts    −31 to +31 pts          within
+
+Flips, dev:
+  Now passing: goal-involvements-2022-reused-approval (memory-reuse), argentina-second-half-goals-2022-reused-approval-es (memory-reuse), croatia-extra-time-wins-shootouts-excluded (memory-correction), most-wins-2022-shootouts-updated (memory-update)
+  Now failing: none
+Flips, held-out:
+  Now passing: none
+  Now failing: none
+Only before: none
+Only after: none
+
+Cost before: $0.0589 · $0.0016 per question
+Cost after: $0.0588 · $0.0016 per question
+Cost per question: −0.1%
+
+Draft change log: Round <…>: <…>. <…> Dev 17/24 → 21/24, held-out 2/12 → 2/12; <…>; cost per question $0.0016 → $0.0016. Runs 9288c1a6, 4ccd416a, 42de8423 → 2b2218a5, 897d1464, 4bd33b83.

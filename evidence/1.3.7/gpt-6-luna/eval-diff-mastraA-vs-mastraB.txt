@@ -1,0 +1,33 @@
+Before: 98805bb4 (30 questions, openai/gpt-6-luna, repeats 3, judge off); 2ca59ff6 (3 questions, openai/gpt-6-luna, repeats 3, judge off); b15246b8 (3 questions, openai/gpt-6-luna, repeats 3, judge off)
+After:  baa68bda (30 questions, openai/gpt-6-luna, repeats 3, judge off); c530a3d4 (3 questions, openai/gpt-6-luna, repeats 3, judge off); 39a36f2a (3 questions, openai/gpt-6-luna, repeats 3, judge off)
+
+Split     Category           Before          After           Change    95% interval of change  Flag
+dev       memory-reuse       4/4 (51–100%)   4/4 (51–100%)   0 pts     −49 to +49 pts          within
+dev       memory-correction  4/4 (51–100%)   4/4 (51–100%)   0 pts     −49 to +49 pts          within
+dev       memory-update      4/4 (51–100%)   3/4 (30–95%)    −25 pts   −70 to +28 pts          within
+dev       memory-rejected    4/4 (51–100%)   3/4 (30–95%)    −25 pts   −70 to +28 pts          within
+dev       memory-abstain     0/4 (0–49%)     0/4 (0–49%)     0 pts     −49 to +49 pts          within
+dev       memory-vs-curated  4/4 (51–100%)   4/4 (51–100%)   0 pts     −49 to +49 pts          within
+dev       all                20/24 (64–93%)  18/24 (55–88%)  −8 pts    −31 to +15 pts          within
+held-out  memory-reuse       2/2 (34–100%)   2/2 (34–100%)   0 pts     −66 to +66 pts          within
+held-out  memory-correction  1/2 (9–91%)     2/2 (34–100%)   +50 pts   −27 to +91 pts          within
+held-out  memory-update      2/2 (34–100%)   2/2 (34–100%)   0 pts     −66 to +66 pts          within
+held-out  memory-rejected    1/2 (9–91%)     1/2 (9–91%)     0 pts     −57 to +57 pts          within
+held-out  memory-abstain     0/2 (0–66%)     0/2 (0–66%)     0 pts     −66 to +66 pts          within
+held-out  memory-vs-curated  0/2 (0–66%)     2/2 (34–100%)   +100 pts  +7 to +100 pts          up
+held-out  all                6/12 (25–75%)   9/12 (47–91%)   +25 pts   −12 to +54 pts          within
+
+Flips, dev:
+  Now passing: none
+  Now failing: most-wins-2022-shootouts-updated (memory-update), lusail-quarter-final-fill-rejected-integer-division (memory-rejected)
+Flips, held-out:
+  Now passing: knockout-excludes-third-place-croatia-conceded-2022 (memory-correction), curated-accrued-fee-revenue-december-2025 (memory-vs-curated), curated-market-share-includes-viewer-auto-2025 (memory-vs-curated)
+  Now failing: none
+Only before: none
+Only after: none
+
+Cost before: $0.1542 · $0.0043 per question
+Cost after: $0.1517 · $0.0042 per question
+Cost per question: −1.6%
+
+Draft change log: Round <…>: <…>. <…> Dev 20/24 → 18/24, held-out 6/12 → 9/12; <…>; cost per question $0.0043 → $0.0042. Runs 98805bb4, 2ca59ff6, b15246b8 → baa68bda, c530a3d4, 39a36f2a.
