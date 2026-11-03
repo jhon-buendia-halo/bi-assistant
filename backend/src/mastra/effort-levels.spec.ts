@@ -79,3 +79,22 @@ describe('nearestEffort', () => {
     );
   });
 });
+
+describe('effortLevelsFor on custom endpoint ids (R52)', () => {
+  it.each([
+    ['custom/gpt-5.2', ['none', 'low', 'medium', 'high', 'xhigh']],
+    ['custom/claude-opus-4-6', ['low', 'medium', 'high', 'max']],
+    ['anthropic/claude-opus-5-5', ['low', 'medium', 'high', 'xhigh', 'max']],
+    ['custom/llama-3.1-70b-instruct', ['low', 'medium', 'high']],
+    ['custom/qwen2.5-coder', ['low', 'medium', 'high']],
+  ])('%s offers %j', (model, levels) => {
+    expect(effortLevelsFor(model)).toEqual(levels);
+  });
+
+  it.each(['custom/gpt-4o-mini', 'anthropic/claude-haiku-4-5'])(
+    '%s offers none',
+    (model) => {
+      expect(effortLevelsFor(model)).toEqual([]);
+    },
+  );
+});
