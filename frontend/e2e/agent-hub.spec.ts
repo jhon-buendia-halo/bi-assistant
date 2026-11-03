@@ -15,6 +15,12 @@ import {
 const ASSISTANT = 'Questions to Insights Assistant';
 /** The showcase agents in hub order (agents-evals R106). */
 const SHOWCASE_KEYS = ['benchmarking', 'lad-coe', 'strategy', 'survey'];
+/**
+ * The Official cards in hub order: the agents that can chat alphabetical by
+ * name ("Data Readiness Agent", "Questions to Insights Assistant", "RFP
+ * Builder"), then the showcase agents (agents-evals R1, R106).
+ */
+const OFFICIAL_KEYS = ['data-readiness', 'assistant', 'rfp', ...SHOWCASE_KEYS];
 const SHOWCASE_REASON = 'Showcase agent: not available to chat yet.';
 const EVIDENCE_1_15_2 = path.resolve(__dirname, '../../evidence/1.15.2');
 const HEALTH = 'Health plan analyst';
@@ -174,11 +180,12 @@ test('filters limit the hub to one kind of agent', async ({ page }) => {
   expect(await sectionIds(page)).toEqual(['mine']);
 
   await filter(page, 'Official').click();
-  // The assistant, the RFP Builder and the four showcase agents are
-  // Official; every card shows, showcase agents last (R1-R3, R106).
+  // The assistant, the RFP Builder, the Data Readiness Agent and the four
+  // showcase agents are Official; every card shows, alphabetical by name,
+  // showcase agents last (R1-R3, R106).
   await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
-  await expect(cards(page)).toHaveCount(6);
-  expect(await cardKeys(page)).toEqual(['assistant', 'rfp', ...SHOWCASE_KEYS]);
+  await expect(cards(page)).toHaveCount(7);
+  expect(await cardKeys(page)).toEqual(OFFICIAL_KEYS);
   await expect(page.getByTestId('agent-show-more-official')).toHaveCount(0);
   expect(await sectionIds(page)).toEqual(['official']);
 
@@ -403,11 +410,7 @@ test('the showcase agents are Official cards that cannot chat yet', async ({
   await openHub(page);
   const official = section(page, 'official');
   await expect(official.getByTestId('agent-card-survey')).toBeVisible();
-  expect(await cardKeys(official)).toEqual([
-    'assistant',
-    'rfp',
-    ...SHOWCASE_KEYS,
-  ]);
+  expect(await cardKeys(official)).toEqual(OFFICIAL_KEYS);
   await expect(page.getByTestId('agent-show-more-official')).toHaveCount(0);
   for (const key of SHOWCASE_KEYS) {
     const card = official.getByTestId(`agent-card-${key}`);
@@ -426,6 +429,19 @@ test('the showcase agents are Official cards that cannot chat yet', async ({
   await expect(assistant.getByTestId('agent-showcase-assistant')).toHaveCount(
     0,
   );
+  // The Data Readiness Agent can chat: the Background's World Cup dataset is
+  // bound to a PostgreSQL datasource (data-readiness R1).
+  const readiness = official.getByTestId('agent-card-data-readiness');
+  await expect(readiness).toContainText('Data Readiness Agent');
+  await expect(readiness).toContainText('Owner: Official');
+  await expect(
+    readiness.getByRole('button', {
+      name: 'Start chat with Data Readiness Agent',
+    }),
+  ).toBeEnabled();
+  await expect(
+    readiness.getByTestId('agent-showcase-data-readiness'),
+  ).toHaveCount(0);
   await page.screenshot({
     path: path.join(EVIDENCE_1_15_2, 'hub-showcase-agents.png'),
     fullPage: true,

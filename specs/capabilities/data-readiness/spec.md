@@ -220,7 +220,7 @@ See [ui.md](../../system/ui.md).
 
 ### Feature: Data readiness
 
-E2E: none yet
+E2E: `frontend/e2e/data-readiness.spec.ts`
 
 ```gherkin
 Feature: Data readiness
