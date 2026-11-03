@@ -1013,6 +1013,94 @@ The app is shown to the US Health practice as its own hub: the banner reads "US 
 - **Acceptance:** the Agent Hub scenarios "The showcase agents are Official cards that cannot chat yet" and "A showcase agent's page shows its description and System Prompt" (`agent-hub.spec.ts`) and the Session management scenario "The Agent field lists the showcase agents disabled" (`session-management.spec.ts`) pass on the web target, with all four showcase agents shown, after the assistant and the RFP Builder, and the existing Agent Hub scenarios updated for an Official section that shows every card with no `Show more`; a backend unit test proves the catalogue entry and the session refusal; `check-specs.py`, backend and frontend unit tests, lint and builds are green. No eval gate: what the assistant and the RFP Builder receive is unchanged.
 - **Notes:** confirmed by the user on 2026-10-15. Scope extended by the user on 2026-10-15: the Benchmarking Agent, and the Official section always expanded; the Jira story keeps its key and title. The descriptions and prompts are `SHOWCASE_AGENTS` and `BENCHMARKING_PROMPT`, `SURVEY_PROMPT`, `LAD_COE_PROMPT`, `STRATEGY_PROMPT` in `backend/src/mastra/agents/showcase-catalog.ts`, copied verbatim into agents.md 2.9. Open: "LAD" is read as Life, Absence and Disability.
 
+### Milestone 1.16 — Data Readiness Agent ([BA-251](https://halo-powered.atlassian.net/browse/BA-251))
+
+A new Official agent assesses how ready a connected Postgres or Databricks datasource is for analysis, using the DMBOK data-quality dimensions. The deterministic engine is ported from the separate `data-readiness-agent` project and owns every score; the LLM only runs the assessment and explains the stored report. Assessments are saved and can be reopened. All stories are built on the branch `feat/BA-251-data-readiness` and ship as one PR. Epic spec: [specs/epics/BA-251/spec.md](specs/epics/BA-251/spec.md).
+
+#### 1.16.1 — Scoring and check engine ([BA-252](https://halo-powered.atlassian.net/browse/BA-252))  `🚧 In progress`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the per-dimension score `100 × (1 − Σw/checksRun)`, the overall mean, the maturity bands, and `runAssessment` with the current time injected.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit specs reproduce the reference numbers (80, 96, 99, 2; overall 88 Managed); a determinism test passes; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.2 — Completeness, validity, consistency and uniqueness checks ([BA-253](https://halo-powered.atlassian.net/browse/BA-253))  `🚧 In progress`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the four checks with the reference formulas and severities.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** per-check unit specs cover every severity branch and the checks-run denominator; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.3 — Integrity, accessibility, timeliness and reasonability checks, plus join inference ([BA-254](https://halo-powered.atlassian.net/browse/BA-254))  `🚧 In progress`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the four checks and join inference, using the injected time.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** per-check unit specs cover every severity branch; join inference covers its naming patterns and the 20-candidate cap; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.4 — Golden conformance suite ([BA-255](https://halo-powered.atlassian.net/browse/BA-255))  `🚧 In progress`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** about 20 Postgres and 20 Databricks labelled fixtures copied from the reference corpus, and its matching scorer.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** the engine meets the reference precision and recall floors on them; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.5 — Postgres profiling queries ([BA-256](https://halo-powered.atlassian.net/browse/BA-256))  `🚧 In progress`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** aggregate-only profiling queries for Postgres with quoted identifiers and a statement timeout.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit specs check the SQL and result mapping; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.6 — Databricks profiling queries ([BA-257](https://halo-powered.atlassian.net/browse/BA-257))  `🚧 In progress`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the same queries in Spark SQL, Unity Catalog names flattened to catalog.schema.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit specs check the SQL and result mapping against a fake session; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.7 — Source profile adapters ([BA-258](https://halo-powered.atlassian.net/browse/BA-258))  `🚧 In progress`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** type classification, format rules from column names, the consistency probe window, keys, relationships and inferred joins, for Postgres and Databricks.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit specs build the expected profile from a fake connector per dialect; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.8 — Saved assessment reports and API ([BA-259](https://halo-powered.atlassian.net/browse/BA-259))  `🚧 In progress`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the `readiness_reports` collection and `POST /data-readiness/assessments`, `GET /data-readiness/assessments`, `GET /data-readiness/assessments/:id`.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit specs cover assess, list, get, 404 and 400; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.9 — Agent, prompt, skill and tools ([BA-260](https://halo-powered.atlassian.net/browse/BA-260))  `🚧 In progress`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the `data-readiness` agent, its prompt, its skill and the tools `assess_data_readiness`, `get_readiness_report`, `list_readiness_reports`.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit specs cover the tools, the prompt fixture and the skill; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.10 — Agent catalogue and chat session wiring ([BA-261](https://halo-powered.atlassian.net/browse/BA-261))  `🚧 In progress`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the agent listed as Official, Start chat gated on a Postgres or Databricks dataset, the tool bridge, the `readiness-report` stream event and panel item.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit specs cover the catalogue entry, the blocked reason and the stream event; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.11 — Scorecard panel and chat card ([BA-262](https://halo-powered.atlassian.net/browse/BA-262))  `🚧 In progress`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the scorecard (overall score and band, dimension bars, findings table filterable by dimension and severity) and its chat card.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit tests cover rendering and filtering; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.12 — Past assessments history ([BA-263](https://halo-powered.atlassian.net/browse/BA-263))  `🚧 In progress`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the list of saved reports for the session's datasource, opening one in the scorecard.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit tests cover listing, the empty state and opening a report; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.
