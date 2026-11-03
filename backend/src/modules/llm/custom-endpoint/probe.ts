@@ -135,6 +135,14 @@ async function safeText(res: Response): Promise<string> {
 }
 
 /**
+ * R54: a server that echoes the request (some proxies put the Authorization
+ * header in an error body) must not get the key into an error text.
+ */
+function redactKey(text: string, apiKey: string | undefined): string {
+  return apiKey ? text.split(apiKey).join('***') : text;
+}
+
+/**
  * Probes an OpenAI-compatible endpoint with the submitted (unsaved) settings:
  * `POST <base>/chat/completions` with the strict JSON-schema request every
  * agent makes, falling back per R49 when the server rejects the format.
@@ -176,6 +184,7 @@ export async function probeOpenAiStyle(
       },
       cap,
       host,
+      apiKey,
     });
   try {
     for (const step of FORMAT_STEPS.slice(0, -1)) {
@@ -214,6 +223,7 @@ async function attempt(request: {
   body: Record<string, unknown>;
   cap: number;
   host: string;
+  apiKey?: string;
 }): Promise<string> {
   let res: Response;
   try {
@@ -232,7 +242,7 @@ async function attempt(request: {
   }
 
   if (!res.ok) {
-    const body = await safeText(res);
+    const body = redactKey(await safeText(res), request.apiKey);
     if (request.signal.aborted) throw new Error(TIMEOUT_MESSAGE);
     if (FORMAT_REJECTED.has(res.status)) {
       throw new FormatRejected(res.status, body);
@@ -240,7 +250,7 @@ async function attempt(request: {
     throw httpFailure(res.status, body, request.url);
   }
 
-  const raw = await safeText(res);
+  const raw = redactKey(await safeText(res), request.apiKey);
   if (request.signal.aborted) throw new Error(TIMEOUT_MESSAGE);
   let json: ChatCompletion | null = null;
   try {

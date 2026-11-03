@@ -299,6 +299,67 @@ describe('probeOpenAiStyle (R45, R49, R50, R52)', () => {
     });
   });
 
+  describe('R54 key echoed by the server', () => {
+    it.each([400, 500])(
+      'redacts the key from a %i body the server echoes',
+      async (status) => {
+        const echo = `bad request: Authorization: Bearer sk-secret-123 ${'z'.repeat(10)}`;
+        answers.push(
+          { status, body: echo },
+          { status, body: echo },
+          { status, body: echo },
+        );
+        const err = await probeOpenAiStyle({
+          ...base,
+          apiKey: 'sk-secret-123',
+        }).catch((e: Error) => e);
+        expect((err as Error).message).toContain(
+          `Provider request failed (${status})`,
+        );
+        expect((err as Error).message).not.toContain('sk-secret-123');
+      },
+    );
+
+    it('redacts the key from a 200 body that is not a chat completion', async () => {
+      answers.push({ status: 200, body: 'echo: Bearer sk-secret-123' });
+      const err = await probeOpenAiStyle({
+        ...base,
+        apiKey: 'sk-secret-123',
+      }).catch((e: Error) => e);
+      expect((err as Error).message).toContain(
+        'could not produce structured JSON',
+      );
+      expect((err as Error).message).not.toContain('sk-secret-123');
+    });
+  });
+
+  it('times out during a fallback step within the one 30 s budget', async () => {
+    jest.useFakeTimers();
+    let calls = 0;
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      calls += 1;
+      if (calls === 1) {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          text: () => Promise.resolve('no schema'),
+        } as unknown as Response);
+      }
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => {
+          const err = new Error('This operation was aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      });
+    });
+    const pending = probeOpenAiStyle(base);
+    const assertion = expect(pending).rejects.toThrow(TIMEOUT_MESSAGE);
+    await jest.advanceTimersByTimeAsync(30_000);
+    await assertion;
+    expect(calls).toBe(2);
+  });
+
   describe('R18 reply checks', () => {
     it('reports an empty reply cut off by the cap', async () => {
       answers.push({
