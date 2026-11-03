@@ -1,7 +1,9 @@
 import type { PostgresConfig } from '../../datasources/entities/datasource.entity';
 import type { ProfilingConnector } from '../../datasources/connectors/profiling';
 import type { AssessScope, SourceProfile } from '../engine/types';
-import { notImplemented } from '../engine/not-implemented';
+import { buildSourceProfile } from './build-profile';
+import { classifyType } from './classify';
+import { POSTGRES_FORMAT_PATTERNS } from './format-rules';
 
 /**
  * Build a SourceProfile for a Postgres datasource from its profiler (unit 7,
@@ -13,9 +15,15 @@ export async function profilePostgres(
   sourceId: string,
   scope?: AssessScope,
 ): Promise<SourceProfile> {
-  void profiler;
-  void config;
-  void sourceId;
-  void scope;
-  return Promise.resolve(notImplemented('profilePostgres'));
+  return buildSourceProfile(
+    profiler,
+    config,
+    sourceId,
+    {
+      sourceType: 'postgres',
+      classify: classifyType,
+      formatPatterns: POSTGRES_FORMAT_PATTERNS,
+    },
+    scope,
+  );
 }
