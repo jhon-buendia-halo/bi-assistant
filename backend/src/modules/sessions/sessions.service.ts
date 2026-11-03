@@ -87,6 +87,7 @@ import {
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
 import { LlmService } from '../llm/llm.service';
+import { chatTurnError } from './llm-error-message';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
@@ -1837,9 +1838,13 @@ export class SessionsService implements OnModuleInit {
     // Every tool name the model actually invoked this turn — the zero-SQL-
     // turn grounding guard below fires only when this stays empty.
     const calledTools = new Set<string>();
+    // The model call's own failure: Mastra reports it as a chunk, not a throw.
+    let streamError: unknown;
     try {
       for await (const chunk of stream.fullStream) {
-        if (chunk.type === 'reasoning-delta') {
+        if (chunk.type === 'error') {
+          streamError ??= (chunk.payload as { error?: unknown }).error;
+        } else if (chunk.type === 'reasoning-delta') {
           const delta = (chunk.payload as { text?: string }).text ?? '';
           if (delta) emit({ type: 'reasoning', content: delta });
         } else if (chunk.type === 'text-delta') {
@@ -2027,6 +2032,14 @@ export class SessionsService implements OnModuleInit {
       if (!turn.signal.aborted) throw error;
     } finally {
       abortSignal?.removeEventListener('abort', forwardAbort);
+    }
+    if (streamError !== undefined && !turn.signal.aborted) {
+      // A custom endpoint's failure fails the turn in R50's words (R51);
+      // any other keeps today's handling.
+      const failure = await chatTurnError(streamError, () =>
+        this.llmService.getView(),
+      );
+      if (failure !== streamError) throw failure;
     }
     // The stage `create_rfp` or `get_rfp` reported moves the tracker too.
     if (rfpHolder?.stage !== undefined && rfpHolder.stage !== drivenStage) {

@@ -230,6 +230,9 @@ describe('SessionsService streaming', () => {
             .fn()
             .mockResolvedValue({ columns: ['n'], rows: check.rows ?? [] }),
     };
+    const llm = {
+      getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
+    };
     const service = new SessionsService(
       repository as never,
       {
@@ -266,9 +269,7 @@ describe('SessionsService streaming', () => {
         ]),
       } as never,
       datasources as never,
-      {
-        getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
-      } as never,
+      llm as never,
       {} as never,
       verifiedQueries as never,
       metrics as never,
@@ -285,6 +286,7 @@ describe('SessionsService streaming', () => {
       verifier,
       datasources,
       repository,
+      llm,
     };
   }
 
@@ -322,6 +324,54 @@ describe('SessionsService streaming', () => {
         lenai: { reasoningEffort: 'medium' },
       });
     }
+  });
+
+  // llm-settings R51: Mastra reports a failed model call as an `error` chunk;
+  // on a custom endpoint the turn fails with the R50 text.
+  it.each([
+    [
+      'an unreachable host',
+      apiCallError(undefined, {
+        cause: Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:8317'), {
+          code: 'ECONNREFUSED',
+        }),
+      }),
+      'Could not reach 127.0.0.1:8317 — check the base URL and that the server is running',
+    ],
+    [
+      'a 404',
+      apiCallError(404),
+      'The endpoint answered 404 at http://127.0.0.1:8317/v1/chat/completions — check the base URL (OpenAI-compatible servers usually end in /v1)',
+    ],
+    [
+      'a rejected key',
+      apiCallError(401),
+      'The endpoint rejected the API key (401)',
+    ],
+  ])(
+    'fails a custom endpoint turn on %s in the words of R50',
+    async (_label, error, message) => {
+      const { service, llm } = buildStreaming(errorChunkStream(error));
+      llm.getView.mockResolvedValue({
+        provider: 'custom',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        reasoningEffort: 'medium',
+      });
+
+      await expect(
+        service.streamMessage('session-1', 'Why?', () => {}),
+      ).rejects.toThrow(message);
+    },
+  );
+
+  it("keeps today's handling of a model failure for other providers", async () => {
+    const { service, session } = buildStreaming(
+      errorChunkStream(apiCallError(401)),
+    );
+
+    await service.streamMessage('session-1', 'Why?', () => {});
+
+    expect(session.messages.at(-1)?.role).toBe('assistant');
   });
 
   it('synthesizes a final answer after a tool-only turn', async () => {
@@ -1935,6 +1985,24 @@ function* retriedClarificationChunks() {
 
 function toolOnlyStream(count: number) {
   return streamOf(toolOnlyChunks(count));
+}
+
+/** A model call that failed: Mastra's `error` chunk, as the stream ends. */
+async function* errorChunkStream(error: unknown): AsyncGenerator<unknown> {
+  yield await Promise.resolve({ type: 'error', payload: { error } });
+}
+
+/** The shape of an AI SDK `APICallError` from an OpenAI-style endpoint. */
+function apiCallError(
+  statusCode: number | undefined,
+  extra: { cause?: unknown } = {},
+): Error {
+  return Object.assign(new Error('API call failed'), {
+    name: 'AI_APICallError',
+    statusCode,
+    url: 'http://127.0.0.1:8317/v1/chat/completions',
+    ...extra,
+  });
 }
 
 /**
