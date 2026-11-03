@@ -86,8 +86,13 @@ const testButton = (page: Page) =>
 const saveButton = (page: Page) =>
   page.getByRole('button', { name: 'Save connection' });
 
-const passText = (model: string) =>
-  `Connection successful — custom/${model} replied "ok"`;
+/** R15: the pass names the route and ends with the latency. */
+const passText = (model: string) => {
+  const escaped = model.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    `Connection successful — custom/${escaped} replied "ok" in \\d+ms`,
+  );
+};
 
 /** Chooses Custom endpoint (OpenAI-compatible) and fills its fields. */
 async function fillCustomEndpoint(
@@ -161,6 +166,8 @@ test.describe('OpenAI-compatible', () => {
       (call) => call.method === 'GET' && call.path === '/v1/models',
     );
     expect(listCall?.authorization).toBe('Bearer sk-custom-4c5d');
+    // R45: the OpenAI style sends the key only as a bearer token.
+    expect(listCall?.xApiKey).toBeUndefined();
     await page.screenshot({
       path: testInfo.outputPath('llm-custom-load-models.png'),
     });
@@ -177,6 +184,7 @@ test.describe('OpenAI-compatible', () => {
       (call) => call.method === 'POST' && call.path === '/v1/chat/completions',
     );
     expect(probeCall?.authorization).toBe('Bearer sk-custom-4c5d');
+    expect(probeCall?.xApiKey).toBeUndefined();
 
     await saveButton(page).click();
     await expect(page.getByText('Configuration saved')).toBeVisible();
