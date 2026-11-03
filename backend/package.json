@@ -49,6 +49,7 @@
     "intellify-api": "node dist/intellify-api/main.js"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "3.0.130",
     "@databricks/sql": "2.1.0",
     "@mastra/arize": "1.3.16",
     "@mastra/core": "1.66.0",

@@ -32,7 +32,7 @@ import { MastraService } from '../../mastra/mastra.service';
 import {
   AGENT_OVERRIDES_CONTEXT_KEY,
   type AgentOverrides,
-  resolveAgentModel,
+  resolveAgentModelConfig,
 } from '../../mastra/model-resolver';
 import {
   AGENT_TOOLS_CONTEXT_KEY,
@@ -231,7 +231,10 @@ export class SessionsService implements OnModuleInit {
     bucket: Record<string, ProviderOptionValue>,
     modelOverride?: string,
   ): Promise<ProviderOptions> {
-    return providerOptionsFor(await resolveAgentModel(modelOverride), bucket);
+    return providerOptionsFor(
+      await resolveAgentModelConfig(modelOverride),
+      bucket,
+    );
   }
 
   constructor(

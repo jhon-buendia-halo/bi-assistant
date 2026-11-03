@@ -12,7 +12,9 @@ jest.mock('@mastra/core/request-context', () => ({
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
 jest.mock('../../mastra/model-resolver', () => ({
   AGENT_OVERRIDES_CONTEXT_KEY: 'agent-overrides',
-  resolveAgentModel: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
+  isCustomAnthropicConfig: (c: unknown) =>
+    typeof c === 'object' && c !== null && 'kind' in c,
+  resolveAgentModelConfig: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
 }));
 jest.mock('../../mastra/tool-services', () => ({
   setDatasetToolServices: jest.fn(),
@@ -80,7 +82,7 @@ jest.mock('./workspace-files', () => {
 });
 
 import { BadRequestException, Logger } from '@nestjs/common';
-import { resolveAgentModel } from '../../mastra/model-resolver';
+import { resolveAgentModelConfig } from '../../mastra/model-resolver';
 import { appSkillBody } from '../../mastra/app-skills';
 
 /** No session in these tests was started from a user agent. */
@@ -288,14 +290,16 @@ describe('SessionsService streaming', () => {
 
   beforeEach(() => {
     (sourceEntities as jest.Mock).mockReturnValue([]);
-    (resolveAgentModel as jest.Mock).mockResolvedValue('openai/gpt-4.1-mini');
+    (resolveAgentModelConfig as jest.Mock).mockResolvedValue(
+      'openai/gpt-4.1-mini',
+    );
   });
 
   // Mastra names an OpenAI-compatible client's provider-options bucket after
   // the provider id, so the reasoning-effort chip was a silent no-op on every
   // LenAI deployment while this key was hardcoded to `openai`.
   it('files provider options under the bucket the configured model reads', async () => {
-    (resolveAgentModel as jest.Mock).mockResolvedValue({
+    (resolveAgentModelConfig as jest.Mock).mockResolvedValue({
       id: 'lenai/mmc-tech-gpt-41-mini-1m-2025-04-14',
       apiKey: 'len-key',
       url: 'https://lenai.example.com/openai/v1/deployments/x',
@@ -590,7 +594,9 @@ describe('SessionsService streaming', () => {
       expect(options.providerOptions).toEqual({
         openai: { reasoningEffort: 'low' },
       });
-      expect(resolveAgentModel).toHaveBeenCalledWith('historian-deployment');
+      expect(resolveAgentModelConfig).toHaveBeenCalledWith(
+        'historian-deployment',
+      );
     });
 
     it('runs as the plain assistant once the agent is deleted', async () => {

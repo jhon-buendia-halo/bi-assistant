@@ -1,6 +1,10 @@
 import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
-import { resolveAgentModel } from '../model-resolver';
+import {
+  isCustomAnthropicConfig,
+  resolveAgentModelConfig,
+} from '../model-resolver';
+import { buildModel } from '../model-factory';
 import { agentInstructions } from '../agent-prompt-overrides';
 import { VISUALIZATION_PROMPT } from './system-prompts';
 import { SESSION_WORKSPACE_CONTEXT_KEY } from '../session-workspaces';
@@ -44,7 +48,9 @@ function miniSibling(id: string): `${string}/${string}` | undefined {
 }
 
 export async function resolveVisualizationModel() {
-  const configured = await resolveAgentModel();
+  const configured = await resolveAgentModelConfig();
+  // An Anthropic-compatible custom endpoint keeps its model until unit 8 (BA-289).
+  if (isCustomAnthropicConfig(configured)) return configured;
   if (typeof configured === 'string') {
     if (VISUAL_MODEL_OVERRIDE) return VISUAL_MODEL_OVERRIDE;
     if (REASONING_FAMILY.test(configured)) return VISUAL_FALLBACK;
@@ -104,7 +110,7 @@ export const visualizationAgent = new Agent({
   instructions: () => agentInstructions('visualization', VISUALIZATION_PROMPT),
   // Keep analysis on the configured model while using the smaller sibling for
   // the bounded code-transformation step.
-  model: resolveVisualizationModel,
+  model: async () => buildModel(await resolveVisualizationModel()),
   workspace: ({ requestContext, mastra }) => {
     const workspaceId = requestContext.get(SESSION_WORKSPACE_CONTEXT_KEY);
     if (typeof workspaceId !== 'string' || !mastra) return undefined;

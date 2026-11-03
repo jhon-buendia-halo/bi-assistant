@@ -4,7 +4,7 @@ import { RequestContext } from '@mastra/core/request-context';
 import type { MastraScorer } from '@mastra/core/evals';
 import type { Agent } from '@mastra/core/agent';
 import { assistantAgent } from '../agents/assistant.agent';
-import { resolveAgentModel } from '../model-resolver';
+import { resolveAgentModelConfig } from '../model-resolver';
 import { providerOptionsFor } from '../model-compat';
 import {
   evalJudgeAgent,
@@ -1269,7 +1269,7 @@ async function runJudgeCheck(
       // Deterministic-ish grading: low temperature where the provider
       // supports it, via providerOptions rather than a top-level field the
       // structured-output call overload does not accept.
-      providerOptions: providerOptionsFor(await resolveAgentModel(), {
+      providerOptions: providerOptionsFor(await resolveAgentModelConfig(), {
         temperature: 0,
       }),
       structuredOutput: {
@@ -1426,7 +1426,7 @@ export async function runAssistantEvalCase(
         question,
         turnRecords,
         new AbortController().signal,
-        providerOptionsFor(await resolveAgentModel(), {
+        providerOptionsFor(await resolveAgentModelConfig(), {
           reasoningEffort: 'medium',
         }),
         undefined,

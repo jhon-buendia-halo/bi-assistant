@@ -31,6 +31,8 @@ import {
   ReasoningEffort,
   SaveLlmSettingsDto,
   SUPPORTED_PROVIDERS,
+  ListModelsDto,
+  ListModelsResult,
 } from './llm.types';
 
 const UNREADABLE_KEY_MESSAGE =
@@ -542,5 +544,17 @@ export class LlmService implements OnModuleInit {
       throw new BadRequestException('apiKey is required — none stored yet');
     }
     return this.storedApiKey(doc);
+  }
+
+  /**
+   * `POST /llm/models` (BA-281): list a custom endpoint's models, using the
+   * stored custom key when none is typed. Unit 1 (BA-282) owns this.
+   */
+  async listModels(dto: ListModelsDto): Promise<ListModelsResult> {
+    void dto;
+    return Promise.resolve({
+      ok: false,
+      message: 'Model listing is not implemented yet (BA-281 scaffold)',
+    });
   }
 }

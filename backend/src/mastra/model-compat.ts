@@ -44,7 +44,7 @@ export function modelIdOf(config: AgentModelConfig): string {
 
 /** True when Mastra will build an OpenAI-compatible client for this config. */
 export function isOpenAiCompatible(config: AgentModelConfig): boolean {
-  return typeof config !== 'string' && !!config.url;
+  return typeof config !== 'string' && 'url' in config && !!config.url;
 }
 
 /** Values the OpenAI-compatible client will serialize into the request body. */
