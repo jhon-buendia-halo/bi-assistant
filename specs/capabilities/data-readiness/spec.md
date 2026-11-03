@@ -95,7 +95,7 @@ Capability-local vocabulary:
   Each dialect writes the pattern in its own regex flavour.
 - R10. A readable `text` column with between 2 and 1,000 distinct values SHALL also get a **normalized distinct count**: the distinct count of its values lower-cased and trimmed.
 - R11. The profile's relationships SHALL be:
-  - **declared:** every declared foreign key between two entities in scope;
+  - **declared:** every declared foreign key whose child entity is in scope; the parent may lie outside the scope (it is still a valid join target), as in the reference engine;
   - **inferred:** join candidates found by name in the same namespace, at most 20 per assessment. A column named `<base>_id` or `<base>Id`, whose (namespace, entity, column) is not already a declared foreign key, points to the first entity named `<base>`, `<base>s`, `dim_<base>`, `<base>_dim` or `dim<base>` (case-insensitive, never the entity itself). The target column is that entity's column named `id`, or else its column with the same name. With neither, there is no candidate.
 
   Each relationship's **orphan count** SHALL be the number of child rows whose non-null value has no matching parent row.
