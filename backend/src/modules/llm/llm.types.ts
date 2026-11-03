@@ -81,7 +81,8 @@ export interface LlmSettingsDoc {
   provider: LlmProvider;
   model: string;
   baseUrl: string;
-  apiKeyCiphertext: string;
+  /** Absent for a `custom` endpoint saved without a key (R47). */
+  apiKeyCiphertext?: string;
   reasoningEffort?: ReasoningEffort;
   /** Custom endpoint only (BA-281). */
   apiStyle?: ApiStyle;
