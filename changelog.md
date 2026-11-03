@@ -2,6 +2,18 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-03
+
+### Added
+- **Data Readiness Agent** (epic [BA-251](https://halo-powered.atlassian.net/browse/BA-251), roadmap 1.16.1 to 1.16.12, stories [BA-252](https://halo-powered.atlassian.net/browse/BA-252) to [BA-263](https://halo-powered.atlassian.net/browse/BA-263); ADR-0031, [specs/epics/BA-251/spec.md](specs/epics/BA-251/spec.md), [specs/capabilities/data-readiness/spec.md](specs/capabilities/data-readiness/spec.md)).
+  - A deterministic engine scores a PostgreSQL or Databricks datasource on the DMBOK dimensions (completeness, validity, consistency, uniqueness, integrity, accessibility, timeliness, reasonability; accuracy and currency listed, not assessed), with a golden conformance suite (1.16.1 to 1.16.4).
+  - Aggregate-only profiling queries for Postgres and Databricks and the adapters that turn them into profiles (1.16.5 to 1.16.7).
+  - Reports are stored and served by `POST` / `GET /data-readiness/assessments` and `GET /data-readiness/assessments/:id` (1.16.8).
+  - The Official `data-readiness` agent, its prompt, skill and the tools `assess_data_readiness`, `get_readiness_report` and `list_readiness_reports`; the model sees only each report's summary (1.16.9).
+  - Start chat is offered when a PostgreSQL or Databricks dataset exists; the session runs the agent and streams the report to the panel (1.16.10). The scorecard with dimension bars and a filterable findings table, the chat card (1.16.11) and Past assessments (1.16.12).
+  - The `data-readiness` eval set (8 cases) passes 8/8 over 3 runs. The acceptance gate fixed one agent fault it found: the prompt and D9 now define the weakest dimension as the lowest assessed score, not the one with the most severe findings.
+  - Evidence: [evidence/1.16/](evidence/1.16/) (114 impacted E2E tests green, eval runs, live smoke, scorecard screenshot).
+
 ## 2026-10-16
 
 ### Changed
