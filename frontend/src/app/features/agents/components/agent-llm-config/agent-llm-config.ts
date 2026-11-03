@@ -6,6 +6,16 @@ import { AgentLlm } from '../../services/agents-api.service';
  * an agent runs on, read-only. The API key is never shown, only whether one
  * is set.
  */
+/**
+ * The provider's display name: the server's `providerName` as sent, else
+ * "Custom endpoint" for `custom` (llm-settings R53), else the raw id.
+ */
+function providerLabel(llm: AgentLlm): string {
+  if (llm.providerName) return llm.providerName;
+  if (llm.provider === 'custom') return 'Custom endpoint';
+  return llm.provider ?? '—';
+}
+
 @Component({
   selector: 'app-agent-llm-config',
   templateUrl: './agent-llm-config.html',
@@ -19,7 +29,7 @@ export class AgentLlmConfig {
     const llm = this.llm();
     if (!llm || llm.model === null) return null;
     return [
-      { label: 'Provider', value: llm.providerName ?? llm.provider ?? '—' },
+      { label: 'Provider', value: providerLabel(llm) },
       {
         label: 'Model',
         value: `${llm.model}${this.modelOverride() ? ' (agent override)' : ''}`,

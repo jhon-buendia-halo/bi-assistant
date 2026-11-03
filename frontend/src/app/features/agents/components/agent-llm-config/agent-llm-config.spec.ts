@@ -34,6 +34,25 @@ describe('AgentLlmConfig', () => {
     expect(value(el, 'Reasoning effort')).toBe('medium');
   });
 
+  it('shows a custom endpoint as Custom endpoint, as the server names it', () => {
+    const custom: AgentLlm = {
+      ...LLM,
+      provider: 'custom',
+      providerName: 'Custom endpoint',
+      model: 'llama3.1:8b',
+      apiKeyConfigured: false,
+    };
+    const el = render(custom);
+    expect(value(el, 'Provider')).toBe('Custom endpoint');
+    expect(value(el, 'Model')).toBe('llama3.1:8b');
+    expect(value(el, 'API key')).toBe('Not set');
+  });
+
+  it('names a custom endpoint even without a server providerName', () => {
+    const el = render({ ...LLM, provider: 'custom', providerName: null });
+    expect(value(el, 'Provider')).toBe('Custom endpoint');
+  });
+
   it('marks a model the agent sets itself', () => {
     expect(value(render(LLM, true), 'Model')).toBe('gpt-4.1 (agent override)');
   });
