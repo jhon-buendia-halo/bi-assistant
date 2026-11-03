@@ -300,6 +300,19 @@ describe('custom endpoint, Anthropic style (R52)', () => {
     });
   });
 
+  it.each([
+    ['gpt-5.2', 'none', 'low'],
+    ['gpt-5-mini', 'minimal', 'low'],
+    ['gpt-5.2', 'xhigh', 'xhigh'],
+  ])(
+    'maps %s effort %s to %s, a value the Anthropic schema accepts',
+    (model, effort, sent) => {
+      expect(
+        providerOptionsFor(customAnthropic(model), { reasoningEffort: effort }),
+      ).toEqual({ anthropic: { effort: sent } });
+    },
+  );
+
   it('never moves the cap for a gpt-5-named model served Anthropic-style', () => {
     expect(
       modelCallTuning(customAnthropic('gpt-5.2'), { maxOutputTokens: 100 }),

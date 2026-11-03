@@ -28,6 +28,7 @@ import {
   effortLevelsFor,
   isReasoningEffort,
   nearestEffort,
+  type ReasoningEffort,
 } from './effort-levels';
 
 /**
@@ -138,6 +139,26 @@ function fitEffort(
   return { ...bucket, reasoningEffort: nearestEffort(levels, effort) };
 }
 
+/** The only `effort` values the Anthropic provider's option schema accepts. */
+const ANTHROPIC_EFFORTS: ReasoningEffort[] = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+];
+
+/**
+ * A level the Anthropic schema accepts. A GPT model served Anthropic-style by
+ * a custom endpoint has `none`/`minimal` levels, which @ai-sdk/anthropic
+ * rejects as invalid provider options, failing the whole call.
+ */
+function anthropicEffort(value: ProviderOptionValue): ProviderOptionValue {
+  return isReasoningEffort(value) && !ANTHROPIC_EFFORTS.includes(value)
+    ? nearestEffort(ANTHROPIC_EFFORTS, value)
+    : value;
+}
+
 /**
  * The Anthropic provider reads `effort`, not `reasoningEffort`, and ignores
  * OpenAI-only passthroughs such as `max_completion_tokens` — so the
@@ -151,7 +172,7 @@ function anthropicBucket(
   for (const [name, value] of Object.entries(bucket)) {
     if (name === 'reasoningEffort') {
       // Models with no levels reject `effort` with a 400.
-      if (effortLevelsFor(modelId).length) out.effort = value;
+      if (effortLevelsFor(modelId).length) out.effort = anthropicEffort(value);
     } else if (name !== 'max_completion_tokens') {
       out[name] = value;
     }
