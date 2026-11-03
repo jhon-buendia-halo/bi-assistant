@@ -3,6 +3,7 @@ import { checks } from '@mastra/evals/checks';
 import { findFixture } from '../../modules/testing-data/fixtures/registry';
 import type { DatasetSnapshot } from '../tool-services';
 import { dataReadinessAgent } from '../agents/data-readiness.agent';
+import { readinessModelOutput } from '../tools/readiness.tools';
 import type {
   AssistantEvalCase,
   AssistantEvalSet,
@@ -137,12 +138,13 @@ const DATA_READINESS_EVAL_CASES: AssistantEvalCase[] = [
     judgeRubric:
       'The user asked which dimension is worst and what to fix first. Score ' +
       'pass=true only if the answer names the lowest-scoring assessed ' +
-      'dimension of the readiness tool result (not accuracy or currency), ' +
-      'explains what that dimension measures, and recommends fixes taken ' +
-      "from that dimension's findings in the tool result, naming tables and " +
-      'columns exactly as the tool gave them. Score pass=false if it picks a ' +
-      'dimension that is not the lowest-scoring assessed one, or invents a ' +
-      'finding, table or column.',
+      'dimension of the readiness tool result as the worst (not accuracy or ' +
+      'currency), explains what that dimension measures, and recommends ' +
+      "fixes taken from findings in the tool result (that dimension's, or " +
+      'the most severe findings of any dimension, as rule D9 orders an ' +
+      'answer), naming tables and columns exactly as the tool gave them. ' +
+      'Score pass=false if it calls a dimension the worst that is not the ' +
+      'lowest-scoring assessed one, or invents a finding, table or column.',
   },
   {
     id: 'dr-accuracy-not-assessed',
@@ -246,7 +248,8 @@ export function readinessEvalOrientation(
  * Readiness Agent, Block D1 as orientation, no knowledge block, and a
  * throwaway session bound to the agent so the readiness tools resolve the
  * session's datasets as in a real chat. The judge reads whole summaries
- * (20 findings run past the report's 2,000 characters).
+ * (20 findings run past the report's 2,000 characters), projected as the
+ * model sees them (`readinessModelOutput`).
  */
 export function dataReadinessEvalTarget(
   now: () => Date = () => new Date(),
@@ -266,6 +269,8 @@ export function dataReadinessEvalTarget(
     sendsKnowledge: false,
     sessionAgentKey: 'data-readiness',
     judgeTraceChars: 12_000,
+    // The judge reads the summary the model was handed, not the full report.
+    judgeOutput: readinessModelOutput,
     orientation: ({ datasets, snapshots }) =>
       readinessEvalOrientation(
         datasets,

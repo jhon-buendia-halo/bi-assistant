@@ -237,6 +237,32 @@ describe('data readiness eval checks', () => {
       ).resolves.toBeUndefined();
     });
 
+    it('accepts counts of a complete topFindings list, not of a cut one', async () => {
+      const high = (entity: string) => ({
+        severity: 'high',
+        dimension: 'completeness',
+        entity,
+      });
+      const complete = summary({
+        findingCount: 7,
+        topFindings: [
+          ...['a', 'b', 'c', 'd', 'e', 'f'].map(high),
+          { severity: 'low', dimension: 'completeness', entity: 'g' },
+        ],
+      });
+      const answer =
+        '| Completeness | 72.5 | 7 findings, 6 of them high severity |';
+      await expect(
+        run(check, answer, [call('assess_data_readiness', complete)]),
+      ).resolves.toBeUndefined();
+      const cut = { ...complete, findingCount: 30 };
+      const reason = await run(check, answer, [
+        call('assess_data_readiness', cut),
+      ]);
+      expect(reason).toContain('7 in');
+      expect(reason).toContain('6 in');
+    });
+
     it('reads list_readiness_reports results and JSON-string outputs', async () => {
       const list = {
         datasourceName: 'World Cup PostgreSQL',
@@ -503,6 +529,10 @@ describe('data-readiness eval set', () => {
       ].join('\n'),
     );
     expect(block).not.toMatch(/score/i);
+    // The judge reads the summary the model was handed, not the report.
+    const raw = { summary: summary(), report: { id: 'r-1', findings: [] } };
+    expect(target.judgeOutput?.(raw)).toEqual(summary());
+    expect(target.judgeOutput?.({ error: 'x' })).toEqual({ error: 'x' });
   });
 
   it('builds Block D1 for Databricks and falls back to the table count', () => {

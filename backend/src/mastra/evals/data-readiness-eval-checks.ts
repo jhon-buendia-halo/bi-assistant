@@ -145,6 +145,35 @@ export function numbersIn(value: unknown, into: number[] = []): number[] {
   return into;
 }
 
+/**
+ * Counts an answer may give by counting a summary's `topFindings`: how many
+ * there are, and how many per dimension, per severity and per dimension and
+ * severity ("7 findings, 6 of them high"). Only counted when the summary
+ * lists every finding (`findingCount` equals the list's length), so a count
+ * of a cut list is never taken for a count of the data.
+ */
+export function topFindingCounts(outputs: Record<string, unknown>[]): number[] {
+  const counts: number[] = [];
+  for (const output of outputs) {
+    const top = output['topFindings'];
+    if (!Array.isArray(top) || output['findingCount'] !== top.length) continue;
+    const groups = new Map<string, number>();
+    for (const finding of top as Record<string, unknown>[]) {
+      const dimension = String(finding?.['dimension'] ?? '');
+      const severity = String(finding?.['severity'] ?? '');
+      for (const key of [
+        `d:${dimension}`,
+        `s:${severity}`,
+        `ds:${dimension}:${severity}`,
+      ]) {
+        groups.set(key, (groups.get(key) ?? 0) + 1);
+      }
+    }
+    counts.push(top.length, ...groups.values());
+  }
+  return counts;
+}
+
 /** A number quoted in the answer, with the text it was found in. */
 export interface QuotedNumber {
   value: number;
@@ -213,7 +242,8 @@ export function sameNumber(quoted: QuotedNumber, allowed: number): boolean {
 
 /**
  * D2-D3: every score-like number the answer quotes is a number a readiness
- * tool returned in this conversation (or a method constant of the skill).
+ * tool returned in this conversation, a count of a complete `topFindings`
+ * list (`topFindingCounts`), or a method constant of the skill.
  * An answer that quotes such numbers with no successful readiness call fails.
  */
 export function quotedNumbersFromTools(): EvalCustomCheck {
@@ -222,8 +252,10 @@ export function quotedNumbersFromTools(): EvalCustomCheck {
     ({ answer, toolCalls }) => {
       const quoted = quotedNumbers(answer);
       if (!quoted.length) return undefined;
+      const outputs = readinessOutputs(toolCalls);
       const allowed = [
-        ...numbersIn(readinessOutputs(toolCalls)),
+        ...numbersIn(outputs),
+        ...topFindingCounts(outputs),
         ...METHOD_CONSTANTS,
       ];
       const invented = quoted.filter(
