@@ -170,9 +170,19 @@
         @if (item(); as readiness) {
           @if (readiness.kind === "readiness") {
             <app-panel-readiness-view
+              #scorecard
               class="h-full"
               [item]="readiness"
-            />
+            >
+              @if (scorecard.report(); as shown) {
+                <app-readiness-history
+                  readinessHistory
+                  [datasourceId]="shown.datasourceId"
+                  [currentReportId]="scorecard.shownReportId()"
+                  (openReport)="scorecard.showReport($event.id)"
+                />
+              }
+            </app-panel-readiness-view>
           }
         }
       }

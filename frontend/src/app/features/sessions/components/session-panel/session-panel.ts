@@ -33,6 +33,7 @@ import { PanelDocumentView } from '../panel-document-view/panel-document-view';
 import { PanelFileView } from '../panel-file-view/panel-file-view';
 import { PanelTableView } from '../panel-table-view/panel-table-view';
 import { PanelReadinessView } from '../panel-readiness-view/panel-readiness-view';
+import { ReadinessHistory } from '../../../data-readiness/components/readiness-history/readiness-history';
 import { slug } from '../../services/slug';
 
 export type PanelDownloadFormat = 'pdf' | 'md';
@@ -96,6 +97,7 @@ export function panelDownloadTitle(item: PanelItem | null): string | null {
     PanelFileView,
     PanelTableView,
     PanelReadinessView,
+    ReadinessHistory,
   ],
   templateUrl: './session-panel.html',
 })
