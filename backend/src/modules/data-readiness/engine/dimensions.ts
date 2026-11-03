@@ -1,5 +1,4 @@
 import type { Dimension } from './types';
-import { notImplemented } from './not-implemented';
 
 export interface DimensionDef {
   id: Dimension;
@@ -8,7 +7,20 @@ export interface DimensionDef {
   assessed: boolean;
 }
 
-/** All ten DMBOK dimensions in display order (unit 1, BA-252). */
+const DIMENSIONS: readonly DimensionDef[] = [
+  { id: 'completeness', label: 'Completeness', assessed: true },
+  { id: 'accuracy', label: 'Accuracy', assessed: false },
+  { id: 'validity', label: 'Validity', assessed: true },
+  { id: 'consistency', label: 'Consistency', assessed: true },
+  { id: 'integrity', label: 'Integrity', assessed: true },
+  { id: 'uniqueness', label: 'Uniqueness', assessed: true },
+  { id: 'timeliness', label: 'Timeliness', assessed: true },
+  { id: 'currency', label: 'Currency', assessed: false },
+  { id: 'reasonability', label: 'Reasonability', assessed: true },
+  { id: 'accessibility', label: 'Accessibility', assessed: true },
+];
+
+/** All ten DMBOK dimensions in display order. */
 export function dimensions(): DimensionDef[] {
-  return notImplemented('dimensions');
+  return DIMENSIONS.map((d) => ({ ...d }));
 }
