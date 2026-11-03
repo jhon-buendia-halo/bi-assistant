@@ -1,5 +1,8 @@
+import type { CustomAnthropicModelConfig } from './model-resolver';
 import {
+  isOpenAiCompatible,
   modelCallTuning,
+  modelIdOf,
   providerOptionsFor,
   providerOptionsKey,
   rejectsMaxTokens,
@@ -182,5 +185,124 @@ describe('reasoning effort per model', () => {
         { reasoningEffort: 'xhigh' },
       ),
     ).toEqual({ anthropic: { effort: 'xhigh' } });
+  });
+});
+
+describe('custom endpoint, OpenAI style (R52)', () => {
+  const custom = (model: string, apiKey = 'k') => ({
+    id: `custom/${model}` as const,
+    apiKey,
+    url: 'http://127.0.0.1:8317/v1',
+  });
+
+  it('is OpenAI-compatible and reads the `custom` bucket', () => {
+    expect(isOpenAiCompatible(custom('gpt-5.2'))).toBe(true);
+    expect(modelIdOf(custom('gpt-5.2'))).toBe('custom/gpt-5.2');
+    expect(providerOptionsKey('custom/gpt-5.2')).toBe('custom');
+  });
+
+  it('sends the effort, mapped to the nearest level, when the model has levels', () => {
+    expect(
+      providerOptionsFor(custom('gpt-5.1'), { reasoningEffort: 'minimal' }),
+    ).toEqual({ custom: { reasoningEffort: 'low' } });
+    expect(
+      providerOptionsFor(custom('claude-opus-4-6'), {
+        reasoningEffort: 'xhigh',
+      }),
+    ).toEqual({ custom: { reasoningEffort: 'max' } });
+  });
+
+  it('gives an unknown model name the fallback levels', () => {
+    expect(
+      providerOptionsFor(custom('llama-3.1-70b'), { reasoningEffort: 'high' }),
+    ).toEqual({ custom: { reasoningEffort: 'high' } });
+  });
+
+  it('drops the effort when the model has no levels, unlike LenAI', () => {
+    expect(
+      providerOptionsFor(custom('gpt-4o-mini'), { reasoningEffort: 'low' }),
+    ).toEqual({ custom: {} });
+    expect(
+      providerOptionsFor(
+        {
+          id: 'lenai/mmc-tech-gpt-41-mini-1m-2025-04-14',
+          apiKey: 'k',
+          url: 'https://lenai.example.com/openai/v1/deployments/x',
+        },
+        { reasoningEffort: 'low' },
+      ),
+    ).toEqual({ lenai: { reasoningEffort: 'low' } });
+  });
+
+  it('moves the cap to max_completion_tokens for gpt-5-class models', () => {
+    expect(
+      modelCallTuning(custom('gpt-5-mini'), {
+        maxOutputTokens: 3_000,
+        reasoningEffort: 'low',
+      }),
+    ).toEqual({
+      modelSettings: {},
+      providerOptions: {
+        custom: { reasoningEffort: 'low', max_completion_tokens: 3_000 },
+      },
+    });
+  });
+
+  it('keeps maxOutputTokens and sends no effort for a model without levels', () => {
+    expect(
+      modelCallTuning(custom('gpt-4.1-mini', ''), {
+        maxOutputTokens: 3_000,
+        reasoningEffort: 'high',
+      }),
+    ).toEqual({
+      modelSettings: { maxOutputTokens: 3_000 },
+      providerOptions: { custom: {} },
+    });
+  });
+});
+
+describe('custom endpoint, Anthropic style (R52)', () => {
+  const customAnthropic = (model: string): CustomAnthropicModelConfig => ({
+    kind: 'custom-anthropic',
+    id: `anthropic/${model}`,
+    baseUrl: 'http://127.0.0.1:8317/v1',
+    apiKey: 'k',
+  });
+
+  it('returns its id and is not OpenAI-compatible', () => {
+    expect(modelIdOf(customAnthropic('claude-opus-5-5'))).toBe(
+      'anthropic/claude-opus-5-5',
+    );
+    expect(isOpenAiCompatible(customAnthropic('claude-opus-5-5'))).toBe(false);
+  });
+
+  it('files the effort under `anthropic` as `effort`', () => {
+    expect(
+      modelCallTuning(customAnthropic('claude-sonnet-4-6'), {
+        maxOutputTokens: 4096,
+        reasoningEffort: 'xhigh',
+      }),
+    ).toEqual({
+      modelSettings: { maxOutputTokens: 4096 },
+      providerOptions: { anthropic: { effort: 'max' } },
+    });
+  });
+
+  it('drops the effort for the models R29 lists, and keeps the cap as maxOutputTokens', () => {
+    expect(
+      modelCallTuning(customAnthropic('claude-haiku-4-5'), {
+        maxOutputTokens: 512,
+        reasoningEffort: 'low',
+      }),
+    ).toEqual({
+      modelSettings: { maxOutputTokens: 512 },
+      providerOptions: { anthropic: {} },
+    });
+  });
+
+  it('never moves the cap for a gpt-5-named model served Anthropic-style', () => {
+    expect(
+      modelCallTuning(customAnthropic('gpt-5.2'), { maxOutputTokens: 100 }),
+    ).toEqual({ modelSettings: { maxOutputTokens: 100 }, providerOptions: {} });
   });
 });

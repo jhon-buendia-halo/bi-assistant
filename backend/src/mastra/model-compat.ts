@@ -11,7 +11,18 @@
 //    provider id, so options filed under `openai` never reach a `lenai/…`
 //    model. Unknown keys in the right bucket are forwarded into the request
 //    body verbatim, which is what makes `max_completion_tokens` injectable.
+//
+// A custom endpoint (BA-281, R52) is tuned by its API style. The OpenAI style
+// (`{ id: "custom/<model>", url }`) is built by Mastra as an OpenAI-compatible
+// client named after the id's provider segment, so its bucket is `custom`;
+// that client reads `reasoningEffort` from the bucket and serializes it as
+// `reasoning_effort` (checked against @mastra/core's
+// OpenAICompatibleChatLanguageModel). The Anthropic style
+// (`{ kind: "custom-anthropic", id: "anthropic/<model>" }`) has no `url` and
+// files under `anthropic`, exactly like the native provider.
 
+// Type-only: model-resolver imports the model factory (and through it the
+// provider SDKs), which this plain-data module must not load.
 import type { AgentModelConfig } from './model-resolver';
 import {
   effortLevelsFor,
@@ -38,14 +49,27 @@ export function providerOptionsKey(modelId: string): string {
   return provider || 'openai';
 }
 
+/** The router id: the string itself, or the config's `id` (custom-anthropic included). */
 export function modelIdOf(config: AgentModelConfig): string {
   return typeof config === 'string' ? config : config.id;
 }
 
-/** True when Mastra will build an OpenAI-compatible client for this config. */
+/**
+ * True when Mastra will build an OpenAI-compatible client for this config
+ * (LenAI and the OpenAI-style custom endpoint). Never true for a
+ * `custom-anthropic` config, which carries a `baseUrl`, not a `url`.
+ */
 export function isOpenAiCompatible(config: AgentModelConfig): boolean {
-  return typeof config !== 'string' && 'url' in config && !!config.url;
+  return (
+    typeof config !== 'string' &&
+    !('kind' in config) &&
+    'url' in config &&
+    !!config.url
+  );
 }
+
+/** The provider segment of a custom endpoint's OpenAI-style id. */
+const CUSTOM_PROVIDER = 'custom';
 
 /** Values the OpenAI-compatible client will serialize into the request body. */
 export type ProviderOptionValue = string | number | boolean;
@@ -72,9 +96,30 @@ export function providerOptionsFor(
   const modelId = modelIdOf(config);
   const key = providerOptionsKey(modelId);
   const tuned = fitEffort(modelId, bucket);
-  return {
-    [key]: key === 'anthropic' ? anthropicBucket(modelId, tuned) : tuned,
-  };
+  if (key === 'anthropic') return { [key]: anthropicBucket(modelId, tuned) };
+  if (key === CUSTOM_PROVIDER && isOpenAiCompatible(config)) {
+    return { [key]: customOpenAiBucket(modelId, tuned) };
+  }
+  return { [key]: tuned };
+}
+
+/**
+ * The OpenAI-style custom endpoint (R52): the effort travels as
+ * `reasoningEffort`, which the compatible client sends as `reasoning_effort`,
+ * but only when the model has levels. A self-hosted server may reject the
+ * unknown field, so a model without levels gets no effort at all instead of
+ * the OpenAI routes' passthrough.
+ */
+function customOpenAiBucket(
+  modelId: string,
+  bucket: Record<string, ProviderOptionValue>,
+): Record<string, ProviderOptionValue> {
+  if (!('reasoningEffort' in bucket) || effortLevelsFor(modelId).length) {
+    return bucket;
+  }
+  const rest = { ...bucket };
+  delete rest.reasoningEffort;
+  return rest;
 }
 
 /**
