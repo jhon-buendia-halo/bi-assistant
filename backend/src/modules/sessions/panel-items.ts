@@ -6,6 +6,7 @@ import type {
 } from '../../mastra/tool-services';
 import type {
   PanelItem,
+  ReadinessPanelItem,
   SessionDoc,
   TablePanelItem,
 } from './entities/session.entity';
@@ -19,7 +20,7 @@ export const DOCUMENT_MAX_CHARS = 50_000;
 
 /** The id of a visual's item: one per visual, upserted. */
 export const visualItemId = (visualId: string) => `visual:${visualId}`;
-const UPSERTED_KINDS = new Set<PanelItem['kind']>(['visual']);
+const UPSERTED_KINDS = new Set<PanelItem['kind']>(['visual', 'readiness']);
 
 /** What the panel-item builder needs besides the tool's input. */
 export interface PanelItemContext {
@@ -60,8 +61,9 @@ export function withVisualItems(session: SessionDoc): PanelItem[] {
 }
 
 /**
- * `items` with `item` added: a visual item replaces the one with its id, any other is appended. Past `MAX_PANEL_ITEMS`, the oldest file,
- * document and table items are dropped.
+ * `items` with `item` added: a visual or readiness item replaces the one with
+ * its id (re-stamping `shownAt`), any other is appended. Past
+ * `MAX_PANEL_ITEMS`, the oldest file, document and table items are dropped.
  */
 export function upsertPanelItem(
   items: readonly PanelItem[],
@@ -202,7 +204,7 @@ export async function buildPanelItem(
 }
 
 function summaryOf(
-  item: PanelItem,
+  item: Exclude<PanelItem, ReadinessPanelItem>,
   extra: { bytes?: number; rowCount?: number } = {},
 ): PanelToolResult {
   return {
