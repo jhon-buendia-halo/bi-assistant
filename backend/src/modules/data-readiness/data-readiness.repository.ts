@@ -2,7 +2,6 @@ import { Inject, Injectable } from '@nestjs/common';
 import { READINESS_REPORTS_STORE } from '../../infrastructure/database/doc-store';
 import type { DocStore } from '../../infrastructure/database/doc-store';
 import type { ReadinessReport } from './engine/types';
-import { notImplemented } from './engine/not-implemented';
 
 /** Stored assessments, collection `readiness_reports` (unit 8, BA-259). */
 @Injectable()
@@ -13,19 +12,15 @@ export class DataReadinessRepository {
   ) {}
 
   insert(report: ReadinessReport): Promise<ReadinessReport> {
-    void report;
-    void this.store;
-    return Promise.resolve(notImplemented('DataReadinessRepository.insert'));
+    return this.store.insert(report);
   }
 
-  /** Newest first. */
+  /** Newest `generatedAt` first (data-model 3.15). */
   listByDatasource(datasourceId: string): Promise<ReadinessReport[]> {
-    void datasourceId;
-    return Promise.resolve(notImplemented('DataReadinessRepository.list'));
+    return this.store.find({ datasourceId }, { sort: { generatedAt: -1 } });
   }
 
   get(id: string): Promise<ReadinessReport | null> {
-    void id;
-    return Promise.resolve(notImplemented('DataReadinessRepository.get'));
+    return this.store.findOne({ id });
   }
 }
