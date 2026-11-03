@@ -58,14 +58,17 @@ function toAttempt(
     durationMs: result.durationMs,
     usage,
     costUsd: result.costUsd === undefined ? costUsdOf(usage) : result.costUsd,
+    // Under a memory arm, the attempt keeps its own memory record (R240).
+    ...(result.memory !== undefined ? { memory: result.memory } : {}),
   };
 }
 
 /**
  * Fold a question's attempts, in order, into its result (R211): `passed`
  * only when every attempt passed, `not-scored` when every attempt was not
- * scored, `failed` otherwise. Checks, scores, answer, tool calls, error and
- * duration are the representative attempt's; usage and cost are the sums.
+ * scored, `failed` otherwise. Checks, scores, answer, tool calls, error,
+ * duration and memory record are the representative attempt's; usage and
+ * cost are the sums.
  */
 export function foldAttempts(
   attempts: readonly AssistantEvalCaseResult[],

@@ -102,6 +102,11 @@ export function toAssistantEvalSets(
       split: evalCase.split,
       tags: evalCase.tags,
       ...(evalCase.notes !== undefined ? { notes: evalCase.notes } : {}),
+      // A memory case's teach signals, trap and memory checks (R234): the
+      // memory checks get no scorer, the runner scores them (R241 to R243).
+      ...(evalCase.teach ? { teach: evalCase.teach } : {}),
+      ...(evalCase.trapSql !== undefined ? { trapSql: evalCase.trapSql } : {}),
+      ...(evalCase.memoryChecks ? { memoryChecks: evalCase.memoryChecks } : {}),
     })),
   }));
 }

@@ -470,6 +470,13 @@
                             >Repeat {{ runRepeatsOf(run) }}</span
                           >
                         }
+                        @if (runMemoryArm(run) !== "none") {
+                          <span
+                            [attr.data-testid]="'eval-run-memory-' + run.jobId"
+                            class="chip chip-neutral shrink-0 whitespace-nowrap"
+                            >Memory {{ runMemoryArm(run) }}</span
+                          >
+                        }
                         @if (runFlakyCount(run) > 0) {
                           <span
                             [attr.data-testid]="'eval-run-flaky-' + run.jobId"

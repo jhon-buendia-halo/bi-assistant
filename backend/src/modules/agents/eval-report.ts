@@ -19,7 +19,13 @@ import {
   judgeLabel,
   LEGACY_JUDGE_SETTING,
 } from '../../mastra/evals/judge-option';
-import type { ModelRate } from '../../mastra/evals/eval-usage';
+import type {
+  ModelRate,
+  ModelUsageEntry,
+  UsageAgent,
+} from '../../mastra/evals/eval-usage';
+import { costLineSuffix, recallLine } from '../../mastra/evals/eval-memory';
+import { LEGACY_ARM } from '../../mastra/evals/memory-arm-option';
 
 /** A question's result as the report shows it (R38). */
 const VERDICT: Readonly<Record<EvalStatus, string>> = {
@@ -63,6 +69,31 @@ function runsOf(result: AssistantEvalCaseResult): number {
   return result.runs ?? 1;
 }
 
+/** An agent's name in a question's tokens (R217, R245). */
+const AGENT_LABEL: Readonly<Record<UsageAgent, string>> = {
+  assistant: 'Assistant',
+  'sql-fixer': 'SQL fixer',
+  designer: 'Designer',
+  judge: 'Judge',
+  memory: 'Memory',
+};
+
+/**
+ * Under a memory arm, a question's tokens per agent and model, under its
+ * Tokens line, so the memory's own calls show beside the assistant's (R245).
+ * None for a question whose memory made no call, so every other report
+ * reads as before.
+ */
+function agentTokenLines(
+  usage: readonly ModelUsageEntry[] | undefined,
+): string[] {
+  if (!usage?.some((entry) => entry.agent === 'memory')) return [];
+  return usage.map(
+    (entry) =>
+      `  - ${AGENT_LABEL[entry.agent] ?? entry.agent} · ${entry.model}: ${tokensText([entry])}`,
+  );
+}
+
 function toolCallSection(call: EvalToolCall, index: number): string {
   const lines = [`##### ${index + 1}. \`${call.name}\``];
   if (call.input) lines.push('', 'Input:', fence(call.input, 'json'));
@@ -89,9 +120,14 @@ function caseSection(
       `- **Attempts:** ${result.passes} of ${runsOf(result)} passed${result.flaky ? ', flaky' : ''}`,
     );
   }
+  lines.push(`- **Duration:** ${durationLabel(result.durationMs)}`);
+  // The representative attempt's recall time, under a memory arm (R245).
+  if (result.memory?.recallMs !== undefined) {
+    lines.push(`- **Recall:** ${result.memory.recallMs} ms`);
+  }
   lines.push(
-    `- **Duration:** ${durationLabel(result.durationMs)}`,
     `- **Tokens:** ${tokensText(result.usage)}`,
+    ...agentTokenLines(result.usage),
     `- **Cost:** ${costText(result.costUsd, result.usage, rates)}`,
   );
 
@@ -183,20 +219,28 @@ export function renderComparisonMarkdown(
 }
 
 /**
- * The repeats, dev, held-out, flaky, tokens and cost lines that follow the
- * judge and not-scored lines (R218). The cost per question counts the
- * finished questions.
+ * The repeats, memory, dev, held-out, flaky, tokens and cost lines that
+ * follow the judge and not-scored lines (R218, R246), then under a memory
+ * arm the recall line (R245). The cost per question counts the finished
+ * questions.
  */
 export function renderRunMetricLines(
-  run: Pick<EvalRunView, 'repeats' | 'results' | 'usage' | 'costUsd' | 'rates'>,
+  run: Pick<
+    EvalRunView,
+    'repeats' | 'results' | 'usage' | 'costUsd' | 'rates'
+  > & { arm?: EvalRunView['arm'] },
   summary = summarizeEvalResults(run.results),
 ): string[] {
+  const memory = run.arm?.memory ?? LEGACY_ARM.memory;
+  const recall = recallLine(memory, run.results);
   return [
     `Repeats: ${run.repeats ?? 1}`,
+    `Memory: ${memory}`,
     ...splitLines(summary),
     ...(summary.flaky > 0 ? [`Flaky: ${summary.flaky}`] : []),
     `Tokens: ${tokensText(run.usage)}`,
-    `Cost: ${costText(run.costUsd, run.usage, run.rates, run.results.length)}`,
+    `Cost: ${costText(run.costUsd, run.usage, run.rates, run.results.length)}${costLineSuffix(memory)}`,
+    ...(recall ? [recall] : []),
   ];
 }
 

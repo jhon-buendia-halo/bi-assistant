@@ -12,6 +12,9 @@ import type { EvalJudgeSetting } from './judge-option';
 import { resolveUserPath } from './loop/cli-args';
 import { repeatsFromEnv } from './repeats-option';
 import type { EvalRepeats } from './repeats-option';
+import { memoryArmFromEnv } from './memory-arm-option';
+import type { EvalArm } from './memory-case';
+import { costLineSuffix, recallLine } from './eval-memory';
 import {
   costText,
   renderSummaryMarkdown,
@@ -34,8 +37,9 @@ import type { EvalStatus } from './eval-summary';
  *
  * `EVAL_SET` names one set (`world-cup`, `world-cup-rest`, …) or
  * `EVAL_CASES` lists case ids; a run needs exactly one of them (agents.md
- * 8.5). `EVAL_SPLIT` and `EVAL_CATEGORY` narrow them, and `EVAL_REPEATS`
- * (1, 3 or 5) sets the attempts per question (R222).
+ * 8.5). `EVAL_SPLIT` and `EVAL_CATEGORY` narrow them, `EVAL_REPEATS`
+ * (1, 3 or 5) sets the attempts per question (R222), and `EVAL_MEMORY`
+ * (`none`, `mastra` or `hindsight-mastra`) the run's memory arm (R232).
  *
  * `EVAL_JUDGE` (`off` by default, `on` or `categories`) and
  * `EVAL_JUDGE_CATEGORIES` set the judge option (agents-evals R154). With it
@@ -63,6 +67,7 @@ interface CliRun {
   agentKey: string;
   judge: EvalJudgeSetting;
   repeats: EvalRepeats;
+  arm: EvalArm;
 }
 
 /**
@@ -106,10 +111,17 @@ export async function main(
     out.error(judge.error);
     return 1;
   }
-  // The repeats, then the split and category filters (R222).
+  // The repeats, the memory arm's value, then the split and category
+  // filters (R222, R232). Whether this build has the arm's memory is the
+  // run service's to say, once the backend has booted.
   const repeats = repeatsFromEnv(env);
   if ('error' in repeats) {
     out.error(repeats.error);
+    return 1;
+  }
+  const memory = memoryArmFromEnv(env);
+  if ('error' in memory) {
+    out.error(memory.error);
     return 1;
   }
   const narrowed = narrowCliEvalCases(env, EVAL_SETS, selection.caseIds);
@@ -129,6 +141,7 @@ export async function main(
       agentKey: agent.agentKey,
       judge: judge.setting,
       repeats: repeats.repeats,
+      arm: { memory: memory.memory },
     });
   } finally {
     await app.close();
@@ -147,7 +160,8 @@ export async function runEvals(
   // chat turn gets, and the run saved after every question.
   const evalRuns = app.get(EvalRunsService);
   out.log(`Judge: ${judgeLabel(cli.judge)}`);
-  out.log(`Repeats: ${cli.repeats}\n`);
+  out.log(`Repeats: ${cli.repeats}`);
+  out.log(`Memory: ${cli.arm.memory}\n`);
   const outcome = await evalRuns.runFromCommandLine(
     {
       agentKey: cli.agentKey,
@@ -155,6 +169,7 @@ export async function runEvals(
       caseIds: cli.caseIds,
       judge: cli.judge,
       repeats: cli.repeats,
+      arm: cli.arm,
     },
     (result) => printResult(result, cli.repeats, out),
   );
@@ -174,8 +189,11 @@ export async function runEvals(
   out.log(`\n${renderSummaryMarkdown(summary).join('\n')}`);
   out.log(`\nTokens: ${tokensText(run.usage)}`);
   out.log(
-    `Cost: ${costText(run.costUsd, run.usage, run.rates, run.results.length)}`,
+    `Cost: ${costText(run.costUsd, run.usage, run.rates, run.results.length)}${costLineSuffix(cli.arm.memory)}`,
   );
+  // Under a memory arm, how long the recalls took (R245).
+  const recall = recallLine(cli.arm.memory, run.results);
+  if (recall) out.log(recall);
   out.log(`\nRun id: ${run.jobId}`);
   out.log(await comparisonText(evalRuns, run));
 

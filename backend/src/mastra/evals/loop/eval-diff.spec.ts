@@ -182,6 +182,29 @@ describe('eval:diff flips, sides, cost and warnings (R226)', () => {
       'the before side mixes repeats (1, 3); pass^k is not comparable across repeats',
     );
   });
+
+  it('warns when the memory arms differ, a run saved before the arm reading as none (R246)', () => {
+    const control = loopRun(BEFORE, [storedResult('m', 'failed')]);
+    const mastra = loopRun(AFTER, [storedResult('m', 'passed')], {
+      arm: { memory: 'mastra' },
+    });
+    expect(computeDiff([control], [mastra]).warnings).toEqual([
+      'the memory arm differs: none → mastra',
+    ]);
+    expect(
+      computeDiff([control], [loopRun(AFTER, [storedResult('m', 'passed')])])
+        .warnings,
+    ).toEqual([]);
+    const mixed = loopRun(AFTER, [storedResult('n', 'passed')], {
+      arm: { memory: 'mastra' },
+    });
+    const other = loopRun('c0000000-0000-4000-8000-000000000003', [
+      storedResult('m', 'passed'),
+    ]);
+    expect(computeDiff([control, mixed], [other]).warnings).toContain(
+      'the before side mixes memory arms (none, mastra)',
+    );
+  });
 });
 
 describe('eval:diff drafts (R226)', () => {

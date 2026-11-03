@@ -168,7 +168,7 @@ export interface EvalCheckResult {
 
 /** One agent's token use in an attempt or run (api.md 2.6, R219). */
 export interface ModelUsageEntry {
-  agent: 'assistant' | 'sql-fixer' | 'designer' | 'judge';
+  agent: 'assistant' | 'sql-fixer' | 'designer' | 'judge' | 'memory';
   /** Without provider prefix, lower case: `gpt-4o-mini`. */
   model: string;
   inputTokens: number;
@@ -190,6 +190,20 @@ export interface ModelRate {
   readOn?: string;
 }
 
+/** The memory arm a run used (R231, R246). */
+export type EvalMemoryArm = 'none' | 'mastra' | 'hindsight-mastra';
+
+/** What the memory held and recalled for an attempt (R240, R245). */
+export interface EvalMemoryRecord {
+  scope: string;
+  /** Every item the memory held after the teach step, as the port lists it. */
+  held: { kind: string; documentId?: string; text: string }[];
+  recalled: { documentId: string; kind: string; content: string }[];
+  summary?: string;
+  /** Milliseconds the recall took. */
+  recallMs?: number;
+}
+
 /** One try of a question when the run repeats (R211). */
 export interface EvalAttempt {
   /** 1-based. */
@@ -202,6 +216,8 @@ export interface EvalAttempt {
   toolCalls: EvalToolCall[];
   error?: string;
   durationMs: number;
+  /** Absent under the memory arm `none`. */
+  memory?: EvalMemoryRecord;
   usage: ModelUsageEntry[];
   costUsd: number | null;
 }
@@ -231,6 +247,8 @@ export interface AgentEvalCaseResult {
   passes?: number;
   runs?: number;
   flaky?: boolean;
+  /** The representative attempt's; absent under the memory arm `none`. */
+  memory?: EvalMemoryRecord;
   /** Only when `runs` is above 1. */
   attempts?: EvalAttempt[];
   /** Absent: not recorded (saved before usage was). */
@@ -304,6 +322,8 @@ export interface EvalRunView {
   judge?: { mode: EvalJudgeMode; categories?: string[] };
   /** Attempts per question; absent on older records: read 1. */
   repeats?: EvalRepeats;
+  /** Absent on older records: read `{ memory: 'none' }` (R246). */
+  arm?: { memory: EvalMemoryArm };
   /** Router id the agent ran on, such as `openai/gpt-4o-mini`. */
   model?: string;
   /** Absent: not recorded. */

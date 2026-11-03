@@ -6,7 +6,11 @@ import { getDatasetToolServices } from '../tool-services';
 import { assistantEvalDatasetError } from './assistant-eval-datasets';
 import { evalSetById, loadEvalSets } from './eval-set-files';
 import type { EvalSetDefinition } from './eval-set-files';
-import { runReferenceSql } from './result-set-check';
+import {
+  compareEvidence,
+  RESULT_SET_ROW_LIMIT,
+  runReferenceSql,
+} from './result-set-check';
 import { tableReferences } from './checks/sql-text';
 import { catalogOfEntities, referenceInCatalog } from './databricks-catalog';
 
@@ -27,23 +31,39 @@ import { catalogOfEntities, referenceInCatalog } from './databricks-catalog';
  * which would both call a model and hide a broken reference. The model
  * resolver is replaced with one that refuses, so any model call would fail
  * the run rather than spend tokens.
+ *
+ * A memory set (agents-evals R237) is validated the same way, then each
+ * case's trap and teach SQL run too: the trap must run and must not pass the
+ * result-set match against the reference's rows, or it catches nothing; each
+ * teach signal's SQL must run.
  */
 
-/** What one reference query returned. */
+/** What one query returned. */
 export interface ReferenceRun {
   rowCount: number;
+  /** The rows; a memory set's trap is compared with its reference's (R237). */
+  rows?: Record<string, unknown>[];
 }
 
-/** Runs a case's reference query; throws with the database's error. */
+/**
+ * What a statement is to the validator: a case's reference when `role` is
+ * absent (refused when truncated, R110), else a memory case's trap or a
+ * teach signal's SQL, run under the same row limit with no truncation rule.
+ */
+export type ReferenceRole = 'trap' | 'teach';
+
+/** Runs one of a case's queries; throws with the database's error. */
 export type ReferenceRunner = (
   sql: string,
   caseId: string,
+  role?: ReferenceRole,
 ) => Promise<ReferenceRun>;
 
 /** The outcome of validating one set. */
 export interface EvalSetValidation {
   /** Reference queries run (cases with a reference in the set's dialect). */
   ran: number;
+  /** Cases that failed: their reference, or a memory case's trap or teach. */
   failed: number;
   /** Cases with nothing to validate: no reference query. */
   withoutReference: number;
@@ -99,7 +119,10 @@ export function referenceOutsideDatasets(
  * a misspelled value, and an empty answer is better written as a count.
  * A Databricks set's references run in the catalog of `datasetEntities`,
  * their `` `evals`. `` rewritten (R192); entities that name no single catalog
- * fail like the preflight. Exit code 1 on any failure.
+ * fail like the preflight. A memory case whose reference passed then runs
+ * its trap and its teach SQL (R237): `✓ <id>  <dialect>  <n> rows · trap <m>
+ * rows`, or `✗` with the first thing that failed. Exit code 1 on any
+ * failure.
  */
 export async function validateEvalSet(
   set: Pick<EvalSetDefinition, 'id' | 'dialect' | 'cases'>,
@@ -148,29 +171,91 @@ export async function validateEvalSet(
     let line: string;
     try {
       // `<n> rows` whatever n is: the line format of agents-evals R110.
-      const { rowCount } = await run(
-        inCatalog(evalCase.expectedSql),
-        evalCase.id,
-      );
-      line =
-        rowCount === 0
-          ? `✗ ${evalCase.id}  ${set.dialect}  the reference returned 0 rows`
-          : `✓ ${evalCase.id}  ${set.dialect}  ${rowCount} rows`;
-      if (rowCount === 0) failed++;
+      const reference = await run(inCatalog(evalCase.expectedSql), evalCase.id);
+      if (reference.rowCount === 0) {
+        line = `✗ ${evalCase.id}  ${set.dialect}  the reference returned 0 rows`;
+      } else if (isMemoryCase(evalCase)) {
+        const problem = await memoryCaseProblem(
+          evalCase,
+          reference,
+          run,
+          inCatalog,
+        );
+        line = problem.trapRows
+          ? `✓ ${evalCase.id}  ${set.dialect}  ${reference.rowCount} rows · trap ${problem.trapRows} rows`
+          : `✗ ${evalCase.id}  ${set.dialect}  ${problem.reason}`;
+      } else {
+        line = `✓ ${evalCase.id}  ${set.dialect}  ${reference.rowCount} rows`;
+      }
     } catch (err) {
-      failed++;
-      line = `✗ ${evalCase.id}  ${set.dialect}  ${oneLine(err instanceof Error ? err.message : String(err))}`;
+      line = `✗ ${evalCase.id}  ${set.dialect}  ${errorLine(err)}`;
     }
+    if (line.startsWith('✗')) failed++;
     print(line);
   }
   const none =
     withoutReference > 0
       ? `; ${withoutReference} case${withoutReference === 1 ? ' has' : 's have'} no reference query`
       : '';
-  print(
-    `\n${set.id}: ${ran - failed} of ${ran} reference ${ran === 1 ? 'query' : 'queries'} passed${none}.`,
-  );
+  const what = set.cases.some(isMemoryCase)
+    ? `memory ${ran === 1 ? 'case' : 'cases'} (reference, trap and teach queries)`
+    : `reference ${ran === 1 ? 'query' : 'queries'}`;
+  print(`\n${set.id}: ${ran - failed} of ${ran} ${what} passed${none}.`);
   return { ran, failed, withoutReference, exitCode: failed > 0 ? 1 : 0 };
+}
+
+type ValidatedCase = EvalSetDefinition['cases'][number];
+
+function errorLine(err: unknown): string {
+  return oneLine(err instanceof Error ? err.message : String(err));
+}
+
+/** A case of a memory set: it has a trap, or teach signals (R234). */
+function isMemoryCase(evalCase: ValidatedCase): boolean {
+  return evalCase.trapSql !== undefined || evalCase.teach !== undefined;
+}
+
+/**
+ * A memory case after its reference ran (R237): its trap must run and must
+ * not pass the result-set match against the reference's rows (R31), and each
+ * teach signal's SQL must run. The trap's row count, or the first problem.
+ */
+async function memoryCaseProblem(
+  evalCase: ValidatedCase,
+  reference: ReferenceRun,
+  run: ReferenceRunner,
+  inCatalog: (sql: string) => string,
+): Promise<
+  | { trapRows: number; reason?: undefined }
+  | { trapRows?: undefined; reason: string }
+> {
+  if (!evalCase.trapSql) return { reason: 'the case has no trap query' };
+  let trap: ReferenceRun;
+  try {
+    trap = await run(inCatalog(evalCase.trapSql), evalCase.id, 'trap');
+  } catch (err) {
+    return { reason: `the trap failed to run — ${errorLine(err)}` };
+  }
+  const caught = !compareEvidence(
+    reference.rows ?? [],
+    trap.rows ?? [],
+    evalCase.resultSetOptions ?? {},
+  ).match;
+  if (!caught) {
+    return {
+      reason: 'the trap returns the reference rows, so it catches nothing',
+    };
+  }
+  for (const [index, signal] of (evalCase.teach ?? []).entries()) {
+    try {
+      await run(inCatalog(signal.sql), evalCase.id, 'teach');
+    } catch (err) {
+      return {
+        reason: `teach signal ${index + 1} failed to run — ${errorLine(err)}`,
+      };
+    }
+  }
+  return { trapRows: trap.rowCount };
 }
 
 async function main(): Promise<void> {
@@ -238,16 +323,19 @@ async function validateOnApp(
   console.log(
     `Validating ${set.name} (${set.id}, ${set.dialect}) on ${datasets.join(', ')}\n`,
   );
+  const execute = (statement: string, limit: number) =>
+    datasources.runReadOnlySql(datasourceId ?? '', statement, limit);
   return validateEvalSet(
     set,
     preflightError,
-    async (sql) => ({
-      rowCount: (
-        await runReferenceSql(sql, (statement, limit) =>
-          datasources.runReadOnlySql(datasourceId ?? '', statement, limit),
-        )
-      ).length,
-    }),
+    async (sql, _caseId, role) => {
+      // A reference is refused when truncated (R110); a trap or teach SQL
+      // runs under the same row limit, as the assistant's query would.
+      const rows = role
+        ? (await execute(sql, RESULT_SET_ROW_LIMIT)).rows
+        : await runReferenceSql(sql, execute);
+      return { rowCount: rows.length, rows };
+    },
     (line) => console.log(line),
     snapshots
       .filter((dataset) => datasets.includes(dataset.name))

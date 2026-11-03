@@ -305,6 +305,27 @@ describe('AgentDetail evals', () => {
     expect(byTestId('eval-run-repeats-job-1')).toBeNull();
     expect(byTestId('eval-run-flaky-job-1')).toBeNull();
     expect(byTestId('eval-run-cost-job-1')).toBeNull();
+    expect(byTestId('eval-run-memory-job-1')).toBeNull();
+  });
+
+  it('shows Memory <arm> on a run whose arm is not none', () => {
+    api.listEvalRuns.and.returnValue(
+      of({ runs: [{ ...FINISHED_RUN, arm: { memory: 'mastra' } }] }),
+    );
+    fixture.componentInstance.selectEvalTab('runs');
+    fixture.detectChanges();
+    expect(byTestId('eval-run-memory-job-1')?.textContent?.trim()).toBe(
+      'Memory mastra',
+    );
+  });
+
+  it('shows no Memory chip when the arm is none', () => {
+    api.listEvalRuns.and.returnValue(
+      of({ runs: [{ ...FINISHED_RUN, arm: { memory: 'none' } }] }),
+    );
+    fixture.componentInstance.selectEvalTab('runs');
+    fixture.detectChanges();
+    expect(byTestId('eval-run-memory-job-1')).toBeNull();
   });
 
   it('shows repeats, flaky, cost, the split line and held-out chips', () => {

@@ -173,6 +173,32 @@ describe('foldAttempts (agents-evals R211)', () => {
     expect(folded.costUsd).toBeNull();
   });
 
+  it("keeps the representative attempt's memory record on the result and each attempt's on it (R240)", () => {
+    const record = (attemptNo: number) => ({
+      scope: `eval-job-shot-conversion-2022-${attemptNo}`,
+      held: [],
+      recalled: [],
+      recallMs: 10 * attemptNo,
+    });
+    const folded = foldAttempts([
+      attempt('passed', { memory: record(1) }),
+      attempt('failed', { memory: record(2) }),
+      attempt('passed', { memory: record(3) }),
+    ]);
+    expect(folded.memory).toEqual(record(2));
+    expect(folded.attempts?.map((each) => each.memory)).toEqual([
+      record(1),
+      record(2),
+      record(3),
+    ]);
+  });
+
+  it('records no memory under the arm none', () => {
+    const folded = foldAttempts([attempt('passed'), attempt('passed')]);
+    expect(folded).not.toHaveProperty('memory');
+    expect(folded.attempts?.[0]).not.toHaveProperty('memory');
+  });
+
   it('refuses to fold no attempt', () => {
     expect(() => foldAttempts([])).toThrow(RangeError);
   });

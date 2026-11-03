@@ -102,6 +102,11 @@ export interface LoopRun {
   repeats: number;
   /** Absent on a results array, which does not record it. */
   judge?: LoopJudge;
+  /**
+   * The run's memory arm (R231): `none` on a record saved before it; absent
+   * on a results array, which does not record it.
+   */
+  memoryArm?: string;
   source?: 'app' | 'cli';
   datasets: string[];
   results: LoopResult[];
@@ -267,6 +272,7 @@ export function readRunRecord(
     ...(str(raw.model) ? { model: str(raw.model) } : {}),
     repeats: repeats === 3 || repeats === 5 ? repeats : 1,
     judge: readJudge(raw.judge),
+    memoryArm: (isObject(raw.arm) ? str(raw.arm.memory) : undefined) ?? 'none',
     source: raw.source === 'cli' ? 'cli' : 'app',
     datasets: Array.isArray(raw.datasets)
       ? raw.datasets.filter((d): d is string => typeof d === 'string')

@@ -1,4 +1,4 @@
-import { EVAL_CATEGORIES } from './eval-set-files';
+import { QUESTION_CATEGORIES } from './eval-set-files';
 import {
   JUDGE_OFF,
   judgeCriterion,
@@ -64,8 +64,19 @@ describe('parseJudgeSetting (agents-evals R144)', () => {
 
   it('refuses a listed value that is not a category, naming the known ones', () => {
     expect(parseJudgeSetting('categories', ['ambiguous', 'joins'])).toEqual({
-      error: `Unknown judge category "joins". Known categories: ${EVAL_CATEGORIES.join(', ')}.`,
+      error: `Unknown judge category "joins". Known categories: ${QUESTION_CATEGORIES.join(', ')}.`,
     });
+  });
+
+  it('takes the eighteen only, refusing a memory category (agents-evals R236)', () => {
+    expect(QUESTION_CATEGORIES).toHaveLength(18);
+    const refused = parseJudgeSetting('categories', ['memory-reuse']);
+    expect(refused).toEqual({
+      error: `Unknown judge category "memory-reuse". Known categories: ${QUESTION_CATEGORIES.join(', ')}.`,
+    });
+    expect(
+      ('error' in refused ? refused.error : '').split('Known categories:')[1],
+    ).not.toContain('memory-');
   });
 });
 

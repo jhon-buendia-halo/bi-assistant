@@ -45,6 +45,7 @@ function baseRun(overrides: Partial<EvalRunView> = {}): EvalRunView {
     finishedAt: '2026-01-01T00:00:05.000Z',
     judge: { mode: 'off' },
     repeats: 1,
+    arm: { memory: 'none' },
     source: 'app',
     summary: summarizeEvalResults(results),
     ...overrides,
@@ -317,6 +318,8 @@ describe('renderEvalRunMarkdown — repeats, splits, tokens and cost (R218)', ()
         '',
         'Repeats: 3',
         '',
+        'Memory: none',
+        '',
         'Dev: 1/1 passed · 95% interval 21–100%',
         '',
         'Held-out: 0/1 passed · 95% interval 0–79%',
@@ -353,6 +356,9 @@ describe('renderEvalRunMarkdown — repeats, splits, tokens and cost (R218)', ()
       ].join('\n'),
     );
     expect(markdown).toContain('- **Attempts:** 3 of 3 passed\n');
+    // No memory arm: no recall line, no per-agent tokens.
+    expect(markdown).not.toContain('Recall');
+    expect(markdown).not.toContain('  - Assistant');
   });
 
   it('writes the By category cells as passed over scored with the interval', () => {
@@ -431,5 +437,126 @@ describe('renderEvalRunMarkdown — repeats, splits, tokens and cost (R218)', ()
         renderEvalRunMarkdown(repeatRun({ comparison }), undefined, previous),
       ).not.toContain('Note: the previous run');
     }
+  });
+});
+
+describe('renderEvalRunMarkdown — memory arms (R245, R246)', () => {
+  /** The memory's embeddings, on text-embedding-3-small. */
+  const embeddings: ModelUsageEntry = {
+    agent: 'memory',
+    model: 'text-embedding-3-small',
+    inputTokens: 1_200,
+    cachedInputTokens: 0,
+    outputTokens: 0,
+    reasoningTokens: 0,
+    calls: 3,
+    unreportedCalls: 0,
+  };
+  const assistant: ModelUsageEntry = {
+    agent: 'assistant',
+    model: 'gpt-4o-mini',
+    inputTokens: 10_000,
+    cachedInputTokens: 2_000,
+    outputTokens: 500,
+    reasoningTokens: 0,
+    calls: 1,
+    unreportedCalls: 0,
+  };
+  /** A memory question's record with this recall time. */
+  const record = (recallMs: number) => ({
+    scope: `eval-job-1-memory-reuse-1-${recallMs}`,
+    held: [],
+    recalled: [],
+    recallMs,
+  });
+  const memoryRun = (memory: 'mastra' | 'hindsight-mastra') => {
+    const results = [
+      {
+        ...caseResult('memory-reuse-1', true),
+        usage: [assistant, embeddings],
+        costUsd: 0.0021,
+        memory: record(120),
+      },
+      {
+        ...caseResult('memory-abstain-1', true),
+        runs: 3,
+        passes: 3,
+        memory: record(300),
+        attempts: [100, 300, 2_500].map((recallMs, index) => ({
+          attempt: index + 1,
+          status: 'passed' as const,
+          passed: true,
+          scores: {},
+          checkResults: [],
+          answer: '',
+          toolCalls: [],
+          durationMs: 10,
+          usage: [],
+          costUsd: 0,
+          memory: record(recallMs),
+        })),
+      },
+    ];
+    return baseRun({
+      results,
+      totalCases: 2,
+      arm: { memory },
+      usage: [assistant, embeddings],
+      costUsd: 0.0021,
+      rates: {},
+    });
+  };
+
+  it('writes the arm after the repeats line and the recall line after the cost line', () => {
+    const markdown = renderEvalRunMarkdown(memoryRun('mastra'));
+    expect(markdown).toContain(
+      [
+        'Repeats: 1',
+        '',
+        'Memory: mastra',
+        '',
+        'Dev: 2/2 passed · 95% interval 34–100%',
+      ].join('\n'),
+    );
+    // Over the attempts that recalled: 120, 100, 300 and 2,500 ms.
+    expect(markdown).toContain(
+      [
+        'Cost: $0.0021 · $0.0010 per question',
+        '',
+        'Recall: p50 210 ms · p90 1840 ms',
+        '',
+        '- **Started:**',
+      ].join('\n'),
+    );
+    expect(markdown).not.toContain('excludes the memory server');
+  });
+
+  it("writes each question's recall time after its duration and its tokens per agent, Memory beside Assistant", () => {
+    const markdown = renderEvalRunMarkdown(memoryRun('mastra'));
+    expect(markdown).toContain(
+      [
+        '- **Duration:** 10ms',
+        '- **Recall:** 120 ms',
+        '- **Tokens:** 11,200 in (2,000 cached) · 500 out (0 reasoning) · 4 calls',
+        '  - Assistant · gpt-4o-mini: 10,000 in (2,000 cached) · 500 out (0 reasoning) · 1 call',
+        '  - Memory · text-embedding-3-small: 1,200 in (0 cached) · 0 out (0 reasoning) · 3 calls',
+        '- **Cost:** $0.0021',
+      ].join('\n'),
+    );
+    expect(markdown).toContain('- **Recall:** 300 ms');
+  });
+
+  it("ends the cost line with what a memory server's own calls leave out, for Hindsight", () => {
+    expect(renderEvalRunMarkdown(memoryRun('hindsight-mastra'))).toContain(
+      "Cost: $0.0021 · $0.0010 per question · excludes the memory server's own model calls",
+    );
+  });
+
+  it('reads a run saved before the arm as Memory: none, with no recall line', () => {
+    const legacy: Partial<EvalRunView> = baseRun();
+    delete legacy.arm;
+    const markdown = renderEvalRunMarkdown(legacy as EvalRunView);
+    expect(markdown).toContain('Memory: none');
+    expect(markdown).not.toContain('Recall');
   });
 });

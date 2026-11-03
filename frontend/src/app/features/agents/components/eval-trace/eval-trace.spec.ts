@@ -206,6 +206,37 @@ describe('EvalTrace with repeats, split and cost', () => {
     );
   });
 
+  it('shows the recall time of a memory question, and the Memory tokens', async () => {
+    const el = await render(
+      result({
+        memory: { scope: 's', held: [], recalled: [], recallMs: 412 },
+        usage: [
+          {
+            agent: 'memory',
+            model: 'text-embedding-3-small',
+            inputTokens: 90,
+            cachedInputTokens: 0,
+            outputTokens: 0,
+            reasoningTokens: 0,
+            calls: 2,
+            unreportedCalls: 0,
+          },
+        ],
+      }),
+    );
+    expect(byTestId(el, 'eval-trace-recall')?.textContent?.trim()).toBe(
+      'Recall: 412 ms',
+    );
+    expect(byTestId(el, 'eval-trace-tokens-memory')?.textContent).toContain(
+      'Memory',
+    );
+  });
+
+  it('shows no recall time without a memory record', async () => {
+    const el = await render(result());
+    expect(byTestId(el, 'eval-trace-recall')).toBeNull();
+  });
+
   it('shows tokens per agent and the cost', async () => {
     const el = await render(
       result({

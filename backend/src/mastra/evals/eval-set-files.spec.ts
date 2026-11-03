@@ -72,9 +72,12 @@ import { toAssistantEvalSets } from './eval-check-scorers';
 import { isDeterministicCheckType } from './checks';
 import {
   EVAL_CATEGORIES,
+  EVAL_CRITERIA,
   EVAL_SET_FILES,
   EVAL_SPLITS,
   EvalSetError,
+  MEMORY_CATEGORIES,
+  QUESTION_CATEGORIES,
   evalSetById,
   loadEvalSets,
   parseEvalSetFile,
@@ -280,6 +283,9 @@ describe('eval set files', () => {
       'marketing-analytics',
       'marketing-analytics-rest',
       'marketing-analytics-databricks',
+      'memory-world-cup',
+      'memory-finance',
+      'memory-marketing-analytics',
     ]);
   });
 
@@ -1004,5 +1010,541 @@ describe('the REST-only set (agents-evals R164 to R168, BA-187)', () => {
         ]);
       }
     }
+  });
+});
+
+describe('the memory bank (agents-evals R233 to R236, BA-190)', () => {
+  const raw = (
+    EVAL_SET_FILES.find((source) => source.file === 'memory.json')!.content as {
+      cases: {
+        id: string;
+        fixture: string;
+        category: string;
+        split?: string;
+        tags: string[];
+        intent: string;
+        notes: string;
+        teach: unknown[];
+        probe: {
+          question: string;
+          expectedSql: { postgres: string };
+          trapSql: { postgres: string };
+        };
+      }[];
+    }
+  ).cases;
+  const memorySets = loadEvalSets().filter((set) => set.file === 'memory.json');
+
+  it('lists the six memory categories after the eighteen, and M1 to M3 after C4', () => {
+    expect(QUESTION_CATEGORIES).toHaveLength(18);
+    expect(EVAL_CATEGORIES).toEqual([
+      ...QUESTION_CATEGORIES,
+      'memory-reuse',
+      'memory-correction',
+      'memory-update',
+      'memory-rejected',
+      'memory-abstain',
+      'memory-vs-curated',
+    ]);
+    expect(EVAL_CRITERIA.slice(-4)).toEqual(['C4', 'M1', 'M2', 'M3']);
+  });
+
+  it('has one PostgreSQL set per sample, with no prefix, each holding its sample’s cases in file order', () => {
+    expect(
+      memorySets.map(({ id, name, fixtureId, dialect }) => ({
+        id,
+        name,
+        fixtureId,
+        dialect,
+      })),
+    ).toEqual([
+      {
+        id: 'memory-world-cup',
+        name: 'Memory (World Cup)',
+        fixtureId: 'world-cup',
+        dialect: 'postgres',
+      },
+      {
+        id: 'memory-finance',
+        name: 'Memory (Finance)',
+        fixtureId: 'finance',
+        dialect: 'postgres',
+      },
+      {
+        id: 'memory-marketing-analytics',
+        name: 'Memory (Marketing Analytics)',
+        fixtureId: 'marketing-analytics',
+        dialect: 'postgres',
+      },
+    ]);
+    for (const set of memorySets) {
+      expect([set.id, set.cases.map((c) => c.id)]).toEqual([
+        set.id,
+        raw.filter((c) => c.fixture === set.fixtureId).map((c) => c.id),
+      ]);
+    }
+    expect(memorySets.map((set) => set.cases.length)).toEqual([30, 3, 3]);
+  });
+
+  it('holds 6 questions per category, 4 dev and 2 held out', () => {
+    const cases = memorySets.flatMap((set) => set.cases);
+    expect(cases).toHaveLength(36);
+    for (const category of MEMORY_CATEGORIES) {
+      const of = cases.filter((c) => c.category === category);
+      expect([
+        category,
+        of.filter((c) => c.split === 'dev').length,
+        of.filter((c) => c.split === 'held-out').length,
+      ]).toEqual([category, 4, 2]);
+    }
+  });
+
+  it('loads each memory case as a case whose question, reference and checks are its probe’s, plus its teach, trap and memory checks', () => {
+    const cases = memorySets.flatMap((set) => set.cases);
+    for (const evalCase of cases) {
+      const file = raw.find((c) => c.id === evalCase.id)!;
+      expect(evalCase).toMatchObject({
+        category: file.category,
+        split: file.split ?? 'dev',
+        tags: file.tags,
+        intent: file.intent,
+        notes: file.notes,
+        question: file.probe.question,
+        expectedSql: file.probe.expectedSql.postgres,
+        trapSql: file.probe.trapSql.postgres,
+        teach: file.teach,
+      });
+      // Every probe carries D1 and D3 (R234) and keeps no memory check among
+      // the checks a scorer is built for (A3).
+      expect(evalCase.checks.slice(0, 2)).toEqual([
+        {
+          type: 'calledTool',
+          args: { tool: 'run_readonly_sql' },
+          criterion: 'D1',
+        },
+        { type: 'noToolErrors', criterion: 'D3' },
+      ]);
+      expect(evalCase.checks.map((c) => c.type)).not.toEqual(
+        expect.arrayContaining(['noRowValuesRetained']),
+      );
+      expect([evalCase.id, evalCase.memoryChecks]).toEqual([
+        evalCase.id,
+        [
+          { type: 'noRowValuesRetained', criterion: 'M1' },
+          ...(evalCase.category === 'memory-rejected'
+            ? [{ type: 'notRejectedSql', criterion: 'M2' }]
+            : []),
+          ...(evalCase.category === 'memory-abstain'
+            ? [{ type: 'teachNotRecalled', criterion: 'M3' }]
+            : []),
+        ],
+      ]);
+      expect(evalCase).not.toHaveProperty('judgeRubric');
+      expect(evalCase).not.toHaveProperty('agentTools');
+      expect(evalCase).not.toHaveProperty('fixture');
+    }
+  });
+
+  it('reaches the suite with no scorer for a memory check, and with its teach, trap and memory checks', () => {
+    const [worldCup] = toAssistantEvalSets(memorySets);
+    const evalCase = worldCup.cases.find(
+      (c) => c.id === 'extra-time-goals-rejected-matches-filter',
+    )!;
+    expect(evalCase.scorers.map((scorer) => String(scorer.id))).toEqual([
+      'check-called-tool',
+      'check-no-tool-errors',
+    ]);
+    expect(evalCase.checkCriteria).toEqual(['D1', 'D3']);
+    expect(evalCase.memoryChecks).toEqual([
+      { type: 'noRowValuesRetained', criterion: 'M1' },
+      { type: 'notRejectedSql', criterion: 'M2' },
+    ]);
+    expect(evalCase.teach?.[0]).toMatchObject({ kind: 'rejection' });
+    expect(evalCase.trapSql).toMatch(/^SELECT /);
+    expect(evalCase.category).toBe('memory-rejected');
+  });
+});
+
+describe('the memory bank loader refuses (agents-evals R235)', () => {
+  function memoryVariant(fields: Record<string, unknown> = {}) {
+    return {
+      id: 'memory-test',
+      name: 'Memory (Test)',
+      description: 'A memory test set.',
+      fixtureId: 'world-cup',
+      dialect: 'postgres',
+      caseIdPrefix: '',
+      ...fields,
+    };
+  }
+  function teachSignal(fields: Record<string, unknown> = {}) {
+    return {
+      kind: 'verified_query',
+      at: '2026-11-02T15:00:00Z',
+      question: 'Who scored most in 2018?',
+      sql: 'SELECT 1 FROM world_cup.goals',
+      ...fields,
+    };
+  }
+  function probe(fields: Record<string, unknown> = {}) {
+    return {
+      question: '¿Quién fue el máximo goleador del Mundial 2018?',
+      expectedSql: { postgres: 'SELECT 1 FROM world_cup.goals' },
+      trapSql: { postgres: 'SELECT 2 FROM world_cup.goals' },
+      checks: [
+        { type: 'calledTool', args: { tool: 'run_readonly_sql' } },
+        { type: 'noToolErrors' },
+        { type: 'noRowValuesRetained' },
+      ],
+      ...fields,
+    };
+  }
+  function memoryCase(fields: Record<string, unknown> = {}) {
+    return {
+      id: 'm1',
+      fixture: 'world-cup',
+      category: 'memory-reuse',
+      tags: ['lang:es', 'difficulty:easy', 'trap:own-goals'],
+      intent: 'An approval is reused.',
+      notes: 'Why.',
+      teach: [teachSignal()],
+      probe: probe(),
+      ...fields,
+    };
+  }
+  const load = (
+    cases: unknown[] = [memoryCase()],
+    variants: unknown[] = [memoryVariant()],
+  ) => parseEvalSetFile({ file: 'memory.json', content: { variants, cases } });
+  const refused = (cases: unknown[], variants?: unknown[]) => {
+    try {
+      load(cases, variants);
+    } catch (err) {
+      expect(err).toBeInstanceOf(EvalSetError);
+      return (err as Error).message;
+    }
+    return 'not refused';
+  };
+
+  it('loads a well-formed case, its criteria as named or by default', () => {
+    const [set] = load([
+      memoryCase({
+        split: 'held-out',
+        probe: probe({
+          checks: [
+            { type: 'noToolErrors' },
+            { type: 'noRowValuesRetained', criterion: 'D4' },
+          ],
+          resultSetOptions: { distinctRows: true },
+        }),
+      }),
+    ]);
+    expect(set.cases).toEqual([
+      {
+        id: 'm1',
+        category: 'memory-reuse',
+        split: 'held-out',
+        tags: ['lang:es', 'difficulty:easy', 'trap:own-goals'],
+        question: '¿Quién fue el máximo goleador del Mundial 2018?',
+        intent: 'An approval is reused.',
+        notes: 'Why.',
+        checks: [{ type: 'noToolErrors' }],
+        expectedSql: 'SELECT 1 FROM world_cup.goals',
+        trapSql: 'SELECT 2 FROM world_cup.goals',
+        resultSetOptions: { distinctRows: true },
+        teach: [teachSignal()],
+        memoryChecks: [{ type: 'noRowValuesRetained', criterion: 'D4' }],
+      },
+    ]);
+  });
+
+  it('puts a case only in the variant of its sample', () => {
+    const sets = load(
+      [
+        memoryCase(),
+        memoryCase({ id: 'm2', fixture: 'finance' }),
+        memoryCase({ id: 'm3' }),
+      ],
+      [
+        memoryVariant(),
+        memoryVariant({ id: 'memory-test-finance', fixtureId: 'finance' }),
+      ],
+    );
+    expect(sets.map((set) => set.cases.map((c) => c.id))).toEqual([
+      ['m1', 'm3'],
+      ['m2'],
+    ]);
+  });
+
+  it.each(['fixture', 'category', 'tags', 'intent', 'notes', 'teach', 'probe'])(
+    'a case without %s, naming the file and the case',
+    (field) => {
+      expect(refused([without(memoryCase(), field)])).toMatch(
+        new RegExp(`^Eval set file memory\\.json, case "m1": "${field}"`),
+      );
+    },
+  );
+
+  it.each([
+    ['a question of its own', { question: 'Q?' }, '"question"'],
+    [
+      'a reference of its own',
+      { expectedSql: { postgres: 'SELECT 1' } },
+      '"expectedSql"',
+    ],
+    ['a judge rubric', { judgeRubric: 'R' }, '"judgeRubric"'],
+  ])('a case with %s', (_what, fields, key) => {
+    expect(refused([memoryCase(fields)])).toBe(
+      `Eval set file memory.json, case "m1": unknown field(s) ${key}; known fields: id, fixture, category, split, tags, intent, notes, teach, probe`,
+    );
+  });
+
+  it('a probe or a teach signal with a field it does not list', () => {
+    expect(
+      refused([memoryCase({ probe: probe({ agentTools: ['visuals'] }) })]),
+    ).toBe(
+      'Eval set file memory.json, case "m1", probe: unknown field(s) "agentTools"; known fields: question, expectedSql, trapSql, checks, resultSetOptions',
+    );
+    expect(
+      refused([memoryCase({ teach: [teachSignal({ answer: 'Kane' })] })]),
+    ).toBe(
+      'Eval set file memory.json, case "m1", teach signal #1: unknown field(s) "answer"; known fields: kind, at, question, sql, note',
+    );
+  });
+
+  it('a fixture no variant of the file has, a category outside the six, a bad id', () => {
+    expect(refused([memoryCase({ fixture: 'finance' })])).toBe(
+      'Eval set file memory.json, case "m1": fixture "finance" is the sample of no variant of this file; known: world-cup',
+    );
+    expect(refused([memoryCase({ category: 'lookup' })])).toBe(
+      'Eval set file memory.json, case "m1": category "lookup" is not one of memory-reuse, memory-correction, memory-update, memory-rejected, memory-abstain, memory-vs-curated',
+    );
+    expect(refused([memoryCase({ id: 'Memory 1' })])).toBe(
+      'Eval set file memory.json, case "Memory 1": the id must be lowercase words joined by hyphens',
+    );
+  });
+
+  it('tags without the probe’s language or a difficulty', () => {
+    expect(refused([memoryCase({ tags: ['difficulty:easy'] })])).toBe(
+      'Eval set file memory.json, case "m1": "tags" must name the language with one of lang:en, lang:es',
+    );
+    expect(refused([memoryCase({ tags: ['lang:en'] })])).toBe(
+      'Eval set file memory.json, case "m1": "tags" must name the difficulty with one of difficulty:easy, difficulty:medium, difficulty:hard',
+    );
+  });
+
+  it('no teach signal or more than 3', () => {
+    const message =
+      'Eval set file memory.json, case "m1": "teach" is required and must hold 1 to 3 signals';
+    expect(refused([memoryCase({ teach: [] })])).toBe(message);
+    const four = ['10', '11', '12', '13'].map((hour) =>
+      teachSignal({ at: `2026-11-02T${hour}:00:00Z` }),
+    );
+    expect(refused([memoryCase({ teach: four })])).toBe(message);
+  });
+
+  it('a signal of another kind, a time that is not ISO 8601 UTC or not later than the one before', () => {
+    expect(
+      refused([memoryCase({ teach: [teachSignal({ kind: 'approval' })] })]),
+    ).toBe(
+      'Eval set file memory.json, case "m1", teach signal #1: kind "approval" is not one of verified_query, correction, rejection',
+    );
+    for (const at of [
+      '2026-11-02 15:00',
+      '2026-11-02T15:00:00+01:00',
+      '2026-13-45T99:00:00Z',
+    ]) {
+      expect(refused([memoryCase({ teach: [teachSignal({ at })] })])).toBe(
+        `Eval set file memory.json, case "m1", teach signal #1: "at" "${at}" is not an ISO 8601 UTC time such as 2026-11-02T15:00:00Z`,
+      );
+    }
+    expect(
+      refused([
+        memoryCase({
+          teach: [
+            teachSignal({ at: '2026-11-02T15:00:00Z' }),
+            teachSignal({
+              kind: 'correction',
+              at: '2026-11-02T15:00:00Z',
+              note: 'Leave own goals out.',
+            }),
+          ],
+        }),
+      ]),
+    ).toBe(
+      'Eval set file memory.json, case "m1", teach signal #2: "at" 2026-11-02T15:00:00Z is not later than the signal before it (2026-11-02T15:00:00Z)',
+    );
+  });
+
+  it('a correction without a note, or an approval with one; a rejection may have one or not', () => {
+    expect(
+      refused([memoryCase({ teach: [teachSignal({ kind: 'correction' })] })]),
+    ).toBe(
+      'Eval set file memory.json, case "m1", teach signal #1: a correction needs a "note"',
+    );
+    expect(
+      refused([memoryCase({ teach: [teachSignal({ note: 'Good.' })] })]),
+    ).toBe(
+      'Eval set file memory.json, case "m1", teach signal #1: an approval (verified_query) takes no "note"',
+    );
+    const rejected = (note?: string) =>
+      memoryCase({
+        category: 'memory-rejected',
+        teach: [teachSignal({ kind: 'rejection', ...(note ? { note } : {}) })],
+        probe: probe({
+          checks: [{ type: 'noRowValuesRetained' }, { type: 'notRejectedSql' }],
+        }),
+      });
+    expect(() => load([rejected()])).not.toThrow();
+    expect(() =>
+      load([rejected('Shoot-out kicks are not goals.')]),
+    ).not.toThrow();
+  });
+
+  it('a memory-rejected case with no rejection signal', () => {
+    expect(
+      refused([
+        memoryCase({
+          category: 'memory-rejected',
+          probe: probe({
+            checks: [
+              { type: 'noRowValuesRetained' },
+              { type: 'notRejectedSql' },
+            ],
+          }),
+        }),
+      ]),
+    ).toBe(
+      'Eval set file memory.json, case "m1": a memory-rejected case needs a "rejection" teach signal',
+    );
+  });
+
+  it('a probe without expectedSql.postgres or trapSql.postgres, or with another dialect', () => {
+    for (const key of ['expectedSql', 'trapSql']) {
+      expect(refused([memoryCase({ probe: without(probe(), key) })])).toBe(
+        `Eval set file memory.json, case "m1", probe: "${key}.postgres" is required and must be a non-empty string`,
+      );
+      expect(
+        refused([
+          memoryCase({ probe: probe({ [key]: { sqlite: 'SELECT 1' } }) }),
+        ]),
+      ).toBe(
+        `Eval set file memory.json, case "m1", probe: "${key}.postgres" is required and must be a non-empty string`,
+      );
+    }
+    expect(
+      refused([
+        memoryCase({
+          probe: probe({
+            expectedSql: { postgres: 'SELECT 1', sqlite: 'SELECT 1' },
+          }),
+        }),
+      ]),
+    ).toBe(
+      'Eval set file memory.json, case "m1", probe expectedSql: unknown field(s) "sqlite"; known fields: postgres',
+    );
+  });
+
+  it('a probe without the memory checks its category needs', () => {
+    expect(
+      refused([
+        memoryCase({ probe: probe({ checks: [{ type: 'noToolErrors' }] }) }),
+      ]),
+    ).toBe(
+      'Eval set file memory.json, case "m1", probe: the check "noRowValuesRetained" is required on every memory case',
+    );
+    expect(
+      refused([
+        memoryCase({
+          category: 'memory-rejected',
+          teach: [teachSignal({ kind: 'rejection' })],
+        }),
+      ]),
+    ).toBe(
+      'Eval set file memory.json, case "m1", probe: the check "notRejectedSql" is required on a memory-rejected case',
+    );
+    expect(refused([memoryCase({ category: 'memory-abstain' })])).toBe(
+      'Eval set file memory.json, case "m1", probe: the check "teachNotRecalled" is required on a memory-abstain case',
+    );
+  });
+
+  it('a memory check with arguments, twice, or with a criterion outside the list', () => {
+    const withChecks = (checks: unknown[]) =>
+      refused([memoryCase({ probe: probe({ checks }) })]);
+    expect(
+      withChecks([{ type: 'noRowValuesRetained', args: { strict: true } }]),
+    ).toBe(
+      'Eval set file memory.json, case "m1", probe, check #1: "noRowValuesRetained" takes no "args"',
+    );
+    expect(
+      withChecks([
+        { type: 'noRowValuesRetained' },
+        { type: 'noRowValuesRetained' },
+      ]),
+    ).toMatch(
+      /probe, check #2: check type "noRowValuesRetained" is used twice/,
+    );
+    expect(
+      withChecks([{ type: 'noRowValuesRetained', criterion: 'M4' }]),
+    ).toMatch(
+      /probe, check #1: criterion "M4" is not one of D1, .+, M1, M2, M3$/,
+    );
+    expect(withChecks([{ type: 'remembers' }])).toMatch(
+      /probe, check #1: check type "remembers" is not one of includes, .+, noRowValuesRetained, notRejectedSql, teachNotRecalled$/,
+    );
+  });
+
+  it('a memory set on another dialect', () => {
+    expect(
+      refused(
+        [memoryCase({ fixture: 'world-cup-rest' })],
+        [
+          memoryVariant({
+            fixtureId: 'world-cup-rest',
+            dialect: 'sqlite',
+          }),
+        ],
+      ),
+    ).toBe(
+      'Eval set file memory.json, variant "memory-test": a memory set runs on PostgreSQL only; dialect "sqlite" is not postgres',
+    );
+  });
+
+  it('a memory check or a memory category in any other question bank file', () => {
+    for (const type of [
+      'noRowValuesRetained',
+      'notRejectedSql',
+      'teachNotRecalled',
+    ]) {
+      expect(() =>
+        parseEvalSetFile(
+          file({
+            cases: [evalCase({ checks: [{ type: 'noToolErrors' }, { type }] })],
+          }),
+        ),
+      ).toThrow(
+        `Eval set file test-set.json, case "c1", check #2: check type "${type}" needs a teach step, so only memory.json may use it`,
+      );
+    }
+    expect(() =>
+      parseEvalSetFile(
+        file({ cases: [evalCase({ category: 'memory-reuse' })] }),
+      ),
+    ).toThrow(
+      `Eval set file test-set.json, case "c1": category "memory-reuse" is not one of ${QUESTION_CATEGORIES.join(', ')}`,
+    );
+  });
+
+  it('lets a check of any bank name a memory criterion (R125)', () => {
+    const [set] = parseEvalSetFile(
+      file({
+        cases: [
+          evalCase({ checks: [{ type: 'noToolErrors', criterion: 'M2' }] }),
+        ],
+      }),
+    );
+    expect(set.cases[0].checks).toEqual([
+      { type: 'noToolErrors', criterion: 'M2' },
+    ]);
   });
 });

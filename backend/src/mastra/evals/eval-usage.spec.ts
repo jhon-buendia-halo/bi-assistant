@@ -9,6 +9,7 @@ import {
   parsePriceTable,
   rateFor,
   ratesUsed,
+  recordMemoryUsage,
   recordUsage,
   sumUsage,
   usageFromResult,
@@ -212,6 +213,65 @@ describe('recordUsage', () => {
       'sql-fixer',
       'designer',
       'judge',
+      'memory',
+    ]);
+  });
+});
+
+describe('recordMemoryUsage (agents-evals R245)', () => {
+  it("records the memory's embeddings and summary rewrites under the agent memory, after the others", () => {
+    const entries: ModelUsageEntry[] = [];
+    recordUsage(entries, 'assistant', 'gpt-4o-mini', {
+      totalUsage: { inputTokens: 100, outputTokens: 10 },
+    });
+    recordMemoryUsage(entries, {
+      scope: 'eval-job-case-1',
+      purpose: 'embedding',
+      model: 'text-embedding-3-small',
+      inputTokens: 40,
+      outputTokens: 0,
+    });
+    recordMemoryUsage(entries, {
+      scope: 'eval-job-case-1',
+      purpose: 'embedding',
+      model: 'text-embedding-3-small',
+      inputTokens: 12,
+      outputTokens: 0,
+    });
+    recordMemoryUsage(entries, {
+      scope: 'eval-job-case-1',
+      purpose: 'summary',
+      model: 'gpt-4o-mini',
+      inputTokens: 300,
+      outputTokens: 60,
+      cachedInputTokens: 100,
+      reasoningTokens: 20,
+    });
+    recordUsage(entries, 'judge', 'gpt-4o-mini', {
+      usage: { inputTokens: 5, outputTokens: 1 },
+    });
+    expect(entries).toEqual([
+      entry('assistant', 'gpt-4o-mini', {
+        inputTokens: 100,
+        outputTokens: 10,
+        calls: 1,
+      }),
+      entry('judge', 'gpt-4o-mini', {
+        inputTokens: 5,
+        outputTokens: 1,
+        calls: 1,
+      }),
+      entry('memory', 'text-embedding-3-small', {
+        inputTokens: 52,
+        calls: 2,
+      }),
+      entry('memory', 'gpt-4o-mini', {
+        inputTokens: 300,
+        cachedInputTokens: 100,
+        outputTokens: 60,
+        reasoningTokens: 20,
+        calls: 1,
+      }),
     ]);
   });
 });

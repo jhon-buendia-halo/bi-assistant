@@ -334,3 +334,64 @@ describe('runs saved before BA-242 are read with defaults (data-model 3.8, R209,
     expect(read?.summary.flaky).toBe(1);
   });
 });
+
+describe('the memory arm of a stored run (R231, R246)', () => {
+  /** A completed run on the World Cup datasource with this arm, if any. */
+  const run = (jobId: string, arm?: { memory: string }) => ({
+    jobId,
+    datasets: ['World Cup'],
+    caseIds: ['memory-reuse-world-cup-1'],
+    results: [{ id: 'memory-reuse-world-cup-1', passed: true }],
+    ...(arm ? { arm } : {}),
+  });
+
+  it('reads a run saved before the arm as no memory, and keeps a stored arm', async () => {
+    const repository = new EvalRunsRepository({
+      find: jest
+        .fn()
+        .mockResolvedValue([run('new', { memory: 'mastra' }), run('old')]),
+    } as unknown as DocStore<EvalRunView>);
+    const [newer, older] = await repository.list('assistant');
+    expect(newer.arm).toEqual({ memory: 'mastra' });
+    expect(older.arm).toEqual({ memory: 'none' });
+  });
+
+  it('compares a run only with an earlier run of the same memory arm, a run without one reading as none', async () => {
+    const repository = new EvalRunsRepository(
+      // Newest first, as the store sorts them.
+      storeOf([
+        run('mastra-2', { memory: 'mastra' }),
+        run('none-1', { memory: 'none' }),
+        run('legacy'),
+        run('mastra-1', { memory: 'mastra' }),
+      ]),
+    );
+    const baseline = (memory: string, exclude: string) =>
+      repository.mostRecentCompleted(
+        'assistant',
+        exclude,
+        'wc',
+        ['World Cup'],
+        ['memory-reuse-world-cup-1'],
+        memory as never,
+      );
+    expect((await baseline('mastra', 'mastra-2'))?.jobId).toBe('mastra-1');
+    expect((await baseline('none', 'current'))?.jobId).toBe('none-1');
+    expect((await baseline('none', 'none-1'))?.jobId).toBe('legacy');
+    expect(await baseline('hindsight-mastra', 'current')).toBeNull();
+  });
+
+  it('reads the arm none when the caller names none', async () => {
+    const repository = new EvalRunsRepository(
+      storeOf([run('mastra-1', { memory: 'mastra' }), run('legacy')]),
+    );
+    const baseline = await repository.mostRecentCompleted(
+      'assistant',
+      'current',
+      'wc',
+      ['World Cup'],
+      ['memory-reuse-world-cup-1'],
+    );
+    expect(baseline?.jobId).toBe('legacy');
+  });
+});

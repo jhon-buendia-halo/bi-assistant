@@ -4,6 +4,8 @@ import type { DocStore } from '../../../infrastructure/database/doc-store';
 import type { EvalRunView } from '../eval-runs.service';
 import { LEGACY_JUDGE_SETTING } from '../../../mastra/evals/judge-option';
 import { LEGACY_REPEATS } from '../../../mastra/evals/repeats-option';
+import { LEGACY_ARM } from '../../../mastra/evals/memory-arm-option';
+import type { MemoryArm } from '../../../mastra/evals/memory-case';
 import {
   summarizeEvalResults,
   withResultDefaults,
@@ -15,18 +17,25 @@ import { evalCaseIndex } from '../../../mastra/evals/eval-case-index';
 /**
  * A run as the store may hold it: one saved before BA-184 has no judge
  * option, no summary and no statuses; one saved before BA-242 has no
- * repeats, no source, no usage and no split on its results (data-model 3.8).
+ * repeats, no source, no usage and no split on its results; one saved
+ * before BA-190 has no arm (data-model 3.8).
  */
 export type StoredEvalRun = Omit<
   EvalRunView,
-  'judge' | 'summary' | 'results' | 'repeats' | 'source'
+  'judge' | 'summary' | 'results' | 'repeats' | 'source' | 'arm'
 > & {
   judge?: EvalRunView['judge'];
   summary?: EvalRunView['summary'];
   results?: StoredEvalCaseResult[];
   repeats?: EvalRunView['repeats'];
   source?: EvalRunView['source'];
+  arm?: EvalRunView['arm'];
 };
+
+/** A stored run's memory arm: `none` on a run saved before the arm (R231). */
+function memoryArmOf(run: Pick<StoredEvalRun, 'arm'>): MemoryArm {
+  return run.arm?.memory ?? LEGACY_ARM.memory;
+}
 
 /** The split of the question bank case with this id, if there is one. */
 function questionBankSplit(caseId: string): EvalSplit | undefined {
@@ -38,8 +47,9 @@ function questionBankSplit(caseId: string): EvalSplit | undefined {
  * judged when it has no option, statuses from each `passed` flag (R144,
  * R147); one attempt per question and the source `app` when it has neither,
  * and each result's split from `splitOf`, by default the question bank's,
- * else `dev` (R209, R215, R223); and the summary recomputed from the results
- * (R148, R213). Usage stays absent on a run saved before it was recorded.
+ * else `dev` (R209, R215, R223); no memory when it has no arm (R231); and
+ * the summary recomputed from the results (R148, R213). Usage stays absent
+ * on a run saved before it was recorded.
  */
 export function withEvalRunDefaults(
   run: StoredEvalRun,
@@ -53,6 +63,7 @@ export function withEvalRunDefaults(
     results,
     judge: run.judge ?? { ...LEGACY_JUDGE_SETTING },
     repeats: run.repeats ?? LEGACY_REPEATS,
+    arm: { memory: memoryArmOf(run) },
     source: run.source ?? 'app',
     summary: summarizeEvalResults(results),
   };
@@ -80,13 +91,15 @@ export class EvalRunsRepository {
   }
 
   /**
-   * The most recently completed run for this agent and data scope that
-   * shares at least one question id with `questionIds`, excluding
+   * The most recently completed run for this agent, data scope and memory
+   * arm that shares at least one question id with `questionIds`, excluding
    * `excludeJobId`. Regression tracking diffs a finishing run against this
    * baseline (agents-evals R40). A run of another set on the same datasource
    * and datasets (`world-cup-databricks` and `world-cup-databricks-only`) has
    * no question in common, so it would skip every question; it is not
-   * comparable. `null` when no comparable completed run exists.
+   * comparable. Nor is a run of another memory arm (R246), a run saved
+   * before the arm reading as `none`. `null` when no comparable completed
+   * run exists.
    */
   async mostRecentCompleted(
     agentKey: string,
@@ -94,6 +107,7 @@ export class EvalRunsRepository {
     datasourceId: string,
     datasets: string[],
     questionIds: string[],
+    memoryArm: MemoryArm = LEGACY_ARM.memory,
   ): Promise<EvalRunView | null> {
     const completed: StoredEvalRun[] = await this.store.find(
       { agentKey, status: 'completed', datasourceId },
@@ -104,6 +118,7 @@ export class EvalRunsRepository {
     const baseline = completed.find(
       (run) =>
         run.jobId !== excludeJobId &&
+        memoryArmOf(run) === memoryArm &&
         new Set(run.datasets).size === scope.size &&
         run.datasets.every((dataset) => scope.has(dataset)) &&
         [

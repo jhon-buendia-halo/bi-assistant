@@ -5,7 +5,10 @@
  * knowledge seeds, never the questions; a change that copies a question's
  * words, a name, a number or a quoted value from any question bank file (dev
  * and held-out alike, decision D6) or from a planted-facts file would teach
- * the assistant the test instead of the skill.
+ * the assistant the test instead of the skill. A memory case (BA-190) is read
+ * for what it holds: its probe question, and each teach signal's question
+ * and note, as a question; its probe's checks as checks; its reference, its
+ * trap and each teach signal's SQL as reference queries.
  *
  * It reads the lines a change adds to the lever files (`git diff` against a
  * base, the staged change, or a patch file), normalises them and the
@@ -22,8 +25,9 @@
  *      base are skipped;
  *   4. a quoted value: a quoted string of a question, an `includes` value,
  *      a string of 4 or more characters of a facts file.
- * A string literal of a reference query only warns. A line moved unchanged
- * within a file, and a literal of the allowlist, are ignored.
+ * A string literal of a reference query (a memory case's trap and teach SQL
+ * included) only warns. A line moved unchanged within a file, and a literal
+ * of the allowlist, are ignored.
  *
  * Rules 2 and 4 skip a value that is common (`CommonVocabulary`): without it
  * an `includes` value such as `matches` would reject every line that uses
@@ -412,14 +416,13 @@ export function buildLiteralIndex(
         split,
         field,
       });
-      if (typeof raw.question === 'string') {
-        const question = raw.question;
+      const addQuestion = (question: string, field: string) => {
         const words = wordsOf(normalizeText(question));
         const q = index.questions.length;
         index.questions.push({
           words,
           display: question,
-          source: at('question'),
+          source: at(field),
         });
         for (let i = 0; i + 4 <= words.length; i += 1) {
           const key = words.slice(i, i + 4).join(' ');
@@ -428,57 +431,94 @@ export function buildLiteralIndex(
           index.quadgrams.set(key, list);
         }
         for (const span of capitalisedSpans(question)) {
-          addEntity(span, at('question'));
+          addEntity(span, at(field));
         }
         for (const n of numbersIn(normalizeText(question))) {
-          addNumber(n, at('question'));
+          addNumber(n, at(field));
         }
         for (const quoted of quotedStrings(question)) {
-          addQuoted(quoted, at('question'));
+          addQuoted(quoted, at(field));
         }
+      };
+      const addChecks = (list: unknown, prefix: string) => {
+        const checks = Array.isArray(list) ? list : [];
+        checks.forEach((check, c) => {
+          if (!isObject(check) || !isObject(check.args)) return;
+          for (const [key, value] of Object.entries(check.args)) {
+            const field = `${prefix}[${c}].args.${key}`;
+            const texts = Array.isArray(value)
+              ? value.filter((v): v is string => typeof v === 'string')
+              : typeof value === 'string'
+                ? [value]
+                : [];
+            for (const text of texts) {
+              if (key === 'pattern') {
+                for (const n of patternNumbers(text)) addNumber(n, at(field));
+                if (check.type === 'matches' || check.type === 'notMatches') {
+                  for (const word of patternWords(text))
+                    addEntity(word, at(field));
+                }
+              } else {
+                for (const n of numbersIn(normalizeText(text))) {
+                  addNumber(n, at(field));
+                }
+              }
+              if (check.type === 'includes' && key === 'text') {
+                addEntity(text, at(field));
+                addQuoted(text, at(field));
+              }
+            }
+          }
+        });
+      };
+      const addSql = (sql: unknown, field: string) => {
+        if (typeof sql !== 'string') return;
+        for (const literal of sqlStringLiterals(sql)) {
+          if (literal.length < 4) continue;
+          addLiteral(
+            index.sqlLiterals,
+            normalizeText(literal).trim(),
+            literal,
+            at(field),
+          );
+        }
+      };
+      const addReferences = (queries: unknown, prefix: string) => {
+        if (!isObject(queries)) return;
+        for (const [dialect, sql] of Object.entries(queries)) {
+          addSql(sql, `${prefix}.${dialect}`);
+        }
+      };
+
+      if (typeof raw.question === 'string') {
+        addQuestion(raw.question, 'question');
       }
-      const checks = Array.isArray(raw.checks) ? raw.checks : [];
-      checks.forEach((check, c) => {
-        if (!isObject(check) || !isObject(check.args)) return;
-        for (const [key, value] of Object.entries(check.args)) {
-          const field = `checks[${c}].args.${key}`;
-          const texts = Array.isArray(value)
-            ? value.filter((v): v is string => typeof v === 'string')
-            : typeof value === 'string'
-              ? [value]
-              : [];
-          for (const text of texts) {
-            if (key === 'pattern') {
-              for (const n of patternNumbers(text)) addNumber(n, at(field));
-              if (check.type === 'matches' || check.type === 'notMatches') {
-                for (const word of patternWords(text))
-                  addEntity(word, at(field));
-              }
-            } else {
-              for (const n of numbersIn(normalizeText(text))) {
-                addNumber(n, at(field));
-              }
-            }
-            if (check.type === 'includes' && key === 'text') {
-              addEntity(text, at(field));
-              addQuoted(text, at(field));
+      addChecks(raw.checks, 'checks');
+      addReferences(raw.expectedSql, 'expectedSql');
+      // A memory case (`memory.json`, R234) holds its question, checks and
+      // reference in its probe, and teaches signals before it: the probe is
+      // read as a question is, and each teach signal's question and note as
+      // a question's words; the trap and every teach SQL as a reference.
+      if (isObject(raw.probe)) {
+        const probe = raw.probe;
+        if (typeof probe.question === 'string') {
+          addQuestion(probe.question, 'probe.question');
+        }
+        addChecks(probe.checks, 'probe.checks');
+        addReferences(probe.expectedSql, 'probe.expectedSql');
+        addReferences(probe.trapSql, 'probe.trapSql');
+      }
+      if (Array.isArray(raw.teach)) {
+        raw.teach.forEach((signal, n) => {
+          if (!isObject(signal)) return;
+          for (const key of ['question', 'note']) {
+            const text = signal[key];
+            if (typeof text === 'string') {
+              addQuestion(text, `teach[${n}].${key}`);
             }
           }
-        }
-      });
-      if (isObject(raw.expectedSql)) {
-        for (const [dialect, sql] of Object.entries(raw.expectedSql)) {
-          if (typeof sql !== 'string') continue;
-          for (const literal of sqlStringLiterals(sql)) {
-            if (literal.length < 4) continue;
-            addLiteral(
-              index.sqlLiterals,
-              normalizeText(literal).trim(),
-              literal,
-              at(`expectedSql.${dialect}`),
-            );
-          }
-        }
+          addSql(signal.sql, `teach[${n}].sql`);
+        });
       }
     }
   }

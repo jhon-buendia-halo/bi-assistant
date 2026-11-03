@@ -30,6 +30,7 @@ describe('AgentsController POST /agents/:key/evals/run (api.md 36)', () => {
       judge: 'categories',
       judgeCategories: ['ambiguous'],
       repeats: undefined,
+      arm: undefined,
     });
     expect(answer).toEqual({
       ok: true,
@@ -45,6 +46,7 @@ describe('AgentsController POST /agents/:key/evals/run (api.md 36)', () => {
       judge: undefined,
       judgeCategories: undefined,
       repeats: undefined,
+      arm: undefined,
     });
   });
 
@@ -59,6 +61,27 @@ describe('AgentsController POST /agents/:key/evals/run (api.md 36)', () => {
       'wc',
       undefined,
       expect.objectContaining({ repeats: 3 }),
+    );
+  });
+
+  it('forwards the arm as sent, for the service to check (R231, R232)', async () => {
+    const start = jest.fn().mockResolvedValue({
+      error: 'The memory arm "hindsight-mastra" is not built in this version',
+    });
+    await expect(
+      build(start).runEvals('assistant', {
+        datasourceId: 'wc',
+        arm: { memory: 'hindsight-mastra' },
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      message: 'The memory arm "hindsight-mastra" is not built in this version',
+    });
+    expect(start).toHaveBeenCalledWith(
+      'assistant',
+      'wc',
+      undefined,
+      expect.objectContaining({ arm: { memory: 'hindsight-mastra' } }),
     );
   });
 

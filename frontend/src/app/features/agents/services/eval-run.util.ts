@@ -1,6 +1,7 @@
 import {
   AgentEvalCaseResult,
   EvalCheckResult,
+  EvalMemoryArm,
   EvalRepeats,
   EvalRunSummary,
   EvalRunView,
@@ -89,6 +90,11 @@ export function evalRunSummary(run: EvalRunView): EvalRunSummary | null {
 /** Attempts per question; runs saved before repeats existed made one. */
 export function runRepeats(run: Pick<EvalRunView, 'repeats'>): EvalRepeats {
   return run.repeats ?? 1;
+}
+
+/** The memory arm of a run; runs saved before arms existed used none (R246). */
+export function runMemoryArm(run: Pick<EvalRunView, 'arm'>): EvalMemoryArm {
+  return run.arm?.memory ?? 'none';
 }
 
 /** Attempts made at a question; one on a record from before repeats. */
@@ -186,6 +192,7 @@ export const USAGE_AGENT_LABELS: Record<ModelUsageEntry['agent'], string> = {
   'sql-fixer': 'SQL fixer',
   designer: 'Designer',
   judge: 'Judge',
+  memory: 'Memory',
 };
 
 /**

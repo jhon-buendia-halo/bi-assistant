@@ -127,8 +127,10 @@ function pairReferenceRows(
  * its own (agents-evals R31). Extra rows and extra columns are allowed: the
  * answer-text checks judge whether the answer states the right fact. An
  * empty reference still needs an empty result, or any query would pass.
+ * The validator compares a memory case's trap with it, and `notRejectedSql`
+ * a rejected SQL's rows (agents-evals R237, R242).
  */
-function compareEvidence(
+export function compareEvidence(
   expected: Row[],
   actual: Row[],
   options: ResultSetCheckOptions,
@@ -196,6 +198,49 @@ export async function runReferenceSql(
   return result.rows;
 }
 
+/** Runs one statement as a case's reference runs, answering its rows. */
+export type CaseReferenceRunner = (sql: string) => Promise<Row[]>;
+
+/**
+ * Run statements as the result-set check runs a case's reference: on the
+ * datasource of the selected datasets, through the same `DatasetToolServices`
+ * bridge `run_readonly_sql` uses, a Databricks reference in the catalog of
+ * the datasets' entities (R192), and refused when truncated
+ * (`runReferenceSql`). Undefined when no datasource is resolved. The memory
+ * checks run a rejected SQL through it (agents-evals R242).
+ */
+export function caseReferenceRunner(
+  datasets: string[],
+  datasetSnapshots: DatasetSnapshot[],
+): CaseReferenceRunner | undefined {
+  const datasourceId = datasetSnapshots.find(
+    (s) => s.datasourceId,
+  )?.datasourceId;
+  if (!datasourceId) return undefined;
+  const selected = datasetSnapshots.filter((snapshot) =>
+    datasets.includes(snapshot.name),
+  );
+  const onDatabricks =
+    selected.length > 0 &&
+    selected.every((snapshot) => snapshot.datasourceKind === 'databricks');
+  return async (sql) => {
+    const reference = onDatabricks
+      ? referenceInCatalog(
+          sql,
+          catalogOfEntities(selected.flatMap((snapshot) => snapshot.tables)),
+        )
+      : sql;
+    return runReferenceSql(reference, (statement, limit) =>
+      getDatasetToolServices().runReadOnlySql(
+        datasourceId,
+        statement,
+        limit,
+        datasets,
+      ),
+    );
+  };
+}
+
 /**
  * The last `run_readonly_sql` call that did not error. This may be a coverage
  * lookup or supporting detail rather than the answer. Read from the live
@@ -230,6 +275,8 @@ export function lastSuccessfulSqlRecord(
  *
  * Returns `undefined` when the case has no `expectedSql` — callers should
  * skip adding a check in that case rather than reporting a vacuous pass.
+ * `onReferenceRows` hears the reference's rows once it has run, so the
+ * memory checks read them without running it again (agents-evals R241).
  */
 export async function runResultSetCheck(
   expectedSql: string | undefined,
@@ -237,6 +284,7 @@ export async function runResultSetCheck(
   datasetSnapshots: DatasetSnapshot[],
   turnRecords: ToolDataRecord[],
   options: ResultSetCheckOptions = {},
+  onReferenceRows?: (rows: Row[]) => void,
 ): Promise<ScoredCheckResult | undefined> {
   if (!expectedSql) return undefined;
   const description =
@@ -253,10 +301,8 @@ export async function runResultSetCheck(
     };
   }
 
-  const datasourceId = datasetSnapshots.find(
-    (s) => s.datasourceId,
-  )?.datasourceId;
-  if (!datasourceId) {
+  const runReference = caseReferenceRunner(datasets, datasetSnapshots);
+  if (!runReference) {
     return {
       id: RESULT_SET_CHECK_ID,
       description,
@@ -267,26 +313,8 @@ export async function runResultSetCheck(
   }
 
   try {
-    const selected = datasetSnapshots.filter((snapshot) =>
-      datasets.includes(snapshot.name),
-    );
-    const onDatabricks =
-      selected.length > 0 &&
-      selected.every((snapshot) => snapshot.datasourceKind === 'databricks');
-    const reference = onDatabricks
-      ? referenceInCatalog(
-          expectedSql,
-          catalogOfEntities(selected.flatMap((snapshot) => snapshot.tables)),
-        )
-      : expectedSql;
-    const expectedRows = await runReferenceSql(reference, (sql, limit) =>
-      getDatasetToolServices().runReadOnlySql(
-        datasourceId,
-        sql,
-        limit,
-        datasets,
-      ),
-    );
+    const expectedRows = await runReference(expectedSql);
+    onReferenceRows?.(expectedRows);
     const candidates = turnRecords.filter(
       (candidate) =>
         candidate.tool === 'run_readonly_sql' &&

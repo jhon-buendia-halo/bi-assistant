@@ -59,6 +59,7 @@ import {
   runCounts,
   runFlakyCount,
   runHeadline,
+  runMemoryArm,
   runRepeats,
   runVerdict,
   splitLine,
@@ -608,6 +609,7 @@ export class AgentDetail implements OnDestroy {
   readonly runHeadline = runHeadline;
   readonly runVerdict = runVerdict;
   readonly runRepeatsOf = runRepeats;
+  readonly runMemoryArm = runMemoryArm;
   readonly runFlakyCount = runFlakyCount;
   readonly runCost = runCost;
   readonly splitLine = splitLine;

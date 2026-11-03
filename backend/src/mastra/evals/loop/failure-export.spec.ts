@@ -18,6 +18,8 @@ import {
   TOOL_TEXT_LIMIT,
   writeFailureExport,
 } from './failure-export';
+import { evalCaseIndex } from '../eval-case-index';
+import { EVAL_SET_FILES } from '../eval-set-files';
 import { loopRun, storedResult, storedRun } from './test-runs.stub';
 
 const JOB = 'e0000000-0000-4000-8000-000000000001';
@@ -302,5 +304,92 @@ describe('eval:export-failures (agents-evals R228)', () => {
         expect(content).not.toContain('AS home_team');
       }
     });
+  });
+});
+
+describe('eval:export-failures on a memory set (R228, BA-190)', () => {
+  type MemoryCase = {
+    id: string;
+    split?: string;
+    category: string;
+    tags: string[];
+    notes: string;
+    teach: { question: string; note?: string; sql: string }[];
+    probe: { question: string };
+  };
+  const bank = (
+    EVAL_SET_FILES.find((f) => f.file === 'memory.json')!.content as {
+      cases: MemoryCase[];
+    }
+  ).cases;
+  const dev = bank.find(
+    (c) => (c.split ?? 'dev') === 'dev' && c.category === 'memory-correction',
+  )!;
+  const held = bank.find(
+    (c) => c.split === 'held-out' && c.teach.some((signal) => signal.note),
+  )!;
+  /** What a memory arm records: the taught text, held and recalled. */
+  const memoryOf = (c: MemoryCase) => ({
+    scope: `eval-${JOB}-${c.id}-1`,
+    held: c.teach.map((signal, i) => ({
+      kind: 'signal',
+      documentId: `eval-${JOB}-${c.id}-1:teach-${i + 1}`,
+      text: `Question: ${signal.question}\nAnalyst note: ${signal.note ?? ''}`,
+    })),
+    recalled: [],
+    recallMs: 412,
+  });
+  const resultOf = (c: MemoryCase) =>
+    storedResult(c.id, 'failed', {
+      category: c.category,
+      split: c.split ?? 'dev',
+      question: c.probe.question,
+      checkResults: [
+        check('check-called-tool', 'passed'),
+        check(
+          'check-no-row-values-retained',
+          'failed',
+          'the memory holds the row value "X" in its signal item',
+        ),
+      ],
+      memory: memoryOf(c),
+    });
+
+  it('exports a failed dev memory question like any question, and nothing of its teach, its notes or its memory', () => {
+    const run = loopRun(
+      JOB,
+      [resultOf(dev), resultOf(held)],
+      { arm: { memory: 'mastra' } },
+      new Map(evalCaseIndex()),
+    );
+    const files = buildFailureExport(run);
+    expect(files.map((f) => f.name)).toEqual(['README.md', `${dev.id}.md`]);
+    const [readme, file] = files.map((f) => f.content);
+    expect(readme).toContain('- Sets: memory-world-cup');
+    expect(readme).toContain(`| ${dev.category} | 0/1 (`);
+    expect(readme).toContain(`| ${held.category} | 0 | 1 | 0 | 1 |`);
+    expect(file).toContain(`- Question: ${dev.probe.question}`);
+    expect(file).toContain(`- Category: ${dev.category}`);
+    expect(file).toContain(`- Tags: ${dev.tags.join(', ')}`);
+    expect(file).toContain(
+      '- **check-no-row-values-retained: checks check-no-row-values-retained** (attempt 1): the memory holds the row value "X" in its signal item',
+    );
+    for (const content of [readme, file]) {
+      // Nothing of the held-out case, its teach notes included.
+      expect(content).not.toContain(held.id);
+      expect(content).not.toContain(held.probe.question);
+      for (const signal of held.teach) {
+        expect(content).not.toContain(signal.question);
+        if (signal.note) expect(content).not.toContain(signal.note);
+      }
+      // Nor the dev case's teach, notes or memory record.
+      for (const signal of dev.teach) {
+        expect(content).not.toContain(signal.question);
+        expect(content).not.toContain(signal.sql);
+        if (signal.note) expect(content).not.toContain(signal.note);
+      }
+      expect(content).not.toContain(dev.notes);
+      expect(content).not.toContain(':teach-1');
+    }
   });
 });

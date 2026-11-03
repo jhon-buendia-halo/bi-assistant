@@ -28,6 +28,12 @@
       "outputPerMillionUsd": 1.6,
       "source": "developers.openai.com/api/docs/pricing (Standard)",
       "readOn": "2026-10-21"
+    },
+    "text-embedding-3-small": {
+      "inputPerMillionUsd": 0.02,
+      "outputPerMillionUsd": 0,
+      "source": "developers.openai.com/api/docs/pricing (Specialized models, Standard; an embedding has no output tokens)",
+      "readOn": "2026-11-02"
     }
   }
 }

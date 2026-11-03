@@ -3,7 +3,7 @@
  * environment, so a bad selection fails before the backend boots and before
  * any model call: a full run costs money, so there is no default.
  */
-import { EVAL_CATEGORIES, EVAL_SPLITS } from './eval-set-files';
+import { EVAL_SPLITS, QUESTION_CATEGORIES } from './eval-set-files';
 
 interface EvalSetIds {
   id: string;
@@ -66,12 +66,14 @@ export function narrowCliEvalCases(
     return { error: `Unknown EVAL_SPLIT "${split}"; use dev or held-out` };
   }
   const categories = list(env['EVAL_CATEGORY']);
+  // The eighteen only: the memory categories are not a filter (R236, OD-17).
   const unknown = categories.find(
-    (category) => !(EVAL_CATEGORIES as readonly string[]).includes(category),
+    (category) =>
+      !(QUESTION_CATEGORIES as readonly string[]).includes(category),
   );
   if (unknown !== undefined) {
     return {
-      error: `Unknown EVAL_CATEGORY "${unknown}". Known categories: ${EVAL_CATEGORIES.join(', ')}.`,
+      error: `Unknown EVAL_CATEGORY "${unknown}". Known categories: ${QUESTION_CATEGORIES.join(', ')}.`,
     };
   }
   if (!split && categories.length === 0) return { caseIds: [...caseIds] };

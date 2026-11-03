@@ -98,12 +98,12 @@ describe('narrowCliEvalCases (agents-evals R222)', () => {
     });
   });
 
-  it('refuses an unknown category, uncategorised included, naming the eighteen', () => {
-    for (const value of ['joins', 'uncategorised']) {
+  it('refuses an unknown category, uncategorised and the memory categories included, naming the eighteen', () => {
+    for (const value of ['joins', 'uncategorised', 'memory-reuse']) {
       const result = narrow({ EVAL_CATEGORY: `lookup,${value}` });
       expect('error' in result ? result.error : '').toMatch(
         new RegExp(
-          `^Unknown EVAL_CATEGORY "${value}"\\. Known categories: lookup, .+\\.$`,
+          `^Unknown EVAL_CATEGORY "${value}"\\. Known categories: lookup, .+, paraphrase\\.$`,
         ),
       );
     }

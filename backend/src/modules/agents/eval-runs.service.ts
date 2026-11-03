@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { randomUUID } from 'node:crypto';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
@@ -33,6 +34,11 @@ import { runCaseAttempts, sumCostUsd } from '../../mastra/evals/eval-attempts';
 import { mergeUsage, ratesUsed } from '../../mastra/evals/eval-usage';
 import type { ModelRate, ModelUsageEntry } from '../../mastra/evals/eval-usage';
 import { getDatasetToolServices } from '../../mastra/tool-services';
+import { parseEvalArm } from '../../mastra/evals/memory-arm-option';
+import type { EvalArm } from '../../mastra/evals/memory-case';
+import { evalMemoryScope } from '../../mastra/evals/eval-memory';
+import { LEARNING_STORE } from '../memory/learning-store.port';
+import type { LearningStore } from '../memory/learning-store.port';
 
 export type EvalRunStatus = 'running' | 'completed' | 'failed';
 
@@ -63,8 +69,8 @@ export interface EvalRunView {
   finishedAt?: string;
   /**
    * Regression comparison against the most recent previous completed run
-   * for this agent with the same datasource and datasets, computed once this
-   * run finishes. Absent when no
+   * for this agent with the same datasource, datasets and memory arm,
+   * computed once this run finishes. Absent when no
    * previous completed run existed to compare against, and — since it was
    * added after runs were already being persisted — on older records saved
    * before this field existed; callers must treat it as optional.
@@ -79,6 +85,11 @@ export interface EvalRunView {
   judge: EvalJudgeSetting;
   /** Attempts per question (R209); runs saved before it read as 1. */
   repeats: EvalRepeats;
+  /**
+   * The arm the run measures (R231): its cross-session memory. Runs saved
+   * before it read as `{ memory: 'none' }`.
+   */
+  arm: EvalArm;
   /** Router id of the model the agent runs on, resolved at start (R219). */
   model?: string;
   /**
@@ -101,6 +112,8 @@ export interface EvalRunOptionsInput {
   judge?: unknown;
   judgeCategories?: unknown;
   repeats?: unknown;
+  /** `{ memory }` (api.md endpoint 36); none = `{ memory: 'none' }`. */
+  arm?: unknown;
 }
 
 /** A command-line run, its options already checked (agents.md 8.5). */
@@ -111,6 +124,13 @@ export interface CommandLineEvalRun {
   caseIds: string[];
   judge: EvalJudgeSetting;
   repeats: EvalRepeats;
+  /** From `EVAL_MEMORY`, its value already known (R232). */
+  arm: EvalArm;
+}
+
+/** The refusal of an arm whose memory this build does not have (R232). */
+function notBuilt(memory: string): string {
+  return `The memory arm "${memory}" is not built in this version`;
 }
 
 /**
@@ -135,6 +155,8 @@ export class EvalRunsService {
     private readonly datasources: DatasourcesService,
     private readonly sessions: SessionsService,
     private readonly knowledge: KnowledgeService,
+    /** Finds the memory port's store, when the build has one (R232). */
+    private readonly moduleRef?: ModuleRef,
   ) {}
 
   /** Display name for a datasource id, falling back to the id itself. */
@@ -220,6 +242,12 @@ export class EvalRunsService {
     const repeats = parseRepeats(options.repeats);
     if ('error' in repeats) return { error: repeats.error };
 
+    // R19 step 10: the arm, no memory when none is given (R231, R232).
+    const arm = parseEvalArm(options.arm);
+    if ('error' in arm) return { error: arm.error };
+    const memory = this.memoryFor(agentKey, arm.arm);
+    if ('error' in memory) return { error: memory.error };
+
     const view = await this.record({
       agentKey,
       datasourceId,
@@ -227,11 +255,12 @@ export class EvalRunsService {
       cases,
       judge: judge.setting,
       repeats: repeats.repeats,
+      arm: arm.arm,
       source: 'app',
     });
 
     // Outlives the request.
-    void this.run(view, cases);
+    void this.run(view, cases, undefined, memory.store);
     return { jobId: view.jobId };
   }
 
@@ -240,9 +269,11 @@ export class EvalRunsService {
    * wait for the run to end. The run is saved as a run started in the app
    * is, with the source `cli` and the datasource of those datasets, and
    * compared with the earlier comparable run (R40). The selection, the judge
-   * option and the repeats were checked before the backend booted; refused,
-   * with nothing recorded, when the datasets do not cover the questions'
-   * sample (R20) or this process already runs one of the agent's runs.
+   * option, the repeats and the memory arm's value were checked before the
+   * backend booted; refused, with nothing recorded and no model called, when
+   * the datasets do not cover the questions' sample (R20), the arm's memory
+   * is not built or cannot run on the agent (R232), or this process already
+   * runs one of the agent's runs.
    * `onResult` hears each question once all of its attempts are saved.
    */
   async runFromCommandLine(
@@ -273,6 +304,8 @@ export class EvalRunsService {
       fixture,
     );
     if (datasetError) return { error: datasetError };
+    const memory = this.memoryFor(agentKey, request.arm);
+    if ('error' in memory) return { error: memory.error };
     if (this.active.has(agentKey)) {
       return { error: 'An eval run is already in progress for this agent' };
     }
@@ -287,9 +320,10 @@ export class EvalRunsService {
       cases,
       judge: request.judge,
       repeats: request.repeats,
+      arm: request.arm,
       source: 'cli',
     });
-    await this.run(view, cases, onResult);
+    await this.run(view, cases, onResult, memory.store);
     return { run: view };
   }
 
@@ -312,9 +346,47 @@ export class EvalRunsService {
   }
 
   /**
+   * The store a run's attempts use under its arm (R19 step 10, R232): none
+   * under `none`; refused for a memory arm on another agent than the
+   * assistant, for `hindsight-mastra`, which this version does not build, and
+   * for `mastra` on a build with no store for the memory port.
+   */
+  private memoryFor(
+    agentKey: string,
+    arm: EvalArm,
+  ): { store?: LearningStore } | { error: string } {
+    if (arm.memory === 'none') return {};
+    if (agentKey !== 'assistant') {
+      return { error: 'Memory arms run only on the assistant' };
+    }
+    if (arm.memory === 'hindsight-mastra') {
+      return { error: notBuilt(arm.memory) };
+    }
+    const store = this.learningStore();
+    return store ? { store } : { error: notBuilt(arm.memory) };
+  }
+
+  /**
+   * The memory port's one store (BA-81's "Mastra only" memory), found by its
+   * token in whichever module registers it; undefined on a build with no
+   * provider for it. The one place the eval looks the store up.
+   */
+  private learningStore(): LearningStore | undefined {
+    try {
+      return (
+        this.moduleRef?.get<LearningStore>(LEARNING_STORE, {
+          strict: false,
+        }) ?? undefined
+      );
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * A new run, in memory and in the store, holding the agent until it ends
-   * (R22): its repeats, the model the agent runs on, no usage yet and its
-   * source.
+   * (R22): its repeats, its arm, the model the agent runs on, no usage yet
+   * and its source.
    */
   private async record(fields: {
     agentKey: string;
@@ -323,6 +395,7 @@ export class EvalRunsService {
     cases: AssistantEvalCase[];
     judge: EvalJudgeSetting;
     repeats: EvalRepeats;
+    arm: EvalArm;
     source: EvalRunSource;
   }): Promise<EvalRunView> {
     const model = await evalRunModel();
@@ -340,6 +413,7 @@ export class EvalRunsService {
       startedAt: new Date().toISOString(),
       judge: fields.judge,
       repeats: fields.repeats,
+      arm: { ...fields.arm },
       ...(model ? { model } : {}),
       usage: [],
       costUsd: 0,
@@ -356,6 +430,8 @@ export class EvalRunsService {
     view: EvalRunView,
     cases: AssistantEvalCase[],
     onResult?: (result: AssistantEvalCaseResult) => void,
+    /** The arm's store, under a memory arm (agents.md 8.3). */
+    store?: LearningStore,
   ): Promise<void> {
     // The agent the cases run on, with its context and clean-up (agents.md
     // 8.1); the RFP Builder tags its drafts with this run.
@@ -386,11 +462,12 @@ export class EvalRunsService {
       for (const [index, evalCase] of cases.entries()) {
         view.currentQuestion = evalCase.question;
         // Every attempt of this question, one after another, folded into
-        // its result (pass^k, R210, R211).
+        // its result (pass^k, R210, R211); under a memory arm each with a
+        // scope of its own (R238).
         const result = await runCaseAttempts(
           evalCase,
           view.repeats,
-          () =>
+          (attempt) =>
             runAssistantEvalCase(
               evalCase,
               view.datasets,
@@ -398,7 +475,22 @@ export class EvalRunsService {
               knowledgeBlock,
               target,
               view.judge,
-              { model: view.model },
+              {
+                model: view.model,
+                ...(store
+                  ? {
+                      memory: {
+                        store,
+                        scope: evalMemoryScope(
+                          view.jobId,
+                          evalCase.id,
+                          attempt,
+                        ),
+                        warn: (message: string) => this.logger.warn(message),
+                      },
+                    }
+                  : {}),
+              },
             ),
           (attempt) => {
             view.currentAttempt = attempt;
@@ -436,8 +528,9 @@ export class EvalRunsService {
 
   /**
    * Diff this run's per-case results against the agent's most recent
-   * previous completed run with the same data scope and at least one question
-   * in common (agents-evals R40), and attach the outcome to `view.comparison` —
+   * previous completed run with the same data scope, the same memory arm
+   * (R246) and at least one question in common (agents-evals R40), and
+   * attach the outcome to `view.comparison` —
    * best-effort, so a repository hiccup here degrades the report (no
    * comparison section) rather than marking an otherwise-successful run
    * failed. The verdicts compared are the folded ones (pass^k), whatever the
@@ -456,6 +549,7 @@ export class EvalRunsService {
             ...view.results.map((result) => result.id),
           ]),
         ),
+        view.arm.memory,
       );
       if (!previous) return;
       const diff = computeRegressionDiff(previous.results, view.results);

@@ -58,6 +58,7 @@ import {
   selectEvalCases,
 } from '../../mastra/evals/assistant.evals';
 import { evalTargetFor } from '../../mastra/evals/eval-sets';
+import { LEARNING_STORE } from '../memory/learning-store.port';
 
 describe('EvalRunsService dataset validation', () => {
   const datasets = { list: jest.fn() };
@@ -155,6 +156,7 @@ describe('EvalRunsService dataset validation', () => {
         'wc',
         ['Sample'],
         ['champion-2022'],
+        'none',
       );
     }),
   );
@@ -745,6 +747,7 @@ describe('EvalRunsService repeats, attempts and usage (R209 to R211, R219 to R22
       caseIds: ['champion-2022', 'shot-conversion-2022'],
       judge: { mode: 'off' as const },
       repeats: 1 as const,
+      arm: { memory: 'none' as const },
     };
 
     it('saves the run with the source cli and the datasource of the named datasets, and waits for it', async () => {
@@ -780,6 +783,7 @@ describe('EvalRunsService repeats, attempts and usage (R209 to R211, R219 to R22
         'wc',
         ['Sample'],
         ['champion-2022', 'shot-conversion-2022'],
+        'none',
       );
     });
 
@@ -792,5 +796,218 @@ describe('EvalRunsService repeats, attempts and usage (R209 to R211, R219 to R22
       expect(repository.insert).not.toHaveBeenCalled();
       expect(runAssistantEvalCase).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('EvalRunsService memory arm (R19 step 10, R231, R232, R238, R246)', () => {
+  const sample = [
+    {
+      name: 'Sample',
+      datasourceId: 'wc',
+      datasourceKind: 'postgres',
+      tables: [
+        'tournaments',
+        'teams',
+        'matches',
+        'venues',
+        'players',
+        'goals',
+        'match_team_statistics',
+        'disciplinary_events',
+        'v_match_results',
+        'v_player_goal_totals',
+      ].map((table) => `world_cup.world_cup.${table}`),
+    },
+  ];
+  let inserted: EvalRunView[];
+  const repository = {
+    insert: jest.fn((view: EvalRunView) => {
+      inserted.push(structuredClone(view));
+      return Promise.resolve(view);
+    }),
+    save: jest.fn(),
+    mostRecentCompleted: jest.fn(),
+  };
+  /** The memory port's store, as BA-81's module provides it. */
+  const store = { retain: jest.fn(), forget: jest.fn() };
+  /** A module ref that finds the store, or none, as this build has. */
+  const moduleRef = (found: boolean) => ({
+    get: jest.fn((token: string) => {
+      if (found && token === LEARNING_STORE) return store;
+      throw new Error(`Nest could not find ${token} element`);
+    }),
+  });
+  const service = (ref?: ReturnType<typeof moduleRef>) =>
+    new EvalRunsService(
+      { list: jest.fn().mockResolvedValue(sample) } as never,
+      repository as never,
+      {} as never,
+      {} as never,
+      { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+      ref as never,
+    );
+  const settle = async () => {
+    for (let i = 0; i < 20; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    inserted = [];
+  });
+
+  it.each([
+    [
+      { memory: 'sometimes' },
+      'Unknown memory arm "sometimes"; use none, mastra or hindsight-mastra',
+    ],
+    [
+      { memory: 3 },
+      'Unknown memory arm "3"; use none, mastra or hindsight-mastra',
+    ],
+    [
+      'mastra',
+      'Unknown memory arm "mastra"; use none, mastra or hindsight-mastra',
+    ],
+    [
+      { memory: 'hindsight-mastra' },
+      'The memory arm "hindsight-mastra" is not built in this version',
+    ],
+  ])(
+    'refuses the arm %j without recording a run or calling a model',
+    async (arm, message) => {
+      const ref = moduleRef(true);
+      await expect(
+        service(ref).start('assistant', 'wc', undefined, { arm }),
+      ).resolves.toEqual({ error: message });
+      expect(repository.insert).not.toHaveBeenCalled();
+      expect(runAssistantEvalCase).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses mastra on a build with no store for the memory port (A1)', async () => {
+    for (const ref of [moduleRef(false), undefined]) {
+      await expect(
+        service(ref).start('assistant', 'wc', undefined, {
+          arm: { memory: 'mastra' },
+        }),
+      ).resolves.toEqual({
+        error: 'The memory arm "mastra" is not built in this version',
+      });
+    }
+    expect(repository.insert).not.toHaveBeenCalled();
+  });
+
+  it("refuses a memory arm on the RFP Builder's set", async () => {
+    jest
+      .mocked(selectEvalCases)
+      .mockReturnValueOnce([
+        { id: 'rfp-skill-first', question: 'Start an RFP for Orchard' },
+      ] as never);
+    await expect(
+      service(moduleRef(true)).start('rfp', 'wc', ['rfp-skill-first'], {
+        arm: { memory: 'mastra' },
+      }),
+    ).resolves.toEqual({ error: 'Memory arms run only on the assistant' });
+    expect(repository.insert).not.toHaveBeenCalled();
+  });
+
+  it('refuses bad repeats before a bad arm (R19 steps 9 and 10)', async () => {
+    await expect(
+      service().start('assistant', 'wc', undefined, {
+        repeats: 2,
+        arm: { memory: 'sometimes' },
+      }),
+    ).resolves.toEqual({ error: 'Repeats must be 1, 3 or 5 (got "2")' });
+  });
+
+  it('records the arm none when none is given, and reads no store', async () => {
+    const ref = moduleRef(true);
+    await service(ref).start('assistant', 'wc', undefined, {
+      arm: { memory: 'none' },
+    });
+    await service(ref).start('rfp', 'wc', ['rfp-skill-first']);
+    expect(inserted.map((view) => view.arm)).toEqual([
+      { memory: 'none' },
+      { memory: 'none' },
+    ]);
+    expect(ref.get).not.toHaveBeenCalled();
+    await settle();
+    // Under none no attempt is given a memory (agents.md 8.3).
+    for (const call of jest.mocked(runAssistantEvalCase).mock.calls) {
+      expect(call[6]).toEqual({ model: 'openai/gpt-4o-mini' });
+    }
+  });
+
+  it('runs mastra with the store it finds, each attempt in a scope of its own, and compares within the arm', async () => {
+    const ref = moduleRef(true);
+    const runner = service(ref);
+    const started = await runner.start('assistant', 'wc', undefined, {
+      repeats: 3,
+      arm: { memory: 'mastra' },
+    });
+    if (!('jobId' in started)) throw new Error('Run did not start');
+    expect(ref.get).toHaveBeenCalledWith(LEARNING_STORE, { strict: false });
+    expect(inserted[0].arm).toEqual({ memory: 'mastra' });
+    await settle();
+    const options = jest
+      .mocked(runAssistantEvalCase)
+      .mock.calls.map((call) => call[6]);
+    expect(options).toEqual(
+      [1, 2, 3].map((attempt) => ({
+        model: 'openai/gpt-4o-mini',
+        memory: {
+          store,
+          scope: `eval-${started.jobId}-champion-2022-${attempt}`,
+          warn: expect.any(Function) as unknown,
+        },
+      })),
+    );
+    expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
+      'assistant',
+      started.jobId,
+      'wc',
+      ['Sample'],
+      ['champion-2022'],
+      'mastra',
+    );
+  });
+
+  it('refuses a memory arm this build has not on the command line, after the preflight, recording nothing', async () => {
+    mockGetDatasets.mockResolvedValue(sample);
+    const request = {
+      agentKey: 'assistant',
+      datasets: ['Sample'],
+      caseIds: ['champion-2022'],
+      judge: { mode: 'off' as const },
+      repeats: 1 as const,
+    };
+    await expect(
+      service(moduleRef(false)).runFromCommandLine({
+        ...request,
+        arm: { memory: 'mastra' },
+      }),
+    ).resolves.toEqual({
+      error: 'The memory arm "mastra" is not built in this version',
+    });
+    await expect(
+      service(moduleRef(true)).runFromCommandLine({
+        ...request,
+        arm: { memory: 'hindsight-mastra' },
+      }),
+    ).resolves.toEqual({
+      error: 'The memory arm "hindsight-mastra" is not built in this version',
+    });
+    await expect(
+      service(moduleRef(true)).runFromCommandLine({
+        ...request,
+        agentKey: 'rfp',
+        caseIds: ['rfp-skill-first'],
+        arm: { memory: 'mastra' },
+      }),
+    ).resolves.toEqual({ error: 'Memory arms run only on the assistant' });
+    expect(repository.insert).not.toHaveBeenCalled();
+    expect(runAssistantEvalCase).not.toHaveBeenCalled();
   });
 });

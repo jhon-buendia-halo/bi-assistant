@@ -302,3 +302,175 @@ describe('eval:validate on a Databricks set (agents-evals R192)', () => {
     );
   });
 });
+
+describe('eval:validate on a memory set (agents-evals R237, BA-190)', () => {
+  const MEMORY = loadEvalSets().find((set) => set.id === 'memory-world-cup')!;
+  type Role = Parameters<ReferenceRunner>[2];
+
+  /**
+   * A runner whose answers differ by role, as a good trap's rows differ from
+   * its reference's: one reference row, two trap rows, one row per teach SQL.
+   */
+  function runner(
+    override?: (
+      sql: string,
+      caseId: string,
+      role: Role,
+    ) =>
+      | Promise<{ rowCount: number; rows?: Record<string, unknown>[] }>
+      | undefined,
+  ) {
+    return jest.fn((sql: string, caseId: string, role?: Role) => {
+      const answer = override?.(sql, caseId, role);
+      if (answer) return answer;
+      if (role === 'trap') {
+        const rows = [{ v: `trap-${caseId}` }, { v: 'more' }];
+        return Promise.resolve({ rowCount: rows.length, rows });
+      }
+      const rows = [{ v: `${role ?? 'reference'}-${caseId}` }];
+      return Promise.resolve({ rowCount: rows.length, rows });
+    });
+  }
+
+  it('runs each reference, then its trap and each teach SQL, and prints the reference and trap row counts', async () => {
+    const run = runner();
+    const { result, lines } = await validate(run, MEMORY);
+
+    expect(MEMORY.cases).toHaveLength(30);
+    expect(lines.slice(0, 30)).toEqual(
+      MEMORY.cases.map((c) => `✓ ${c.id}  postgres  1 rows · trap 2 rows`),
+    );
+    expect(run.mock.calls).toEqual(
+      MEMORY.cases.flatMap((c) => [
+        [c.expectedSql, c.id],
+        [c.trapSql, c.id, 'trap'],
+        ...(c.teach ?? []).map((signal) => [signal.sql, c.id, 'teach']),
+      ]),
+    );
+    expect(lines.at(-1)).toBe(
+      '\nmemory-world-cup: 30 of 30 memory cases (reference, trap and teach queries) passed.',
+    );
+    expect(result).toEqual({
+      ran: 30,
+      failed: 0,
+      withoutReference: 0,
+      exitCode: 0,
+    });
+  });
+
+  it('refuses a trap that catches nothing, and still prints the other questions', async () => {
+    // The trap returns the reference rows; with extra rows it still passes
+    // the result-set match, so it catches nothing either (R31).
+    const [first, second] = MEMORY.cases;
+    const run = runner((_sql, caseId, role) => {
+      if (role !== 'trap') return undefined;
+      if (caseId === first.id) {
+        return Promise.resolve({
+          rowCount: 1,
+          rows: [{ v: `reference-${caseId}` }],
+        });
+      }
+      if (caseId === second.id) {
+        const rows = [
+          { w: 'x', v: `reference-${caseId}` },
+          { w: 'y', v: 'z' },
+        ];
+        return Promise.resolve({ rowCount: 2, rows });
+      }
+      return undefined;
+    });
+    const { result, lines } = await validate(run, MEMORY);
+
+    expect(lines.slice(0, 3)).toEqual([
+      `✗ ${first.id}  postgres  the trap returns the reference rows, so it catches nothing`,
+      `✗ ${second.id}  postgres  the trap returns the reference rows, so it catches nothing`,
+      `✓ ${MEMORY.cases[2].id}  postgres  1 rows · trap 2 rows`,
+    ]);
+    expect(lines.filter((line) => line.startsWith('✓'))).toHaveLength(28);
+    // Its teach SQL does not run once the trap has failed the case.
+    expect(
+      run.mock.calls.filter(
+        ([, id, role]) => id === first.id && role === 'teach',
+      ),
+    ).toEqual([]);
+    expect(result).toMatchObject({ ran: 30, failed: 2, exitCode: 1 });
+  });
+
+  it('fails a trap that does not run, and a teach SQL that does not run, naming the signal', async () => {
+    const twoSignals = MEMORY.cases.find((c) => (c.teach ?? []).length >= 2)!;
+    const [first] = MEMORY.cases;
+    const run = runner((sql, caseId, role) => {
+      if (caseId === first.id && role === 'trap') {
+        return Promise.reject(
+          new Error('relation "world_cup.goalz" does not exist\n  at …'),
+        );
+      }
+      if (
+        caseId === twoSignals.id &&
+        role === 'teach' &&
+        sql === twoSignals.teach![1].sql
+      ) {
+        return Promise.reject(new Error('syntax error at or near "FORM"'));
+      }
+      return undefined;
+    });
+    const { result, lines } = await validate(run, MEMORY);
+
+    expect(lines).toContain(
+      `✗ ${first.id}  postgres  the trap failed to run — relation "world_cup.goalz" does not exist at …`,
+    );
+    expect(lines).toContain(
+      `✗ ${twoSignals.id}  postgres  teach signal 2 failed to run — syntax error at or near "FORM"`,
+    );
+    expect(result).toMatchObject({ failed: 2, exitCode: 1 });
+  });
+
+  it('runs no trap or teach SQL for a case whose reference failed or returned no rows', async () => {
+    const [first, second] = MEMORY.cases;
+    const run = runner((_sql, caseId, role) => {
+      if (role) return undefined;
+      if (caseId === first.id) return Promise.reject(new Error('boom'));
+      if (caseId === second.id)
+        return Promise.resolve({ rowCount: 0, rows: [] });
+      return undefined;
+    });
+    const { lines } = await validate(run, MEMORY);
+
+    expect(lines.slice(0, 2)).toEqual([
+      `✗ ${first.id}  postgres  boom`,
+      `✗ ${second.id}  postgres  the reference returned 0 rows`,
+    ]);
+    expect(
+      run.mock.calls.filter(
+        ([, id, role]) => (id === first.id || id === second.id) && role,
+      ),
+    ).toEqual([]);
+  });
+
+  it('fails a reference that reads a table outside the datasets without running anything of the case', async () => {
+    const [first] = MEMORY.cases;
+    const outside = {
+      ...MEMORY,
+      cases: MEMORY.cases.map((c) =>
+        c === first
+          ? {
+              ...c,
+              expectedSql:
+                'SELECT tt.group_letter FROM world_cup.tournament_teams tt',
+            }
+          : c,
+      ),
+    };
+    const run = runner();
+    const { lines } = await validate(
+      run,
+      outside,
+      undefined,
+      WORLD_CUP_ENTITIES,
+    );
+    expect(lines.filter((line) => line.startsWith('✗'))).toEqual([
+      `✗ ${first.id}  postgres  the reference reads world_cup.tournament_teams, which is not in the selected datasets`,
+    ]);
+    expect(run.mock.calls.filter(([, id]) => id === first.id)).toEqual([]);
+  });
+});

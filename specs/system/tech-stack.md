@@ -157,6 +157,8 @@ Rules:
 - `infrastructure/` is technical concerns. Feature modules depend on infrastructure, never the reverse.
 - `config/` is typed configuration files.
 
+`modules/memory/` on the BA-9 branch (BA-190) holds only what the memory eval imports: the `LearningStore` port (`learning-store.port.ts`) and two pure helpers, the signal text with the redaction of row values (`signal-text.ts`) and the learned block (`learned-block.ts`), each with its spec, all byte-identical to BA-81's on BA-4's branch so the branches merge cleanly. It is not a Nest module yet and has no store: the "Mastra only" store and the module that provides it arrive when this branch merges `main` with BA-81 (until then the memory arm `mastra` is refused as not built, [agents-evals](../capabilities/agents-evals/spec.md) R232).
+
 Current state (verified): existing modules are `agents`, `datasets`, `datasources`, `deep-analysis`, `developer-settings`, `knowledge`, `llm`, `metrics`, `sessions`, `testing-data`, `verified-queries`.
 
 The Intellify RFP API (ADR-0027, planned in BA-226/BA-227) is its own module tree, `backend/src/intellify-api/`, compiled by the same `nest build`. It imports nothing from `modules/` or `mastra/`, and the app reaches it only over HTTP; the one in-process link is the `IntellifyApiInfo` value (`{ url, apiKey }`) the Testing Data loader reads. Layout:

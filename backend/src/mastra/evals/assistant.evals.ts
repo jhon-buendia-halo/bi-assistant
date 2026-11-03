@@ -27,7 +27,7 @@ import {
   type OptionalAgentTool,
   toolSelectionFrom,
 } from '../agent-tools';
-import { runResultSetCheck } from './result-set-check';
+import { caseReferenceRunner, runResultSetCheck } from './result-set-check';
 import type { ResultSetCheckOptions } from './result-set-check';
 import { loadEvalSets } from './eval-set-files';
 import type { EvalCategory, EvalCriterion, EvalSplit } from './eval-set-files';
@@ -43,6 +43,19 @@ import { questionStatus } from './eval-summary';
 import type { EvalStatus } from './eval-summary';
 import { recordUsage } from './eval-usage';
 import type { ModelUsageEntry } from './eval-usage';
+import type {
+  EvalMemoryRecord,
+  MemoryCheckSpec,
+  TeachSignal,
+} from './memory-case';
+import {
+  forgetScope,
+  listenMemoryUsage,
+  recallForProbe,
+  scoreMemoryChecks,
+  teachMemory,
+} from './eval-memory';
+import type { EvalAttemptMemory, ProbeRecall } from './eval-memory';
 import { costUsdOf } from './eval-attempts';
 import { evalFixture } from './assistant-eval-datasets';
 import type { SampleFixture } from '../../modules/testing-data/fixtures/registry';
@@ -123,6 +136,19 @@ export interface AssistantEvalCase {
   tags?: string[];
   /** Why the case exists and what it guards; for people, never graded. */
   notes?: string;
+  /**
+   * A memory case only (agents-evals R234): the signals stored before the
+   * question, which is the probe's; the other fields above are the probe's
+   * too.
+   */
+  teach?: TeachSignal[];
+  /** A memory case only: the probe's trap query, for the validator (R237). */
+  trapSql?: string;
+  /**
+   * A memory case only: the checks of R241 to R243, scored after the
+   * result-set check from the attempt's memory record, in file order.
+   */
+  memoryChecks?: MemoryCheckSpec[];
 }
 
 /** One tool call as the agent made it, with its parsed input and output. */
@@ -354,6 +380,11 @@ export interface AssistantEvalCaseResult {
   usage?: ModelUsageEntry[];
   /** US dollars over every attempt; `null` when not priced (R221). */
   costUsd?: number | null;
+  /**
+   * Under a memory arm, the representative attempt's memory record (R240);
+   * absent under `none` and on runs saved before the option.
+   */
+  memory?: EvalMemoryRecord;
 }
 
 /** One attempt of a question (R210), as a result's `attempts` holds it. */
@@ -371,6 +402,8 @@ export interface EvalAttempt {
   /** This attempt's tokens alone, and their cost (`null`: not priced). */
   usage: ModelUsageEntry[];
   costUsd: number | null;
+  /** Under a memory arm, this attempt's memory record (R240). */
+  memory?: EvalMemoryRecord;
 }
 
 /** Tool payloads can be whole result sets; keep the trace readable. */
@@ -888,6 +921,13 @@ export interface EvalAttemptOptions {
    * for the attempt when omitted.
    */
   model?: string;
+  /**
+   * Under a memory arm, the arm's store and this attempt's scope (agents.md
+   * 8.3, *Memory arms*): the attempt teaches, recalls before the probe,
+   * records its memory and deletes its scope. Absent under `none`: no store
+   * is read or written, and the memory checks score an empty record.
+   */
+  memory?: EvalAttemptMemory;
 }
 
 /**
@@ -910,7 +950,9 @@ export async function evalRunModel(): Promise<string | undefined> {
  * a single call — one call for all ten questions would collapse them into
  * one set of numbers. The result is the attempt's alone (`runs` 1), with the
  * tokens of every model call made for it (R219); `runCaseAttempts` folds a
- * question's attempts.
+ * question's attempts. Under a memory arm (`options.memory`) the attempt
+ * first teaches the case's signals, then probes with what its scope recalls,
+ * and its scope is deleted whatever happened (R238 to R240).
  */
 export async function runAssistantEvalCase(
   evalCase: AssistantEvalCase,
@@ -957,6 +999,11 @@ export async function runAssistantEvalCase(
   // The agent's own generate: started, and whether its result was recorded.
   let assistantCalled = false;
   let assistantRecorded = false;
+  // Under a memory arm: the memory's own model calls are this attempt's
+  // (R245), and what its scope held and recalled is recorded (R240).
+  const memory = options.memory;
+  const stopMemoryUsage = memory ? listenMemoryUsage(memory, usage) : undefined;
+  let memoryRecord: EvalMemoryRecord | undefined;
   /** The fields every attempt result carries, whatever happened. */
   const attemptFields = (status: EvalStatus) => ({
     id: evalCase.id,
@@ -985,6 +1032,16 @@ export async function runAssistantEvalCase(
         vars = prepared.vars ?? {};
       }
     }
+    // The teach step, then what the scope holds (R239, R240): a teach the
+    // memory refuses fails the attempt before the probe.
+    if (memory) {
+      await teachMemory(memory, evalCase.teach, datasets);
+      memoryRecord = {
+        scope: memory.scope,
+        held: await memory.store.items(memory.scope),
+        recalled: [],
+      };
+    }
     const requestContext = evalRequestContext(
       datasets,
       sessionId,
@@ -994,12 +1051,22 @@ export async function runAssistantEvalCase(
       usageSink,
     );
     target.configureContext?.(requestContext);
+    // The probe recalls as a chat turn does, in parallel with the context.
+    const recall: Promise<ProbeRecall> | undefined = memory
+      ? recallForProbe(memory, question)
+      : undefined;
     const orientation = await target.orientation({
       datasets,
       snapshots: datasetSnapshots,
       requestContext,
       vars,
     });
+    const learned = recall ? await recall : undefined;
+    if (memoryRecord && learned) {
+      memoryRecord.recalled = learned.recalled;
+      if (learned.summary !== undefined) memoryRecord.summary = learned.summary;
+      memoryRecord.recallMs = learned.recallMs;
+    }
 
     assistantCalled = true;
     const result = await runEvals({
@@ -1023,6 +1090,11 @@ export async function runAssistantEvalCase(
         context: [
           { role: 'system', content: orientation },
           ...(target.sendsKnowledge ? knowledgeContext(knowledgeBlock) : []),
+          // The learned block after the knowledge block, as a chat turn
+          // sends it; none when nothing was recalled (R240).
+          ...(learned?.block
+            ? [{ role: 'system' as const, content: learned.block }]
+            : []),
         ],
         onStepFinish: (step: unknown) => captureStepRecords(step, turnRecords),
       },
@@ -1091,14 +1163,42 @@ export async function runAssistantEvalCase(
 
     // Result-set comparison (Feature 1) — primary correctness signal for
     // cases with expectedSql, on top of the text/tool scorers above.
+    let referenceRows: Record<string, unknown>[] | undefined;
     const resultSetCheck = await runResultSetCheck(
       evalCase.expectedSql,
       datasets,
       datasetSnapshots,
       turnRecords,
       evalCase.resultSetOptions,
+      (rows) => {
+        referenceRows = rows;
+      },
     );
     if (resultSetCheck) checkResults.push(withStatus(resultSetCheck, 'D1'));
+
+    // The memory checks (R241 to R243), from the attempt's memory record, in
+    // file order; under `none` the record is empty.
+    if (evalCase.memoryChecks?.length) {
+      const runReference = caseReferenceRunner(datasets, datasetSnapshots);
+      checkResults.push(
+        ...(await scoreMemoryChecks({
+          checks: evalCase.memoryChecks,
+          teach: evalCase.teach ?? [],
+          record: memoryRecord,
+          toolCalls: rawToolCalls,
+          turnRecords,
+          referenceRows: async () =>
+            referenceRows ??
+            (evalCase.expectedSql && runReference
+              ? runReference(evalCase.expectedSql)
+              : []),
+          ...(runReference ? { runReference } : {}),
+          ...(evalCase.resultSetOptions
+            ? { resultSetOptions: evalCase.resultSetOptions }
+            : {}),
+        })),
+      );
+    }
 
     // Custom checks: tool arguments, call order, state read back. They name
     // no criterion.
@@ -1154,6 +1254,7 @@ export async function runAssistantEvalCase(
       durationMs: Date.now() - startedAt,
       usage,
       costUsd: costUsdOf(usage),
+      ...(memoryRecord ? { memory: memoryRecord } : {}),
     };
   } catch (err) {
     // The generate threw before its result was recorded: a call whose
@@ -1173,8 +1274,13 @@ export async function runAssistantEvalCase(
       durationMs: Date.now() - startedAt,
       usage,
       costUsd: costUsdOf(usage),
+      ...(memoryRecord ? { memory: memoryRecord } : {}),
     };
   } finally {
+    // The attempt's usage is final once its result is built; then its scope
+    // is deleted, whatever happened (R238).
+    stopMemoryUsage?.();
+    if (memory) await forgetScope(memory);
     await target.afterCase?.(datasets);
   }
 }

@@ -57,6 +57,9 @@ import {
   runAssistantEvalCase,
 } from './assistant.evals';
 import type { AssistantEvalCase } from './assistant.evals';
+import { LEARNED_BLOCK_HEADING } from '../../modules/memory/learned-block';
+import { StubLearningStore } from './learning-store.stub';
+import type { TeachSignal } from './memory-case';
 
 /** The judge's `generate`, a plain mock here (see the module mock above). */
 const generate = (evalJudgeAgent as unknown as { generate: jest.Mock })
@@ -731,5 +734,205 @@ describe('evalRunModel (R22, R219)', () => {
       .mocked(resolveAgentModel)
       .mockRejectedValueOnce(new Error('no settings'));
     await expect(evalRunModel()).resolves.toBeUndefined();
+  });
+});
+
+describe('runAssistantEvalCase under a memory arm (agents.md 8.3, R238 to R245)', () => {
+  const SCOPE = 'eval-job-1-memory-correction-1-1';
+  const teach: TeachSignal[] = [
+    {
+      kind: 'correction',
+      at: '2026-09-01T10:00:00Z',
+      question: 'How many goals did he score?',
+      sql: "SELECT count(*) FROM world_cup.goals g JOIN world_cup.players p ON p.player_id = g.player_id WHERE p.name = 'Lionel Messi'",
+      note: 'Own goals are not his goals.',
+    },
+  ];
+  /** A memory case with two memory checks and a custom check after them. */
+  const memoryCase = (
+    overrides: Partial<AssistantEvalCase> = {},
+  ): AssistantEvalCase => ({
+    id: 'memory-correction-1',
+    question: 'How many goals did Messi score in 2018?',
+    intent: 'applies the correction',
+    scorers: [
+      {
+        id: 'check-no-tool-errors',
+        name: 'No tool errors',
+        description: 'Checks that no tool calls resulted in errors',
+      } as never,
+    ],
+    checkCriteria: ['D3'],
+    category: 'memory-correction',
+    teach,
+    memoryChecks: [
+      { type: 'noRowValuesRetained', criterion: 'M1' },
+      { type: 'teachNotRecalled', criterion: 'M3' },
+    ],
+    customChecks: [
+      { id: 'custom-last', description: 'Last', run: () => undefined },
+    ],
+    ...overrides,
+  });
+  /** The system messages the generate was given, in order. */
+  const contextSent = (): string[] => {
+    const config = jest.mocked(runEvals).mock.calls[0][0] as unknown as {
+      targetOptions: { context: { content: string }[] };
+    };
+    return config.targetOptions.context.map((message) => message.content);
+  };
+  const run = (store: StubLearningStore, evalCase = memoryCase(), extra = {}) =>
+    runAssistantEvalCase(
+      evalCase,
+      ['World Cup'],
+      undefined,
+      'Curated knowledge block',
+      ASSISTANT_EVAL_TARGET,
+      undefined,
+      {
+        model: 'openai/gpt-4o-mini',
+        memory: { store, scope: SCOPE, warn: jest.fn(), ...extra },
+      },
+    );
+
+  it('teaches, recalls into the learned block after the knowledge block, records the memory and deletes the scope', async () => {
+    const store = new StubLearningStore();
+    const result = await run(store);
+
+    expect(store.calls).toEqual([
+      `retain ${SCOPE}`,
+      `settle ${SCOPE}`,
+      `items ${SCOPE}`,
+      `recall ${SCOPE}`,
+      `mentalModels ${SCOPE}`,
+      `forget ${SCOPE}`,
+    ]);
+    const context = contextSent();
+    expect(context).toHaveLength(3);
+    expect(context[1]).toBe('Curated knowledge block');
+    expect(context[2]).toContain(LEARNED_BLOCK_HEADING);
+    expect(context[2]).toContain("p.name = '?'");
+    expect(context[2]).not.toContain('Lionel Messi');
+
+    expect(result.memory).toEqual({
+      scope: SCOPE,
+      held: [
+        expect.objectContaining({
+          kind: 'signal',
+          documentId: `${SCOPE}:teach-1`,
+        }),
+        expect.objectContaining({
+          kind: 'index',
+          documentId: `${SCOPE}:teach-1`,
+        }),
+        expect.objectContaining({ kind: 'summary' }),
+      ],
+      recalled: [
+        expect.objectContaining({
+          documentId: `${SCOPE}:teach-1`,
+          kind: 'correction',
+        }),
+      ],
+      summary: 'The analysts left 1 signal(s) about this data.',
+      recallMs: expect.any(Number) as number,
+    });
+    // After the file's checks and before the custom ones, in file order.
+    expect(
+      result.checkResults.map((check) => [
+        check.id,
+        check.status,
+        check.criterion,
+      ]),
+    ).toEqual([
+      ['check-no-tool-errors', 'passed', 'D3'],
+      ['check-no-row-values-retained', 'passed', 'M1'],
+      ['check-teach-not-recalled', 'failed', 'M3'],
+      ['custom-last', 'passed', undefined],
+    ]);
+    expect(result.status).toBe('failed');
+    // The memory's own calls, under the agent memory (R245).
+    expect(result.usage?.filter((entry) => entry.agent === 'memory')).toEqual([
+      expect.objectContaining({ model: 'text-embedding-3-small', calls: 2 }),
+      expect.objectContaining({ model: 'gpt-4o-mini', calls: 1 }),
+    ]);
+    expect(store.listening).toBe(0);
+    expect(await store.items(SCOPE)).toEqual([]);
+  });
+
+  it('sends no learned block when nothing is recalled and there is no summary', async () => {
+    const store = new StubLearningStore();
+    const result = await run(store, memoryCase({ teach: undefined }));
+    expect(contextSent()).toHaveLength(2);
+    expect(result.memory).toMatchObject({ held: [], recalled: [] });
+    expect(result.memory).not.toHaveProperty('summary');
+    expect(
+      result.checkResults.find((c) => c.id === 'check-teach-not-recalled')
+        ?.status,
+    ).toBe('passed');
+  });
+
+  it('goes on without a learned block when the recall is cut off', async () => {
+    const store = new StubLearningStore();
+    store.recallWith = () => new Promise(() => undefined);
+    const result = await run(store, memoryCase(), { recallCutOffMs: 20 });
+    expect(contextSent()).toHaveLength(2);
+    expect(result.memory?.recalled).toEqual([]);
+    expect(result.memory?.recallMs).toBeGreaterThanOrEqual(15);
+    expect(store.calls.at(-1)).toBe(`forget ${SCOPE}`);
+  });
+
+  it('fails an attempt whose teach step fails, without the probe, and still deletes the scope', async () => {
+    const store = new StubLearningStore();
+    store.failRetain = new Error('No embedding key is set');
+    const result = await run(store);
+    expect(runEvals).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      status: 'failed',
+      passed: false,
+      error: 'teach failed: No embedding key is set',
+      checkResults: [],
+    });
+    expect(result).not.toHaveProperty('memory');
+    expect(store.calls).toEqual([`retain ${SCOPE}`, `forget ${SCOPE}`]);
+  });
+
+  it('deletes the scope when the probe throws, keeping what the memory held', async () => {
+    const store = new StubLearningStore();
+    jest.mocked(runEvals).mockRejectedValueOnce(new Error('model down'));
+    const result = await run(store);
+    expect(result).toMatchObject({ status: 'failed', error: 'model down' });
+    expect(result.memory?.held).toHaveLength(3);
+    expect(store.calls.at(-1)).toBe(`forget ${SCOPE}`);
+  });
+
+  it('keeps the verdict when the scope cannot be deleted, and logs it', async () => {
+    const store = new StubLearningStore();
+    store.failForget = new Error('database is locked');
+    const warn = jest.fn();
+    const result = await run(store, memoryCase(), { warn });
+    expect(result.checkResults).toHaveLength(4);
+    expect(warn).toHaveBeenCalledWith(
+      `Memory scope ${SCOPE} not deleted: database is locked`,
+    );
+  });
+
+  it('scores the memory checks on an empty record under none, with no store and no learned block (A3)', async () => {
+    const result = await runAssistantEvalCase(
+      memoryCase(),
+      ['World Cup'],
+      undefined,
+      'Curated knowledge block',
+    );
+    expect(contextSent()).toHaveLength(2);
+    expect(result).not.toHaveProperty('memory');
+    expect(
+      result.checkResults.map((check) => [check.id, check.status]),
+    ).toEqual([
+      ['check-no-tool-errors', 'passed'],
+      ['check-no-row-values-retained', 'passed'],
+      ['check-teach-not-recalled', 'passed'],
+      ['custom-last', 'passed'],
+    ]);
+    expect(result.usage?.some((entry) => entry.agent === 'memory')).toBe(false);
   });
 });

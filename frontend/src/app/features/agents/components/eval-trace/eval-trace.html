@@ -40,6 +40,13 @@
           <lucide-angular [img]="Clock" [size]="12" />
           <span>{{ durationLabel(result.durationMs) }}</span>
         </span>
+        @if (result.memory && result.memory.recallMs !== undefined) {
+          <span
+            data-testid="eval-trace-recall"
+            class="text-[12px] text-fg-muted"
+            >Recall: {{ result.memory.recallMs }} ms</span
+          >
+        }
         <span data-testid="eval-trace-split" class="text-[12px] text-fg-muted"
           >· {{ splitLabel() }}</span
         >

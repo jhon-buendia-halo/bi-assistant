@@ -1,8 +1,9 @@
 /**
- * Tokens and cost of eval runs (agents-evals R219 to R221; data-model 3.8 and
- * 4.11). Every model call an attempt makes is recorded under one of four
- * agents (the assistant, the SQL fixer, the visual designer and the judge) and
- * the model it ran on, so a question's cost can be read per agent.
+ * Tokens and cost of eval runs (agents-evals R219 to R221, R245; data-model
+ * 3.8 and 4.11). Every model call an attempt makes is recorded under one of
+ * five agents (the assistant, the SQL fixer, the visual designer, the judge
+ * and, under a memory arm, the memory's own calls) and the model it ran on, so
+ * a question's cost can be read per agent.
  *
  * Two rules, as on `feat/engine-eval-loop`:
  *
@@ -21,6 +22,7 @@
  * (`resolveJsonModule`), so `nest build` emits it next to this module.
  */
 import pricingFile from './pricing.json';
+import type { MemoryModelUsage } from '../../modules/memory/learning-store.port';
 
 export { modelIdOf } from '../model-compat';
 
@@ -30,6 +32,8 @@ export const USAGE_AGENTS = [
   'sql-fixer',
   'designer',
   'judge',
+  // The memory's embeddings and summary rewrites, under a memory arm (R245).
+  'memory',
 ] as const;
 export type UsageAgent = (typeof USAGE_AGENTS)[number];
 
@@ -307,6 +311,25 @@ export function recordUsage(
   const usage = usageFromResult(result);
   if (usage) addInto(entry, usage);
   else entry.unreportedCalls += 1;
+}
+
+/**
+ * Add one model call the memory made itself (`LearningStore.onUsage`) to
+ * `entries`, in place, under the agent `memory` and the model it names
+ * (R245): an embedding (input tokens only) or a summary rewrite.
+ */
+export function recordMemoryUsage(
+  entries: ModelUsageEntry[],
+  usage: MemoryModelUsage,
+): void {
+  recordUsage(entries, 'memory', usage.model, {
+    usage: {
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cachedInputTokens: usage.cachedInputTokens ?? 0,
+      reasoningTokens: usage.reasoningTokens ?? 0,
+    },
+  });
 }
 
 /**

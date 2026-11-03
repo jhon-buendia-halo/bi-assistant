@@ -166,6 +166,40 @@ describe('summarizeEvalResults (agents-evals R148)', () => {
     ]);
   });
 
+  it('lists the memory categories after the eighteen, and M1 to M3 after C4 (R236, R244)', () => {
+    const summary = summarizeEvalResults([
+      result('a', 'memory-vs-curated', [check('passed', 'M3')]),
+      result('b', 'memory-reuse', [
+        check('passed', 'M1'),
+        check('failed', 'D1'),
+      ]),
+      result('c', 'paraphrase', [check('passed', 'C4')]),
+      result('d', 'memory-rejected', [
+        check('failed', 'M2'),
+        check('passed', 'M1'),
+      ]),
+      result('e', undefined, [check('passed', 'G1')]),
+      result('f', 'lookup', [check('passed', 'I1')]),
+    ]);
+    expect(summary.byCategory.map((entry) => entry.category)).toEqual([
+      'lookup',
+      'paraphrase',
+      'memory-reuse',
+      'memory-rejected',
+      'memory-vs-curated',
+      'uncategorised',
+    ]);
+    expect(summary.byCriterion).toEqual([
+      { criterion: 'D1', passed: 0, failed: 1, total: 1 },
+      { criterion: 'G1', passed: 1, failed: 0, total: 1 },
+      { criterion: 'I1', passed: 1, failed: 0, total: 1 },
+      { criterion: 'C4', passed: 1, failed: 0, total: 1 },
+      { criterion: 'M1', passed: 2, failed: 0, total: 2 },
+      { criterion: 'M2', passed: 0, failed: 1, total: 1 },
+      { criterion: 'M3', passed: 1, failed: 0, total: 1 },
+    ]);
+  });
+
   it('summarises an empty run and tolerates results with no checks', () => {
     expect(summarizeEvalResults([])).toEqual({
       passed: 0,

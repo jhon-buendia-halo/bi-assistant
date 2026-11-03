@@ -342,19 +342,19 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 - **Acceptance:** agreement at least 90% on both passes and fails, or the rubrics rewritten until it is.
 - **Notes:** 3 days, after the beta. Needs 1.1.10 and a labeller. Jira: [BA-190](https://halo-powered.atlassian.net/browse/BA-190).
 
-#### 1.1.13 — Arms: knowledge on and off, model comparison (Step 7) ([BA-190](https://halo-powered.atlassian.net/browse/BA-190); was BA-191)  `📋 Planned`
+#### 1.1.13 — Arms: knowledge on and off, model comparison (Step 7) ([BA-190](https://halo-powered.atlassian.net/browse/BA-190); was BA-191)  `🚧 In progress`
 - **Intent:** prove whether a change helps by running the same questions with it and without it.
-- **Scope:** an `arm` option on a run (knowledge on or off; a model override), stored on the run; a side-by-side report of two runs by category; the loop runner and `eval:diff --draft`.
+- **Scope:** an `arm` option on a run (knowledge on or off; a model override), stored on the run; a side-by-side report of two runs by category; the loop runner and `eval:diff --draft`. Added 2026-11-02 for BA-81's memory decision ([ADR-0031](specs/system/architecture.md)): a memory arm on a run (`arm.memory`: `none`, `mastra` or `hindsight-mastra`; `EVAL_MEMORY` on the command line; `Memory <arm>` on an execution), compared only with runs of the same arm. `mastra` runs only on a build that has BA-81's store, and `hindsight-mastra` is refused as not built ([agents-evals](specs/capabilities/agents-evals/spec.md) R231, R232).
 - **Out of scope:** automating the improvement loop.
-- **Acceptance:** 1.3.3's acceptance (knowledge on and off, no category gets worse) is answered by one report.
-- **Notes:** 2 to 3 days. Needs 1.1.10 and 1.1.11. Jira: [BA-190](https://halo-powered.atlassian.net/browse/BA-190) (was BA-191, merged on 2026-10-13).
+- **Acceptance:** 1.3.3's acceptance (knowledge on and off, no category gets worse) is answered by one report. The memory arm answers ADR-0031's rules 1 to 3: an A/A pair of `none` runs and of `mastra` runs on the memory set (1.1.14), then `mastra` against `none` by memory category.
+- **Notes:** 2 to 3 days. Needs 1.1.10 and 1.1.11. Jira: [BA-190](https://halo-powered.atlassian.net/browse/BA-190) (was BA-191, merged on 2026-10-13). The memory arm started 2026-11-02, for roadmap 1.3.7 of the BA-4 branch (BA-81); the knowledge on and off and model-override arms are still to do.
 
-#### 1.1.14 — Component checks and two-turn tasks (Step 8) ([BA-190](https://halo-powered.atlassian.net/browse/BA-190); was BA-192)  `📋 Planned`
+#### 1.1.14 — Component checks and two-turn tasks (Step 8) ([BA-190](https://halo-powered.atlassian.net/browse/BA-190); was BA-192)  `🚧 In progress`
 - **Intent:** a wrong answer names the part that failed, and a clarification counts only if the answer after it is right.
-- **Scope:** checks on intermediate outputs (tables used, repair count, query time against the reference, the verifier's agreement in careful mode); a `turns` field on a case; at least ten tasks in the `follow-up` category.
+- **Scope:** checks on intermediate outputs (tables used, repair count, query time against the reference, the verifier's agreement in careful mode); a `turns` field on a case; at least ten tasks in the `follow-up` category. Added 2026-11-02 for BA-81's memory decision: the memory set `memory.json`, 36 two-step cases (teach signals stored in the memory under test, then a probe as the first turn of a new session) in six memory categories, 4 dev and 2 held out each; the memory checks M1 to M3 (`noRowValuesRetained`, `notRejectedSql`, `teachNotRecalled`), scored by the runner; the validator's trap and teach checks; the recall time in the Details panel ([agents-evals](specs/capabilities/agents-evals/spec.md) R233 to R246).
 - **Out of scope:** none named in the plan.
-- **Acceptance:** a failed task names the component that failed.
-- **Notes:** about a week, after the beta. Jira: [BA-190](https://halo-powered.atlassian.net/browse/BA-190) (was BA-192, merged on 2026-10-13).
+- **Acceptance:** a failed task names the component that failed. The validator passes the three memory sets: every reference and teach query runs, and every trap fails the result-set match.
+- **Notes:** about a week, after the beta. Jira: [BA-190](https://halo-powered.atlassian.net/browse/BA-190) (was BA-192, merged on 2026-10-13). The memory part started 2026-11-02; the component checks on intermediate outputs and the `turns` field are still to do.
 
 #### 1.1.15 — Verified queries become cases; a user eval set per dataset (Step 9) ([BA-193](https://halo-powered.atlassian.net/browse/BA-193))  `📋 Planned`
 - **Intent:** a user gets a pass rate on their own data from the answers they already approved.

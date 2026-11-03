@@ -6,7 +6,7 @@
  *
  * Pure module: no Nest, no Mastra, no model.
  */
-import { EVAL_CATEGORIES } from './eval-set-files';
+import { QUESTION_CATEGORIES } from './eval-set-files';
 import type { EvalCategory, EvalCriterion } from './eval-set-files';
 
 export const EVAL_JUDGE_MODES = ['off', 'on', 'categories'] as const;
@@ -65,10 +65,11 @@ export function parseJudgeSetting(
   for (const value of categories as unknown[]) {
     if (
       typeof value !== 'string' ||
-      !EVAL_CATEGORIES.includes(value as EvalCategory)
+      !(QUESTION_CATEGORIES as readonly string[]).includes(value)
     ) {
+      // The eighteen only: no memory case has a rubric (R236, OD-17).
       return {
-        error: `Unknown judge category "${shown(value)}". Known categories: ${EVAL_CATEGORIES.join(', ')}.`,
+        error: `Unknown judge category "${shown(value)}". Known categories: ${QUESTION_CATEGORIES.join(', ')}.`,
       };
     }
     wanted.add(value);
@@ -76,7 +77,9 @@ export function parseJudgeSetting(
   return {
     setting: {
       mode: 'categories',
-      categories: EVAL_CATEGORIES.filter((category) => wanted.has(category)),
+      categories: QUESTION_CATEGORIES.filter((category) =>
+        wanted.has(category),
+      ),
     },
   };
 }

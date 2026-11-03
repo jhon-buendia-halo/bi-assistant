@@ -254,6 +254,33 @@ function sideWarnings(
   return warnings;
 }
 
+/**
+ * The memory arm's warnings (R246): a side that mixes arms, or two sides of
+ * one arm each that differ, written `the memory arm differs: <before> →
+ * <after>`. Comparing two arms on the same questions is what ADR-0031's
+ * decision rule does, so it is a warning, not a refusal.
+ */
+function memoryArmWarnings(before: DiffSide, after: DiffSide): string[] {
+  const armOf = (run: LoopRun): string => run.memoryArm ?? 'not recorded';
+  const warnings: string[] = [];
+  const b = distinct(before.runs.map(armOf));
+  const a = distinct(after.runs.map(armOf));
+  for (const side of [
+    { name: 'before', values: b },
+    { name: 'after', values: a },
+  ]) {
+    if (side.values.length > 1) {
+      warnings.push(
+        `the ${side.name} side mixes memory arms (${side.values.join(', ')})`,
+      );
+    }
+  }
+  if (b.length === 1 && a.length === 1 && b[0] !== a[0]) {
+    warnings.push(`the memory arm differs: ${b[0]} → ${a[0]}`);
+  }
+  return warnings;
+}
+
 /** Compare the two sides (R225, R226). */
 export function computeDiff(
   beforeRuns: readonly LoopRun[],
@@ -344,6 +371,7 @@ export function computeDiff(
       { mixes: 'judge options', differ: 'the judge option differs' },
       (r) => describeJudge(r.judge),
     ),
+    ...memoryArmWarnings(before, after),
   );
   return {
     before,

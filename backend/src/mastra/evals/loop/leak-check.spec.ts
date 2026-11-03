@@ -2,6 +2,7 @@ import { execFileSync } from 'child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
+import { EVAL_SET_FILES } from '../eval-set-files';
 import type { EvalSetFileSource } from '../eval-set-files';
 import { CommonVocabulary, normalizeText } from './common-words';
 import {
@@ -480,5 +481,196 @@ describe('leakCheckMain against a git repository', () => {
     await expect(leakCheckMain(['--fixer'], {}, io, root)).resolves.toBe(1);
     expect(out.join('\n')).toContain(`${LEVER}:2 [question]`);
     expect(out.join('\n')).not.toContain('shot-conversion-2022');
+  });
+  it('rejects a held-out memory case’s teach note from the bundled bank, and with --fixer names no case', async () => {
+    type Case = {
+      id: string;
+      split?: string;
+      teach: { note?: string }[];
+    };
+    const memory = EVAL_SET_FILES.find((f) => f.file === 'memory.json')!
+      .content as { cases: Case[] };
+    const held = memory.cases.find(
+      (c) => c.split === 'held-out' && c.teach.some((signal) => signal.note),
+    )!;
+    const n = held.teach.findIndex((signal) => signal.note);
+    write(
+      LEVER,
+      'export const PROMPT = `Answer from the data.`;\n' +
+        `export const NOTE = ${JSON.stringify(held.teach[n].note)};\n`,
+    );
+    type Report = {
+      rejected: number;
+      findings: { kind: string; sources: object[] }[];
+    };
+    await expect(leakCheckMain(['--json'], {}, io, root)).resolves.toBe(1);
+    const report = JSON.parse(out[out.length - 1]) as Report;
+    expect(report.rejected).toBeGreaterThan(0);
+    expect(
+      report.findings.find((f) => f.kind === 'question')?.sources,
+    ).toContainEqual({
+      file: 'memory.json',
+      caseId: held.id,
+      split: 'held-out',
+      field: `teach[${n}].note`,
+    });
+
+    out.length = 0;
+    await expect(leakCheckMain(['--fixer'], {}, io, root)).resolves.toBe(1);
+    expect(out.join('\n')).toContain(`${LEVER}:2 [question]`);
+    expect(out.join('\n')).not.toContain(held.id);
+  });
+});
+
+describe('leak check on memory cases (agents-evals R229, BA-190)', () => {
+  /** A memory bank: a held-out case and a dev case, as memory.json writes them. */
+  const MEMORY: EvalSetFileSource = {
+    file: 'memory.json',
+    content: {
+      variants: [],
+      cases: [
+        {
+          id: 'held-memory',
+          fixture: 'world-cup',
+          category: 'memory-correction',
+          split: 'held-out',
+          notes: 'Never read: a case’s notes are for people.',
+          teach: [
+            {
+              kind: 'correction',
+              at: '2026-11-02T15:00:00Z',
+              question:
+                'Which venue saw the most goals scored during the Qatar tournament?',
+              sql: "SELECT v.name FROM world_cup.venues v WHERE v.name <> 'Ahmad bin Ali Stadium'",
+              note: 'Count the extra-time goals too, they were scored at the venue all the same.',
+            },
+          ],
+          probe: {
+            question:
+              '¿Cuántos goles se marcaron en el estadio Al Bayt durante el torneo de Qatar?',
+            expectedSql: {
+              postgres:
+                "SELECT COUNT(*) FROM world_cup.goals g WHERE g.venue = 'Education City Stadium'",
+            },
+            trapSql: {
+              postgres:
+                "SELECT COUNT(*) FROM world_cup.goals g WHERE g.venue = 'Stadium 974 Ras Abu Aboud' AND g.minute <= 90",
+            },
+            checks: [
+              { type: 'calledTool', args: { tool: 'run_readonly_sql' } },
+              { type: 'noRowValuesRetained' },
+            ],
+          },
+        },
+        {
+          id: 'dev-memory',
+          fixture: 'world-cup',
+          category: 'memory-reuse',
+          split: 'dev',
+          teach: [
+            {
+              kind: 'verified_query',
+              at: '2026-11-02T15:00:00Z',
+              question:
+                'How many spot kicks did the champions convert in regulation play?',
+              sql: 'SELECT COUNT(*) FROM world_cup.goals',
+            },
+          ],
+          probe: {
+            question:
+              'Which side converted the most spot kicks during regulation at the latest tournament?',
+            expectedSql: { postgres: 'SELECT 1' },
+            trapSql: { postgres: 'SELECT 2' },
+            checks: [{ type: 'noRowValuesRetained' }],
+          },
+        },
+      ],
+    },
+  };
+
+  const memoryCheck = (lines: string[], sets = [MEMORY]) =>
+    checkChanges({
+      changes: [
+        {
+          path: LEVER,
+          added: lines.map((text, i) => ({ line: i + 10, text })),
+          removed: [],
+        },
+      ],
+      index: buildLiteralIndex(sets, []),
+      vocabulary: new CommonVocabulary([BASE], []),
+      baseText: new Map([[LEVER, BASE]]),
+      allowlist: new Set(),
+    }).findings;
+  /** A finding's distinct sources (folded findings repeat one). */
+  const fields = (finding: Finding | undefined) => [
+    ...new Set(
+      (finding?.sources ?? []).map((s) => `${s.caseId} ${s.split} ${s.field}`),
+    ),
+  ];
+
+  it('rejects a copied teach note of a held-out case, naming no case with --fixer', () => {
+    const found = memoryCheck([
+      '  Count the extra-time goals too, they were scored at the venue all the same.',
+    ]);
+    const question = found.find((f) => f.kind === 'question');
+    expect(question?.warning).toBe(false);
+    expect(fields(question)).toEqual(['held-memory held-out teach[0].note']);
+    expect(formatFinding(question!, true)).toMatch(/← a held-out case$/);
+  });
+
+  it('rejects a held-out probe question, and a teach question, copied whole', () => {
+    const probe = memoryCheck([
+      'e.g. ¿Cuántos goles se marcaron en el estadio Al Bayt durante el torneo de Qatar?',
+    ]).find((f) => f.kind === 'question');
+    // The span Qatar of the other text is folded in, after the copied one.
+    expect(fields(probe)[0]).toBe('held-memory held-out probe.question');
+    const teach = memoryCheck([
+      'Which venue saw the most goals scored during the Qatar tournament?',
+    ]).find((f) => f.kind === 'question');
+    expect(fields(teach)[0]).toBe('held-memory held-out teach[0].question');
+  });
+
+  it('flags a copied trap, reference or teach SQL by its string literals, which only warn, as a reference query’s do', () => {
+    const trap = memoryCheck([
+      "SELECT COUNT(*) FROM world_cup.goals g WHERE g.venue = 'Stadium 974 Ras Abu Aboud' AND g.minute <= 90",
+    ]);
+    expect(kinds(trap)).toEqual(['sql-literal?:stadium 974 ras abu aboud']);
+    expect(fields(trap[0])).toEqual([
+      'held-memory held-out probe.trapSql.postgres',
+    ]);
+    expect(
+      fields(memoryCheck(["venue = 'Education City Stadium'"])[0]),
+    ).toEqual(['held-memory held-out probe.expectedSql.postgres']);
+    expect(fields(memoryCheck(["name <> 'Ahmad bin Ali Stadium'"])[0])).toEqual(
+      ['held-memory held-out teach[0].sql'],
+    );
+  });
+
+  it('treats a dev memory case as any dev case: rejected, and named even with --fixer', () => {
+    const line =
+      'Which side converted the most spot kicks during regulation at the latest tournament?';
+    const [finding] = memoryCheck([line]);
+    expect(finding).toMatchObject({ kind: 'question', warning: false });
+    expect(formatFinding(finding, true)).toBe(
+      `${LEVER}:10 [question] "which side converted the most spot kicks during regulation at the latest tournament" ← memory.json case dev-memory (dev) probe.question`,
+    );
+    // The same as a dev question of another bank.
+    const [other] = check([
+      'Which branch of Harborline Mutual opened 1,062 accounts in 2024?',
+    ]);
+    expect(formatFinding(other, true)).toContain(
+      ' ← demo.json case dev-q (dev) question',
+    );
+  });
+
+  it('reads nothing of a case’s own notes, and leaves a bank without memory cases as it was', () => {
+    expect(memoryCheck(['Never read: a case’s notes are for people.'])).toEqual(
+      [],
+    );
+    const line =
+      'Which venue saw the most goals scored during the Qatar tournament?';
+    expect(memoryCheck([line], SETS)).toEqual([]);
+    expect(memoryCheck([line], [...SETS, MEMORY])).toHaveLength(1);
   });
 });

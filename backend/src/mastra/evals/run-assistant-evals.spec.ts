@@ -86,6 +86,18 @@ describe('npm run evals:assistant refusals (agents.md 8.5, R222)', () => {
       { EVAL_CATEGORY: 'lookup,joins' },
       'Unknown EVAL_CATEGORY "joins". Known categories:',
     ],
+    [
+      { EVAL_MEMORY: 'sometimes' },
+      'Unknown memory arm "sometimes"; use none, mastra or hindsight-mastra',
+    ],
+    [
+      { EVAL_MEMORY: 'hindsight', EVAL_SPLIT: 'test' },
+      'Unknown memory arm "hindsight"; use none, mastra or hindsight-mastra',
+    ],
+    [
+      { EVAL_REPEATS: '2', EVAL_MEMORY: 'sometimes' },
+      'Repeats must be 1, 3 or 5 (got "2")',
+    ],
   ])('refuses %j with "%s" before the backend boots', async (env, message) => {
     const output = capture();
     await expect(main({ ...WORLD_CUP, ...env }, output)).resolves.toBe(1);
@@ -190,6 +202,7 @@ function savedRun(results: AssistantEvalCaseResult[]): EvalRunView {
     finishedAt: '2026-10-20T00:01:00.000Z',
     judge: { mode: 'off' },
     repeats: 3,
+    arm: { memory: 'none' },
     model: 'openai/gpt-4o-mini',
     usage: results.flatMap((each) => each.usage ?? []),
     costUsd: 0.0063,
@@ -232,11 +245,12 @@ describe('npm run evals:assistant run (R154, R222, R223)', () => {
         caseIds: ['shot-conversion-2022'],
         judge: { mode: 'off' },
         repeats: 3,
+        arm: { memory: 'none' },
       },
       expect.any(Function),
     );
     const printed = output.out.join('\n');
-    expect(printed).toContain('Judge: off\nRepeats: 3\n');
+    expect(printed).toContain('Judge: off\nRepeats: 3\nMemory: none\n');
     expect(printed).toContain(
       'FAIL  shot-conversion-2022  2/3 attempts  (20ms)  flaky',
     );
@@ -262,6 +276,58 @@ describe('npm run evals:assistant run (R154, R222, R223)', () => {
     );
     expect(JSON.parse(readFileSync(runFile, 'utf8'))).toEqual(run);
     expect(app.close).toHaveBeenCalled();
+    // No memory arm: no recall line.
+    expect(printed).not.toContain('Recall:');
+  });
+
+  it('runs a memory arm, printing it under the repeats and the recall times after the cost (R245, R246)', async () => {
+    const recalled = (recallMs: number) => ({
+      scope: `eval-job-1-a-${recallMs}`,
+      held: [],
+      recalled: [],
+      recallMs,
+    });
+    const run = {
+      ...savedRun([
+        result('memory-reuse-1', { runs: 1, memory: recalled(400) }),
+        result('memory-reuse-2', { runs: 1, memory: recalled(100) }),
+        // Its teach step failed, so it never recalled.
+        result('memory-reuse-3', { runs: 1 }),
+      ]),
+      repeats: 1 as const,
+      arm: { memory: 'mastra' as const },
+    };
+    const { service } = fakeApp(run);
+    const output = capture();
+    await main({ ...WORLD_CUP, EVAL_MEMORY: ' mastra ' }, output);
+    expect(service.runFromCommandLine).toHaveBeenCalledWith(
+      expect.objectContaining({ arm: { memory: 'mastra' } }),
+      expect.any(Function),
+    );
+    const printed = output.out.join('\n');
+    expect(printed).toContain('Judge: off\nRepeats: 1\nMemory: mastra\n');
+    expect(printed).toMatch(
+      /Cost: \$0\.0063 · \$0\.0021 per question\nRecall: p50 250 ms · p90 370 ms\n/,
+    );
+  });
+
+  it("refuses a memory arm the build has not after it boots, before any model call, with the service's message", async () => {
+    const service = {
+      runFromCommandLine: jest.fn().mockResolvedValue({
+        error: 'The memory arm "mastra" is not built in this version',
+      }),
+    };
+    createApplicationContext.mockResolvedValueOnce({
+      get: () => service,
+      close: jest.fn(),
+    });
+    const output = capture();
+    await expect(
+      main({ ...WORLD_CUP, EVAL_MEMORY: 'mastra' }, output),
+    ).resolves.toBe(1);
+    expect(output.err).toEqual([
+      'The memory arm "mastra" is not built in this version',
+    ]);
   });
 
   it('prints the comparison as the report writes it, noting other repeats, and exits 0 when all passed', async () => {

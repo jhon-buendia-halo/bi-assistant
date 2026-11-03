@@ -17,9 +17,11 @@ import {
   resultStatus,
   runCost,
   runFlakyCount,
+  runMemoryArm,
   runRepeats,
   splitCell,
   splitLine,
+  USAGE_AGENT_LABELS,
   usageLabel,
   runCounts,
   runHeadline,
@@ -182,6 +184,9 @@ describe('repeats, split and cost helpers', () => {
   it('reads a run saved before repeats as one attempt', () => {
     expect(runRepeats(run())).toBe(1);
     expect(runRepeats(run({ repeats: 3 }))).toBe(3);
+    expect(runMemoryArm(run())).toBe('none');
+    expect(runMemoryArm(run({ arm: { memory: 'mastra' } }))).toBe('mastra');
+    expect(USAGE_AGENT_LABELS.memory).toBe('Memory');
     expect(resultRuns(result())).toBe(1);
     expect(resultPasses(result())).toBe(1);
     expect(resultPasses(result({ passed: false, status: 'failed' }))).toBe(0);

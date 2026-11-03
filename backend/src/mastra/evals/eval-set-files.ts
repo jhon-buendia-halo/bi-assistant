@@ -30,6 +30,13 @@
  *   canonical catalog backticked (`` `evals`.world_cup.matches ``); where it
  *   runs, `databricks-catalog.ts` rewrites `` `evals`. `` to the selected
  *   datasets' catalog (agents-evals R192).
+ *
+ * `memory.json` (BA-190) holds memory cases instead of questions: each
+ * teaches signals, then asks a probe (agents-evals R233 to R236). Its
+ * variants are PostgreSQL sets, one per sample, each holding the cases whose
+ * `fixture` is its sample, and a memory case loads as an ordinary case whose
+ * question, checks and reference are its probe's, plus its `teach`, its
+ * `trapSql` and its memory checks.
  */
 import { SAMPLE_FIXTURES } from '../../modules/testing-data/fixtures/registry';
 import { OPTIONAL_AGENT_TOOLS } from '../agent-tools';
@@ -41,6 +48,13 @@ import {
   isDeterministicCheckType,
 } from './checks';
 import type { DeterministicCheckSpec, DeterministicCheckType } from './checks';
+import { MEMORY_CHECKS } from './checks/memory-checks';
+import { MEMORY_CHECK_TYPES } from './memory-case';
+import type {
+  MemoryCheckSpec,
+  MemoryCheckType,
+  TeachSignal,
+} from './memory-case';
 import worldCupSetFile from './sets/world-cup.json';
 import formula1SetFile from './sets/formula-1.json';
 import worldCupRestConnectorSetFile from './sets/world-cup-rest-connector.json';
@@ -50,13 +64,18 @@ import healthInsuranceSetFile from './sets/health-insurance.json';
 import genomicsSetFile from './sets/genomics.json';
 import supplyChainSetFile from './sets/supply-chain.json';
 import marketingAnalyticsSetFile from './sets/marketing-analytics.json';
+import memorySetFile from './sets/memory.json';
 
 /** The SQL dialects a reference query can be written in. */
 export const EVAL_DIALECTS = ['postgres', 'sqlite', 'databricks'] as const;
 export type EvalDialect = (typeof EVAL_DIALECTS)[number];
 
-/** One primary category per case (research 2.6). */
-export const EVAL_CATEGORIES = [
+/**
+ * One primary category per question (research 2.6): the eighteen of every
+ * question bank but `memory.json`. `EVAL_CATEGORY` and the judge's
+ * `categories` take these only (agents-evals R236, OD-17).
+ */
+export const QUESTION_CATEGORIES = [
   'lookup',
   'aggregate',
   'join',
@@ -76,6 +95,30 @@ export const EVAL_CATEGORIES = [
   'follow-up',
   'paraphrase',
 ] as const;
+
+/**
+ * A memory case's category (agents-evals R236): the four learning
+ * categories, where what was taught should change the answer, then the two
+ * a memory must not change.
+ */
+export const MEMORY_CATEGORIES = [
+  'memory-reuse',
+  'memory-correction',
+  'memory-update',
+  'memory-rejected',
+  'memory-abstain',
+  'memory-vs-curated',
+] as const;
+export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
+
+/**
+ * Every category a case can have, in the order the run summary lists them:
+ * the memory categories after the eighteen (R148, R236).
+ */
+export const EVAL_CATEGORIES = [
+  ...QUESTION_CATEGORIES,
+  ...MEMORY_CATEGORIES,
+] as const;
 export type EvalCategory = (typeof EVAL_CATEGORIES)[number];
 
 /** `held-out` cases are kept out of prompt tuning; `dev` is the default. */
@@ -84,8 +127,9 @@ export type EvalSplit = (typeof EVAL_SPLITS)[number];
 
 /**
  * The ids of the BA-9 criteria list (research 2.5) a check may measure:
- * domain, generation, instruction-following, cost and latency. J1 and J2
- * grade the judge, never a question.
+ * domain, generation, instruction-following, cost and latency, then the
+ * memory bucket M1 to M3 (agents-evals R244). J1 and J2 grade the judge,
+ * never a question.
  */
 export const EVAL_CRITERIA = [
   'D1',
@@ -109,6 +153,9 @@ export const EVAL_CRITERIA = [
   'C2',
   'C3',
   'C4',
+  'M1',
+  'M2',
+  'M3',
 ] as const;
 export type EvalCriterion = (typeof EVAL_CRITERIA)[number];
 
@@ -178,6 +225,19 @@ export interface EvalCaseDefinition {
   expectedSql?: string;
   resultSetOptions?: ResultSetCheckOptions;
   judgeRubric?: string;
+  /**
+   * A memory case only (agents-evals R234): the signals stored before the
+   * question, which is its probe's, in file order.
+   */
+  teach?: TeachSignal[];
+  /** A memory case only: the probe's trap query, for the validator (R237). */
+  trapSql?: string;
+  /**
+   * A memory case only: the checks of R241 to R243, in file order, each with
+   * its criterion (named, or its type's default). They are not in `checks`:
+   * they read the attempt's memory record, so no scorer is built for them.
+   */
+  memoryChecks?: MemoryCheckSpec[];
 }
 
 /** One runnable set: a variant of a set file with its expanded cases. */
@@ -196,11 +256,15 @@ export interface EvalSetFileSource {
   content: unknown;
 }
 
+/** The question bank file of the memory cases (agents-evals R233). */
+export const MEMORY_SET_FILE = 'memory.json';
+
 /**
  * Every set file, in the order the suite lists its sets: World Cup, World Cup
  * (REST API), Formula 1, World Cup (REST connector, BA-187), World Cup
  * (Databricks only, BA-186), then the synthetic domains (BA-185): Finance,
- * Health Insurance, Genomics, Supply Chain, Marketing Analytics.
+ * Health Insurance, Genomics, Supply Chain, Marketing Analytics; then the
+ * memory sets (BA-190), before the RFP Builder's set (R11).
  */
 export const EVAL_SET_FILES: readonly EvalSetFileSource[] = [
   { file: 'world-cup.json', content: worldCupSetFile },
@@ -218,6 +282,7 @@ export const EVAL_SET_FILES: readonly EvalSetFileSource[] = [
   { file: 'genomics.json', content: genomicsSetFile },
   { file: 'supply-chain.json', content: supplyChainSetFile },
   { file: 'marketing-analytics.json', content: marketingAnalyticsSetFile },
+  { file: MEMORY_SET_FILE, content: memorySetFile },
 ];
 
 const FILE_KEYS = ['variants', 'cases'];
@@ -245,6 +310,42 @@ const CASE_KEYS = [
 ];
 const CHECK_KEYS = ['type', 'args', 'criterion'];
 const RESULT_SET_OPTION_KEYS = ['distinctRows'];
+/** A memory case's fields (R234); `split` is the only optional one. */
+const MEMORY_CASE_KEYS = [
+  'id',
+  'fixture',
+  'category',
+  'split',
+  'tags',
+  'intent',
+  'notes',
+  'teach',
+  'probe',
+];
+const TEACH_SIGNAL_KEYS = ['kind', 'at', 'question', 'sql', 'note'];
+const PROBE_KEYS = [
+  'question',
+  'expectedSql',
+  'trapSql',
+  'checks',
+  'resultSetOptions',
+];
+const TEACH_KINDS: readonly TeachSignal['kind'][] = [
+  'verified_query',
+  'correction',
+  'rejection',
+];
+const MAX_TEACH_SIGNALS = 3;
+/** One of these per memory case (R234): the probe's language. */
+const LANGUAGE_TAGS = ['lang:en', 'lang:es'];
+/** And one of these. */
+const DIFFICULTY_TAGS = [
+  'difficulty:easy',
+  'difficulty:medium',
+  'difficulty:hard',
+];
+/** An ISO 8601 time in UTC (`2026-11-02T15:00:00Z`). */
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z$/;
 
 /** Required and optional `args` per check type. */
 const CHECK_ARGS: Readonly<
@@ -375,8 +476,22 @@ export function parseEvalSetFile(
     parseVariant(file, raw, index),
   );
   const dialects = Array.from(new Set(variants.map((v) => v.dialect)));
+  const memory = file === MEMORY_SET_FILE;
+  if (memory) {
+    // A probe has a PostgreSQL reference only (R233).
+    const other = variants.find((v) => v.dialect !== 'postgres');
+    if (other) {
+      throw new EvalSetError(
+        file,
+        `variant "${other.id}"`,
+        `a memory set runs on PostgreSQL only; dialect "${other.dialect}" is not postgres`,
+      );
+    }
+  }
   const cases = content.cases.map((raw, index) =>
-    parseCase(file, raw, index, dialects),
+    memory
+      ? parseMemoryCase(file, raw, index, variants)
+      : parseCase(file, raw, index, dialects),
   );
   const seen = new Set<string>();
   for (const evalCase of cases) {
@@ -393,8 +508,14 @@ export function parseEvalSetFile(
 }
 
 /** A case as the file writes it, validated but not yet expanded. */
-interface ParsedCase extends Omit<EvalCaseDefinition, 'expectedSql'> {
+interface ParsedCase extends Omit<
+  EvalCaseDefinition,
+  'expectedSql' | 'trapSql'
+> {
   expectedSql?: Partial<Record<EvalDialect, string>>;
+  trapSql?: Partial<Record<EvalDialect, string>>;
+  /** A memory case's sample: only the variant on it holds the case (R233). */
+  fixture?: string;
 }
 
 function expand(
@@ -406,13 +527,19 @@ function expand(
   return {
     ...set,
     file,
-    cases: cases.map(({ expectedSql, ...evalCase }) => {
+    cases: cases.flatMap(({ expectedSql, trapSql, fixture, ...evalCase }) => {
+      // A memory case belongs to the variant of its sample only (R233).
+      if (fixture !== undefined && fixture !== variant.fixtureId) return [];
       const sql = expectedSql?.[variant.dialect];
-      return {
-        ...evalCase,
-        id: `${caseIdPrefix}${evalCase.id}`,
-        ...(sql !== undefined ? { expectedSql: sql } : {}),
-      };
+      const trap = trapSql?.[variant.dialect];
+      return [
+        {
+          ...evalCase,
+          id: `${caseIdPrefix}${evalCase.id}`,
+          ...(sql !== undefined ? { expectedSql: sql } : {}),
+          ...(trap !== undefined ? { trapSql: trap } : {}),
+        },
+      ];
     }),
   };
 }
@@ -541,24 +668,9 @@ function parseCase(
       'the id must be lowercase words joined by hyphens',
     );
   }
-  if (raw.category === undefined) {
-    throw new EvalSetError(file, where, '"category" is required');
-  }
-  if (!EVAL_CATEGORIES.includes(raw.category as EvalCategory)) {
-    throw new EvalSetError(
-      file,
-      where,
-      `category ${JSON.stringify(raw.category)} is not one of ${oneOf(EVAL_CATEGORIES)}`,
-    );
-  }
-  const split = raw.split ?? 'dev';
-  if (!EVAL_SPLITS.includes(split as EvalSplit)) {
-    throw new EvalSetError(
-      file,
-      where,
-      `split ${JSON.stringify(split)} is not one of ${oneOf(EVAL_SPLITS)}`,
-    );
-  }
+  // A memory category belongs to memory.json only (R236).
+  const category = parseCategory(file, where, raw, QUESTION_CATEGORIES);
+  const split = parseSplit(file, where, raw);
   const tags = raw.tags ?? [];
   if (!Array.isArray(tags) || !tags.every(isNonEmptyString)) {
     throw new EvalSetError(
@@ -572,19 +684,9 @@ function parseCase(
   const notes = optionalString(file, where, raw, 'notes');
   const agentTools = parseAgentTools(file, where, raw.agentTools);
   const judgeRubric = optionalString(file, where, raw, 'judgeRubric');
-  const checks = parseChecks(file, where, raw.checks);
+  const { checks } = parseChecks(file, where, raw.checks, false);
   const expectedSql = parseExpectedSql(file, where, raw.expectedSql, dialects);
-  checks.forEach((check, index) => {
-    if (!isDeterministicCheckType(check.type)) return;
-    // `usesEntities` without entities reads them from the reference (R125).
-    const problem = DETERMINISTIC_CHECKS[check.type].validateCase?.(
-      (check.args ?? {}) as Json,
-      expectedSql,
-    );
-    if (problem) {
-      throw new EvalSetError(file, `${where}, check #${index + 1}`, problem);
-    }
-  });
+  validateDeterministicChecks(file, where, checks, expectedSql);
   const resultSetOptions = parseResultSetOptions(
     file,
     where,
@@ -592,8 +694,8 @@ function parseCase(
   );
   return {
     id,
-    category: raw.category as EvalCategory,
-    split: split as EvalSplit,
+    category,
+    split,
     tags,
     question,
     intent,
@@ -604,6 +706,289 @@ function parseCase(
     ...(resultSetOptions ? { resultSetOptions } : {}),
     ...(judgeRubric !== undefined ? { judgeRubric } : {}),
   };
+}
+
+function parseCategory(
+  file: string,
+  where: string,
+  raw: Json,
+  categories: readonly EvalCategory[],
+): EvalCategory {
+  if (raw.category === undefined) {
+    throw new EvalSetError(file, where, '"category" is required');
+  }
+  if (!categories.includes(raw.category as EvalCategory)) {
+    throw new EvalSetError(
+      file,
+      where,
+      `category ${JSON.stringify(raw.category)} is not one of ${oneOf(categories)}`,
+    );
+  }
+  return raw.category as EvalCategory;
+}
+
+function parseSplit(file: string, where: string, raw: Json): EvalSplit {
+  const split = raw.split ?? 'dev';
+  if (!EVAL_SPLITS.includes(split as EvalSplit)) {
+    throw new EvalSetError(
+      file,
+      where,
+      `split ${JSON.stringify(split)} is not one of ${oneOf(EVAL_SPLITS)}`,
+    );
+  }
+  return split as EvalSplit;
+}
+
+/** `usesEntities` without entities reads them from the reference (R125). */
+function validateDeterministicChecks(
+  file: string,
+  where: string,
+  checks: EvalCheckSpec[],
+  expectedSql: Partial<Record<EvalDialect, string>> | undefined,
+): void {
+  checks.forEach((check, index) => {
+    if (!isDeterministicCheckType(check.type)) return;
+    const problem = DETERMINISTIC_CHECKS[check.type].validateCase?.(
+      (check.args ?? {}) as Json,
+      expectedSql,
+    );
+    if (problem) {
+      throw new EvalSetError(file, `${where}, check #${index + 1}`, problem);
+    }
+  });
+}
+
+/**
+ * A memory case of `memory.json` (agents-evals R234, R235): its own fields,
+ * its teach signals and its probe, refused as R235 lists. It loads as a case
+ * whose question, checks, reference and options are the probe's, plus its
+ * `teach`, its `trapSql` and its memory checks; `fixture` picks the variant
+ * that holds it.
+ */
+function parseMemoryCase(
+  file: string,
+  raw: unknown,
+  index: number,
+  variants: readonly EvalSetVariant[],
+): ParsedCase {
+  const at = `case #${index + 1}`;
+  if (!isObject(raw)) throw new EvalSetError(file, at, 'must be an object');
+  const id = requireString(file, at, raw, 'id');
+  const where = `case "${id}"`;
+  refuseUnknownKeys(file, where, raw, MEMORY_CASE_KEYS);
+  if (!ID_PATTERN.test(id)) {
+    throw new EvalSetError(
+      file,
+      where,
+      'the id must be lowercase words joined by hyphens',
+    );
+  }
+  const fixture = requireString(file, where, raw, 'fixture');
+  const samples = Array.from(new Set(variants.map((v) => v.fixtureId)));
+  if (!samples.includes(fixture)) {
+    throw new EvalSetError(
+      file,
+      where,
+      `fixture "${fixture}" is the sample of no variant of this file; known: ${oneOf(samples)}`,
+    );
+  }
+  const category = parseCategory(file, where, raw, MEMORY_CATEGORIES);
+  const split = parseSplit(file, where, raw);
+  const tags = parseMemoryTags(file, where, raw.tags);
+  const intent = requireString(file, where, raw, 'intent');
+  const notes = requireString(file, where, raw, 'notes');
+  const teach = parseTeach(file, where, raw.teach);
+  if (
+    category === 'memory-rejected' &&
+    !teach.some((signal) => signal.kind === 'rejection')
+  ) {
+    throw new EvalSetError(
+      file,
+      where,
+      'a memory-rejected case needs a "rejection" teach signal',
+    );
+  }
+
+  const probe = raw.probe;
+  if (!isObject(probe)) {
+    throw new EvalSetError(
+      file,
+      where,
+      '"probe" is required and must be an object',
+    );
+  }
+  const inProbe = `${where}, probe`;
+  refuseUnknownKeys(file, inProbe, probe, PROBE_KEYS);
+  const question = requireString(file, inProbe, probe, 'question');
+  const expectedSql = parsePostgresOnly(file, inProbe, probe, 'expectedSql');
+  const trapSql = parsePostgresOnly(file, inProbe, probe, 'trapSql');
+  const { checks, memoryChecks } = parseChecks(
+    file,
+    inProbe,
+    probe.checks,
+    true,
+  );
+  validateDeterministicChecks(file, inProbe, checks, expectedSql);
+  const required: [MemoryCheckType, boolean, string][] = [
+    ['noRowValuesRetained', true, 'every memory case'],
+    [
+      'notRejectedSql',
+      category === 'memory-rejected',
+      'a memory-rejected case',
+    ],
+    [
+      'teachNotRecalled',
+      category === 'memory-abstain',
+      'a memory-abstain case',
+    ],
+  ];
+  for (const [type, needed, who] of required) {
+    if (needed && !memoryChecks.some((check) => check.type === type)) {
+      throw new EvalSetError(
+        file,
+        inProbe,
+        `the check "${type}" is required on ${who}`,
+      );
+    }
+  }
+  const resultSetOptions = parseResultSetOptions(
+    file,
+    inProbe,
+    probe.resultSetOptions,
+  );
+  return {
+    id,
+    fixture,
+    category,
+    split,
+    tags,
+    question,
+    intent,
+    notes,
+    checks,
+    expectedSql,
+    trapSql,
+    ...(resultSetOptions ? { resultSetOptions } : {}),
+    teach,
+    memoryChecks,
+  };
+}
+
+/** A memory case's tags: the probe's language and a difficulty (R234). */
+function parseMemoryTags(file: string, where: string, raw: unknown): string[] {
+  if (!Array.isArray(raw) || raw.length === 0 || !raw.every(isNonEmptyString)) {
+    throw new EvalSetError(
+      file,
+      where,
+      '"tags" is required and must be a non-empty array of non-empty strings',
+    );
+  }
+  for (const [kind, wanted] of [
+    ['language', LANGUAGE_TAGS],
+    ['difficulty', DIFFICULTY_TAGS],
+  ] as const) {
+    if (!wanted.some((tag) => raw.includes(tag))) {
+      throw new EvalSetError(
+        file,
+        where,
+        `"tags" must name the ${kind} with one of ${oneOf(wanted)}`,
+      );
+    }
+  }
+  return raw;
+}
+
+/**
+ * A memory case's teach signals (R234, R235): 1 to 3, in time order, each a
+ * known kind at an ISO 8601 UTC time later than the one before it; a
+ * correction has a note, an approval has none.
+ */
+function parseTeach(file: string, where: string, raw: unknown): TeachSignal[] {
+  if (
+    !Array.isArray(raw) ||
+    raw.length === 0 ||
+    raw.length > MAX_TEACH_SIGNALS
+  ) {
+    throw new EvalSetError(
+      file,
+      where,
+      `"teach" is required and must hold 1 to ${MAX_TEACH_SIGNALS} signals`,
+    );
+  }
+  let previous: { at: string; time: number } | undefined;
+  return raw.map((signal, index): TeachSignal => {
+    const at = `${where}, teach signal #${index + 1}`;
+    if (!isObject(signal))
+      throw new EvalSetError(file, at, 'must be an object');
+    refuseUnknownKeys(file, at, signal, TEACH_SIGNAL_KEYS);
+    const kind = signal.kind;
+    if (!TEACH_KINDS.includes(kind as TeachSignal['kind'])) {
+      throw new EvalSetError(
+        file,
+        at,
+        `kind ${JSON.stringify(kind)} is not one of ${oneOf(TEACH_KINDS)}`,
+      );
+    }
+    const time = requireString(file, at, signal, 'at');
+    const parsed = Date.parse(time);
+    if (!ISO_UTC.test(time) || Number.isNaN(parsed)) {
+      throw new EvalSetError(
+        file,
+        at,
+        `"at" ${JSON.stringify(time)} is not an ISO 8601 UTC time such as 2026-11-02T15:00:00Z`,
+      );
+    }
+    if (previous && parsed <= previous.time) {
+      throw new EvalSetError(
+        file,
+        at,
+        `"at" ${time} is not later than the signal before it (${previous.at})`,
+      );
+    }
+    previous = { at: time, time: parsed };
+    const question = requireString(file, at, signal, 'question');
+    const sql = requireString(file, at, signal, 'sql');
+    const note = optionalString(file, at, signal, 'note');
+    if (kind === 'correction' && note === undefined) {
+      throw new EvalSetError(file, at, 'a correction needs a "note"');
+    }
+    if (kind === 'verified_query' && note !== undefined) {
+      throw new EvalSetError(
+        file,
+        at,
+        'an approval (verified_query) takes no "note"',
+      );
+    }
+    return {
+      kind: kind as TeachSignal['kind'],
+      at: time,
+      question,
+      sql,
+      ...(note !== undefined ? { note } : {}),
+    };
+  });
+}
+
+/**
+ * A probe's `expectedSql` or `trapSql`: `{ postgres }` and nothing else,
+ * since the memory bank has no other dialect (R233).
+ */
+function parsePostgresOnly(
+  file: string,
+  where: string,
+  probe: Json,
+  key: 'expectedSql' | 'trapSql',
+): { postgres: string } {
+  const raw = probe[key];
+  if (!isObject(raw) || !isNonEmptyString(raw.postgres)) {
+    throw new EvalSetError(
+      file,
+      where,
+      `"${key}.postgres" is required and must be a non-empty string`,
+    );
+  }
+  refuseUnknownKeys(file, `${where} ${key}`, raw, ['postgres']);
+  return { postgres: raw.postgres };
 }
 
 /**
@@ -645,11 +1030,21 @@ function parseAgentTools(
   return raw as OptionalAgentTool[];
 }
 
+function isMemoryCheckType(type: unknown): type is MemoryCheckType {
+  return MEMORY_CHECK_TYPES.includes(type as MemoryCheckType);
+}
+
+/**
+ * A case's checks, in file order. The memory checks of R241 to R243 come
+ * apart in `memoryChecks` (only `memory.json` may hold them, since they need
+ * a teach step, R235); every other check is in `checks`.
+ */
 function parseChecks(
   file: string,
   where: string,
   raw: unknown,
-): EvalCheckSpec[] {
+  memory: boolean,
+): { checks: EvalCheckSpec[]; memoryChecks: MemoryCheckSpec[] } {
   if (!Array.isArray(raw) || raw.length === 0) {
     throw new EvalSetError(
       file,
@@ -657,17 +1052,29 @@ function parseChecks(
       '"checks" is required and must be a non-empty array',
     );
   }
+  const known: readonly string[] = memory
+    ? [...EVAL_CHECK_TYPES, ...MEMORY_CHECK_TYPES]
+    : EVAL_CHECK_TYPES;
   const seen = new Set<string>();
-  return raw.map((check, index) => {
+  const checks: EvalCheckSpec[] = [];
+  const memoryChecks: MemoryCheckSpec[] = [];
+  raw.forEach((check, index) => {
     const at = `${where}, check #${index + 1}`;
     if (!isObject(check)) throw new EvalSetError(file, at, 'must be an object');
     refuseUnknownKeys(file, at, check, CHECK_KEYS);
     const type = check.type;
-    if (!EVAL_CHECK_TYPES.includes(type as EvalCheckType)) {
+    if (!memory && isMemoryCheckType(type)) {
       throw new EvalSetError(
         file,
         at,
-        `check type ${JSON.stringify(type)} is not one of ${oneOf(EVAL_CHECK_TYPES)}`,
+        `check type "${type}" needs a teach step, so only ${MEMORY_SET_FILE} may use it`,
+      );
+    }
+    if (!known.includes(type as string)) {
+      throw new EvalSetError(
+        file,
+        at,
+        `check type ${JSON.stringify(type)} is not one of ${oneOf(known)}`,
       );
     }
     // `runEvals` keys scores by scorer id, which is per type: a second check
@@ -680,18 +1087,37 @@ function parseChecks(
       );
     }
     seen.add(type as string);
-    const args = parseCheckArgs(file, at, type as EvalCheckType, check.args);
-    const stated = optionalString(file, at, check, 'criterion');
-    if (
-      stated !== undefined &&
-      !EVAL_CRITERIA.includes(stated as EvalCriterion)
-    ) {
-      throw new EvalSetError(
-        file,
-        at,
-        `criterion "${stated}" is not one of ${oneOf(EVAL_CRITERIA)}`,
-      );
+    const statedCriterion = (): string | undefined => {
+      const stated = optionalString(file, at, check, 'criterion');
+      if (
+        stated !== undefined &&
+        !EVAL_CRITERIA.includes(stated as EvalCriterion)
+      ) {
+        throw new EvalSetError(
+          file,
+          at,
+          `criterion "${stated}" is not one of ${oneOf(EVAL_CRITERIA)}`,
+        );
+      }
+      return stated;
+    };
+    if (isMemoryCheckType(type)) {
+      // No arguments: the check reads the case's teach and the attempt's
+      // memory record. Its criterion is M1, M2 or M3 unless named (R244).
+      if (
+        check.args !== undefined &&
+        (!isObject(check.args) || Object.keys(check.args).length > 0)
+      ) {
+        throw new EvalSetError(file, at, `"${type}" takes no "args"`);
+      }
+      memoryChecks.push({
+        type,
+        criterion: statedCriterion() ?? MEMORY_CHECKS[type].criterion,
+      });
+      return;
     }
+    const args = parseCheckArgs(file, at, type as EvalCheckType, check.args);
+    const stated = statedCriterion();
     // A deterministic check measures its own criterion unless the file says
     // otherwise (R125); the Mastra helpers have none.
     const criterion =
@@ -699,12 +1125,13 @@ function parseChecks(
       (isDeterministicCheckType(type)
         ? DETERMINISTIC_CHECKS[type].criterion
         : undefined);
-    return {
+    checks.push({
       type,
       ...(args ? { args } : {}),
       ...(criterion !== undefined ? { criterion } : {}),
-    } as EvalCheckSpec;
+    } as EvalCheckSpec);
   });
+  return { checks, memoryChecks };
 }
 
 function parseCheckArgs(

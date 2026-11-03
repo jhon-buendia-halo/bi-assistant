@@ -116,9 +116,10 @@ export class AgentsController {
 
   /**
    * Start a run against one datasource. Long-running: poll the job below.
-   * `judge` (`off` when absent), `judgeCategories` and `repeats` (1 when
-   * absent) are checked by the service, after the dataset preflight
-   * (agents-evals R19 steps 8 and 9, R144, R209).
+   * `judge` (`off` when absent), `judgeCategories`, `repeats` (1 when
+   * absent) and `arm` (`{ memory: 'none' }` when absent) are checked by the
+   * service, after the dataset preflight (agents-evals R19 steps 8 to 10,
+   * R144, R209, R232).
    */
   @Post(':key/evals/run')
   async runEvals(
@@ -130,6 +131,7 @@ export class AgentsController {
       judge?: unknown;
       judgeCategories?: unknown;
       repeats?: unknown;
+      arm?: unknown;
     },
   ): Promise<{ ok: boolean; message: string; jobId?: string }> {
     const result = await this.evalRuns.start(
@@ -140,6 +142,7 @@ export class AgentsController {
         judge: body?.judge,
         judgeCategories: body?.judgeCategories,
         repeats: body?.repeats,
+        arm: body?.arm,
       },
     );
     if ('error' in result) return { ok: false, message: result.error };
