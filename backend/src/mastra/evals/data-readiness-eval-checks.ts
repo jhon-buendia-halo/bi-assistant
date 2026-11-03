@@ -159,8 +159,8 @@ export function topFindingCounts(outputs: Record<string, unknown>[]): number[] {
     if (!Array.isArray(top) || output['findingCount'] !== top.length) continue;
     const groups = new Map<string, number>();
     for (const finding of top as Record<string, unknown>[]) {
-      const dimension = String(finding?.['dimension'] ?? '');
-      const severity = String(finding?.['severity'] ?? '');
+      const dimension = fieldText(finding?.['dimension']);
+      const severity = fieldText(finding?.['severity']);
       for (const key of [
         `d:${dimension}`,
         `s:${severity}`,
