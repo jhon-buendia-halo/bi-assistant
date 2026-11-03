@@ -1,11 +1,13 @@
 import type { ApiStyle } from '../llm.types';
 import type { AgentModelConfig } from '../../../mastra/model-resolver';
+import { BASE_URL_INVALID } from './messages';
 
-// URL normalisation and the model route per API style (unit 2, BA-283).
+// URL normalisation and the model route per API style (BA-283; llm-settings
+// R27, R44–R47; ADR-0032). Plain data only: no Mastra import, so Jest specs
+// and config readers can load it.
 
-const todo = (what: string): never => {
-  throw new Error(`${what} is not implemented yet (BA-281 scaffold)`);
-};
+/** An absolute http(s) URL starts with `http://` or `https://` (`http:foo` does not). */
+const ABSOLUTE_HTTP_URL = /^https?:\/\//i;
 
 /**
  * The URL requests are built on. OpenAI style: as given, no trailing slash
@@ -14,20 +16,68 @@ const todo = (what: string): never => {
  * non-http(s) URL.
  */
 export function normalizeBaseUrl(style: ApiStyle, baseUrl: string): string {
-  void style;
-  void baseUrl;
-  return todo('normalizeBaseUrl');
+  const trimmed = typeof baseUrl === 'string' ? baseUrl.trim() : '';
+  if (!ABSOLUTE_HTTP_URL.test(trimmed)) {
+    throw new Error(BASE_URL_INVALID);
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error(BASE_URL_INVALID);
+  }
+  if (
+    (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+    !parsed.hostname
+  ) {
+    throw new Error(BASE_URL_INVALID);
+  }
+  const base = trimmed.replace(/\/+$/, '');
+  if (style === 'anthropic' && !base.endsWith('/v1')) {
+    return `${base}/v1`;
+  }
+  return base;
 }
 
-/** The model config for a saved custom endpoint (llm-settings route rules). */
+/**
+ * The model config for a saved custom endpoint (llm-settings R27).
+ *
+ * OpenAI style: Mastra's router config `{ id: "custom/<model>", url, apiKey }`.
+ * With a `url`, Mastra 1.66 builds `createOpenAICompatible({ baseURL: url,
+ * apiKey, headers })`, and that client adds `Authorization: Bearer <key>`
+ * only when the key is truthy. A keyless endpoint therefore gets `apiKey: ''`
+ * (the router type requires a string) and is called with no Authorization
+ * header at all (R47). No `headers` are set.
+ *
+ * Anthropic style: plain data `{ kind: "custom-anthropic", id:
+ * "anthropic/<model>", baseUrl: <root>/v1, apiKey? }`, built into an
+ * @ai-sdk/anthropic model by `buildModel` at call time (ADR-0032). The key is
+ * omitted, not empty, when there is none.
+ *
+ * A blank (empty or whitespace-only) key counts as no key. Throws
+ * Error(BASE_URL_INVALID) for a base URL that is not http(s).
+ */
 export function customModelConfig(settings: {
   apiStyle: ApiStyle;
   baseUrl: string;
   model: string;
   apiKey?: string;
 }): AgentModelConfig {
-  void settings;
-  return todo('customModelConfig');
+  const baseUrl = normalizeBaseUrl(settings.apiStyle, settings.baseUrl);
+  const apiKey = settings.apiKey?.trim() ? settings.apiKey : undefined;
+  if (settings.apiStyle === 'anthropic') {
+    return {
+      kind: 'custom-anthropic',
+      id: `anthropic/${settings.model}`,
+      baseUrl,
+      ...(apiKey ? { apiKey } : {}),
+    };
+  }
+  return {
+    id: `custom/${settings.model}`,
+    url: baseUrl,
+    apiKey: apiKey ?? '',
+  };
 }
 
 /** `scheme://host[:port]` of a base URL, for messages. */
