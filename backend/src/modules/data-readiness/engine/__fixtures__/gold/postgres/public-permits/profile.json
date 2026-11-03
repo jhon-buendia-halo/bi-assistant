@@ -1,0 +1,1156 @@
+{
+  "sourceId": "public-permits-gold",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "permits",
+      "name": "authorities",
+      "rowCount": 420,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "authority_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "authority_cd"
+          ],
+          "duplicateCount": 8
+        }
+      ],
+      "fields": [
+        {
+          "name": "authority_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 420,
+          "min": "1",
+          "max": "420"
+        },
+        {
+          "name": "authority_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 412
+        },
+        {
+          "name": "authority_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 420
+        },
+        {
+          "name": "website_url",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 63,
+          "distinctCount": 340,
+          "formatRule": "url",
+          "invalidFormatCount": 28
+        },
+        {
+          "name": "region_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 28,
+          "normalizedDistinctCount": 22
+        },
+        {
+          "name": "onboarded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 380,
+          "min": "2019-04-01T00:00:00Z",
+          "max": "2026-05-11T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "permits",
+      "name": "applicants",
+      "rowCount": 640000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "applicant_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "national_ref"
+          ],
+          "duplicateCount": 240
+        }
+      ],
+      "fields": [
+        {
+          "name": "applicant_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 640000,
+          "min": "1",
+          "max": "640000"
+        },
+        {
+          "name": "national_ref",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 639760
+        },
+        {
+          "name": "display_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 612000
+        },
+        {
+          "name": "contact_email",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 89600,
+          "distinctCount": 528000,
+          "formatRule": "email",
+          "invalidFormatCount": 4800
+        },
+        {
+          "name": "mobile_number",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 121600,
+          "distinctCount": 498000,
+          "formatRule": "phone",
+          "invalidFormatCount": 3100
+        },
+        {
+          "name": "registered_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7400,
+          "min": "2005-01-04",
+          "max": "2026-08-07"
+        }
+      ]
+    },
+    {
+      "namespace": "permits",
+      "name": "applications",
+      "rowCount": 2400000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "application_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "application_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2400000,
+          "min": "1",
+          "max": "2400000"
+        },
+        {
+          "name": "applicant_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 612000,
+          "min": "1",
+          "max": "640000"
+        },
+        {
+          "name": "authority_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 418,
+          "min": "1",
+          "max": "420"
+        },
+        {
+          "name": "use_class_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 288000,
+          "distinctCount": 84
+        },
+        {
+          "name": "decision_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 384000,
+          "distinctCount": 9
+        },
+        {
+          "name": "received_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2100000,
+          "min": "2019-01-02T00:00:00Z",
+          "max": "2026-08-11T16:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "permits",
+      "name": "permits",
+      "rowCount": 1800000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "permit_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "permit_no"
+          ],
+          "duplicateCount": 940
+        }
+      ],
+      "fields": [
+        {
+          "name": "permit_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1800000,
+          "min": "1",
+          "max": "1800000"
+        },
+        {
+          "name": "application_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1790000,
+          "min": "1",
+          "max": "2400000"
+        },
+        {
+          "name": "permit_no",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1799060
+        },
+        {
+          "name": "permit_uuid",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1800000,
+          "formatRule": "uuid",
+          "invalidFormatCount": 9400
+        },
+        {
+          "name": "conditions_text",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 720000,
+          "distinctCount": 340000
+        },
+        {
+          "name": "revoked_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4100,
+          "min": "2011-06-01",
+          "max": "2099-12-31"
+        }
+      ]
+    },
+    {
+      "namespace": "permits",
+      "name": "fees",
+      "rowCount": 3100000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "fee_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "fee_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3100000,
+          "min": "1",
+          "max": "3100000"
+        },
+        {
+          "name": "application_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2290000,
+          "min": "1",
+          "max": "2400000"
+        },
+        {
+          "name": "amount_cents",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 61000,
+          "min": "0",
+          "max": "4800000"
+        },
+        {
+          "name": "fee_code_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 240,
+          "normalizedDistinctCount": 240
+        },
+        {
+          "name": "receipt_ref",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 217000,
+          "distinctCount": 2880000
+        },
+        {
+          "name": "charged_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2740000,
+          "min": "2019-01-02T00:00:00Z",
+          "max": "2026-08-11T17:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "permits",
+      "name": "v_permit_status",
+      "rowCount": 1800000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "permit_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1793600,
+          "min": "1",
+          "max": "1800000"
+        },
+        {
+          "name": "status_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 8,
+          "normalizedDistinctCount": 8
+        },
+        {
+          "name": "last_event_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 108000,
+          "distinctCount": 1610000,
+          "min": "2019-01-05T00:00:00Z",
+          "max": "2026-08-11T18:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "permits",
+      "name": "stg_portal_submissions",
+      "rowCount": 2400000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "application_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2361600,
+          "min": "1",
+          "max": "2400000"
+        },
+        {
+          "name": "submitted_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2740,
+          "formatRule": "date-string",
+          "invalidFormatCount": 31000
+        },
+        {
+          "name": "channel_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6,
+          "normalizedDistinctCount": 6
+        },
+        {
+          "name": "received_ts",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2290000,
+          "min": "2024-01-01T00:00:00Z",
+          "max": "2087-01-01T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "permits",
+      "name": "stg_gis_parcels",
+      "rowCount": 840000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "parcel_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 831600,
+          "min": "1",
+          "max": "840000"
+        },
+        {
+          "name": "survey_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6400,
+          "formatRule": "date-string",
+          "invalidFormatCount": 12000
+        },
+        {
+          "name": "area_sqm",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 640000,
+          "min": "-1",
+          "max": "4100000"
+        },
+        {
+          "name": "loaded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 950,
+          "min": "2024-01-01T04:00:00Z",
+          "max": "2026-08-12T04:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "permits",
+      "name": "legacy_permits_2005",
+      "rowCount": 1240000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "permit_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1228600,
+          "min": "1",
+          "max": "1240000"
+        },
+        {
+          "name": "permit_ref",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1190000
+        },
+        {
+          "name": "issued_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6400,
+          "min": "1899-12-30",
+          "max": "2023-03-30"
+        },
+        {
+          "name": "recorded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1140000,
+          "min": "2005-01-04T00:00:00Z",
+          "max": "2023-03-31T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "permits",
+      "name": "permits_pii_vault",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [],
+      "fields": []
+    },
+    {
+      "namespace": "inspect",
+      "name": "inspectors",
+      "rowCount": 1400,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "inspector_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "badge_no"
+          ],
+          "duplicateCount": 34
+        }
+      ],
+      "fields": [
+        {
+          "name": "inspector_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1400,
+          "min": "1",
+          "max": "1400"
+        },
+        {
+          "name": "badge_no",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1366
+        },
+        {
+          "name": "inspector_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1400
+        },
+        {
+          "name": "discipline_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18,
+          "normalizedDistinctCount": 13
+        },
+        {
+          "name": "team_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 168,
+          "distinctCount": 24
+        },
+        {
+          "name": "appointed_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 940,
+          "min": "1996-09-02",
+          "max": "2026-06-01"
+        }
+      ]
+    },
+    {
+      "namespace": "inspect",
+      "name": "inspection_types",
+      "rowCount": 84,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "inspection_type_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "inspection_type_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 84,
+          "min": "1",
+          "max": "84"
+        },
+        {
+          "name": "type_label",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 84
+        },
+        {
+          "name": "statutory_basis",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 21,
+          "distinctCount": 12
+        },
+        {
+          "name": "revised_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18,
+          "min": "2012-01-01",
+          "max": "2026-02-10"
+        }
+      ]
+    },
+    {
+      "namespace": "inspect",
+      "name": "inspections",
+      "rowCount": 4800000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "inspection_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "inspection_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4800000,
+          "min": "1",
+          "max": "4800000"
+        },
+        {
+          "name": "permit_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1640000,
+          "min": "1",
+          "max": "1800000"
+        },
+        {
+          "name": "inspector_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1398,
+          "min": "1",
+          "max": "1400"
+        },
+        {
+          "name": "inspection_type_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 84,
+          "min": "1",
+          "max": "84"
+        },
+        {
+          "name": "duration_minutes",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 610,
+          "min": "-15",
+          "max": "640"
+        },
+        {
+          "name": "outcome_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 432000,
+          "distinctCount": 7
+        },
+        {
+          "name": "start_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4100000,
+          "min": "2019-01-07T07:00:00Z",
+          "max": "2026-08-11T15:00:00Z"
+        },
+        {
+          "name": "end_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4080000,
+          "min": "2018-11-05T08:00:00Z",
+          "max": "2025-10-14T16:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "inspect",
+      "name": "violations",
+      "rowCount": 940000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "violation_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "violation_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 940000,
+          "min": "1",
+          "max": "940000"
+        },
+        {
+          "name": "inspection_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 610000,
+          "min": "1",
+          "max": "4800000"
+        },
+        {
+          "name": "breach_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 340,
+          "normalizedDistinctCount": 340
+        },
+        {
+          "name": "remedy_notes",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 141000,
+          "distinctCount": 640000
+        },
+        {
+          "name": "raised_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2740,
+          "min": "2019-01-08",
+          "max": "2026-08-11"
+        }
+      ]
+    },
+    {
+      "namespace": "inspect",
+      "name": "v_inspector_load",
+      "rowCount": 1400,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "inspector_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1358,
+          "min": "1",
+          "max": "1400"
+        },
+        {
+          "name": "utilisation_pct",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1240,
+          "min": "0",
+          "max": "137.5"
+        },
+        {
+          "name": "open_cases",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 610,
+          "min": "0",
+          "max": "940"
+        },
+        {
+          "name": "computed_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1,
+          "min": "2026-08-12T01:00:00Z",
+          "max": "2026-08-12T01:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "inspect",
+      "name": "stg_field_reports",
+      "rowCount": 4800000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "inspection_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4723200,
+          "min": "1",
+          "max": "4800000"
+        },
+        {
+          "name": "report_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2740,
+          "formatRule": "date-string",
+          "invalidFormatCount": 61000
+        },
+        {
+          "name": "score",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 120,
+          "min": "-99",
+          "max": "100"
+        },
+        {
+          "name": "synced_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 950,
+          "min": "2024-01-01T06:00:00Z",
+          "max": "2026-08-12T06:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "inspect",
+      "name": "legacy_complaints",
+      "rowCount": 620000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "complaint_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 614600,
+          "min": "1",
+          "max": "620000"
+        },
+        {
+          "name": "subject_text",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 580000
+        },
+        {
+          "name": "received_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6400,
+          "min": "1801-01-01",
+          "max": "2023-02-27"
+        },
+        {
+          "name": "logged_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 590000,
+          "min": "2007-04-02T00:00:00Z",
+          "max": "2023-02-28T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "inspect",
+      "name": "inspect_case_notes",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [],
+      "fields": []
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "permits",
+      "fromEntity": "applications",
+      "fromField": "applicant_id",
+      "toNamespace": "permits",
+      "toEntity": "applicants",
+      "toField": "applicant_id",
+      "orphanCount": 18400,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "permits",
+      "fromEntity": "applications",
+      "fromField": "authority_id",
+      "toNamespace": "permits",
+      "toEntity": "authorities",
+      "toField": "authority_id",
+      "orphanCount": 2400,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "permits",
+      "fromEntity": "permits",
+      "fromField": "application_id",
+      "toNamespace": "permits",
+      "toEntity": "applications",
+      "toField": "application_id",
+      "orphanCount": 9400,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "permits",
+      "fromEntity": "fees",
+      "fromField": "application_id",
+      "toNamespace": "permits",
+      "toEntity": "applications",
+      "toField": "application_id",
+      "orphanCount": 31000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "inspect",
+      "fromEntity": "inspections",
+      "fromField": "permit_id",
+      "toNamespace": "permits",
+      "toEntity": "permits",
+      "toField": "permit_id",
+      "orphanCount": 84000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "inspect",
+      "fromEntity": "inspections",
+      "fromField": "inspector_id",
+      "toNamespace": "inspect",
+      "toEntity": "inspectors",
+      "toField": "inspector_id",
+      "orphanCount": 12400,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "inspect",
+      "fromEntity": "inspections",
+      "fromField": "inspection_type_id",
+      "toNamespace": "inspect",
+      "toEntity": "inspection_types",
+      "toField": "inspection_type_id",
+      "orphanCount": 1800,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "inspect",
+      "fromEntity": "violations",
+      "fromField": "inspection_id",
+      "toNamespace": "inspect",
+      "toEntity": "inspections",
+      "toField": "inspection_id",
+      "orphanCount": 6400,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "permits",
+      "fromEntity": "v_permit_status",
+      "fromField": "permit_id",
+      "toNamespace": "permits",
+      "toEntity": "permits",
+      "toField": "permit_id",
+      "orphanCount": 4100,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "permits",
+      "fromEntity": "stg_portal_submissions",
+      "fromField": "application_id",
+      "toNamespace": "permits",
+      "toEntity": "applications",
+      "toField": "application_id",
+      "orphanCount": 26000,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "permits",
+      "fromEntity": "legacy_permits_2005",
+      "fromField": "permit_id",
+      "toNamespace": "permits",
+      "toEntity": "permits",
+      "toField": "permit_id",
+      "orphanCount": 640000,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "inspect",
+      "fromEntity": "v_inspector_load",
+      "fromField": "inspector_id",
+      "toNamespace": "inspect",
+      "toEntity": "inspectors",
+      "toField": "inspector_id",
+      "orphanCount": 12,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "inspect",
+      "fromEntity": "stg_field_reports",
+      "fromField": "inspection_id",
+      "toNamespace": "inspect",
+      "toEntity": "inspections",
+      "toField": "inspection_id",
+      "orphanCount": 48000,
+      "origin": "inferred"
+    }
+  ]
+}

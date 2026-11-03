@@ -1,0 +1,80 @@
+{
+  "sourceId": "order-management-gold",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "public",
+      "name": "customers",
+      "rowCount": 500000,
+      "keys": [{ "kind": "primary", "fields": ["id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 500000 },
+        { "name": "client_id", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 499000 },
+        { "name": "email", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 499960, "formatRule": "email", "invalidFormatCount": 40 },
+        { "name": "country", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 200, "normalizedDistinctCount": 195 },
+        { "name": "customer_type", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 4 },
+        { "name": "signup_date", "type": "date", "semanticType": "temporal", "nullable": true, "nullCount": 0, "min": "2018-03-01", "max": "2099-12-31" }
+      ]
+    },
+    {
+      "namespace": "public",
+      "name": "products",
+      "rowCount": 100000,
+      "keys": [{ "kind": "primary", "fields": ["product_sku"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "product_sku", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 100000 },
+        { "name": "product_name", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 20000, "distinctCount": 79500 },
+        { "name": "description", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 8000, "distinctCount": 90000 },
+        { "name": "category", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 60 },
+        { "name": "list_price_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0 }
+      ]
+    },
+    {
+      "namespace": "public",
+      "name": "orders",
+      "rowCount": 100000,
+      "keys": [
+        { "kind": "primary", "fields": ["order_id"], "duplicateCount": 0 },
+        { "kind": "unique", "fields": ["order_number"], "duplicateCount": 12 }
+      ],
+      "fields": [
+        { "name": "order_id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 100000 },
+        { "name": "order_number", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 99988 },
+        { "name": "customer_id", "type": "integer", "semanticType": "numeric", "nullable": true, "nullCount": 0, "distinctCount": 61000 },
+        { "name": "order_date", "type": "timestamptz", "semanticType": "temporal", "nullable": false, "nullCount": 0, "min": "2019-01-01T00:00:00Z", "max": "2024-01-29T10:00:00Z" },
+        { "name": "total_amount_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0 }
+      ]
+    },
+    {
+      "namespace": "public",
+      "name": "order_items",
+      "rowCount": 350000,
+      "keys": [{ "kind": "primary", "fields": ["order_item_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "order_item_id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 350000 },
+        { "name": "order_id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 100000 },
+        { "name": "product_sku", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 99800 },
+        { "name": "quantity", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0 },
+        { "name": "unit_price_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "min": "-500", "max": "4999900" },
+        { "name": "discount_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0 }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "public", "fromEntity": "orders", "fromField": "customer_id",
+      "toNamespace": "public", "toEntity": "customers", "toField": "id",
+      "orphanCount": 100, "origin": "declared"
+    },
+    {
+      "fromNamespace": "public", "fromEntity": "order_items", "fromField": "product_sku",
+      "toNamespace": "public", "toEntity": "products", "toField": "product_sku",
+      "orphanCount": 250, "origin": "declared"
+    },
+    {
+      "fromNamespace": "public", "fromEntity": "order_items", "fromField": "order_id",
+      "toNamespace": "public", "toEntity": "orders", "toField": "order_id",
+      "orphanCount": 0, "origin": "declared"
+    }
+  ]
+}

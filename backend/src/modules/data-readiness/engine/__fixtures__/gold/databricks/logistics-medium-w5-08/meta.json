@@ -1,0 +1,7 @@
+{
+  "industry": "logistics",
+  "complexity": "medium",
+  "wave": "W5",
+  "authoring": "generated",
+  "defectPlan": "plans/databricks/logistics-medium-w5-08.plan.json"
+}

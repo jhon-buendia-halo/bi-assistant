@@ -1,0 +1,157 @@
+{
+  "sourceId": "investment-portfolio-gold",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "pms",
+      "name": "portfolios",
+      "rowCount": 24000,
+      "readable": true,
+      "keys": [
+        { "kind": "primary", "fields": ["portfolio_id"], "duplicateCount": 0 },
+        { "kind": "unique", "fields": ["portfolio_code"], "duplicateCount": 0 }
+      ],
+      "fields": [
+        { "name": "portfolio_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 24000, "min": "1", "max": "24000" },
+        { "name": "portfolio_code", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 24000 },
+        { "name": "client_id", "type": "integer", "semanticType": "numeric", "nullable": true, "nullCount": 0, "distinctCount": 9400, "min": "1", "max": "9400" },
+        { "name": "mandate_type", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 18, "normalizedDistinctCount": 12 },
+        { "name": "base_ccy", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 9, "normalizedDistinctCount": 9 },
+        { "name": "benchmark_url", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 23800, "formatRule": "url", "invalidFormatCount": 210 },
+        { "name": "mandate_begin_dt", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 3900, "min": "2011-01-03", "max": "2026-06-30" },
+        { "name": "mandate_finish_dt", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 1400, "min": "2005-06-30", "max": "2010-12-31" }
+      ]
+    },
+    {
+      "namespace": "pms",
+      "name": "positions",
+      "rowCount": 14600000,
+      "readable": true,
+      "keys": [
+        { "kind": "primary", "fields": ["portfolio_id", "instrument_id", "as_of_date"], "duplicateCount": 3120 }
+      ],
+      "fields": [
+        { "name": "portfolio_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 24000, "min": "1", "max": "24000" },
+        { "name": "instrument_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 92000, "min": "1", "max": "92000" },
+        { "name": "as_of_date", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 1900, "min": "2019-01-02", "max": "2026-07-24" },
+        { "name": "quantity", "type": "numeric", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 2100000, "min": "-480000", "max": "9200000" },
+        { "name": "market_value_usd", "type": "numeric", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 8900000, "min": "0", "max": "8200000000" },
+        { "name": "weight_pct", "type": "numeric", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 640000, "min": "0", "max": "118.4" },
+        { "name": "custodian_account_id", "type": "integer", "semanticType": "numeric", "nullable": true, "nullCount": 1898000, "distinctCount": 41000, "min": "10000", "max": "99999" },
+        { "name": "source_system", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 7, "normalizedDistinctCount": 7 }
+      ]
+    },
+    {
+      "namespace": "pms",
+      "name": "instruments",
+      "rowCount": 92000,
+      "readable": true,
+      "keys": [{ "kind": "primary", "fields": ["instrument_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "instrument_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 92000, "min": "1", "max": "92000" },
+        { "name": "isin", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 91800 },
+        { "name": "issuer_name", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 41000 },
+        { "name": "asset_class", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 14, "normalizedDistinctCount": 9 },
+        { "name": "listing_ccy", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 9, "normalizedDistinctCount": 9 },
+        { "name": "maturity_date", "type": "date", "semanticType": "temporal", "nullable": true, "nullCount": 38000, "distinctCount": 12400, "min": "1998-01-15", "max": "2076-06-30" },
+        { "name": "updated_at", "type": "timestamptz", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 2700, "min": "2019-01-02T22:00:00Z", "max": "2026-07-26T22:00:00Z" }
+      ]
+    },
+    {
+      "namespace": "pms",
+      "name": "trades",
+      "rowCount": 8400000,
+      "readable": true,
+      "keys": [
+        { "kind": "primary", "fields": ["trade_id"], "duplicateCount": 0 },
+        { "kind": "unique", "fields": ["broker_ref"], "duplicateCount": 0 }
+      ],
+      "fields": [
+        { "name": "trade_id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 8400000, "min": "1", "max": "8400000" },
+        { "name": "broker_ref", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 8400000 },
+        { "name": "portfolio_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 23800, "min": "1", "max": "24000" },
+        { "name": "instrument_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 88000, "min": "1", "max": "92000" },
+        { "name": "side", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 4, "normalizedDistinctCount": 4 },
+        { "name": "venue_cd", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 26, "normalizedDistinctCount": 26 },
+        { "name": "quantity", "type": "numeric", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 1400000, "min": "0", "max": "4200000" },
+        { "name": "price", "type": "numeric", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 2900000, "min": "0", "max": "8400" },
+        { "name": "commission_usd", "type": "numeric", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 180000, "min": "0", "max": "42000" },
+        { "name": "trade_date", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 3840, "min": "2008-01-02", "max": "2023-03-31" },
+        { "name": "settle_date", "type": "date", "semanticType": "temporal", "nullable": true, "nullCount": 0, "distinctCount": 3860, "min": "2008-01-04", "max": "2023-04-04" }
+      ]
+    },
+    {
+      "namespace": "ref",
+      "name": "clients",
+      "rowCount": 9400,
+      "readable": true,
+      "keys": [{ "kind": "primary", "fields": ["client_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "client_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 9400, "min": "1", "max": "9400" },
+        { "name": "client_name", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 9380 },
+        { "name": "lei_code", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 9400 },
+        { "name": "domicile_cc", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 74, "normalizedDistinctCount": 74 },
+        { "name": "email", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 9400, "formatRule": "email", "invalidFormatCount": 0 },
+        { "name": "kyc_refresh_date", "type": "date", "semanticType": "temporal", "nullable": true, "nullCount": 3760, "distinctCount": 2600, "min": "2015-06-01", "max": "2026-05-30" },
+        { "name": "onboarded_at", "type": "timestamptz", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 7100, "min": "1998-04-01T09:00:00Z", "max": "2026-07-22T09:00:00Z" }
+      ]
+    },
+    {
+      "namespace": "ref",
+      "name": "index_levels",
+      "rowCount": 486000,
+      "readable": true,
+      "keys": [
+        { "kind": "primary", "fields": ["benchmark_id", "level_year", "level_month"], "duplicateCount": 0 }
+      ],
+      "fields": [
+        { "name": "benchmark_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 1800, "min": "1", "max": "1800" },
+        { "name": "level_year", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 34, "min": "1988", "max": "2021" },
+        { "name": "level_month", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 14, "min": "0", "max": "13" },
+        { "name": "index_level", "type": "numeric", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 420000, "min": "100", "max": "48200" },
+        { "name": "currency_cd", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 9, "normalizedDistinctCount": 9 }
+      ]
+    },
+    {
+      "namespace": "ref",
+      "name": "credit_ratings",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [{ "kind": "primary", "fields": ["rating_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "rating_id", "type": "integer", "semanticType": "numeric", "nullable": false },
+        { "name": "isin", "type": "text", "semanticType": "text", "nullable": false },
+        { "name": "agency_cd", "type": "text", "semanticType": "text", "nullable": false },
+        { "name": "rating_grade", "type": "text", "semanticType": "text", "nullable": false },
+        { "name": "rated_at", "type": "timestamptz", "semanticType": "temporal", "nullable": true }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "pms", "fromEntity": "portfolios", "fromField": "client_id",
+      "toNamespace": "ref", "toEntity": "clients", "toField": "client_id",
+      "orphanCount": 0, "origin": "declared"
+    },
+    {
+      "fromNamespace": "pms", "fromEntity": "positions", "fromField": "portfolio_id",
+      "toNamespace": "pms", "toEntity": "portfolios", "toField": "portfolio_id",
+      "orphanCount": 14200, "origin": "declared"
+    },
+    {
+      "fromNamespace": "pms", "fromEntity": "positions", "fromField": "instrument_id",
+      "toNamespace": "pms", "toEntity": "instruments", "toField": "instrument_id",
+      "orphanCount": 0, "origin": "declared"
+    },
+    {
+      "fromNamespace": "pms", "fromEntity": "trades", "fromField": "portfolio_id",
+      "toNamespace": "pms", "toEntity": "portfolios", "toField": "portfolio_id",
+      "orphanCount": 0, "origin": "declared"
+    },
+    {
+      "fromNamespace": "pms", "fromEntity": "trades", "fromField": "instrument_id",
+      "toNamespace": "pms", "toEntity": "instruments", "toField": "instrument_id",
+      "orphanCount": 0, "origin": "declared"
+    }
+  ]
+}

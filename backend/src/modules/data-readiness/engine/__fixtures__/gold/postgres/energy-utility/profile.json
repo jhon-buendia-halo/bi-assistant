@@ -1,0 +1,1460 @@
+{
+  "sourceId": "energy-utility-gold",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "meter",
+      "name": "premises",
+      "rowCount": 820000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "premise_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "mpan"
+          ],
+          "duplicateCount": 140
+        }
+      ],
+      "fields": [
+        {
+          "name": "premise_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 820000,
+          "min": "1",
+          "max": "820000"
+        },
+        {
+          "name": "mpan",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 819860
+        },
+        {
+          "name": "address_line1",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 802400
+        },
+        {
+          "name": "postal_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 34000,
+          "distinctCount": 41200
+        },
+        {
+          "name": "region_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 34,
+          "normalizedDistinctCount": 28
+        },
+        {
+          "name": "geo_zone",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 106000,
+          "distinctCount": 640
+        },
+        {
+          "name": "connection_date",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "min": "1962-04-03",
+          "max": "2087-12-31"
+        },
+        {
+          "name": "surveyed_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 610000,
+          "min": "2019-01-08T06:00:00Z",
+          "max": "2026-07-22T18:40:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "meter",
+      "name": "meters",
+      "rowCount": 1240000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "meter_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "serial_no"
+          ],
+          "duplicateCount": 1240
+        }
+      ],
+      "fields": [
+        {
+          "name": "meter_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1240000,
+          "min": "1",
+          "max": "1240000"
+        },
+        {
+          "name": "premise_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 806400,
+          "min": "1",
+          "max": "820000"
+        },
+        {
+          "name": "serial_no",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1238760
+        },
+        {
+          "name": "device_uuid",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1240000,
+          "formatRule": "uuid",
+          "invalidFormatCount": 640
+        },
+        {
+          "name": "manufacturer_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 46,
+          "normalizedDistinctCount": 46
+        },
+        {
+          "name": "firmware_version",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 272800,
+          "distinctCount": 240
+        },
+        {
+          "name": "pulse_constant",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12,
+          "min": "1",
+          "max": "1000"
+        },
+        {
+          "name": "installed_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1180000,
+          "min": "1998-06-02T08:00:00Z",
+          "max": "2026-07-30T16:05:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "meter",
+      "name": "meter_reads",
+      "rowCount": 410000000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "read_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "read_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 410000000,
+          "min": "1",
+          "max": "410000000"
+        },
+        {
+          "name": "meter_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1204000,
+          "min": "1",
+          "max": "1240000"
+        },
+        {
+          "name": "batch_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 86000,
+          "min": "1",
+          "max": "86000"
+        },
+        {
+          "name": "consumption_kwh",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4100000,
+          "min": "-4200",
+          "max": "96400"
+        },
+        {
+          "name": "quality_flag",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 33600000,
+          "distinctCount": 7
+        },
+        {
+          "name": "read_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 74000000,
+          "min": "2019-01-01T00:00:00Z",
+          "max": "2026-08-11T23:45:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "meter",
+      "name": "read_batches",
+      "rowCount": 86000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "batch_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "batch_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 86000,
+          "min": "1",
+          "max": "86000"
+        },
+        {
+          "name": "head_end_ref",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 86000
+        },
+        {
+          "name": "row_count",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 61400,
+          "min": "0",
+          "max": "4100000"
+        },
+        {
+          "name": "operator_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 12900,
+          "distinctCount": 44
+        },
+        {
+          "name": "batch_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 86000,
+          "min": "2019-01-01T02:00:00Z",
+          "max": "2026-08-11T02:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "meter",
+      "name": "install_jobs",
+      "rowCount": 94000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "job_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "job_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 94000,
+          "min": "1",
+          "max": "94000"
+        },
+        {
+          "name": "meter_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 92100,
+          "min": "1",
+          "max": "1240000"
+        },
+        {
+          "name": "premise_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 91400,
+          "min": "1",
+          "max": "820000"
+        },
+        {
+          "name": "technician_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 8460,
+          "distinctCount": 1380,
+          "min": "1",
+          "max": "1400"
+        },
+        {
+          "name": "duration_minutes",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 780,
+          "min": "-45",
+          "max": "960"
+        },
+        {
+          "name": "start_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 92800,
+          "min": "2019-03-01T07:00:00Z",
+          "max": "2026-08-04T15:30:00Z"
+        },
+        {
+          "name": "end_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 91900,
+          "min": "2018-11-02T09:00:00Z",
+          "max": "2025-12-30T17:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "meter",
+      "name": "firmware_versions",
+      "rowCount": 240,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "firmware_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "firmware_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 240,
+          "min": "1",
+          "max": "240"
+        },
+        {
+          "name": "version_tag",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 240
+        },
+        {
+          "name": "release_url",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 240,
+          "formatRule": "url",
+          "invalidFormatCount": 18
+        },
+        {
+          "name": "certified_by",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 72,
+          "distinctCount": 9
+        },
+        {
+          "name": "released_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 236,
+          "min": "2014-02-11",
+          "max": "2026-06-12"
+        }
+      ]
+    },
+    {
+      "namespace": "meter",
+      "name": "meter_events_archive",
+      "rowCount": 12000000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "event_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "event_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12000000,
+          "min": "1",
+          "max": "12000000"
+        },
+        {
+          "name": "meter_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1140000,
+          "min": "1",
+          "max": "1240000"
+        },
+        {
+          "name": "event_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 480000,
+          "distinctCount": 84
+        },
+        {
+          "name": "event_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 9800000,
+          "min": "1899-12-30T00:00:00Z",
+          "max": "2024-03-18T21:14:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "meter",
+      "name": "v_meter_state",
+      "rowCount": 1240000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "meter_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1236900,
+          "min": "1",
+          "max": "1240000"
+        },
+        {
+          "name": "state_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6,
+          "normalizedDistinctCount": 6
+        },
+        {
+          "name": "estimation_pct",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 9400,
+          "min": "0",
+          "max": "118.4"
+        },
+        {
+          "name": "last_read_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 62000,
+          "distinctCount": 1140000,
+          "min": "2019-01-01T00:00:00Z",
+          "max": "2026-08-11T23:45:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "meter",
+      "name": "stg_ami_reads",
+      "rowCount": 18400000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "read_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 17988000,
+          "min": "1",
+          "max": "18400000"
+        },
+        {
+          "name": "meter_serial",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1180000
+        },
+        {
+          "name": "register_value",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6400000,
+          "min": "-9999",
+          "max": "9999999"
+        },
+        {
+          "name": "read_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2740,
+          "formatRule": "date-string",
+          "invalidFormatCount": 84000
+        },
+        {
+          "name": "loaded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 950,
+          "min": "2024-01-01T03:00:00Z",
+          "max": "2026-08-12T03:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "meter",
+      "name": "stg_meter_master",
+      "rowCount": 1240000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "meter_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1237600,
+          "min": "1",
+          "max": "1240000"
+        },
+        {
+          "name": "install_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 8900,
+          "formatRule": "date-string",
+          "invalidFormatCount": 3100
+        },
+        {
+          "name": "tariff_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1400,
+          "normalizedDistinctCount": 1400
+        },
+        {
+          "name": "loaded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 950,
+          "min": "2024-01-01T03:30:00Z",
+          "max": "2026-08-12T03:30:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "meter",
+      "name": "field_audit_log",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [],
+      "fields": []
+    },
+    {
+      "namespace": "billing",
+      "name": "accounts",
+      "rowCount": 790000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "account_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "account_no"
+          ],
+          "duplicateCount": 310
+        }
+      ],
+      "fields": [
+        {
+          "name": "account_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 790000,
+          "min": "1",
+          "max": "790000"
+        },
+        {
+          "name": "account_no",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 789690
+        },
+        {
+          "name": "premise_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 778400,
+          "min": "1",
+          "max": "820000"
+        },
+        {
+          "name": "tariff_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1396,
+          "min": "1",
+          "max": "1400"
+        },
+        {
+          "name": "contact_email",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 86900,
+          "distinctCount": 692400,
+          "formatRule": "email",
+          "invalidFormatCount": 3800
+        },
+        {
+          "name": "mobile_number",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 704100,
+          "formatRule": "phone",
+          "invalidFormatCount": 1200
+        },
+        {
+          "name": "segment_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 19,
+          "normalizedDistinctCount": 12
+        },
+        {
+          "name": "billing_address",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 47400,
+          "distinctCount": 741200
+        },
+        {
+          "name": "opened_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 640000,
+          "min": "1987-05-04T00:00:00Z",
+          "max": "2026-08-06T11:20:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "billing",
+      "name": "invoices",
+      "rowCount": 28000000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "invoice_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "invoice_no"
+          ],
+          "duplicateCount": 2400
+        }
+      ],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 28000000,
+          "min": "1",
+          "max": "28000000"
+        },
+        {
+          "name": "invoice_no",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 27997600
+        },
+        {
+          "name": "account_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 782400,
+          "min": "1",
+          "max": "790000"
+        },
+        {
+          "name": "tariff_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1400,
+          "min": "1",
+          "max": "1400"
+        },
+        {
+          "name": "total_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2100000,
+          "min": "0",
+          "max": "4800000"
+        },
+        {
+          "name": "due_date",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 840000,
+          "distinctCount": 2740,
+          "min": "2019-02-01",
+          "max": "2026-09-10"
+        },
+        {
+          "name": "issued_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2740,
+          "min": "2019-01-15T00:00:00Z",
+          "max": "2026-08-10T05:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "billing",
+      "name": "invoice_lines",
+      "rowCount": 94000000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "line_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "line_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 94000000,
+          "min": "1",
+          "max": "94000000"
+        },
+        {
+          "name": "invoice_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 27900000,
+          "min": "1",
+          "max": "28000000"
+        },
+        {
+          "name": "tariff_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1400,
+          "min": "1",
+          "max": "1400"
+        },
+        {
+          "name": "line_amount_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 840000,
+          "min": "0",
+          "max": "1900000"
+        },
+        {
+          "name": "cost_center_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 16920000,
+          "distinctCount": 310
+        }
+      ]
+    },
+    {
+      "namespace": "billing",
+      "name": "payments",
+      "rowCount": 26000000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "payment_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "payment_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 26000000,
+          "min": "1",
+          "max": "26000000"
+        },
+        {
+          "name": "account_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 771000,
+          "min": "1",
+          "max": "790000"
+        },
+        {
+          "name": "invoice_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 24900000,
+          "min": "1",
+          "max": "28000000"
+        },
+        {
+          "name": "amount_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1940000,
+          "min": "0",
+          "max": "4800000"
+        },
+        {
+          "name": "reference_no",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 1820000,
+          "distinctCount": 23100000
+        },
+        {
+          "name": "paid_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2760,
+          "min": "2019-01-20T00:00:00Z",
+          "max": "2026-08-11T22:10:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "billing",
+      "name": "tariffs",
+      "rowCount": 1400,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "tariff_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "tariff_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1400,
+          "min": "1",
+          "max": "1400"
+        },
+        {
+          "name": "tariff_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1400
+        },
+        {
+          "name": "unit_rate",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1180,
+          "min": "0",
+          "max": "1.94"
+        },
+        {
+          "name": "regulator_ref",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 770,
+          "distinctCount": 610
+        },
+        {
+          "name": "effective_from",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1240,
+          "min": "2009-01-01",
+          "max": "2026-07-01"
+        },
+        {
+          "name": "effective_to",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1190,
+          "min": "2010-01-01",
+          "max": "2026-12-31"
+        }
+      ]
+    },
+    {
+      "namespace": "billing",
+      "name": "stg_billing_export",
+      "rowCount": 2100000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2081600,
+          "min": "1",
+          "max": "28000000"
+        },
+        {
+          "name": "bill_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 640,
+          "formatRule": "date-string",
+          "invalidFormatCount": 2400
+        },
+        {
+          "name": "export_amount_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1640000,
+          "min": "0",
+          "max": "4800000"
+        },
+        {
+          "name": "loaded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 580,
+          "min": "2025-01-02T04:00:00Z",
+          "max": "2026-08-12T04:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "billing",
+      "name": "stg_payment_file",
+      "rowCount": 4800000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "payment_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4790400,
+          "min": "1",
+          "max": "26000000"
+        },
+        {
+          "name": "payer_ref",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4100000
+        },
+        {
+          "name": "amount_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1240000,
+          "min": "0",
+          "max": "4800000"
+        },
+        {
+          "name": "value_dt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2740,
+          "min": "2019-01-02",
+          "max": "2099-12-31"
+        },
+        {
+          "name": "loaded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 950,
+          "min": "2024-01-02T05:00:00Z",
+          "max": "2026-08-12T05:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "billing",
+      "name": "legacy_cis_customers",
+      "rowCount": 760000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "customer_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 754600,
+          "min": "1",
+          "max": "760000"
+        },
+        {
+          "name": "cust_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 712000
+        },
+        {
+          "name": "opened_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 14600,
+          "min": "1753-01-01",
+          "max": "2023-10-30"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 640000,
+          "min": "1998-01-01T00:00:00Z",
+          "max": "2023-11-20T18:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "billing",
+      "name": "billing_secrets",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [],
+      "fields": []
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "meter",
+      "fromEntity": "meters",
+      "fromField": "premise_id",
+      "toNamespace": "meter",
+      "toEntity": "premises",
+      "toField": "premise_id",
+      "orphanCount": 8400,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "meter",
+      "fromEntity": "meter_reads",
+      "fromField": "meter_id",
+      "toNamespace": "meter",
+      "toEntity": "meters",
+      "toField": "meter_id",
+      "orphanCount": 96000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "meter",
+      "fromEntity": "meter_reads",
+      "fromField": "batch_id",
+      "toNamespace": "meter",
+      "toEntity": "read_batches",
+      "toField": "batch_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "meter",
+      "fromEntity": "install_jobs",
+      "fromField": "meter_id",
+      "toNamespace": "meter",
+      "toEntity": "meters",
+      "toField": "meter_id",
+      "orphanCount": 1800,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "meter",
+      "fromEntity": "meter_events_archive",
+      "fromField": "meter_id",
+      "toNamespace": "meter",
+      "toEntity": "meters",
+      "toField": "meter_id",
+      "orphanCount": 240000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "billing",
+      "fromEntity": "accounts",
+      "fromField": "premise_id",
+      "toNamespace": "meter",
+      "toEntity": "premises",
+      "toField": "premise_id",
+      "orphanCount": 3200,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "billing",
+      "fromEntity": "invoices",
+      "fromField": "account_id",
+      "toNamespace": "billing",
+      "toEntity": "accounts",
+      "toField": "account_id",
+      "orphanCount": 12400,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "billing",
+      "fromEntity": "invoices",
+      "fromField": "tariff_id",
+      "toNamespace": "billing",
+      "toEntity": "tariffs",
+      "toField": "tariff_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "billing",
+      "fromEntity": "invoice_lines",
+      "fromField": "invoice_id",
+      "toNamespace": "billing",
+      "toEntity": "invoices",
+      "toField": "invoice_id",
+      "orphanCount": 88000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "billing",
+      "fromEntity": "payments",
+      "fromField": "account_id",
+      "toNamespace": "billing",
+      "toEntity": "accounts",
+      "toField": "account_id",
+      "orphanCount": 4100,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "billing",
+      "fromEntity": "payments",
+      "fromField": "invoice_id",
+      "toNamespace": "billing",
+      "toEntity": "invoices",
+      "toField": "invoice_id",
+      "orphanCount": 148000,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "billing",
+      "fromEntity": "invoice_lines",
+      "fromField": "tariff_id",
+      "toNamespace": "billing",
+      "toEntity": "tariffs",
+      "toField": "tariff_id",
+      "orphanCount": 3900,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "meter",
+      "fromEntity": "install_jobs",
+      "fromField": "premise_id",
+      "toNamespace": "meter",
+      "toEntity": "premises",
+      "toField": "premise_id",
+      "orphanCount": 2100,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "meter",
+      "fromEntity": "v_meter_state",
+      "fromField": "meter_id",
+      "toNamespace": "meter",
+      "toEntity": "meters",
+      "toField": "meter_id",
+      "orphanCount": 3100,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "billing",
+      "fromEntity": "stg_billing_export",
+      "fromField": "invoice_id",
+      "toNamespace": "billing",
+      "toEntity": "invoices",
+      "toField": "invoice_id",
+      "orphanCount": 24000,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "billing",
+      "fromEntity": "accounts",
+      "fromField": "tariff_id",
+      "toNamespace": "billing",
+      "toEntity": "tariffs",
+      "toField": "tariff_id",
+      "orphanCount": 0,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "meter",
+      "fromEntity": "stg_meter_master",
+      "fromField": "meter_id",
+      "toNamespace": "meter",
+      "toEntity": "meters",
+      "toField": "meter_id",
+      "orphanCount": 0,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "billing",
+      "fromEntity": "stg_payment_file",
+      "fromField": "payment_id",
+      "toNamespace": "billing",
+      "toEntity": "payments",
+      "toField": "payment_id",
+      "orphanCount": 0,
+      "origin": "inferred"
+    }
+  ]
+}

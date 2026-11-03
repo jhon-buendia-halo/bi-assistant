@@ -1,0 +1,7 @@
+{
+  "industry": "healthcare",
+  "complexity": "medium",
+  "wave": "W2",
+  "authoring": "generated",
+  "defectPlan": "plans/databricks/healthcare-medium-w2-14.plan.json"
+}

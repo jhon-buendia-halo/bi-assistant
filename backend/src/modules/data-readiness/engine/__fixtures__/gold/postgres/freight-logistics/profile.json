@@ -1,0 +1,1210 @@
+{
+  "sourceId": "freight-logistics-gold",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "freight",
+      "name": "carriers",
+      "rowCount": 4100,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "carrier_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "scac_cd"
+          ],
+          "duplicateCount": 24
+        }
+      ],
+      "fields": [
+        {
+          "name": "carrier_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4100,
+          "min": "1",
+          "max": "4100"
+        },
+        {
+          "name": "scac_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4076
+        },
+        {
+          "name": "carrier_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4100
+        },
+        {
+          "name": "contact_email",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 574,
+          "distinctCount": 3400,
+          "formatRule": "email",
+          "invalidFormatCount": 118
+        },
+        {
+          "name": "dispatch_url",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 1640,
+          "distinctCount": 2100,
+          "formatRule": "url",
+          "invalidFormatCount": 96
+        },
+        {
+          "name": "mode_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 22,
+          "normalizedDistinctCount": 16
+        },
+        {
+          "name": "onboarded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3900,
+          "min": "2015-02-02T00:00:00Z",
+          "max": "2026-08-03T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "freight",
+      "name": "depots",
+      "rowCount": 620,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "depot_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "depot_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 620,
+          "min": "1",
+          "max": "620"
+        },
+        {
+          "name": "depot_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 620
+        },
+        {
+          "name": "mobile_number",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 74,
+          "distinctCount": 540,
+          "formatRule": "phone",
+          "invalidFormatCount": 31
+        },
+        {
+          "name": "country_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 34,
+          "normalizedDistinctCount": 34
+        },
+        {
+          "name": "dock_count",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 44,
+          "min": "1",
+          "max": "84"
+        },
+        {
+          "name": "opened_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 480,
+          "min": "1971-05-01",
+          "max": "2026-04-20"
+        }
+      ]
+    },
+    {
+      "namespace": "freight",
+      "name": "shipments",
+      "rowCount": 34000000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "shipment_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "waybill_no"
+          ],
+          "duplicateCount": 6400
+        }
+      ],
+      "fields": [
+        {
+          "name": "shipment_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 34000000,
+          "min": "1",
+          "max": "34000000"
+        },
+        {
+          "name": "waybill_no",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 33993600
+        },
+        {
+          "name": "carrier_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4080,
+          "min": "1",
+          "max": "4100"
+        },
+        {
+          "name": "depot_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 618,
+          "min": "1",
+          "max": "620"
+        },
+        {
+          "name": "service_level_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 4080000,
+          "distinctCount": 12
+        },
+        {
+          "name": "declared_weight_kg",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 610000,
+          "min": "0",
+          "max": "44000"
+        },
+        {
+          "name": "transit_start_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 28000000,
+          "min": "2019-01-02T00:00:00Z",
+          "max": "2026-08-11T21:00:00Z"
+        },
+        {
+          "name": "transit_end_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 27400000,
+          "min": "2018-10-14T00:00:00Z",
+          "max": "2025-09-30T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "freight",
+      "name": "stops",
+      "rowCount": 96000000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "stop_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "stop_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 96000000,
+          "min": "1",
+          "max": "96000000"
+        },
+        {
+          "name": "shipment_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 33400000,
+          "min": "1",
+          "max": "34000000"
+        },
+        {
+          "name": "depot_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 19200000,
+          "distinctCount": 618,
+          "min": "1",
+          "max": "620"
+        },
+        {
+          "name": "dwell_minutes",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4120,
+          "min": "-22",
+          "max": "4100"
+        },
+        {
+          "name": "stop_type_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 8,
+          "normalizedDistinctCount": 8
+        },
+        {
+          "name": "arrived_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 61000000,
+          "min": "1899-12-30T00:00:00Z",
+          "max": "2026-08-11T22:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "freight",
+      "name": "vehicles",
+      "rowCount": 18400,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "vehicle_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "vin"
+          ],
+          "duplicateCount": 84
+        }
+      ],
+      "fields": [
+        {
+          "name": "vehicle_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18400,
+          "min": "1",
+          "max": "18400"
+        },
+        {
+          "name": "vin",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18316
+        },
+        {
+          "name": "depot_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 610,
+          "min": "1",
+          "max": "620"
+        },
+        {
+          "name": "telematics_uuid",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 2208,
+          "distinctCount": 16192,
+          "formatRule": "uuid",
+          "invalidFormatCount": 340
+        },
+        {
+          "name": "body_type_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 24,
+          "normalizedDistinctCount": 24
+        },
+        {
+          "name": "disposed_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3100,
+          "min": "2009-07-01",
+          "max": "2099-12-31"
+        }
+      ]
+    },
+    {
+      "namespace": "freight",
+      "name": "telemetry_archive",
+      "rowCount": 240000000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "telemetry_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "telemetry_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 240000000,
+          "min": "1",
+          "max": "240000000"
+        },
+        {
+          "name": "vehicle_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 17900,
+          "min": "1",
+          "max": "18400"
+        },
+        {
+          "name": "odometer_km",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12400000,
+          "min": "-1",
+          "max": "1940000"
+        },
+        {
+          "name": "fault_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 232800000,
+          "distinctCount": 640
+        },
+        {
+          "name": "recorded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 180000000,
+          "min": "2019-06-01T00:00:00Z",
+          "max": "2024-02-29T23:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "freight",
+      "name": "v_shipment_status",
+      "rowCount": 34000000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "shipment_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 33898000,
+          "min": "1",
+          "max": "34000000"
+        },
+        {
+          "name": "status_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 14,
+          "normalizedDistinctCount": 14
+        },
+        {
+          "name": "last_status_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 1700000,
+          "distinctCount": 30100000,
+          "min": "2019-01-03T00:00:00Z",
+          "max": "2026-08-11T23:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "freight",
+      "name": "stg_edi_214",
+      "rowCount": 52000000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "message_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 51324000,
+          "min": "1",
+          "max": "52000000"
+        },
+        {
+          "name": "ship_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2740,
+          "formatRule": "date-string",
+          "invalidFormatCount": 412000
+        },
+        {
+          "name": "weight_kg",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 610000,
+          "min": "-999",
+          "max": "44000"
+        },
+        {
+          "name": "received_ts",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 44000000,
+          "min": "2024-01-01T00:00:00Z",
+          "max": "2026-08-12T07:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "freight",
+      "name": "stg_carrier_master",
+      "rowCount": 4100,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "carrier_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4062,
+          "min": "1",
+          "max": "4100"
+        },
+        {
+          "name": "onboard_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1940,
+          "formatRule": "date-string",
+          "invalidFormatCount": 240
+        },
+        {
+          "name": "insurance_ref",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3900
+        },
+        {
+          "name": "loaded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 950,
+          "min": "2024-01-01T02:00:00Z",
+          "max": "2026-08-12T02:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "freight",
+      "name": "freight_contracts_vault",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [],
+      "fields": []
+    },
+    {
+      "namespace": "finance",
+      "name": "invoices",
+      "rowCount": 12400000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "invoice_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "invoice_no"
+          ],
+          "duplicateCount": 3100
+        }
+      ],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12400000,
+          "min": "1",
+          "max": "12400000"
+        },
+        {
+          "name": "invoice_no",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12396900
+        },
+        {
+          "name": "carrier_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4020,
+          "min": "1",
+          "max": "4100"
+        },
+        {
+          "name": "currency_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18,
+          "normalizedDistinctCount": 11
+        },
+        {
+          "name": "total_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1940000,
+          "min": "0",
+          "max": "9400000"
+        },
+        {
+          "name": "po_number",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 2232000,
+          "distinctCount": 8400000
+        },
+        {
+          "name": "issued_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2740,
+          "min": "2019-01-31T00:00:00Z",
+          "max": "2026-08-10T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "finance",
+      "name": "invoice_lines",
+      "rowCount": 41000000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "line_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "line_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 41000000,
+          "min": "1",
+          "max": "41000000"
+        },
+        {
+          "name": "invoice_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12100000,
+          "min": "1",
+          "max": "12400000"
+        },
+        {
+          "name": "rate_card_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 82400,
+          "min": "1",
+          "max": "84000"
+        },
+        {
+          "name": "charge_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 940000,
+          "min": "0",
+          "max": "4100000"
+        },
+        {
+          "name": "accessorial_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 12300000,
+          "distinctCount": 240
+        }
+      ]
+    },
+    {
+      "namespace": "finance",
+      "name": "accruals",
+      "rowCount": 8600000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "accrual_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "accrual_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 8600000,
+          "min": "1",
+          "max": "8600000"
+        },
+        {
+          "name": "shipment_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 8400000,
+          "min": "1",
+          "max": "34000000"
+        },
+        {
+          "name": "accrued_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 610000,
+          "min": "0",
+          "max": "4100000"
+        },
+        {
+          "name": "cost_center_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 1032000,
+          "distinctCount": 340
+        },
+        {
+          "name": "accrued_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 92,
+          "min": "2019-01-31T00:00:00Z",
+          "max": "2026-07-31T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "finance",
+      "name": "rate_cards",
+      "rowCount": 84000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "rate_card_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "rate_card_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 84000,
+          "min": "1",
+          "max": "84000"
+        },
+        {
+          "name": "carrier_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4100,
+          "min": "1",
+          "max": "4100"
+        },
+        {
+          "name": "lane_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 61000
+        },
+        {
+          "name": "base_rate",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 41000,
+          "min": "0",
+          "max": "9400"
+        },
+        {
+          "name": "approved_by",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 25200,
+          "distinctCount": 84
+        },
+        {
+          "name": "valid_from",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2400,
+          "min": "2019-01-01",
+          "max": "2026-07-01"
+        }
+      ]
+    },
+    {
+      "namespace": "finance",
+      "name": "v_margin_by_lane",
+      "rowCount": 610000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "lane_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 601400,
+          "min": "1",
+          "max": "610000"
+        },
+        {
+          "name": "margin_pct",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 84000,
+          "min": "0",
+          "max": "214.6"
+        },
+        {
+          "name": "revenue_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 410000,
+          "min": "0",
+          "max": "94000000"
+        },
+        {
+          "name": "computed_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1,
+          "min": "2026-08-12T03:00:00Z",
+          "max": "2026-08-12T03:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "finance",
+      "name": "stg_ap_feed",
+      "rowCount": 12400000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12301200,
+          "min": "1",
+          "max": "12400000"
+        },
+        {
+          "name": "invoice_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2740,
+          "formatRule": "date-string",
+          "invalidFormatCount": 84000
+        },
+        {
+          "name": "gross_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1640000,
+          "min": "0",
+          "max": "9400000"
+        },
+        {
+          "name": "posting_ts",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 11400000,
+          "min": "2024-01-01T00:00:00Z",
+          "max": "2087-12-01T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "finance",
+      "name": "legacy_tms_charges",
+      "rowCount": 18400000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "charge_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18326000,
+          "min": "1",
+          "max": "18400000"
+        },
+        {
+          "name": "charge_type_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 84
+        },
+        {
+          "name": "charged_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4100,
+          "min": "1899-12-30",
+          "max": "2023-06-29"
+        },
+        {
+          "name": "booked_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 16400000,
+          "min": "2011-01-04T00:00:00Z",
+          "max": "2023-06-30T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "finance",
+      "name": "finance_bank_vault",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [],
+      "fields": []
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "freight",
+      "fromEntity": "shipments",
+      "fromField": "carrier_id",
+      "toNamespace": "freight",
+      "toEntity": "carriers",
+      "toField": "carrier_id",
+      "orphanCount": 61000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "freight",
+      "fromEntity": "shipments",
+      "fromField": "depot_id",
+      "toNamespace": "freight",
+      "toEntity": "depots",
+      "toField": "depot_id",
+      "orphanCount": 8400,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "freight",
+      "fromEntity": "stops",
+      "fromField": "shipment_id",
+      "toNamespace": "freight",
+      "toEntity": "shipments",
+      "toField": "shipment_id",
+      "orphanCount": 240000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "freight",
+      "fromEntity": "vehicles",
+      "fromField": "depot_id",
+      "toNamespace": "freight",
+      "toEntity": "depots",
+      "toField": "depot_id",
+      "orphanCount": 340,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "freight",
+      "fromEntity": "telemetry_archive",
+      "fromField": "vehicle_id",
+      "toNamespace": "freight",
+      "toEntity": "vehicles",
+      "toField": "vehicle_id",
+      "orphanCount": 4100000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "finance",
+      "fromEntity": "invoices",
+      "fromField": "carrier_id",
+      "toNamespace": "freight",
+      "toEntity": "carriers",
+      "toField": "carrier_id",
+      "orphanCount": 18400,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "finance",
+      "fromEntity": "invoice_lines",
+      "fromField": "invoice_id",
+      "toNamespace": "finance",
+      "toEntity": "invoices",
+      "toField": "invoice_id",
+      "orphanCount": 94000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "finance",
+      "fromEntity": "accruals",
+      "fromField": "shipment_id",
+      "toNamespace": "freight",
+      "toEntity": "shipments",
+      "toField": "shipment_id",
+      "orphanCount": 124000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "freight",
+      "fromEntity": "stops",
+      "fromField": "depot_id",
+      "toNamespace": "freight",
+      "toEntity": "depots",
+      "toField": "depot_id",
+      "orphanCount": 61000,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "freight",
+      "fromEntity": "v_shipment_status",
+      "fromField": "shipment_id",
+      "toNamespace": "freight",
+      "toEntity": "shipments",
+      "toField": "shipment_id",
+      "orphanCount": 102000,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "freight",
+      "fromEntity": "stg_carrier_master",
+      "fromField": "carrier_id",
+      "toNamespace": "freight",
+      "toEntity": "carriers",
+      "toField": "carrier_id",
+      "orphanCount": 38,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "finance",
+      "fromEntity": "invoice_lines",
+      "fromField": "rate_card_id",
+      "toNamespace": "finance",
+      "toEntity": "rate_cards",
+      "toField": "rate_card_id",
+      "orphanCount": 41000,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "finance",
+      "fromEntity": "stg_ap_feed",
+      "fromField": "invoice_id",
+      "toNamespace": "finance",
+      "toEntity": "invoices",
+      "toField": "invoice_id",
+      "orphanCount": 186000,
+      "origin": "inferred"
+    }
+  ]
+}

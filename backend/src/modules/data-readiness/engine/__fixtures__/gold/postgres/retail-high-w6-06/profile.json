@@ -1,0 +1,909 @@
+{
+  "sourceId": "gold-postgres-retail-high-w6-06",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "storefront",
+      "name": "prods",
+      "rowCount": 801,
+      "fields": [
+        {
+          "name": "prod_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 801,
+          "min": "1",
+          "max": "801"
+        },
+        {
+          "name": "prod_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 541,
+          "normalizedDistinctCount": 541
+        },
+        {
+          "name": "gtin_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 748,
+          "normalizedDistinctCount": 748
+        },
+        {
+          "name": "cat_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 39,
+          "normalizedDistinctCount": 39
+        },
+        {
+          "name": "season_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 13,
+          "normalizedDistinctCount": 13
+        },
+        {
+          "name": "unit_price_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 448,
+          "min": "0",
+          "max": "32540107"
+        },
+        {
+          "name": "margin_pct",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 801,
+          "min": "0",
+          "max": "86"
+        },
+        {
+          "name": "introduced_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 434,
+          "min": "2021-09-02",
+          "max": "2026-08-04"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "prod_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "gtin_code"
+          ],
+          "duplicateCount": 33
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "storefront",
+      "name": "stores",
+      "rowCount": 89,
+      "fields": [
+        {
+          "name": "store_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 89,
+          "min": "1",
+          "max": "89"
+        },
+        {
+          "name": "store_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 57,
+          "normalizedDistinctCount": 57
+        },
+        {
+          "name": "region_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 16,
+          "normalizedDistinctCount": 16
+        },
+        {
+          "name": "format_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 27,
+          "normalizedDistinctCount": 27
+        },
+        {
+          "name": "manager_email",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 87,
+          "normalizedDistinctCount": 87,
+          "formatRule": "email",
+          "invalidFormatCount": 28
+        },
+        {
+          "name": "opened_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 56,
+          "min": "2021-12-18",
+          "max": "2026-06-05"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "store_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "storefront",
+      "name": "orders",
+      "rowCount": 4433,
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4433,
+          "min": "1",
+          "max": "4433"
+        },
+        {
+          "name": "store_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 89,
+          "min": "1",
+          "max": "89"
+        },
+        {
+          "name": "order_status",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7,
+          "normalizedDistinctCount": 7
+        },
+        {
+          "name": "channel_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 22,
+          "normalizedDistinctCount": 22
+        },
+        {
+          "name": "total_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2926,
+          "min": "-2400",
+          "max": "88444659"
+        },
+        {
+          "name": "placed_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3225,
+          "min": "2022-05-18T12:00:00.000Z",
+          "max": "2026-06-28T12:00:00.000Z"
+        },
+        {
+          "name": "fulfilled_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 2770,
+          "min": "2022-01-26T12:00:00.000Z",
+          "max": "2026-06-26T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "order_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "storefront",
+      "name": "order_lines",
+      "rowCount": 2582,
+      "fields": [
+        {
+          "name": "order_line_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2582,
+          "min": "1",
+          "max": "2582"
+        },
+        {
+          "name": "order_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1542,
+          "min": "1",
+          "max": "4433"
+        },
+        {
+          "name": "prod_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 801,
+          "min": "1",
+          "max": "801"
+        },
+        {
+          "name": "line_seq",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 273,
+          "min": "0",
+          "max": "1831"
+        },
+        {
+          "name": "qty_units",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 266,
+          "min": "0",
+          "max": "2757"
+        },
+        {
+          "name": "line_total_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1645,
+          "min": "0",
+          "max": "55226339"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "order_line_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "natural",
+          "fields": [
+            "order_id",
+            "line_seq"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "storefront",
+      "name": "loyalty_members",
+      "rowCount": 154,
+      "fields": [
+        {
+          "name": "loyalty_member_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 154,
+          "min": "1",
+          "max": "154"
+        },
+        {
+          "name": "member_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 103,
+          "normalizedDistinctCount": 103
+        },
+        {
+          "name": "contact_email",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 124,
+          "normalizedDistinctCount": 124,
+          "formatRule": "email",
+          "invalidFormatCount": 28
+        },
+        {
+          "name": "phone_num",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 137,
+          "normalizedDistinctCount": 137,
+          "formatRule": "phone",
+          "invalidFormatCount": 0
+        },
+        {
+          "name": "tier_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 26,
+          "normalizedDistinctCount": 26
+        },
+        {
+          "name": "enrolled_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 114,
+          "min": "2022-07-16T12:00:00.000Z",
+          "max": "2026-06-17T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "loyalty_member_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "storefront",
+      "name": "invty_levels",
+      "rowCount": 335,
+      "fields": [
+        {
+          "name": "invty_level_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 335,
+          "min": "1",
+          "max": "335"
+        },
+        {
+          "name": "prod_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 137,
+          "min": "1",
+          "max": "801"
+        },
+        {
+          "name": "store_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 89,
+          "min": "1",
+          "max": "89"
+        },
+        {
+          "name": "on_hand_units",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 40,
+          "min": "0",
+          "max": "893"
+        },
+        {
+          "name": "counted_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 247,
+          "min": "2021-06-19T12:00:00.000Z",
+          "max": "2069-01-15T00:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "invty_level_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "storefront",
+      "name": "sales_daily",
+      "rowCount": 7082,
+      "fields": [
+        {
+          "name": "record_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7082,
+          "min": "1",
+          "max": "7082"
+        },
+        {
+          "name": "store_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6462,
+          "min": "1",
+          "max": "89"
+        },
+        {
+          "name": "revenue_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 5683,
+          "min": "0",
+          "max": "32155438"
+        },
+        {
+          "name": "snapshot_year",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4,
+          "min": "2023",
+          "max": "2026"
+        }
+      ],
+      "keys": [],
+      "readable": true
+    },
+    {
+      "namespace": "storefront",
+      "name": "promo_windows",
+      "rowCount": 451,
+      "fields": [
+        {
+          "name": "promo_window_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 451,
+          "min": "1",
+          "max": "451"
+        },
+        {
+          "name": "prod_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 288,
+          "min": "1",
+          "max": "801"
+        },
+        {
+          "name": "discount_pct",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 451,
+          "min": "0",
+          "max": "66"
+        },
+        {
+          "name": "promo_start_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 354,
+          "min": "2019-08-09",
+          "max": "2026-08-10"
+        },
+        {
+          "name": "promo_end_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 274,
+          "min": "2019-01-01",
+          "max": "2019-07-25"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "promo_window_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "supply_chain",
+      "name": "purchase_orders",
+      "rowCount": 7609,
+      "fields": [
+        {
+          "name": "purchase_order_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7609,
+          "min": "1",
+          "max": "7609"
+        },
+        {
+          "name": "prod_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 801,
+          "min": "1",
+          "max": "801"
+        },
+        {
+          "name": "supp_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6998
+        },
+        {
+          "name": "po_status",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 30,
+          "normalizedDistinctCount": 27
+        },
+        {
+          "name": "ordered_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4042,
+          "min": "2020-04-27",
+          "max": "2026-05-30"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "purchase_order_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "supply_chain",
+      "name": "supp_invoices",
+      "rowCount": 326,
+      "fields": [
+        {
+          "name": "supp_invoice_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 326,
+          "min": "1",
+          "max": "326"
+        },
+        {
+          "name": "purchase_order_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 255,
+          "min": "1",
+          "max": "7609"
+        },
+        {
+          "name": "amt_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 238,
+          "min": "0",
+          "max": "22881637"
+        },
+        {
+          "name": "invoice_status",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 32,
+          "normalizedDistinctCount": 32
+        },
+        {
+          "name": "received_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 276,
+          "min": "2021-11-10T12:00:00.000Z",
+          "max": "2022-12-16T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "supp_invoice_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "supply_chain",
+      "name": "returns_desk",
+      "rowCount": 156,
+      "fields": [
+        {
+          "name": "returns_desk_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 156,
+          "min": "1",
+          "max": "156"
+        },
+        {
+          "name": "order_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 97,
+          "min": "1",
+          "max": "4433"
+        },
+        {
+          "name": "reason_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 5,
+          "normalizedDistinctCount": 5
+        },
+        {
+          "name": "refunded_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 28,
+          "distinctCount": 112,
+          "min": "0",
+          "max": "88099616"
+        },
+        {
+          "name": "processed_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 120,
+          "min": "2022-03-24",
+          "max": "2026-08-10"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "returns_desk_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "storefront",
+      "fromEntity": "orders",
+      "fromField": "store_id",
+      "toNamespace": "storefront",
+      "toEntity": "stores",
+      "toField": "store_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "storefront",
+      "fromEntity": "order_lines",
+      "fromField": "order_id",
+      "toNamespace": "storefront",
+      "toEntity": "orders",
+      "toField": "order_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "storefront",
+      "fromEntity": "order_lines",
+      "fromField": "prod_id",
+      "toNamespace": "storefront",
+      "toEntity": "prods",
+      "toField": "prod_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "storefront",
+      "fromEntity": "invty_levels",
+      "fromField": "prod_id",
+      "toNamespace": "storefront",
+      "toEntity": "prods",
+      "toField": "prod_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "storefront",
+      "fromEntity": "invty_levels",
+      "fromField": "store_id",
+      "toNamespace": "storefront",
+      "toEntity": "stores",
+      "toField": "store_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "storefront",
+      "fromEntity": "promo_windows",
+      "fromField": "prod_id",
+      "toNamespace": "storefront",
+      "toEntity": "prods",
+      "toField": "prod_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "supply_chain",
+      "fromEntity": "purchase_orders",
+      "fromField": "prod_id",
+      "toNamespace": "storefront",
+      "toEntity": "prods",
+      "toField": "prod_id",
+      "orphanCount": 42,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "supply_chain",
+      "fromEntity": "supp_invoices",
+      "fromField": "purchase_order_id",
+      "toNamespace": "supply_chain",
+      "toEntity": "purchase_orders",
+      "toField": "purchase_order_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "supply_chain",
+      "fromEntity": "returns_desk",
+      "fromField": "order_id",
+      "toNamespace": "storefront",
+      "toEntity": "orders",
+      "toField": "order_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "storefront",
+      "fromEntity": "sales_daily",
+      "fromField": "store_id",
+      "toNamespace": "storefront",
+      "toEntity": "stores",
+      "toField": "store_id",
+      "orphanCount": 0,
+      "origin": "inferred"
+    }
+  ]
+}

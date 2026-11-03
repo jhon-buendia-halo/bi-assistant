@@ -1,0 +1,27 @@
+# Answer key for the "order-management" gold dataset (sales/orders domain) — HUMAN-MAINTAINED.
+# One JSON object per line. Blank lines and lines starting with # or // are ignored.
+# Each line is a real defect a human asserts is in profile.json, independent of what the
+# engine reports. Fields: dimension, namespace, entity, field (the tuple the scorer matches
+# on — must equal the engine's emitted tuple), severity (graded within ±1 band), optional note.
+# See ./README.md for the planted-defect table and the expected precision/recall.
+#
+# TRUE POSITIVES — real defects the engine SHOULD catch (and does):
+{"dimension":"completeness","namespace":"public","entity":"products","field":"product_name","severity":"high","note":"planted: product_name is null in 20% (20000/100000) of rows"}
+{"dimension":"validity","namespace":"public","entity":"customers","field":"email","severity":"medium","note":"planted: 40 email values are malformed (fail the email format)"}
+{"dimension":"consistency","namespace":"public","entity":"customers","field":"country","severity":"low","note":"planted: country stored as US / us / ' US ' — 5 case/whitespace variants collapse (200 raw -> 195 normalized)"}
+{"dimension":"uniqueness","namespace":"public","entity":"orders","field":"order_number","severity":"high","note":"planted: 12 duplicate order_number values on the unique key"}
+{"dimension":"integrity","namespace":"public","entity":"orders","field":"customer_id","severity":"high","note":"planted: 100 orders reference a customer_id with no matching customers.id"}
+{"dimension":"integrity","namespace":"public","entity":"order_items","field":"product_sku","severity":"high","note":"planted: 250 order_items reference a product_sku with no matching products.product_sku"}
+{"dimension":"reasonability","namespace":"public","entity":"order_items","field":"unit_price_cents","severity":"low","note":"planted: 15 unit_price_cents values are negative (MIN = -500)"}
+{"dimension":"reasonability","namespace":"public","entity":"customers","field":"signup_date","severity":"medium","note":"planted: 4 signup_date values in year 2099 (future-dated)"}
+{"dimension":"timeliness","namespace":"public","entity":"orders","field":"order_date","severity":"high","note":"planted: newest order_date is ~900 days old (>730d -> medium) — a stale/paused legacy partition"}
+#
+# RECALL GAP (blind spot) — a real defect the engine CANNOT catch today. Keep this label:
+# it measures the blind spot honestly (it will always score as a miss / false-negative).
+{"dimension":"completeness","namespace":"public","entity":"customers","field":"client_id","severity":"medium","note":"BLIND SPOT: 3000 client_id rows hold the literal string 'null' (disguised missing). The engine sees nullCount=0, so completeness never fires. A disguised-missing detector (RECOMMENDED RULE) would be needed."}
+#
+# INTENTIONALLY NOT LABELED (precision gaps the harness should surface as false alarms):
+#   - completeness products.description (low): 8% null (8000/100000). Below the 10% medium
+#     threshold, but the engine still emits a LOW finding for any non-zero null fraction.
+#     We treat 8% as acceptable here, so leaving it unlabeled makes it a false alarm — that
+#     is the point: it measures the engine over-reporting minor nulls (precision < 1.0).
