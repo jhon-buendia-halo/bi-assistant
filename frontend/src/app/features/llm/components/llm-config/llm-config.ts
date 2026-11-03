@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { LucideAngularModule, Loader2, TriangleAlert } from 'lucide-angular';
 import { LlmApiService } from '../../services/llm-api.service';
+import { LlmModelPicker } from '../llm-model-picker/llm-model-picker';
 import {
   ApiStyle,
   LlmProvider,
@@ -54,7 +55,7 @@ const LEVELS_LOOKUP_DELAY_MS = 250;
 
 @Component({
   selector: 'app-llm-config',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, LlmModelPicker],
   templateUrl: './llm-config.html',
   styleUrl: './llm-config.scss',
 })

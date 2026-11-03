@@ -1,3 +1,4 @@
+import { LlmModelsApiService } from '../../services/llm-models-api.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { LlmApiService } from '../../services/llm-api.service';
@@ -46,6 +47,11 @@ describe('LlmConfig custom endpoint', () => {
       providers: [
         { provide: LlmApiService, useValue: api },
         { provide: ToastService, useValue: toast },
+        // The Load-models picker is tested on its own; here it never loads.
+        {
+          provide: LlmModelsApiService,
+          useValue: jasmine.createSpyObj('LlmModelsApiService', ['listModels']),
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(LlmConfig);
