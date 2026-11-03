@@ -43,6 +43,7 @@ import {
   readinessPanelItem,
   readinessAnswerFallback,
   readinessReportIdOf,
+  readinessReportOf,
   readinessReportRef,
 } from './readiness-bridge';
 import {
@@ -1477,11 +1478,14 @@ export class SessionsService implements OnModuleInit {
     result: unknown,
     emit: (event: StreamEvent) => void,
   ): Promise<ReadinessReportRef | undefined> {
+    // The tool's raw result carries the full report (only its summary
+    // reaches the model); the bridge's copy covers any other shape.
     const reportId = readinessReportIdOf(result);
     const report =
-      reportId && this.readinessBridge
+      readinessReportOf(result) ??
+      (reportId && this.readinessBridge
         ? await this.readinessBridge.reportFor(reportId)
-        : undefined;
+        : undefined);
     if (!report) return undefined;
     const panelItem = readinessPanelItem(report);
     const session = await this.get(sessionId);

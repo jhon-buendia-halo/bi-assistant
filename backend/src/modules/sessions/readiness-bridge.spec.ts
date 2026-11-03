@@ -9,6 +9,7 @@ import {
   readinessOrientationBlock,
   readinessPanelItem,
   readinessReportIdOf,
+  readinessReportOf,
   readinessReportRef,
   readinessSummary,
   topFindings,
@@ -161,6 +162,15 @@ describe('the readiness panel item and answer reference (data-model 3.4)', () =>
       maturity: 'Managed',
       generatedAt: '2026-11-03T10:00:00.000Z',
     });
+  });
+
+  it('reads the full report of a raw { summary, report } tool result', () => {
+    const full = report('r-1');
+    expect(readinessReportOf({ summary: {}, report: full })).toBe(full);
+    expect(readinessReportOf({ reportId: 'r-1' })).toBeUndefined();
+    expect(readinessReportOf({ report: { id: 'r-1' } })).toBeUndefined();
+    expect(readinessReportOf({ error: 'x', report: full })).toBeUndefined();
+    expect(readinessReportOf(undefined)).toBeUndefined();
   });
 
   it('reads the report id of a tool result, never of an error', () => {

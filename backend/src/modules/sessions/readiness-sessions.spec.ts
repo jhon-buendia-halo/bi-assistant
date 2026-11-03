@@ -481,6 +481,44 @@ describe('SessionsService sessions bound to the Data Readiness Agent (BA-261)', 
       );
     });
 
+    it("takes the full report from the tool's raw { summary, report } result (unit 9 contract)", async () => {
+      const ctx = build();
+      ctx.readinessAgent.stream.mockImplementation(() =>
+        Promise.resolve({
+          fullStream: streamOf([
+            () =>
+              Promise.resolve({
+                type: 'tool-result',
+                payload: {
+                  toolCallId: 't1',
+                  toolName: 'get_readiness_report',
+                  args: {},
+                  result: {
+                    summary: { reportId: 'r-5' },
+                    report: report('r-5'),
+                  },
+                },
+              }),
+            () =>
+              Promise.resolve({
+                type: 'text-delta',
+                payload: { text: 'Here it is.' },
+              }),
+          ]),
+          text: Promise.resolve(''),
+        }),
+      );
+      const events = await turn(ctx, 'Show the latest report');
+      expect(ctx.readiness.get).not.toHaveBeenCalled();
+      const event = events.find((e) => e.type === 'readiness-report')!;
+      expect(
+        (JSON.parse(event.content!) as { report: ReadinessReport }).report,
+      ).toEqual(report('r-5'));
+      expect(ctx.session.messages.at(-1)).toMatchObject({
+        readinessReport: { reportId: 'r-5' },
+      });
+    });
+
     it('keeps the answer and its card when the turn ends on the report without prose', async () => {
       const ctx = build();
       await ctx.service.onModuleInit();

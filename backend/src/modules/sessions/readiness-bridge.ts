@@ -177,6 +177,27 @@ export function readinessReportIdOf(result: unknown): string | undefined {
   return typeof id === 'string' && id ? id : undefined;
 }
 
+/**
+ * The full report a readiness tool's raw result carries: the bridge's
+ * `{ report, summary }` as the tool returns it (its `toModelOutput` shows the
+ * model only `summary`). Undefined for an error or any other shape.
+ */
+export function readinessReportOf(
+  result: unknown,
+): ReadinessReport | undefined {
+  if (!result || typeof result !== 'object') return undefined;
+  const value = result as { error?: unknown; report?: unknown };
+  if (typeof value.error === 'string') return undefined;
+  const report = value.report as Partial<ReadinessReport> | undefined;
+  return report &&
+    typeof report === 'object' &&
+    typeof report.id === 'string' &&
+    Array.isArray(report.findings) &&
+    Array.isArray(report.dimensionScores)
+    ? (report as ReadinessReport)
+    : undefined;
+}
+
 /** One dataset line of Block D1. */
 export interface ReadinessOrientationRow {
   name: string;
