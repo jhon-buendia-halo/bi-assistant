@@ -33,7 +33,7 @@ PG_PORT=55471 APP_PORT=3311 scripts/data-readiness-smoke/run.sh
 
 | Call | Expected |
 |---|---|
-| `POST` whole datasource | 4 entities (`audit_log`, `customers`, `events`, `orders`), 17 findings, overall 74, Defined |
+| `POST` whole datasource | 5 entities (`audit_log`, `customers`, `events`, `orders`, `secrets`), 17 findings, overall 74, Defined |
 | `POST` `smokedb.smoke.orders` | 1 entity, overall 86, Managed |
 | `POST` `customers`, `events` and a missing table | 2 entities (the missing key is dropped), overall 76, Defined |
 | `POST` only a missing table | 400 `None of the entities to assess exist` |
@@ -50,12 +50,13 @@ Whole-datasource scores, as `score (checks, findings, worst)`:
 | Completeness | 63 (6, 4, high) | `nickname` 60 % null (high), `region` 20 % (medium), `events.event_id` and `events.customer_id` 1 of 6 (medium); `email` and `orders.customer_id` nullable with no nulls |
 | Validity | 60 (1, 1, medium) | 3 bad `email` values |
 | Consistency | 97 (3, 1, low) | `segment` has 5 distinct values, 2 after lower/trim |
-| Uniqueness | 84 (5, 2, medium) | 3 primary keys clean; `events` has no key, so `event_id` (2 duplicates) and `customer_id` (1) are inferred |
+| Uniqueness | 87 (6, 2, medium) | 4 primary keys clean (secrets unmeasured); `events` has no key, so `event_id` (2 duplicates) and `customer_id` (1) are inferred |
 | Integrity | 30 (2, 2, high) | declared FK `orders.customer_id` (added `NOT VALID`) with orphan 999 (high); inferred `events.customer_id` → `customers.id` with orphan 777 (medium) |
-| Accessibility | 90 (4, 1, medium) | `audit_log` is visible (INSERT grant) but not readable |
+| Accessibility | 92 (5, 1, medium) | `audit_log` (INSERT grant only) and `secrets` (no grant) are not readable; one finding for the namespace |
 | Timeliness | 73 (3, 2, medium) | `customers.created_at` newest 2020; `events.event_year` newest 2019 (year fallback); `orders` is fresh |
-| Reasonability | 92 (12, 4, medium) | negative `amount`, `discount_pct` 150, future `ordered_at`, `created_at` in 1899 |
+| Reasonability | 92 (13, 4, medium) | negative `amount`, `discount_pct` 150, future `ordered_at`, `created_at` in 1899 |
 
-`smoke.secrets` has no grant at all, so `information_schema` hides it from the
-inventory and it is not assessed: on PostgreSQL, accessibility only sees tables
-the role holds some privilege on.
+`smoke.secrets` has no grant at all. The profiler lists relations from
+`pg_class`, as the inventory does, so it is still assessed: accessibility flags
+it, and its declared key and numeric `id` add one uniqueness and one
+reasonability check (unmeasured, so passing).

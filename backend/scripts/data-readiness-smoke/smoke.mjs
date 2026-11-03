@@ -70,15 +70,15 @@ const EXPECTED_WHOLE = {
     completeness: [63, 6, 4, 'high'], // 1 - (1 + .4 + .4 + .4)/6
     validity: [60, 1, 1, 'medium'],
     consistency: [97, 3, 1, 'low'], // 1 - .1/3
-    uniqueness: [84, 5, 2, 'medium'], // 1 - .8/5
+    uniqueness: [87, 6, 2, 'medium'], // 1 - .8/6 (secrets' declared key counts, unmeasured)
     integrity: [30, 2, 2, 'high'], // 1 - 1.4/2
-    accessibility: [90, 4, 1, 'medium'], // 1 - .4/4
+    accessibility: [92, 5, 1, 'medium'], // 1 - .4/5 (audit_log and secrets, one finding per namespace)
     timeliness: [73, 3, 2, 'medium'], // 1 - .8/3
-    reasonability: [92, 12, 4, 'medium'], // 1 - 1.0/12
+    reasonability: [92, 13, 4, 'medium'], // 1 - 1.0/13 (secrets.id is numeric)
   },
-  overall: 74, // (63+60+97+84+30+90+73+92)/8 = 73.625
+  overall: 74, // (63+60+97+87+30+92+73+92)/8 = 74.25
   maturity: 'Defined',
-  entityCount: 4,
+  entityCount: 5,
   findings: [
     'accessibility|||medium',
     'completeness|customers|nickname|high',
