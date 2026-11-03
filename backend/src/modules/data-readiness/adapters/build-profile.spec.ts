@@ -6,7 +6,12 @@ jest.mock('../engine/infer-joins', () => ({
 import type { ProfiledTable } from '../../datasources/connectors/profiling';
 import { inferJoinCandidates } from '../engine/infer-joins';
 import type { JoinCandidate } from '../engine/infer-joins';
-import { buildSourceProfile, type DialectRules } from './build-profile';
+import type { AssessScope } from '../engine/types';
+import {
+  buildSourceProfile,
+  utcTemporal,
+  type DialectRules,
+} from './build-profile';
 import { classifyType } from './classify';
 import { fakeProfiler, stats, type FakeSource } from './fake-profiler.stub';
 import { POSTGRES_FORMAT_PATTERNS } from './format-rules';
@@ -47,10 +52,7 @@ function source(overrides: Partial<FakeSource> = {}): FakeSource {
   };
 }
 
-const run = (
-  src: FakeSource,
-  scope?: { namespace?: string; entity?: string },
-) => {
+const run = (src: FakeSource, scope?: AssessScope) => {
   const profiler = fakeProfiler<object>('postgres', src);
   return {
     profiler,
@@ -327,5 +329,182 @@ describe('buildSourceProfile', () => {
       'c1_id',
     );
     expect(profile.relationships[18].fromField).toBe('c19_id');
+  });
+
+  it('profiles only the requested entity set, keeping every table as a join target', async () => {
+    const names = ['a', 'b', 'c', 'd', 'e'];
+    const src: FakeSource = {
+      tables: names.map((n) => textTable('s', n)),
+      stats: Object.fromEntries(
+        names.map((n) => [`s.${n}`, stats(1, { id: { distinct: 1 } })]),
+      ),
+      privileges: names.map((n) => ({
+        schema: 's',
+        table: n,
+        selectable: true,
+      })),
+      foreignKeys: [
+        {
+          schema: 's',
+          table: 'b',
+          column: 'id',
+          refSchema: 's',
+          refTable: 'e',
+          refColumn: 'id',
+        },
+        {
+          schema: 's',
+          table: 'c',
+          column: 'id',
+          refSchema: 's',
+          refTable: 'a',
+          refColumn: 'id',
+        },
+      ],
+      orphans: { 's.b.id': 0, 's.c.id': 0 },
+    };
+
+    const { profiler, result } = run(src, {
+      entities: [
+        { namespace: 's', name: 'b' },
+        { namespace: 's', name: 'd' },
+        { namespace: 'x', name: 'gone' },
+      ],
+    });
+    const profile = await result;
+
+    expect(profile.entities.map((e) => e.name)).toEqual(['b', 'd']);
+    expect(
+      profiler.calls
+        .filter((c) => c.method === 'columnStats')
+        .map((c) => c.args.slice(0, 2).join('.')),
+    ).toEqual(['s.b', 's.d']);
+    // b -> e stays (its parent is out of scope); c -> a is not in scope.
+    expect(profile.relationships.map((r) => r.fromEntity)).toEqual(['b']);
+    const [children, targets] = infer.mock.calls[0];
+    expect(children.map((t) => t.name)).toEqual(['b', 'd']);
+    expect(targets.map((t) => t.name)).toEqual(names);
+  });
+
+  it('applies the 20 inferred-join cap once, to the requested entities only', async () => {
+    infer.mockImplementation(
+      jest.requireActual<{
+        inferJoinCandidates: typeof inferJoinCandidates;
+      }>('../engine/infer-joins').inferJoinCandidates,
+    );
+    const refs = (n: number) => Array.from({ length: n }, (_, i) => `r${i}_id`);
+    const child = (table: string, cols: string[]): ProfiledTable => ({
+      schema: 's',
+      table,
+      columns: cols.map((name) => ({ name, type: 'integer', nullable: true })),
+    });
+    const targets = Array.from({ length: 15 }, (_, i) =>
+      child(`r${i}`, ['id']),
+    );
+    // `out` sorts first and has 15 candidates of its own; it is not requested.
+    const tables = [
+      child('aa_out', refs(15)),
+      child('in1', refs(15)),
+      child('in2', refs(10)),
+      ...targets,
+    ];
+    const orphans: Record<string, number> = {};
+    for (const t of tables)
+      for (const c of t.columns) orphans[`s.${t.table}.${c.name}`] = 0;
+    const src: FakeSource = {
+      tables,
+      stats: Object.fromEntries(
+        tables.map((t) => [`s.${t.table}`, stats(1, {})]),
+      ),
+      orphans,
+      failing: ['tablePrivileges'],
+    };
+
+    const { profiler, result } = run(src, {
+      entities: [
+        { namespace: 's', name: 'in1' },
+        { namespace: 's', name: 'in2' },
+      ],
+    });
+    const profile = await result;
+
+    const probed = profiler.calls
+      .filter((c) => c.method === 'orphanCount')
+      .map((c) => (c.args[0] as JoinCandidate).table);
+    expect(probed).toHaveLength(20);
+    expect(probed).not.toContain('aa_out');
+    expect(profile.relationships).toHaveLength(20);
+    expect(profile.relationships.every((r) => r.origin === 'inferred')).toBe(
+      true,
+    );
+    expect(
+      profile.relationships.filter((r) => r.fromEntity === 'in1'),
+    ).toHaveLength(15);
+    expect(
+      profile.relationships.filter((r) => r.fromEntity === 'in2'),
+    ).toHaveLength(5);
+  });
+
+  it('reads a zone-less temporal min/max as UTC', async () => {
+    const src: FakeSource = {
+      tables: [
+        {
+          schema: 's',
+          table: 'ev',
+          columns: [
+            { name: 'at', type: 'timestamp without time zone', nullable: true },
+            { name: 'on', type: 'date', nullable: true },
+            { name: 'code', type: 'text', nullable: true },
+          ],
+        },
+      ],
+      stats: {
+        's.ev': stats(2, {
+          at: { min: '2024-01-05 10:00:00', max: '2024-03-01 23:59:59.5' },
+          on: { min: '2024-01-05', max: '2024-01-06' },
+          code: { min: '2024-01-05 10:00:00', max: 'z' },
+        }),
+      },
+      privileges: [{ schema: 's', table: 'ev', selectable: true }],
+    };
+
+    const profile = await run(src).result;
+    const field = (n: string) =>
+      profile.entities[0].fields.find((f) => f.name === n);
+
+    expect(field('at')).toMatchObject({
+      min: '2024-01-05T10:00:00Z',
+      max: '2024-03-01T23:59:59.5Z',
+    });
+    expect(Date.parse(field('at')!.min!)).toBe(Date.UTC(2024, 0, 5, 10));
+    expect(field('on')).toMatchObject({ min: '2024-01-05', max: '2024-01-06' });
+    // Only temporal columns are rewritten.
+    expect(field('code')?.min).toBe('2024-01-05 10:00:00');
+  });
+});
+
+describe('utcTemporal', () => {
+  it.each([
+    ['2024-01-05 10:00:00', '2024-01-05T10:00:00Z'],
+    ['2024-01-05T10:00', '2024-01-05T10:00Z'],
+    ['2024-01-05 10:00:00.123456', '2024-01-05T10:00:00.123456Z'],
+    ['2024-01-05 10:00:00+00', '2024-01-05T10:00:00+00:00'],
+    ['2024-01-05 10:00:00-0530', '2024-01-05T10:00:00-05:30'],
+    ['2024-01-05 10:00:00+05:30', '2024-01-05T10:00:00+05:30'],
+    ['2024-01-05T10:00:00.000Z', '2024-01-05T10:00:00.000Z'],
+    ['2024-01-05', '2024-01-05'],
+    ['10:00:00', '10:00:00'],
+    ['1 day 02:00:00', '1 day 02:00:00'],
+  ])('%s -> %s', (input, expected) => {
+    expect(utcTemporal(input)).toBe(expected);
+  });
+
+  it('parses the same instant whatever the host time zone', () => {
+    expect(Date.parse(utcTemporal('2024-01-05 10:00:00'))).toBe(
+      Date.UTC(2024, 0, 5, 10),
+    );
+    expect(Date.parse(utcTemporal('2024-01-05 10:00:00+00'))).toBe(
+      Date.UTC(2024, 0, 5, 10),
+    );
   });
 });

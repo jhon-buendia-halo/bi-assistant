@@ -260,31 +260,36 @@ describe('DataReadinessService', () => {
       );
 
       expect(mockPostgres.mock.calls[0][3]).toEqual({
-        namespace: 'public',
-        entity: 'orders',
+        entities: [{ namespace: 'public', name: 'orders' }],
       });
       expect(report.entityCount).toBe(1);
     });
 
-    it('narrows several entities of one namespace to that namespace, then filters the profile', async () => {
+    it('profiles exactly the requested entities of one namespace in one adapter call', async () => {
       mockPostgres.mockResolvedValue(
-        profile([
-          entity('public', 'orders'),
-          entity('public', 'customers'),
-          entity('public', 'audit'),
-        ]),
+        profile([entity('public', 'orders'), entity('public', 'customers')]),
       );
       const { service } = build();
 
       await service.assess(
         {
           datasourceId: 'ds-pg',
-          entities: ['sales.public.orders', 'sales.public.customers'],
+          entities: [
+            'sales.public.orders',
+            'sales.public.customers',
+            'sales.public.orders',
+          ],
         },
         NOW,
       );
 
-      expect(mockPostgres.mock.calls[0][3]).toEqual({ namespace: 'public' });
+      expect(mockPostgres).toHaveBeenCalledTimes(1);
+      expect(mockPostgres.mock.calls[0][3]).toEqual({
+        entities: [
+          { namespace: 'public', name: 'orders' },
+          { namespace: 'public', name: 'customers' },
+        ],
+      });
       const assessed = mockEngine.mock.calls[0][0];
       expect(assessed.entities.map((e) => e.name)).toEqual([
         'orders',
@@ -293,18 +298,16 @@ describe('DataReadinessService', () => {
       expect(assessed.relationships).toHaveLength(1);
     });
 
-    it('profiles one scope per namespace when entities span namespaces, and merges them', async () => {
-      mockPostgres
-        .mockResolvedValueOnce(profile([entity('public', 'orders')]))
-        .mockResolvedValueOnce({
-          sourceId: 'ds-pg',
-          sourceType: 'postgres',
-          entities: [entity('crm', 'leads')],
-          relationships: [],
-        });
+    it('profiles entities spanning namespaces in one adapter call', async () => {
+      mockPostgres.mockResolvedValue({
+        sourceId: 'ds-pg',
+        sourceType: 'postgres',
+        entities: [entity('crm', 'leads'), entity('public', 'orders')],
+        relationships: [],
+      });
       const { service } = build();
 
-      await service.assess(
+      const report = await service.assess(
         {
           datasourceId: 'ds-pg',
           entities: ['sales.public.orders', 'sales.crm.leads'],
@@ -312,31 +315,14 @@ describe('DataReadinessService', () => {
         NOW,
       );
 
-      expect(mockPostgres.mock.calls.map((c) => c[3])).toEqual([
-        { namespace: 'public', entity: 'orders' },
-        { namespace: 'crm', entity: 'leads' },
-      ]);
-      const assessed = mockEngine.mock.calls[0][0];
-      expect(assessed.entities.map((e) => `${e.namespace}.${e.name}`)).toEqual([
-        'public.orders',
-        'crm.leads',
-      ]);
-      // orders -> customers stays: its orphans belong to orders.
-      expect(assessed.relationships).toHaveLength(1);
-    });
-
-    it('drops relationships whose from-entity is out of scope', async () => {
-      mockPostgres.mockResolvedValue(
-        profile([entity('public', 'customers'), entity('public', 'orders')]),
-      );
-      const { service } = build();
-
-      await service.assess(
-        { datasourceId: 'ds-pg', entities: ['sales.public.customers'] },
-        NOW,
-      );
-
-      expect(mockEngine.mock.calls[0][0].relationships).toEqual([]);
+      expect(mockPostgres).toHaveBeenCalledTimes(1);
+      expect(mockPostgres.mock.calls[0][3]).toEqual({
+        entities: [
+          { namespace: 'public', name: 'orders' },
+          { namespace: 'crm', name: 'leads' },
+        ],
+      });
+      expect(report.entityCount).toBe(2);
     });
 
     it('drops PostgreSQL keys naming another database', async () => {
@@ -353,17 +339,46 @@ describe('DataReadinessService', () => {
       expect(mockPostgres).not.toHaveBeenCalled();
     });
 
-    it('refuses an entity list with no string keys', async () => {
-      const { service } = build();
+    it.each([
+      ['a string', 'sales.public.orders'],
+      ['an object', { key: 'sales.public.orders' }],
+      ['a number', 3],
+      ['non-string keys', [null, 3]],
+      ['a mixed array', ['sales.public.orders', 3]],
+    ])('answers 400 when entities is %s', async (_label, entities) => {
+      const { service, ds } = build();
 
       await expect(
-        service.assess(
-          { datasourceId: 'ds-pg', entities: [null, 3] as never },
-          NOW,
-        ),
+        service.assess({ datasourceId: 'ds-pg', entities } as never, NOW),
+      ).rejects.toThrow(
+        new BadRequestException('entities must be an array of entity keys'),
+      );
+      expect(ds.get).not.toHaveBeenCalled();
+      expect(mockPostgres).not.toHaveBeenCalled();
+    });
+
+    it('treats a null entity list as the whole datasource', async () => {
+      const { service } = build();
+
+      await service.assess(
+        { datasourceId: 'ds-pg', entities: null } as never,
+        NOW,
+      );
+
+      expect(mockPostgres.mock.calls[0][3]).toBeUndefined();
+    });
+
+    it('refuses a whole-datasource assessment of an empty datasource', async () => {
+      mockPostgres.mockResolvedValue(profile([]));
+      const { service, repository } = build();
+
+      await expect(
+        service.assess({ datasourceId: 'ds-pg' }, NOW),
       ).rejects.toThrow(
         new BadRequestException('None of the entities to assess exist'),
       );
+      expect(mockEngine).not.toHaveBeenCalled();
+      expect(repository.insert).not.toHaveBeenCalled();
     });
 
     it('keeps a programming error as is, not 502', async () => {
@@ -410,8 +425,7 @@ describe('DataReadinessService', () => {
       );
 
       expect(mockDatabricks.mock.calls[0][3]).toEqual({
-        namespace: 'main.sales',
-        entity: 'orders',
+        entities: [{ namespace: 'main.sales', name: 'orders' }],
       });
     });
 

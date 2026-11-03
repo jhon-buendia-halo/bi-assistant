@@ -39,6 +39,7 @@ const UNSUPPORTED_KIND =
   'Data readiness supports PostgreSQL and Databricks datasources only';
 const NONE_EXIST = 'None of the entities to assess exist';
 const ID_REQUIRED = 'datasourceId is required';
+const ENTITIES_INVALID = 'entities must be an array of entity keys';
 
 const refKey = (r: EntityRef): string => `${r.namespace}\u0000${r.name}`;
 
@@ -66,35 +67,18 @@ export function entityRefFromKey(
 }
 
 /**
- * The adapter scopes covering every requested entity: one per namespace,
- * narrowed to the entity when the namespace holds only one. `AssessScope`
- * cannot express a multi-entity set, so the merged profile is filtered to the
- * requested set afterwards.
+ * The adapter scope for the requested entities: the exact (deduplicated) set,
+ * in one adapter call, so only those tables are profiled while every table
+ * stays a join target and the inferred-join cap applies once (R11).
  */
-export function scopesFor(refs: EntityRef[]): AssessScope[] {
-  const byNamespace = new Map<string, Set<string>>();
-  for (const r of refs) {
-    const names = byNamespace.get(r.namespace) ?? new Set<string>();
-    names.add(r.name);
-    byNamespace.set(r.namespace, names);
-  }
-  return [...byNamespace].map(([namespace, names]) =>
-    names.size === 1 ? { namespace, entity: [...names][0] } : { namespace },
-  );
-}
-
-function narrow(profile: SourceProfile, refs: EntityRef[]): SourceProfile {
-  const wanted = new Set(refs.map(refKey));
-  const has = (namespace: string, name: string) =>
-    wanted.has(refKey({ namespace, name }));
+export function scopeFor(refs: EntityRef[]): AssessScope {
+  const seen = new Map<string, EntityRef>();
+  for (const r of refs) seen.set(refKey(r), r);
   return {
-    ...profile,
-    entities: profile.entities.filter((e) => has(e.namespace, e.name)),
-    // A relationship belongs to its from-entity (its orphans are counted
-    // there), so it stays even when the parent is out of scope.
-    relationships: profile.relationships.filter((r) =>
-      has(r.fromNamespace, r.fromEntity),
-    ),
+    entities: [...seen.values()].map(({ namespace, name }) => ({
+      namespace,
+      name,
+    })),
   };
 }
 
@@ -133,14 +117,14 @@ export class DataReadinessService {
     now: Date = new Date(),
   ): Promise<ReadinessReport> {
     const datasourceId = requireId(input?.datasourceId);
+    // Omitted (or empty) `entities` means the whole datasource.
+    const keys = requireKeys(input.entities);
     const ds = await this.datasource(datasourceId);
     if (ds.kind !== 'postgres' && ds.kind !== 'databricks') {
       throw new BadRequestException(UNSUPPORTED_KIND);
     }
     const kind: ReadinessKind = ds.kind;
 
-    // Omitted (or empty) `entities` means the whole datasource.
-    const keys: unknown[] = Array.isArray(input.entities) ? input.entities : [];
     let refs: EntityRef[] | undefined;
     if (keys.length > 0) {
       const database =
@@ -153,13 +137,15 @@ export class DataReadinessService {
       if (refs.length === 0) throw new BadRequestException(NONE_EXIST);
     }
 
-    let profile = await this.profile(ds, kind, refs);
-    if (refs) {
-      // Keys that no longer exist are dropped (api.md 108).
-      profile = narrow(profile, refs);
-      if (profile.entities.length === 0) {
-        throw new BadRequestException(NONE_EXIST);
-      }
+    // Keys that no longer exist are dropped (api.md 108); a scope left with
+    // no entity, or a datasource with none, is refused (Edge cases).
+    const profile = await this.profile(
+      ds,
+      kind,
+      refs ? scopeFor(refs) : undefined,
+    );
+    if (profile.entities.length === 0) {
+      throw new BadRequestException(NONE_EXIST);
     }
 
     const result = runAssessment(profile, {
@@ -209,32 +195,11 @@ export class DataReadinessService {
   }
 
   /**
-   * Profile through the kind's adapter: the whole datasource, or one call per
-   * namespace of the requested entities, merged.
-   */
-  private async profile(
-    ds: Datasource,
-    kind: ReadinessKind,
-    refs: EntityRef[] | undefined,
-  ): Promise<SourceProfile> {
-    if (!refs) return this.profileScope(ds, kind, undefined);
-    const parts: SourceProfile[] = [];
-    for (const scope of scopesFor(refs)) {
-      parts.push(await this.profileScope(ds, kind, scope));
-    }
-    return {
-      ...parts[0],
-      entities: parts.flatMap((p) => p.entities),
-      relationships: parts.flatMap((p) => p.relationships),
-    };
-  }
-
-  /**
    * One adapter call. The adapters record a failing statement and carry on,
    * so a connector error they throw means the datasource cannot be reached at
    * all: 502 with the connector's message. Programming errors stay 500.
    */
-  private async profileScope(
+  private async profile(
     ds: Datasource,
     kind: ReadinessKind,
     scope: AssessScope | undefined,
@@ -269,6 +234,15 @@ function isProgrammingError(err: unknown): boolean {
     err instanceof RangeError ||
     err instanceof SyntaxError
   );
+}
+
+/** `entities`: omitted (or null), or an array of strings (api.md 108). */
+function requireKeys(value: unknown): string[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.some((k) => typeof k !== 'string')) {
+    throw new BadRequestException(ENTITIES_INVALID);
+  }
+  return value as string[];
 }
 
 function requireId(value: unknown): string {

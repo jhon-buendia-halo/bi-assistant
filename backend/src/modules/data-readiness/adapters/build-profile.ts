@@ -48,10 +48,36 @@ async function attempt<T>(probe: () => Promise<T>): Promise<T | undefined> {
 const tableKey = (schema: string, table: string): string =>
   `${schema}\u0000${table}`;
 
-function inScope(t: ProfiledTable, scope?: AssessScope): boolean {
-  if (scope?.namespace && t.schema !== scope.namespace) return false;
-  if (scope?.entity && t.table !== scope.entity) return false;
-  return true;
+/** The scope as a table predicate; every field given must match. */
+function scopeFilter(scope?: AssessScope): (t: ProfiledTable) => boolean {
+  const set = scope?.entities
+    ? new Set(scope.entities.map((e) => tableKey(e.namespace, e.name)))
+    : undefined;
+  return (t) => {
+    if (scope?.namespace && t.schema !== scope.namespace) return false;
+    if (scope?.entity && t.table !== scope.entity) return false;
+    if (set && !set.has(tableKey(t.schema, t.table))) return false;
+    return true;
+  };
+}
+
+const ZONED_TIMESTAMP =
+  /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)\s*(Z|[+-]\d{2}(?::?\d{2})?)?$/i;
+
+/**
+ * A temporal min/max as host-independent ISO text (R23): a date-time with no
+ * offset (PostgreSQL `timestamp`, Databricks `TIMESTAMP_NTZ`) is read as UTC,
+ * and a short offset (`+00`, `+0530`) is spelled `+00:00`. Anything else (a
+ * date alone, which ECMAScript already reads as UTC, a time, an interval) is
+ * returned unchanged.
+ */
+export function utcTemporal(value: string): string {
+  const m = ZONED_TIMESTAMP.exec(value.trim());
+  if (!m) return value;
+  const [, date, time, offset] = m;
+  if (!offset || offset.toUpperCase() === 'Z') return `${date}T${time}Z`;
+  const digits = offset.slice(1).replace(':', '');
+  return `${date}T${time}${offset[0]}${digits.slice(0, 2)}:${digits.slice(2) || '00'}`;
 }
 
 /**
@@ -66,7 +92,9 @@ export async function buildSourceProfile<TConfig>(
   dialect: DialectRules,
   scope?: AssessScope,
 ): Promise<SourceProfile> {
-  // Every table stays a join target; the scope narrows the child tables only.
+  // Every table stays a join target; the scope narrows the child tables only,
+  // and only children are profiled. The inferred-join cap below is applied
+  // once, to the narrowed children's candidates (R11).
   // Only the inventory call may reject; the other three never do (`attempt`).
   const [allTables, keyConstraints, foreignKeys, privileges] =
     await Promise.all([
@@ -75,7 +103,7 @@ export async function buildSourceProfile<TConfig>(
       attempt(() => profiler.foreignKeys(config)),
       attempt(() => profiler.tablePrivileges(config)),
     ]);
-  const children = allTables.filter((t) => inScope(t, scope));
+  const children = allTables.filter(scopeFilter(scope));
   const childKeys = new Set(children.map((t) => tableKey(t.schema, t.table)));
   const selectable = privileges
     ? new Set(
@@ -213,10 +241,11 @@ async function profileEntity<TConfig>(
       if (nulls !== undefined) field.nullCount = nulls;
       const distinct = stats.distinctCounts[c.name];
       if (distinct !== undefined) field.distinctCount = distinct;
+      const temporal = c.semanticType === 'temporal';
       const min = stats.minValues[c.name];
-      if (min !== undefined) field.min = min;
+      if (min !== undefined) field.min = temporal ? utcTemporal(min) : min;
       const max = stats.maxValues[c.name];
-      if (max !== undefined) field.max = max;
+      if (max !== undefined) field.max = temporal ? utcTemporal(max) : max;
     }
 
     if (canRead && c.semanticType === 'text') {

@@ -215,6 +215,41 @@ describe('DatabricksProfiler', () => {
     expect(sqls[0]).toContain("table_schema = 's'");
   });
 
+  it('reads tables, columns and catalogs in a stable order', async () => {
+    responder = (sql) => {
+      if (sql === 'SHOW CATALOGS')
+        return [{ catalog: 'zeta' }, { catalog: 'alpha' }];
+      if (sql.includes('.tables'))
+        return [{ table_schema: 's', table_name: 't' }];
+      return [];
+    };
+    const out = await profiler.tables(config);
+    const tableSql = sqls.filter((q) => q.includes('.tables'));
+    const columnSql = sqls.filter((q) => q.includes('.columns'));
+    expect(tableSql).toHaveLength(2);
+    for (const q of tableSql) {
+      expect(q).toMatch(/ORDER BY table_schema, table_name\s*$/);
+    }
+    for (const q of columnSql) {
+      expect(q).toContain(
+        'ORDER BY table_schema, table_name, ordinal_position',
+      );
+    }
+    // Catalogs are visited in name order, whatever SHOW CATALOGS returns.
+    expect(columnSql[0]).toContain('`alpha`.information_schema');
+    expect(columnSql[1]).toContain('`zeta`.information_schema');
+    expect(out.map((t) => t.schema)).toEqual(['alpha.s', 'zeta.s']);
+  });
+
+  it('reads foreign keys in a stable order', async () => {
+    responder = (sql) => (sql === 'SHOW CATALOGS' ? [{ catalog: 'main' }] : []);
+    await profiler.foreignKeys(config);
+    const fkSql = sqls.find((q) => q.includes('referential_constraints'));
+    expect(fkSql).toContain(
+      'ORDER BY kcu.table_schema, kcu.table_name, kcu.constraint_name, kcu.ordinal_position',
+    );
+  });
+
   it('a failing statement surfaces an Error without the token', async () => {
     responder = () => new Error('bad auth dapiSECRET rejected');
     const err = await profiler
