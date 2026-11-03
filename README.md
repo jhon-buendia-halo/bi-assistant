@@ -81,7 +81,7 @@ Then click **Test connection**, and **Save connection** once the test passes. Th
 | API style | Base URL to enter | Requests go to | Key sent as |
 | --- | --- | --- | --- |
 | OpenAI-compatible | Include the version path, e.g. `http://127.0.0.1:8317/v1` | `<base URL>/chat/completions`, models from `<base URL>/models` | `Authorization: Bearer <key>` |
-| Anthropic-compatible | The server root, e.g. `http://127.0.0.1:8317` | `<base URL>/v1/messages`, models from `<base URL>/v1/models` | `x-api-key: <key>`, plus `anthropic-version: 2023-06-01` |
+| Anthropic-compatible | The server root, e.g. `http://127.0.0.1:8317` | `<base URL>/v1/messages`, models from `<base URL>/v1/models` | `x-api-key: <key>`; every request, with or without a key, also carries `anthropic-version: 2023-06-01` |
 
 - Trailing slashes are removed in both styles.
 - In the OpenAI style the URL is used as given: `http://127.0.0.1:8317` without `/v1` is not corrected, and the server usually answers 404.
@@ -161,7 +161,7 @@ These are typical defaults; check the port and model names on your own server.
 
 | Message | Likely cause | What to do |
 | --- | --- | --- |
-| `apiStyle must be one of: openai, anthropic` | No API style was sent. | Pick an API style. |
+| `apiStyle must be one of: openai, anthropic` | A request to the API carried no API style, or an unknown one (the form always sends one). | Send `openai` or `anthropic`. |
 | `baseUrl is required for custom` | The Base URL box is empty. | Enter the server's URL. |
 | `baseUrl must be an http or https URL` | The URL is relative, misspelled or uses another scheme. | Enter a full URL such as `http://localhost:11434/v1`. |
 | `Could not reach <host> — check the base URL and that the server is running` | Connection refused, unknown host or reset. | Start the server; check host and port. From the desktop app, `localhost` means your own machine. |
@@ -172,7 +172,7 @@ These are typical defaults; check the port and model names on your own server.
 | `LLM request timed out after 30s` | Test connection got no answer in time (often a large model still loading). | Wait for the model to load and test again, or use a smaller model. |
 | `Model list request timed out after 15s` | Load models got no answer in time. | Retry, or type the model name. |
 | `The endpoint did not return a model list — type the model name instead` | The models URL answered, but not with an OpenAI-style `data` list. | Type the model name. |
-| `Model answered but could not produce structured JSON output, which every agent here requires — reply="..."` | The model cannot return JSON even after the fallbacks. | Use a stronger or instruction-tuned model. |
+| `Model answered but could not produce structured JSON output, which every agent here requires — reply="..."` | The model cannot return the JSON reply (in the OpenAI style, even after the fallbacks). | Use a stronger or instruction-tuned model. |
 
 The same connection messages appear as a chat turn's error when a saved custom endpoint becomes unreachable, answers 404 or rejects the key. Error messages never include your key or request headers.
 
