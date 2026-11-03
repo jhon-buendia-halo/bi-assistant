@@ -155,6 +155,7 @@ const PROVIDER_NAMES: Record<string, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   lenai: 'LenAI',
+  custom: 'Custom endpoint',
 };
 
 export interface AgentDetail extends AgentSummary {
