@@ -190,7 +190,7 @@ async function profileEntity<TConfig>(
         schema,
         name,
         columns.filter((c) => c.nullable).map((c) => c.name),
-        columns.map((c) => c.name),
+        columns.filter(hasEquality).map((c) => c.name),
         columns
           .filter((c) => COMPARABLE_TYPES.has(c.semanticType))
           .map((c) => c.name),
@@ -292,4 +292,13 @@ function toRelationship(
   };
   if (orphanCount !== undefined) r.orphanCount = orphanCount;
   return r;
+}
+
+/**
+ * COUNT(DISTINCT) needs an equality operator: Postgres `json` and `xml` have
+ * none, and one such column would fail the whole table's aggregate, losing all
+ * its statistics (R6). Their distinct count is left out instead.
+ */
+function hasEquality(c: { type: string; semanticType: string }): boolean {
+  return c.semanticType !== 'json' && !/^xml$/i.test(c.type.trim());
 }
