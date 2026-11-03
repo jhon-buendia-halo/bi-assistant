@@ -284,13 +284,17 @@ describe('LlmConfig custom endpoint', () => {
     const cmp = fixture.componentInstance;
     type(q<HTMLInputElement>(el, 'llm-model')!, 'llama3.1:8b');
     type(q<HTMLInputElement>(el, 'llm-base-url')!, 'http://localhost:11434/v1');
+    type(q<HTMLInputElement>(el, 'llm-api-key')!, 'secret-cdef');
+    expect(q<HTMLInputElement>(el, 'llm-api-key')!.placeholder).toBe(
+      'Leave blank if the server needs none',
+    );
     cmp.testConnection();
     api.getSettings.and.returnValue(
       of({
         provider: 'custom',
         model: 'llama3.1:8b',
         baseUrl: 'http://localhost:11434/v1',
-        apiKeyMasked: null,
+        apiKeyMasked: '••••••••cdef',
         reasoningEffort: 'high',
         configured: true,
         apiStyle: 'openai',
@@ -300,7 +304,7 @@ describe('LlmConfig custom endpoint', () => {
     fixture.detectChanges();
     expect(api.getSettings).toHaveBeenCalledTimes(2);
     expect(q<HTMLInputElement>(el, 'llm-api-key')!.placeholder).toBe(
-      'Leave blank if the server needs none',
+      '••••••••cdef',
     );
   });
 });
