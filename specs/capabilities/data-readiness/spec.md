@@ -129,6 +129,8 @@ Thresholds are fixed at these defaults, with no setting to change them:
   2. otherwise, the largest year from 1900 to 2100 in a `numeric` column whose name ends with `year` or `yr`, read as 31 December of that year at 23:59:59 UTC;
   3. otherwise, the entity's last-modified time.
 
+  A date-time with no time zone (a PostgreSQL `timestamp`, a Databricks `TIMESTAMP_NTZ`) is read as UTC, whatever the host's time zone.
+
   An entity with a signal counts as one check. Its age is `floor((now − signal) / 86,400,000 ms)` days.
   - An age above 365 days yields a **low** finding.
   - An age above 730 days yields a **medium** finding instead.
@@ -190,7 +192,7 @@ Thresholds are fixed at these defaults, with no setting to change them:
 
 - A datasource that is neither PostgreSQL nor Databricks: the API answers 400 `Data readiness supports PostgreSQL and Databricks datasources only`, and the tool returns the same text as `{ error }`.
 - An unknown datasource: 404 `Datasource "<id>" not found`. An unknown report: 404 `Readiness report "<id>" not found`.
-- An entity in scope that no longer exists: it is left out, and the report's entity count says how many were assessed. When no entity in scope exists, the assessment is refused with 400 `None of the entities to assess exist`.
+- An entity in scope that no longer exists: it is left out, and the report's entity count says how many were assessed. When no entity in scope exists, including a whole-datasource assessment of a datasource with no entity, the assessment is refused with 400 `None of the entities to assess exist`.
 - A table the connection cannot read: it is counted by accessibility (R17). Its rows are not profiled, so it adds no completeness, validity or consistency checks.
 - An empty table (0 rows): no completeness checks and no inferred-key checks. Timeliness uses the last-modified time when the platform gives one.
 - An unreachable datasource: the API answers 502 with the connector's message. The tool returns `{ error: 'Could not reach "<datasource>": <message>' }`, and the agent tells the user to test the connection in Datasources.

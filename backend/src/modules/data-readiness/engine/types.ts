@@ -186,8 +186,12 @@ export type SourceCheck = (
   ctx: CheckContext,
 ) => CheckResult;
 
-/** Optional narrowing of an assessment to one schema or one table. */
+/**
+ * Optional narrowing of an assessment: one schema, one table, or an exact set
+ * of (namespace, name) entities. The fields combine (all must match).
+ */
 export interface AssessScope {
   namespace?: string;
   entity?: string;
+  entities?: { namespace: string; name: string }[];
 }

@@ -927,7 +927,8 @@ Controller prefix `/data-readiness`. Capability: [data-readiness](../capabilitie
 - Errors:
   - 400 `"datasourceId is required"`;
   - 400 `"Data readiness supports PostgreSQL and Databricks datasources only"` (a `rest` datasource);
-  - 400 `"None of the entities to assess exist"`;
+  - 400 `"entities must be an array of entity keys"` when `entities` is present (and not null) but is not an array of strings;
+  - 400 `"None of the entities to assess exist"`, also for a whole-datasource assessment of a datasource with no entity;
   - 404 `"Datasource \"<id>\" not found"`;
   - 502 with the connector's message when the datasource cannot be reached at all. A single failing profiling statement is not an error: that statistic is left out (data-readiness R6).
 

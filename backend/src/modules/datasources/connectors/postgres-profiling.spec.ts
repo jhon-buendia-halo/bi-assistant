@@ -140,18 +140,99 @@ describe('PostgresProfiler', () => {
     expect(stmt()[1]).toEqual(['s']);
   });
 
-  it('lists ordinary tables from pg_catalog, unreadable ones included', async () => {
+  it('lists every table-like relation the inventory lists, unreadable ones included', async () => {
     answer([]);
     await profiler.tables(config);
     const [sql, params] = stmt();
     // information_schema hides tables the role cannot read, so accessibility
-    // (R17) would never see them; pg_catalog lists them, views left out.
+    // (R17) would never see them; pg_catalog lists them.
     expect(sql).not.toContain('information_schema.columns');
-    expect(sql).toContain('FROM pg_attribute a');
-    expect(sql).toContain("c.relkind = 'r'");
+    expect(sql).toContain('FROM pg_class c');
+    expect(sql).toContain('LEFT JOIN pg_attribute a');
+    expect(sql).toContain("c.relkind IN ('r', 'v', 'm', 'p', 'f')");
+    expect(sql).toContain('a.attnum > 0');
     expect(sql).toContain('NOT a.attisdropped');
     expect(sql).toContain('format_type(a.atttypid, a.atttypmod)');
+    expect(sql).toContain(
+      "n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')",
+    );
     expect(params).toEqual([]);
+  });
+
+  it('maps views, partitioned tables and column-less relations', async () => {
+    answer([
+      {
+        schema: 's',
+        table: 'events',
+        column: 'id',
+        type: 'bigint',
+        nullable: false,
+      },
+      {
+        schema: 's',
+        table: 'events',
+        column: 'at',
+        type: 'timestamp without time zone',
+        nullable: true,
+      },
+      {
+        schema: 's',
+        table: 'events_2024',
+        column: 'id',
+        type: 'bigint',
+        nullable: false,
+      },
+      {
+        schema: 's',
+        table: 'v_recent',
+        column: 'id',
+        type: 'bigint',
+        nullable: true,
+      },
+      {
+        schema: 's',
+        table: 'empty_view',
+        column: null,
+        type: null,
+        nullable: null,
+      },
+    ]);
+    expect(await profiler.tables(config)).toEqual([
+      {
+        schema: 's',
+        table: 'events',
+        columns: [
+          { name: 'id', type: 'bigint', nullable: false },
+          { name: 'at', type: 'timestamp without time zone', nullable: true },
+        ],
+      },
+      {
+        schema: 's',
+        table: 'events_2024',
+        columns: [{ name: 'id', type: 'bigint', nullable: false }],
+      },
+      {
+        schema: 's',
+        table: 'v_recent',
+        columns: [{ name: 'id', type: 'bigint', nullable: true }],
+      },
+      { schema: 's', table: 'empty_view', columns: [] },
+    ]);
+  });
+
+  it('probes SELECT on the same relation kinds as the inventory', async () => {
+    answer([
+      { schema: 's', table: 'events', selectable: true },
+      { schema: 's', table: 'v_recent', selectable: true },
+    ]);
+    expect(await profiler.tablePrivileges(config)).toEqual([
+      { schema: 's', table: 'events', selectable: true },
+      { schema: 's', table: 'v_recent', selectable: true },
+    ]);
+    const [sql] = stmt();
+    expect(sql).toContain("c.relkind IN ('r', 'v', 'm', 'p', 'f')");
+    expect(sql).not.toContain("c.relkind = 'r'");
+    expect(sql).toContain("has_table_privilege(c.oid, 'SELECT')");
   });
 
   it('never leaks the password in an error', async () => {

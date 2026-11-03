@@ -59,7 +59,8 @@ export class DatabricksProfiler implements ProfilingConnector<DatabricksConfig> 
           );
           tabs = await run(
             `SELECT table_schema, table_name, last_altered
-             FROM ${base}.tables ${where}`,
+             FROM ${base}.tables ${where}
+             ORDER BY table_schema, table_name`,
           );
         } catch (err) {
           if (schema) throw err;
@@ -229,7 +230,8 @@ export class DatabricksProfiler implements ProfilingConnector<DatabricksConfig> 
                 AND ref.constraint_schema = rc.unique_constraint_schema
                 AND ref.constraint_name = rc.unique_constraint_name
                 AND ref.ordinal_position = kcu.position_in_unique_constraint
-               WHERE kcu.table_schema <> 'information_schema'`,
+               WHERE kcu.table_schema <> 'information_schema'
+               ORDER BY kcu.table_schema, kcu.table_name, kcu.constraint_name, kcu.ordinal_position`,
             );
           } catch (err) {
             this.logger.warn(
@@ -448,7 +450,8 @@ async function listUserCatalogs(run: Run): Promise<string[]> {
   const rows = await run('SHOW CATALOGS');
   return rows
     .map((r) => text(r['catalog'] ?? Object.values(r)[0]))
-    .filter((c) => c && !SYSTEM_CATALOGS.has(c.toLowerCase()));
+    .filter((c) => c && !SYSTEM_CATALOGS.has(c.toLowerCase()))
+    .sort();
 }
 
 /** `catalog.schema` → [catalog, schema]. */

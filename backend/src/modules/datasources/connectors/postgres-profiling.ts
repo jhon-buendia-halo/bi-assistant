@@ -11,6 +11,14 @@ import type {
 } from './profiling';
 
 const CONNECT_TIMEOUT_MS = 5_000;
+
+/**
+ * Table-like relations, the same set the inventory lists
+ * (`PostgresConnector.inventory`): ordinary tables, views, materialized views,
+ * partitioned tables and foreign tables.
+ */
+const TABLE_RELKINDS = `('r', 'v', 'm', 'p', 'f')`;
+const NON_SYSTEM_SCHEMA = `n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')`;
 const STATEMENT_TIMEOUT_MS = 15_000;
 
 /** Double-quote a PostgreSQL identifier, escaping embedded quotes. */
@@ -48,17 +56,18 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
   private readonly logger = new Logger(PostgresProfiler.name);
 
   /**
-   * Ordinary tables (relkind 'r') and their columns from pg_catalog, as the
-   * reference inventory reads them. Unlike information_schema, pg_catalog also
-   * lists tables the role cannot read, so accessibility (R17) can count them,
-   * and it leaves views out. Types come from format_type (e.g. `integer[]`).
+   * Every table-like relation the inventory lists (TABLE_RELKINDS) and its
+   * columns, from pg_catalog. Unlike information_schema, pg_catalog also lists
+   * relations the role cannot read, so accessibility (R17) can count them.
+   * A relation with no column is still listed, as in the inventory. Types come
+   * from format_type (e.g. `integer[]`).
    */
   async tables(
     config: PostgresConfig,
     schema?: string,
   ): Promise<ProfiledTable[]> {
     const params: string[] = [];
-    let filter = `n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')`;
+    let filter = NON_SYSTEM_SCHEMA;
     if (schema) {
       params.push(schema);
       filter += ` AND n.nspname = $1`;
@@ -66,20 +75,20 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
     const rows = await this.run<{
       schema: string;
       table: string;
-      column: string;
-      type: string;
-      nullable: boolean;
+      column: string | null;
+      type: string | null;
+      nullable: boolean | null;
     }>(
       config,
       `SELECT n.nspname AS schema, c.relname AS "table", a.attname AS "column",
               format_type(a.atttypid, a.atttypmod) AS type,
               NOT a.attnotnull AS nullable
-       FROM pg_attribute a
-       JOIN pg_class c ON c.oid = a.attrelid
+       FROM pg_class c
        JOIN pg_namespace n ON n.oid = c.relnamespace
-       WHERE c.relkind = 'r'
+       LEFT JOIN pg_attribute a ON a.attrelid = c.oid
          AND a.attnum > 0
          AND NOT a.attisdropped
+       WHERE c.relkind IN ${TABLE_RELKINDS}
          AND ${filter}
        ORDER BY n.nspname, c.relname, a.attnum`,
       params,
@@ -92,7 +101,12 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
         t = { schema: r.schema, table: r.table, columns: [] };
         byKey.set(key, t);
       }
-      t.columns.push({ name: r.column, type: r.type, nullable: r.nullable });
+      if (r.column === null) continue;
+      t.columns.push({
+        name: r.column,
+        type: r.type ?? '',
+        nullable: r.nullable ?? true,
+      });
     }
     return Array.from(byKey.values());
   }
@@ -282,8 +296,8 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
               has_table_privilege(c.oid, 'SELECT') AS selectable
        FROM pg_class c
        JOIN pg_namespace n ON n.oid = c.relnamespace
-       WHERE c.relkind = 'r'
-         AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')`,
+       WHERE c.relkind IN ${TABLE_RELKINDS}
+         AND ${NON_SYSTEM_SCHEMA}`,
     );
     return rows.map((r) => ({
       schema: r.schema,
