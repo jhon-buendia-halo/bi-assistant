@@ -1,0 +1,40 @@
+# Answer key for the "commercial-lending" gold dataset (commercial lending domain, Postgres, complexity HIGH) — HUMAN-MAINTAINED.
+# One JSON object per line. Blank lines and lines starting with # or // are ignored.
+# Wave B1 of Milestone 1.23 (F1.23.4): banking industry, HIGH complexity — two schemas
+# (`lending` 6 tables incl. a keyless rollup view, `risk` 1 readable + 1 locked), ~9.2M rows.
+# Exercises both inferred paths (candidate key + name-matched FK), a composite-PK duplicate,
+# the from/to swapped-range pair, the numeric year-column timeliness fallback, uuid + url
+# formats, and an 1899 scanner-epoch sentinel.
+# See ./README.md for the planted-defect table and the expected precision/recall.
+#
+# TRUE POSITIVES — real defects the engine SHOULD catch (and does):
+{"dimension":"consistency","namespace":"lending","entity":"borrowers","field":"industry_cd","severity":"low","note":"planted: industry_cd stored as MFG / mfg / Mfg / AGRI / agri ... — 31 raw collapse to 22 normalized."}
+{"dimension":"validity","namespace":"lending","entity":"borrowers","field":"website_url","severity":"medium","note":"planted: 900 website_url values are not URLs (free-text like 'see broker file') — fail the url format."}
+{"dimension":"integrity","namespace":"lending","entity":"loans","field":"borrower_id","severity":"high","note":"planted: 1750 loans reference a borrower_id with no matching borrowers row (de-duplicated borrower master; declared FK left NOT VALID)."}
+{"dimension":"reasonability","namespace":"lending","entity":"loans","field":"ltv_ratio","severity":"medium","note":"planted: ltv_ratio reads as a ratio (bound 1) but its MAX is 1.62 — percent values loaded into the fraction column for one origination channel."}
+{"dimension":"uniqueness","namespace":"lending","entity":"payments","field":"loan_id, due_date","severity":"high","note":"planted: 9400 duplicate (loan_id, due_date) rows on the composite PRIMARY key — the re-amortisation job double-inserted a schedule partition."}
+{"dimension":"uniqueness","namespace":"lending","entity":"collections_daily","field":"record_id","severity":"medium","note":"planted: 900 duplicate record_id values in the keyless rollup view — the daily job re-ran a partition. Only visible via the INFERRED candidate-key rule (the view declares no keys)."}
+{"dimension":"integrity","namespace":"lending","entity":"collections_daily","field":"loan_id","severity":"medium","note":"planted: 8800 collections_daily rows reference a purged loan. No FK is declared on the view, so this fires only via the INFERRED name-matched join (collections_daily.loan_id → loans.loan_id), severity-capped at medium."}
+{"dimension":"timeliness","namespace":"lending","entity":"collections_daily","field":"snapshot_year","severity":"medium","note":"planted: the rollup has NO temporal column — the numeric year-column fallback reads snapshot_year MAX 2023 (≈955d) — the collections rollup job died in 2023."}
+{"dimension":"reasonability","namespace":"lending","entity":"covenants","field":"test_from, test_to","severity":"low","note":"planted: test_to's whole range (2008–2019) precedes test_from's (2010–2021) — the covenant migration swapped the two columns."}
+{"dimension":"timeliness","namespace":"lending","entity":"covenants","field":"test_from","severity":"medium","note":"planted: newest test_from is 2021-06-30 (>730 days) — covenant testing stopped when the monitoring module was retired, but the loans are still active."}
+{"dimension":"validity","namespace":"lending","entity":"loan_documents","field":"doc_uuid","severity":"medium","note":"planted: 320 doc_uuid values are not UUIDs — legacy DMS references migrated into the uuid column."}
+{"dimension":"reasonability","namespace":"lending","entity":"loan_documents","field":"scanned_on","severity":"low","note":"planted: scanned_on MIN is 1899-12-30 — the scanner epoch sentinel the imaging vendor wrote for 'date unknown'."}
+{"dimension":"integrity","namespace":"lending","entity":"loan_documents","field":"loan_id","severity":"high","note":"planted: 260 documents reference a loan_id with no matching loans row (loans purged after write-off; declared FK left NOT VALID)."}
+{"dimension":"accessibility","namespace":"risk","severity":"medium","note":"planted: the readiness role has no SELECT on risk.risk_overrides — 1 of 2 tables locked, so the namespace aggregates to ONE medium (partial) finding."}
+#
+# RECALL GAPS (blind spots) — real defects the engine CANNOT catch today.
+{"dimension":"validity","namespace":"lending","entity":"borrowers","field":"tax_id","severity":"medium","note":"BLIND SPOT: ~2600 tax_id values are malformed (wrong length, letters). The format detector is NAME-based and knows email/phone/url/uuid/date — 'tax_id' is never format-checked. Same class as telecom-billing's msisdn."}
+{"dimension":"completeness","namespace":"lending","entity":"loans","field":"collateral_type","severity":"low","note":"BLIND SPOT: ~5400 collateral_type values (7.9%) hold the literal string 'N/A' (disguised missing). nullCount is 0, so completeness never fires — the disguised-missing-token detector class."}
+{"dimension":"validity","namespace":"risk","entity":"risk_scores","field":"score_grade","severity":"medium","note":"BLIND SPOT: ~700 score_grade values sit outside the documented AAA…D domain (e.g. 'ZZ', 'TMP'). The engine has no allowed-domain rule; validity only checks name-detected format patterns."}
+{"dimension":"accuracy","namespace":"lending","entity":"loans","field":"interest_rate_pct","severity":"medium","note":"BLIND SPOT: ~450 loans' interest_rate_pct disagree with the signed term sheets (a repricing batch applied the wrong index). Accuracy needs trusted reference data and is out of automated scope by design."}
+#
+# INTENTIONALLY NOT LABELED (precision gaps the harness should surface as false alarms):
+#   - reasonability loans.maturity_on (medium): MAX = 2058-07-30. Commercial loans legitimately
+#     mature decades out — the future-date finding is a false alarm.
+#   - completeness payments.paid_on (low): 6% null (310000/5200000). Upcoming installments are
+#     legitimately unpaid — the null is the schedule, not a defect.
+#   - uniqueness collections_daily.loan_id (medium): the INFERRED candidate-key rule treats any
+#     id-like column on a keyless entity as a candidate key. The rollup is one row per loan per
+#     day, so loan_id repeats by design (~3.74M "duplicates") — same column as the real inferred-FK
+#     finding above: the integrity finding is real, this uniqueness one is noise.

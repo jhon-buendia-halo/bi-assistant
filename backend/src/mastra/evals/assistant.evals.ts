@@ -3,7 +3,7 @@ import { RequestContext } from '@mastra/core/request-context';
 import type { MastraScorer } from '@mastra/core/evals';
 import type { Agent } from '@mastra/core/agent';
 import { assistantAgent } from '../agents/assistant.agent';
-import { resolveAgentModel } from '../model-resolver';
+import { resolveAgentModelConfig } from '../model-resolver';
 import { modelIdOf, providerOptionsFor } from '../model-compat';
 import { USAGE_SINK_CONTEXT_KEY } from '../usage-sink';
 import type { UsageSink } from '../usage-sink';
@@ -293,6 +293,13 @@ export interface EvalTarget {
    * whole records, so its judge reads more of them.
    */
   judgeTraceChars?: number;
+  /**
+   * What the LLM judge reads of a successful tool output, when the model
+   * is handed a projection of it (`toModelOutput`): the Data Readiness
+   * Agent's report tools hand the model only the summary. Unset, the judge
+   * reads the output as the tool returned it.
+   */
+  judgeOutput?: (output: unknown) => unknown;
 }
 
 /** The assistant's sets, run as they always have been. */
@@ -776,12 +783,12 @@ function withStatus(
 /**
  * Score a case's tool calls + final answer against its `judgeRubric` with
  * one structured-output `generate` call on `evalJudgeAgent` (same configured
- * model the assistant runs on, via `resolveAgentModel`). Returns `undefined`
- * when the case has no rubric. A judge that errors or returns unparseable
- * JSON scores 0 rather than crashing the run — the run's other checks and
- * remaining cases must still complete. The judge's call is reported to
- * `usageSink` (R219): its result, or none when the call threw, which counts
- * as a call that reported no tokens.
+ * model the assistant runs on, via `resolveAgentModelConfig`). Returns
+ * `undefined` when the case has no rubric. A judge that errors or returns
+ * unparseable JSON scores 0 rather than crashing the run — the run's other
+ * checks and remaining cases must still complete. The judge's call is
+ * reported to `usageSink` (R219): its result, or none when the call threw,
+ * which counts as a call that reported no tokens.
  */
 async function runJudgeCheck(
   evalCase: AssistantEvalCase,
@@ -829,9 +836,12 @@ async function runJudgeCheck(
     // Deterministic-ish grading: low temperature where the provider
     // supports it, via providerOptions rather than a top-level field the
     // structured-output call overload does not accept.
-    const providerOptions = providerOptionsFor(await resolveAgentModel(), {
-      temperature: 0,
-    });
+    const providerOptions = providerOptionsFor(
+      await resolveAgentModelConfig(),
+      {
+        temperature: 0,
+      },
+    );
     called = true;
     const result = await evalJudgeAgent.generate(prompt, {
       maxSteps: 1,
@@ -937,7 +947,7 @@ export interface EvalAttemptOptions {
  */
 export async function evalRunModel(): Promise<string | undefined> {
   try {
-    const config = await resolveAgentModel();
+    const config = await resolveAgentModelConfig();
     return config ? modelIdOf(config) : undefined;
   } catch {
     return undefined;
@@ -1130,7 +1140,7 @@ export async function runAssistantEvalCase(
         question,
         turnRecords,
         new AbortController().signal,
-        providerOptionsFor(await resolveAgentModel(), {
+        providerOptionsFor(await resolveAgentModelConfig(), {
           reasoningEffort: 'medium',
         }),
         undefined,
@@ -1229,7 +1239,12 @@ export async function runAssistantEvalCase(
             input: encode(call.input, target.judgeTraceChars),
             output: call.failed
               ? undefined
-              : encode(call.output, target.judgeTraceChars),
+              : encode(
+                  target.judgeOutput
+                    ? target.judgeOutput(call.output)
+                    : call.output,
+                  target.judgeTraceChars,
+                ),
             error: call.failed
               ? (encode(call.output, target.judgeTraceChars) ??
                 'Tool call failed')

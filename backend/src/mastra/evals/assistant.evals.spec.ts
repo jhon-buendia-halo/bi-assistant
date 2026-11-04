@@ -10,7 +10,7 @@ jest.mock('../agents/eval-judge.agent', () => {
   };
 });
 jest.mock('../model-resolver', () => ({
-  resolveAgentModel: jest.fn().mockResolvedValue({}),
+  resolveAgentModelConfig: jest.fn().mockResolvedValue({}),
 }));
 jest.mock('../model-compat', () => ({
   providerOptionsFor: () => ({}),
@@ -48,7 +48,7 @@ jest.mock('@mastra/evals/checks', () => ({
 import { runEvals } from '@mastra/core/evals';
 import { evalJudgeAgent } from '../agents/eval-judge.agent';
 import { appSkillBody } from '../app-skills';
-import { resolveAgentModel } from '../model-resolver';
+import { resolveAgentModelConfig } from '../model-resolver';
 import { USAGE_SINK_CONTEXT_KEY, usageSinkFrom } from '../usage-sink';
 import {
   ASSISTANT_EVAL_SETS,
@@ -710,7 +710,7 @@ describe('runAssistantEvalCase usage and cost (agents-evals R219 to R221)', () =
   });
 
   it('records on the model resolved for the attempt when the run names none', async () => {
-    jest.mocked(resolveAgentModel).mockResolvedValueOnce({
+    jest.mocked(resolveAgentModelConfig).mockResolvedValueOnce({
       id: 'lenai/gpt-4o-mini',
       apiKey: 'k',
     });
@@ -725,13 +725,15 @@ describe('runAssistantEvalCase usage and cost (agents-evals R219 to R221)', () =
 
 describe('evalRunModel (R22, R219)', () => {
   it('answers the router id of the resolved model', async () => {
-    jest.mocked(resolveAgentModel).mockResolvedValueOnce('openai/gpt-4o-mini');
+    jest
+      .mocked(resolveAgentModelConfig)
+      .mockResolvedValueOnce('openai/gpt-4o-mini');
     await expect(evalRunModel()).resolves.toBe('openai/gpt-4o-mini');
   });
 
   it('answers undefined when the model cannot be resolved', async () => {
     jest
-      .mocked(resolveAgentModel)
+      .mocked(resolveAgentModelConfig)
       .mockRejectedValueOnce(new Error('no settings'));
     await expect(evalRunModel()).resolves.toBeUndefined();
   });

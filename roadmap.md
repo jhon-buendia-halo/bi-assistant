@@ -1170,6 +1170,238 @@ The app is shown to the US Health practice as its own hub: the banner reads "US 
 - **Acceptance:** the Agent Hub scenarios "The showcase agents are Official cards that cannot chat yet" and "A showcase agent's page shows its description and System Prompt" (`agent-hub.spec.ts`) and the Session management scenario "The Agent field lists the showcase agents disabled" (`session-management.spec.ts`) pass on the web target, with all four showcase agents shown, after the assistant and the RFP Builder, and the existing Agent Hub scenarios updated for an Official section that shows every card with no `Show more`; a backend unit test proves the catalogue entry and the session refusal; `check-specs.py`, backend and frontend unit tests, lint and builds are green. No eval gate: what the assistant and the RFP Builder receive is unchanged.
 - **Notes:** confirmed by the user on 2026-10-15. Scope extended by the user on 2026-10-15: the Benchmarking Agent, and the Official section always expanded; the Jira story keeps its key and title. The descriptions and prompts are `SHOWCASE_AGENTS` and `BENCHMARKING_PROMPT`, `SURVEY_PROMPT`, `LAD_COE_PROMPT`, `STRATEGY_PROMPT` in `backend/src/mastra/agents/showcase-catalog.ts`, copied verbatim into agents.md 2.9. Open: "LAD" is read as Life, Absence and Disability.
 
+### Milestone 1.16 — Data Readiness Agent ([BA-251](https://halo-powered.atlassian.net/browse/BA-251))
+
+A new Official agent assesses how ready a connected Postgres or Databricks datasource is for analysis, using the DMBOK data-quality dimensions. The deterministic engine is ported from the separate `data-readiness-agent` project and owns every score; the LLM only runs the assessment and explains the stored report. Assessments are saved and can be reopened. All stories are built on the branch `feat/BA-251-data-readiness` and ship as one PR. Epic spec: [specs/epics/BA-251/spec.md](specs/epics/BA-251/spec.md).
+
+#### 1.16.1 — Scoring and check engine ([BA-252](https://halo-powered.atlassian.net/browse/BA-252))  `✅ Done`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the per-dimension score `100 × (1 − Σw/checksRun)`, the overall mean, the maturity bands, and `runAssessment` with the current time injected.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit specs reproduce the reference numbers (80, 96, 99, 2; overall 88 Managed); a determinism test passes; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.2 — Completeness, validity, consistency and uniqueness checks ([BA-253](https://halo-powered.atlassian.net/browse/BA-253))  `✅ Done`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the four checks with the reference formulas and severities.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** per-check unit specs cover every severity branch and the checks-run denominator; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.3 — Integrity, accessibility, timeliness and reasonability checks, plus join inference ([BA-254](https://halo-powered.atlassian.net/browse/BA-254))  `✅ Done`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the four checks and join inference, using the injected time.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** per-check unit specs cover every severity branch; join inference covers its naming patterns and the 20-candidate cap; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.4 — Golden conformance suite ([BA-255](https://halo-powered.atlassian.net/browse/BA-255))  `✅ Done`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** about 20 Postgres and 20 Databricks labelled fixtures copied from the reference corpus, and its matching scorer.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** the engine meets the reference precision and recall floors on them; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.5 — Postgres profiling queries ([BA-256](https://halo-powered.atlassian.net/browse/BA-256))  `✅ Done`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** aggregate-only profiling queries for Postgres with quoted identifiers and a statement timeout.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit specs check the SQL and result mapping; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.6 — Databricks profiling queries ([BA-257](https://halo-powered.atlassian.net/browse/BA-257))  `✅ Done`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the same queries in Spark SQL, Unity Catalog names flattened to catalog.schema.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit specs check the SQL and result mapping against a fake session; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.7 — Source profile adapters ([BA-258](https://halo-powered.atlassian.net/browse/BA-258))  `✅ Done`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** type classification, format rules from column names, the consistency probe window, keys, relationships and inferred joins, for Postgres and Databricks.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit specs build the expected profile from a fake connector per dialect; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.8 — Saved assessment reports and API ([BA-259](https://halo-powered.atlassian.net/browse/BA-259))  `✅ Done`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the `readiness_reports` collection and `POST /data-readiness/assessments`, `GET /data-readiness/assessments`, `GET /data-readiness/assessments/:id`.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit specs cover assess, list, get, 404 and 400; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.9 — Agent, prompt, skill and tools ([BA-260](https://halo-powered.atlassian.net/browse/BA-260))  `✅ Done`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the `data-readiness` agent, its prompt, its skill and the tools `assess_data_readiness`, `get_readiness_report`, `list_readiness_reports`.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit specs cover the tools, the prompt fixture and the skill; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.10 — Agent catalogue and chat session wiring ([BA-261](https://halo-powered.atlassian.net/browse/BA-261))  `✅ Done`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the agent listed as Official, Start chat gated on a Postgres or Databricks dataset, the tool bridge, the `readiness-report` stream event and panel item.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit specs cover the catalogue entry, the blocked reason and the stream event; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.11 — Scorecard panel and chat card ([BA-262](https://halo-powered.atlassian.net/browse/BA-262))  `✅ Done`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the scorecard (overall score and band, dimension bars, findings table filterable by dimension and severity) and its chat card.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit tests cover rendering and filtering; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+#### 1.16.12 — Past assessments history ([BA-263](https://halo-powered.atlassian.net/browse/BA-263))  `✅ Done`
+- **Intent:** part of the Data Readiness Agent (BA-251); see the epic spec.
+- **Scope:** the list of saved reports for the session's datasource, opening one in the scorecard.
+- **Out of scope:** editable thresholds, provenance, false positives, MongoDB and REST sources, rule exports (epic spec).
+- **Acceptance:** unit tests cover listing, the empty state and opening a report; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 12 parallel units against a shared contracts scaffold.
+
+### Milestone 1.17 — Custom LLM endpoint provider ([BA-281](https://halo-powered.atlassian.net/browse/BA-281))
+
+A fourth LLM provider, `custom` ("Custom endpoint"), connects every agent to any self-hosted or third-party model server: OpenAI-compatible (base URL with `/v1`, Bearer key) or Anthropic-compatible (base URL root, `x-api-key`), an optional encrypted key, a model, and **Load models** from the endpoint's `/v1/models`. Replaces the cancelled Claude-account approach (BA-264). All stories are built on the branch `feat/BA-281-custom-llm-endpoint` and ship as one PR. Epic spec: [specs/epics/BA-281/spec.md](specs/epics/BA-281/spec.md).
+
+#### 1.17.1 — Settings service: validate, save, view and resolve ([BA-282](https://halo-powered.atlassian.net/browse/BA-282))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-282 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.2 — URL normalisation and model route per API style ([BA-283](https://halo-powered.atlassian.net/browse/BA-283))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-283 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.3 — Anthropic-compatible model factory ([BA-284](https://halo-powered.atlassian.net/browse/BA-284))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-284 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.4 — OpenAI-style connection probe ([BA-285](https://halo-powered.atlassian.net/browse/BA-285))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-285 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.5 — Anthropic-style connection probe ([BA-286](https://halo-powered.atlassian.net/browse/BA-286))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-286 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.6 — List models from the endpoint ([BA-287](https://halo-powered.atlassian.net/browse/BA-287))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-287 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.7 — Tuning and effort levels ([BA-288](https://halo-powered.atlassian.net/browse/BA-288))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-288 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.8 — Visual designer model selection ([BA-289](https://halo-powered.atlassian.net/browse/BA-289))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-289 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.9 — Agent catalogue provider display ([BA-290](https://halo-powered.atlassian.net/browse/BA-290))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-290 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.10 — Clear chat errors for unreachable or misconfigured endpoints ([BA-291](https://halo-powered.atlassian.net/browse/BA-291))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-291 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.11 — Key redaction in logs and diagnostics ([BA-292](https://halo-powered.atlassian.net/browse/BA-292))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-292 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.12 — Settings form: provider, API style, base URL and key ([BA-293](https://halo-powered.atlassian.net/browse/BA-293))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-293 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.13 — Load models dropdown ([BA-294](https://halo-powered.atlassian.net/browse/BA-294))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-294 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.14 — Provider display in the agent page and composer ([BA-295](https://halo-powered.atlassian.net/browse/BA-295))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-295 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.15 — E2E for the OpenAI style ([BA-296](https://halo-powered.atlassian.net/browse/BA-296))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-296 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.16 — Anthropic API stub and E2E fixture ([BA-297](https://halo-powered.atlassian.net/browse/BA-297))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-297 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.17 — E2E for the Anthropic style ([BA-298](https://halo-powered.atlassian.net/browse/BA-298))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-298 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.18 — Live smoke script against a real endpoint ([BA-299](https://halo-powered.atlassian.net/browse/BA-299))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-299 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.19 — Run evals against a custom endpoint ([BA-300](https://halo-powered.atlassian.net/browse/BA-300))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-300 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
+#### 1.17.20 — User docs for common endpoints ([BA-301](https://halo-powered.atlassian.net/browse/BA-301))  `✅ Done`
+- **Intent:** part of the custom LLM endpoint provider (BA-281); see the epic spec.
+- **Scope:** see the Jira story BA-301 and the epic spec.
+- **Out of scope:** the Claude local-login approach (BA-264, cancelled); per-agent endpoints.
+- **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
+- **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.
@@ -1245,3 +1477,4 @@ Not yet sequenced into a release. The detailed phase plans below predate this ro
 - Visual quality + interactivity — [docs/plans/phase-3-visual-quality-interactivity.md](docs/plans/phase-3-visual-quality-interactivity.md)
 - Strategic bets — [docs/plans/phase-4-strategic-bets.md](docs/plans/phase-4-strategic-bets.md)
 - Agent Routines ([BA-82](https://halo-powered.atlassian.net/browse/BA-82)): an epic in Jira with no description, dates or fix version. Promote it into a release once it's defined.
+- Data readiness: revisit heuristics inherited from the reference engine: the Data Readiness Agent (epic BA-251) keeps reference parity (spec R12–R19), so each item below needs a spec change first. Integrity counts relationships whose orphan count is unmeasured; reasonability may count a numeric ratio-named column twice; a future-dated column can make timeliness read fresh; the ratio/percent name heuristics are over-broad (`debt_ratio`, `growth_pct`); year-column freshness matches `birth_year`; `parseYear` misreads epoch values; join inference is case-sensitive with naive plurals; swapped-range pairing misses some spellings; the inferred-key regex matches `Paid`/`Valid`; duplicateCount counts NULL-key groups; Databricks accessibility is per schema; timeouts do not cancel warehouse statements.

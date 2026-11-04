@@ -155,8 +155,14 @@ export function startChatBlockedReason(agent: Agent): string | null {
   if (kind === 'official') {
     // A showcase agent never chats (R106).
     if (agent.showcase) return agent.chatRequirement ?? null;
-    // An Official agent with a dataset (the RFP Builder) waits for it.
-    return agent.chatRequirement && (agent.missingDatasets ?? []).length > 0
+    // An Official agent with a requirement waits for its datasets: the RFP
+    // Builder while its dataset is missing, the Data Readiness Agent while no
+    // PostgreSQL or Databricks dataset exists (data-readiness R2), which the
+    // catalogue shows as no datasets at all.
+    if (!agent.chatRequirement) return null;
+    const missing = agent.missingDatasets ?? [];
+    const datasets = agent.datasets ?? [];
+    return missing.length > 0 || datasets.length === 0
       ? agent.chatRequirement
       : null;
   }

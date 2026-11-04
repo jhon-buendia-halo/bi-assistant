@@ -445,6 +445,13 @@
                 class="prose-dark"
                 [innerHTML]="message.content | markdown"
               ></div>
+              @if (message.readinessReport; as readiness) {
+                <!-- Data readiness report: score, band, Open scorecard -->
+                <app-readiness-card
+                  [report]="readiness"
+                  (openScorecard)="openScorecard(readiness)"
+                />
+              }
               <ng-container
                 [ngTemplateOutlet]="reasoningTrail"
                 [ngTemplateOutletContext]="{ $implicit: message }"
@@ -642,6 +649,12 @@
               class="prose-dark"
               [innerHTML]="streamingText() | markdown"
             ></div>
+          }
+          @if (streamingReadiness(); as readiness) {
+            <app-readiness-card
+              [report]="readiness"
+              (openScorecard)="openScorecard(readiness)"
+            />
           }
           <div class="flex items-center gap-2 text-fg-muted">
             <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />

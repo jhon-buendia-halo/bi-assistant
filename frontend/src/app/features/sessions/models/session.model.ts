@@ -1,3 +1,5 @@
+import type { ReadinessMaturity } from './readiness.model';
+
 export interface ClarificationOption {
   label: string;
   description?: string;
@@ -90,6 +92,11 @@ export interface ChatMessage {
   /** Present when the RFP Builder exported an RFP package this turn. */
   rfpPackage?: RfpPackage;
   /**
+   * The last readiness report this turn produced (Data Readiness Agent
+   * sessions; data-model 3.4.1). Drives the readiness card.
+   */
+  readinessReport?: ReadinessReportRef;
+  /**
    * Set on a client-only bubble rendered when a turn's stream failed
    * (provider error, dropped connection, backend crash mid-turn). Never
    * persisted server-side — the backend transcript still ends with the
@@ -107,6 +114,15 @@ export interface RfpPackage {
   exportedAt: string;
   /** True for a draft exported by `export_rfp_draft` (stored under `rfp/<rfpId>/draft/`). */
   draft?: true;
+}
+
+/** `ChatMessage.readinessReport` (data-model 3.4.1): a reference, not the report. */
+export interface ReadinessReportRef {
+  reportId: string;
+  datasourceName: string;
+  overallScore: number;
+  maturity: ReadinessMaturity;
+  generatedAt: string;
 }
 
 export interface AnalysisReport {
@@ -149,7 +165,8 @@ export interface VisualEvent {
   action: 'created' | 'updated' | 'reverted';
 }
 
-export type PanelItemKind = 'file' | 'document' | 'table' | 'visual';
+export type PanelItemKind =
+  'file' | 'document' | 'table' | 'visual' | 'readiness';
 
 interface PanelItemBase {
   id: string;
@@ -185,9 +202,19 @@ export interface VisualPanelItem extends PanelItemBase {
   visualId: string;
 }
 
+/** A data-readiness report; id `readiness:<reportId>` (data-model 3.4.4). */
+export interface ReadinessPanelItem extends PanelItemBase {
+  kind: 'readiness';
+  reportId: string;
+}
+
 /** Something an agent showed in the right panel (data-model 3.4.4). */
 export type PanelItem =
-  FilePanelItem | DocumentPanelItem | TablePanelItem | VisualPanelItem;
+  | FilePanelItem
+  | DocumentPanelItem
+  | TablePanelItem
+  | VisualPanelItem
+  | ReadinessPanelItem;
 
 export interface WorkflowPhase {
   number: number;

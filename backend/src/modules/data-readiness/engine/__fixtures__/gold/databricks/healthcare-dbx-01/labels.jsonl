@@ -1,0 +1,17 @@
+{"dimension":"timeliness","namespace":"main.clinical","entity":"consent_docs","field":"(table last altered)","severity":"medium","note":"Consent docs have no temporal column (signed_date is text); last_altered says ~2.7 years — the lastModifiedAt fallback."}
+{"dimension":"accessibility","namespace":"main.revenue_ops","severity":"medium","note":"Remittances are browse_only for the agent principal — 1 of 2 revenue tables locked."}
+{"dimension":"reasonability","namespace":"main.clinical","entity":"coverage_periods","field":"coverage_start_at, coverage_end_at","severity":"low","note":"Coverage end wholly precedes coverage start — the payer feed swapped the pair."}
+{"dimension":"timeliness","namespace":"main.clinical","entity":"claims_daily","field":"claim_year","severity":"medium","note":"The claims snapshot models time as an integer year, newest 2023 — the year-column fallback."}
+{"dimension":"integrity","namespace":"main.clinical","entity":"claims_daily","field":"patient_id","severity":"medium","note":"The keyless claims table joins patients only by naming convention; 300 rows have no parent."}
+{"dimension":"uniqueness","namespace":"main.clinical","entity":"claims_daily","field":"record_id","severity":"medium","note":"record_id reads as an identifier on a keyless table and carries 200 duplicates."}
+{"dimension":"integrity","namespace":"main.clinical","entity":"encounters","field":"patient_id","severity":"high","note":"40 encounters reference merged patient records the MPI job deleted."}
+{"dimension":"validity","namespace":"main.clinical","entity":"patients","field":"contact_email","severity":"medium","note":"500 patient emails fail the pattern — portal signups accepted free text."}
+{"dimension":"validity","namespace":"main.clinical","entity":"consent_docs","field":"doc_uuid","severity":"medium","note":"90 consent docs carry pre-migration non-UUID identifiers."}
+{"dimension":"consistency","namespace":"main.clinical","entity":"encounters","field":"ward_code","severity":"low","note":"Ward codes cased differently by the two ADT feeds."}
+{"dimension":"completeness","namespace":"main.clinical","entity":"lab_results","field":"result_value","severity":"high","note":"55% of lab rows have no numeric result — the interface drops non-numeric results silently."}
+{"dimension":"reasonability","namespace":"main.clinical","entity":"medications","field":"approved_at","severity":"low","note":"Approval dates in 1894 — a formulary import parsed two-digit years wrong."}
+{"dimension":"timeliness","namespace":"main.clinical","entity":"wards","field":"renovated_at","severity":"medium","note":"The wards reference stopped syncing ~2.5 years ago."}
+{"dimension":"validity","namespace":"main.clinical","entity":"patients","field":"pat_ssn","severity":"medium","note":"BLIND SPOT: pat_ssn is a national-id column under an alias no format rule knows."}
+{"dimension":"validity","namespace":"main.clinical","entity":"lab_results","field":"test_code","severity":"medium","note":"BLIND SPOT: retired LOINC codes outside the allowed domain — no allowed-domain rule exists."}
+{"dimension":"completeness","namespace":"main.clinical","entity":"providers","field":"specialty_code","severity":"medium","note":"BLIND SPOT: 'UNK' specialty tokens — missing data with nullCount 0."}
+{"dimension":"accuracy","namespace":"main.revenue_ops","entity":"billing_invoices","field":"amt_cents","severity":"medium","note":"BLIND SPOT: billed amounts drift from the chargemaster reference — accuracy is out of deterministic scope."}

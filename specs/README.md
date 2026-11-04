@@ -45,6 +45,7 @@ specs/
 | [agents-evals](capabilities/agents-evals/spec.md) | Agent Hub, agent catalogue and user agents, eval sets, eval runs and reports | Agents (`agents.spec.ts`), Agent Hub (`agent-hub.spec.ts`) |
 | [rfp](capabilities/rfp/spec.md) | The RFP Builder agent, the Intellify RFP API, RFP records and the RFP package | RFP builder (E2E: none yet), Intellify RFP API (API-level) |
 | [agent-panel](capabilities/agent-panel/spec.md) | `show_in_panel`: what an agent shows in the right panel (file, document, table, visual), the workflow bar and its Details, its history and download | Agent panel (E2E: none yet) |
+| [data-readiness](capabilities/data-readiness/spec.md) | The Data Readiness Agent, the deterministic DMBOK readiness engine, profiling, saved readiness reports and the scorecard | Data readiness (E2E: none yet) |
 
 A Gherkin Feature that spans capabilities lives in the capability that owns its main outcome; the others link to it.
 
@@ -71,6 +72,8 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-198 Assistant skills: progressive-disclosure agent structure | [epics/BA-198](epics/BA-198/spec.md) |
 | BA-213 Agent Hub: tools and skills per agent | [epics/BA-213](epics/BA-213/spec.md) |
 | BA-233 US Health demo | [epics/BA-233](epics/BA-233/spec.md) |
+| BA-251 Data Readiness Agent | [epics/BA-251](epics/BA-251/spec.md) |
+| BA-281 Custom LLM endpoint | [epics/BA-281](epics/BA-281/spec.md) |
 
 ## Stack neutrality
 

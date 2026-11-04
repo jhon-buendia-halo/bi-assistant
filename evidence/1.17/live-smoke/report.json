@@ -1,0 +1,191 @@
+{
+  "at": "2026-11-03T23:17:15.736Z",
+  "model": "claude-sonnet-4-6",
+  "styles": [
+    {
+      "style": "openai",
+      "baseUrl": "http://127.0.0.1:8317/v1"
+    },
+    {
+      "style": "anthropic",
+      "baseUrl": "http://127.0.0.1:8317"
+    }
+  ],
+  "keyProvided": true,
+  "checks": [
+    {
+      "scope": "app",
+      "name": "ready",
+      "status": "pass",
+      "detail": "http://127.0.0.1:3473"
+    },
+    {
+      "scope": "openai",
+      "name": "POST /llm/models",
+      "status": "pass",
+      "detail": "19 model(s) listed"
+    },
+    {
+      "scope": "openai",
+      "name": "model listed",
+      "status": "pass",
+      "detail": "claude-sonnet-4-6"
+    },
+    {
+      "scope": "openai",
+      "name": "POST /llm/test-connection",
+      "status": "pass",
+      "detail": "Connection successful — custom/claude-sonnet-4-6 replied \"ok\" in 889ms"
+    },
+    {
+      "scope": "openai",
+      "name": "test route custom/<model>",
+      "status": "pass",
+      "detail": "custom/claude-sonnet-4-6"
+    },
+    {
+      "scope": "openai",
+      "name": "PUT /llm/settings",
+      "status": "pass",
+      "detail": "Configuration saved"
+    },
+    {
+      "scope": "openai",
+      "name": "GET /llm/settings",
+      "status": "pass",
+      "detail": "configured, custom/openai, key ••••••••68f5"
+    },
+    {
+      "scope": "openai",
+      "name": "assistant turn",
+      "status": "pass",
+      "detail": "\"pong\" in 1707ms"
+    },
+    {
+      "scope": "anthropic",
+      "name": "POST /llm/models",
+      "status": "pass",
+      "detail": "19 model(s) listed"
+    },
+    {
+      "scope": "anthropic",
+      "name": "model listed",
+      "status": "pass",
+      "detail": "claude-sonnet-4-6"
+    },
+    {
+      "scope": "anthropic",
+      "name": "POST /llm/test-connection",
+      "status": "pass",
+      "detail": "Connection successful — custom/claude-sonnet-4-6 replied \"ok\" in 1009ms"
+    },
+    {
+      "scope": "anthropic",
+      "name": "test route custom/<model>",
+      "status": "pass",
+      "detail": "custom/claude-sonnet-4-6"
+    },
+    {
+      "scope": "anthropic",
+      "name": "PUT /llm/settings",
+      "status": "pass",
+      "detail": "Configuration saved"
+    },
+    {
+      "scope": "anthropic",
+      "name": "GET /llm/settings",
+      "status": "pass",
+      "detail": "configured, custom/anthropic, key ••••••••68f5"
+    },
+    {
+      "scope": "anthropic",
+      "name": "assistant turn",
+      "status": "pass",
+      "detail": "\"pong\" in 1932ms"
+    },
+    {
+      "scope": "key scan",
+      "name": "API responses",
+      "status": "pass",
+      "detail": "13 response(s) clean"
+    },
+    {
+      "scope": "key scan",
+      "name": "data dir",
+      "status": "pass",
+      "detail": "8 file(s) clean"
+    },
+    {
+      "scope": "key scan",
+      "name": "app log",
+      "status": "pass",
+      "detail": "203 line(s) clean"
+    }
+  ],
+  "responses": [
+    {
+      "label": "ready GET /llm/settings",
+      "body": "{\"provider\":null,\"model\":null,\"baseUrl\":null,\"apiKeyMasked\":null,\"reasoningEffort\":\"high\",\"configured\":false,\"apiStyle\":null}"
+    },
+    {
+      "label": "POST /llm/models",
+      "status": 201,
+      "body": "{\"ok\":true,\"models\":[\"claude-opus-4-20250514\",\"claude-opus-4-7\",\"claude-opus-5\",\"claude-sonnet-5-5\",\"claude-opus-4-5-20251101\",\"claude-3-7-sonnet-20250219\",\"claude-3-5-haiku-20241022\",\"claude-sonnet-4-5-20250929\",\"claude-sonnet-4-6\",\"claude-haiku-5-5\",\"claude-opus-4-1-20250805\",\"claude-haiku-4-5-20251001\",\"claude-opus-4-8\",\"claude-sonnet-5\",\"claude-sonnet-4-20250514\",\"claude-opus-4-6\",\"claude-fable-5\",\"claude-fable-5-1\",\"claude-opus-5-5\"]}"
+    },
+    {
+      "label": "POST /llm/test-connection",
+      "status": 201,
+      "body": "{\"ok\":true,\"message\":\"Connection successful — custom/claude-sonnet-4-6 replied \\\"ok\\\" in 889ms\"}"
+    },
+    {
+      "label": "PUT /llm/settings",
+      "status": 200,
+      "body": "{\"ok\":true,\"message\":\"Configuration saved\",\"settings\":{\"provider\":\"custom\",\"model\":\"claude-sonnet-4-6\",\"baseUrl\":\"http://127.0.0.1:8317/v1\",\"reasoningEffort\":\"high\",\"apiStyle\":\"openai\",\"apiKeyMasked\":\"••••••••68f5\",\"configured\":true}}"
+    },
+    {
+      "label": "GET /llm/settings",
+      "status": 200,
+      "body": "{\"provider\":\"custom\",\"model\":\"claude-sonnet-4-6\",\"baseUrl\":\"http://127.0.0.1:8317/v1\",\"reasoningEffort\":\"high\",\"apiStyle\":\"openai\",\"apiKeyMasked\":\"••••••••68f5\",\"configured\":true}"
+    },
+    {
+      "label": "POST /sessions",
+      "status": 201,
+      "body": "{\"ok\":true,\"message\":\"Session \\\"Custom endpoint smoke (openai)\\\" created\",\"session\":{\"id\":\"34bec3d1-dd7b-422a-95b3-c3aa964adf06\",\"name\":\"Custom endpoint smoke (openai)\",\"workspaceId\":\"session-34bec3d1-dd7b-422a-95b3-c3aa964adf06\",\"datasets\":[\"custom-endpoint-smoke\"],\"messages\":[],\"visualizations\":[],\"createdAt\":\"2026-11-03T23:17:09.832Z\",\"updatedAt\":\"2026-11-03T23:17:09.832Z\",\"panelItems\":[]}}"
+    },
+    {
+      "label": "POST /sessions/34bec3d1-dd7b-422a-95b3-c3aa964adf06/messages/stream",
+      "status": 200,
+      "body": "data: {\"type\":\"text\",\"content\":\"p\"}\n\ndata: {\"type\":\"text\",\"content\":\"ong\"}\n\ndata: {\"type\":\"done\",\"session\":{\"id\":\"34bec3d1-dd7b-422a-95b3-c3aa964adf06\",\"name\":\"Custom endpoint smoke (openai)\",\"workspaceId\":\"session-34bec3d1-dd7b-422a-95b3-c3aa964adf06\",\"datasets\":[\"custom-endpoint-smoke\"],\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly: pong\",\"at\":\"2026-11-03T23:17:09.836Z\"},{\"role\":\"assistant\",\"content\":\"pong\",\"at\":\"2026-11-03T23:17:11.539Z\"}],\"visualizations\":[],\"createdAt\":\"2026-11-03T23:17:09.832Z\",\"updatedAt\":\"2026-11-03T23:17:11.539Z\",\"panelItems\":[]}}\n\n"
+    },
+    {
+      "label": "POST /llm/models",
+      "status": 201,
+      "body": "{\"ok\":true,\"models\":[\"claude-3-5-haiku-20241022\",\"claude-3-7-sonnet-20250219\",\"claude-opus-4-20250514\",\"claude-sonnet-4-20250514\",\"claude-opus-4-1-20250805\",\"claude-haiku-4-5-20251001\",\"claude-opus-4-5-20251101\",\"claude-sonnet-4-5-20250929\",\"claude-opus-4-6\",\"claude-sonnet-4-6\",\"claude-fable-5\",\"claude-fable-5-1\",\"claude-haiku-5-5\",\"claude-opus-4-7\",\"claude-opus-4-8\",\"claude-opus-5\",\"claude-opus-5-5\",\"claude-sonnet-5\",\"claude-sonnet-5-5\"]}"
+    },
+    {
+      "label": "POST /llm/test-connection",
+      "status": 201,
+      "body": "{\"ok\":true,\"message\":\"Connection successful — custom/claude-sonnet-4-6 replied \\\"ok\\\" in 1009ms\"}"
+    },
+    {
+      "label": "PUT /llm/settings",
+      "status": 200,
+      "body": "{\"ok\":true,\"message\":\"Configuration saved\",\"settings\":{\"provider\":\"custom\",\"model\":\"claude-sonnet-4-6\",\"baseUrl\":\"http://127.0.0.1:8317\",\"reasoningEffort\":\"high\",\"apiStyle\":\"anthropic\",\"apiKeyMasked\":\"••••••••68f5\",\"configured\":true}}"
+    },
+    {
+      "label": "GET /llm/settings",
+      "status": 200,
+      "body": "{\"provider\":\"custom\",\"model\":\"claude-sonnet-4-6\",\"baseUrl\":\"http://127.0.0.1:8317\",\"reasoningEffort\":\"high\",\"apiStyle\":\"anthropic\",\"apiKeyMasked\":\"••••••••68f5\",\"configured\":true}"
+    },
+    {
+      "label": "POST /sessions",
+      "status": 201,
+      "body": "{\"ok\":true,\"message\":\"Session \\\"Custom endpoint smoke (anthropic)\\\" created\",\"session\":{\"id\":\"1cee6faf-4aad-40a5-9bb1-1354e3f92993\",\"name\":\"Custom endpoint smoke (anthropic)\",\"workspaceId\":\"session-1cee6faf-4aad-40a5-9bb1-1354e3f92993\",\"datasets\":[\"custom-endpoint-smoke\"],\"messages\":[],\"visualizations\":[],\"createdAt\":\"2026-11-03T23:17:13.790Z\",\"updatedAt\":\"2026-11-03T23:17:13.790Z\",\"panelItems\":[]}}"
+    },
+    {
+      "label": "POST /sessions/1cee6faf-4aad-40a5-9bb1-1354e3f92993/messages/stream",
+      "status": 200,
+      "body": "data: {\"type\":\"text\",\"content\":\"p\"}\n\ndata: {\"type\":\"text\",\"content\":\"ong\"}\n\ndata: {\"type\":\"done\",\"session\":{\"id\":\"1cee6faf-4aad-40a5-9bb1-1354e3f92993\",\"name\":\"Custom endpoint smoke (anthropic)\",\"workspaceId\":\"session-1cee6faf-4aad-40a5-9bb1-1354e3f92993\",\"datasets\":[\"custom-endpoint-smoke\"],\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly: pong\",\"at\":\"2026-11-03T23:17:13.791Z\"},{\"role\":\"assistant\",\"content\":\"pong\",\"at\":\"2026-11-03T23:17:15.720Z\"}],\"visualizations\":[],\"createdAt\":\"2026-11-03T23:17:13.790Z\",\"updatedAt\":\"2026-11-03T23:17:15.720Z\",\"panelItems\":[]}}\n\n"
+    }
+  ]
+}

@@ -4,7 +4,7 @@ import {
   HttpTestingController,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
-import { App } from './app';
+import { App, composerModelLabel } from './app';
 
 describe('App', () => {
   beforeEach(async () => {
@@ -236,6 +236,125 @@ describe('App without sign-in or permissions (BA-232)', () => {
     expect(
       element.querySelector('main [title="Reasoning effort"]'),
     ).toBeTruthy();
+  });
+});
+
+describe('composerModelLabel (llm-settings R53)', () => {
+  const view = {
+    provider: 'openai',
+    model: 'gpt-4o-mini',
+    baseUrl: null,
+    apiKeyMasked: null,
+    reasoningEffort: 'high',
+    configured: true,
+    apiStyle: null,
+  } as const;
+
+  it('shows the model alone for a built-in provider', () => {
+    expect(composerModelLabel(view)).toBe('gpt-4o-mini');
+    expect(
+      composerModelLabel({
+        ...view,
+        provider: 'lenai',
+        baseUrl: 'https://lenai.example.com',
+      }),
+    ).toBe('gpt-4o-mini');
+  });
+
+  it('shows <model> · <host:port> for a custom endpoint', () => {
+    expect(
+      composerModelLabel({
+        ...view,
+        provider: 'custom',
+        apiStyle: 'openai',
+        model: 'llama3.1:8b',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+      }),
+    ).toBe('llama3.1:8b · 127.0.0.1:8317');
+    expect(
+      composerModelLabel({
+        ...view,
+        provider: 'custom',
+        apiStyle: 'anthropic',
+        model: 'claude-sonnet-5-5',
+        baseUrl: 'https://gateway.example.com',
+      }),
+    ).toBe('claude-sonnet-5-5 · gateway.example.com');
+  });
+
+  it('is null when nothing is configured', () => {
+    expect(
+      composerModelLabel({ ...view, configured: false, model: null }),
+    ).toBeNull();
+  });
+});
+
+function modelChip(el: HTMLElement, text: string): HTMLButtonElement {
+  const chip = Array.from(el.querySelectorAll('button')).find(
+    (b) => b.textContent?.trim() === text,
+  );
+  if (!chip) throw new Error(`no model chip reading ${text}`);
+  return chip;
+}
+
+describe('Composer model chip (llm-settings R53)', () => {
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+  });
+
+  it('shows a custom model with its endpoint host', () => {
+    const fixture = TestBed.createComponent(App);
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    fixture.componentInstance.openComposer();
+    http
+      .match((r) => r.url.endsWith('/llm/settings'))
+      .forEach((r) =>
+        r.flush({
+          provider: 'custom',
+          model: 'llama3.1:8b',
+          baseUrl: 'http://localhost:11434/v1',
+          apiKeyMasked: null,
+          reasoningEffort: 'high',
+          configured: true,
+          apiStyle: 'openai',
+        }),
+      );
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'llama3.1:8b · localhost:11434',
+    );
+    const chip = modelChip(
+      fixture.nativeElement as HTMLElement,
+      'llama3.1:8b · localhost:11434',
+    );
+    expect(chip.getAttribute('title')).toBe('http://localhost:11434/v1');
+  });
+
+  it('gives a built-in provider chip no base URL title', () => {
+    const fixture = TestBed.createComponent(App);
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    fixture.componentInstance.openComposer();
+    http
+      .match((r) => r.url.endsWith('/llm/settings'))
+      .forEach((r) =>
+        r.flush({
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          baseUrl: null,
+          apiKeyMasked: '****abcd',
+          reasoningEffort: 'high',
+          configured: true,
+          apiStyle: null,
+        }),
+      );
+    fixture.detectChanges();
+    const chip = modelChip(fixture.nativeElement as HTMLElement, 'gpt-4o-mini');
+    expect(chip.hasAttribute('title')).toBe(false);
   });
 });
 

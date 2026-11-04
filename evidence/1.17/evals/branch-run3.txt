@@ -1,0 +1,64 @@
+Model: claude-sonnet-4-6 on custom endpoint 127.0.0.1:8317 (Anthropic-compatible, with API key)
+PASS  champion-2022  (6684ms)
+      pass check-includes: Checks if output includes "Argentina"
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass result-set-match: Result set matches expectedSql (primary correctness signal)
+PASS  final-score-2018  (13207ms)
+      pass check-matches: Checks if output matches pattern /4\s*[-–:]\s*2/
+      pass check-includes: Checks if output includes "France"
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass result-set-match: Result set matches expectedSql (primary correctness signal)
+PASS  top-scorer-2022  (15541ms)
+      pass check-includes: Checks if output includes "Messi"
+      pass check-matches: Checks if output matches pattern /\b4\b/
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass result-set-match: Result set matches expectedSql (primary correctness signal)
+PASS  shootouts  (19542ms)
+      pass check-includes: Checks if output includes "Croatia"
+      pass check-matches: Checks if output matches pattern /Argentina/i
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass result-set-match: Result set matches expectedSql (primary correctness signal)
+PASS  biggest-venue  (10319ms)
+      pass check-includes: Checks if output includes "Lusail"
+      pass check-matches: Checks if output matches pattern /88[,.]?966/
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass result-set-match: Result set matches expectedSql (primary correctness signal)
+PASS  schema-discovery  (10718ms)
+      pass check-includes: Checks if output includes "matches"
+      pass check-did-not-call: Checks that "run_readonly_sql" was NOT called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+PASS  ambiguous-best-team  (7561ms)
+      pass check-called-tool: Checks that "ask_clarification" was called
+      pass check-did-not-call: Checks that "run_readonly_sql" was NOT called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass llm-judge: LLM judge: The question ("Which team performed best?") is ambiguous on both the performance metric (goals? wins? possess
+FAIL  possession-vs-result  (46778ms)
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-matches: Checks if output matches pattern /\b(possession|%)\b/i
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      FAIL llm-judge: LLM judge: The question asks whether, in the 2022 knockout rounds, the team with more possession usually won. In this da
+           ↳ The assistant found only 7 knockout matches instead of 8, and reports 2 wins out of 7 (29%) rather than the correct 2 wins out of 8 (25%). The counts contradict the rubric's required 2 won / 6 lost figure, likely because the round-of-16 matches are missing from the query results.
+PASS  out-of-scope  (23249ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass llm-judge: LLM judge: The question asks about 1970, a year this dataset does not cover (it only has 2018 and 2022). Score pass=true
+PASS  visual-request  (69267ms)
+      pass check-tool-order: Checks tool call order: [run_readonly_sql → create_visual]
+      pass check-called-tool: Checks that "create_visual" was called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass llm-judge: LLM judge: The user asked for a chart of goals scored by each team in the 2022 World Cup knockout stage. Score pass=true
+PASS  no-clarification-best-team  (28597ms)
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-did-not-call: Checks that "ask_clarification" was NOT called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass llm-judge: LLM judge: The question ("Which team performed best?") does not say what "best" means, and this assistant cannot ask the
+PASS  no-visuals-chart-request  (35312ms)
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-did-not-call: Checks that "create_visual" was NOT called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass llm-judge: LLM judge: The user asked for a chart of goals scored per World Cup tournament, but this assistant cannot create visuals
+11/12 questions passed

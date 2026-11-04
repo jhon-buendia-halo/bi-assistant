@@ -1,0 +1,7 @@
+{
+  "industry": "capital-markets",
+  "complexity": "medium",
+  "wave": "W3",
+  "authoring": "generated",
+  "defectPlan": "plans/postgres/capital-markets-medium-w3-06.plan.json"
+}

@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **59 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 15, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **80 HTTP route handlers** across 12 app controllers (sessions 17, deep analysis 3, agents 17, skills 9, datasources 6, knowledge 6, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2), plus the 33 routes of the embedded Intellify RFP API (2.16). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
 
 ---
 
@@ -146,6 +146,7 @@ Preview sessions answer endpoints 2 and 4 to 14 like any session (a turn runs wi
 - Body: `{ name: string; datasets: string[] }` or `{ agentId: string }`. `name` required (trimmed, non-empty, **truncated to 64 chars**); `datasets` must be a non-empty array of dataset **names**.
 - With `agentId` (a user-agent id; sessions-chat R52): `datasets` in the body is ignored, and `name` is optional: a non-blank `name` (trimmed, truncated to 64 chars; sent by the New conversation screen's Agent picker) names the session, else it takes the agent's Live name. The session takes those of its Live datasets that exist, and stores `agentId` and `agentName` (data-model 3.4).
 - With `agentId` set to the registry key of a built-in agent that declares a dataset (today only `rfp`, whose dataset is `Intellify RFP API`; ADR-0028): `datasets` in the body is ignored and an optional non-blank `name` works as above. The session takes the typed name, else the agent's name (`RFP Builder`), and that dataset, and stores `agentKey` (the registry key) and `agentName` instead of `agentId` (data-model 3.4); every turn then runs that agent. When the dataset doesn't exist the call fails with the agent's requirement text, for `rfp` `"Load the \"Intellify RFP API\" sample in Settings → Testing Data first"`. A built-in key that declares no dataset (e.g. `assistant`) still fails with `"Agent \"<key>\" not found"`.
+- With `agentId` set to `data-readiness` (agents.md 2.10): `datasets` in the body is ignored and an optional non-blank `name` works as above. The session takes the typed name, else `Data Readiness`, and every dataset bound to a `postgres` or `databricks` datasource, ordered by name, and stores `agentKey` and `agentName`. With no such dataset the call fails with `"Add a PostgreSQL or Databricks dataset first"`.
 - With `agentId` set to a showcase agent's key (`benchmarking`, `survey`, `lad-coe`, `strategy`; agents-evals R106): always refused with `{ ok:false, message:"Showcase agent: not available to chat yet." }` (Style A: the service's 400 is flattened into the envelope), creating nothing (no session, no workspace). A preview (`preview: true`) of a showcase key fails, like any built-in key, with `"Agent \"<key>\" not found"`.
 - With `{ agentId, preview: true }` (agents-evals R60, R61): starts a **preview session** of the agent's draft. It is held in memory only (data-model 3.12), never listed and never written to the `sessions` collection. Its `id` is `preview-<uuid>`, its `name` `Preview: <draft name>`, its `datasets` those of the draft that exist, and it carries `preview: true` and `agentId`. Its derived `agent` comes from the draft. Success message `Preview started`. Failures: `"Agent \"<id>\" not found"` (also for a built-in key), `"Select at least one dataset to preview"`.
 - Success: `{ ok:true, message:"Session \"<name>\" created", session: SessionDoc }` with `messages: []`, `visualizations: []`, a generated UUID `id`, and a contained Mastra workspace created and linked (`workspaceId`).
@@ -345,7 +346,7 @@ Controller prefix `/metrics`. Capability: metrics. Shape `MetricDoc` in data-mod
 
 ### 2.5 LLM settings
 
-Controller prefix `/llm`. Capability: llm-settings. One persisted singleton document, API key encrypted at rest (AES-256-GCM keyed by `APP_SECRET`).
+Controller prefix `/llm`. Capability: [llm-settings](../capabilities/llm-settings/spec.md). One persisted singleton document ([data-model.md](data-model.md) 3.2), API key encrypted at rest (AES-256-GCM keyed by `APP_SECRET`, data-model 2.3). How a provider's settings become a model route is in [agents.md](agents.md) 1.3.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -354,12 +355,18 @@ Controller prefix `/llm`. Capability: llm-settings. One persisted singleton docu
 | 31 | `PUT /llm/reasoning` | Set reasoning effort only | yes |
 | 32 | `POST /llm/test-connection` | Test candidate settings | yes |
 | 32a | `GET /llm/effort-levels` | Effort levels a model accepts | yes |
+| 32b | `POST /llm/models` | List a custom endpoint's models | yes |
 
 ```ts
-type LlmProvider = 'openai' | 'anthropic' | 'lenai';
+type LlmProvider = 'openai' | 'anthropic' | 'lenai' | 'custom';   // custom is shown "Custom endpoint"
+type LlmApiStyle = 'openai' | 'anthropic';   // shown "OpenAI-compatible" / "Anthropic-compatible"; custom only
 // Ordered lowest to highest; each model accepts a subset (agents.md 1.4).
 type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-interface SaveLlmSettingsDto { provider: LlmProvider; model: string; apiKey?: string; baseUrl?: string; reasoningEffort?: ReasoningEffort }
+interface SaveLlmSettingsDto {
+  provider: LlmProvider; model: string; apiKey?: string; baseUrl?: string; reasoningEffort?: ReasoningEffort;
+  apiStyle?: LlmApiStyle;   // required when provider is 'custom'; ignored (not stored) otherwise
+}
+interface ListLlmModelsDto { provider: 'custom'; apiStyle: LlmApiStyle; baseUrl: string; apiKey?: string }
 interface EffortLevelsView {
   levels: ReasoningEffort[];              // lowest first; [] = the model has no reasoning effort
   defaultEffort: ReasoningEffort | null;  // 'high' when offered, else the first level; null when levels is []
@@ -367,37 +374,60 @@ interface EffortLevelsView {
 }
 interface LlmSettingsView {
   provider: LlmProvider | null; model: string | null; baseUrl: string | null;
-  apiKeyMasked: string | null;   // "••••••••" + last 4 chars of the key
+  apiStyle: LlmApiStyle | null;  // set only when provider is 'custom', else null
+  apiKeyMasked: string | null;   // "••••••••" + last 4 chars of the key; null when no key is stored (a keyless custom endpoint)
   reasoningEffort: ReasoningEffort;   // default 'high'
   configured: boolean;
   keyUnreadable?: true;   // present only when a stored key cannot be decrypted with the current APP_SECRET
 }
 ```
 
+**Custom endpoint URLs.** The `baseUrl` of a `custom` provider is trimmed and its trailing slashes are removed; it is stored that way. What the app calls depends on `apiStyle`:
+
+| `apiStyle` | `baseUrl` the user gives | Chat / probe | Model list | Key header (when a key is set) |
+|---|---|---|---|---|
+| `openai` | Includes the version path, e.g. `http://127.0.0.1:8317/v1`; used as given | `<base>/chat/completions` | `GET <base>/models` | `Authorization: Bearer <key>` |
+| `anthropic` | The server root, e.g. `http://127.0.0.1:8317`; the app appends `/v1` (a URL already ending in `/v1` is used as-is) | `<root>/v1/messages` | `GET <root>/v1/models` | `x-api-key: <key>`, always with `anthropic-version: 2023-06-01` |
+
+With no key the request carries no credential header. Any `http`/`https` host is accepted, loopback and private addresses included ([ADR-0032](architecture.md): one super-admin app, the host is the boundary per ADR-0030).
+
+**Custom endpoint error texts.** Used by 32 and 32b, and by chat turns that fail on a custom endpoint ([llm-settings](../capabilities/llm-settings/spec.md)): connection refused, DNS failure or reset `"Could not reach <host> — check the base URL and that the server is running"` (`<host>` = the URL's `host`, port included); HTTP 404 `"The endpoint answered 404 at <url> — check the base URL (OpenAI-compatible servers usually end in /v1)"` (`<url>` = the full URL called); 401 or 403 `"The endpoint rejected the API key (<status>)"`; 429 `"The endpoint is rate limiting requests (429) — try again later"`. Any other status keeps today's text, `"Provider request failed (<status>) — <first 300 characters of the body>"`. No text ever contains the key.
+
+**Key handling.** Keys of every provider never appear in a response body, a log line or the desktop diagnostics; `Authorization` and `x-api-key` header values are redacted wherever requests are logged ([non-functional](../product/non-functional.md)).
+
 #### 29. `GET /llm/settings`
-- Response `200`: `LlmSettingsView` (bare). Nothing stored: `{ provider:null, model:null, baseUrl:null, apiKeyMasked:null, reasoningEffort:"high", configured:false }`.
-- Stored key that cannot be decrypted with the current `APP_SECRET`: still `200`, with `configured:false`, `keyUnreadable:true`, the stored `provider`, `model`, `baseUrl` and `reasoningEffort`, and `apiKeyMasked:null`.
+- Response `200`: `LlmSettingsView` (bare). Nothing stored: `{ provider:null, model:null, baseUrl:null, apiStyle:null, apiKeyMasked:null, reasoningEffort:"high", configured:false }`.
+- A stored `custom` provider answers its `apiStyle` and `baseUrl`; with no stored key `apiKeyMasked` is `null` and `configured` is still `true`.
+- Stored key that cannot be decrypted with the current `APP_SECRET`: still `200`, with `configured:false`, `keyUnreadable:true`, the stored `provider`, `model`, `baseUrl`, `apiStyle` and `reasoningEffort`, and `apiKeyMasked:null`.
 
 #### 30. `PUT /llm/settings`
 - Body: `SaveLlmSettingsDto`. `apiKey` omitted or blank = use the stored key. For `lenai`, `model` is the deployment name and `baseUrl` is required. `anthropic` takes an API key only (no subscription logins).
-- Validation (Style A): `"provider must be one of: openai, anthropic, lenai"`, `"model is required"`, `"baseUrl is required for lenai"`, `"apiKey is required — none stored yet"`, and, with no `apiKey` and a stored key that cannot be decrypted, `"The saved API key can't be read because the app secret changed — enter it again in Settings → LLM Configuration"` (same for `POST /llm/test-connection`).
-- **The settings are tested against the provider before they are persisted**; a failing test fails the save with the provider's error text and nothing is stored.
-- `reasoningEffort` (optional) must be one of the model's levels (32a), else the save fails with `"reasoning effort must be one of: <levels, comma-separated>"` before any provider call. Omitted: the stored effort is kept when the model offers it, else the model's `defaultEffort`; for a model with no levels the stored effort (or `high`) is kept unchanged.
+- For `custom`: `apiStyle` and `baseUrl` are required, `model` is free text. The API key is optional: a given key is encrypted and stored; a blank key keeps the key stored for `custom` (when the stored provider is `custom`), and with none stored the endpoint is called and saved with no credential (no `apiKeyCiphertext`). A key stored for another provider is never sent to a custom endpoint. Switching from `custom` to another provider follows that provider's rules (blank = the stored key, else `"apiKey is required — none stored yet"`).
+- Validation (Style A, HTTP 200 `{ ok:false, message }`), checked in this order: `"provider must be one of: openai, anthropic, lenai, custom"`, `"apiStyle must be one of: openai, anthropic"` (custom only), `"baseUrl is required for custom"`, `"baseUrl must be an http or https URL"` (custom only), `"model is required"`, `"baseUrl is required for lenai"`, `"apiKey is required — none stored yet"` (not for custom), and, with no `apiKey` and a stored key that cannot be decrypted, `"The saved API key can't be read because the app secret changed — enter it again in Settings → LLM Configuration"` (same for `POST /llm/test-connection`).
+- **The settings are tested against the provider before they are persisted**; a failing test fails the save with the provider's error text (for custom, the texts above) and nothing is stored.
+- `reasoningEffort` (optional) must be one of the model's levels (32a), else the save fails with `"reasoning effort must be one of: <levels, comma-separated>"` before any provider call. Omitted: the stored effort is kept when the model offers it, else the model's `defaultEffort`; for a model with no levels the stored effort (or `high`) is kept unchanged. For `custom` the levels are chosen by model name, as for the other providers.
 - Success: `{ ok:true, message:"Configuration saved", settings: LlmSettingsView }`.
-- Side effects: persists (key encrypted); subsequent agent turns resolve the model from these settings.
+- Side effects: persists (key encrypted; `apiStyle` stored only for `custom`); subsequent agent turns resolve the model from these settings.
 
 #### 31. `PUT /llm/reasoning`
 - Body: `{ effort: "low"|"medium"|"high" }`. This is the composer's menu; it still offers only these three.
 - Success: `{ ok:true, message:"Reasoning effort set to <effort>", settings }`. Failures: `"reasoning effort must be one of: low, medium, high"`, `"Configure and save the LLM first — no settings stored yet"`.
-- Applied per model: mapped to the nearest level the model accepts, translated to the provider's native option, and dropped for Anthropic models that reject it (agents.md 1.4).
+- Applied per model: mapped to the nearest level the model accepts, translated to the provider's native option, and dropped for Anthropic models that reject it (agents.md 1.4). A `custom` provider uses the OpenAI-compatible option for `apiStyle: openai` (`reasoning_effort`, sent only when the model has levels) and the Anthropic one for `apiStyle: anthropic`.
 
 #### 32. `POST /llm/test-connection`
 - Body: `SaveLlmSettingsDto` (same rules as save, nothing persisted; `reasoningEffort` is ignored). Sends one cheap fixed prompt using the candidate settings at the model's `probeEffort` (32a; none sent when the model has no levels); 30 s timeout.
-- Success: `{ ok:true, message:"Connection successful — <provider>/<model> replied \"<reply>\" in <ms>ms" }`. Failure: `{ ok:false, message }` (validation errors, provider HTTP errors, `"LLM request timed out after 30s"`).
+- Success: `{ ok:true, message:"Connection successful — <provider>/<model> replied \"<reply>\" in <ms>ms" }` (for custom, `custom/<model>`). Failure: `{ ok:false, message }` (validation errors, provider HTTP errors, `"LLM request timed out after 30s"`; for custom, the error texts above).
+- Custom, `apiStyle: openai`: when the server rejects the strict `json_schema` response format, the probe retries with `json_object`, then with plain text, and passes on the first step whose reply parses to `{ "status": "<non-empty string>" }` (a code fence tolerated); a failure at the plain-text step, or any failure other than a 400 or 422 rejection of the format, fails the test (llm-settings R49). `apiStyle: anthropic` sends one Messages request.
 
 #### 32a. `GET /llm/effort-levels`
-- Query: `provider` (`openai`|`anthropic`|`lenai`) and `model` (the model or deployment name, trimmed). Both optional; an empty model answers `{ levels: [], defaultEffort: null, probeEffort: null }`.
+- Query: `provider` (`openai`|`anthropic`|`lenai`|`custom`) and `model` (the model or deployment name, trimmed). Both optional; an empty model answers `{ levels: [], defaultEffort: null, probeEffort: null }`. Levels are looked up by model name for every provider, `custom` included.
 - Response `200`: `EffortLevelsView` (bare), from the built-in table in [agents.md](agents.md) section 1.4. Pure lookup: no provider call, nothing stored.
+
+#### 32b. `POST /llm/models`
+- Body: `ListLlmModelsDto`. A blank or omitted `apiKey` uses the key stored for `custom` when the stored provider is `custom` and has one; otherwise the request carries no credential. Nothing is persisted.
+- Calls the endpoint's model list (table above) once, 15 s timeout, and reads the ids from `data[].id` (both styles).
+- Success (Style A): `{ ok:true, models: string[] }`: the ids in the server's order, duplicates removed (first kept); `[]` when the server lists none.
+- Failure: `{ ok:false, message }`: `"provider must be custom to load models"`, the custom validation texts of 30 (`apiStyle`, `baseUrl`), a stored key that cannot be decrypted (same text as 30), the custom endpoint error texts above, `"Model list request timed out after 15s"`, and `"The endpoint did not return a model list — type the model name instead"` when the body is not JSON or has no `data` array (llm-settings R48).
 
 ### 2.6 Agents, hub and evals
 
@@ -426,7 +456,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 #### 33. `GET /agents`
 - Response `200`: `{ agents: AgentSummary[] }` sorted by `name`, built-in and user agents together.
 - `AgentSummary = { key, id, name, description, tools: string[] /* sorted tool names; a user agent shows those its effective configuration selects (agents.md 2.1) */, kind: 'official'|'system'|'user', status: 'builtin'|'draft'|'live', pinned: boolean, owner: 'Official'|'System'|'You', hasUnpublishedChanges: boolean, missingDatasets: string[], datasets: string[], starterQuestions: string[], chatRequirement?: string, showcase?: boolean }`.
-- For a user agent `key` equals `id`, and `name`, `description`, `datasets`, `starterQuestions` and `tools` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty, except for a built-in agent that declares a dataset for its sessions (today `rfp`; ADR-0028): its `datasets` is `["Intellify RFP API"]`, `missingDatasets` lists it while no dataset of that name exists, and `chatRequirement` is then `Load the "Intellify RFP API" sample in Settings → Testing Data first` (the UI shows it as the reason Start chat is blocked). A **showcase agent** (`benchmarking`, `survey`, `lad-coe`, `strategy`; [agents.md](agents.md) 2.9, agents-evals R106) carries `showcase: true` and `chatRequirement` `"Showcase agent: not available to chat yet."` (the reason Start chat is always disabled), with empty `datasets`, `missingDatasets` and `starterQuestions` and `tools: []`; `showcase` is absent on every other agent. `chatRequirement` is absent otherwise. `kind` is `official` for `assistant`, `rfp` and the showcase agents, and `system` for the other built-in agents.
+- For a user agent `key` equals `id`, and `name`, `description`, `datasets`, `starterQuestions` and `tools` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty, except for a built-in agent that declares a dataset for its sessions (today `rfp`; ADR-0028): its `datasets` is `["Intellify RFP API"]`, `missingDatasets` lists it while no dataset of that name exists, and `chatRequirement` is then `Load the "Intellify RFP API" sample in Settings → Testing Data first` (the UI shows it as the reason Start chat is blocked). A **showcase agent** (`benchmarking`, `survey`, `lad-coe`, `strategy`; [agents.md](agents.md) 2.9, agents-evals R106) carries `showcase: true` and `chatRequirement` `"Showcase agent: not available to chat yet."` (the reason Start chat is always disabled), with empty `datasets`, `missingDatasets` and `starterQuestions` and `tools: []`; `showcase` is absent on every other agent. `chatRequirement` is absent otherwise. The **Data Readiness Agent** (`data-readiness`; [agents.md](agents.md) 2.10) declares a dataset *kind* instead of a name: its `datasets` lists the names of every dataset bound to a `postgres` or `databricks` datasource, its `missingDatasets` is empty, its `starterQuestions` are its three starters (data-readiness R2), and while no such dataset exists `chatRequirement` is `Add a PostgreSQL or Databricks dataset first`. `kind` is `official` for `assistant`, `rfp`, `data-readiness` and the showcase agents, and `system` for the other built-in agents.
 
 #### 34. `GET /agents/:key`
 - Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */; toolLinks?: { name: string; status: 'always-on'|'linked'|'not-linked'; linkedVia: { instructions: boolean; skills: string[] /* skill names, sorted */ } }[] /* user agents only: every library tool sorted by name, from the Live version, else the draft */; llm: { provider: string | null; providerName: string | null; model: string | null; apiKeyConfigured: boolean; maxOutputTokens: number | null; reasoningEffort: string | null } /* the effective LLM settings the agent resolves to; never the key; every field null/false when no LLM is saved */; prompt?: { editable: string /* as served: the override, else the shipped text */; shipped: string; modified: boolean; builtInChanged: boolean /* modified and the shipped text's hash differs from baseHash */; linksAllowed: boolean /* true for assistant and rfp only; false for the System and showcase agents */; updatedAt: string | null /* the override's */ } /* built-in agents only */ }`.
@@ -634,7 +664,7 @@ The `built-in` routes are declared before `/skills/:id`.
 #### 103. `PUT /agents/:key/prompt`
 - Body: `{ prompt: string }`, trimmed; the checks below run on the trimmed text. Saves the override (ADR-0026); it applies to the next call of every session, user agent, deep analysis, visual and eval run.
 - Success: `{ ok:true, message:"System prompt of \"<name>\" saved", agent: AgentDetail }`.
-- Failures (Style A), the first that applies: `"Agent \"<key>\" not found"`; `"Only built-in agents have a shared system prompt; edit a user agent's instructions instead"` (`:key` is a user-agent id); `"The prompt is empty"`; `"The prompt is at most 20,000 characters"`; for the `assistant` only: `"The assistant's prompt must start with \"You are the Questions to Insights assistant\""`, `"Only built-in skills can be linked here: this prompt is shared by every user"` (a `[[skill:<name>]]` whose name is not a built-in on-demand skill; a built-in one is accepted), `"Unknown tool \"<name>\""` (a `[[tool:…]]` not in the library, as in 41); for the `rfp` (RFP Builder) only (agents.md 2.8): `"The RFP Builder's prompt must start with \"You are the RFP Builder\""`, `"Only the RFP Builder's own skills can be linked here: this prompt is shared by every user"` (a `[[skill:<name>]]` that is not one of its own on-demand skills, its seven stage skills of agents.md 7.4), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its own tools: its RFP tools and `ask_clarification`); for a System or showcase agent only: `"This agent's prompt can't contain links"` (any `[[…]]`; a showcase agent's prompt has no required first line).
+- Failures (Style A), the first that applies: `"Agent \"<key>\" not found"`; `"Only built-in agents have a shared system prompt; edit a user agent's instructions instead"` (`:key` is a user-agent id); `"The prompt is empty"`; `"The prompt is at most 20,000 characters"`; for the `assistant` only: `"The assistant's prompt must start with \"You are the Questions to Insights assistant\""`, `"Only built-in skills can be linked here: this prompt is shared by every user"` (a `[[skill:<name>]]` whose name is not a built-in on-demand skill; a built-in one is accepted), `"Unknown tool \"<name>\""` (a `[[tool:…]]` not in the library, as in 41); for the `rfp` (RFP Builder) only (agents.md 2.8): `"The RFP Builder's prompt must start with \"You are the RFP Builder\""`, `"Only the RFP Builder's own skills can be linked here: this prompt is shared by every user"` (a `[[skill:<name>]]` that is not one of its own on-demand skills, its seven stage skills of agents.md 7.4), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its own tools: its RFP tools and `ask_clarification`); for the `data-readiness` agent only (agents.md 2.10): `"The Data Readiness Agent's prompt must start with \"You are the Data Readiness Agent\""`, `"Only the Data Readiness Agent's own skills can be linked here: this prompt is shared by every user"` (any `[[skill:…]]` other than `data-readiness`), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its tools: `assess_data_readiness`, `get_readiness_report`, `list_readiness_reports`, `show_in_panel`, `ask_clarification`); for a System or showcase agent only: `"This agent's prompt can't contain links"` (any `[[…]]`; a showcase agent's prompt has no required first line).
 - Declared before the `GET /agents/:key` catch-alls.
 
 #### 104. `DELETE /agents/:key/prompt`
@@ -958,6 +988,39 @@ Document outline (Markdown, deterministic):
 9. `## 8. Instructions to bidders` and `## 9. Evaluation criteria`: the section texts.
 10. `## Exhibits`: the list of the four exhibits.
 
+### 2.17 Data readiness
+
+Controller prefix `/data-readiness`. Capability: [data-readiness](../capabilities/data-readiness/spec.md). Decision: ADR-0031. Shapes: `ReadinessReport` and `readiness_reports` in [data-model.md](data-model.md). **Style B** (1.3): failures are real HTTP statuses with the framework error body.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 108 | `POST /data-readiness/assessments` | Profile a datasource, run the deterministic engine and store the report | no (the agent's tool runs it through the bridge) |
+| 109 | `GET /data-readiness/assessments` | List a datasource's stored reports, newest first | yes (Past assessments) |
+| 110 | `GET /data-readiness/assessments/:id` | Read one stored report | yes (scorecard) |
+
+#### 108. `POST /data-readiness/assessments`
+- Body: `{ datasourceId: string; entities?: string[]; sessionId?: string }`.
+  - `entities` are entity keys (`catalog.schema.table` on Databricks, `database.schema.table` on PostgreSQL, as in the inventory, #20) and narrow the scope. Left out, the scope is every entity in the datasource's inventory. Keys that no longer exist are dropped.
+  - `sessionId` is recorded on the report when the assessment comes from a chat.
+- Runs synchronously: profile (connector profiling queries, 15 s per statement), engine with `now` = the request time, store.
+- Response `201`: `ReadinessReport` ([data-model.md](data-model.md)).
+- Errors:
+  - 400 `"datasourceId is required"`;
+  - 400 `"Data readiness supports PostgreSQL and Databricks datasources only"` (a `rest` datasource);
+  - 400 `"entities must be an array of entity keys"` when `entities` is present (and not null) but is not an array of strings;
+  - 400 `"None of the entities to assess exist"`, also for a whole-datasource assessment of a datasource with no entity;
+  - 404 `"Datasource \"<id>\" not found"`;
+  - 502 with the connector's message when the datasource cannot be reached at all. A single failing profiling statement is not an error: that statistic is left out (data-readiness R6).
+
+#### 109. `GET /data-readiness/assessments`
+- Query: `datasourceId` (required).
+- Response `200`: `{ reports: ReadinessReportSummary[] }`, newest `generatedAt` first, where `ReadinessReportSummary = { id, datasourceId, datasourceName, datasourceKind, generatedAt, overallScore, maturity, entityCount, sessionId? }`. An unknown or report-less datasource gives `{ reports: [] }`.
+- Errors: 400 `"datasourceId is required"`.
+
+#### 110. `GET /data-readiness/assessments/:id`
+- Response `200`: the full `ReadinessReport`.
+- Errors: 404 `"Readiness report \"<id>\" not found"`.
+
 ## 3. Streaming and long-running work
 
 Two Server-Sent-Events endpoints exist (chat, knowledge bootstrap). Both are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. Two background-job patterns use start + poll instead of SSE (deep analysis, eval runs).
@@ -978,7 +1041,7 @@ interface StreamMessageRequest {
 
 **Framing.** Each event is a single `data: <JSON>\n\n` frame. No `event:` or `id:` fields, no `retry:`, no heartbeat/comment frames. Readers split on `\n\n`, take the line starting with `data: ` and `JSON.parse` it; malformed frames are skipped.
 
-**Event envelope.** `{ type, content?, session? }`. `content` is a string; for `tool`, `tool-result`, `visual-updated`, `panel-item`, `workflow` and `rfp-package` it is itself **a JSON-encoded string** (double encoding) that the client parses.
+**Event envelope.** `{ type, content?, session? }`. `content` is a string; for `tool`, `tool-result`, `visual-updated`, `panel-item`, `workflow`, `rfp-package` and `readiness-report` it is itself **a JSON-encoded string** (double encoding) that the client parses.
 
 | `type` | Payload | Meaning |
 |---|---|---|
@@ -990,6 +1053,7 @@ interface StreamMessageRequest {
 | `panel-item` | `content: JSON string` `PanelItemEvent` `{ item: PanelItem }` ([data-model.md](data-model.md) 3.4.4) | An agent showed something in the right panel this turn (`show_in_panel` returned without an error); never sent for a workflow change (`update_workflow`, the RFP Builder's stage auto-drive); sent just before that tool's `tool-result` `{ tool: "show_in_panel", input? /* the item's title */, error? }`. The client refreshes the session without disturbing the turn, makes the item the active one and opens the panel; for a `visual` item it also loads the visual. Every agent ([agent-panel](../capabilities/agent-panel/spec.md) R12). `visual-updated` stays for visual tools. |
 | `workflow` | `content: JSON string` `WorkflowView` `{ phases: { number, title, skill? }[], source: "prompt"\|"agent", current: number\|null, done: number[], skipped: number[], waiting?: boolean, note?: string }` ([data-model.md](data-model.md) 3.4.4) | The session's workflow changed this turn: after an `update_workflow` result without an error and after an RFP Builder stage was saved. `show_in_panel` never sends it. It carries the whole view, not a delta. It never creates a panel item and does not open the right panel. The client patches the session's `workflow` live, so the workflow bar moves while the turn streams; the persisted view arrives with `done` ([agent-panel](../capabilities/agent-panel/spec.md) R19). Every agent. |
 | `rfp-package` | `content: JSON string` `RfpPackageEvent` `{ rfpId, title, files: { name, bytes }[], exportedAt, draft?: boolean }` | `export_rfp_package` or `export_rfp_draft` stored an RFP package in the session workspace (`rfp/<rfpId>/`, or `rfp/<rfpId>/draft/` when `draft` is `true`, [data-model.md](data-model.md) 4.1) this turn; sent just before that tool's `tool-result`. The answer persisted at the end of the turn carries the same value as `rfpPackage` (data-model 3.4.1), and the chat shows the package card with its downloads (#105). RFP Builder sessions only ([rfp](../capabilities/rfp/spec.md)). |
+| `readiness-report` | `content: JSON string` `ReadinessReportEvent` `{ report: ReadinessReport, panelItem: PanelItem }` ([data-model.md](data-model.md)) | `assess_data_readiness` or `get_readiness_report` returned a report this turn; sent just before that tool's `tool-result`. The client shows the scorecard in the right panel (the `panelItem`, kind `readiness`, is also persisted on the session as `show_in_panel` items are). The answer persisted at the end of the turn carries `readinessReport` (data-model 3.4.1), and the chat shows the readiness card. Data Readiness Agent sessions only ([data-readiness](../capabilities/data-readiness/spec.md) R5). |
 | `done` | `session: SessionDoc` | **Terminal, success.** The persisted session with this turn's messages. |
 | `error` | `content: string` | **Terminal, failure.** Human-readable message (`"message is required"`, `"Session <id> not found"`, provider/model errors). |
 
@@ -1217,6 +1281,7 @@ The `Intellify API:` line carries the actual bound port of the embedded API (use
 | `EVAL_CATEGORY` | the same script | Runs only the selected questions of these categories, comma-separated (blanks ignored), each one of the eighteen of [data-model.md](data-model.md) 4.9 (R222). Refused like `EVAL_SPLIT`. | unset (all) |
 | `EVAL_RESULTS_FILE` | the same script | A path: the run's results, answers and tool calls included, are written there as a JSON array when the run ends (R224). A relative path is read against `INIT_CWD` when npm set it, else the working directory (R223). | unset |
 | `EVAL_RUN_FILE` | the same script | A path: the saved run record, as endpoint 38 returns it without `ok` and `message`, is written there as JSON when the run ends (R223, R224). A relative path is read against `INIT_CWD` when npm set it, else the working directory (R223). | unset |
+| `EVAL_LLM_PROVIDER`, `EVAL_LLM_API_STYLE`, `EVAL_LLM_BASE_URL`, `EVAL_LLM_API_KEY`, `EVAL_LLM_MODEL` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | `EVAL_LLM_PROVIDER=custom` runs the evals on a custom endpoint instead of the saved LLM settings: API style (`openai` \| `anthropic`), base URL and model required, key optional ([agents.md](agents.md) 8.5). | unset (saved settings) |
 
 ### 6.2 CLI-only
 

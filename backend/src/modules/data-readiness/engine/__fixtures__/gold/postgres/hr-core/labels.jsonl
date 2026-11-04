@@ -1,0 +1,22 @@
+# Answer key for the "hr-core" gold dataset (HR domain) — HUMAN-MAINTAINED.
+# One JSON object per line. Blank lines and lines starting with # or // are ignored.
+# The tuple (dimension, namespace, entity, field) must equal the engine's emitted tuple;
+# severity is graded within ±1 band. See ./README.md for the planted-defect table.
+#
+# TRUE POSITIVES — real defects the engine SHOULD catch (and does):
+{"dimension":"completeness","namespace":"public","entity":"employees","field":"mobile_phone","severity":"high","note":"planted: mobile_phone is null in 60% (30000/50000) of rows"}
+{"dimension":"validity","namespace":"public","entity":"employees","field":"personal_email","severity":"high","note":"planted: 30 personal_email values are malformed"}
+{"dimension":"consistency","namespace":"public","entity":"employees","field":"employment_status","severity":"low","note":"planted: Active / active / ACTIVE / 'Active ' variants (6 raw -> 4 normalized)"}
+{"dimension":"uniqueness","namespace":"public","entity":"employees","field":"employee_number","severity":"high","note":"planted: 10 duplicate employee_number values on the unique key"}
+{"dimension":"integrity","namespace":"public","entity":"employment_history","field":"employee_id","severity":"high","note":"planted: 55 employment_history rows reference an employee_id with no matching employees.employee_id"}
+{"dimension":"reasonability","namespace":"public","entity":"employees","field":"hire_date","severity":"medium","note":"planted: 4 hire_date values in year 2099 (future-dated)"}
+{"dimension":"timeliness","namespace":"public","entity":"employment_history","field":"effective_from","severity":"medium","note":"planted: newest effective_from is ~800 days old (>730d -> medium)"}
+#
+# RECALL GAP (blind spot) — a real defect the engine CANNOT catch today:
+{"dimension":"completeness","namespace":"public","entity":"employees","field":"middle_name","severity":"medium","note":"BLIND SPOT: 2000 middle_name rows hold 'N/A' / 'null' strings (disguised missing). nullCount=0, so completeness never fires. Needs a disguised-missing detector."}
+#
+# INTENTIONALLY NOT LABELED (precision gap — false alarm the harness should surface):
+#   - completeness employees.termination_date (high): 65% null (32500/50000). This is a
+#     LEGITIMATE business case — active employees have no termination date. The engine has no
+#     business context, so it flags it high. Leaving it unlabeled makes it a false alarm on
+#     purpose: it measures the engine over-reporting an expected-null column (precision < 1.0).

@@ -29,6 +29,9 @@ jest.mock('@mastra/evals/checks', () => ({
 }));
 jest.mock('../agents/assistant.agent', () => ({ assistantAgent: {} }));
 jest.mock('../agents/rfp.agent', () => ({ rfpAgent: {} }));
+jest.mock('../agents/data-readiness.agent', () => ({
+  dataReadinessAgent: {},
+}));
 jest.mock('../agents/eval-judge.agent', () => ({
   evalJudgeAgent: {},
   evalJudgeOutputSchema: {},

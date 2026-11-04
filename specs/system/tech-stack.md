@@ -46,6 +46,7 @@ Build facts: the Angular production build has budgets (initial 500 kB warn / 1 M
 | `reflect-metadata`, RxJS | ^0.2.2, ^7.8.1 | Nest runtime requirements. |
 | Zod | 4.6.5 | Schemas for agent tool inputs and structured model output. |
 | Mastra `@mastra/core` | 1.66.0 | Agent harness: agents, tools, workspaces, model routing (ADR-0004). |
+| `@ai-sdk/anthropic` | 3.x, pinned exactly when added | Builds the model of a custom endpoint in the Anthropic API style at its own base URL, which Mastra's router cannot target ([agents.md](agents.md) 1.3, ADR-0032). Its major must match the `@ai-sdk/provider` major that `@mastra/core` resolves by default; a Mastra upgrade re-checks it. |
 | `@mastra/memory` | 1.29.0 | Agent memory; each session is its own thread/resource. |
 | `@mastra/libsql` | 1.22.5 | LibSQL storage for agent memory and runtime data (`<APP_DATA_DIR>/mastra.sqlite`). |
 | `@mastra/duckdb` | 1.8.0 | DuckDB storage for observability: traces, metrics, logs (`<APP_DATA_DIR>/observability.duckdb`; limits: 512MB memory, 2 threads). |

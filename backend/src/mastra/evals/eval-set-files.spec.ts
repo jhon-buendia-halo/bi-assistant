@@ -113,6 +113,27 @@ const ADDED_ON_MAIN = [
   'rest-no-visuals-chart-request',
 ];
 /**
+ * What main reworded since: BA-300 lets a clarification on one dimension
+ * pass the ambiguous best-team question, whose rubric the REST variant
+ * repeats. Applied to the snapshot's rubric before comparing.
+ */
+const BA_300_SENTENCE =
+  'One clarifying question on either dimension is enough: options that ' +
+  'each name a concrete metric (scoped, for example, "across all ' +
+  'tournaments") pass even when no year is named, and options that each ' +
+  'name a tournament year pass even when no metric is named. ';
+const REWORDED_ON_MAIN: Readonly<Record<string, (rubric: string) => string>> =
+  Object.fromEntries(
+    ['ambiguous-best-team', 'rest-ambiguous-best-team'].map((id) => [
+      id,
+      (rubric: string) =>
+        rubric.replace(
+          'the answer. Score pass=false',
+          `the answer. ${BA_300_SENTENCE}Score pass=false`,
+        ),
+    ]),
+  );
+/**
  * The 40 questions roadmap 1.1.10 (BA-188) appended to the World Cup bank
  * after its twelve: 23 from `feat/engine-eval-loop`, then 17 paraphrases.
  */
@@ -242,8 +263,14 @@ describe('eval set files', () => {
       cases.forEach(({ scorers, ...evalCase }, caseIndex) => {
         const { scorers: beforeScorers, ...beforeCase } =
           beforeCases[caseIndex];
-        // Question, intent, reference, options and rubric are unchanged.
-        expect(evalCase).toEqual(beforeCase);
+        // Question, intent, reference, options and rubric are unchanged,
+        // apart from the rubrics main reworded since.
+        const reword = REWORDED_ON_MAIN[evalCase.id];
+        expect(evalCase).toEqual(
+          reword && beforeCase.judgeRubric
+            ? { ...beforeCase, judgeRubric: reword(beforeCase.judgeRubric) }
+            : beforeCase,
+        );
         // Every check of the snapshot is still there, with the same id and
         // the same arguments (the description carries them); BA-183 only
         // added checks (agents-evals R126). The ones main dropped are gone.

@@ -15,6 +15,10 @@ import {
   ToolDataRecord,
   VisualEvent,
 } from '../models/session.model';
+import {
+  ReadinessReport,
+  ReadinessReportEvent,
+} from '../models/readiness.model';
 
 /** A tool call announced mid-stream, with the assistant's reason for it. */
 export interface ToolCallEvent {
@@ -55,6 +59,36 @@ export function parseToolEvent(content: string): ToolCallEvent {
     // Not JSON — the old contract, a plain tool name.
   }
   return { name: raw };
+}
+
+/**
+ * The `readiness-report` frame's content (api.md 3.1), parsed. Null when it
+ * is not a report with a `readiness` panel item.
+ */
+export function parseReadinessReportEvent(
+  content: string,
+): ReadinessReportEvent | null {
+  try {
+    const parsed: unknown = JSON.parse(content);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const { report, panelItem } = parsed as Partial<ReadinessReportEvent>;
+    if (
+      !report ||
+      typeof report.id !== 'string' ||
+      typeof report.datasourceName !== 'string' ||
+      typeof report.overallScore !== 'number' ||
+      typeof report.maturity !== 'string' ||
+      typeof report.generatedAt !== 'string' ||
+      !panelItem ||
+      panelItem.kind !== 'readiness' ||
+      typeof panelItem.reportId !== 'string'
+    ) {
+      return null;
+    }
+    return { report, panelItem };
+  } catch {
+    return null;
+  }
 }
 
 @Injectable({ providedIn: 'root' })
@@ -212,6 +246,13 @@ export class SessionsApiService {
     );
   }
 
+  /** One stored data-readiness report (api.md 110). */
+  getReadinessReport(reportId: string): Observable<ReadinessReport> {
+    return this.http.get<ReadinessReport>(
+      `${API_BASE_URL}/data-readiness/assessments/${encodeURIComponent(reportId)}`,
+    );
+  }
+
   // ------------------------------------------------------- deep analysis
 
   /**
@@ -305,6 +346,8 @@ export class SessionsApiService {
       onWorkflow?: (workflow: WorkflowView) => void;
       /** `export_rfp_package` stored a package this turn. */
       onRfpPackage?: (rfpPackage: RfpPackage) => void;
+      /** `assess_data_readiness` or `get_readiness_report` returned a report. */
+      onReadinessReport?: (event: ReadinessReportEvent) => void;
       onDone?: (session: Session) => void;
       onError?: (message: string) => void;
     },
@@ -408,6 +451,11 @@ export class SessionsApiService {
                   // Malformed event — ignore.
                 }
                 break;
+              case 'readiness-report': {
+                const parsed = parseReadinessReportEvent(event.content ?? '');
+                if (parsed) handlers.onReadinessReport?.(parsed);
+                break;
+              }
               case 'done':
                 terminalEventReceived = true;
                 handlers.onDone?.(event.session);

@@ -1,0 +1,123 @@
+{
+  "sourceId": "commercial-lending-gold",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "lending",
+      "name": "borrowers",
+      "rowCount": 42000,
+      "readable": true,
+      "keys": [{ "kind": "primary", "fields": ["borrower_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "borrower_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 42000, "min": "1", "max": "42000" },
+        { "name": "legal_name", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 41800 },
+        { "name": "tax_id", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 41850 },
+        { "name": "industry_cd", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 31, "normalizedDistinctCount": 22 },
+        { "name": "website_url", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 39400, "formatRule": "url", "invalidFormatCount": 900 },
+        { "name": "incorporated_on", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 18200, "min": "1912-05-20", "max": "2026-06-15" }
+      ]
+    },
+    {
+      "namespace": "lending",
+      "name": "loans",
+      "rowCount": 68000,
+      "readable": true,
+      "keys": [{ "kind": "primary", "fields": ["loan_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "loan_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 68000, "min": "1", "max": "68000" },
+        { "name": "borrower_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 39800, "min": "1", "max": "44100" },
+        { "name": "principal_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 64500, "min": "500000", "max": "90000000000" },
+        { "name": "interest_rate_pct", "type": "numeric", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 720, "min": "0.9", "max": "8.75" },
+        { "name": "ltv_ratio", "type": "numeric", "semanticType": "numeric", "nullable": true, "nullCount": 0, "distinctCount": 1480, "min": "0.05", "max": "1.62" },
+        { "name": "collateral_type", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 12, "normalizedDistinctCount": 12 },
+        { "name": "status", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 8, "normalizedDistinctCount": 8 },
+        { "name": "originated_on", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 6400, "min": "2008-01-10", "max": "2026-07-30" },
+        { "name": "maturity_on", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 7100, "min": "2009-01-10", "max": "2058-07-30" }
+      ]
+    },
+    {
+      "namespace": "lending",
+      "name": "payments",
+      "rowCount": 5200000,
+      "readable": true,
+      "keys": [{ "kind": "primary", "fields": ["loan_id", "due_date"], "duplicateCount": 9400 }],
+      "fields": [
+        { "name": "loan_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 66200, "min": "1", "max": "68000" },
+        { "name": "due_date", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 6900, "min": "2008-02-01", "max": "2026-12-01" },
+        { "name": "paid_on", "type": "date", "semanticType": "temporal", "nullable": true, "nullCount": 310000, "distinctCount": 6700, "min": "2008-02-03", "max": "2026-08-10" },
+        { "name": "amount_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 2100000, "min": "12000", "max": "48000000" }
+      ]
+    },
+    {
+      "namespace": "lending",
+      "name": "collections_daily",
+      "rowCount": 3800000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        { "name": "record_id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 3799100, "min": "1", "max": "3799100" },
+        { "name": "loan_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 61000, "min": "1", "max": "68000" },
+        { "name": "collected_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 940000, "min": "0", "max": "8400000" },
+        { "name": "snapshot_year", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 5, "min": "2019", "max": "2023" }
+      ]
+    },
+    {
+      "namespace": "lending",
+      "name": "covenants",
+      "rowCount": 15400,
+      "readable": true,
+      "keys": [{ "kind": "primary", "fields": ["covenant_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "covenant_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 15400, "min": "1", "max": "15400" },
+        { "name": "loan_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 14900, "min": "1", "max": "68000" },
+        { "name": "test_from", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 3900, "min": "2010-03-01", "max": "2021-06-30" },
+        { "name": "test_to", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 3800, "min": "2008-01-15", "max": "2019-12-31" },
+        { "name": "breach_pct", "type": "numeric", "semanticType": "numeric", "nullable": true, "nullCount": 0, "distinctCount": 880, "min": "0", "max": "88" }
+      ]
+    },
+    {
+      "namespace": "lending",
+      "name": "loan_documents",
+      "rowCount": 96000,
+      "readable": true,
+      "keys": [{ "kind": "primary", "fields": ["doc_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "doc_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 96000, "min": "1", "max": "96000" },
+        { "name": "doc_uuid", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 95680, "formatRule": "uuid", "invalidFormatCount": 320 },
+        { "name": "loan_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 64100, "min": "1", "max": "69800" },
+        { "name": "source_system", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 4, "normalizedDistinctCount": 4 },
+        { "name": "uploaded_at", "type": "timestamptz", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 94100, "min": "2015-01-01T08:00:00Z", "max": "2026-08-08T16:44:00Z" },
+        { "name": "scanned_on", "type": "date", "semanticType": "temporal", "nullable": true, "nullCount": 0, "distinctCount": 4100, "min": "1899-12-30", "max": "2026-08-01" }
+      ]
+    },
+    {
+      "namespace": "risk",
+      "name": "risk_scores",
+      "rowCount": 42000,
+      "readable": true,
+      "keys": [{ "kind": "primary", "fields": ["borrower_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "borrower_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 42000, "min": "1", "max": "42000" },
+        { "name": "pd_probability", "type": "numeric", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 9400, "min": "0", "max": "0.98" },
+        { "name": "score_grade", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 10, "normalizedDistinctCount": 10 },
+        { "name": "scored_at", "type": "timestamptz", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 41200, "min": "2020-01-01T00:00:00Z", "max": "2026-08-05T11:30:00Z" }
+      ]
+    },
+    {
+      "namespace": "risk",
+      "name": "risk_overrides",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [],
+      "fields": []
+    }
+  ],
+  "relationships": [
+    { "fromNamespace": "lending", "fromEntity": "loans", "fromField": "borrower_id", "toNamespace": "lending", "toEntity": "borrowers", "toField": "borrower_id", "orphanCount": 1750, "origin": "declared" },
+    { "fromNamespace": "lending", "fromEntity": "payments", "fromField": "loan_id", "toNamespace": "lending", "toEntity": "loans", "toField": "loan_id", "orphanCount": 0, "origin": "declared" },
+    { "fromNamespace": "lending", "fromEntity": "covenants", "fromField": "loan_id", "toNamespace": "lending", "toEntity": "loans", "toField": "loan_id", "orphanCount": 0, "origin": "declared" },
+    { "fromNamespace": "lending", "fromEntity": "loan_documents", "fromField": "loan_id", "toNamespace": "lending", "toEntity": "loans", "toField": "loan_id", "orphanCount": 260, "origin": "declared" },
+    { "fromNamespace": "risk", "fromEntity": "risk_scores", "fromField": "borrower_id", "toNamespace": "lending", "toEntity": "borrowers", "toField": "borrower_id", "orphanCount": 0, "origin": "declared" },
+    { "fromNamespace": "lending", "fromEntity": "collections_daily", "fromField": "loan_id", "toNamespace": "lending", "toEntity": "loans", "toField": "loan_id", "orphanCount": 8800, "origin": "inferred" }
+  ]
+}

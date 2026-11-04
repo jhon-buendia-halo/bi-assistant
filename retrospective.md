@@ -14,6 +14,52 @@ Entry template:
 
 ---
 
+## 2026-11-03 — 1.17.1 to 1.17.20 acceptance gate of epic BA-281 (custom LLM endpoint)
+
+### What went well
+- Seeding one eval data dir through `POST /testing-data/world-cup/load` on the `main` build, then copying it for the branch, gave both builds the same dataset with no hand-written SQL, and forward migration made the copy safe.
+- Reading the base's Mastra bundle before running settled how to point `main` at the relay: the router's `createAnthropic` reads `ANTHROPIC_BASE_URL`, and it needs the `/v1` suffix. One-case probes on both builds proved the wiring before the 36-question runs.
+- Running the base alongside the branch, same model and data, turned "ambiguous-best-team fails on the branch" into "the judge fails identical answers on both builds", which pointed at the rubric, not at the custom route.
+- The live smoke script did in two minutes what the unit tests cannot: both API styles end to end against a real relay, plus a key scan of responses, data dir and log.
+
+### What went wrong
+- Units 15 and 17 both created `llm-custom-endpoint.spec.ts`; the add/add conflict had to be stitched by hand, and unit 15's top-level `beforeEach` would have started an OpenAI stub for the Anthropic tests too.
+- Two verified unit branches (05, 12) got a commit after they were merged into the epic. The brief named only the three unmerged branches, so this was found only by checking every `*-verified` branch with `git merge-base --is-ancestor`, after the evals and smoke had run.
+- The first Playwright run failed all 55 tests: the Chromium build Playwright expected was not installed.
+- I committed a placeholder "wip" commit before merging the late fixes and had to reset and redo the merges to keep the history clean.
+- The `ambiguous-best-team` judge rubric said "ambiguous on both" and then "a metric … or a year"; it failed about 1 run in 4 on `main` as well, and nobody had noticed because 3-run rounds rarely hit it.
+
+### What to do differently
+- At the start of a gate, list every `unit/<epic>-*-verified` branch and run `git merge-base --is-ancestor <branch> HEAD` on each; merge anything missing before running E2E, evals or the smoke.
+- When two parallel units add scenarios to one Feature, give one of them the file and the other a describe block to fill in, with hooks scoped to each describe.
+- Before the first Playwright run in a session, run `npx playwright install chromium chromium-headless-shell` from `frontend/`.
+- For a judge failure, compare the failing answer with a passing one from the base; if they are the same, fix the rubric so it states one pass condition, not two that disagree.
+- Never commit a placeholder message; set work aside with a properly named commit, or not at all.
+
+## 2026-11-03 — 1.16.1 to 1.16.12 acceptance gate of the Data Readiness Agent (BA-251)
+
+### What went well
+- Drafting the Playwright spec early, in its own unit, with its UI guesses written as a numbered "assumptions to confirm" list made integration cheap: all 11 held and all five scenarios passed on the first integrated run.
+- Reading each failed eval case's answer and tool calls before changing anything (the 1.13.9 lesson) split the failures cleanly: four rounds produced five check or rubric faults and one real agent fault (Completeness called the worst dimension over a lower Timeliness). Each fix was made once and covered by a unit test.
+- Querying the stored report in the eval data dir's `app.sqlite` proved the model's "6 of them high" was true before I loosened the numbers check.
+- Hashing the assistant's and RFP Builder's compiled instructions and tool lists on a `git archive` build of `main` settled in a minute that their eval sets did not need to run.
+- Configuring the eval LLM through a throwaway CLI instance (`PUT /llm/settings`, `POST /testing-data/world-cup/load`, `POST /llm/test-connection`) with `ANTHROPIC_BASE_URL=…/v1` worked on the first try, and the key never touched the repo: it stayed in a mode-600 scratch file.
+
+### What went wrong
+- The eval unit's checks were written against a tool result shape (bare summary) that the merged tool no longer returned (`{ summary, report }`), and the judge was handed the raw result with the full report first, although `readiness.tools.ts` said the judge used `readinessModelOutput`. The documented projection had never been wired.
+- My first move from the lazy `require` to a static import broke two Jest suites on Mastra's ESM; the fix was the `jest.mock` every other eval spec already has for its agent.
+- The first eval rubric and numbers check were stricter than the rules they enforce (D2, D9): counts derived from a complete findings list, ages in years and clock times all failed as "invented scores". It took four 3-run rounds to reach 100 %.
+- `rfp-builder.spec.ts` failed 9 tests because `intellify_mercer_demo` did not exist on the shared embedded Postgres; an environment prerequisite that nothing checks up front.
+- The session-management test that read the Agent dropdown with `allInnerTexts()` raced the listbox and got `[]`; it had been passing by timing.
+- The evidence screenshot shows a header layout bug (agent chip empty, datasource overlapping the ID with the panel open). It was not caught in the fast loop and is left as a follow-up.
+
+### What to do differently
+- When a tool has `toModelOutput`, write the eval checks and the judge input against the model-facing projection, and add a unit test that feeds the raw tool result through the check.
+- Before running an eval round, write each custom check against the exact wording of the rule it enforces (D2 names scores, bands, findings and counts), and unit-test it on one real answer from a dry run.
+- Before running `rfp-builder.spec.ts` on a non-Docker Postgres, load the `intellify` fixture into `intellify_mercer_demo` (intellify-api skill, step 2).
+- Never read a list with `allInnerTexts()` until a known last item is visible.
+- When an agent-bound session is new, screenshot its header with the right panel open as part of the fast loop.
+
 ## 2026-11-02 — 1.1.13 and 1.1.14, memory part: memory arms and the memory eval set (BA-190)
 
 ### What went well

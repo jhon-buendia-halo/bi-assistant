@@ -1,3 +1,4 @@
+import type { ListModelsDto, ListModelsResult } from './llm.types';
 import { Body, Controller, Get, Post, Put, Query } from '@nestjs/common';
 import { LlmService } from './llm.service';
 import type {
@@ -68,5 +69,11 @@ export class LlmController {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };
     }
+  }
+
+  /** `POST /llm/models` (BA-281): a custom endpoint's model list. */
+  @Post('models')
+  listModels(@Body() dto: ListModelsDto): Promise<ListModelsResult> {
+    return this.llmService.listModels(dto);
   }
 }

@@ -1,3 +1,9 @@
+// The data-readiness service loads the Databricks driver (ESM-only deps)
+// at import time; the session specs never call it for real.
+jest.mock('../data-readiness/data-readiness.service', () => ({
+  DataReadinessService: class {},
+}));
+
 // Sessions bound to a built-in agent (sessions-chat R52, R61; ADR-0028): the
 // RFP Builder's session creation, its derived `agent`, and its turn.
 jest.mock('@mastra/core/request-context', () => ({
@@ -12,7 +18,9 @@ jest.mock('@mastra/core/request-context', () => ({
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
 jest.mock('../../mastra/model-resolver', () => ({
   AGENT_OVERRIDES_CONTEXT_KEY: 'agent-overrides',
-  resolveAgentModel: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
+  isCustomAnthropicConfig: (c: unknown) =>
+    typeof c === 'object' && c !== null && 'kind' in c,
+  resolveAgentModelConfig: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
 }));
 jest.mock('../../mastra/tool-services', () => ({
   setDatasetToolServices: jest.fn(),

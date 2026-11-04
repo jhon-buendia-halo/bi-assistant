@@ -24,6 +24,7 @@ import {
   type SkillDoc,
 } from '../skills/entities/skill.entity';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
+import type { DatasourceKind } from '../datasources/entities/datasource.entity';
 import {
   AGENT_LIMITS,
   type AgentConfig,
@@ -160,6 +161,19 @@ export class UserAgentsService {
   /** Names of the datasets that exist, for `missingDatasets` (R48). */
   async datasetNames(): Promise<Set<string>> {
     return new Set((await this.datasets.list()).map((d) => d.name));
+  }
+
+  /**
+   * The datasets that exist with their datasource kind, for a built-in agent
+   * that declares a dataset kind (agents.md 2.10).
+   */
+  async datasetKinds(): Promise<
+    { name: string; datasourceKind?: DatasourceKind }[]
+  > {
+    return (await this.datasets.list()).map((d) => ({
+      name: d.name,
+      ...(d.datasourceKind ? { datasourceKind: d.datasourceKind } : {}),
+    }));
   }
 
   private async require(id: string): Promise<UserAgentDoc> {

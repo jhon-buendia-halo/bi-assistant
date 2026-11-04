@@ -1,0 +1,368 @@
+{
+  "sourceId": "gold-databricks-banking-low-w1-11",
+  "sourceType": "databricks",
+  "entities": [
+    {
+      "namespace": "main.bank_core",
+      "name": "customers",
+      "rowCount": 196,
+      "fields": [
+        {
+          "name": "customerId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 196,
+          "min": "1",
+          "max": "196"
+        },
+        {
+          "name": "fullName",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 151,
+          "normalizedDistinctCount": 151
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 185,
+          "normalizedDistinctCount": 185,
+          "formatRule": "email",
+          "invalidFormatCount": 33
+        },
+        {
+          "name": "phoneNumber",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 162,
+          "normalizedDistinctCount": 162,
+          "formatRule": "phone",
+          "invalidFormatCount": 0
+        },
+        {
+          "name": "segmentCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 11,
+          "normalizedDistinctCount": 11
+        },
+        {
+          "name": "mailingAddress",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 158,
+          "normalizedDistinctCount": 158
+        },
+        {
+          "name": "creditScore",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 196,
+          "min": "0",
+          "max": "2854"
+        },
+        {
+          "name": "msisdn",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 140,
+          "normalizedDistinctCount": 140
+        },
+        {
+          "name": "createdAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 157,
+          "min": "1900-01-01T00:00:00.000Z",
+          "max": "2026-08-07T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "customerId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-10T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.bank_core",
+      "name": "accounts",
+      "rowCount": 528,
+      "fields": [
+        {
+          "name": "accountId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 528,
+          "min": "1",
+          "max": "528"
+        },
+        {
+          "name": "customerId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 196,
+          "min": "1",
+          "max": "196"
+        },
+        {
+          "name": "ibanCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 456,
+          "normalizedDistinctCount": 456
+        },
+        {
+          "name": "accountStatus",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 33,
+          "normalizedDistinctCount": 33
+        },
+        {
+          "name": "balanceCents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 348,
+          "min": "-1800",
+          "max": "10544014"
+        },
+        {
+          "name": "openedAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 399,
+          "min": "2020-09-10T12:00:00.000Z",
+          "max": "2025-01-04T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "accountId"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "ibanCode"
+          ],
+          "duplicateCount": 42
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-11T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.bank_core",
+      "name": "transactions",
+      "rowCount": 8641,
+      "fields": [
+        {
+          "name": "transactionId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 8641,
+          "min": "1",
+          "max": "8641"
+        },
+        {
+          "name": "accountId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 528,
+          "min": "1",
+          "max": "528"
+        },
+        {
+          "name": "amountCents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6168,
+          "min": "0",
+          "max": "69231256"
+        },
+        {
+          "name": "transactionType",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4,
+          "normalizedDistinctCount": 4
+        },
+        {
+          "name": "channelCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 22,
+          "normalizedDistinctCount": 22
+        },
+        {
+          "name": "postedAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4989,
+          "min": "2019-11-12",
+          "max": "2026-06-11"
+        },
+        {
+          "name": "settledAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 3024,
+          "distinctCount": 5617,
+          "min": "2021-11-13T12:00:00.000Z",
+          "max": "2026-06-14T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "transactionId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-11T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.bank_core",
+      "name": "branches",
+      "rowCount": 790,
+      "fields": [
+        {
+          "name": "branchId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 790,
+          "min": "1",
+          "max": "790"
+        },
+        {
+          "name": "branchCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 745,
+          "normalizedDistinctCount": 745
+        },
+        {
+          "name": "cityName",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 528,
+          "normalizedDistinctCount": 528
+        },
+        {
+          "name": "regionCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6,
+          "normalizedDistinctCount": 4
+        },
+        {
+          "name": "openedAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 672,
+          "min": "2019-09-29",
+          "max": "2026-06-25"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "branchId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-15T12:00:00.000Z"
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "main.bank_core",
+      "fromEntity": "accounts",
+      "fromField": "customerId",
+      "toNamespace": "main.bank_core",
+      "toEntity": "customers",
+      "toField": "customerId",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.bank_core",
+      "fromEntity": "transactions",
+      "fromField": "accountId",
+      "toNamespace": "main.bank_core",
+      "toEntity": "accounts",
+      "toField": "accountId",
+      "orphanCount": 65,
+      "origin": "declared"
+    }
+  ]
+}
