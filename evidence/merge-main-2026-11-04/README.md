@@ -47,5 +47,9 @@ What each side deleted was checked against the other side's added lines: `main` 
 ## Not run
 
 - **Desktop**: not run (web target only).
-- **Model evals**: not run. The merge changes no prompt, skill or tool of the assistant; BA-300's rubric change is `main`'s and was gated there (agents-evals on the custom Anthropic-compatible route, `evidence/1.17/`).
+- **Model evals**: not run, so the merged branch is a combination no eval has measured yet.
+  - What the resolution left as it was: the assistant's prompt, context blocks and tools are byte-identical to the branch before the merge (`36fd26f`): the prompt fixture `assistant-prompt.full.txt` that `assistant.agent.spec.ts` pins, `assistant-prompt.ts`, `context-blocks.ts`, `dataset.tools.ts`, `left-join-filter.ts` and `visual.tools.ts`. `main`'s new skill (`data-readiness`) belongs to the Data Readiness Agent only, and `main`'s changes to `sessions.service.ts` are that agent's sessions and the resolver rename.
+  - What `main` adds to the assistant's calls: BA-281's tuning in `model-compat.ts`. On Anthropic models an `effort` outside `low` to `max` maps to the nearest accepted value, and custom endpoints get their own route. The loop's rounds ran on OpenAI models, so they never measured it.
+  - What this PR changes in the assistant: the loop's rounds (BA-242, BA-244 and BA-188: prompt rules such as A4 and A40, the column list in the turn, the dead-filter warning on `run_readonly_sql` results, the Finance and Marketing Analytics knowledge seeds). That is what the PR's eval gate measures, `main` against the branch on the beta's Claude model ([specs/epics/BA-9/spec.md](../../specs/epics/BA-9/spec.md), *The eval gate of this epic's PR*). It has not run, and it runs on the merged branch, so it covers both.
+  - BA-300's rubric change is `main`'s and was gated there (agents-evals on the custom Anthropic-compatible route, `evidence/1.17/`).
 - **Rest of the E2E suite**: only the specs the merge touches were run.
