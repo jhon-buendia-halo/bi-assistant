@@ -6,6 +6,7 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 
 ### Changed
 - **The cross-session memory ADR is ADR-0033** (roadmap 1.3.5 and 1.3.6, [BA-123](https://halo-powered.atlassian.net/browse/BA-123), [BA-124](https://halo-powered.atlassian.net/browse/BA-124), epic [BA-4](https://halo-powered.atlassian.net/browse/BA-4)). `main` (v0.38.0, merged into this branch) took ADR-0031 for BA-251 and ADR-0032 for BA-281, so the memory ADR that BA-124 adds, numbered ADR-0031 until today, is ADR-0033; [docs/research/BA-4.md](docs/research/BA-4.md) section 8 cites it so. Retrospective and evidence entries keep the id they were written with. Evidence: `check-specs` passes; no app change.
+  - On this branch: the ADR's heading and its Date line (which records the old number) in [specs/system/architecture.md](specs/system/architecture.md), after `main`'s ADR-0031 and ADR-0032; [docs/plans/BA-4.md](docs/plans/BA-4.md) (with the ADR-number note) and [docs/plans/BA-4-technical.md](docs/plans/BA-4-technical.md); roadmap 1.3.6, 1.3.1 and 1.3.4; [specs/epics/BA-4/spec.md](specs/epics/BA-4/spec.md); the 2026-10-29 changelog entry.
 
 ## 2026-11-03
 
