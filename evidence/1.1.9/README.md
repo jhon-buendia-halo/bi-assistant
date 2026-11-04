@@ -13,7 +13,7 @@ Branch `feat/BA-9-golden-dataset-evals`, 2026-10-13.
 | `validator-world-cup-rest-connector.txt` | The connector set: 11 of 11 references on page, offset and cursor; 6 of 11 on next-url (the connector cannot follow a next-page URL). |
 | `validator-rest-fixtures.txt` | `world-cup-rest` 5/5, `world-cup-golden-rest` 11/11, `finance-rest` 59/59, `marketing-analytics-rest` 42/42. |
 | `references-sqlite-*.txt` | Each SQLite reference against its PostgreSQL reference. |
-| `references-vs-postgres-and-ba11-repros.txt` | Seven connector bug candidates for BA-11, each with a one-line reproduction. **Not filed yet** (needs the user's go-ahead). |
+| `references-vs-postgres-and-ba11-repros.txt` | Seven connector bug candidates for BA-11, each with a one-line reproduction. Filed on 2026-10-27 as five bugs under BA-11: [BA-246](https://halo-powered.atlassian.net/browse/BA-246) (repros 1 to 3), [BA-247](https://halo-powered.atlassian.net/browse/BA-247) (repro 4), [BA-248](https://halo-powered.atlassian.net/browse/BA-248) (repros 5 and 6), [BA-249](https://halo-powered.atlassian.net/browse/BA-249) (repro 7). The datasource label the runs showed is [BA-250](https://halo-powered.atlassian.net/browse/BA-250). Fixed on the branch `fix/BA-11-bug-fixes` (roadmap 1.7.21 to 1.7.25). |
 | `../runs-2026-10-13/world-cup-rest-connector-cursor.*`, `finance-rest.*`, `marketing-analytics-rest.*` | Real runs (judge off). |
 
-**Open before Done:** the BA-11 bugs filed; the DIGS and RSS endpoints of the RFP demo checked against the switch list in writing (their API documents are not in the repository).
+**Open before Done:** the DIGS and RSS endpoints of the RFP demo checked against the switch list in writing (their API documents are not in the repository).
