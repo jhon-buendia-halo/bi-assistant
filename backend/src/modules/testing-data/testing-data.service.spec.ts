@@ -544,6 +544,7 @@ describe('a register-only fixture (no bundled SQL)', () => {
       'world-cup',
       'formula-1',
       'intellify',
+      'us-health',
       'world-cup-rest',
       'intellify-api',
       'register-only',

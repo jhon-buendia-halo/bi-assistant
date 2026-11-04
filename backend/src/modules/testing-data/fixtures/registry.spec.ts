@@ -70,4 +70,35 @@ describe('sample fixture catalogue', () => {
       );
     });
   });
+
+  describe('us-health', () => {
+    const fixture = findFixture('us-health')!;
+    const sql = seedSql(fixture.seedFile as string);
+
+    it('owns schema us_health in its own database', () => {
+      expect(fixture.schema).toBe('us_health');
+      expect(fixture.defaults.database).toBe('us_health');
+      expect(fixture.requiredTables).toHaveLength(45);
+      expect(sql).toMatch(/^DROP SCHEMA IF EXISTS us_health CASCADE;$/m);
+    });
+
+    it('qualifies every statement, so it does not depend on search_path', () => {
+      const statements = splitSqlStatements(sql);
+      const unqualified = statements.filter((statement) =>
+        /^(?:CREATE (?:OR REPLACE )?(?:TABLE|VIEW)|INSERT INTO|ALTER TABLE|COMMENT ON (?:TABLE|COLUMN|VIEW))\s+"/i.test(
+          statement.trim(),
+        ),
+      );
+      expect(unqualified).toEqual([]);
+      expect(statements.some((s) => /^SET\s+search_path/im.test(s))).toBe(
+        false,
+      );
+    });
+
+    it('declares foreign keys with unique names', () => {
+      const names = sql.match(/ADD CONSTRAINT "fk_[^"]+" FOREIGN KEY/g) ?? [];
+      expect(names.length).toBeGreaterThan(40);
+      expect(new Set(names).size).toBe(names.length);
+    });
+  });
 });
