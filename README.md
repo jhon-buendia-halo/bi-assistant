@@ -178,7 +178,7 @@ The same connection messages appear as a chat turn's error when a saved custom e
 
 ## Desktop app
 
-The Electron desktop app (Halo BI Assistant) is built for macOS (arm64, x64) and Windows (x64). Installers are produced by the "Build desktop installers" GitHub Actions workflow (`.github/workflows/build-desktop.yml`) and attached to GitHub releases. See [specs/system/delivery.md](specs/system/delivery.md) for the packaging details.
+The Electron desktop app (Halo BI Assistant) is published for Windows (x64) only; macOS `.dmg` files can still be built locally with `npm run electron:dist -- --mac dmg`. The installer is produced by the "Build desktop installers" GitHub Actions workflow (`.github/workflows/build-desktop.yml`) and attached to GitHub releases. See [specs/system/delivery.md](specs/system/delivery.md) for the packaging details.
 
 ## Development
 
