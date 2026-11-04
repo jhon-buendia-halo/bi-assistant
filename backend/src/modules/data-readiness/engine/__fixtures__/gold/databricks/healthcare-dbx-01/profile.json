@@ -1,0 +1,935 @@
+{
+  "sourceId": "gold-databricks-healthcare-dbx-01",
+  "sourceType": "databricks",
+  "entities": [
+    {
+      "namespace": "main.clinical",
+      "name": "patients",
+      "rowCount": 3444,
+      "fields": [
+        {
+          "name": "patient_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3444,
+          "min": "1",
+          "max": "3444"
+        },
+        {
+          "name": "full_name",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2285
+        },
+        {
+          "name": "contact_email",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 2759,
+          "formatRule": "email",
+          "invalidFormatCount": 500
+        },
+        {
+          "name": "phone_num",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 3299,
+          "formatRule": "phone",
+          "invalidFormatCount": 0
+        },
+        {
+          "name": "pat_ssn",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 3159
+        },
+        {
+          "name": "gender_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 22,
+          "normalizedDistinctCount": 22
+        },
+        {
+          "name": "birth_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2639,
+          "min": "2020-01-28",
+          "max": "2026-07-10"
+        },
+        {
+          "name": "registered_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2997,
+          "min": "2020-10-20T12:00:00.000Z",
+          "max": "2026-07-17T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "patient_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-03T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.clinical",
+      "name": "encounters",
+      "rowCount": 253003,
+      "fields": [
+        {
+          "name": "encounter_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 253003,
+          "min": "1",
+          "max": "253003"
+        },
+        {
+          "name": "patient_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3444,
+          "min": "1",
+          "max": "3444"
+        },
+        {
+          "name": "provider_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2283,
+          "min": "1",
+          "max": "2283"
+        },
+        {
+          "name": "encounter_type",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 8,
+          "normalizedDistinctCount": 8
+        },
+        {
+          "name": "ward_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 25,
+          "normalizedDistinctCount": 23
+        },
+        {
+          "name": "admitted_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 210384,
+          "min": "2022-12-04",
+          "max": "2026-07-10"
+        },
+        {
+          "name": "discharged_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 75901,
+          "distinctCount": 177102,
+          "min": "2023-01-16",
+          "max": "2026-06-16"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "encounter_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-04T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.clinical",
+      "name": "lab_results",
+      "rowCount": 394176,
+      "fields": [
+        {
+          "name": "lab_result_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 394176,
+          "min": "1",
+          "max": "394176"
+        },
+        {
+          "name": "encounter_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 208362,
+          "min": "1",
+          "max": "253003"
+        },
+        {
+          "name": "test_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 5,
+          "normalizedDistinctCount": 5
+        },
+        {
+          "name": "result_value",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 216797,
+          "distinctCount": 243,
+          "min": "0",
+          "max": "4499"
+        },
+        {
+          "name": "abnormal_flag",
+          "type": "boolean",
+          "semanticType": "boolean",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 2
+        },
+        {
+          "name": "resulted_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 264965,
+          "min": "2020-03-08",
+          "max": "2026-07-30"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "lab_result_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-11T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.clinical",
+      "name": "providers",
+      "rowCount": 2283,
+      "fields": [
+        {
+          "name": "provider_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2283,
+          "min": "1",
+          "max": "2283"
+        },
+        {
+          "name": "npi_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2255
+        },
+        {
+          "name": "provider_name",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1677
+        },
+        {
+          "name": "specialty_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 31,
+          "normalizedDistinctCount": 31
+        },
+        {
+          "name": "credentialed_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1638,
+          "min": "2022-01-06T12:00:00.000Z",
+          "max": "2026-06-13T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "provider_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "npi_code"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-05T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.clinical",
+      "name": "medications",
+      "rowCount": 4131,
+      "fields": [
+        {
+          "name": "medication_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4131,
+          "min": "1",
+          "max": "4131"
+        },
+        {
+          "name": "ndc_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4014
+        },
+        {
+          "name": "medication_name",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3762
+        },
+        {
+          "name": "sched_class",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 21,
+          "normalizedDistinctCount": 21
+        },
+        {
+          "name": "approved_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3559,
+          "min": "1894-04-07",
+          "max": "2026-07-08"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "medication_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-03T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.clinical",
+      "name": "prescriptions",
+      "rowCount": 2672,
+      "fields": [
+        {
+          "name": "prescription_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2672,
+          "min": "1",
+          "max": "2672"
+        },
+        {
+          "name": "encounter_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1019,
+          "min": "1",
+          "max": "253003"
+        },
+        {
+          "name": "medication_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1967,
+          "min": "1",
+          "max": "4131"
+        },
+        {
+          "name": "dosage_mg",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 308,
+          "min": "0",
+          "max": "3513"
+        },
+        {
+          "name": "refill_count",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 275,
+          "min": "0",
+          "max": "3410"
+        },
+        {
+          "name": "prescribed_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1552,
+          "min": "2022-11-22T12:00:00.000Z",
+          "max": "2026-07-09T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "prescription_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "natural",
+          "fields": [
+            "encounter_id",
+            "medication_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-13T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.clinical",
+      "name": "claims_daily",
+      "rowCount": 136882,
+      "fields": [
+        {
+          "name": "record_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 136682,
+          "min": "1",
+          "max": "136882"
+        },
+        {
+          "name": "patient_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 136182,
+          "min": "1",
+          "max": "3444"
+        },
+        {
+          "name": "billed_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 106477,
+          "min": "0",
+          "max": "60744921"
+        },
+        {
+          "name": "claim_year",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4,
+          "min": "2011",
+          "max": "2023"
+        }
+      ],
+      "keys": [],
+      "readable": true,
+      "lastModifiedAt": "2026-08-05T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.clinical",
+      "name": "coverage_periods",
+      "rowCount": 889,
+      "fields": [
+        {
+          "name": "coverage_period_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 889,
+          "min": "1",
+          "max": "889"
+        },
+        {
+          "name": "patient_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 286,
+          "min": "1",
+          "max": "3444"
+        },
+        {
+          "name": "payer_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 39,
+          "normalizedDistinctCount": 39
+        },
+        {
+          "name": "coverage_start_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 635,
+          "min": "2021-07-18T12:00:00.000Z",
+          "max": "2026-06-27T12:00:00.000Z"
+        },
+        {
+          "name": "coverage_end_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 787,
+          "min": "2020-12-10T12:00:00.000Z",
+          "max": "2021-07-03T12:00:00.000Z"
+        },
+        {
+          "name": "copay_pct",
+          "type": "double",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 674,
+          "min": "0",
+          "max": "77"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "coverage_period_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-05T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.clinical",
+      "name": "consent_docs",
+      "rowCount": 8463,
+      "fields": [
+        {
+          "name": "consent_doc_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 8463,
+          "min": "1",
+          "max": "8463"
+        },
+        {
+          "name": "patient_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3444,
+          "min": "1",
+          "max": "3444"
+        },
+        {
+          "name": "signed_date",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7788,
+          "formatRule": "date-string",
+          "invalidFormatCount": 0
+        },
+        {
+          "name": "doc_uuid",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6811,
+          "formatRule": "uuid",
+          "invalidFormatCount": 90
+        },
+        {
+          "name": "portal_url",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 7827,
+          "formatRule": "url",
+          "invalidFormatCount": 0
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "consent_doc_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2023-11-21T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.clinical",
+      "name": "wards",
+      "rowCount": 8480,
+      "fields": [
+        {
+          "name": "ward_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 8480,
+          "min": "1",
+          "max": "8480"
+        },
+        {
+          "name": "ward_name",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7816
+        },
+        {
+          "name": "bed_capacity",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 203,
+          "min": "0",
+          "max": "3385"
+        },
+        {
+          "name": "renovated_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 7016,
+          "min": "2022-03-13",
+          "max": "2024-02-29"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "ward_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-07-30T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.revenue_ops",
+      "name": "billing_invoices",
+      "rowCount": 258682,
+      "fields": [
+        {
+          "name": "billing_invoice_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 258682,
+          "min": "1",
+          "max": "258682"
+        },
+        {
+          "name": "patient_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3444,
+          "min": "1",
+          "max": "3444"
+        },
+        {
+          "name": "invoice_status",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 24,
+          "normalizedDistinctCount": 24
+        },
+        {
+          "name": "amt_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 202080,
+          "min": "0",
+          "max": "47595216"
+        },
+        {
+          "name": "issued_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 129748,
+          "min": "2022-11-18T12:00:00.000Z",
+          "max": "2026-08-12T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "billing_invoice_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-07-24T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.revenue_ops",
+      "name": "remittances",
+      "rowCount": 0,
+      "fields": [
+        {
+          "name": "remittance_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "payer_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "paid_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "received_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "remittance_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": false,
+      "lastModifiedAt": "2026-08-14T12:00:00.000Z"
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "main.clinical",
+      "fromEntity": "encounters",
+      "fromField": "patient_id",
+      "toNamespace": "main.clinical",
+      "toEntity": "patients",
+      "toField": "patient_id",
+      "orphanCount": 40,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.clinical",
+      "fromEntity": "encounters",
+      "fromField": "provider_id",
+      "toNamespace": "main.clinical",
+      "toEntity": "providers",
+      "toField": "provider_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.clinical",
+      "fromEntity": "lab_results",
+      "fromField": "encounter_id",
+      "toNamespace": "main.clinical",
+      "toEntity": "encounters",
+      "toField": "encounter_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.clinical",
+      "fromEntity": "prescriptions",
+      "fromField": "encounter_id",
+      "toNamespace": "main.clinical",
+      "toEntity": "encounters",
+      "toField": "encounter_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.clinical",
+      "fromEntity": "prescriptions",
+      "fromField": "medication_id",
+      "toNamespace": "main.clinical",
+      "toEntity": "medications",
+      "toField": "medication_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.clinical",
+      "fromEntity": "coverage_periods",
+      "fromField": "patient_id",
+      "toNamespace": "main.clinical",
+      "toEntity": "patients",
+      "toField": "patient_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.clinical",
+      "fromEntity": "consent_docs",
+      "fromField": "patient_id",
+      "toNamespace": "main.clinical",
+      "toEntity": "patients",
+      "toField": "patient_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.revenue_ops",
+      "fromEntity": "billing_invoices",
+      "fromField": "patient_id",
+      "toNamespace": "main.clinical",
+      "toEntity": "patients",
+      "toField": "patient_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.clinical",
+      "fromEntity": "claims_daily",
+      "fromField": "patient_id",
+      "toNamespace": "main.clinical",
+      "toEntity": "patients",
+      "toField": "patient_id",
+      "orphanCount": 300,
+      "origin": "inferred"
+    }
+  ]
+}

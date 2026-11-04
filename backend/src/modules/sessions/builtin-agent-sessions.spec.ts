@@ -1,3 +1,9 @@
+// The data-readiness service loads the Databricks driver (ESM-only deps)
+// at import time; the session specs never call it for real.
+jest.mock('../data-readiness/data-readiness.service', () => ({
+  DataReadinessService: class {},
+}));
+
 // Sessions bound to a built-in agent (sessions-chat R52, R61; ADR-0028): the
 // RFP Builder's session creation, its derived `agent`, and its turn.
 jest.mock('@mastra/core/request-context', () => ({

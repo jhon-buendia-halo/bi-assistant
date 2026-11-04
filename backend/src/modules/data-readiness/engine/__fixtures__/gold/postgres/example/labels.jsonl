@@ -1,0 +1,16 @@
+# Answer key for the "postgres" gold dataset — HUMAN-MAINTAINED.
+# One JSON object per line. Blank lines and lines starting with # or // are ignored.
+# Each line is a real defect a human asserts is in profile.json, independent of
+# what the engine reports. Fields: dimension, namespace, entity, field (all the
+# tuple the scorer matches on), severity (graded within ±1 band), and an
+# optional free-text note. See ./README.md for the full labeling guide.
+#
+# This is a WORKED example, not a complete key: it deliberately includes one
+# defect the engine cannot catch (accuracy) and omits a minor null the engine
+# does flag, so the measured precision AND recall come out honestly below 1.0.
+{"dimension":"completeness","namespace":"public","entity":"customers","field":"email","severity":"medium","note":"planted: email is null in ~12% (2400/20000) of rows"}
+{"dimension":"validity","namespace":"public","entity":"customers","field":"email","severity":"medium","note":"planted: 18 email values are malformed"}
+{"dimension":"uniqueness","namespace":"public","entity":"orders","field":"order_number","severity":"medium","note":"planted: 8 duplicate order_number values on the natural key"}
+{"dimension":"timeliness","namespace":"public","entity":"orders","field":"created_at","severity":"medium","note":"planted: newest order is ~3.5 years old — a stale/paused pipeline"}
+{"dimension":"integrity","namespace":"public","entity":"orders","field":"customer_id","severity":"high","note":"planted: 30 orders reference a customer_id with no matching customers.id"}
+{"dimension":"accuracy","namespace":"public","entity":"customers","field":"country","severity":"high","note":"planted: ~200 country values are not valid ISO codes. INTENTIONAL RECALL GAP — the engine has no accuracy check (out of automated scope until reference data / Improvement 1). Keep this label; it measures the blind spot."}

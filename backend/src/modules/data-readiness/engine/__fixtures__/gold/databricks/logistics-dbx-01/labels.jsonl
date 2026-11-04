@@ -1,0 +1,11 @@
+{"dimension":"timeliness","namespace":"main.operations","entity":"customsDocuments","field":"(table last altered)","severity":"medium","note":"Customs docs have no temporal column (filingDate is text); last_altered is ~2.5 years old — the lastModifiedAt fallback."}
+{"dimension":"accessibility","namespace":"main.operations","severity":"medium","note":"Route survey data is browse_only for the agent principal — 1 of 6 tables locked."}
+{"dimension":"validity","namespace":"main.operations","entity":"carriers","field":"dispatchEmail","severity":"medium","note":"40 dispatch emails are phone numbers typed into the wrong field."}
+{"dimension":"validity","namespace":"main.operations","entity":"customsDocuments","field":"filingDate","severity":"medium","note":"60 filing dates are 'DD/MM/YYYY' strings in an ISO-dated text column — the date-string rule."}
+{"dimension":"reasonability","namespace":"main.operations","entity":"warehouses","field":"utilizationPct","severity":"medium","note":"Utilization above 100% — overflow storage was recorded against rated capacity."}
+{"dimension":"integrity","namespace":"main.operations","entity":"trackingEvents","field":"shipmentId","severity":"high","note":"150 scan events reference shipments archived out of the operational table."}
+{"dimension":"consistency","namespace":"main.operations","entity":"shipments","field":"originCode","severity":"low","note":"Origin codes cased differently by the EDI and manual-entry paths."}
+{"dimension":"timeliness","namespace":"main.operations","entity":"carriers","field":"onboardedAt","severity":"medium","note":"No carrier has been onboarded in ~2.4 years — procurement moved to a separate system."}
+{"dimension":"validity","namespace":"main.operations","entity":"shipments","field":"awbRef","severity":"medium","note":"BLIND SPOT: air-waybill refs are malformed, but awbRef matches no known format rule."}
+{"dimension":"completeness","namespace":"main.operations","entity":"trackingEvents","field":"facilityCode","severity":"medium","note":"BLIND SPOT: 'UNKN' facility placeholders — missing data with nullCount 0."}
+{"dimension":"accuracy","namespace":"main.operations","entity":"shipments","field":"weightKg","severity":"medium","note":"BLIND SPOT: declared weights drift from re-weigh station measurements — accuracy needs reference data."}

@@ -217,6 +217,12 @@ test('the Agent field disables an agent that cannot start', async ({
     path: path.join(EVIDENCE, 'new-conversation-agent-disabled.png'),
   });
 
+  // The Background's World Cup dataset is on PostgreSQL, so the Data
+  // Readiness Agent can be chosen (data-readiness R1-R2).
+  await expect(agentOption(page, 'Data Readiness Agent')).not.toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
   // It cannot be chosen (clicked past Playwright's aria-disabled check).
   await rfp.click({ force: true });
   await expect(agentField(page)).toHaveText(/Assistant/);
@@ -345,11 +351,17 @@ test('I copy the session id to share it', async ({ page }) => {
 test('the Agent field lists the showcase agents disabled', async ({ page }) => {
   await openComposer(page);
   await agentField(page).click();
+  // allInnerTexts does not wait: wait for the last option to render first.
+  await expect(agentOption(page, 'Survey Agent')).toBeVisible();
   const names = (await agentList(page).getByRole('option').allInnerTexts()).map(
     (text) => text.split('\n')[0].trim(),
   );
-  expect(names.slice(0, 6)).toEqual([
+  // Assistant, the Official agents that bring their own datasets
+  // alphabetical (the Data Readiness Agent, BA-251, then the RFP Builder),
+  // then the showcase agents (R64).
+  expect(names.slice(0, 7)).toEqual([
     'Assistant',
+    'Data Readiness Agent',
     'RFP Builder',
     'Benchmarking Agent',
     'LAD COE Agent',
@@ -368,6 +380,12 @@ test('the Agent field lists the showcase agents disabled', async ({ page }) => {
       'Showcase agent: not available to chat yet.',
     );
   }
+  // The Background's World Cup dataset is on PostgreSQL, so the Data
+  // Readiness Agent can be chosen (data-readiness R1-R2).
+  await expect(agentOption(page, 'Data Readiness Agent')).not.toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
   // It cannot be chosen (clicked past Playwright's aria-disabled check).
   await agentOption(page, 'Survey Agent').click({ force: true });
   await expect(agentField(page)).toHaveText(/Assistant/);

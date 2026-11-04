@@ -49,6 +49,8 @@ import {
   ReasoningStep,
   ToolDataRecord,
   PanelItemEvent,
+  ReadinessPanelItem,
+  ReadinessReportRef,
   WorkflowView,
   VisualEvent,
 } from '../../models/session.model';
@@ -60,6 +62,12 @@ import {
 import { ToastService } from '../../../../core/toast/toast.service';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import { slug } from '../../services/slug';
+import {
+  readinessPanelItemId,
+  readinessPanelTitle,
+  readinessReportRef,
+} from '../../models/readiness.model';
+import { ReadinessCard } from './readiness-card';
 
 /** Human-readable text for a clicked mark: its label when it has one. */
 export function selectionText(selection: DataPointSelection): string {
@@ -146,7 +154,7 @@ export function skillStepLabel(toolName: string): string | null {
 
 @Component({
   selector: 'app-session-chat',
-  imports: [LucideAngularModule, MarkdownPipe, NgTemplateOutlet],
+  imports: [LucideAngularModule, MarkdownPipe, NgTemplateOutlet, ReadinessCard],
   templateUrl: './session-chat.html',
   styleUrl: './session-chat.scss',
 })
@@ -226,6 +234,11 @@ export class SessionChat implements OnDestroy {
   readonly toolCalls = signal<ToolActivity[]>([]);
   /** Streamed assistant text for the in-flight turn. */
   readonly streamingText = signal('');
+  /**
+   * The readiness report this turn produced (`readiness-report`), shown as a
+   * card on the in-flight answer until the persisted answer carries it.
+   */
+  readonly streamingReadiness = signal<ReadinessReportRef | null>(null);
   readonly elapsed = signal(0);
   /** `at` of the message whose rating is being persisted right now. */
   readonly feedbackPending = signal<string | null>(null);
@@ -500,6 +513,11 @@ export class SessionChat implements OnDestroy {
           if (this.activeStream !== controller) return;
           this.workflowChanged.emit(workflow);
         },
+        onReadinessReport: ({ report, panelItem }) => {
+          if (this.activeStream !== controller) return;
+          this.streamingReadiness.set(readinessReportRef(report));
+          this.panelItem.emit({ item: panelItem });
+        },
         onDone: (session) => {
           if (this.activeStream !== controller) return;
           this.activeStream = null;
@@ -523,6 +541,7 @@ export class SessionChat implements OnDestroy {
           // rescue `stop()` gives a manually-cancelled turn — before the
           // error bubble that explains why the turn didn't finish.
           const partial = this.streamingText().trim();
+          const readiness = this.streamingReadiness();
           this.resetTurnState();
           const now = Date.now();
           this.messages.set([
@@ -533,6 +552,7 @@ export class SessionChat implements OnDestroy {
                     role: 'assistant' as const,
                     content: partial,
                     at: new Date(now).toISOString(),
+                    ...(readiness ? { readinessReport: readiness } : {}),
                   },
                 ]
               : []),
@@ -560,6 +580,7 @@ export class SessionChat implements OnDestroy {
   stop(): void {
     if (!this.sending()) return;
     const partial = this.streamingText().trim();
+    const readiness = this.streamingReadiness();
     this.activeStream?.abort();
     this.activeStream = null;
     this.stopTimer();
@@ -567,7 +588,12 @@ export class SessionChat implements OnDestroy {
     if (partial) {
       this.messages.set([
         ...this.messages(),
-        { role: 'assistant', content: partial, at: new Date().toISOString() },
+        {
+          role: 'assistant',
+          content: partial,
+          at: new Date().toISOString(),
+          ...(readiness ? { readinessReport: readiness } : {}),
+        },
       ]);
     }
     this.resetTurnState();
@@ -595,6 +621,7 @@ export class SessionChat implements OnDestroy {
     this.reasoning.set('');
     this.toolCalls.set([]);
     this.streamingText.set('');
+    this.streamingReadiness.set(null);
     this.elapsed.set(0);
   }
 
@@ -772,6 +799,28 @@ export class SessionChat implements OnDestroy {
       error: (err) => {
         this.reportDownloading.set(null);
         this.toast.error(err?.error?.message ?? 'Report download failed');
+      },
+    });
+  }
+
+  /**
+   * Open scorecard: show the report's panel item (the saved one, else the
+   * same item the orchestrator writes) and open the panel. Always a fresh
+   * object, so a scorecard showing a past assessment comes back to this one.
+   */
+  openScorecard(ref: ReadinessReportRef): void {
+    const id = readinessPanelItemId(ref.reportId);
+    const saved = this.session().panelItems?.find(
+      (item): item is ReadinessPanelItem =>
+        item.kind === 'readiness' && item.id === id,
+    );
+    this.panelItem.emit({
+      item: saved ? { ...saved } : {
+        id,
+        kind: 'readiness',
+        title: readinessPanelTitle(ref.datasourceName),
+        shownAt: ref.generatedAt,
+        reportId: ref.reportId,
       },
     });
   }

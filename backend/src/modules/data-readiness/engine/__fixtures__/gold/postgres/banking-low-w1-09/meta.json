@@ -1,0 +1,7 @@
+{
+  "industry": "banking",
+  "complexity": "low",
+  "wave": "W1",
+  "authoring": "generated",
+  "defectPlan": "plans/postgres/banking-low-w1-09.plan.json"
+}

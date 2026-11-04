@@ -726,6 +726,42 @@ flowchart LR
   - Org-mode E2E (the Playwright `org` project, the OIDC stub, the SCIM client) is deleted. The retired dependencies `openid-client` and `cookie` go if nothing else uses them.
   - Re-introducing multi-user access later needs a new ADR; ADR-0010 to ADR-0012 stay as the record of the design that was removed.
 
+#### ADR-0031 — A deterministic DMBOK readiness engine owns every score; the Data Readiness Agent only presents stored reports; profiling is a connector capability
+- **Status:** Accepted
+- **Date:** 2026-11-03
+- **Context:**
+  - The user asked on 2026-11-03 for a Data Readiness Agent that uses only the deterministic DMBOK metrics of the separate `data-readiness-agent` project ([BA-251](https://halo-powered.atlassian.net/browse/BA-251)).
+  - That project computes readiness with a pure engine over pre-aggregated statistics: eight assessed dimensions, proportional scoring and a maturity band. Its LLM features only read stored reports, and they are out of scope here.
+  - Letting a model compute or adjust scores would make them unrepeatable and impossible to evaluate. Letting it run free-form SQL to profile would put whole-table scans through the user's read-only SQL path, which is built for answers, row-capped and repaired by the SQL Fixer.
+- **Decision:**
+  - **A deterministic engine owns every number.** A pure module takes a *source profile* (aggregate statistics only, no row values), the fixed default thresholds and the time `now`, and returns the dimension scores, the overall score, the band and the findings ([data-readiness](../capabilities/data-readiness/spec.md) R12-R23).
+    - It has no framework, database or model imports.
+    - `now` is an input, so the same profile at the same time always gives the same report.
+    - A golden suite copied from the reference corpus holds it to the reference precision and recall (R27).
+  - **The agent presents, never computes.** The new Official agent `data-readiness` ([agents.md](agents.md) 2.10) has three tools: assess, read a report, list reports. They call the engine through the tool-services bridge.
+    - The full report reaches the user through the panel and an answer card.
+    - The model sees a compact summary, and its prompt forbids stating any score not in a tool result, or adjusting one.
+  - **Profiling is a connector capability, outside the user SQL path.**
+    - The PostgreSQL and Databricks connectors gain an optional *profiling* interface: column stats, keys and duplicate counts, orphan counts, invalid-format counts, normalized distinct counts, table privileges and last-altered time.
+    - Each method issues fixed, aggregate-only SELECT statements with quoted identifiers, a 15 s statement timeout and the existing read-only guard.
+    - These statements never go through `run_readonly_sql`, its row cap, SQL repair or result guards.
+    - A profile adapter per dialect turns them into a source profile, inferring format rules and join candidates by name.
+  - **Reports are stored** in a new `readiness_reports` collection, append-only, keyed by id and listed per datasource ([data-model.md](data-model.md)).
+    - A chat answer references its report (`readinessReport`), and the panel gets a `readiness` item kind.
+    - Both changes are additive, with no migration.
+  - Sessions bind to the agent like the RFP Builder (ADR-0028). Its required dataset is any dataset on a PostgreSQL or Databricks datasource, not a named one, and Start chat binds the session to all of them.
+- **Rejected:**
+  - Model-computed or model-adjusted scores: unrepeatable and impossible to evaluate.
+  - Profiling through `run_readonly_sql`: row caps, repair and result guards are wrong for aggregate scans, and it would let the model choose what is measured.
+  - Porting the reference project's connectors as a second connector stack: the app already has PostgreSQL and Databricks connectors with secrets, pooling and the read-only guard.
+  - Editable thresholds: out of the epic's scope, and they would make stored reports incomparable without storing the thresholds with each one.
+- **Consequences:**
+  - Full-table aggregates can be slow on large Databricks tables. Each statement times out on its own, and a missing statistic only skips the checks that need it.
+  - Timeliness and reasonability depend on `now`, so live scores drift as data ages, while tests stay stable.
+  - The agent needs an eval set (`data-readiness`). Its prompt, tools or skill changes must pass it at 100 % over 3 runs.
+  - A third built-in session agent: the session code's per-agent branches (ADR-0028) grow by one.
+  - Stack-neutral: a rebuild needs the pure engine, a profiling interface per supported dialect, one stored report collection, three tools, a scorecard view and the stream event that opens it.
+
 #### ADR-0032 — Custom LLM endpoints: an OpenAI- or Anthropic-compatible server at any base URL, Anthropic-style models built by the app with `@ai-sdk/anthropic`
 - **Status:** Accepted
 - **Date:** 2026-11-03

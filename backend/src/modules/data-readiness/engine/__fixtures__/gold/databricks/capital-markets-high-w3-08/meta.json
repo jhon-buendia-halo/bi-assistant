@@ -1,0 +1,7 @@
+{
+  "industry": "capital-markets",
+  "complexity": "high",
+  "wave": "W3",
+  "authoring": "generated",
+  "defectPlan": "plans/databricks/capital-markets-high-w3-08.plan.json"
+}

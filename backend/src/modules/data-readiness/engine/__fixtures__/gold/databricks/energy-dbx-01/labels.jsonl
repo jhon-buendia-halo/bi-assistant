@@ -1,0 +1,10 @@
+{"dimension":"timeliness","namespace":"main.grid","entity":"inspection_reports","field":"(table last altered)","severity":"medium","note":"Inspection reports have no temporal column (report_date is text); last_altered is ~2.3 years old — the lastModifiedAt fallback."}
+{"dimension":"accessibility","namespace":"main.grid","severity":"medium","note":"Outage events are restricted to the reliability team — browse_only for the agent principal."}
+{"dimension":"validity","namespace":"main.grid","entity":"service_points","field":"contact_email","severity":"medium","note":"700 contact emails fail the pattern — the CIS migration concatenated name+domain."}
+{"dimension":"reasonability","namespace":"main.grid","entity":"substations","field":"load_pct","severity":"medium","note":"load_pct maxes at 165 — a per-unit value was multiplied by 100 twice."}
+{"dimension":"uniqueness","namespace":"main.grid","entity":"meters","field":"meter_msn","severity":"medium","note":"25 duplicate meter serials — the informational UNIQUE constraint doesn't enforce on merge."}
+{"dimension":"integrity","namespace":"main.grid","entity":"meter_readings","field":"meter_id","severity":"high","note":"200 readings reference decommissioned meters purged from the registry."}
+{"dimension":"timeliness","namespace":"main.grid","entity":"substations","field":"commissioned_at","severity":"medium","note":"The substation registry hasn't recorded a commissioning in ~2.6 years — feed paused."}
+{"dimension":"validity","namespace":"main.grid","entity":"meters","field":"meter_msn","severity":"medium","note":"BLIND SPOT: meter_msn is a serial-number column under an industry alias — no format rule is assigned."}
+{"dimension":"completeness","namespace":"main.grid","entity":"service_points","field":"region_code","severity":"medium","note":"BLIND SPOT: region 'XX' placeholder codes — missing data with nullCount 0."}
+{"dimension":"accuracy","namespace":"main.grid","entity":"service_points","field":"tariff_code","severity":"medium","note":"BLIND SPOT: tariff assignments drift from the regulator's reference list — accuracy needs reference data."}

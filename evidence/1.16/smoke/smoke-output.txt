@@ -1,0 +1,60 @@
+work dir: /var/folders/kq/9ys30yds3cv7zl58_xt2lcbh0000gn/T//dr-smoke.7TjBaP
+postgres pid 31749 on 55471
+app pid 31790 on 3311
+PASS create datasource ok: true
+PASS whole: status: 201
+PASS whole completeness: [63,6,4,"high"]
+PASS whole validity: [60,1,1,"medium"]
+PASS whole consistency: [97,3,1,"low"]
+PASS whole uniqueness: [87,6,2,"medium"]
+PASS whole integrity: [30,2,2,"high"]
+PASS whole accessibility: [92,5,1,"medium"]
+PASS whole timeliness: [73,3,2,"medium"]
+PASS whole reasonability: [92,13,4,"medium"]
+PASS whole accuracy not assessed: [100,false,0]
+PASS whole currency not assessed: [100,false,0]
+PASS whole overall: [74,"Defined"]
+PASS whole entityCount: 5
+PASS whole findings: ["accessibility|||medium","completeness|customers|nickname|high","completeness|customers|region|medium","completeness|events|customer_id|medium","completeness|events|event_id|medium","consistency|customers|segment|low","integrity|events|customer_id|medium","integrity|orders|customer_id|high","reasonability|customers|created_at|low","reasonability|orders|amount|low","reasonability|orders|discount_pct|medium","reasonability|orders|ordered_at|medium","timeliness|customers|created_at|medium","timeliness|events|event_year|medium","uniqueness|events|customer_id|medium","uniqueness|events|event_id|medium","validity|customers|email|medium"]
+PASS whole: sessionId: "smoke-session"
+PASS whole: accessibility last: "accessibility"
+PASS orders scope: status: 201
+PASS orders scope completeness: [100,1,0,null]
+PASS orders scope validity: [100,0,0,null]
+PASS orders scope consistency: [100,0,0,null]
+PASS orders scope uniqueness: [100,1,0,null]
+PASS orders scope integrity: [0,1,1,"high"]
+PASS orders scope accessibility: [100,1,0,null]
+PASS orders scope timeliness: [100,1,0,null]
+PASS orders scope reasonability: [85,6,3,"medium"]
+PASS orders scope accuracy not assessed: [100,false,0]
+PASS orders scope currency not assessed: [100,false,0]
+PASS orders scope overall: [86,"Managed"]
+PASS orders scope entityCount: 1
+PASS pair scope: status: 201
+PASS pair scope completeness: [56,5,4,"high"]
+PASS pair scope validity: [60,1,1,"medium"]
+PASS pair scope consistency: [97,3,1,"low"]
+PASS pair scope uniqueness: [73,3,2,"medium"]
+PASS pair scope integrity: [60,1,1,"medium"]
+PASS pair scope accessibility: [100,2,0,null]
+PASS pair scope timeliness: [60,2,2,"medium"]
+PASS pair scope reasonability: [98,5,1,"low"]
+PASS pair scope accuracy not assessed: [100,false,0]
+PASS pair scope currency not assessed: [100,false,0]
+PASS pair scope overall: [76,"Defined"]
+PASS pair scope entityCount: 2
+PASS missing entity: [400,"None of the entities to assess exist"]
+PASS missing id: [400,"datasourceId is required"]
+PASS unknown datasource: [404,"Datasource \"nope\" not found"]
+PASS rest kind: [400,"Data readiness supports PostgreSQL and Databricks datasources only"]
+PASS list: status: 200
+PASS list: newest first: ["7498f032-d7d6-4499-b7c1-53746e2bb0c1","c6eb54dd-e109-4393-9f7d-4f1cbf80b511","2b3f58ba-87f9-4118-9aad-8009928496d0"]
+PASS list: generatedAt descending: ["2026-11-03T23:41:37.927Z","2026-11-03T23:41:37.867Z","2026-11-03T23:41:37.733Z"]
+PASS list: summary keys: ["datasourceId","datasourceKind","datasourceName","entityCount","generatedAt","id","maturity","overallScore","sessionId"]
+PASS list missing id: [400,"datasourceId is required"]
+PASS list unknown: [200,{"reports":[]}]
+PASS get by id: [200,true]
+PASS get unknown: [404,"Readiness report \"nope\" not found"]
+
+ALL CHECKS PASSED
