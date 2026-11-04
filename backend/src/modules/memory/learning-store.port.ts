@@ -1,5 +1,5 @@
 /**
- * The cross-session memory as the rest of the app sees it (ADR-0031,
+ * The cross-session memory as the rest of the app sees it (ADR-0033,
  * agents.md 2.1). Sessions, the memory outbox and the memory eval depend on
  * this port only; `MastraLearningStore` is the one implementation.
  *
