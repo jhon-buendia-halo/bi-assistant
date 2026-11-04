@@ -794,7 +794,7 @@ interface UiPreferences { theme: ThemePreference | null; navExpanded: boolean | 
 
 ### 2.13 Memory
 
-Controller prefix `/memory`. Capability: [knowledge](../capabilities/knowledge/spec.md) R30 to R43 (the memory of past sessions, ADR-0031). The lever is one `memory` settings document ([data-model.md](data-model.md) 3.2.2); the signals are the `memory_signals` outbox (3.15) and the learning memories (5.2). The feedback endpoint (#7) and the datasource delete (#19) also reach the memory, as side effects.
+Controller prefix `/memory`. Capability: [knowledge](../capabilities/knowledge/spec.md) R30 to R43 (the memory of past sessions, ADR-0033). The lever is one `memory` settings document ([data-model.md](data-model.md) 3.2.2); the signals are the `memory_signals` outbox (3.15) and the learning memories (5.2). The feedback endpoint (#7) and the datasource delete (#19) also reach the memory, as side effects.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|

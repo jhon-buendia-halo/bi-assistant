@@ -12,7 +12,7 @@ import { MemorySettingsRepository } from './repositories/memory-settings.reposit
 import { MemorySignalsRepository } from './repositories/memory-signals.repository';
 
 /**
- * The memory of past sessions (ADR-0031, knowledge R30 to R43): the
+ * The memory of past sessions (ADR-0033, knowledge R30 to R43): the
  * `LearningStore` port with its "Mastra only" implementation, the
  * `memory_signals` outbox, the lever and the routes of api.md 108 to 110.
  * Depends on the global `DatabaseModule` and on `LlmModule` (the embedding

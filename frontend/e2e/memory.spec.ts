@@ -41,7 +41,7 @@ import {
 
 /**
  * Mirrors the Feature "Memory from past sessions" in
- * specs/capabilities/knowledge/spec.md (R30 to R43, ADR-0031).
+ * specs/capabilities/knowledge/spec.md (R30 to R43, ADR-0033).
  *
  * The app runs its real "Mastra only" memory: the `memory_signals` outbox in
  * app.sqlite and the learning memories in mastra.sqlite. Two local stubs

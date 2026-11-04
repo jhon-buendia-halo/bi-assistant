@@ -205,7 +205,7 @@ Written by `PUT /ui-preferences` ([api.md](api.md) 57); ADR-0009.
 
 #### 3.2.2 `settings` document `memory`
 
-The memory lever of the memory of past sessions ([knowledge](../capabilities/knowledge/spec.md) R30, ADR-0031), keyed like the `llm` document.
+The memory lever of the memory of past sessions ([knowledge](../capabilities/knowledge/spec.md) R30, ADR-0033), keyed like the `llm` document.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -578,7 +578,7 @@ The app is single-user (ADR-0030): one built-in super admin, id `local`, is alwa
 
 ### 3.15 `memory_signals` — the memory outbox
 
-The persisted queue between a person's judgement of an answer (a rating, with the thumbs-down's note when it has one; a reviewer's note once that action exists, knowledge R31) and the cross-session memory ([ADR-0031](architecture.md), Accepted; behaviour: [knowledge](../capabilities/knowledge/spec.md) R30 to R43; the port: [agents.md](agents.md) 2.1). A rating, or a change to a thumbs-down's note, writes one row and returns; a background flush hands the row to the memory's `retain`, so a click never waits for the memory, and a memory that cannot store yet only delays what it learns. Rows are kept once stored, as the audit of what the memory was given, until their signal is forgotten. Rows are written only while the memory lever is on (knowledge R30).
+The persisted queue between a person's judgement of an answer (a rating, with the thumbs-down's note when it has one; a reviewer's note once that action exists, knowledge R31) and the cross-session memory ([ADR-0033](architecture.md), Accepted; behaviour: [knowledge](../capabilities/knowledge/spec.md) R30 to R43; the port: [agents.md](agents.md) 2.1). A rating, or a change to a thumbs-down's note, writes one row and returns; a background flush hands the row to the memory's `retain`, so a click never waits for the memory, and a memory that cannot store yet only delays what it learns. Rows are kept once stored, as the audit of what the memory was given, until their signal is forgotten. Rows are written only while the memory lever is on (knowledge R30).
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
@@ -758,7 +758,7 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 
 ### 5.2 Learning memories (cross-session memory)
 
-What the cross-session memory keeps ([ADR-0031](architecture.md), Accepted; rules: [knowledge](../capabilities/knowledge/spec.md) R30 to R43; the port and the "Mastra only" implementation: [agents.md](agents.md) 2.1). It sits in `mastra.sqlite` beside the conversation threads of 5.1, and the two never reach each other.
+What the cross-session memory keeps ([ADR-0033](architecture.md), Accepted; rules: [knowledge](../capabilities/knowledge/spec.md) R30 to R43; the port and the "Mastra only" implementation: [agents.md](agents.md) 2.1). It sits in `mastra.sqlite` beside the conversation threads of 5.1, and the two never reach each other.
 
 - **One learning thread per scope.** A scope is one datasource (not one dataset: decided 2026-11-02, knowledge R35): thread id `learning-<scope>`, resource id `<scope>`, where `<scope>` is the datasource id. No conversation thread has a datasource id as its resource (a session's resource is its session id), and a chat's message history never reaches a learning thread. Recall is always scoped to the learning thread (scope `thread`), never to its resource: a resource-scoped recall reads a resource's store from any thread id, even one that does not exist. The thread is created by the first signal its scope stores.
 - **One message per signal.** Message id = the signal's `documentId`; role `user`; one text part, the signal's `content` from the outbox (3.15), which is the text of knowledge R33; created at the signal's `occurredAt` moved forward by the fewest milliseconds that make it unique in its thread (the framework's recall fetches a hit by its time, so two messages at one time would return the wrong one); an update keeps the stored time; metadata `{ documentId, kind, datasourceId, datasetIds, entities }`. Storing a signal whose id the thread already holds **updates** that message (`updateMessages`), which replaces its embedding too; saving it again (`saveMessages` with the same id) would replace the row but add one more embedding each time, the old text still searchable. So an answer has at most two messages, its rating's and, once the reviewer's-note action exists, its correction's, each with one embedding (knowledge R39). A message never holds a row value (knowledge R32), an answer's text or result rows.
@@ -797,7 +797,7 @@ None for the RFP Builder (BA-213, ADR-0028): `agentKey` and `rfpId` on sessions 
 
 None for the agent panel (BA-231, ADR-0029): `panelItems` and `workflowState` on sessions are new optional fields; visuals made before are synthesized into the item list at read time (3.4.4), so no stored document is rewritten.
 
-None for the cross-session memory (ADR-0031): `memory_signals` is a new collection, `source` on `KnowledgeUse` a new optional field read as absent on older answers (3.9), `feedbackNote` on a message a new optional field (3.4.1), the `memory` settings document new and read as off when absent (3.2.2), and learning threads are new threads in `mastra.sqlite` (5.2).
+None for the cross-session memory (ADR-0033): `memory_signals` is a new collection, `source` on `KnowledgeUse` a new optional field read as absent on older answers (3.9), `feedbackNote` on a message a new optional field (3.4.1), the `memory` settings document new and read as off when absent (3.2.2), and learning threads are new threads in `mastra.sqlite` (5.2).
 
 Tests: the table/field renames (M1-M3), M14 and M4/M5 are covered by `database.module.spec.ts` and the repository/workspace specs.
 
@@ -926,4 +926,4 @@ Columns map to the API's camelCase fields ([api.md](api.md) 2.16.4): `client_one
 - **Legacy single-selection `datasets` documents** (pre-`name` era) are ignored by readers but their exact shape is not documented anywhere in the code. Open question: can they be dropped?
 - **Electron `userData` name when unpackaged**: the profile name is derived from the packaged `productName` (`Halo BI Assistant`); for an unpackaged `electron .` run the name derives from the package name (`frontend`), so dev data lands in a different directory. Not verified.
 - Mastra's own `mastra.sqlite` / `observability.duckdb` internals are intentionally not specified; a rebuild on another stack only needs equivalent conversation memory (last-40 replay, thread = resource = session id), the learning memories of 5.2 once the cross-session memory is built, and may drop the observability store.
-- **Open (cross-session memory, ADR-0031):** whether the `memory_signals` rows of a stored signal are pruned after some time, since today nothing prunes them (3.15); what compacting both files after each forget costs on a large data directory (5.2). The draft defaults are in the text; the options are in the BA-4 memory prep notes (OD-20, OD-22). The embedding model, which fixes the index's 1536 dimensions, was decided on 2026-10-30 (OD-2); one learning memory per datasource, not per dataset, on 2026-11-02 (OD-1).
+- **Open (cross-session memory, ADR-0033):** whether the `memory_signals` rows of a stored signal are pruned after some time, since today nothing prunes them (3.15); what compacting both files after each forget costs on a large data directory (5.2). The draft defaults are in the text; the options are in the BA-4 memory prep notes (OD-20, OD-22). The embedding model, which fixes the index's 1536 dimensions, was decided on 2026-10-30 (OD-2); one learning memory per datasource, not per dataset, on 2026-11-02 (OD-1).
