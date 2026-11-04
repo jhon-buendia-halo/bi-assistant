@@ -7,6 +7,12 @@ import { writeFileSync } from 'fs';
 import { runAssistantEvals } from './assistant.evals';
 import { selectCliEvalCases } from './eval-cli-selection';
 import { EVAL_SETS, agentForCases, evalTargetFor } from './eval-sets';
+import {
+  describeEvalTarget,
+  evalCustomResolver,
+  evalLlmTargetFromEnv,
+} from './eval-llm-env';
+import { setAgentModelResolver } from '../model-resolver';
 
 /**
  * CLI entry point for the same suite the Agents → Evals tab runs.
@@ -50,9 +56,24 @@ async function main(): Promise<void> {
     return;
   }
 
+  // The model: the saved settings, or a custom endpoint from EVAL_LLM_*
+  // (agents.md 8.5). Validated before booting, so a bad value makes no call.
+  const llmTarget = evalLlmTargetFromEnv(process.env);
+  if ('error' in llmTarget) {
+    console.error(llmTarget.error);
+    process.exitCode = 1;
+    return;
+  }
+
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['error', 'warn'],
   });
+  if (llmTarget.kind === 'custom') {
+    // After boot: LlmService.onModuleInit installs the saved-settings
+    // resolver, which this replaces for the run only (nothing is stored).
+    setAgentModelResolver(evalCustomResolver(llmTarget.endpoint));
+    console.log(describeEvalTarget(llmTarget.endpoint));
+  }
 
   try {
     await runEvals(app, datasets, selection.caseIds, agent.agentKey);

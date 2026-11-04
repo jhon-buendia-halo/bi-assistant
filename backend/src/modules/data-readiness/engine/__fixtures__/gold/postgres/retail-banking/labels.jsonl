@@ -1,0 +1,23 @@
+# Answer key for the "retail-banking" gold dataset (retail banking domain, Postgres, complexity LOW) — HUMAN-MAINTAINED.
+# One JSON object per line. Blank lines and lines starting with # or // are ignored.
+# Wave B1 of Milestone 1.23 (F1.23.4): banking industry, LOW complexity — one schema (`bank`),
+# 4 readable tables + 1 locked, few defects, each planted on a distinct engine path.
+# See ./README.md for the planted-defect table and the expected precision/recall.
+#
+# TRUE POSITIVES — real defects the engine SHOULD catch (and does):
+{"dimension":"completeness","namespace":"bank","entity":"customers","field":"mailing_address","severity":"medium","note":"planted: mailing_address is null on 15% (27000/180000) of customers — the 2024 onboarding redesign stopped writing it, so statements bounce."}
+{"dimension":"validity","namespace":"bank","entity":"customers","field":"email","severity":"medium","note":"planted: 2100 email values are malformed (fail the email format) — free-text imports from the branch capture tool."}
+{"dimension":"consistency","namespace":"bank","entity":"customers","field":"segment_cd","severity":"low","note":"planted: segment_cd stored as RETAIL / retail / Retail / PREMIER / premier ... — 14 raw collapse to 9 normalized."}
+{"dimension":"uniqueness","namespace":"bank","entity":"accounts","field":"iban","severity":"medium","note":"planted: 380 duplicate iban values on the declared UNIQUE key — the core migration re-issued IBANs for a converted branch (engine emits medium for a unique key)."}
+{"dimension":"integrity","namespace":"bank","entity":"accounts","field":"customer_id","severity":"high","note":"planted: 5200 accounts reference a customer_id with no matching customers row (GDPR purge deleted the parents; declared FK left NOT VALID)."}
+{"dimension":"timeliness","namespace":"bank","entity":"legacy_wire_transfers","field":"executed_at","severity":"medium","note":"planted: newest executed_at is 2023-05-14 (>730 days stale) — wires moved to the new core in mid-2023 but the legacy table is still in the schema."}
+{"dimension":"accessibility","namespace":"bank","severity":"medium","note":"planted: the readiness role has no SELECT on bank.audit_log — 1 of 5 tables locked, so the namespace aggregates to ONE medium (partial) finding."}
+#
+# RECALL GAPS (blind spots) — real defects the engine CANNOT catch today.
+{"dimension":"accuracy","namespace":"bank","entity":"customers","field":"credit_score","severity":"medium","note":"BLIND SPOT: ~2400 credit_score values disagree with the bureau feed (stale nightly sync). Accuracy needs trusted reference data and is out of automated scope by design — the engine emits nothing for this dimension, ever."}
+#
+# INTENTIONALLY NOT LABELED (precision gaps the harness should surface as false alarms):
+#   - completeness accounts.closed_at (high): 87% null (231000/265000). Open accounts have no
+#     close date — the engine's HIGH finding is a false alarm (the churn_date / termination_date class).
+#   - reasonability accounts.balance_cents (low): MIN = -842000. Overdrafts are legitimately
+#     negative in a current-account balance column — the negative-minimum finding is a false alarm.

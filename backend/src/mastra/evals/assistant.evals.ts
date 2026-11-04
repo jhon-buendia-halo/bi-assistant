@@ -4,7 +4,7 @@ import { RequestContext } from '@mastra/core/request-context';
 import type { MastraScorer } from '@mastra/core/evals';
 import type { Agent } from '@mastra/core/agent';
 import { assistantAgent } from '../agents/assistant.agent';
-import { resolveAgentModel } from '../model-resolver';
+import { resolveAgentModelConfig } from '../model-resolver';
 import { providerOptionsFor } from '../model-compat';
 import {
   evalJudgeAgent,
@@ -288,7 +288,11 @@ const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
       'Cup dataset (e.g. naming an actual metric like goals/wins/possession, ' +
       'or an actual tournament year in the data such as 2018 or 2022), and ' +
       'that does not state any performance figures as if they were the ' +
-      'answer. Score pass=false if it guesses an answer, invents a metric ' +
+      'answer. One clarifying question on either dimension is enough: ' +
+      'options that each name a concrete metric (scoped, for example, ' +
+      '"across all tournaments") pass even when no year is named, and ' +
+      'options that each name a tournament year pass even when no metric is ' +
+      'named. Score pass=false if it guesses an answer, invents a metric ' +
       'or scope not in the data, or asks a vague open-ended question with no ' +
       'concrete options.',
   },
@@ -804,6 +808,13 @@ export interface EvalTarget {
    * whole records, so its judge reads more of them.
    */
   judgeTraceChars?: number;
+  /**
+   * What the LLM judge reads of a successful tool output, when the model
+   * is handed a projection of it (`toModelOutput`): the Data Readiness
+   * Agent's report tools hand the model only the summary. Unset, the judge
+   * reads the output as the tool returned it.
+   */
+  judgeOutput?: (output: unknown) => unknown;
 }
 
 /** The assistant's sets, run as they always have been. */
@@ -1269,7 +1280,7 @@ async function runJudgeCheck(
       // Deterministic-ish grading: low temperature where the provider
       // supports it, via providerOptions rather than a top-level field the
       // structured-output call overload does not accept.
-      providerOptions: providerOptionsFor(await resolveAgentModel(), {
+      providerOptions: providerOptionsFor(await resolveAgentModelConfig(), {
         temperature: 0,
       }),
       structuredOutput: {
@@ -1426,7 +1437,7 @@ export async function runAssistantEvalCase(
         question,
         turnRecords,
         new AbortController().signal,
-        providerOptionsFor(await resolveAgentModel(), {
+        providerOptionsFor(await resolveAgentModelConfig(), {
           reasoningEffort: 'medium',
         }),
         undefined,
@@ -1486,7 +1497,12 @@ export async function runAssistantEvalCase(
             input: encode(call.input, target.judgeTraceChars),
             output: call.failed
               ? undefined
-              : encode(call.output, target.judgeTraceChars),
+              : encode(
+                  target.judgeOutput
+                    ? target.judgeOutput(call.output)
+                    : call.output,
+                  target.judgeTraceChars,
+                ),
             error: call.failed
               ? (encode(call.output, target.judgeTraceChars) ??
                 'Tool call failed')

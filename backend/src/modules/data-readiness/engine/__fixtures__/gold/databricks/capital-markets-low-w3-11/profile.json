@@ -1,0 +1,385 @@
+{
+  "sourceId": "gold-databricks-capital-markets-low-w3-11",
+  "sourceType": "databricks",
+  "entities": [
+    {
+      "namespace": "main.markets",
+      "name": "instruments",
+      "rowCount": 528,
+      "fields": [
+        {
+          "name": "instrumentId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 528,
+          "min": "1",
+          "max": "528"
+        },
+        {
+          "name": "isinCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 420,
+          "normalizedDistinctCount": 420
+        },
+        {
+          "name": "instrumentName",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 452,
+          "normalizedDistinctCount": 452
+        },
+        {
+          "name": "sectorCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 13,
+          "normalizedDistinctCount": 13
+        },
+        {
+          "name": "lotSize",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 25,
+          "min": "0",
+          "max": "3467"
+        },
+        {
+          "name": "assetClass",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 39,
+          "normalizedDistinctCount": 39
+        },
+        {
+          "name": "currencyCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 13,
+          "normalizedDistinctCount": 13
+        },
+        {
+          "name": "listedAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 320,
+          "min": "2021-11-26T12:00:00.000Z",
+          "max": "2025-01-04T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "instrumentId"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "isinCode"
+          ],
+          "duplicateCount": 42
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-09T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.markets",
+      "name": "portfolios",
+      "rowCount": 237,
+      "fields": [
+        {
+          "name": "portfolioId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 237,
+          "min": "1",
+          "max": "237"
+        },
+        {
+          "name": "portfolioName",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 148,
+          "normalizedDistinctCount": 148
+        },
+        {
+          "name": "managerEmail",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 218,
+          "normalizedDistinctCount": 218,
+          "formatRule": "email",
+          "invalidFormatCount": 33
+        },
+        {
+          "name": "strategyCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 14,
+          "normalizedDistinctCount": 14
+        },
+        {
+          "name": "targetAllocPct",
+          "type": "double",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 237,
+          "min": "0",
+          "max": "190"
+        },
+        {
+          "name": "inceptionAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 140,
+          "min": "2019-11-11T12:00:00.000Z",
+          "max": "2026-07-06T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "portfolioId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-07-27T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.markets",
+      "name": "trades",
+      "rowCount": 8867,
+      "fields": [
+        {
+          "name": "tradeId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 8867,
+          "min": "1",
+          "max": "8867"
+        },
+        {
+          "name": "portfolioId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 237,
+          "min": "1",
+          "max": "237"
+        },
+        {
+          "name": "instrumentId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 528,
+          "min": "1",
+          "max": "528"
+        },
+        {
+          "name": "sideCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 11,
+          "normalizedDistinctCount": 11
+        },
+        {
+          "name": "venueTag",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 11,
+          "normalizedDistinctCount": 11
+        },
+        {
+          "name": "quantityUnits",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 292,
+          "min": "0",
+          "max": "843"
+        },
+        {
+          "name": "notionalCents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7615,
+          "min": "-1800",
+          "max": "17252594"
+        },
+        {
+          "name": "tradedAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4791,
+          "min": "2021-07-16T12:00:00.000Z",
+          "max": "2026-06-13T12:00:00.000Z"
+        },
+        {
+          "name": "settledAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 2660,
+          "distinctCount": 6207,
+          "min": "2020-02-20",
+          "max": "2026-07-31"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "tradeId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-07T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.markets",
+      "name": "counterparties",
+      "rowCount": 609,
+      "fields": [
+        {
+          "name": "counterpartyId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 609,
+          "min": "1",
+          "max": "609"
+        },
+        {
+          "name": "counterpartyName",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 413,
+          "normalizedDistinctCount": 413
+        },
+        {
+          "name": "leiCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 213,
+          "distinctCount": 396,
+          "normalizedDistinctCount": 396
+        },
+        {
+          "name": "ratingCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18,
+          "normalizedDistinctCount": 18
+        },
+        {
+          "name": "countryCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 13,
+          "normalizedDistinctCount": 11
+        },
+        {
+          "name": "onboardedAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 424,
+          "min": "1900-01-01",
+          "max": "2026-05-30"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "counterpartyId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-06T12:00:00.000Z"
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "main.markets",
+      "fromEntity": "trades",
+      "fromField": "portfolioId",
+      "toNamespace": "main.markets",
+      "toEntity": "portfolios",
+      "toField": "portfolioId",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.markets",
+      "fromEntity": "trades",
+      "fromField": "instrumentId",
+      "toNamespace": "main.markets",
+      "toEntity": "instruments",
+      "toField": "instrumentId",
+      "orphanCount": 65,
+      "origin": "declared"
+    }
+  ]
+}

@@ -7,6 +7,7 @@
 // (its ADR-0010).
 
 import type { ReasoningEffort } from './effort-levels';
+import { buildModel, type BuiltModel } from './model-factory';
 
 /**
  * A Mastra model config. Either a router id string (`openai/gpt-4o-mini`,
@@ -22,7 +23,27 @@ export type AgentModelConfig =
       apiKey: string;
       url?: string;
       headers?: Record<string, string>;
-    };
+    }
+  | CustomAnthropicModelConfig;
+
+/**
+ * An Anthropic-compatible custom endpoint (BA-281, ADR-0032): plain data,
+ * built into an @ai-sdk/anthropic model by `buildModel` (model-factory.ts)
+ * at call time, because Mastra's router cannot target a custom Anthropic URL.
+ */
+export interface CustomAnthropicModelConfig {
+  kind: 'custom-anthropic';
+  id: `anthropic/${string}`;
+  /** Normalised: the server root plus /v1. */
+  baseUrl: string;
+  apiKey?: string;
+}
+
+export function isCustomAnthropicConfig(
+  config: AgentModelConfig,
+): config is CustomAnthropicModelConfig {
+  return typeof config === 'object' && 'kind' in config;
+}
 
 /**
  * Resolves the persisted model. `modelOverride` replaces the saved model or
@@ -38,7 +59,8 @@ export function setAgentModelResolver(fn: AgentModelResolver): void {
   resolver = fn;
 }
 
-export async function resolveAgentModel(
+/** The saved model as plain data (what tuning and the visual designer read). */
+export async function resolveAgentModelConfig(
   modelOverride?: string,
 ): Promise<AgentModelConfig> {
   if (resolver) {
@@ -46,6 +68,13 @@ export async function resolveAgentModel(
   }
   // Fallback: env-bound string router (OPENAI_API_KEY) when no settings exist.
   return 'openai/gpt-4o-mini';
+}
+
+/** What an agent's `model` function returns (configs built by `buildModel`). */
+export async function resolveAgentModel(
+  modelOverride?: string,
+): Promise<BuiltModel> {
+  return buildModel(await resolveAgentModelConfig(modelOverride));
 }
 
 /**

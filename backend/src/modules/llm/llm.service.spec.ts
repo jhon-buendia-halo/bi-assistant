@@ -5,7 +5,28 @@ jest.mock('@mastra/core/agent', () => ({
   },
 }));
 
-import { resolveAgentModel } from '../../mastra/model-resolver';
+jest.mock('./custom-endpoint/config', () => ({
+  normalizeBaseUrl: jest.fn(),
+  customModelConfig: jest.fn(),
+  endpointHost: jest.fn((url: string) => new URL(url).host),
+}));
+jest.mock('./custom-endpoint/probe', () => ({ probeOpenAiStyle: jest.fn() }));
+jest.mock('./custom-endpoint/probe-anthropic', () => ({
+  probeAnthropicStyle: jest.fn(),
+}));
+jest.mock('./custom-endpoint/models', () => ({
+  listEndpointModels: jest.fn(),
+}));
+
+import {
+  resolveAgentModel,
+  resolveAgentModelConfig,
+} from '../../mastra/model-resolver';
+import { customModelConfig, normalizeBaseUrl } from './custom-endpoint/config';
+import { probeOpenAiStyle } from './custom-endpoint/probe';
+import { probeAnthropicStyle } from './custom-endpoint/probe-anthropic';
+import { listEndpointModels } from './custom-endpoint/models';
+import { effortLevelsFor } from '../../mastra/effort-levels';
 import {
   CryptoService,
   UnreadableSecretError,
@@ -42,6 +63,13 @@ function serviceWithMocks(opts?: {
     patch: jest.fn().mockImplementation((patch: Partial<LlmSettingsDoc>) => {
       if (!doc) return Promise.resolve(null);
       doc = { ...doc, ...patch };
+      return Promise.resolve(doc);
+    }),
+    unset: jest.fn().mockImplementation((...fields: string[]) => {
+      if (!doc) return Promise.resolve(null);
+      const next: Record<string, unknown> = { ...doc };
+      for (const field of fields) delete next[field];
+      doc = next as unknown as LlmSettingsDoc;
       return Promise.resolve(doc);
     }),
   } as unknown as LlmSettingsRepository;
@@ -486,6 +514,7 @@ describe('a stored key the app secret cannot read', () => {
       reasoningEffort: 'low',
       configured: false,
       keyUnreadable: true,
+      apiStyle: null,
     });
   });
 
@@ -656,6 +685,693 @@ describe('reasoning effort per model', () => {
       levels: [],
       defaultEffort: null,
       probeEffort: null,
+    });
+  });
+});
+
+describe('custom endpoint provider (BA-281)', () => {
+  const unreadableMessage =
+    "The saved API key can't be read because the app secret changed — enter it again in Settings → LLM Configuration";
+  const normalize = jest.mocked(normalizeBaseUrl);
+  const modelConfig = jest.mocked(customModelConfig);
+  const openAiProbe = jest.mocked(probeOpenAiStyle);
+  const anthropicProbe = jest.mocked(probeAnthropicStyle);
+  const listModels = jest.mocked(listEndpointModels);
+
+  const customDoc = (
+    overrides: Partial<LlmSettingsDoc> = {},
+  ): LlmSettingsDoc => ({
+    key: 'llm',
+    provider: 'custom',
+    apiStyle: 'openai',
+    model: 'llama3',
+    baseUrl: 'http://127.0.0.1:8317/v1',
+    apiKeyCiphertext: 'enc(custom-key)',
+    reasoningEffort: 'high',
+    ...overrides,
+  });
+  const openAiDoc: LlmSettingsDoc = {
+    key: 'llm',
+    provider: 'openai',
+    model: 'gpt-4o-mini',
+    baseUrl: '',
+    apiKeyCiphertext: 'enc(sk-openai)',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    normalize.mockImplementation((style, url) =>
+      style === 'anthropic' && !url.endsWith('/v1') ? `${url}/v1` : url,
+    );
+    modelConfig.mockImplementation((settings) => ({
+      id: `custom/${settings.model}`,
+      apiKey: settings.apiKey ?? '',
+      url: settings.baseUrl,
+    }));
+    openAiProbe.mockResolvedValue({ reply: 'ok', latencyMs: 12 });
+    anthropicProbe.mockResolvedValue({ reply: 'ready', latencyMs: 34 });
+    listModels.mockResolvedValue({ ok: true, models: ['llama3', 'qwen'] });
+  });
+
+  describe('validation (R44 order and texts)', () => {
+    const test = (dto: Record<string, unknown>) =>
+      serviceWith().testConnection(
+        dto as unknown as Parameters<LlmService['testConnection']>[0],
+      );
+
+    it('rejects an unknown provider naming all four', async () => {
+      await expect(test({ provider: 'azure', model: 'x' })).rejects.toThrow(
+        'provider must be one of: openai, anthropic, lenai, custom',
+      );
+    });
+
+    it('checks the API style first (before base URL and model)', async () => {
+      await expect(test({ provider: 'custom' })).rejects.toThrow(
+        'apiStyle must be one of: openai, anthropic',
+      );
+      await expect(
+        test({ provider: 'custom', apiStyle: 'azure', baseUrl: 'x' }),
+      ).rejects.toThrow('apiStyle must be one of: openai, anthropic');
+    });
+
+    it('then base URL presence', async () => {
+      await expect(
+        test({ provider: 'custom', apiStyle: 'openai', baseUrl: '   ' }),
+      ).rejects.toThrow('baseUrl is required for custom');
+    });
+
+    it.each(['ftp://host/v1', 'not a url', '127.0.0.1:8317'])(
+      'then base URL form (%s)',
+      async (baseUrl) => {
+        await expect(
+          test({ provider: 'custom', apiStyle: 'openai', baseUrl }),
+        ).rejects.toThrow('baseUrl must be an http or https URL');
+      },
+    );
+
+    it('then the model', async () => {
+      await expect(
+        test({
+          provider: 'custom',
+          apiStyle: 'openai',
+          baseUrl: 'http://127.0.0.1:8317/v1',
+          model: ' ',
+        }),
+      ).rejects.toThrow('model is required');
+    });
+
+    it.each(['http://localhost:11434/v1', 'https://10.0.0.5/v1'])(
+      'accepts loopback and private hosts (%s)',
+      async (baseUrl) => {
+        await expect(
+          test({ provider: 'custom', apiStyle: 'openai', baseUrl, model: 'm' }),
+        ).resolves.toMatchObject({ provider: 'custom', model: 'm' });
+      },
+    );
+
+    it('ignores an API style sent for another provider', async () => {
+      const originalFetch = global.fetch;
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValue({
+          choices: [{ message: { content: '{"status":"ok"}' } }],
+        }),
+      }) as typeof fetch;
+      try {
+        const { service, repository } = serviceWithMocks();
+        await service.save({
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          apiKey: 'sk-key',
+          apiStyle: 'bogus' as never,
+        });
+        const stored = await repository.get();
+        expect(stored).not.toHaveProperty('apiStyle');
+        expect((await service.getView()).apiStyle).toBeNull();
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+  });
+
+  describe('testConnection', () => {
+    it('probes the OpenAI style on the normalised URL at the lowest effort', async () => {
+      const service = serviceWith();
+
+      const result = await service.testConnection({
+        provider: 'custom',
+        apiStyle: 'openai',
+        baseUrl: ' http://127.0.0.1:8317/v1// ',
+        model: 'gpt-5',
+        apiKey: ' sk-typed ',
+      });
+
+      expect(normalize).toHaveBeenCalledWith(
+        'openai',
+        'http://127.0.0.1:8317/v1',
+      );
+      expect(openAiProbe).toHaveBeenCalledWith({
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        model: 'gpt-5',
+        apiKey: 'sk-typed',
+        effort: effortLevelsFor('gpt-5')[0],
+      });
+      expect(anthropicProbe).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        provider: 'custom',
+        model: 'gpt-5',
+        reply: 'ok',
+        latencyMs: 12,
+      });
+    });
+
+    it('probes the Anthropic style on <root>/v1', async () => {
+      const result = await serviceWith().testConnection({
+        provider: 'custom',
+        apiStyle: 'anthropic',
+        baseUrl: 'http://127.0.0.1:8317/',
+        model: 'claude-opus-4-1',
+        apiKey: 'sk-ant',
+      });
+
+      expect(anthropicProbe).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseUrl: 'http://127.0.0.1:8317/v1',
+          model: 'claude-opus-4-1',
+          apiKey: 'sk-ant',
+        }),
+      );
+      expect(openAiProbe).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        provider: 'custom',
+        model: 'claude-opus-4-1',
+        reply: 'ready',
+        latencyMs: 34,
+      });
+    });
+
+    it('sends no effort for a model without levels', async () => {
+      await serviceWith().testConnection({
+        provider: 'custom',
+        apiStyle: 'openai',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        model: 'gpt-4o-mini',
+      });
+
+      expect(openAiProbe.mock.calls[0][0]).not.toHaveProperty('effort');
+    });
+
+    it('calls a keyless endpoint with no key when nothing is stored', async () => {
+      await serviceWith().testConnection({
+        provider: 'custom',
+        apiStyle: 'openai',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        model: 'llama3',
+      });
+
+      expect(openAiProbe.mock.calls[0][0]).not.toHaveProperty('apiKey');
+    });
+
+    it('uses the stored key when the stored provider is custom', async () => {
+      await serviceWith({
+        settings: customDoc(),
+        decryptedKey: 'custom-key',
+      }).testConnection({
+        provider: 'custom',
+        apiStyle: 'openai',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        model: 'llama3',
+        apiKey: '  ',
+      });
+
+      expect(openAiProbe.mock.calls[0][0]).toMatchObject({
+        apiKey: 'custom-key',
+      });
+    });
+
+    it('never sends a key stored for another provider', async () => {
+      const { service, crypto } = serviceWithMocks({
+        settings: openAiDoc,
+        decryptedKey: 'sk-openai',
+      });
+
+      await service.testConnection({
+        provider: 'custom',
+        apiStyle: 'openai',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        model: 'llama3',
+      });
+
+      expect(openAiProbe.mock.calls[0][0]).not.toHaveProperty('apiKey');
+      expect(jest.spyOn(crypto, 'decrypt')).not.toHaveBeenCalled();
+    });
+
+    it('fails with the re-entry message when the stored custom key is unreadable', async () => {
+      await expect(
+        serviceWith({ settings: customDoc(), unreadable: true }).testConnection(
+          {
+            provider: 'custom',
+            apiStyle: 'openai',
+            baseUrl: 'http://127.0.0.1:8317/v1',
+            model: 'llama3',
+          },
+        ),
+      ).rejects.toThrow(unreadableMessage);
+      expect(openAiProbe).not.toHaveBeenCalled();
+    });
+
+    it("reports the probe's own failure text", async () => {
+      openAiProbe.mockRejectedValue(
+        new Error('The endpoint rejected the API key (401)'),
+      );
+
+      await expect(
+        serviceWith().testConnection({
+          provider: 'custom',
+          apiStyle: 'openai',
+          baseUrl: 'http://127.0.0.1:8317/v1',
+          model: 'llama3',
+          apiKey: 'bad',
+        }),
+      ).rejects.toThrow('The endpoint rejected the API key (401)');
+    });
+  });
+
+  describe('save', () => {
+    it('stores a typed key encrypted, the API style and the trimmed base URL', async () => {
+      const { service, repository } = serviceWithMocks({
+        decryptedKey: 'sk-custom-1234',
+      });
+
+      const view = await service.save({
+        provider: 'custom',
+        apiStyle: 'anthropic',
+        baseUrl: ' http://127.0.0.1:8317/ ',
+        model: 'claude-opus-4-1',
+        apiKey: 'sk-custom-1234',
+      });
+
+      expect(anthropicProbe).toHaveBeenCalledTimes(1);
+      expect(await repository.get()).toMatchObject({
+        provider: 'custom',
+        apiStyle: 'anthropic',
+        baseUrl: 'http://127.0.0.1:8317',
+        model: 'claude-opus-4-1',
+        apiKeyCiphertext: 'enc(sk-custom-1234)',
+      });
+      expect(view).toMatchObject({
+        provider: 'custom',
+        apiStyle: 'anthropic',
+        baseUrl: 'http://127.0.0.1:8317',
+        apiKeyMasked: '••••••••1234',
+        configured: true,
+      });
+    });
+
+    it('saves a keyless endpoint with no ciphertext over another provider', async () => {
+      const { service, repository, crypto } = serviceWithMocks({
+        settings: openAiDoc,
+      });
+
+      const view = await service.save({
+        provider: 'custom',
+        apiStyle: 'openai',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        model: 'llama3',
+      });
+
+      const stored = await repository.get();
+      expect(stored).not.toHaveProperty('apiKeyCiphertext');
+      expect(stored).toMatchObject({ provider: 'custom', apiStyle: 'openai' });
+      expect(
+        jest.spyOn(repository, 'save').mock.calls[0][0],
+      ).not.toHaveProperty('apiKeyCiphertext');
+      expect(jest.spyOn(crypto, 'encrypt')).not.toHaveBeenCalled();
+      expect(view).toMatchObject({
+        provider: 'custom',
+        apiKeyMasked: null,
+        configured: true,
+        apiStyle: 'openai',
+      });
+    });
+
+    it('keeps the stored custom key when the key is blank', async () => {
+      const { service, repository } = serviceWithMocks({
+        settings: customDoc(),
+        decryptedKey: 'custom-key',
+      });
+
+      await service.save({
+        provider: 'custom',
+        apiStyle: 'openai',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        model: 'qwen',
+        apiKey: '',
+      });
+
+      expect(openAiProbe.mock.calls[0][0]).toMatchObject({
+        apiKey: 'custom-key',
+      });
+      expect((await repository.get())?.apiKeyCiphertext).toBe(
+        'enc(custom-key)',
+      );
+    });
+
+    it('persists nothing when the probe fails', async () => {
+      openAiProbe.mockRejectedValue(
+        new Error(
+          'The endpoint answered 404 at http://127.0.0.1:8317/chat/completions — check the base URL (OpenAI-compatible servers usually end in /v1)',
+        ),
+      );
+      const { service, repository } = serviceWithMocks();
+
+      await expect(
+        service.save({
+          provider: 'custom',
+          apiStyle: 'openai',
+          baseUrl: 'http://127.0.0.1:8317',
+          model: 'llama3',
+        }),
+      ).rejects.toThrow('The endpoint answered 404');
+      expect(jest.spyOn(repository, 'save')).not.toHaveBeenCalled();
+    });
+
+    describe('switching away from custom (R6 unchanged)', () => {
+      const originalFetch = global.fetch;
+      beforeEach(() => {
+        global.fetch = jest.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: jest.fn().mockResolvedValue({
+            choices: [{ message: { content: '{"status":"ok"}' } }],
+          }),
+        }) as typeof fetch;
+      });
+      afterEach(() => {
+        global.fetch = originalFetch;
+      });
+
+      it('stores a typed key and drops the API style', async () => {
+        const { service, repository } = serviceWithMocks({
+          settings: customDoc(),
+          decryptedKey: 'sk-openai-5678',
+        });
+
+        const view = await service.save({
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          apiKey: 'sk-openai-5678',
+        });
+
+        const stored = await repository.get();
+        expect(stored).not.toHaveProperty('apiStyle');
+        expect(stored).toMatchObject({
+          provider: 'openai',
+          apiKeyCiphertext: 'enc(sk-openai-5678)',
+        });
+        expect(view.apiStyle).toBeNull();
+      });
+
+      it('never sends the stored custom key to a public provider', async () => {
+        const { service, repository, crypto } = serviceWithMocks({
+          settings: customDoc(),
+          decryptedKey: 'custom-key',
+        });
+
+        await expect(
+          service.save({ provider: 'openai', model: 'gpt-4o-mini' }),
+        ).rejects.toThrow('apiKey is required — none stored yet');
+        await expect(
+          service.testConnection({
+            provider: 'anthropic',
+            model: 'claude-opus-4-1',
+            apiKey: ' ',
+          }),
+        ).rejects.toThrow('apiKey is required — none stored yet');
+        expect(jest.spyOn(crypto, 'decrypt')).not.toHaveBeenCalled();
+        expect(global.fetch).not.toHaveBeenCalled();
+        expect(jest.spyOn(repository, 'save')).not.toHaveBeenCalled();
+      });
+
+      it('still reuses the stored key between public providers', async () => {
+        const { service } = serviceWithMocks({
+          settings: openAiDoc,
+          decryptedKey: 'sk-openai',
+        });
+
+        await expect(
+          service.testConnection({ provider: 'openai', model: 'gpt-4o-mini' }),
+        ).resolves.toMatchObject({ provider: 'openai' });
+      });
+
+      it('requires a key when the stored custom endpoint is keyless', async () => {
+        const { service, repository } = serviceWithMocks({
+          settings: customDoc({ apiKeyCiphertext: undefined }),
+        });
+
+        await expect(
+          service.save({ provider: 'openai', model: 'gpt-4o-mini' }),
+        ).rejects.toThrow('apiKey is required — none stored yet');
+        expect(jest.spyOn(repository, 'save')).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('getView', () => {
+    it('reads a keyless custom endpoint as configured with no masked key', async () => {
+      const { apiKeyCiphertext, ...keyless } = customDoc();
+      void apiKeyCiphertext;
+
+      await expect(
+        serviceWith({ settings: keyless }).getView(),
+      ).resolves.toEqual({
+        provider: 'custom',
+        model: 'llama3',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        apiKeyMasked: null,
+        reasoningEffort: 'high',
+        configured: true,
+        apiStyle: 'openai',
+      });
+    });
+
+    it('masks a stored custom key', async () => {
+      await expect(
+        serviceWith({
+          settings: customDoc(),
+          decryptedKey: 'sk-local-9876',
+        }).getView(),
+      ).resolves.toMatchObject({
+        apiKeyMasked: '••••••••9876',
+        configured: true,
+        apiStyle: 'openai',
+      });
+    });
+
+    it('answers apiStyle null with nothing stored or for another provider', async () => {
+      await expect(serviceWith().getView()).resolves.toMatchObject({
+        apiStyle: null,
+        configured: false,
+      });
+      await expect(
+        serviceWith({
+          settings: { ...openAiDoc, apiStyle: 'anthropic' },
+        }).getView(),
+      ).resolves.toMatchObject({ apiStyle: null, configured: true });
+    });
+
+    it('does not read a non-custom doc without a key as configured', async () => {
+      const { apiKeyCiphertext, ...keyless } = openAiDoc;
+      void apiKeyCiphertext;
+
+      await expect(
+        serviceWith({ settings: keyless }).getView(),
+      ).resolves.toMatchObject({ apiKeyMasked: null, configured: false });
+    });
+  });
+
+  describe('agent model resolver', () => {
+    it('builds the custom route from the saved settings and key', async () => {
+      const service = serviceWith({
+        settings: customDoc({ apiStyle: 'anthropic', baseUrl: 'http://h:1' }),
+        decryptedKey: 'custom-key',
+      });
+      await service.onModuleInit();
+
+      await expect(resolveAgentModelConfig()).resolves.toEqual({
+        id: 'custom/llama3',
+        apiKey: 'custom-key',
+        url: 'http://h:1',
+      });
+      expect(modelConfig).toHaveBeenCalledWith({
+        apiStyle: 'anthropic',
+        baseUrl: 'http://h:1',
+        model: 'llama3',
+        apiKey: 'custom-key',
+      });
+    });
+
+    it("honours a user agent's model override", async () => {
+      const service = serviceWith({ settings: customDoc() });
+      await service.onModuleInit();
+
+      await resolveAgentModelConfig(' qwen ');
+
+      expect(modelConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'qwen' }),
+      );
+    });
+
+    it('passes no key for a keyless endpoint', async () => {
+      const { service, crypto } = serviceWithMocks({
+        settings: customDoc({ apiKeyCiphertext: undefined }),
+      });
+      await service.onModuleInit();
+
+      await resolveAgentModelConfig();
+
+      expect(modelConfig.mock.calls[0][0]).not.toHaveProperty('apiKey');
+      expect(jest.spyOn(crypto, 'decrypt')).not.toHaveBeenCalled();
+    });
+
+    it('fails with the re-entry message when the custom key is unreadable', async () => {
+      const service = serviceWith({ settings: customDoc(), unreadable: true });
+      await service.onModuleInit();
+
+      await expect(resolveAgentModelConfig()).rejects.toThrow(
+        unreadableMessage,
+      );
+    });
+  });
+
+  describe('migration M11', () => {
+    it('skips a keyless custom endpoint', async () => {
+      const { service, crypto, repository } = serviceWithMocks({
+        settings: customDoc({ apiKeyCiphertext: undefined }),
+        reencrypted: 'never',
+      });
+
+      await service.onModuleInit();
+
+      expect(
+        jest.spyOn(crypto, 'reencryptFormerSecret'),
+      ).not.toHaveBeenCalled();
+      expect(jest.spyOn(repository, 'patch')).not.toHaveBeenCalled();
+    });
+
+    it('re-encrypts a stored custom key', async () => {
+      const { service, repository } = serviceWithMocks({
+        settings: customDoc(),
+        reencrypted: 'sealed-now',
+      });
+
+      await service.onModuleInit();
+
+      expect(jest.spyOn(repository, 'patch')).toHaveBeenCalledWith({
+        apiKeyCiphertext: 'sealed-now',
+      });
+    });
+  });
+
+  describe('listModels (R48)', () => {
+    const body = {
+      provider: 'custom' as const,
+      apiStyle: 'openai' as const,
+      baseUrl: 'http://127.0.0.1:8317/v1/',
+    };
+
+    it('rejects any provider but custom', async () => {
+      await expect(
+        serviceWith().listModels({ ...body, provider: 'openai' as never }),
+      ).resolves.toEqual({
+        ok: false,
+        message: 'provider must be custom to load models',
+      });
+      expect(listModels).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [{ apiStyle: 'azure' }, 'apiStyle must be one of: openai, anthropic'],
+      [{ baseUrl: '' }, 'baseUrl is required for custom'],
+      [{ baseUrl: 'file:///etc' }, 'baseUrl must be an http or https URL'],
+    ])('validates as R44 (%o)', async (patch, message) => {
+      await expect(
+        serviceWith().listModels({ ...body, ...patch } as never),
+      ).resolves.toEqual({ ok: false, message });
+      expect(listModels).not.toHaveBeenCalled();
+    });
+
+    it('lists through the normalised URL with the typed key and persists nothing', async () => {
+      const { service, repository } = serviceWithMocks();
+
+      await expect(
+        service.listModels({ ...body, apiKey: ' sk-typed ' }),
+      ).resolves.toEqual({ ok: true, models: ['llama3', 'qwen'] });
+      expect(normalize).toHaveBeenCalledWith(
+        'openai',
+        'http://127.0.0.1:8317/v1',
+      );
+      expect(listModels).toHaveBeenCalledWith({
+        apiStyle: 'openai',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        apiKey: 'sk-typed',
+      });
+      expect(jest.spyOn(repository, 'save')).not.toHaveBeenCalled();
+      expect(jest.spyOn(repository, 'patch')).not.toHaveBeenCalled();
+    });
+
+    it('uses <root>/v1 for the Anthropic style', async () => {
+      await serviceWith().listModels({
+        ...body,
+        apiStyle: 'anthropic',
+        baseUrl: 'http://127.0.0.1:8317',
+      });
+
+      expect(listModels).toHaveBeenCalledWith({
+        apiStyle: 'anthropic',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+      });
+    });
+
+    it('uses the stored custom key when none is typed', async () => {
+      await serviceWith({
+        settings: customDoc(),
+        decryptedKey: 'custom-key',
+      }).listModels(body);
+
+      expect(listModels.mock.calls[0][0]).toMatchObject({
+        apiKey: 'custom-key',
+      });
+    });
+
+    it('sends no key stored for another provider', async () => {
+      await serviceWith({
+        settings: openAiDoc,
+        decryptedKey: 'sk-openai',
+      }).listModels(body);
+
+      expect(listModels.mock.calls[0][0]).not.toHaveProperty('apiKey');
+    });
+
+    it('answers the re-entry message for an unreadable stored custom key', async () => {
+      await expect(
+        serviceWith({ settings: customDoc(), unreadable: true }).listModels(
+          body,
+        ),
+      ).resolves.toEqual({ ok: false, message: unreadableMessage });
+    });
+
+    it("passes the endpoint's failure through", async () => {
+      listModels.mockResolvedValue({
+        ok: false,
+        message: 'Model list request timed out after 15s',
+      });
+
+      await expect(serviceWith().listModels(body)).resolves.toEqual({
+        ok: false,
+        message: 'Model list request timed out after 15s',
+      });
     });
   });
 });

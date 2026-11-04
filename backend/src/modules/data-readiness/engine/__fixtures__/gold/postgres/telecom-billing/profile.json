@@ -1,0 +1,156 @@
+{
+  "sourceId": "telecom-billing-gold",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "billing",
+      "name": "subscribers",
+      "rowCount": 2400000,
+      "readable": true,
+      "keys": [
+        { "kind": "primary", "fields": ["subscriber_id"], "duplicateCount": 0 },
+        { "kind": "unique", "fields": ["msisdn"], "duplicateCount": 640 }
+      ],
+      "fields": [
+        { "name": "subscriber_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 2400000, "min": "1", "max": "2400000" },
+        { "name": "account_uuid", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 2400000, "formatRule": "uuid", "invalidFormatCount": 1850 },
+        { "name": "msisdn", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 2399360 },
+        { "name": "email", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 2300000, "formatRule": "email", "invalidFormatCount": 3200 },
+        { "name": "plan_code", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 140, "normalizedDistinctCount": 120 },
+        { "name": "status", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 6, "normalizedDistinctCount": 6 },
+        { "name": "churn_reason", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 12, "normalizedDistinctCount": 12 },
+        { "name": "activation_date", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 7050, "min": "2007-04-01", "max": "2026-07-20" },
+        { "name": "churn_date", "type": "date", "semanticType": "temporal", "nullable": true, "nullCount": 1560000, "distinctCount": 6390, "min": "2009-01-15", "max": "2026-07-18" }
+      ]
+    },
+    {
+      "namespace": "billing",
+      "name": "plans",
+      "rowCount": 140,
+      "readable": true,
+      "keys": [{ "kind": "primary", "fields": ["plan_code"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "plan_code", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 140, "normalizedDistinctCount": 140 },
+        { "name": "plan_name", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 140, "normalizedDistinctCount": 140 },
+        { "name": "monthly_fee_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 96, "min": "0", "max": "1299900" },
+        { "name": "data_cap_gb", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 18, "min": "0", "max": "500" },
+        { "name": "discount_share", "type": "numeric", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 34, "min": "0", "max": "1.35" },
+        { "name": "contract_months", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 5, "min": "0", "max": "36" },
+        { "name": "effective_from", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 118, "min": "2015-01-01", "max": "2026-06-01" },
+        { "name": "effective_to", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 96, "min": "2016-06-30", "max": "2099-12-31" }
+      ]
+    },
+    {
+      "namespace": "billing",
+      "name": "invoices",
+      "rowCount": 18600000,
+      "readable": true,
+      "keys": [
+        { "kind": "primary", "fields": ["invoice_id"], "duplicateCount": 0 },
+        { "kind": "unique", "fields": ["invoice_number"], "duplicateCount": 0 }
+      ],
+      "fields": [
+        { "name": "invoice_id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 18600000, "min": "1", "max": "18600000" },
+        { "name": "invoice_number", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 18600000 },
+        { "name": "subscriber_id", "type": "integer", "semanticType": "numeric", "nullable": true, "nullCount": 0, "distinctCount": 2280000, "min": "1", "max": "2400000" },
+        { "name": "service_address_id", "type": "integer", "semanticType": "numeric", "nullable": true, "nullCount": 4092000, "distinctCount": 1980000, "min": "10000", "max": "3990000" },
+        { "name": "billing_period_from", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 30, "min": "2024-02-01", "max": "2026-07-01" },
+        { "name": "billing_period_to", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 36, "min": "2019-01-31", "max": "2021-12-31" },
+        { "name": "amount_due_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 840000, "min": "-1245000", "max": "899000000" },
+        { "name": "issued_at", "type": "timestamptz", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 900, "min": "2024-02-01T06:00:00Z", "max": "2026-07-25T06:00:00Z" }
+      ]
+    },
+    {
+      "namespace": "billing",
+      "name": "invoice_lines",
+      "rowCount": 92000000,
+      "readable": true,
+      "keys": [{ "kind": "primary", "fields": ["invoice_line_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "invoice_line_id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 92000000, "min": "1", "max": "92000000" },
+        { "name": "invoice_id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 18600000, "min": "1", "max": "18600000" },
+        { "name": "charge_code", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 480, "normalizedDistinctCount": 480 },
+        { "name": "charge_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 620000, "min": "0", "max": "45000000" },
+        { "name": "quantity", "type": "numeric", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 999, "min": "0", "max": "999" },
+        { "name": "usage_bytes", "type": "bigint", "semanticType": "numeric", "nullable": true, "nullCount": 0, "distinctCount": 4100000, "min": "0", "max": "990000000000" },
+        { "name": "rated_at", "type": "timestamptz", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 906, "min": "2024-02-01T00:00:00Z", "max": "2026-07-25T06:00:00Z" }
+      ]
+    },
+    {
+      "namespace": "billing",
+      "name": "usage_daily",
+      "rowCount": 8760000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        { "name": "record_id", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 8759400 },
+        { "name": "subscriber_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 2400000, "min": "1", "max": "2400000" },
+        { "name": "usage_date", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 908, "min": "2024-02-01", "max": "2026-07-27" },
+        { "name": "voice_minutes", "type": "numeric", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 1441, "min": "0", "max": "1440" },
+        { "name": "data_mb", "type": "numeric", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 720000, "min": "0", "max": "980000" },
+        { "name": "sms_count", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 3201, "min": "0", "max": "3200" },
+        { "name": "roaming_flag", "type": "boolean", "semanticType": "boolean", "nullable": false, "nullCount": 0, "distinctCount": 2 }
+      ]
+    },
+    {
+      "namespace": "billing",
+      "name": "prepaid_topups",
+      "rowCount": 41000000,
+      "readable": true,
+      "keys": [{ "kind": "primary", "fields": ["topup_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "topup_id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 41000000, "min": "1", "max": "41000000" },
+        { "name": "mobile_number", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 1900000, "formatRule": "phone", "invalidFormatCount": 12400 },
+        { "name": "topup_amount_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 42, "min": "0", "max": "5000000" },
+        { "name": "channel_cd", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 24, "normalizedDistinctCount": 18 },
+        { "name": "topped_up_at", "type": "timestamptz", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 4200, "min": "2011-06-01T00:00:00Z", "max": "2022-11-30T23:59:00Z" },
+        { "name": "legacy_load_date", "type": "timestamp", "semanticType": "temporal", "nullable": true, "nullCount": 0, "distinctCount": 3900, "min": "1899-12-31T00:00:00Z", "max": "2022-10-15T00:00:00Z" }
+      ]
+    },
+    {
+      "namespace": "network",
+      "name": "cell_sites",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [{ "kind": "primary", "fields": ["cell_site_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "cell_site_id", "type": "integer", "semanticType": "numeric", "nullable": false },
+        { "name": "site_code", "type": "text", "semanticType": "text", "nullable": false },
+        { "name": "latitude", "type": "numeric", "semanticType": "numeric", "nullable": true },
+        { "name": "longitude", "type": "numeric", "semanticType": "numeric", "nullable": true },
+        { "name": "commissioned_at", "type": "timestamptz", "semanticType": "temporal", "nullable": true }
+      ]
+    },
+    {
+      "namespace": "network",
+      "name": "tower_leases",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [{ "kind": "primary", "fields": ["lease_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "lease_id", "type": "integer", "semanticType": "numeric", "nullable": false },
+        { "name": "landlord_name", "type": "text", "semanticType": "text", "nullable": false },
+        { "name": "annual_rent_cents", "type": "bigint", "semanticType": "numeric", "nullable": true },
+        { "name": "lease_start", "type": "date", "semanticType": "temporal", "nullable": true },
+        { "name": "lease_end", "type": "date", "semanticType": "temporal", "nullable": true }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "billing", "fromEntity": "invoices", "fromField": "subscriber_id",
+      "toNamespace": "billing", "toEntity": "subscribers", "toField": "subscriber_id",
+      "orphanCount": 41200, "origin": "declared"
+    },
+    {
+      "fromNamespace": "billing", "fromEntity": "invoice_lines", "fromField": "invoice_id",
+      "toNamespace": "billing", "toEntity": "invoices", "toField": "invoice_id",
+      "orphanCount": 0, "origin": "declared"
+    },
+    {
+      "fromNamespace": "billing", "fromEntity": "usage_daily", "fromField": "subscriber_id",
+      "toNamespace": "billing", "toEntity": "subscribers", "toField": "subscriber_id",
+      "orphanCount": 26400, "origin": "inferred"
+    }
+  ]
+}

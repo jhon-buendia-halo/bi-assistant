@@ -1,0 +1,740 @@
+{
+  "sourceId": "gold-databricks-logistics-medium-w5-08",
+  "sourceType": "databricks",
+  "entities": [
+    {
+      "namespace": "main.operations",
+      "name": "shipments",
+      "rowCount": 7722,
+      "fields": [
+        {
+          "name": "shipmentId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7722,
+          "min": "1",
+          "max": "7722"
+        },
+        {
+          "name": "carrierId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 308,
+          "min": "1",
+          "max": "308"
+        },
+        {
+          "name": "originCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 20,
+          "normalizedDistinctCount": 20
+        },
+        {
+          "name": "destinationCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6,
+          "normalizedDistinctCount": 6
+        },
+        {
+          "name": "awbRef",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 5754
+        },
+        {
+          "name": "shipmentStatus",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 37,
+          "normalizedDistinctCount": 37
+        },
+        {
+          "name": "serviceLevel",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 27,
+          "normalizedDistinctCount": 27
+        },
+        {
+          "name": "weightKg",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 237,
+          "min": "0",
+          "max": "900"
+        },
+        {
+          "name": "tenderedAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 5026,
+          "min": "2022-04-19",
+          "max": "2026-06-12"
+        },
+        {
+          "name": "deliveredAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 1158,
+          "distinctCount": 4193,
+          "min": "2020-09-11T12:00:00.000Z",
+          "max": "2026-06-09T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "shipmentId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-07-27T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.operations",
+      "name": "carriers",
+      "rowCount": 308,
+      "fields": [
+        {
+          "name": "carrierId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 308,
+          "min": "1",
+          "max": "308"
+        },
+        {
+          "name": "carrierName",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 283,
+          "normalizedDistinctCount": 283
+        },
+        {
+          "name": "scacCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 291,
+          "normalizedDistinctCount": 291
+        },
+        {
+          "name": "dispatchEmail",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 298,
+          "normalizedDistinctCount": 298,
+          "formatRule": "email",
+          "invalidFormatCount": 36
+        },
+        {
+          "name": "onboardedAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 206,
+          "min": "2023-01-31T12:00:00.000Z",
+          "max": "2026-07-09T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "carrierId"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "scacCode"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-07-28T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.operations",
+      "name": "trackingEvents",
+      "rowCount": 2467,
+      "fields": [
+        {
+          "name": "trackingEventId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2467,
+          "min": "1",
+          "max": "2467"
+        },
+        {
+          "name": "shipmentId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1277,
+          "min": "1",
+          "max": "7722"
+        },
+        {
+          "name": "eventCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7,
+          "normalizedDistinctCount": 4
+        },
+        {
+          "name": "scannerCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7,
+          "normalizedDistinctCount": 7
+        },
+        {
+          "name": "facilityCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 1530,
+          "distinctCount": 10,
+          "normalizedDistinctCount": 10
+        },
+        {
+          "name": "recordedAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1439,
+          "min": "2021-04-01",
+          "max": "2026-08-06"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "trackingEventId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-02T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.operations",
+      "name": "warehouses",
+      "rowCount": 694,
+      "fields": [
+        {
+          "name": "warehouseId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 694,
+          "min": "1",
+          "max": "694"
+        },
+        {
+          "name": "warehouseName",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 574,
+          "normalizedDistinctCount": 574
+        },
+        {
+          "name": "regionCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6,
+          "normalizedDistinctCount": 6
+        },
+        {
+          "name": "dockCount",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 173,
+          "min": "0",
+          "max": "934"
+        },
+        {
+          "name": "utilizationPct",
+          "type": "double",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 405,
+          "min": "0",
+          "max": "59"
+        },
+        {
+          "name": "openedAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 385,
+          "min": "1900-01-01",
+          "max": "2026-08-11"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "warehouseId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-13T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.operations",
+      "name": "routes",
+      "rowCount": 498,
+      "fields": [
+        {
+          "name": "routeId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 498,
+          "min": "1",
+          "max": "498"
+        },
+        {
+          "name": "routeName",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 312,
+          "normalizedDistinctCount": 312
+        },
+        {
+          "name": "distanceKm",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 141,
+          "min": "-330",
+          "max": "3721"
+        },
+        {
+          "name": "hazmatFlag",
+          "type": "boolean",
+          "semanticType": "boolean",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2
+        },
+        {
+          "name": "surveyedAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 328,
+          "min": "2022-07-28T12:00:00.000Z",
+          "max": "2025-05-04T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "routeId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-07-29T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.operations",
+      "name": "rateCards",
+      "rowCount": 512,
+      "fields": [
+        {
+          "name": "rateCardId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 512,
+          "min": "1",
+          "max": "512"
+        },
+        {
+          "name": "carrierId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 308,
+          "min": "1",
+          "max": "308"
+        },
+        {
+          "name": "routeId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 258,
+          "min": "1",
+          "max": "498"
+        },
+        {
+          "name": "rateCents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 417,
+          "min": "-900",
+          "max": "37573568"
+        },
+        {
+          "name": "fuelShare",
+          "type": "double",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 326,
+          "min": "0",
+          "max": "0.99"
+        },
+        {
+          "name": "negotiatedAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 274,
+          "min": "2021-12-13",
+          "max": "2026-06-10"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "rateCardId"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "natural",
+          "fields": [
+            "carrierId",
+            "routeId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-07-26T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.operations",
+      "name": "mileageDaily",
+      "rowCount": 5581,
+      "fields": [
+        {
+          "name": "recordId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 5371,
+          "min": "1",
+          "max": "5581"
+        },
+        {
+          "name": "routeId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 5581,
+          "min": "1",
+          "max": "498"
+        },
+        {
+          "name": "milesTotal",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 266,
+          "min": "0",
+          "max": "845"
+        },
+        {
+          "name": "snapshotYear",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18,
+          "min": "2022",
+          "max": "2026"
+        }
+      ],
+      "keys": [],
+      "readable": true,
+      "lastModifiedAt": "2026-07-31T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.operations",
+      "name": "deliveryWindows",
+      "rowCount": 0,
+      "fields": [
+        {
+          "name": "deliveryWindowId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "shipmentId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "windowStartAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "windowEndAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "confirmedFlag",
+          "type": "boolean",
+          "semanticType": "boolean",
+          "nullable": false,
+          "nullCount": 0
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "deliveryWindowId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": false,
+      "lastModifiedAt": "2026-07-25T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.operations",
+      "name": "customsDocuments",
+      "rowCount": 353,
+      "fields": [
+        {
+          "name": "customsDocumentId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 353,
+          "min": "1",
+          "max": "353"
+        },
+        {
+          "name": "shipmentId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 278,
+          "min": "1",
+          "max": "7722"
+        },
+        {
+          "name": "filingDate",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 300,
+          "normalizedDistinctCount": 300,
+          "formatRule": "date-string",
+          "invalidFormatCount": 0
+        },
+        {
+          "name": "documentUuid",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 332,
+          "normalizedDistinctCount": 332,
+          "formatRule": "uuid",
+          "invalidFormatCount": 0
+        },
+        {
+          "name": "portalUrl",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 299,
+          "normalizedDistinctCount": 299,
+          "formatRule": "url",
+          "invalidFormatCount": 36
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "customsDocumentId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2023-12-11T12:00:00.000Z"
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "main.operations",
+      "fromEntity": "shipments",
+      "fromField": "carrierId",
+      "toNamespace": "main.operations",
+      "toEntity": "carriers",
+      "toField": "carrierId",
+      "orphanCount": 12,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.operations",
+      "fromEntity": "trackingEvents",
+      "fromField": "shipmentId",
+      "toNamespace": "main.operations",
+      "toEntity": "shipments",
+      "toField": "shipmentId",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.operations",
+      "fromEntity": "rateCards",
+      "fromField": "carrierId",
+      "toNamespace": "main.operations",
+      "toEntity": "carriers",
+      "toField": "carrierId",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.operations",
+      "fromEntity": "rateCards",
+      "fromField": "routeId",
+      "toNamespace": "main.operations",
+      "toEntity": "routes",
+      "toField": "routeId",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.operations",
+      "fromEntity": "deliveryWindows",
+      "fromField": "shipmentId",
+      "toNamespace": "main.operations",
+      "toEntity": "shipments",
+      "toField": "shipmentId",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.operations",
+      "fromEntity": "customsDocuments",
+      "fromField": "shipmentId",
+      "toNamespace": "main.operations",
+      "toEntity": "shipments",
+      "toField": "shipmentId",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.operations",
+      "fromEntity": "mileageDaily",
+      "fromField": "routeId",
+      "toNamespace": "main.operations",
+      "toEntity": "routes",
+      "toField": "routeId",
+      "orphanCount": 0,
+      "origin": "inferred"
+    }
+  ]
+}

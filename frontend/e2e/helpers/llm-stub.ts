@@ -6,6 +6,12 @@ import { AddressInfo } from 'node:net';
  * answers the settings connection test with `{"status":"ok"}`, and agent
  * calls (streamed or not) with a scripted reply. Every agent call is
  * recorded, so a test can check what the backend sent to the model.
+ *
+ * It also serves an OpenAI-style model list (`GET …/models`, the fixed list
+ * in `models`) for the custom endpoint provider, and logs every request it
+ * receives with its credential headers (`calls`). With `pathPrefix` set (e.g.
+ * `/v1`), only paths under that prefix are served; any other path answers
+ * 404, like a server reached without its version path.
  */
 
 export interface StubMessage {
@@ -23,12 +29,32 @@ export interface StubRequest {
   tools: string[];
   /** The body's `reasoning_effort`, when one was sent. */
   reasoningEffort?: string;
+  /** The body's `model`, when one was sent. */
+  model?: string;
+}
+
+/** Any request the stub received (served or answered 404), oldest first. */
+export interface StubCall {
+  method: string;
+  path: string;
+  /** The `Authorization` header; undefined when the request had none. */
+  authorization?: string;
+  /** The `X-Api-Key` header; undefined when the request had none. */
+  xApiKey?: string;
+}
+
+export interface LlmStubOptions {
+  /** Serve only paths under this prefix (e.g. `/v1`); others answer 404. */
+  pathPrefix?: string;
+  /** The model ids `GET …/models` lists; the default is `STUB_MODELS`. */
+  models?: string[];
 }
 
 /** A settings connection test (the probe), as the stub received it. */
 export interface StubProbe {
   path: string;
   reasoningEffort?: string;
+  model?: string;
 }
 
 export type StubReply =
@@ -43,6 +69,10 @@ export interface LlmStub {
   requests: StubRequest[];
   /** Connection tests, oldest first. */
   probes: StubProbe[];
+  /** Every request received, served or not, oldest first. */
+  calls: StubCall[];
+  /** The ids `GET …/models` lists, in order (mutable). */
+  models: string[];
   /** Decides each agent call's reply; the default answers `STUB_ANSWER`. */
   reply: (request: StubRequest) => StubReply;
   /**
@@ -55,6 +85,9 @@ export interface LlmStub {
 }
 
 export const STUB_ANSWER = 'The stub model answered this question.';
+
+/** The default model list of `GET …/models`. */
+export const STUB_MODELS = ['qwen3-8b', 'llama3.1:8b'];
 
 /** The text of a message's content, whether a string or content parts. */
 export function messageText(message: StubMessage): string {
@@ -165,12 +198,22 @@ function respond(
   );
 }
 
-export async function startLlmStub(): Promise<LlmStub> {
+function header(req: http.IncomingMessage, name: string): string | undefined {
+  const value = req.headers[name];
+  return Array.isArray(value) ? value.join(', ') : value;
+}
+
+export async function startLlmStub(
+  options: LlmStubOptions = {},
+): Promise<LlmStub> {
+  const prefix = options.pathPrefix?.replace(/\/+$/, '') ?? '';
   const stub: LlmStub = {
     baseUrl: '',
     apiKeys: [],
     requests: [],
     probes: [],
+    calls: [],
+    models: [...(options.models ?? STUB_MODELS)],
     reply: () => ({ text: STUB_ANSWER }),
     close: async () => undefined,
   };
@@ -178,6 +221,32 @@ export async function startLlmStub(): Promise<LlmStub> {
     const chunks: Buffer[] = [];
     req.on('data', (data: Buffer) => chunks.push(data));
     req.on('end', () => {
+      const pathname = (req.url ?? '').split('?')[0];
+      stub.calls.push({
+        method: req.method ?? '',
+        path: pathname,
+        authorization: header(req, 'authorization'),
+        xApiKey: header(req, 'x-api-key'),
+      });
+      if (prefix && !pathname.startsWith(`${prefix}/`)) {
+        res.writeHead(404).end();
+        return;
+      }
+      if (req.method === 'GET' && pathname.endsWith('/models')) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            object: 'list',
+            data: stub.models.map((id) => ({
+              id,
+              object: 'model',
+              created: 0,
+              owned_by: 'stub',
+            })),
+          }),
+        );
+        return;
+      }
       if (req.method !== 'POST' || !req.url?.endsWith('/chat/completions')) {
         res.writeHead(404).end();
         return;
@@ -189,6 +258,7 @@ export async function startLlmStub(): Promise<LlmStub> {
         tools?: { function?: { name?: string } }[];
         response_format?: unknown;
         reasoning_effort?: string;
+        model?: string;
       } = {};
       try {
         body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
@@ -200,6 +270,7 @@ export async function startLlmStub(): Promise<LlmStub> {
         stub.probes.push({
           path: req.url,
           reasoningEffort: body.reasoning_effort,
+          model: body.model,
         });
         respond(res, false, { text: '{"status":"ok"}' });
         return;
@@ -210,6 +281,7 @@ export async function startLlmStub(): Promise<LlmStub> {
         messages: body.messages ?? [],
         tools: (body.tools ?? []).map((tool) => tool.function?.name ?? ''),
         reasoningEffort: body.reasoning_effort,
+        model: body.model,
       };
       stub.requests.push(request);
       const held = stub.hold?.(request);

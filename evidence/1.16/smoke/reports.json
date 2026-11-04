@@ -1,0 +1,652 @@
+{
+  "whole": {
+    "id": "2b3f58ba-87f9-4118-9aad-8009928496d0",
+    "datasourceId": "2d57fe53-0cd2-4557-8ece-4fd5126a0ba1",
+    "datasourceName": "Readiness smoke",
+    "datasourceKind": "postgres",
+    "generatedAt": "2026-11-03T23:41:37.733Z",
+    "findings": [
+      {
+        "dimension": "completeness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "customers",
+        "field": "nickname",
+        "severity": "high",
+        "measured": "60.0% null (6/10)",
+        "description": "Column \"nickname\" is missing values in 6 of 10 rows.",
+        "recommendation": "High null rate — confirm the column is still populated upstream, or mark it optional."
+      },
+      {
+        "dimension": "completeness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "customers",
+        "field": "region",
+        "severity": "medium",
+        "measured": "20.0% null (2/10)",
+        "description": "Column \"region\" is missing values in 2 of 10 rows.",
+        "recommendation": "Investigate the source of the missing values or document them as expected."
+      },
+      {
+        "dimension": "reasonability",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "customers",
+        "field": "created_at",
+        "severity": "low",
+        "measured": "min = 1899-06-01T00:00:00Z",
+        "description": "Column \"created_at\" has implausibly old values (earliest year 1899).",
+        "recommendation": "Values before 1900 are often placeholders or parse errors; verify the source."
+      },
+      {
+        "dimension": "timeliness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "customers",
+        "field": "created_at",
+        "severity": "medium",
+        "measured": "newest \"created_at\" = 2020-09-15T00:00:00Z (2240d ago)",
+        "description": "The most recent record in \"customers\" is 2240 days old (by \"created_at\").",
+        "recommendation": "Confirm the table is still being loaded — stale data often signals a broken or paused pipeline."
+      },
+      {
+        "dimension": "validity",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "customers",
+        "field": "email",
+        "severity": "medium",
+        "measured": "3 value(s) fail email format",
+        "description": "Column \"email\" has 3 value(s) that don't match a valid email.",
+        "recommendation": "Validate email values on ingest, or correct the malformed records."
+      },
+      {
+        "dimension": "consistency",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "customers",
+        "field": "segment",
+        "severity": "low",
+        "measured": "5 distinct → 2 normalized",
+        "description": "Column \"segment\" has 3 value(s) that differ only by case or whitespace.",
+        "recommendation": "Standardise casing/trimming on write (or with a constraint) so the same value is stored one way."
+      },
+      {
+        "dimension": "completeness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "events",
+        "field": "event_id",
+        "severity": "medium",
+        "measured": "16.7% null (1/6)",
+        "description": "Column \"event_id\" is missing values in 1 of 6 rows.",
+        "recommendation": "Investigate the source of the missing values or document them as expected."
+      },
+      {
+        "dimension": "completeness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "events",
+        "field": "customer_id",
+        "severity": "medium",
+        "measured": "16.7% null (1/6)",
+        "description": "Column \"customer_id\" is missing values in 1 of 6 rows.",
+        "recommendation": "Investigate the source of the missing values or document them as expected."
+      },
+      {
+        "dimension": "uniqueness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "events",
+        "field": "event_id",
+        "severity": "medium",
+        "measured": "2 duplicate value(s)",
+        "description": "Column \"event_id\" looks like an identifier (inferred — no key is declared) but carries 2 duplicate value(s).",
+        "recommendation": "If \"event_id\" is meant to be unique, de-duplicate and declare the key; if not, rename it so it stops reading as an identifier."
+      },
+      {
+        "dimension": "uniqueness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "events",
+        "field": "customer_id",
+        "severity": "medium",
+        "measured": "1 duplicate value(s)",
+        "description": "Column \"customer_id\" looks like an identifier (inferred — no key is declared) but carries 1 duplicate value(s).",
+        "recommendation": "If \"customer_id\" is meant to be unique, de-duplicate and declare the key; if not, rename it so it stops reading as an identifier."
+      },
+      {
+        "dimension": "timeliness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "events",
+        "field": "event_year",
+        "severity": "medium",
+        "measured": "newest \"event_year\" = 2019 (2498d ago)",
+        "description": "The most recent record in \"events\" is 2498 days old (by \"event_year\").",
+        "recommendation": "Confirm the table is still being loaded — stale data often signals a broken or paused pipeline."
+      },
+      {
+        "dimension": "reasonability",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "orders",
+        "field": "amount",
+        "severity": "low",
+        "measured": "min = -5.00",
+        "description": "Column \"amount\" contains negative values.",
+        "recommendation": "Confirm negatives are valid for this column (e.g. adjustments/refunds) or treat them as anomalies."
+      },
+      {
+        "dimension": "reasonability",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "orders",
+        "field": "ordered_at",
+        "severity": "medium",
+        "measured": "max = 2028-11-03T18:41:36.365924-05:00",
+        "description": "Column \"ordered_at\" has future-dated values (latest year 2028).",
+        "recommendation": "Future timestamps usually indicate data-entry or timezone errors; verify the source."
+      },
+      {
+        "dimension": "reasonability",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "orders",
+        "field": "discount_pct",
+        "severity": "medium",
+        "measured": "max = 150.0",
+        "description": "Column \"discount_pct\" reads as a percentage but its maximum (150.0) exceeds 100.",
+        "recommendation": "Values above 100 contradict the column's name — verify the unit (percent vs fraction) or the upstream calculation."
+      },
+      {
+        "dimension": "integrity",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "orders",
+        "field": "customer_id",
+        "severity": "high",
+        "measured": "1 orphan row(s)",
+        "description": "\"smoke.orders.customer_id\" has 1 value(s) with no matching \"smoke.customers.id\".",
+        "recommendation": "Restore the missing parent rows or add a foreign-key constraint to stop new orphans."
+      },
+      {
+        "dimension": "integrity",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "events",
+        "field": "customer_id",
+        "severity": "medium",
+        "measured": "1 orphan row(s)",
+        "description": "\"smoke.events.customer_id\" has 1 value(s) with no matching \"smoke.customers.id\" (inferred relationship — no FK is declared; matched by naming convention).",
+        "recommendation": "If these tables are meant to join, repair the orphan values and declare the foreign key; if not, ignore or mark this finding a false positive."
+      },
+      {
+        "dimension": "accessibility",
+        "level": "source",
+        "namespace": "smoke",
+        "severity": "medium",
+        "measured": "2 of 5 table(s) not readable",
+        "description": "The connecting role cannot SELECT from 2 of 5 table(s) in \"smoke\" (audit_log, secrets), so their data can't be assessed or consumed.",
+        "recommendation": "Grant SELECT to the agent role, or exclude the schema from the readiness scope if access is intentionally restricted."
+      }
+    ],
+    "dimensionScores": [
+      {
+        "dimension": "completeness",
+        "score": 63,
+        "findingCount": 4,
+        "maxSeverity": "high",
+        "assessed": true,
+        "totalChecks": 6
+      },
+      {
+        "dimension": "accuracy",
+        "score": 100,
+        "findingCount": 0,
+        "maxSeverity": null,
+        "assessed": false,
+        "totalChecks": 0
+      },
+      {
+        "dimension": "validity",
+        "score": 60,
+        "findingCount": 1,
+        "maxSeverity": "medium",
+        "assessed": true,
+        "totalChecks": 1
+      },
+      {
+        "dimension": "consistency",
+        "score": 97,
+        "findingCount": 1,
+        "maxSeverity": "low",
+        "assessed": true,
+        "totalChecks": 3
+      },
+      {
+        "dimension": "integrity",
+        "score": 30,
+        "findingCount": 2,
+        "maxSeverity": "high",
+        "assessed": true,
+        "totalChecks": 2
+      },
+      {
+        "dimension": "uniqueness",
+        "score": 87,
+        "findingCount": 2,
+        "maxSeverity": "medium",
+        "assessed": true,
+        "totalChecks": 6
+      },
+      {
+        "dimension": "timeliness",
+        "score": 73,
+        "findingCount": 2,
+        "maxSeverity": "medium",
+        "assessed": true,
+        "totalChecks": 3
+      },
+      {
+        "dimension": "currency",
+        "score": 100,
+        "findingCount": 0,
+        "maxSeverity": null,
+        "assessed": false,
+        "totalChecks": 0
+      },
+      {
+        "dimension": "reasonability",
+        "score": 92,
+        "findingCount": 4,
+        "maxSeverity": "medium",
+        "assessed": true,
+        "totalChecks": 13
+      },
+      {
+        "dimension": "accessibility",
+        "score": 92,
+        "findingCount": 1,
+        "maxSeverity": "medium",
+        "assessed": true,
+        "totalChecks": 5
+      }
+    ],
+    "overallScore": 74,
+    "maturity": "Defined",
+    "entityCount": 5,
+    "sessionId": "smoke-session",
+    "createdAt": "2026-11-03T23:41:37.864Z",
+    "updatedAt": "2026-11-03T23:41:37.864Z"
+  },
+  "orders": {
+    "id": "c6eb54dd-e109-4393-9f7d-4f1cbf80b511",
+    "datasourceId": "2d57fe53-0cd2-4557-8ece-4fd5126a0ba1",
+    "datasourceName": "Readiness smoke",
+    "datasourceKind": "postgres",
+    "generatedAt": "2026-11-03T23:41:37.867Z",
+    "findings": [
+      {
+        "dimension": "reasonability",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "orders",
+        "field": "amount",
+        "severity": "low",
+        "measured": "min = -5.00",
+        "description": "Column \"amount\" contains negative values.",
+        "recommendation": "Confirm negatives are valid for this column (e.g. adjustments/refunds) or treat them as anomalies."
+      },
+      {
+        "dimension": "reasonability",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "orders",
+        "field": "ordered_at",
+        "severity": "medium",
+        "measured": "max = 2028-11-03T18:41:36.365924-05:00",
+        "description": "Column \"ordered_at\" has future-dated values (latest year 2028).",
+        "recommendation": "Future timestamps usually indicate data-entry or timezone errors; verify the source."
+      },
+      {
+        "dimension": "reasonability",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "orders",
+        "field": "discount_pct",
+        "severity": "medium",
+        "measured": "max = 150.0",
+        "description": "Column \"discount_pct\" reads as a percentage but its maximum (150.0) exceeds 100.",
+        "recommendation": "Values above 100 contradict the column's name — verify the unit (percent vs fraction) or the upstream calculation."
+      },
+      {
+        "dimension": "integrity",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "orders",
+        "field": "customer_id",
+        "severity": "high",
+        "measured": "1 orphan row(s)",
+        "description": "\"smoke.orders.customer_id\" has 1 value(s) with no matching \"smoke.customers.id\".",
+        "recommendation": "Restore the missing parent rows or add a foreign-key constraint to stop new orphans."
+      }
+    ],
+    "dimensionScores": [
+      {
+        "dimension": "completeness",
+        "score": 100,
+        "findingCount": 0,
+        "maxSeverity": null,
+        "assessed": true,
+        "totalChecks": 1
+      },
+      {
+        "dimension": "accuracy",
+        "score": 100,
+        "findingCount": 0,
+        "maxSeverity": null,
+        "assessed": false,
+        "totalChecks": 0
+      },
+      {
+        "dimension": "validity",
+        "score": 100,
+        "findingCount": 0,
+        "maxSeverity": null,
+        "assessed": true,
+        "totalChecks": 0
+      },
+      {
+        "dimension": "consistency",
+        "score": 100,
+        "findingCount": 0,
+        "maxSeverity": null,
+        "assessed": true,
+        "totalChecks": 0
+      },
+      {
+        "dimension": "integrity",
+        "score": 0,
+        "findingCount": 1,
+        "maxSeverity": "high",
+        "assessed": true,
+        "totalChecks": 1
+      },
+      {
+        "dimension": "uniqueness",
+        "score": 100,
+        "findingCount": 0,
+        "maxSeverity": null,
+        "assessed": true,
+        "totalChecks": 1
+      },
+      {
+        "dimension": "timeliness",
+        "score": 100,
+        "findingCount": 0,
+        "maxSeverity": null,
+        "assessed": true,
+        "totalChecks": 1
+      },
+      {
+        "dimension": "currency",
+        "score": 100,
+        "findingCount": 0,
+        "maxSeverity": null,
+        "assessed": false,
+        "totalChecks": 0
+      },
+      {
+        "dimension": "reasonability",
+        "score": 85,
+        "findingCount": 3,
+        "maxSeverity": "medium",
+        "assessed": true,
+        "totalChecks": 6
+      },
+      {
+        "dimension": "accessibility",
+        "score": 100,
+        "findingCount": 0,
+        "maxSeverity": null,
+        "assessed": true,
+        "totalChecks": 1
+      }
+    ],
+    "overallScore": 86,
+    "maturity": "Managed",
+    "entityCount": 1,
+    "createdAt": "2026-11-03T23:41:37.925Z",
+    "updatedAt": "2026-11-03T23:41:37.925Z"
+  },
+  "pair": {
+    "id": "7498f032-d7d6-4499-b7c1-53746e2bb0c1",
+    "datasourceId": "2d57fe53-0cd2-4557-8ece-4fd5126a0ba1",
+    "datasourceName": "Readiness smoke",
+    "datasourceKind": "postgres",
+    "generatedAt": "2026-11-03T23:41:37.927Z",
+    "findings": [
+      {
+        "dimension": "completeness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "customers",
+        "field": "nickname",
+        "severity": "high",
+        "measured": "60.0% null (6/10)",
+        "description": "Column \"nickname\" is missing values in 6 of 10 rows.",
+        "recommendation": "High null rate — confirm the column is still populated upstream, or mark it optional."
+      },
+      {
+        "dimension": "completeness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "customers",
+        "field": "region",
+        "severity": "medium",
+        "measured": "20.0% null (2/10)",
+        "description": "Column \"region\" is missing values in 2 of 10 rows.",
+        "recommendation": "Investigate the source of the missing values or document them as expected."
+      },
+      {
+        "dimension": "reasonability",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "customers",
+        "field": "created_at",
+        "severity": "low",
+        "measured": "min = 1899-06-01T00:00:00Z",
+        "description": "Column \"created_at\" has implausibly old values (earliest year 1899).",
+        "recommendation": "Values before 1900 are often placeholders or parse errors; verify the source."
+      },
+      {
+        "dimension": "timeliness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "customers",
+        "field": "created_at",
+        "severity": "medium",
+        "measured": "newest \"created_at\" = 2020-09-15T00:00:00Z (2240d ago)",
+        "description": "The most recent record in \"customers\" is 2240 days old (by \"created_at\").",
+        "recommendation": "Confirm the table is still being loaded — stale data often signals a broken or paused pipeline."
+      },
+      {
+        "dimension": "validity",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "customers",
+        "field": "email",
+        "severity": "medium",
+        "measured": "3 value(s) fail email format",
+        "description": "Column \"email\" has 3 value(s) that don't match a valid email.",
+        "recommendation": "Validate email values on ingest, or correct the malformed records."
+      },
+      {
+        "dimension": "consistency",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "customers",
+        "field": "segment",
+        "severity": "low",
+        "measured": "5 distinct → 2 normalized",
+        "description": "Column \"segment\" has 3 value(s) that differ only by case or whitespace.",
+        "recommendation": "Standardise casing/trimming on write (or with a constraint) so the same value is stored one way."
+      },
+      {
+        "dimension": "completeness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "events",
+        "field": "event_id",
+        "severity": "medium",
+        "measured": "16.7% null (1/6)",
+        "description": "Column \"event_id\" is missing values in 1 of 6 rows.",
+        "recommendation": "Investigate the source of the missing values or document them as expected."
+      },
+      {
+        "dimension": "completeness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "events",
+        "field": "customer_id",
+        "severity": "medium",
+        "measured": "16.7% null (1/6)",
+        "description": "Column \"customer_id\" is missing values in 1 of 6 rows.",
+        "recommendation": "Investigate the source of the missing values or document them as expected."
+      },
+      {
+        "dimension": "uniqueness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "events",
+        "field": "event_id",
+        "severity": "medium",
+        "measured": "2 duplicate value(s)",
+        "description": "Column \"event_id\" looks like an identifier (inferred — no key is declared) but carries 2 duplicate value(s).",
+        "recommendation": "If \"event_id\" is meant to be unique, de-duplicate and declare the key; if not, rename it so it stops reading as an identifier."
+      },
+      {
+        "dimension": "uniqueness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "events",
+        "field": "customer_id",
+        "severity": "medium",
+        "measured": "1 duplicate value(s)",
+        "description": "Column \"customer_id\" looks like an identifier (inferred — no key is declared) but carries 1 duplicate value(s).",
+        "recommendation": "If \"customer_id\" is meant to be unique, de-duplicate and declare the key; if not, rename it so it stops reading as an identifier."
+      },
+      {
+        "dimension": "timeliness",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "events",
+        "field": "event_year",
+        "severity": "medium",
+        "measured": "newest \"event_year\" = 2019 (2498d ago)",
+        "description": "The most recent record in \"events\" is 2498 days old (by \"event_year\").",
+        "recommendation": "Confirm the table is still being loaded — stale data often signals a broken or paused pipeline."
+      },
+      {
+        "dimension": "integrity",
+        "level": "entity",
+        "namespace": "smoke",
+        "entity": "events",
+        "field": "customer_id",
+        "severity": "medium",
+        "measured": "1 orphan row(s)",
+        "description": "\"smoke.events.customer_id\" has 1 value(s) with no matching \"smoke.customers.id\" (inferred relationship — no FK is declared; matched by naming convention).",
+        "recommendation": "If these tables are meant to join, repair the orphan values and declare the foreign key; if not, ignore or mark this finding a false positive."
+      }
+    ],
+    "dimensionScores": [
+      {
+        "dimension": "completeness",
+        "score": 56,
+        "findingCount": 4,
+        "maxSeverity": "high",
+        "assessed": true,
+        "totalChecks": 5
+      },
+      {
+        "dimension": "accuracy",
+        "score": 100,
+        "findingCount": 0,
+        "maxSeverity": null,
+        "assessed": false,
+        "totalChecks": 0
+      },
+      {
+        "dimension": "validity",
+        "score": 60,
+        "findingCount": 1,
+        "maxSeverity": "medium",
+        "assessed": true,
+        "totalChecks": 1
+      },
+      {
+        "dimension": "consistency",
+        "score": 97,
+        "findingCount": 1,
+        "maxSeverity": "low",
+        "assessed": true,
+        "totalChecks": 3
+      },
+      {
+        "dimension": "integrity",
+        "score": 60,
+        "findingCount": 1,
+        "maxSeverity": "medium",
+        "assessed": true,
+        "totalChecks": 1
+      },
+      {
+        "dimension": "uniqueness",
+        "score": 73,
+        "findingCount": 2,
+        "maxSeverity": "medium",
+        "assessed": true,
+        "totalChecks": 3
+      },
+      {
+        "dimension": "timeliness",
+        "score": 60,
+        "findingCount": 2,
+        "maxSeverity": "medium",
+        "assessed": true,
+        "totalChecks": 2
+      },
+      {
+        "dimension": "currency",
+        "score": 100,
+        "findingCount": 0,
+        "maxSeverity": null,
+        "assessed": false,
+        "totalChecks": 0
+      },
+      {
+        "dimension": "reasonability",
+        "score": 98,
+        "findingCount": 1,
+        "maxSeverity": "low",
+        "assessed": true,
+        "totalChecks": 5
+      },
+      {
+        "dimension": "accessibility",
+        "score": 100,
+        "findingCount": 0,
+        "maxSeverity": null,
+        "assessed": true,
+        "totalChecks": 2
+      }
+    ],
+    "overallScore": 76,
+    "maturity": "Defined",
+    "entityCount": 2,
+    "createdAt": "2026-11-03T23:41:38.039Z",
+    "updatedAt": "2026-11-03T23:41:38.039Z"
+  }
+}

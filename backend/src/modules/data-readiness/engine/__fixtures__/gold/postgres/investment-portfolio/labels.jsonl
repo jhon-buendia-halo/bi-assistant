@@ -1,0 +1,43 @@
+# Answer key for the "investment-portfolio" gold dataset (asset-management domain, Postgres) — HUMAN-MAINTAINED.
+# One JSON object per line. Blank lines and lines starting with # or // are ignored.
+# Each line is a real defect a human asserts is in profile.json, independent of what the
+# engine reports. Fields: dimension, namespace, entity, field (the tuple the scorer matches
+# on — must equal the engine's emitted tuple), severity (graded within ±1 band), optional note.
+# See ./README.md for the planted-defect table and the expected precision/recall.
+#
+# Shape note: TWO schemas — `pms` (portfolio management: portfolios, positions, instruments,
+# trades) and `ref` (reference data: clients, index_levels, credit_ratings). `ref.credit_ratings`
+# is not readable (licensed vendor data), so accessibility fires ONCE for the ref namespace at
+# `medium` (1 of 3 locked — partial). `ref.index_levels` has NO temporal column at all: its
+# freshness is measured through the numeric YEAR-column fallback on `level_year`.
+#
+# TRUE POSITIVES — real defects the engine SHOULD catch (and does):
+{"dimension":"consistency","namespace":"pms","entity":"portfolios","field":"mandate_type","severity":"low","note":"planted: mandate_type stored as BALANCED / balanced / Balanced / GROWTH / growth ... — 18 raw collapse to 12."}
+{"dimension":"validity","namespace":"pms","entity":"portfolios","field":"benchmark_url","severity":"medium","note":"planted: 210 benchmark_url values are not URLs (bare hostnames, 'n/a', internal share paths)."}
+{"dimension":"reasonability","namespace":"pms","entity":"portfolios","field":"mandate_begin_dt, mandate_finish_dt","severity":"low","note":"planted: mandate_finish_dt's whole range (2005–2010) precedes mandate_begin_dt's (2011–2026) — the pair was swapped when the legacy mandate table was merged."}
+{"dimension":"uniqueness","namespace":"pms","entity":"positions","field":"portfolio_id, instrument_id, as_of_date","severity":"high","note":"planted: 3120 duplicate rows on the COMPOSITE primary key — a re-run of the overnight position load double-booked one date's holdings, which inflates AUM."}
+{"dimension":"reasonability","namespace":"pms","entity":"positions","field":"weight_pct","severity":"medium","note":"planted: weight_pct reads as a percentage but its MAX is 118.4 (>100) — leveraged sleeves were written un-normalised."}
+{"dimension":"completeness","namespace":"pms","entity":"positions","field":"custodian_account_id","severity":"medium","note":"planted: custodian_account_id is null on 13% (1898000/14600000) of positions — those holdings cannot be reconciled against a custodian statement."}
+{"dimension":"integrity","namespace":"pms","entity":"positions","field":"portfolio_id","severity":"high","note":"planted: 14200 positions reference a portfolio_id with no matching portfolios row (closed portfolios purged from the master, declared FK left NOT VALID)."}
+{"dimension":"consistency","namespace":"pms","entity":"instruments","field":"asset_class","severity":"low","note":"planted: asset_class stored as EQUITY / equity / Equity / FIXED_INCOME / fixed_income ... — 14 raw collapse to 9."}
+{"dimension":"timeliness","namespace":"pms","entity":"trades","field":"settle_date","severity":"high","note":"planted: the newest settle_date is 2023-04-04 (>730 days stale) — trading moved to a new OMS in 2023 and this 8.4M-row table was never decommissioned. NOTE the tuple: timeliness reports the entity's NEWEST temporal field, and settle_date (2023-04-04) is newer than trade_date (2023-03-31), so the finding lands on settle_date (engine emits medium; graded ±1)."}
+{"dimension":"timeliness","namespace":"ref","entity":"index_levels","field":"level_year","severity":"high","note":"planted: the benchmark index feed stopped after 2021 (newest level_year = 2021). index_levels has NO temporal column, so this is only caught by the numeric YEAR-column fallback, which treats the newest year as its Dec 31 (engine emits medium; graded ±1)."}
+{"dimension":"completeness","namespace":"ref","entity":"clients","field":"kyc_refresh_date","severity":"medium","note":"planted: kyc_refresh_date is null for 40% (3760/9400) of clients — a genuine compliance gap: those clients have never had a periodic KYC refresh recorded."}
+{"dimension":"accessibility","namespace":"ref","severity":"medium","note":"planted: ref.credit_ratings (licensed rating-agency data) is not readable by the connecting role — 1 of 3 tables in ref locked, so the namespace aggregates to ONE medium finding."}
+#
+# RECALL GAPS (blind spots) — real defects the engine CANNOT catch today.
+# Keep these labels: they measure the blind spots honestly (they always score as misses / FN).
+{"dimension":"accuracy","namespace":"pms","entity":"positions","field":"market_value_usd","severity":"high","note":"BLIND SPOT: ~600000 positions' market_value_usd is wrong because the FX rates used in the valuation run were a day stale — the values are plausible, internally consistent, and simply incorrect. Accuracy needs a trusted reference (the custodian statement) and is out of automated scope by design."}
+{"dimension":"completeness","namespace":"pms","entity":"instruments","field":"issuer_name","severity":"medium","note":"BLIND SPOT: 6200 issuer_name rows hold the literal string 'UNKNOWN ISSUER' (disguised missing). The engine sees nullCount=0, so completeness never fires."}
+{"dimension":"uniqueness","namespace":"pms","entity":"instruments","field":"isin","severity":"high","note":"BLIND SPOT: 200 duplicate ISINs (the same security loaded twice from two vendors, so positions split across two instrument_ids). No unique key is declared on isin, and the inferred candidate-key rule is skipped because a PK (instrument_id) IS declared — and `isin` is not id-like, so it would not be a candidate even then."}
+{"dimension":"integrity","namespace":"pms","entity":"positions","field":"custodian_account_id","severity":"medium","note":"BLIND SPOT: ~9000 custodian_account_id values reference accounts that no longer exist in the custody platform. The custodian master is NOT part of this source, so there is no FK to declare and no sibling table for the join-inference heuristic to match — the engine cannot see cross-system references at all."}
+{"dimension":"validity","namespace":"ref","entity":"index_levels","field":"level_month","severity":"medium","note":"BLIND SPOT: level_month contains 0 and 13 (MIN 0, MAX 13) — outside the 1–12 domain, from an off-by-one in the vendor parser. The engine has no numeric-range/domain rule: reasonability only checks negatives and NAME-implied ratio bounds, and 'level_month' implies neither."}
+#
+# INTENTIONALLY NOT LABELED (precision gaps the harness should surface as false alarms):
+#   - reasonability positions.quantity (low): MIN = -480000. Short positions are legitimately
+#     negative in a long/short book, so the negative-minimum finding is a false alarm.
+#   - completeness instruments.maturity_date (medium): 41% null (38000/92000). Equities and funds
+#     have no maturity, so a null is correct for them — the engine's medium finding is a false alarm.
+#   - reasonability instruments.maturity_date (medium): MAX = 2076-06-30. A 50-year corporate bond
+#     legitimately matures in 2076, so "future-dated" is wrong here. Note this is the SAME column
+#     producing a second false alarm under a different rule — one benign column, two false alarms.

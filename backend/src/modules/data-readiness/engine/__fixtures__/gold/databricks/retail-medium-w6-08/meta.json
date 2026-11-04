@@ -1,0 +1,7 @@
+{
+  "industry": "retail",
+  "complexity": "medium",
+  "wave": "W6",
+  "authoring": "generated",
+  "defectPlan": "plans/databricks/retail-medium-w6-08.plan.json"
+}

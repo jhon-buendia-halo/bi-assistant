@@ -1,0 +1,82 @@
+{
+  "sourceId": "hr-core-gold",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "public",
+      "name": "departments",
+      "rowCount": 500,
+      "keys": [{ "kind": "primary", "fields": ["department_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "department_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 500 },
+        { "name": "department_name", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 500 },
+        { "name": "parent_department_id", "type": "integer", "semanticType": "numeric", "nullable": true, "nullCount": 0, "distinctCount": 60 }
+      ]
+    },
+    {
+      "namespace": "public",
+      "name": "positions",
+      "rowCount": 3000,
+      "keys": [
+        { "kind": "primary", "fields": ["position_id"], "duplicateCount": 0 },
+        { "kind": "unique", "fields": ["position_code"], "duplicateCount": 0 }
+      ],
+      "fields": [
+        { "name": "position_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 3000 },
+        { "name": "position_code", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 3000 },
+        { "name": "title", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 2400 },
+        { "name": "job_level", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 12 }
+      ]
+    },
+    {
+      "namespace": "public",
+      "name": "employees",
+      "rowCount": 50000,
+      "keys": [
+        { "kind": "primary", "fields": ["employee_id"], "duplicateCount": 0 },
+        { "kind": "unique", "fields": ["employee_number"], "duplicateCount": 10 }
+      ],
+      "fields": [
+        { "name": "employee_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 50000 },
+        { "name": "employee_number", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 49990 },
+        { "name": "personal_email", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 50000, "formatRule": "email", "invalidFormatCount": 30 },
+        { "name": "mobile_phone", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 30000, "distinctCount": 20000 },
+        { "name": "middle_name", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 41000 },
+        { "name": "employment_status", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 6, "normalizedDistinctCount": 4 },
+        { "name": "hire_date", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "min": "1990-01-01", "max": "2099-06-01" },
+        { "name": "termination_date", "type": "date", "semanticType": "temporal", "nullable": true, "nullCount": 32500, "min": "1995-01-01", "max": "2026-06-30" }
+      ]
+    },
+    {
+      "namespace": "public",
+      "name": "employment_history",
+      "rowCount": 300000,
+      "keys": [{ "kind": "primary", "fields": ["history_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "history_id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 300000 },
+        { "name": "employee_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 49000 },
+        { "name": "department_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 500 },
+        { "name": "position_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 3000 },
+        { "name": "effective_from", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "min": "2015-01-01", "max": "2024-05-08T09:00:00Z" },
+        { "name": "effective_to", "type": "date", "semanticType": "temporal", "nullable": true, "nullCount": 0 }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "public", "fromEntity": "employment_history", "fromField": "employee_id",
+      "toNamespace": "public", "toEntity": "employees", "toField": "employee_id",
+      "orphanCount": 55, "origin": "declared"
+    },
+    {
+      "fromNamespace": "public", "fromEntity": "employment_history", "fromField": "department_id",
+      "toNamespace": "public", "toEntity": "departments", "toField": "department_id",
+      "orphanCount": 0, "origin": "declared"
+    },
+    {
+      "fromNamespace": "public", "fromEntity": "employment_history", "fromField": "position_id",
+      "toNamespace": "public", "toEntity": "positions", "toField": "position_id",
+      "orphanCount": 0, "origin": "declared"
+    }
+  ]
+}

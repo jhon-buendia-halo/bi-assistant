@@ -4,12 +4,18 @@ import type { ReasoningEffort } from '../../mastra/effort-levels';
 // 1.5.3 / ADR-0026). OpenAI, Anthropic and LenAI (Halo's internal
 // OpenAI-compatible gateway) are wired; adding another provider later is a new
 // union member + a branch in the test service, not a restructure.
-export type LlmProvider = 'openai' | 'anthropic' | 'lenai';
+export type LlmProvider = 'openai' | 'anthropic' | 'lenai' | 'custom';
+
+/** Which API a custom endpoint speaks (BA-281, llm-settings). */
+export type ApiStyle = 'openai' | 'anthropic';
+
+export const API_STYLES: ApiStyle[] = ['openai', 'anthropic'];
 
 export const SUPPORTED_PROVIDERS: LlmProvider[] = [
   'openai',
   'anthropic',
   'lenai',
+  'custom',
 ];
 
 export type { ReasoningEffort };
@@ -31,7 +37,22 @@ export interface SaveLlmSettingsDto {
   baseUrl?: string;
   /** Saved with the connection; must be one of the model's levels. */
   reasoningEffort?: ReasoningEffort;
+  /** Required when `provider` is 'custom' (BA-281). */
+  apiStyle?: ApiStyle;
 }
+
+/** Body of `POST /llm/models` (BA-281): list a custom endpoint's models. */
+export interface ListModelsDto {
+  provider: 'custom';
+  apiStyle: ApiStyle;
+  baseUrl: string;
+  /** Blank = use the key stored for the custom provider, if any. */
+  apiKey?: string;
+}
+
+/** Style A answer of `POST /llm/models`. */
+export type ListModelsResult =
+  { ok: true; models: string[] } | { ok: false; message: string };
 
 /** The effort levels a model accepts (`GET /llm/effort-levels`). */
 export interface EffortLevelsView {
@@ -50,6 +71,8 @@ export interface LlmSettingsView {
   configured: boolean;
   /** Set when a key is stored but the current app secret cannot decrypt it. */
   keyUnreadable?: true;
+  /** The custom endpoint's API style; null for other providers (BA-281). */
+  apiStyle?: ApiStyle | null;
 }
 
 /** Persisted document (single row keyed 'llm'; the API key is encrypted). */
@@ -58,8 +81,11 @@ export interface LlmSettingsDoc {
   provider: LlmProvider;
   model: string;
   baseUrl: string;
-  apiKeyCiphertext: string;
+  /** Absent for a `custom` endpoint saved without a key (R47). */
+  apiKeyCiphertext?: string;
   reasoningEffort?: ReasoningEffort;
+  /** Custom endpoint only (BA-281). */
+  apiStyle?: ApiStyle;
   createdAt?: string;
   updatedAt?: string;
 }

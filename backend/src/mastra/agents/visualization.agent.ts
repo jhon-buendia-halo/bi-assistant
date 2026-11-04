@@ -1,6 +1,11 @@
 import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
-import { resolveAgentModel } from '../model-resolver';
+import {
+  isCustomAnthropicConfig,
+  resolveAgentModelConfig,
+  type AgentModelConfig,
+} from '../model-resolver';
+import { buildModel } from '../model-factory';
 import { agentInstructions } from '../agent-prompt-overrides';
 import { VISUALIZATION_PROMPT } from './system-prompts';
 import { SESSION_WORKSPACE_CONTEXT_KEY } from '../session-workspaces';
@@ -12,16 +17,20 @@ import { visualSpecSchema } from '../../modules/sessions/visual-spec';
  * hidden-token latency without better output, while nano-class models cannot
  * hold the schema together at all (a VDI report showed 59 straight validation
  * failures on a LenAI gpt-4.1-nano deployment). `VISUAL_MODEL` forces a model;
- * otherwise a gpt-5 family router id is swapped for gpt-4.1-mini, any nano
- * model — LenAI deployments included — is upgraded to its mini sibling, and
- * everything else is kept.
+ * otherwise a public gpt-5 family router id is swapped for gpt-4.1-mini, any
+ * nano model — LenAI deployments and custom endpoints included — is upgraded
+ * to its mini sibling, and everything else is kept (agents.md 1.5).
  */
-const VISUAL_MODEL_OVERRIDE = process.env.VISUAL_MODEL as
-  `${string}/${string}` | undefined;
 const REASONING_FAMILY = /^openai\/(gpt-5|o\d)/;
 const VISUAL_FALLBACK = 'openai/gpt-4.1-mini' as const;
 /** `nano` as a delimited token, so a deployment named `…nanotech…` is kept. */
 const NANO_TOKEN = /(^|[^a-z0-9])nano([^a-z0-9]|$)/i;
+
+/** `VISUAL_MODEL`, read at call time so a changed env applies without a restart. */
+function visualModelOverride(): `${string}/${string}` | undefined {
+  const value = process.env.VISUAL_MODEL?.trim();
+  return value ? (value as `${string}/${string}`) : undefined;
+}
 
 /**
  * The mini sibling of a nano model id, or `undefined` when it is not a nano
@@ -29,12 +38,13 @@ const NANO_TOKEN = /(^|[^a-z0-9])nano([^a-z0-9]|$)/i;
  * `lenai/mmc-tech-gpt-41-nano-1m-2025-04-14` → `…-gpt-41-mini-1m-…`,
  * `openai/gpt-4.1-nano` → `openai/gpt-4.1-mini`.
  */
-function miniSibling(id: string): `${string}/${string}` | undefined {
+function miniSibling<T extends `${string}/${string}`>(id: T): T | undefined {
   if (!NANO_TOKEN.test(id)) return undefined;
+  // Only the model part moves, so `anthropic/…` stays `anthropic/…`.
   const upgraded = id.replace(
     NANO_TOKEN,
     (_match, before: string, after: string) => `${before}mini${after}`,
-  ) as `${string}/${string}`;
+  ) as T;
   // Warned rather than silent: the substitution has to be visible in a
   // diagnostics report, since the model answering is not the configured one.
   console.warn(
@@ -43,15 +53,33 @@ function miniSibling(id: string): `${string}/${string}` | undefined {
   return upgraded;
 }
 
-export async function resolveVisualizationModel() {
-  const configured = await resolveAgentModel();
+/**
+ * The visual designer's model as plain data, derived from the resolved one
+ * (agents.md 1.5). Every substitution moves the id only: a gateway or custom
+ * endpoint keeps its url (or base URL), key, headers and kind, and is never
+ * routed to the public OpenAI fallback. The agent builds the result last.
+ */
+export async function resolveVisualizationModel(): Promise<AgentModelConfig> {
+  const configured = await resolveAgentModelConfig();
+  const override = visualModelOverride();
+  if (isCustomAnthropicConfig(configured)) {
+    if (override) {
+      // The provider segment stays `anthropic`; only the model name moves.
+      const name = override.slice(override.indexOf('/') + 1);
+      return { ...configured, id: `anthropic/${name}` };
+    }
+    // Its id starts with `anthropic/`, so the reasoning-family rule never applies.
+    const mini = miniSibling(configured.id);
+    return mini ? { ...configured, id: mini } : configured;
+  }
   if (typeof configured === 'string') {
-    if (VISUAL_MODEL_OVERRIDE) return VISUAL_MODEL_OVERRIDE;
+    if (override) return override;
     if (REASONING_FAMILY.test(configured)) return VISUAL_FALLBACK;
     return miniSibling(configured) ?? configured;
   }
-  if (VISUAL_MODEL_OVERRIDE)
-    return { ...configured, id: VISUAL_MODEL_OVERRIDE };
+  if (override) return { ...configured, id: override };
+  // A config with a url (LenAI gateway, OpenAI-style custom endpoint) is
+  // never swapped to the public fallback.
   if (REASONING_FAMILY.test(configured.id) && !configured.url) {
     return { ...configured, id: VISUAL_FALLBACK };
   }
@@ -104,7 +132,7 @@ export const visualizationAgent = new Agent({
   instructions: () => agentInstructions('visualization', VISUALIZATION_PROMPT),
   // Keep analysis on the configured model while using the smaller sibling for
   // the bounded code-transformation step.
-  model: resolveVisualizationModel,
+  model: async () => buildModel(await resolveVisualizationModel()),
   workspace: ({ requestContext, mastra }) => {
     const workspaceId = requestContext.get(SESSION_WORKSPACE_CONTEXT_KEY);
     if (typeof workspaceId !== 'string' || !mastra) return undefined;

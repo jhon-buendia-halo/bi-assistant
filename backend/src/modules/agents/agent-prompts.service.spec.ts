@@ -87,6 +87,14 @@ describe('AgentPromptsService (ADR-0026)', () => {
       '1. Client and renewal — [[skill:rfp-client-renewal]]',
     );
     expect((await service.view('rfp'))?.editable).toContain('[[tool:get_rfp]]');
+    // So does the Data Readiness Agent (agents.md 2.10).
+    expect(await service.view('data-readiness')).toMatchObject({
+      editable: shippedAgentPrompt('data-readiness'),
+      linksAllowed: true,
+    });
+    expect((await service.view('data-readiness'))?.editable).toContain(
+      '[[skill:data-readiness]]',
+    );
     expect(await service.view('user-1')).toBeUndefined();
   });
 
@@ -217,6 +225,77 @@ describe('AgentPromptsService (ADR-0026)', () => {
       await expect(
         service.save('rfp', { prompt: shippedAgentPrompt('rfp') }),
       ).resolves.toBe('rfp');
+    });
+
+    it("the Data Readiness Agent's identity, then skill links, then tools not its own", async () => {
+      const identity = 'You are the Data Readiness Agent';
+      expect(await refusal('data-readiness', 'Be brief.')).toBe(
+        `The Data Readiness Agent's prompt must start with "${identity}"`,
+      );
+      const skillRefusal =
+        "Only the Data Readiness Agent's own skills can be linked here: this prompt is shared by every user";
+      expect(
+        await refusal('data-readiness', `${identity}. [[skill:x]] [[tool:x]]`),
+      ).toBe(skillRefusal);
+      // Another agent's skills are not its own.
+      for (const skill of ['curated-knowledge', 'rfp-carriers']) {
+        expect(
+          await refusal('data-readiness', `${identity}. [[skill:${skill}]]`),
+        ).toBe(skillRefusal);
+      }
+      // Neither an assistant-only tool, an RFP tool nor update_workflow.
+      for (const tool of [
+        'x',
+        'run_readonly_sql',
+        'get_rfp',
+        'update_workflow',
+      ]) {
+        expect(
+          await refusal(
+            'data-readiness',
+            `${identity}. [[skill:data-readiness]] [[tool:${tool}]]`,
+          ),
+        ).toBe(`Unknown tool "${tool}"`);
+      }
+    });
+
+    it("accepts the Data Readiness Agent's own tools and skill in its prompt", async () => {
+      const { service } = build();
+      await service.save('data-readiness', {
+        prompt:
+          'You are the Data Readiness Agent. Load [[skill:data-readiness]], then call [[tool:assess_data_readiness]], [[tool:get_readiness_report]], [[tool:list_readiness_reports]], [[tool:show_in_panel]] and [[tool:ask_clarification]].',
+      });
+      expect(agentPromptOverrideFor('data-readiness')?.prompt).toContain(
+        '[[skill:data-readiness]]',
+      );
+      // Its shipped prompt, links and all, saves as an override.
+      await expect(
+        service.save('data-readiness', {
+          prompt: shippedAgentPrompt('data-readiness'),
+        }),
+      ).resolves.toBe('data-readiness');
+    });
+
+    it("refuses the Data Readiness Agent's tools and skill in other agents' prompts", async () => {
+      expect(
+        await refusal(
+          'rfp',
+          'You are the RFP Builder. [[skill:data-readiness]]',
+        ),
+      ).toBe(
+        "Only the RFP Builder's own skills can be linked here: this prompt is shared by every user",
+      );
+      expect(
+        await refusal(
+          'rfp',
+          'You are the RFP Builder. [[tool:assess_data_readiness]]',
+        ),
+      ).toBe('Unknown tool "assess_data_readiness"');
+      expect(
+        await refusal('assistant', `${IDENTITY}. [[skill:data-readiness]]`),
+      ).toBe(
+        'Only built-in skills can be linked here: this prompt is shared by every user',
+      );
     });
 
     it("refuses the RFP Builder's tools and skill in the assistant prompt", async () => {

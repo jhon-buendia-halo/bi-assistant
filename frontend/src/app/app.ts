@@ -107,7 +107,10 @@ import {
   VisualEvent,
   sessionAgentLabel,
 } from './features/sessions/models/session.model';
-import { ReasoningEffort } from './features/llm/models/llm.model';
+import {
+  LlmSettingsView,
+  ReasoningEffort,
+} from './features/llm/models/llm.model';
 import { ToastService } from './core/toast/toast.service';
 import { APP_VERSION } from './core/config/app-version';
 
@@ -168,6 +171,25 @@ export interface ComposerAgentRow {
   description: string;
   /** Why the agent cannot start a chat now, or null. */
   disabledReason: string | null;
+}
+
+/**
+ * The composer chip's label for the saved LLM configuration (llm-settings
+ * R53): the model, or for a custom endpoint `<model> · <host>` where host is
+ * the saved base URL's host with its port. Null when nothing is configured.
+ */
+export function composerModelLabel(view: LlmSettingsView): string | null {
+  if (!view.configured || !view.model) return null;
+  if (view.provider !== 'custom' || !view.baseUrl) return view.model;
+  return `${view.model} · ${urlHost(view.baseUrl)}`;
+}
+
+function urlHost(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).host || baseUrl;
+  } catch {
+    return baseUrl;
+  }
 }
 
 @Component({
@@ -428,8 +450,13 @@ export class App {
   private readonly theme = inject(ThemeService);
   readonly diagnostics = inject(DiagnosticsService);
 
-  /** Model from the saved LLM configuration, shown in the composer chip. */
+  /**
+   * Model from the saved LLM configuration, shown in the composer chip
+   * (`<model> · <host>` for a custom endpoint, llm-settings R53).
+   */
   readonly llmModel = signal<string | null>(null);
+  /** The chip's title: the full base URL for a custom endpoint (ui.md). */
+  readonly llmModelTitle = signal<string | null>(null);
   readonly llmEffort = signal<ReasoningEffort>('high');
   readonly effortMenuOpen = signal(false);
   readonly reasoningEfforts: ReasoningEffort[] = ['low', 'medium', 'high'];
@@ -1151,10 +1178,16 @@ export class App {
     });
     this.llmApi.getSettings().subscribe({
       next: (v) => {
-        this.llmModel.set(v.configured ? v.model : null);
+        this.llmModel.set(composerModelLabel(v));
+        this.llmModelTitle.set(
+          v.configured && v.provider === 'custom' ? v.baseUrl : null,
+        );
         this.llmEffort.set(v.reasoningEffort);
       },
-      error: () => this.llmModel.set(null),
+      error: () => {
+        this.llmModel.set(null);
+        this.llmModelTitle.set(null);
+      },
     });
     this.datasetApi.getDatasets().subscribe({
       next: (res) => this.composerDatasets.set(res.datasets),
