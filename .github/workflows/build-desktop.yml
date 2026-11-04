@@ -1,13 +1,14 @@
 name: Build desktop installers
 
 # Installers are built on demand only: Actions → Build desktop installers → Run
-# workflow (tick the platforms you want and pick a ref), or by pushing a v* tag
-# by hand. Merges never build automatically — they only bump the version (see
-# version-on-merge.yml), so any build can be pointed at the tag you want.
+# workflow (pick a ref), or by pushing a v* tag by hand. Merges never build
+# automatically — they only bump the version (see version-on-merge.yml), so any
+# build can be pointed at the tag you want.
 #
-# Each platform is an independent checkbox, so a run costs one runner per ticked
-# box. Separate runs accumulate on the same release: publishing uploads with
-# --clobber, so building macOS today and Windows tomorrow leaves both attached.
+# Only the Windows x64 installer is built and published (BA-302). macOS .dmg
+# files can still be built locally with `npm run electron:dist -- --mac dmg`,
+# but CI no longer builds or publishes them. The build stays a one-entry matrix
+# so adding a platform back is one line in `prepare`.
 #
 # Publishing never needs a tag to exist up front. When the ref is not a v* tag
 # the `prepare` job derives one from the version committed at that ref
@@ -18,27 +19,12 @@ name: Build desktop installers
 on:
   workflow_dispatch:
     inputs:
-      windows_x64:
-        description: Windows x64 installer (.exe)
-        type: boolean
-        required: false
-        default: true
-      macos_arm64:
-        description: macOS Apple Silicon installer (.dmg)
-        type: boolean
-        required: false
-        default: true
-      macos_x64:
-        description: macOS Intel installer (.dmg)
-        type: boolean
-        required: false
-        default: true
       ref:
         description: "Git ref to build — tag, branch or SHA (empty = branch this run was started from)"
         type: string
         required: false
       publish:
-        description: Attach the installers to the GitHub release for the built tag
+        description: Attach the Windows installer to the GitHub release for the built tag
         type: boolean
         required: false
         default: false
@@ -71,42 +57,16 @@ jobs:
       - name: Resolve targets, ref and tag
         id: select
         env:
-          WINDOWS_X64: ${{ inputs.windows_x64 }}
-          MACOS_ARM64: ${{ inputs.macos_arm64 }}
-          MACOS_X64: ${{ inputs.macos_x64 }}
           INPUT_REF: ${{ inputs.ref }}
         run: |
           set -euo pipefail
 
-          all='[
-            {"id":"windows-x64","name":"Windows x64","os":"windows-2022","target":"win","format":"nsis","arch":"x64","artifact":"questions-to-insights-windows-x64","installer":"frontend/release/*.exe"},
-            {"id":"macos-arm64","name":"macOS Apple Silicon","os":"macos-latest","target":"mac","format":"dmg","arch":"arm64","artifact":"questions-to-insights-macos-arm64","installer":"frontend/release/*.dmg"},
-            {"id":"macos-x64","name":"macOS Intel","os":"macos-15-intel","target":"mac","format":"dmg","arch":"x64","artifact":"questions-to-insights-macos-x64","installer":"frontend/release/*.dmg"}
+          # The only shipped installer (BA-302). Manual runs and tag pushes
+          # both build exactly this.
+          selected='[
+            {"id":"windows-x64","name":"Windows x64","os":"windows-2022","target":"win","format":"nsis","arch":"x64","artifact":"questions-to-insights-windows-x64","installer":"frontend/release/*.exe"}
           ]'
-
-          # A tag push carries no inputs at all, which means "build everything".
-          if [ -z "${WINDOWS_X64}${MACOS_ARM64}${MACOS_X64}" ]; then
-            wanted='["windows-x64","macos-arm64","macos-x64"]'
-          else
-            wanted='[]'
-            if [ "$WINDOWS_X64" = "true" ]; then
-              wanted=$(jq -c '. + ["windows-x64"]' <<<"$wanted")
-            fi
-            if [ "$MACOS_ARM64" = "true" ]; then
-              wanted=$(jq -c '. + ["macos-arm64"]' <<<"$wanted")
-            fi
-            if [ "$MACOS_X64" = "true" ]; then
-              wanted=$(jq -c '. + ["macos-x64"]' <<<"$wanted")
-            fi
-          fi
-
-          selected=$(jq -c --argjson want "$wanted" \
-            '[.[] | select(.id as $id | $want | index($id))]' <<<"$all")
-
-          if [ "$(jq 'length' <<<"$selected")" -eq 0 ]; then
-            echo "No installer selected — tick at least one platform." >&2
-            exit 1
-          fi
+          selected=$(jq -c . <<<"$selected")
 
           ref=${INPUT_REF:-$GITHUB_REF}
           sha=$(git rev-parse HEAD)

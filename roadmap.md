@@ -1245,6 +1245,17 @@ A fourth LLM provider, `custom` ("Custom endpoint"), connects every agent to any
 - **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
 - **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
 
+### Milestone 1.18 — Desktop installer builds ([BA-302](https://halo-powered.atlassian.net/browse/BA-302))
+
+How the desktop installers are built and published. From 2026-11-04 only the Windows x64 installer ships. All stories are built on the branch `ci/BA-302-windows-only-installer` and ship as one PR. Epic spec: [specs/epics/BA-302/spec.md](specs/epics/BA-302/spec.md).
+
+#### 1.18.1 — Build only the Windows installer ([BA-303](https://halo-powered.atlassian.net/browse/BA-303))  `✅ Done`
+- **Intent:** releases stop waiting on macOS runners and publish only the installer we ship.
+- **Scope:** remove the macOS inputs and matrix entries from `build-desktop.yml`, so manual runs and `v*` tag pushes build and publish Windows x64 only; N1 in `non-functional.md` becomes Windows x64; `delivery.md` §5, the README and the `version-on-merge.yml` comment match.
+- **Out of scope:** the product page's macOS buttons (stay on v0.16.1); local macOS builds with `electron:dist`; macOS app behaviour; code signing.
+- **Acceptance:** the run form has no macOS options; a run with `publish=true` builds only the Windows `.exe` and attaches it to the release; `check-specs.py` and actionlint pass.
+- **Notes:** created 2026-11-04 after a GitHub Actions outage left the v0.38.0 macOS Intel job queued; v0.38.0 was published by hand with the Windows installer only. Passed the acceptance gate on 2026-11-04. Evidence: [evidence/1.18.1/](evidence/1.18.1/).
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

@@ -1,0 +1,18 @@
+# Test run 41869156864 — build-desktop.yml from ci/BA-302-windows-only-installer (ae0abe7), publish=false
+# https://github.com/jhon-buendia-halo/bi-assistant/actions/runs/41869156864
+
+## Run form inputs (workflow_dispatch) on the branch
+- ref: string, default nil
+- publish: boolean, default false
+
+## Jobs
+run: completed success
+Select targets: success (2026-11-04T16:37:23Z → 2026-11-04T16:37:37Z)
+Build Windows x64: success (2026-11-04T16:37:40Z → 2026-11-04T16:44:57Z)
+Publish release: skipped (2026-11-04T16:44:57Z → 2026-11-04T16:44:57Z)
+
+## Select targets log
+Building windows-x64 from refs/heads/ci/BA-302-windows-only-installer (ae0abe71dfed4ef090f8d3ea3c7f1d7b69ed0017) as v0.38.1
+
+## Artifacts
+questions-to-insights-windows-x64 227147405 bytes

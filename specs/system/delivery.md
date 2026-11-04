@@ -208,23 +208,20 @@ Conventional Commit subjects therefore drive the bump, Because the bump reads ev
 
 ### `build-desktop.yml` — Build desktop installers
 
-Manual: Actions → Build desktop installers → Run workflow. A hand-pushed `v*` tag also triggers it.
+Manual: Actions → Build desktop installers → Run workflow. A hand-pushed `v*` tag also triggers it. It builds and publishes **only the Windows x64 installer** (BA-302); macOS `.dmg` files can still be built locally with `electron:dist` (section 2) but CI no longer builds them.
 
 | Input | Default | Meaning |
 |---|---|---|
-| `windows_x64` | true | Windows x64 `.exe` (runner `windows-2022`, NSIS) |
-| `macos_arm64` | true | macOS Apple Silicon `.dmg` (runner `macos-latest`) |
-| `macos_x64` | true | macOS Intel `.dmg` (runner `macos-15-intel`) |
 | `ref` | empty | Tag, branch or SHA to build; empty = the branch the run was started from |
-| `publish` | false | Attach the installers to the GitHub release for the resolved tag |
+| `publish` | false | Attach the Windows installer to the GitHub release for the resolved tag |
 
 Jobs:
 
-1. **`prepare`** checks out the ref with full history and tags, turns the ticked boxes into the matrix (`{"include":[…]}`; a tag push carries no inputs and means "build everything"; unticking every box fails with "tick at least one platform"), and resolves the tag:
+1. **`prepare`** checks out the ref with full history and tags, emits the build matrix (`{"include":[…]}`) with its one entry, Windows x64 (runner `windows-2022`, NSIS `.exe`), and resolves the tag:
    - a `v*` ref publishes to exactly that tag;
    - anything else (branch, SHA, empty) takes the version committed at that ref (`frontend/package.json`) and **walks the patch level up** until it finds a tag that either does not exist or already points at this commit, so building `main` twice gives `v0.13.0` then `v0.13.1` instead of clobbering a shipped release.
-2. **`build`** (one runner per ticked platform, 45 min timeout, `fail-fast: false`): checks out the resolved SHA, **stamps the resolved version** into both `package.json`s (so the installer filename and the tag never disagree), `npm ci --legacy-peer-deps` in `backend/` and `frontend/`, then `npm run electron:dist -- --<target> <format> --<arch>`, and uploads the installer as an Actions artifact (retention 14 days). Artifacts are unsigned (`CSC_IDENTITY_AUTO_DISCOVERY=false`).
-3. **`publish`** runs when `publish` is true or the trigger was a `v*` tag: downloads all artifacts, creates the GitHub release empty if it does not exist (`gh release create --target <sha> --generate-notes`, which also creates the tag at the built commit, so no tag is pushed unless the build succeeded), then uploads each installer one at a time with up to 3 attempts and `--clobber` (installers run to hundreds of MB and the upload endpoint rejects them intermittently). Because of `--clobber`, separate per-platform runs accumulate on the same release instead of replacing each other.
+2. **`build`** (one runner per matrix entry, so one Windows runner; 45 min timeout, `fail-fast: false`): checks out the resolved SHA, **stamps the resolved version** into both `package.json`s (so the installer filename and the tag never disagree), `npm ci --legacy-peer-deps` in `backend/` and `frontend/`, then `npm run electron:dist -- --<target> <format> --<arch>`, and uploads the installer as an Actions artifact (retention 14 days). Artifacts are unsigned (`CSC_IDENTITY_AUTO_DISCOVERY=false`).
+3. **`publish`** runs when `publish` is true or the trigger was a `v*` tag: downloads all artifacts, creates the GitHub release empty if it does not exist (`gh release create --target <sha> --generate-notes`, which also creates the tag at the built commit, so no tag is pushed unless the build succeeded), then uploads each installer one at a time with up to 3 attempts and `--clobber` (installers run to hundreds of MB and the upload endpoint rejects them intermittently). Because of `--clobber`, rebuilding the same tag replaces its installer instead of failing.
 
 Publishing therefore never needs an existing tag.
 

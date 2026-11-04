@@ -2,7 +2,7 @@ name: Version on merge
 
 # Every merge into the default branch bumps the app version and tags it, so any
 # later build carries that version in its installer filename
-# (Questions-to-Insights-<version>-<os>-<arch>.dmg/.exe).
+# (Questions-to-Insights-<version>-win-x64.exe).
 # Building installers is a separate, manual step: Actions → Build desktop
 # installers → Run workflow, with the tag as "ref".
 on:

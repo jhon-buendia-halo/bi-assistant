@@ -14,6 +14,23 @@ Entry template:
 
 ---
 
+## 2026-11-04 — 1.18.1 Build only the Windows installer (BA-302)
+
+### What went well
+- Downloading the finished Windows artifact from the stalled run and publishing it the way the publish job does (`gh release create --target <sha> --generate-notes`, then upload with retries) shipped v0.38.0 the same day, without waiting out the outage.
+- Grepping the specs for platform claims before drafting the epic spec found N1 ("SHALL ship … macOS"), so the requirement change was confirmed by the user instead of contradicting the workflow silently.
+- Running `prepare`'s script locally (extracted from the YAML) proved the matrix and tag resolution before any push; the branch test run with `publish=false` then exercised the whole workflow without releasing anything.
+
+### What went wrong
+- The first status check misread GitHub's stale job states as "still building"; only `githubstatus.com` explained that the run was stuck in an Actions outage. The publish job is gated on every build, so one queued platform blocked the whole release.
+- `check-specs` failed on the first run because a new epic spec must also be listed in `specs/README.md`.
+- actionlint could not be fetched in this session (download blocked), so the workflow went out without it.
+
+### What to do differently
+- When a build run looks stuck, check `https://www.githubstatus.com/api/v2/summary.json` (Actions component) before reading job states, and say so to the user.
+- When creating an epic spec, add its row to the epic table in `specs/README.md` in the same edit.
+- Install actionlint once with `brew install actionlint` rather than fetching the binary per session; ask the user if it is missing.
+
 ## 2026-11-03 — 1.17.1 to 1.17.20 acceptance gate of epic BA-281 (custom LLM endpoint)
 
 ### What went well

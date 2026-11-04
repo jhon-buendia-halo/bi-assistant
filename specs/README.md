@@ -74,6 +74,7 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-233 US Health demo | [epics/BA-233](epics/BA-233/spec.md) |
 | BA-251 Data Readiness Agent | [epics/BA-251](epics/BA-251/spec.md) |
 | BA-281 Custom LLM endpoint | [epics/BA-281](epics/BA-281/spec.md) |
+| BA-302 Desktop installer builds | [epics/BA-302](epics/BA-302/spec.md) |
 
 ## Stack neutrality
 

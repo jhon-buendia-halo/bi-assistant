@@ -2,6 +2,14 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-04
+
+### Changed
+- **Only the Windows installer is built and published** (epic [BA-302](https://halo-powered.atlassian.net/browse/BA-302), roadmap 1.18.1, story [BA-303](https://halo-powered.atlassian.net/browse/BA-303), [specs/epics/BA-302/spec.md](specs/epics/BA-302/spec.md)). `build-desktop.yml` drops the macOS Apple Silicon and macOS Intel targets and the platform checkboxes; manual runs and `v*` tag pushes build Windows x64 only. N1 in [non-functional.md](specs/product/non-functional.md) now ships Windows x64; [delivery.md](specs/system/delivery.md) §5, the README and the `version-on-merge.yml` comment match. macOS `.dmg` files can still be built locally; the product page's macOS buttons stay on v0.16.1. Evidence: [evidence/1.18.1/](evidence/1.18.1/) (branch test run: one Windows job, one 227 MB artifact).
+
+### Removed
+- **macOS installers from releases** (1.18.1): v0.38.0 was published by hand with the Windows installer only, after a GitHub Actions outage left its macOS Intel job queued.
+
 ## 2026-11-03
 
 ### Added
