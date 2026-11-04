@@ -303,7 +303,7 @@ Curated knowledge the assistant treats as authoritative: glossary terms, standin
 - **Scope:** the confirmed epic spec, this milestone with one feature per story, any ADRs, and the plan in two files: [docs/plans/BA-4.md](docs/plans/BA-4.md) (functional: the steps, what a user can do after each, dependencies, done-when, the "after" story, the have/need inventory and the open questions) and [docs/plans/BA-4-technical.md](docs/plans/BA-4-technical.md) (pack format, record shapes, schemas, endpoints, flows, migration, agent rules, screens, Gherkin). Both are written against `main` only: anything that exists on another branch is a prerequisite with a merge-or-rebuild decision left open, and each file carries status-check notes to compare the app against the plan at later reviews.
 - **Out of scope:** product code; merging any branch.
 - **Acceptance:** [docs/plans/BA-4.md](docs/plans/BA-4.md) exists, [specs/epics/BA-4/spec.md](specs/epics/BA-4/spec.md) is `Status: Confirmed`, and every story of the epic has a feature in this milestone.
-- **Notes:** starts after 1.3.5 is Done. Done on 2026-10-29: the two plan files (written 2026-10-07 against v0.24.2) with section 9 "Status 2026-10-29" in [docs/plans/BA-4.md](docs/plans/BA-4.md); [ADR-0031](specs/system/architecture.md) (Proposed), the hypothesis and decision rule for cross-session memory; the epic spec confirmed by the user; 1.3.1 closed as covered. The ADR "knowledge as code in packs" moved to 1.3.2. Branch `docs/BA-124-knowledge-store-execution-plan`, rebased on `main` on 2026-10-29. Evidence: [evidence/1.3.6/](evidence/1.3.6/).
+- **Notes:** starts after 1.3.5 is Done. Done on 2026-10-29: the two plan files (written 2026-10-07 against v0.24.2) with section 9 "Status 2026-10-29" in [docs/plans/BA-4.md](docs/plans/BA-4.md); [ADR-0033](specs/system/architecture.md) (Proposed), the hypothesis and decision rule for cross-session memory; the epic spec confirmed by the user; 1.3.1 closed as covered. The ADR "knowledge as code in packs" moved to 1.3.2. Branch `docs/BA-124-knowledge-store-execution-plan`, rebased on `main` on 2026-10-29. Evidence: [evidence/1.3.6/](evidence/1.3.6/).
 
 #### 1.3.1 — Research and ontology design ([BA-78](https://halo-powered.atlassian.net/browse/BA-78))  `✅ Done`
 - **Intent:** an evidence-based design for how the knowledge store models business meaning, so query generation follows each data store's ontology.
@@ -314,7 +314,7 @@ Curated knowledge the assistant treats as authoritative: glossary terms, standin
   - Plan the snippet migration: terms become concepts, default filters become concept constraints, instructions are kept.
 - **Out of scope:** implementation.
 - **Acceptance:** the decision record is merged in `docs/` (as an ADR in [specs/system/architecture.md](specs/system/architecture.md)) and the model is agreed.
-- **Notes:** closed as covered by 1.3.5 and 1.3.6 on 2026-10-29 (user decision): [docs/research/BA-4.md](docs/research/BA-4.md) is the decision record and [docs/plans/BA-4.md](docs/plans/BA-4.md) holds the design. The ontology-model ADR ("knowledge as code in packs") moved to 1.3.2; the memory decision is [ADR-0031](specs/system/architecture.md).
+- **Notes:** closed as covered by 1.3.5 and 1.3.6 on 2026-10-29 (user decision): [docs/research/BA-4.md](docs/research/BA-4.md) is the decision record and [docs/plans/BA-4.md](docs/plans/BA-4.md) holds the design. The ontology-model ADR ("knowledge as code in packs") moved to 1.3.2; the memory decision is [ADR-0033](specs/system/architecture.md).
 
 #### 1.3.2 — Ontology model, knowledge graph and bootstrap ([BA-79](https://halo-powered.atlassian.net/browse/BA-79))  `📋 Planned`
 - **Intent:** business concepts and their relations live in one graph and are drafted automatically, so setup takes minutes.
@@ -347,7 +347,7 @@ Curated knowledge the assistant treats as authoritative: glossary terms, standin
   - The answer panel shows which concepts and definitions were used.
 - **Out of scope:** —
 - **Acceptance:** an analyst can fix a wrong answer by editing a concept, and the next answer cites it.
-- **Notes:** a new UI surface, so it needs Gherkin scenarios and E2E specs first. The provenance display ties into 1.4.1. Plan: Step 3 in [docs/plans/BA-4.md](docs/plans/BA-4.md) and [docs/plans/BA-4-technical.md](docs/plans/BA-4-technical.md). Memory: the provider is chosen by the three-arm eval of [ADR-0031](specs/system/architecture.md); its cases, the Mastra-only implementation and the decision belong here, the eval option to [BA-190](https://halo-powered.atlassian.net/browse/BA-190).
+- **Notes:** a new UI surface, so it needs Gherkin scenarios and E2E specs first. The provenance display ties into 1.4.1. Plan: Step 3 in [docs/plans/BA-4.md](docs/plans/BA-4.md) and [docs/plans/BA-4-technical.md](docs/plans/BA-4-technical.md). Memory: the provider is chosen by the three-arm eval of [ADR-0033](specs/system/architecture.md); its cases, the Mastra-only implementation and the decision belong here, the eval option to [BA-190](https://halo-powered.atlassian.net/browse/BA-190).
 
 ### Milestone 1.4 — Response Reliability Signals ([BA-12](https://halo-powered.atlassian.net/browse/BA-12))
 
