@@ -2,6 +2,11 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-04
+
+### Changed
+- **The cross-session memory ADR is ADR-0033** (roadmap 1.3.5 and 1.3.6, [BA-123](https://halo-powered.atlassian.net/browse/BA-123), [BA-124](https://halo-powered.atlassian.net/browse/BA-124), epic [BA-4](https://halo-powered.atlassian.net/browse/BA-4)). `main` (v0.38.0, merged into this branch) took ADR-0031 for BA-251 and ADR-0032 for BA-281, so the memory ADR that BA-124 adds, numbered ADR-0031 until today, is ADR-0033; [docs/research/BA-4.md](docs/research/BA-4.md) section 8 cites it so. Retrospective and evidence entries keep the id they were written with. Evidence: `check-specs` passes; no app change.
+
 ## 2026-11-03
 
 ### Added
@@ -24,6 +29,12 @@ Running log of every meaningful change, newest first. See *Logging convention* a
   - Start chat is offered when a PostgreSQL or Databricks dataset exists; the session runs the agent and streams the report to the panel (1.16.10). The scorecard with dimension bars and a filterable findings table, the chat card (1.16.11) and Past assessments (1.16.12).
   - The `data-readiness` eval set (8 cases) passes 8/8 over 3 runs. The acceptance gate fixed one agent fault it found: the prompt and D9 now define the weakest dimension as the lowest assessed score, not the one with the most severe findings.
   - Evidence: [evidence/1.16/](evidence/1.16/) (114 impacted E2E tests green, eval runs, live smoke, scorecard screenshot).
+
+## 2026-10-29
+
+### Added
+- **Knowledge Store research** (roadmap 1.3.5, [BA-123](https://halo-powered.atlassian.net/browse/BA-123), epic [BA-4](https://halo-powered.atlassian.net/browse/BA-4)): [docs/research/BA-4.md](docs/research/BA-4.md), the research story's deliverable, converted from the *Knowledge Store Ontology* artifact (version 3, 2026-10-07) and re-checked against `main` at 3012e34 (v0.24.2). Findings, options and recommendation up front; then theory and the market, how it applies to this app (what is on `main`, what is on a branch, what is missing), Hindsight memory, the concept and relation design, further reading, every source by type and the vendor appendix. The execution part and the "after" story of the artifact go to `docs/plans/BA-4.md` under BA-124. [specs/epics/BA-4/spec.md](specs/epics/BA-4/spec.md) links the research. Evidence: [evidence/1.3.5/](evidence/1.3.5/) — spec check and link check; no code or UI change, no E2E affected.
+  - Written on 2026-10-07 against v0.24.2 and merged on 2026-10-29. Its new section 8 records what changed since: the evals that measured the knowledge seeds, Mastra's own memory, Hindsight 1.x, and the memory recommendation that moved to "Mastra only first, Hindsight + Mastra only if the eval of ADR-0033 says so". Evidence: [evidence/1.3.5/](evidence/1.3.5/).
 
 ## 2026-10-16
 
