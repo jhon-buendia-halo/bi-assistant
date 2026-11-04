@@ -2,6 +2,11 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-04
+
+### Changed
+- **The cross-session memory ADR is ADR-0033** (roadmap 1.3.5 and 1.3.6, [BA-123](https://halo-powered.atlassian.net/browse/BA-123), [BA-124](https://halo-powered.atlassian.net/browse/BA-124), epic [BA-4](https://halo-powered.atlassian.net/browse/BA-4)). `main` (v0.38.0, merged into this branch) took ADR-0031 for BA-251 and ADR-0032 for BA-281, so the memory ADR that BA-124 adds, numbered ADR-0031 until today, is ADR-0033; [docs/research/BA-4.md](docs/research/BA-4.md) section 8 cites it so. Retrospective and evidence entries keep the id they were written with. Evidence: `check-specs` passes; no app change.
+
 ## 2026-11-03
 
 ### Added
