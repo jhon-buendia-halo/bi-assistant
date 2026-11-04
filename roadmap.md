@@ -1256,12 +1256,12 @@ How the desktop installers are built and published. From 2026-11-04 only the Win
 - **Acceptance:** the run form has no macOS options; a run with `publish=true` builds only the Windows `.exe` and attaches it to the release; `check-specs.py` and actionlint pass.
 - **Notes:** created 2026-11-04 after a GitHub Actions outage left the v0.38.0 macOS Intel job queued; v0.38.0 was published by hand with the Windows installer only. Passed the acceptance gate on 2026-11-04. Evidence: [evidence/1.18.1/](evidence/1.18.1/).
 
-#### 1.18.2 — Product page offers only the Windows installer ([BA-304](https://halo-powered.atlassian.net/browse/BA-304))  `🚧 In progress`
+#### 1.18.2 — Product page offers only the Windows installer ([BA-304](https://halo-powered.atlassian.net/browse/BA-304))  `✅ Done`
 - **Intent:** the product page stops sending visitors to an outdated macOS build and matches N1.
 - **Scope:** remove the macOS download cards, the Gatekeeper note and macOS from the hero badge, the download intro and the Platforms line of bi-assistant.halo-powered-labs.com; redeploy. Correct the last macOS release in the specs and roadmap from v0.16.1 to v0.13.1.
 - **Out of scope:** removing the `/download/mac-*` routes and `/api/latest`'s macOS entries; the Labs home page.
 - **Acceptance:** the live page shows one download card (Windows) serving the newest release; no macOS text on the page; `/download/win-x64` redirects to the `.exe`; `/download/mac-arm64` still resolves; `check-specs.py` passes.
-- **Notes:** created 2026-11-04 after 1.18.1 merged.
+- **Notes:** created 2026-11-04 after 1.18.1 merged. Deployed and passed the acceptance gate on 2026-11-04. Evidence: [evidence/1.18.2/](evidence/1.18.2/).
 
 ## Release 2 — Multi-user  (no target date yet)
 

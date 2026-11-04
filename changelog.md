@@ -5,6 +5,12 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-11-04
 
 ### Changed
+- **The product page offers only the Windows installer** (epic [BA-302](https://halo-powered.atlassian.net/browse/BA-302), roadmap 1.18.2, story [BA-304](https://halo-powered.atlassian.net/browse/BA-304)). bi-assistant.halo-powered-labs.com drops the two macOS download cards and the Gatekeeper note, and its badge, download intro and Platforms line say Windows; `/download/mac-*` stay, unlinked, for old links. [delivery.md](specs/system/delivery.md) §8, `site/README.md` and the BA-302 epic spec (scope widened, re-confirmed) match. Evidence: [evidence/1.18.2/](evidence/1.18.2/).
+- **v0.38.1 is the first release from the Windows-only workflow** (1.18.1): one Windows build, published with `publish=true`. Evidence: [evidence/1.18.2/](evidence/1.18.2/).
+
+### Fixed
+- **Last macOS release** (1.18.2): the entries below, N1, the BA-302 epic spec and the roadmap named v0.16.1 as the last release with macOS installers; it is **v0.13.1**; every later release (v0.15.0, v0.15.1, v0.16.1, v0.38.0, v0.38.1) carries only the Windows `.exe`, checked with `gh release view`. The specs and roadmap are corrected; the entries below are left as written.
+
 - **Only the Windows installer is built and published** (epic [BA-302](https://halo-powered.atlassian.net/browse/BA-302), roadmap 1.18.1, story [BA-303](https://halo-powered.atlassian.net/browse/BA-303), [specs/epics/BA-302/spec.md](specs/epics/BA-302/spec.md)). `build-desktop.yml` drops the macOS Apple Silicon and macOS Intel targets and the platform checkboxes; manual runs and `v*` tag pushes build Windows x64 only. N1 in [non-functional.md](specs/product/non-functional.md) now ships Windows x64; [delivery.md](specs/system/delivery.md) §5, the README and the `version-on-merge.yml` comment match. macOS `.dmg` files can still be built locally; the product page's macOS buttons stay on v0.16.1. Evidence: [evidence/1.18.1/](evidence/1.18.1/) (branch test run: one Windows job, one 227 MB artifact).
 
 ### Removed
