@@ -22,7 +22,30 @@ import {
   type RfpOrientationRecord,
   type TurnRfpHolder,
 } from '../../mastra/rfp-context';
-import { builtinAgentSession } from '../agents/builtin-sessions';
+import {
+  builtinAgentSession,
+  builtinSessionDatasets,
+  canStartBuiltinSession,
+  existingDatasetsFor,
+} from '../agents/builtin-sessions';
+import { DataReadinessService } from '../data-readiness/data-readiness.service';
+import {
+  READINESS_REPORT_EVENT,
+  setReadinessToolServices,
+} from '../../mastra/readiness-tool-services';
+import {
+  DATA_READINESS_AGENT_KEY,
+  READINESS_MAX_STEPS,
+  READINESS_REPORT_TOOLS,
+  READINESS_TOOLS,
+  ReadinessBridge,
+  readinessOrientationBlock,
+  readinessPanelItem,
+  readinessAnswerFallback,
+  readinessReportIdOf,
+  readinessReportOf,
+  readinessReportRef,
+} from './readiness-bridge';
 import {
   SHOWCASE_REASON,
   isShowcaseAgent,
@@ -126,6 +149,7 @@ import {
   SessionView,
   SessionVisualization,
   ReasoningStep,
+  ReadinessReportRef,
   RfpPackageRef,
   ToolDataRecord,
   VisualEvent,
@@ -202,6 +226,7 @@ export type StreamEvent = {
     | 'panel-item'
     | 'workflow'
     | 'rfp-package'
+    | typeof READINESS_REPORT_EVENT
     | 'done';
   content?: string;
   session?: SessionDoc;
@@ -247,7 +272,12 @@ export class SessionsService implements OnModuleInit {
     private readonly userAgents: UserAgentsService,
     // The RFP Builder's REST target and package export (agents.md 3.10).
     @Optional() private readonly rfpPackages?: RfpPackagesService,
+    // The Data Readiness Agent's assessments (agents.md 3.13).
+    @Optional() private readonly readiness?: DataReadinessService,
   ) {}
+
+  /** The readiness tools' bridge, once installed (agents.md 3.13). */
+  private readinessBridge?: ReadinessBridge;
 
   async onModuleInit(): Promise<void> {
     // Install the DI bridge the Mastra tools use (they load with no Nest DI).
@@ -298,6 +328,17 @@ export class SessionsService implements OnModuleInit {
           options,
         ),
     });
+
+    if (this.readiness) {
+      this.readinessBridge = new ReadinessBridge({
+        sessionDatasetNames: async (sessionId) =>
+          (await this.get(sessionId)).datasets,
+        datasets: (names) => this.boundDatasets(names),
+        datasourceName: (datasourceId) => this.datasourceName(datasourceId),
+        readiness: this.readiness,
+      });
+      setReadinessToolServices(this.readinessBridge);
+    }
 
     // A preview left open when the app stopped has no session left to own
     // its memory and workspace (agents-evals R61).
@@ -501,6 +542,9 @@ export class SessionsService implements OnModuleInit {
     if (session.agentKey === RFP_AGENT_KEY) {
       return this.rfpAgentOptions(session, question, abortSignal);
     }
+    if (session.agentKey === DATA_READINESS_AGENT_KEY) {
+      return this.readinessAgentOptions(session, question, abortSignal);
+    }
     return {
       ...(await this.agentContext(
         session,
@@ -552,6 +596,68 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
+   * A turn of the Data Readiness Agent (agents.md 2.10, 4.1, 4.2): Block D1
+   * only, its requestContext keys and no workflow (ADR-0031).
+   */
+  private async readinessAgentOptions(
+    session: SessionDoc,
+    question?: string,
+    abortSignal?: AbortSignal,
+  ) {
+    const requestContext = new RequestContext();
+    requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
+    requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
+    if (question) requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
+    const workspace = await this.mastra.ensureSessionWorkspace(
+      session.id,
+      session.name,
+    );
+    requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
+    const { reasoningEffort } = await this.llmService.getView();
+    return {
+      maxSteps: READINESS_MAX_STEPS,
+      providerOptions: await this.providerOptions({ reasoningEffort }),
+      context: [
+        {
+          role: 'system' as const,
+          content: await this.readinessOrientation(session),
+        },
+      ],
+      requestContext,
+      abortSignal,
+      memory: { thread: session.id, resource: session.id },
+    };
+  }
+
+  /** Block D1 (agents.md 4.1): each session dataset, its datasource and size. */
+  private async readinessOrientation(session: SessionDoc): Promise<string> {
+    const datasets = await this.boundDatasets(session.datasets);
+    const rows = await Promise.all(
+      session.datasets
+        .map((name) => datasets.find((dataset) => dataset.name === name))
+        .filter((dataset) => dataset !== undefined)
+        .map(async (dataset) => ({
+          name: dataset.name,
+          datasourceKind: dataset.datasourceKind,
+          datasourceName: dataset.datasourceId
+            ? await this.datasourceName(dataset.datasourceId)
+            : 'none',
+          entityCount: dataset.tables.length,
+        })),
+    );
+    return readinessOrientationBlock(rows, isoToday());
+  }
+
+  /** A datasource's name, or its id when it cannot be read. */
+  private async datasourceName(datasourceId: string): Promise<string> {
+    try {
+      return (await this.datasourcesService.get(datasourceId)).name;
+    } catch {
+      return datasourceId;
+    }
+  }
+
+  /**
    * Block R1 (agents.md 4.1): the REST datasource the RFP tools resolve, the
    * session's active RFP read from the API when the turn starts, and today.
    * An RFP that can't be read is reported as none active, never as an error.
@@ -595,13 +701,10 @@ export class SessionsService implements OnModuleInit {
       .map((name) => datasets.find((dataset) => dataset.name === name))
       .find((dataset) => dataset?.datasourceKind === 'rest');
     if (!rest?.datasourceId) return undefined;
-    let name = rest.datasourceId;
-    try {
-      name = (await this.datasourcesService.get(rest.datasourceId)).name;
-    } catch {
-      // The id still names it.
-    }
-    return { id: rest.datasourceId, name };
+    return {
+      id: rest.datasourceId,
+      name: await this.datasourceName(rest.datasourceId),
+    };
   }
 
   /** The RFP package service, which only a unit test leaves out. */
@@ -1057,15 +1160,18 @@ export class SessionsService implements OnModuleInit {
       throw new BadRequestException(SHOWCASE_REASON);
     const builtin = this.builtinSessionAgent(agentId);
     if (builtin) {
-      const { datasetName, requirement } = builtin.session;
-      const existing = await this.userAgents.datasetNames();
-      if (!existing.has(datasetName)) {
-        throw new BadRequestException(requirement);
+      const declared = builtinSessionDatasets(
+        builtin.session,
+        await existingDatasetsFor(builtin.session, this.userAgents),
+      );
+      if (!canStartBuiltinSession(declared)) {
+        throw new BadRequestException(builtin.session.requirement);
       }
-      return this.insertSession(typed || builtin.name, [datasetName], {
-        agentKey: agentId,
-        agentName: builtin.name,
-      });
+      return this.insertSession(
+        typed || builtin.session.sessionName || builtin.name,
+        declared.datasets,
+        { agentKey: agentId, agentName: builtin.name },
+      );
     }
     const agent = await this.userAgents.get(agentId);
     if (!agent) throw new NotFoundException(`Agent "${agentId}" not found`);
@@ -1358,6 +1464,39 @@ export class SessionsService implements OnModuleInit {
     if (workflow) {
       emit({ type: 'workflow', content: JSON.stringify(workflow) });
     }
+  }
+
+  /**
+   * A readiness tool's report reaches the client (agents.md 2.10, api.md
+   * 3.1): its `readiness` panel item is stored on the session (upserted) and
+   * the `readiness-report` event carries the full report with that item. The
+   * model only saw the summary; the full report is the one the bridge
+   * resolved for the same id. Returns the answer's reference.
+   */
+  private async showReadinessReport(
+    sessionId: string,
+    result: unknown,
+    emit: (event: StreamEvent) => void,
+  ): Promise<ReadinessReportRef | undefined> {
+    // The tool's raw result carries the full report (only its summary
+    // reaches the model); the bridge's copy covers any other shape.
+    const reportId = readinessReportIdOf(result);
+    const report =
+      readinessReportOf(result) ??
+      (reportId && this.readinessBridge
+        ? await this.readinessBridge.reportFor(reportId)
+        : undefined);
+    if (!report) return undefined;
+    const panelItem = readinessPanelItem(report);
+    const session = await this.get(sessionId);
+    await this.updateDoc(sessionId, {
+      panelItems: upsertPanelItem(session.panelItems ?? [], panelItem),
+    });
+    emit({
+      type: READINESS_REPORT_EVENT,
+      content: JSON.stringify({ report, panelItem }),
+    });
+    return readinessReportRef(report);
   }
 
   /** Emit the `panel-item` event for a stored item (api.md 3.1). */
@@ -1827,6 +1966,8 @@ export class SessionsService implements OnModuleInit {
     let visualEvent: VisualEvent | undefined;
     // The package an `export_rfp_package` call stored this turn (RFP Builder).
     let rfpPackage: RfpPackageRef | undefined;
+    // The last report a readiness tool returned this turn (Data Readiness Agent).
+    let readinessReport: ReadinessReportRef | undefined;
     // The RFP Builder's `turn-rfp` holder, and the stage the tracker last showed.
     const rfpHolder = turnRfpHolder(options.requestContext);
     let drivenStage: number | undefined;
@@ -1970,6 +2111,28 @@ export class SessionsService implements OnModuleInit {
             });
             continue;
           }
+          if (!isAssistant && READINESS_TOOLS.has(toolName)) {
+            // Each readiness tool shows its step; a report shows the
+            // scorecard first (api.md 3.1, data-readiness R5).
+            const error = resultError(payload.result);
+            if (!error && READINESS_REPORT_TOOLS.has(toolName)) {
+              const shown = await this.showReadinessReport(
+                id,
+                payload.result,
+                emit,
+              );
+              if (shown) readinessReport = shown;
+            }
+            emit({
+              type: 'tool-result',
+              content: JSON.stringify({
+                tool: toolName,
+                input: firstStringArgument(args),
+                error,
+              }),
+            });
+            continue;
+          }
           if (!isAssistant && RFP_TOOLS.has(toolName)) {
             // Every RFP tool shows its step (api.md 3.1); a result with
             // columns and rows is also kept as a data record (agents.md 5.1).
@@ -2036,7 +2199,8 @@ export class SessionsService implements OnModuleInit {
       !turn.signal.aborted &&
       !clarification &&
       !text.trim() &&
-      !visualEvent
+      !visualEvent &&
+      !readinessReport
     ) {
       // A model can spend every allowed step on tools and finish without a
       // user-facing answer. Give it one tool-disabled pass to turn the data it
@@ -2102,8 +2266,9 @@ export class SessionsService implements OnModuleInit {
         ...(reasoning ? { reasoning } : {}),
         ...(knowledge ? { knowledge } : {}),
         ...(rfpPackage ? { rfpPackage } : {}),
+        ...(readinessReport ? { readinessReport } : {}),
       });
-    } else if (text.trim() || visualEvent) {
+    } else if (text.trim() || visualEvent || readinessReport) {
       const interpretation = interpretationLine(data, entities);
       // Careful mode only, and only when there is a result set to corroborate.
       // The assistant's only: another agent runs no SQL to cross-check.
@@ -2115,7 +2280,9 @@ export class SessionsService implements OnModuleInit {
         role: 'assistant',
         content:
           text.trim() ||
-          `${visualEvent!.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent!.title}" (v${visualEvent!.version}).`,
+          (visualEvent
+            ? `${visualEvent.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent.title}" (v${visualEvent.version}).`
+            : readinessAnswerFallback(readinessReport!)),
         at: new Date().toISOString(),
         ...(data.length ? { data } : {}),
         ...(entities.length ? { entities } : {}),
@@ -2128,6 +2295,7 @@ export class SessionsService implements OnModuleInit {
         ...(visualEvent ? { visual: visualEvent } : {}),
         ...(crossChecked ? { crossCheck: crossChecked } : {}),
         ...(rfpPackage ? { rfpPackage } : {}),
+        ...(readinessReport ? { readinessReport } : {}),
       });
     }
     const updated = await this.updateDoc(id, {

@@ -1,0 +1,1258 @@
+{
+  "sourceId": "airline-ops-gold",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "ops",
+      "name": "airports",
+      "rowCount": 4800,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "airport_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "iata_cd"
+          ],
+          "duplicateCount": 12
+        }
+      ],
+      "fields": [
+        {
+          "name": "airport_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4800,
+          "min": "1",
+          "max": "4800"
+        },
+        {
+          "name": "iata_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4788
+        },
+        {
+          "name": "station_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4760
+        },
+        {
+          "name": "info_url",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4100,
+          "formatRule": "url",
+          "invalidFormatCount": 240
+        },
+        {
+          "name": "country_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 186,
+          "normalizedDistinctCount": 179
+        },
+        {
+          "name": "timezone_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 384,
+          "distinctCount": 412
+        },
+        {
+          "name": "surveyed_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4100,
+          "min": "2016-04-01T00:00:00Z",
+          "max": "2026-07-19T12:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "ops",
+      "name": "aircraft",
+      "rowCount": 620,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "aircraft_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "tail_no"
+          ],
+          "duplicateCount": 4
+        }
+      ],
+      "fields": [
+        {
+          "name": "aircraft_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 620,
+          "min": "1",
+          "max": "620"
+        },
+        {
+          "name": "tail_no",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 616
+        },
+        {
+          "name": "airframe_uuid",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 620,
+          "formatRule": "uuid",
+          "invalidFormatCount": 38
+        },
+        {
+          "name": "fleet_type",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 11,
+          "normalizedDistinctCount": 11
+        },
+        {
+          "name": "seat_count",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 9,
+          "min": "48",
+          "max": "220"
+        },
+        {
+          "name": "home_base_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 96,
+          "distinctCount": 14
+        },
+        {
+          "name": "delivered_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 590,
+          "min": "1994-08-12",
+          "max": "2026-05-30"
+        },
+        {
+          "name": "retired_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 210,
+          "min": "2001-03-04",
+          "max": "2099-12-31"
+        }
+      ]
+    },
+    {
+      "namespace": "ops",
+      "name": "flights",
+      "rowCount": 18400000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "flight_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "flight_key"
+          ],
+          "duplicateCount": 9400
+        }
+      ],
+      "fields": [
+        {
+          "name": "flight_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18400000,
+          "min": "1",
+          "max": "18400000"
+        },
+        {
+          "name": "flight_key",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18390600
+        },
+        {
+          "name": "aircraft_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 618,
+          "min": "1",
+          "max": "620"
+        },
+        {
+          "name": "origin_airport_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 412,
+          "min": "1",
+          "max": "4800"
+        },
+        {
+          "name": "destination_airport_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 418,
+          "min": "1",
+          "max": "4800"
+        },
+        {
+          "name": "service_type_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 2208000,
+          "distinctCount": 6
+        },
+        {
+          "name": "scheduled_departure_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4100000,
+          "min": "2018-01-01T04:00:00Z",
+          "max": "2026-10-25T23:55:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "ops",
+      "name": "flight_legs",
+      "rowCount": 42000000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "leg_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "leg_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 42000000,
+          "min": "1",
+          "max": "42000000"
+        },
+        {
+          "name": "flight_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18100000,
+          "min": "1",
+          "max": "18400000"
+        },
+        {
+          "name": "aircraft_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 620,
+          "min": "1",
+          "max": "620"
+        },
+        {
+          "name": "delay_code_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 30240000,
+          "distinctCount": 338,
+          "min": "1",
+          "max": "340"
+        },
+        {
+          "name": "fuel_burn_kg",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1940000,
+          "min": "-840",
+          "max": "24600"
+        },
+        {
+          "name": "block_off_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 9400000,
+          "min": "2018-01-01T04:12:00Z",
+          "max": "2026-08-11T22:40:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "ops",
+      "name": "maintenance_orders",
+      "rowCount": 860000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "order_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 860000,
+          "min": "1",
+          "max": "860000"
+        },
+        {
+          "name": "aircraft_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 620,
+          "min": "1",
+          "max": "620"
+        },
+        {
+          "name": "airport_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 96,
+          "min": "1",
+          "max": "4800"
+        },
+        {
+          "name": "work_package_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 172000,
+          "distinctCount": 4100
+        },
+        {
+          "name": "downtime_hours",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12400,
+          "min": "-6",
+          "max": "1940"
+        },
+        {
+          "name": "start_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 840000,
+          "min": "2019-02-01T06:00:00Z",
+          "max": "2026-08-09T14:00:00Z"
+        },
+        {
+          "name": "end_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 831000,
+          "min": "2018-09-14T08:00:00Z",
+          "max": "2025-11-02T19:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "ops",
+      "name": "delay_codes",
+      "rowCount": 340,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "delay_code_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "delay_code_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 340,
+          "min": "1",
+          "max": "340"
+        },
+        {
+          "name": "code_label",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 340
+        },
+        {
+          "name": "category_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12,
+          "normalizedDistinctCount": 12
+        },
+        {
+          "name": "owner_team",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 51,
+          "distinctCount": 9
+        },
+        {
+          "name": "revised_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 14,
+          "min": "2011-01-01",
+          "max": "2023-06-30"
+        }
+      ]
+    },
+    {
+      "namespace": "ops",
+      "name": "v_aircraft_status",
+      "rowCount": 620,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "aircraft_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 612,
+          "min": "1",
+          "max": "620"
+        },
+        {
+          "name": "status_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 5,
+          "normalizedDistinctCount": 5
+        },
+        {
+          "name": "utilisation_pct",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 610,
+          "min": "0",
+          "max": "143.2"
+        },
+        {
+          "name": "last_flown_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 42,
+          "distinctCount": 578,
+          "min": "2019-01-04T00:00:00Z",
+          "max": "2026-08-11T21:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "ops",
+      "name": "stg_acars_feed",
+      "rowCount": 9400000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "leg_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 9216800,
+          "min": "1",
+          "max": "42000000"
+        },
+        {
+          "name": "sched_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3100,
+          "formatRule": "date-string",
+          "invalidFormatCount": 96000
+        },
+        {
+          "name": "block_minutes",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1100,
+          "min": "-999",
+          "max": "840"
+        },
+        {
+          "name": "event_ts",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 8900000,
+          "min": "2024-01-01T00:00:00Z",
+          "max": "2087-06-30T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "ops",
+      "name": "stg_aircraft_master",
+      "rowCount": 620,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "aircraft_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 614,
+          "min": "1",
+          "max": "620"
+        },
+        {
+          "name": "delivery_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 590,
+          "formatRule": "date-string",
+          "invalidFormatCount": 44
+        },
+        {
+          "name": "lessor_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 34,
+          "normalizedDistinctCount": 34
+        },
+        {
+          "name": "loaded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 590,
+          "min": "2024-01-01T02:00:00Z",
+          "max": "2026-08-12T02:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "ops",
+      "name": "ops_incident_vault",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [],
+      "fields": []
+    },
+    {
+      "namespace": "crew",
+      "name": "crew_members",
+      "rowCount": 24000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "crew_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "employee_no"
+          ],
+          "duplicateCount": 180
+        }
+      ],
+      "fields": [
+        {
+          "name": "crew_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 24000,
+          "min": "1",
+          "max": "24000"
+        },
+        {
+          "name": "employee_no",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 23820
+        },
+        {
+          "name": "contact_email",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 2880,
+          "distinctCount": 20640,
+          "formatRule": "email",
+          "invalidFormatCount": 410
+        },
+        {
+          "name": "mobile_number",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 23100,
+          "formatRule": "phone",
+          "invalidFormatCount": 620
+        },
+        {
+          "name": "rank_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 16,
+          "normalizedDistinctCount": 11
+        },
+        {
+          "name": "base_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 1680,
+          "distinctCount": 14
+        },
+        {
+          "name": "hired_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 8400,
+          "min": "1988-02-01",
+          "max": "2026-07-27"
+        }
+      ]
+    },
+    {
+      "namespace": "crew",
+      "name": "rosters",
+      "rowCount": 6200000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "roster_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "roster_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6200000,
+          "min": "1",
+          "max": "6200000"
+        },
+        {
+          "name": "crew_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 23900,
+          "min": "1",
+          "max": "24000"
+        },
+        {
+          "name": "flight_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 1240000,
+          "distinctCount": 4100000,
+          "min": "1",
+          "max": "18400000"
+        },
+        {
+          "name": "duty_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 24,
+          "normalizedDistinctCount": 24
+        },
+        {
+          "name": "duty_start_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3100000,
+          "min": "2019-01-01T03:00:00Z",
+          "max": "2026-09-30T23:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "crew",
+      "name": "qualifications",
+      "rowCount": 180000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "qual_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "qual_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 180000,
+          "min": "1",
+          "max": "180000"
+        },
+        {
+          "name": "crew_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 23800,
+          "min": "1",
+          "max": "24000"
+        },
+        {
+          "name": "qual_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 84,
+          "normalizedDistinctCount": 84
+        },
+        {
+          "name": "issuing_authority",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 27000,
+          "distinctCount": 22
+        },
+        {
+          "name": "issued_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 9400,
+          "min": "1991-06-01",
+          "max": "2026-08-03"
+        },
+        {
+          "name": "expires_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 9200,
+          "min": "1992-06-01",
+          "max": "2026-12-30"
+        }
+      ]
+    },
+    {
+      "namespace": "crew",
+      "name": "training_records",
+      "rowCount": 940000,
+      "readable": true,
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "record_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "fields": [
+        {
+          "name": "record_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 940000,
+          "min": "1",
+          "max": "940000"
+        },
+        {
+          "name": "crew_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 23940,
+          "min": "1",
+          "max": "24000"
+        },
+        {
+          "name": "course_cd",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 310,
+          "normalizedDistinctCount": 310
+        },
+        {
+          "name": "score_pct",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 84600,
+          "distinctCount": 101,
+          "min": "0",
+          "max": "100"
+        },
+        {
+          "name": "completed_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 11400,
+          "min": "1800-01-01",
+          "max": "2026-08-05"
+        }
+      ]
+    },
+    {
+      "namespace": "crew",
+      "name": "stg_roster_import",
+      "rowCount": 6200000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "roster_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6178400,
+          "min": "1",
+          "max": "6200000"
+        },
+        {
+          "name": "duty_date",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2740,
+          "formatRule": "date-string",
+          "invalidFormatCount": 18400
+        },
+        {
+          "name": "crew_ref",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 24000
+        },
+        {
+          "name": "loaded_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 950,
+          "min": "2024-01-01T01:00:00Z",
+          "max": "2026-08-12T01:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "crew",
+      "name": "legacy_crew_hours",
+      "rowCount": 1400000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "crew_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1391600,
+          "min": "1",
+          "max": "24000"
+        },
+        {
+          "name": "block_hours",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 94000,
+          "min": "0",
+          "max": "118.4"
+        },
+        {
+          "name": "worked_on",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 9400,
+          "min": "1899-12-30",
+          "max": "2024-01-31"
+        },
+        {
+          "name": "reported_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 240,
+          "min": "2004-01-31T00:00:00Z",
+          "max": "2024-01-31T23:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "crew",
+      "name": "v_crew_currency",
+      "rowCount": 24000,
+      "readable": true,
+      "keys": [],
+      "fields": [
+        {
+          "name": "crew_id",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 23640,
+          "min": "1",
+          "max": "24000"
+        },
+        {
+          "name": "currency_state",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4,
+          "normalizedDistinctCount": 4
+        },
+        {
+          "name": "days_to_expiry",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 1920,
+          "distinctCount": 1096,
+          "min": "0",
+          "max": "1095"
+        },
+        {
+          "name": "computed_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1,
+          "min": "2026-08-12T02:00:00Z",
+          "max": "2026-08-12T02:00:00Z"
+        }
+      ]
+    },
+    {
+      "namespace": "crew",
+      "name": "crew_medical",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [],
+      "fields": []
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "ops",
+      "fromEntity": "flights",
+      "fromField": "aircraft_id",
+      "toNamespace": "ops",
+      "toEntity": "aircraft",
+      "toField": "aircraft_id",
+      "orphanCount": 24000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "ops",
+      "fromEntity": "flights",
+      "fromField": "origin_airport_id",
+      "toNamespace": "ops",
+      "toEntity": "airports",
+      "toField": "airport_id",
+      "orphanCount": 1800,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "ops",
+      "fromEntity": "flights",
+      "fromField": "destination_airport_id",
+      "toNamespace": "ops",
+      "toEntity": "airports",
+      "toField": "airport_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "ops",
+      "fromEntity": "flight_legs",
+      "fromField": "flight_id",
+      "toNamespace": "ops",
+      "toEntity": "flights",
+      "toField": "flight_id",
+      "orphanCount": 96000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "ops",
+      "fromEntity": "flight_legs",
+      "fromField": "delay_code_id",
+      "toNamespace": "ops",
+      "toEntity": "delay_codes",
+      "toField": "delay_code_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "ops",
+      "fromEntity": "maintenance_orders",
+      "fromField": "aircraft_id",
+      "toNamespace": "ops",
+      "toEntity": "aircraft",
+      "toField": "aircraft_id",
+      "orphanCount": 3100,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "crew",
+      "fromEntity": "rosters",
+      "fromField": "crew_id",
+      "toNamespace": "crew",
+      "toEntity": "crew_members",
+      "toField": "crew_id",
+      "orphanCount": 18400,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "crew",
+      "fromEntity": "rosters",
+      "fromField": "flight_id",
+      "toNamespace": "ops",
+      "toEntity": "flights",
+      "toField": "flight_id",
+      "orphanCount": 42000,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "crew",
+      "fromEntity": "qualifications",
+      "fromField": "crew_id",
+      "toNamespace": "crew",
+      "toEntity": "crew_members",
+      "toField": "crew_id",
+      "orphanCount": 2400,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "crew",
+      "fromEntity": "training_records",
+      "fromField": "crew_id",
+      "toNamespace": "crew",
+      "toEntity": "crew_members",
+      "toField": "crew_id",
+      "orphanCount": 9800,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "ops",
+      "fromEntity": "flight_legs",
+      "fromField": "aircraft_id",
+      "toNamespace": "ops",
+      "toEntity": "aircraft",
+      "toField": "aircraft_id",
+      "orphanCount": 12400,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "ops",
+      "fromEntity": "maintenance_orders",
+      "fromField": "airport_id",
+      "toNamespace": "ops",
+      "toEntity": "airports",
+      "toField": "airport_id",
+      "orphanCount": 640,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "ops",
+      "fromEntity": "v_aircraft_status",
+      "fromField": "aircraft_id",
+      "toNamespace": "ops",
+      "toEntity": "aircraft",
+      "toField": "aircraft_id",
+      "orphanCount": 8,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "ops",
+      "fromEntity": "stg_aircraft_master",
+      "fromField": "aircraft_id",
+      "toNamespace": "ops",
+      "toEntity": "aircraft",
+      "toField": "aircraft_id",
+      "orphanCount": 14,
+      "origin": "inferred"
+    },
+    {
+      "fromNamespace": "crew",
+      "fromEntity": "stg_roster_import",
+      "fromField": "roster_id",
+      "toNamespace": "crew",
+      "toEntity": "rosters",
+      "toField": "roster_id",
+      "orphanCount": 31000,
+      "origin": "inferred"
+    }
+  ]
+}

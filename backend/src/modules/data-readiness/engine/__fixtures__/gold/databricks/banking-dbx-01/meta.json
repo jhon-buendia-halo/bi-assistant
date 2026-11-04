@@ -1,0 +1,7 @@
+{
+  "industry": "banking",
+  "complexity": "medium",
+  "wave": "B2",
+  "authoring": "generated",
+  "defectPlan": "plans/databricks/banking-dbx-01.plan.json"
+}

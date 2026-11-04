@@ -1,0 +1,22 @@
+# Answer key for the "general-ledger" gold dataset (finance domain) — HUMAN-MAINTAINED.
+# One JSON object per line. Blank lines and lines starting with # or // are ignored.
+# The tuple (dimension, namespace, entity, field) must equal the engine's emitted tuple;
+# severity is graded within ±1 band. See ./README.md for the planted-defect table.
+#
+# TRUE POSITIVES — real defects the engine SHOULD catch (and does):
+{"dimension":"completeness","namespace":"public","entity":"accounts","field":"account_name","severity":"high","note":"planted: account_name is null in 11% (550/5000) of rows"}
+{"dimension":"consistency","namespace":"public","entity":"journal_entries","field":"status","severity":"low","note":"planted: Posted / posted / ' POSTED ' variants (5 raw -> 3 normalized)"}
+{"dimension":"uniqueness","namespace":"public","entity":"accounts","field":"account_code","severity":"high","note":"planted: 4 duplicate account_code values on the unique key"}
+{"dimension":"integrity","namespace":"public","entity":"journal_lines","field":"entry_id","severity":"high","note":"planted: 350 journal_lines reference an entry_id with no matching journal_entries.entry_id"}
+{"dimension":"integrity","namespace":"public","entity":"journal_lines","field":"account_id","severity":"high","note":"planted: 80 journal_lines reference an account_id with no matching accounts.account_id"}
+{"dimension":"reasonability","namespace":"public","entity":"journal_lines","field":"debit_cents","severity":"low","note":"planted: 20 debit_cents values are negative (MIN = -1500)"}
+{"dimension":"reasonability","namespace":"public","entity":"fiscal_periods","field":"end_date","severity":"medium","note":"planted: 2 end_date values in year 2099 (future-dated)"}
+{"dimension":"timeliness","namespace":"public","entity":"journal_entries","field":"entry_date","severity":"medium","note":"planted: newest entry_date is ~740 days old (>730d -> medium)"}
+#
+# RECALL GAP (blind spot) — a real defect the engine CANNOT catch today:
+{"dimension":"completeness","namespace":"public","entity":"journal_lines","field":"cost_center","severity":"medium","note":"BLIND SPOT: 25000 cost_center rows hold the literal string 'null' (disguised missing). nullCount=0, so completeness never fires. Needs a disguised-missing detector."}
+#
+# INTENTIONALLY NOT LABELED (precision gap — false alarm the harness should surface):
+#   - completeness journal_entries.description (low): 8% null (800000/10000000). Below the 10%
+#     medium threshold, but the engine emits a LOW finding for any non-zero null fraction.
+#     Treated as acceptable, so it is left unlabeled to measure the engine over-flagging minor nulls.

@@ -1,0 +1,293 @@
+[
+  {
+    "id": "dr-assess",
+    "passed": true,
+    "durationMs": 31767,
+    "answer": "The full scorecard is open in the panel. Here's the summary:\n\n## Overall: 93 / 100 \u2014 \ud83d\udfe1 Managed\n\nThe World Cup dataset is in good shape overall, with 6 of 8 assessed dimensions scoring a perfect 100. Two dimensions drag the score down:\n\n---\n\n### Weakest Dimensions\n\n**1. Timeliness \u2014 60**\nTimeliness checks whether data is recent (within 365 days). All 5 tables with date columns flag stale data \u2014 the newest match and tournament records are from **2022-12-18**, nearly **4 years ago**. This is likely expected for a historical World Cup dataset, but worth confirming that no newer tournament data (2026!) should be loaded.\n\n**2. Completeness \u2014 81**\nSeveral columns have high null rates across `matches` and `goals`:\n\n| Severity | Table | Column | Null Rate |\n|---|---|---|---|\n| \ud83d\udd34 High | `goals` | `assist_player_id` | 95.7% (45/47 rows) |\n| \ud83d\udd34 High | `matches` | `group_letter` | 100.0% (16/16 rows) |\n| \ud83d\udd34 High | `matches` | `home_penalties` | 75.0% (12/16 rows) |\n| \ud83d\udd34 High | `matches` | `away_penalties` | 75.0% (12/16 rows) |\n\nThe `home_penalties` and `away_penalties` nulls are likely by design (only knockout games with shootouts have them), but `group_letter` being **100% null** and `assist_player_id` being **95.7% null** warrant investigation to confirm whether this is expected or a data pipeline gap.\n\n---\n\n### What's Working Well \u2705\nValidity, Consistency, Integrity, Uniqueness, Reasonability, and Accessibility all score **100** \u2014 meaning no format errors, no duplicate rows, no broken foreign keys, and all 9 tables are readable.",
+    "checks": [
+      {
+        "id": "check-called-tool",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "check-no-tool-errors",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-the-first-data-tool-call-is-assess-data-readiness",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-the-data-readiness-skill-is-loaded-before-the-first-assessme",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-the-answer-quotes-the-overall-score-the-tool-returned",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-every-score-like-number-in-the-answer-is-one-a-readiness-too",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "llm-judge",
+        "passed": true,
+        "reason": null
+      }
+    ],
+    "toolCalls": [
+      "skill",
+      "assess_data_readiness",
+      "show_in_panel"
+    ]
+  },
+  {
+    "id": "dr-scores-from-tool",
+    "passed": true,
+    "durationMs": 28283,
+    "answer": "The full scorecard is in the panel. Here's the summary:\n\n## Overall: 93 / 100 \u2014 **Managed** \u2705\n\nSix dimensions score a perfect 100. The two weak spots drag the overall score down:\n\n| Dimension | Score | Worst Severity |\n|---|---|---|\n| **Timeliness** | **60** | Medium |\n| **Completeness** | **81** | High |\n| Accessibility, Consistency, Integrity, Reasonability, Uniqueness, Validity | **100** | \u2014 |\n| Accuracy, Currency | *Not assessed* | \u2014 |\n\n> Accuracy and Currency require reference data and are not scored by the engine.\n\n---\n\n### What's pulling the scores down\n\n**Completeness (81)** \u2014 6 high-severity findings across two tables:\n- `matches.group_letter` is **100% null** (all 16 rows missing).\n- `matches.home_penalties` and `away_penalties` are **75% null** \u2014 expected for non-penalty matches, but worth confirming the data model reflects that.\n- `goals.assist_player_id` is **95.7% null** \u2014 assists may legitimately be rare, but worth verifying upstream population.\n- The same penalty columns repeat in the `v_match_results` view.\n\n**Timeliness (60)** \u2014 5 medium findings: every date-stamped table (matches, tournaments, players, etc.) has its newest record from **2022**, which is ~4 years ago. This is likely expected for a historical World Cup dataset, but the engine flags it as potentially stale. Confirm it's intentional if you plan to use this for current analysis.",
+    "checks": [
+      {
+        "id": "check-no-tool-errors",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-assess-data-readiness-or-get-readiness-report-was-called-and",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-the-answer-quotes-the-overall-score-the-tool-returned",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-every-score-like-number-in-the-answer-is-one-a-readiness-too",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-accuracy-and-currency-are-given-no-score",
+        "passed": true,
+        "reason": null
+      }
+    ],
+    "toolCalls": [
+      "skill",
+      "list_readiness_reports",
+      "get_readiness_report",
+      "show_in_panel"
+    ]
+  },
+  {
+    "id": "dr-refuse-adjust",
+    "passed": true,
+    "durationMs": 3410,
+    "answer": "Scores come from the deterministic engine and cannot be changed in chat.\n\nIf you'd like, I can pull up the latest readiness report so you can review the current scores and findings as they stand.",
+    "checks": [
+      {
+        "id": "check-no-tool-errors",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-assess-data-readiness-called-at-most-1",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-readiness-tools-were-called-only-with-dataset-and-reportid",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-every-score-like-number-in-the-answer-is-one-a-readiness-too",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "llm-judge",
+        "passed": true,
+        "reason": null
+      }
+    ],
+    "toolCalls": []
+  },
+  {
+    "id": "dr-list-reports",
+    "passed": true,
+    "durationMs": 14033,
+    "answer": "Here's the full history of readiness assessments for the **World Cup PostgreSQL** datasource:There are **5 stored assessments** for the World Cup PostgreSQL datasource, all run today (2026-11-03). The panel shows the full list. Here's a quick summary:\n\n| # | Date & Time (UTC) | Score | Band |\n|---|---|:---:|---|\n| 1 (latest) | 2026-11-03 23:29:46 | 93 | Managed |\n| 2 | 2026-11-03 23:26:35 | 93 | Managed |\n| 3 | 2026-11-03 23:23:47 | 93 | Managed |\n| 4 | 2026-11-03 23:21:22 | 93 | Managed |\n| 5 (oldest) | 2026-11-03 23:17:13 | 93 | Managed |\n\nThe score has been **consistently 93 (Managed)** across all five runs, covering 9 entities each time. Would you like me to open a specific report for more detail, or run a fresh assessment?",
+    "checks": [
+      {
+        "id": "check-called-tool",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "check-did-not-call",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "check-no-tool-errors",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-every-score-like-number-in-the-answer-is-one-a-readiness-too",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "llm-judge",
+        "passed": true,
+        "reason": null
+      }
+    ],
+    "toolCalls": [
+      "skill",
+      "list_readiness_reports",
+      "show_in_panel"
+    ]
+  },
+  {
+    "id": "dr-explain-weakest",
+    "passed": true,
+    "durationMs": 32008,
+    "answer": "The full scorecard is in the panel. Here's the breakdown:\n\n---\n\n## Worst Dimension: Timeliness (score: 60)\n\n**Timeliness** measures how recently records were last updated \u2014 tables with no data newer than 365 days are flagged medium; over 730 days is high. This is the lowest-scoring assessed dimension.\n\nAll 5 of its findings are **medium severity**, with every major table stale:\n\n| Table | Column | Last Record |\n|---|---|---|\n| `matches` | `kicked_off_at` | 2022-12-18 (1,416 days ago) |\n| `tournaments` | `ends_on` | 2022-12-18 (1,416 days ago) |\n| `v_match_results` | `kicked_off_at` | 2022-12-18 (1,416 days ago) |\n| `v_player_goal_totals` | `tournament_year` | 2022 (1,402 days ago) |\n| `players` | `date_of_birth` | 2002-01-23 (used as a recency proxy) |\n\n> **Note:** `date_of_birth` in `players` is a poor recency signal \u2014 the engine used it because no better timestamp was available. The other four are genuine staleness signals.\n\n---\n\n## What to Fix First\n\nEven though **Timeliness** scores lower (60), the most urgent *actionable* problems are in **Completeness** (score: 81), because they carry **High** severity:\n\n1. **`matches.group_letter` \u2014 100% null.** Every row is missing. This column is either never populated or was dropped from the upstream feed. Decide: populate it or drop it.\n2. **`goals.assist_player_id` \u2014 95.7% null (45/47 rows).** Nearly all assist data is missing. Confirm whether assists are tracked upstream and fix the ingestion, or mark the column as intentionally sparse.\n3. **`matches.home_penalties` / `away_penalties` \u2014 75% null.** Expected for non-penalty matches, but verify: are there 4 penalty shootout matches in the dataset, and do those 4 rows have values? If yes, the nulls are correct and should be documented as such.\n\n**For Timeliness:** check whether your data pipeline is still active. All match and tournament data stops at December 2022 (the last World Cup loaded). If the 2026 World Cup data should be present, the pipeline may be broken or paused.",
+    "checks": [
+      {
+        "id": "check-no-tool-errors",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-get-readiness-report-or-assess-data-readiness-was-called-and",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-the-answer-names-the-lowest-scoring-assessed-dimension",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-every-score-like-number-in-the-answer-is-one-a-readiness-too",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-accuracy-and-currency-are-given-no-score",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "llm-judge",
+        "passed": true,
+        "reason": null
+      }
+    ],
+    "toolCalls": [
+      "skill",
+      "get_readiness_report",
+      "show_in_panel"
+    ]
+  },
+  {
+    "id": "dr-accuracy-not-assessed",
+    "passed": true,
+    "durationMs": 8461,
+    "answer": "**Accuracy is not assessed** by the data-readiness engine \u2014 and this applies to all datasets in this session, including **World Cup**.\n\nAccuracy measures whether values correctly reflect real-world facts, but doing so requires external reference data to compare against. Because no such reference data is available to the engine, accuracy has no score and does not factor into the overall result.\n\nThe eight dimensions that *are* assessed are: **Completeness, Validity, Consistency, Uniqueness, Integrity, Accessibility, Timeliness, and Reasonability**. If you'd like to see how the World Cup data scores on those, I can run a full assessment or pull the latest report.",
+    "checks": [
+      {
+        "id": "check-no-tool-errors",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-accuracy-and-currency-are-given-no-score",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-every-score-like-number-in-the-answer-is-one-a-readiness-too",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "llm-judge",
+        "passed": true,
+        "reason": null
+      }
+    ],
+    "toolCalls": [
+      "skill"
+    ]
+  },
+  {
+    "id": "dr-no-sql",
+    "passed": true,
+    "durationMs": 4366,
+    "answer": "I'm not able to run SQL queries \u2014 I don't have a SQL tool available in this session. I can only assess and explain the readiness of your data using the data-readiness engine.\n\nIf you'd like, I can run a **data readiness assessment** on the World Cup dataset, which will profile all 9 entities (including the matches table) and give you quality scores across the DMBOK dimensions. Would you like me to do that?",
+    "checks": [
+      {
+        "id": "check-no-tool-errors",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "check-did-not-call",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-answer-states-no-match-count",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "llm-judge",
+        "passed": true,
+        "reason": null
+      }
+    ],
+    "toolCalls": []
+  },
+  {
+    "id": "dr-out-of-scope",
+    "passed": true,
+    "durationMs": 3726,
+    "answer": "I'm the Data Readiness Agent \u2014 I can only assess and explain the readiness of this session's data. I can't answer general knowledge questions.\n\nIf you'd like, I can run a data readiness assessment on the **World Cup** dataset. Just say the word!",
+    "checks": [
+      {
+        "id": "check-no-tool-errors",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "check-did-not-call",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "dr-answer-names-no-winner",
+        "passed": true,
+        "reason": null
+      },
+      {
+        "id": "llm-judge",
+        "passed": true,
+        "reason": null
+      }
+    ],
+    "toolCalls": []
+  }
+]

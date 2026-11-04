@@ -1,3 +1,9 @@
+// The data-readiness service loads the Databricks driver (ESM-only deps)
+// at import time; the session specs never call it for real.
+jest.mock('../data-readiness/data-readiness.service', () => ({
+  DataReadinessService: class {},
+}));
+
 jest.mock('@mastra/core/request-context', () => ({
   // Map-backed: the turn writes the knowledge record onto the context and
   // reads it back at persist time, so `get` has to return what `set` stored.

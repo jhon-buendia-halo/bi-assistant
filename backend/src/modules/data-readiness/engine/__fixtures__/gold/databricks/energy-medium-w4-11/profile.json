@@ -1,0 +1,582 @@
+{
+  "sourceId": "gold-databricks-energy-medium-w4-11",
+  "sourceType": "databricks",
+  "entities": [
+    {
+      "namespace": "main.grid",
+      "name": "servicePoints",
+      "rowCount": 67,
+      "fields": [
+        {
+          "name": "servicePointId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 67,
+          "min": "1",
+          "max": "67"
+        },
+        {
+          "name": "premiseName",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 53,
+          "normalizedDistinctCount": 53
+        },
+        {
+          "name": "contactEmail",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 66,
+          "normalizedDistinctCount": 66,
+          "formatRule": "email",
+          "invalidFormatCount": 0
+        },
+        {
+          "name": "phoneNumber",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 65,
+          "normalizedDistinctCount": 65,
+          "formatRule": "phone",
+          "invalidFormatCount": 0
+        },
+        {
+          "name": "tariffCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 36,
+          "normalizedDistinctCount": 36
+        },
+        {
+          "name": "segmentCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 34,
+          "normalizedDistinctCount": 34
+        },
+        {
+          "name": "regionCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 28,
+          "normalizedDistinctCount": 28
+        },
+        {
+          "name": "connectedAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 38,
+          "min": "1900-01-01",
+          "max": "2026-08-04"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "servicePointId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-12T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.grid",
+      "name": "meters",
+      "rowCount": 821,
+      "fields": [
+        {
+          "name": "meterId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 821,
+          "min": "1",
+          "max": "821"
+        },
+        {
+          "name": "servicePointId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 67,
+          "min": "1",
+          "max": "67"
+        },
+        {
+          "name": "meterMsn",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 702,
+          "normalizedDistinctCount": 702
+        },
+        {
+          "name": "meterStatus",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 10,
+          "normalizedDistinctCount": 10
+        },
+        {
+          "name": "installedAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 703,
+          "min": "2019-09-02",
+          "max": "2026-07-24"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "meterId"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "meterMsn"
+          ],
+          "duplicateCount": 28
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-14T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.grid",
+      "name": "meterReadings",
+      "rowCount": 7259,
+      "fields": [
+        {
+          "name": "meterReadingId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7259,
+          "min": "1",
+          "max": "7259"
+        },
+        {
+          "name": "meterId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 821,
+          "min": "1",
+          "max": "821"
+        },
+        {
+          "name": "kwhValue",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 212,
+          "min": "0",
+          "max": "2845"
+        },
+        {
+          "name": "qualityCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 9,
+          "normalizedDistinctCount": 9
+        },
+        {
+          "name": "readSource",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18,
+          "normalizedDistinctCount": 18
+        },
+        {
+          "name": "readAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 5772,
+          "min": "2022-11-21",
+          "max": "2026-05-29"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "meterReadingId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-07-27T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.grid",
+      "name": "outageEvents",
+      "rowCount": 551,
+      "fields": [
+        {
+          "name": "outageEventId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 551,
+          "min": "1",
+          "max": "551"
+        },
+        {
+          "name": "causeCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 24,
+          "normalizedDistinctCount": 22
+        },
+        {
+          "name": "affectedCount",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 47,
+          "min": "0",
+          "max": "3723"
+        },
+        {
+          "name": "occurredAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 359,
+          "min": "2022-03-15T12:00:00.000Z",
+          "max": "2025-01-04T12:00:00.000Z"
+        },
+        {
+          "name": "restoredAt",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 193,
+          "distinctCount": 286,
+          "min": "2022-10-19T12:00:00.000Z",
+          "max": "2024-12-25T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "outageEventId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-07-31T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.grid",
+      "name": "tariffVersions",
+      "rowCount": 91,
+      "fields": [
+        {
+          "name": "tariffVersionId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 91,
+          "min": "1",
+          "max": "91"
+        },
+        {
+          "name": "tariffCode",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 27,
+          "normalizedDistinctCount": 27
+        },
+        {
+          "name": "versionSeq",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 91,
+          "min": "0",
+          "max": "712"
+        },
+        {
+          "name": "unitPriceCents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 47,
+          "min": "-1800",
+          "max": "67212990"
+        },
+        {
+          "name": "publishedAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 80,
+          "min": "2020-10-08",
+          "max": "2026-06-26"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "tariffVersionId"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "natural",
+          "fields": [
+            "tariffCode",
+            "versionSeq"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-07-24T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.grid",
+      "name": "consumptionDaily",
+      "rowCount": 3169,
+      "fields": [
+        {
+          "name": "recordId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3049,
+          "min": "1",
+          "max": "3169"
+        },
+        {
+          "name": "meterId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3169,
+          "min": "1",
+          "max": "821"
+        },
+        {
+          "name": "kwhTotal",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 283,
+          "min": "0",
+          "max": "2082"
+        },
+        {
+          "name": "snapshotYear",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 9,
+          "min": "2018",
+          "max": "2022"
+        }
+      ],
+      "keys": [],
+      "readable": true,
+      "lastModifiedAt": "2026-07-23T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.grid",
+      "name": "inspectionReports",
+      "rowCount": 79,
+      "fields": [
+        {
+          "name": "inspectionReportId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 79,
+          "min": "1",
+          "max": "79"
+        },
+        {
+          "name": "reportDate",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 76,
+          "normalizedDistinctCount": 76,
+          "formatRule": "date-string",
+          "invalidFormatCount": 0
+        },
+        {
+          "name": "documentUuid",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 66,
+          "normalizedDistinctCount": 66,
+          "formatRule": "uuid",
+          "invalidFormatCount": 16
+        },
+        {
+          "name": "archiveUrl",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 71,
+          "normalizedDistinctCount": 71,
+          "formatRule": "url",
+          "invalidFormatCount": 0
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "inspectionReportId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2024-06-08T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.grid",
+      "name": "weatherStations",
+      "rowCount": 0,
+      "fields": [
+        {
+          "name": "weatherStationId",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "stationName",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "elevationM",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "activatedAt",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "weatherStationId"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": false,
+      "lastModifiedAt": "2026-07-30T12:00:00.000Z"
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "main.grid",
+      "fromEntity": "meters",
+      "fromField": "servicePointId",
+      "toNamespace": "main.grid",
+      "toEntity": "servicePoints",
+      "toField": "servicePointId",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.grid",
+      "fromEntity": "meterReadings",
+      "fromField": "meterId",
+      "toNamespace": "main.grid",
+      "toEntity": "meters",
+      "toField": "meterId",
+      "orphanCount": 30,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.grid",
+      "fromEntity": "consumptionDaily",
+      "fromField": "meterId",
+      "toNamespace": "main.grid",
+      "toEntity": "meters",
+      "toField": "meterId",
+      "orphanCount": 150,
+      "origin": "inferred"
+    }
+  ]
+}

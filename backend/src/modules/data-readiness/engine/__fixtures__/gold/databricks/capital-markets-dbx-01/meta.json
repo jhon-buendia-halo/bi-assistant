@@ -1,0 +1,7 @@
+{
+  "industry": "capital-markets",
+  "complexity": "high",
+  "wave": "B2",
+  "authoring": "generated",
+  "defectPlan": "plans/databricks/capital-markets-dbx-01.plan.json"
+}

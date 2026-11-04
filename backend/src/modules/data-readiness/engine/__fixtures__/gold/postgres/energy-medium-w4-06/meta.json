@@ -1,0 +1,7 @@
+{
+  "industry": "energy",
+  "complexity": "medium",
+  "wave": "W4",
+  "authoring": "generated",
+  "defectPlan": "plans/postgres/energy-medium-w4-06.plan.json"
+}

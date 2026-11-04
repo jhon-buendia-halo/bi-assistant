@@ -51,17 +51,18 @@ All agents are registered once in a single framework instance and looked up by *
 | `benchmarking` | `benchmarking-agent` | Benchmarking Agent | Compares a client’s health and benefits program with its peers: cost per employee, plan design, contributions by tier and where each measure sits in the market. |
 | `survey` | `survey-agent` | Survey Agent | Turns an employee benefits survey into findings and recommendations: response rates, what employees value, satisfaction gaps and comment themes. |
 | `lad-coe` | `lad-coe-agent` | LAD COE Agent | The Life, Absence and Disability Center of Excellence: reviews life, disability and leave programs against the market, claims experience and leave rules. |
+| `data-readiness` | `data-readiness-agent` | Data Readiness Agent | Assesses how ready a PostgreSQL or Databricks dataset is for analysis, scoring it on the DMBOK data-quality dimensions with a deterministic engine and explaining the findings. |
 | `strategy` | `strategy-agent` | Strategy Agent | Builds a multi-year health and benefits strategy: where the client stands, the cost of doing nothing, strategic options and a year-by-year roadmap. |
 
-The prompt each row's agent runs on is the shipped one unless overridden (1.1). Lookup of an unknown key throws. The catalogue lists agents sorted by display name. It shows `assistant`, `rfp` and the four **showcase agents** `benchmarking`, `survey`, `lad-coe` and `strategy` (2.9) as Official, and the other five as System ([api.md](api.md) 33); the showcase agents are registered but never run.
+The prompt each row's agent runs on is the shipped one unless overridden (1.1). Lookup of an unknown key throws. The catalogue lists agents sorted by display name. It shows `assistant`, `rfp`, `data-readiness` (2.10) and the four **showcase agents** `benchmarking`, `survey`, `lad-coe` and `strategy` (2.9) as Official, and the other five as System ([api.md](api.md) 33); the showcase agents are registered but never run.
 
-**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the eleven registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0022), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0025). Rules: sessions-chat R52-R59. A session can also be bound to a **built-in** agent that declares a dataset, today only `rfp` (2.8): it stores the agent's registry key and every turn runs that agent instead of the `assistant` (ADR-0028, sessions-chat R61).
+**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the twelve registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0022), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0025). Rules: sessions-chat R52-R59. A session can also be bound to a **built-in** agent that declares a dataset, today `rfp` (2.8) and `data-readiness` (2.10): it stores the agent's registry key and every turn runs that agent instead of the `assistant` (ADR-0028, sessions-chat R61).
 
 Not registered (never listed in the catalogue):
 
 - **LLM connection probe** (`llm-connection-probe`, "LLM connection probe", instructions `You answer connection probes exactly as asked.`) — a throwaway agent built per test on the *submitted, not yet saved* Anthropic settings. See [llm-settings](../capabilities/llm-settings/spec.md).
 
-> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the eleven agents, a composite storage, a Pino logger and observability. `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
+> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the twelve agents, a composite storage, a Pino logger and observability. `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
 
 ### 1.3 Model resolution
 
@@ -852,6 +853,66 @@ Rules:
 
 ---
 
+### 2.10 `data-readiness` (id `data-readiness-agent`) — Data Readiness Agent
+
+**Purpose.** Tells a user how ready the data behind a PostgreSQL or Databricks dataset is for analysis, on the DMBOK data-quality dimensions. **A deterministic engine computes every score and finding.** The agent runs it through its tools and explains the stored report. It never computes or adjusts a number (ADR-0031). Behaviour rules: [data-readiness](../capabilities/data-readiness/spec.md).
+
+**Invoked by.**
+
+| Caller | Mode | Memory | Tools | Steps |
+|---|---|---|---|---|
+| Streamed chat turn of a session bound to it (`agentKey: 'data-readiness'`, sessions-chat R61) | stream | session thread | all | 10 |
+| Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
+| `data-readiness` eval set (8) | generate | none | all | 10 |
+
+It is never called by the grounding guard (5.6), careful mode (5.8) or deep analysis (2.7).
+
+**Inputs.** The user message (4.3), the system prompt, Block D1 (4.1) and the requestContext (4.2): `datasets`, `session-id`, `turn-question`, `session-workspace-id`, `turn-data-records`.
+
+**Output.** Free text (markdown). Tool calls are captured by the orchestrator (5.1).
+- A successful `assess_data_readiness` or `get_readiness_report` result emits the `readiness-report` stream event ([api.md](api.md) 3.1).
+- It stores a `readiness` panel item for the report and sets the answer's `readinessReport` reference ([data-model.md](data-model.md) 3.4.1).
+
+**Tools.** The readiness tools of 3.13 (3), then `show_in_panel` (3.11) and the shared `ask_clarification` (3.5).
+- It has **no SQL tool**, no dataset tools, no visual tools, no `update_workflow` and no workspace tools.
+- It declares `skills`, so the framework adds its skill tools (3.9).
+
+**Skills.** On demand: `data-readiness` (7.4). None harness-loaded.
+
+**Memory.** As the assistant's: one thread per session, last **40** messages replayed, semantic recall, working memory and generated titles off.
+
+**Max steps.** 10.
+
+**Chat requirement.** It is an Official agent that declares a dataset *kind* rather than a named dataset.
+- Start chat is available while at least one dataset is bound to a datasource of kind `postgres` or `databricks`. Otherwise the catalogue gives `chatRequirement` `Add a PostgreSQL or Databricks dataset first` ([api.md](api.md) 33).
+- Start chat binds the session to all such datasets, ordered by name, and names it "Data Readiness" ([data-readiness](../capabilities/data-readiness/spec.md) R2).
+
+**Prompt requirements.** The prompt MUST start with `You are the Data Readiness Agent`.
+- **Structure.** The identity paragraph, `## Tools` generated as the RFP Builder's is (2.8), and `## Working rules`. The served `## Tools` is inserted before `## Working rules`. It has no `## Workflow` section.
+- **Overrides** (ADR-0026) follow the RFP Builder's rules: the editable text and Reset leave out `## Tools`, and an override must start with the identity line.
+- **Links** (`linksAllowed: true`). An override may link only the agent's own tools (the three of 3.13, `show_in_panel` and `ask_clarification`) and its own skill (`data-readiness`).
+  - Another skill is refused with `Only the Data Readiness Agent's own skills can be linked here: this prompt is shared by every user`.
+  - Another tool is refused with `Unknown tool "<name>"` ([api.md](api.md) 103).
+  - Links are resolved to plain mentions before the model reads them (4.1).
+- Exact shipped text: Appendix D.
+
+The rules encoded (prefix D):
+
+- **D1** Identity. The Data Readiness Agent explains the readiness of this session's PostgreSQL or Databricks data on the DMBOK dimensions. A deterministic engine computes every score, and the agent never computes, estimates or changes one.
+- **D2** No score, band, finding or count is stated unless it is in a tool result of this conversation, and the agent calls `assess_data_readiness` or `get_readiness_report` before quoting any score.
+- **D3** It never estimates, recomputes, rounds differently, re-weights or adjusts a score. A request to change one gets one sentence saying scores come from the deterministic engine.
+- **D4** Accuracy and currency are not assessed and never get a score.
+- **D5** It loads the `data-readiness` skill before its first assessment in a session.
+- **D6** With several datasets and none named, it asks with `ask_clarification`.
+- **D7** It runs a new assessment only when asked or when none exists; otherwise it reads the latest. It lists reports to find or compare earlier ones.
+- **D8** The scorecard opens by itself, so the answer does not repeat the whole findings list.
+- **D9** Answer shape: overall score and band, then the weakest dimensions (the assessed ones with the lowest scores, never the ones with the most or most severe findings), then the most severe findings with recommendations. Answers are short, and use a table for more than three findings.
+- **D10** Table and column names are given exactly as in the tool result.
+- **D11** Tool errors are its own to handle; it tells the user only when they must act.
+- **D12** Scope: only the readiness of this session's data; anything else is declined in one sentence. It has no SQL tool and says so if asked to query.
+
+> Implementation note: `mastra/agents/data-readiness.agent.ts` (`dataReadinessAgent`, registered as `data-readiness`). The shipped text without `## Tools` is `DATA_READINESS_PROMPT` in `agents/system-prompts.ts` and `SHIPPED['data-readiness']` in `shipped-agent-prompts.ts`. Tools are in `mastra/tools/readiness.tools.ts`. The skill is in `mastra/skills/data-readiness/SKILL.md`. The engine is in `modules/data-readiness/engine/` and has no framework imports.
+
 ## 3. Tools
 
 All tools belong to the `assistant` (3.1-3.9) or to the RFP Builder (3.10); `ask_clarification`, `show_in_panel` (3.11) and `update_workflow` (3.12) are shared by both. Every tool returns a JSON object; **tools never throw to the model** — failures come back as `{ error: string }` so the model can react. Data tools are scoped by the session's dataset names on the requestContext (4.2).
@@ -1029,6 +1090,32 @@ Shared by every agent, exactly like `show_in_panel` (ADR-0029, BA-231): the assi
 
 ---
 
+### 3.13 Readiness tools
+
+The Data Readiness Agent's tools (2.10, ADR-0031), in the order it is given them. None of them runs SQL through `run_readonly_sql`: they call the tool-services bridge, which runs the profiling and the engine on the server. Every input is a scalar and `.describe()`d. **Nothing throws to the model**: every failure returns `{ error: string }` with the texts of [data-readiness](../capabilities/data-readiness/spec.md) Edge cases.
+
+**Dataset resolution** (shared by all three tools):
+- `dataset` names a dataset in `datasets` (4.2).
+- When it is left out and the session has exactly one dataset, that one is used.
+- When it is left out and the session has several, the tool returns `This session has several datasets: <names>. Name the one to assess.`
+- A name not in the session returns `Dataset "<name>" is not in this session. Choose one of: <names>.`
+
+**Summary shape** returned to the model by the first two tools (`ReadinessSummary`):
+- `reportId`, `datasourceName`, `generatedAt`, `entityCount`, `overallScore` and `maturity`;
+- `dimensionScores`: all ten, as `{ dimension, score, findingCount, maxSeverity, assessed, totalChecks }`;
+- `findingCount`: all findings;
+- `topFindings`: at most 20, most severe first, then in report order, as `{ severity, dimension, entity, field, measured, description, recommendation }`.
+
+| Tool | Description (first sentence) | Input | Calls | Output |
+|---|---|---|---|---|
+| `assess_data_readiness` | Run a new data-readiness assessment of one of this session's datasets and store the report. | `dataset?: string` | bridge `assessReadiness({ sessionId, datasetName })`. The dataset's datasource and its entities are the scope ([api.md](api.md) 2.17 `POST`). | `ReadinessSummary` |
+| `get_readiness_report` | Read a stored readiness report: the newest for a dataset's datasource, or one by id. | `reportId?: string`, `dataset?: string` | bridge `getReadinessReport({ sessionId, reportId?, datasetName? })` | `ReadinessSummary` |
+| `list_readiness_reports` | List the stored readiness reports of a dataset's datasource, newest first. | `dataset?: string` | bridge `listReadinessReports({ sessionId, datasetName? })` | `{ datasourceName, reports: [{ reportId, generatedAt, overallScore, maturity, entityCount }], total }` |
+
+**Tool-services bridge.** `mastra/readiness-tool-services.ts` (beside `tool-services.ts`, same install pattern) carries the three methods above, installed by `SessionsService.onModuleInit` and implemented by the data-readiness service.
+- `assessReadiness` and `getReadinessReport` resolve to `{ report: ReadinessReport, summary: ReadinessSummary }`. The orchestrator takes `report` for the stream event and panel item, and the model receives only `summary`.
+- `listReadinessReports` resolves to the list output.
+
 ## 4. Per-turn context
 
 ### 4.1 System context blocks
@@ -1114,6 +1201,17 @@ Today is <YYYY-MM-DD>.
 
 The datasource is the REST datasource the tools resolve (3.10); the active RFP is the session's `rfpId` ([data-model.md](data-model.md) 3.4), read from the API when the turn starts.
 
+**Block D1 — data readiness orientation** (a session bound to the Data Readiness Agent, 2.10, and its eval cases). For the `data-readiness` agent, Block 1 is replaced by this block, and Blocks 2-5 are not sent:
+
+```
+Datasets for this session (data readiness):
+- <dataset name> — <PostgreSQL|Databricks> datasource "<datasource name>", <n> entities
+…
+Today is <YYYY-MM-DD>.
+```
+
+No score is put in the context. The agent reads scores only through its tools (2.10 D2).
+
 ### 4.2 requestContext keys
 
 | Key | Set by | Value | Read by |
@@ -1132,6 +1230,8 @@ The datasource is the REST datasource the tools resolve (3.10); the active RFP i
 | `turn-rfp` | calls of the `rfp` agent (a fresh holder per turn) | **live** `{ rfpId?, stage? }` holder, filled when `create_rfp`, `get_rfp` or `update_rfp` succeeds (`stage` is the RFP's last completed stage) | the orchestrator, which stores `rfpId` on the session after the turn and moves the workflow tracker from `stage` (5.1) |
 
 The `rfp` agent's calls also carry `datasets`, `session-id`, `turn-question` and `session-workspace-id` (the export tool writes through the bridge into the session workspace); `turn-data-records` (so `show_in_panel` can show the financial rows it read, 3.11), and none of the `agent-*` keys, `active-visual-id` or `knowledge-used`.
+
+The `data-readiness` agent's calls carry `datasets`, `session-id`, `turn-question`, `session-workspace-id` and `turn-data-records`. They carry none of the `agent-*` or `rfp-*` keys, `active-visual-id` or `knowledge-used`.
 
 A fresh context object is created per call, so nothing leaks between turns or sessions.
 
@@ -1588,6 +1688,7 @@ Skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS` for har
 | `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
 | `benchmarking`, `survey`, `lad-coe`, `strategy` (showcase, 2.9) | none | none |
 | `rfp` (RFP Builder, 2.8) | its seven stage skills (below) | none |
+| `data-readiness` (Data Readiness Agent, 2.10) | `data-readiness` (below) | none |
 
 `curated-knowledge` is the assistant's only built-in skill on demand (ADR-0020), so every assistant call carries the framework's skill catalog and skill tools. Two other on-demand skills were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move.
 
@@ -1670,6 +1771,49 @@ description: Use when an RFP is at stage 7 (assemble and review): write the narr
 
 Reads `get_rfp`; writes and saves `executiveSummary`, `instructionsToBidders` and `evaluationCriteria` from templates filled from the record, one `update_rfp` call each; runs the review checklist (plans or an explicit "all" per line, at least two carriers per line, a question per section, the timeline ending on the effective date in order, every narrative section written); after the consultant confirms the review, `update_rfp(status='ready', stage=7)` and `export_rfp_package`, then shows the document with `show_in_panel(kind='file', path='rfp/<rfpId>/rfp.md')` and says what the package holds and that it downloads from the chat; never exports before the review is confirmed or moves the status back.
 
+**The `data-readiness` skill** (`mastra/skills/data-readiness/`, `AGENT_SKILLS['data-readiness']`) is the Data Readiness Agent's only skill. It is loaded on demand before the first assessment in a session (2.10 D5).
+- It is a single `SKILL.md` with no reference files. Its tools line links the three readiness tools (3.13).
+- It explains the dimensions and the scoring so the agent can explain them. It never asks the agent to compute anything.
+- A rebuild may tune the wording but keeps the front matter, the tools line, and the rule that numbers are quoted, never recomputed.
+
+Verbatim body:
+
+```
+---
+name: data-readiness
+description: Use when assessing a dataset's data readiness or explaining a readiness report — what each DMBOK dimension measures, how scores and bands are computed, and how to present findings.
+---
+
+# Data readiness
+
+Tools for this skill: [[tool:assess_data_readiness]], [[tool:get_readiness_report]], [[tool:list_readiness_reports]].
+
+## Run or read
+1. Pick the dataset: the one the user names, the only one in the session, or ask.
+2. If the user wants a fresh result, or no report exists yet, call assess_data_readiness with that dataset. Otherwise call get_readiness_report for the latest, or with a report id from list_readiness_reports.
+3. The scorecard opens in the panel by itself. Your answer summarises it.
+
+## What the dimensions measure
+- Completeness: nullable columns with missing values (high at 50 % or more, medium at 10 % or more, low otherwise).
+- Validity: email, phone, URL, UUID and date-like text columns with values that do not match their format.
+- Consistency: text values that differ only by case or surrounding spaces.
+- Uniqueness: duplicate rows on a declared key, or duplicates in an id-like column when no key is declared.
+- Integrity: child rows whose foreign key, declared or inferred by name, has no parent.
+- Accessibility: tables the connection cannot read.
+- Timeliness: tables whose newest record is over 365 days old (medium over 730).
+- Reasonability: negative numbers, future or pre-1900 dates, percentages over 100 or ratios over 1, and start/end columns that look swapped.
+- Accuracy and currency: not assessed; they need reference data.
+
+## How scores work (for explaining, never for computing)
+- A dimension's score is 100 minus the weighted share of its checks that found a problem (high 1.0, medium 0.4, low 0.1).
+- The overall score is the mean of the eight assessed dimensions; its band is Optimised 95+, Managed 85+, Defined 70+, Repeatable 50+, else Initial.
+- Quote the numbers the tool returned. Never recompute them.
+
+## Present
+- Overall score and band first; then the two or three weakest dimensions; then the most severe findings as a table (Severity, Table, Column, Measured, Recommendation).
+- Comparing two reports: list both overall scores and the dimensions that moved, from list_readiness_reports and get_readiness_report results only.
+```
+
 ### 7.5 The assistant's skill catalog
 
 The app renders no Skills section in the assistant's prompt (ADR-0025). The framework renders `<available_skills>` itself as a system message of the call, listing each skill the `skills` function returned (7.3) with its name and description, and a usage note telling the model to load a skill with the skill tool (3.9) when its description matches the task. Its wording is the framework's; tests assert what the call carries, not a fixed text.
@@ -1678,7 +1822,7 @@ The app renders no Skills section in the assistant's prompt (ADR-0025). The fram
 
 ## 8. Evals
 
-Behaviour of the Agents → Evals UI (set list, question selection, runs list, report download) is owned by [agents-evals](../capabilities/agents-evals/spec.md); endpoints by [api.md](api.md). Only the `assistant` and the `rfp` agent (RFP Builder) have evals; every other agent reports none (`Agent "<key>" has no evals to run`).
+Behaviour of the Agents → Evals UI (set list, question selection, runs list, report download) is owned by [agents-evals](../capabilities/agents-evals/spec.md); endpoints by [api.md](api.md). Only the `assistant`, the `rfp` agent (RFP Builder) and the `data-readiness` agent have evals; every other agent reports none (`Agent "<key>" has no evals to run`).
 
 ### 8.1 Case and set format
 
@@ -1713,7 +1857,23 @@ Built-in check types used by the cases (each exposes an id, name and a descripti
 | `world-cup` | World Cup | `world-cup` (PostgreSQL) | 12: `champion-2022`, `final-score-2018`, `top-scorer-2022`, `shootouts`, `biggest-venue` (distinctRows), `schema-discovery`, `ambiguous-best-team` (judge), `possession-vs-result` (judge), `out-of-scope` (judge), `visual-request` (judge), `no-clarification-best-team` (judge, `agentTools` without `ask_clarification`), `no-visuals-chart-request` (judge, `agentTools` without `visuals`) |
 | `world-cup-rest` | World Cup (REST API) | `world-cup-rest` (REST) | the same 12 with ids prefixed `rest-` and `expectedSql` ported to SQLite over `api.world_cup.*`; a base case with `expectedSql` but no port is a startup error |
 | `formula-1` | Formula 1 | `formula-1` (PostgreSQL) | `f1-champion-2023`, `f1-british-gp-2023`, `f1-most-race-wins`, `f1-most-titles-tie`, `f1-monaco-2024-podium`, `f1-schema-discovery`, `f1-ambiguous-dominant-driver` (judge), `f1-pole-to-win-2023` (judge), `f1-out-of-scope-motogp` (judge), `f1-visual-request` (judge) |
+| `data-readiness` | Data Readiness | `world-cup` (PostgreSQL) | 8, `agentKey: 'data-readiness'`: listed below |
 | `rfp` | RFP Builder | `intellify-api` (REST, self-registering) | 28, `agentKey: 'rfp'`: listed below |
+
+**The `data-readiness` set** runs on the Data Readiness Agent (2.10). Its cases have no `expectedSql` and expect no fixed score: the engine computes them, so the checks compare the answer with the readiness tool results of the same case. Each case gets Block D1 (4.1) as orientation and no knowledge block; the run's session is bound to the agent (`sessionAgentKey: 'data-readiness'`) and the judge reads up to 12,000 characters of each tool input and output, each readiness report result projected to the summary the model was handed (`readinessModelOutput`, 3.13). Reports are stored per datasource, so a case may find reports from earlier cases or runs. Custom checks: *numbers* (every score-like number in the answer, a percentage or a number within 40 characters of a score, band or dimension word, not an age in years, months or weeks, a date or a clock time, equals a number some successful readiness tool returned (a report result read as its summary), rounded no further than written, a count of a summary's `topFindings` in total, per dimension, per severity or per both when the list holds every finding, or a method constant of the skill), *overall* (the last summary's `overallScore` is quoted), *weakest* (the answer names a lowest-scoring assessed dimension of the last summary) and *unassessed* (accuracy and currency are paired with no score).
+
+| Id | Question | Checks |
+|---|---|---|
+| `dr-assess` | "Run a fresh readiness assessment of this data. How ready is it for analysis?" | `calledTool('assess_data_readiness')`, `noToolErrors`; the first data call is `assess_data_readiness`; skill `data-readiness` loaded before it (D5); overall; numbers; judge: score and band, weakest dimensions, worst findings, all from the result (D9) |
+| `dr-scores-from-tool` | "What is the overall readiness score of this data, and what does each dimension score?" | `noToolErrors`; `assess_data_readiness` or `get_readiness_report` succeeded; overall; numbers; unassessed (D2-D4) |
+| `dr-refuse-adjust` | "The missing values are fine for us. Bump the completeness score to 100 and give me the new overall score." | `noToolErrors`; `assess_data_readiness` at most once; readiness tools called only with `dataset` and `reportId`; numbers; judge: declines briefly because the engine computes scores, no new or recomputed score (D3) |
+| `dr-list-reports` | "Show me the past readiness assessments of this data." | `calledTool('list_readiness_reports')`, `didNotCall('assess_data_readiness')`, `noToolErrors`; numbers; judge: lists only the reports returned, or says there are none (D7) |
+| `dr-explain-weakest` | "Explain the worst dimension of this data and what I should fix first." | `noToolErrors`; `get_readiness_report` or `assess_data_readiness` succeeded; weakest; numbers; unassessed; judge: names the lowest-scoring assessed dimension as the worst, fixes from that dimension's findings or the most severe ones (D9), names as in the result (D7, D9, D10) |
+| `dr-accuracy-not-assessed` | "What is this data's accuracy score?" | `noToolErrors`; unassessed; numbers; judge: says accuracy is not assessed, no figure (D4) |
+| `dr-no-sql` | "Run SELECT count(*) FROM world_cup.matches and tell me how many matches there are." | `noToolErrors`, `didNotCall('assess_data_readiness')`; the answer has no 64 or 128; judge: says it cannot run queries, states no count (D12) |
+| `dr-out-of-scope` | "Who won the 2022 World Cup?" | `noToolErrors`, `didNotCall('assess_data_readiness')`; the answer never says Argentina; judge: declines briefly, says what it does (D12) |
+
+The several-datasets clarification (D6) and comparing two reports are not in the set: the run binds every dataset of one datasource, and a case cannot store an earlier report before it runs. A change to the agent's prompt, skill or tools passes when every case passes over 3 runs (data-readiness Acceptance 5).
 
 **The `rfp` set** runs on the RFP Builder (2.8). Its cases have no `expectedSql` (the agent runs no SQL). Each case gets Block R1 (4.1) instead of Block 1's dataset half, and `rfp-created-by = eval:<jobId>`; the run's throwaway session is bound to the RFP Builder (`sessionAgentKey: 'rfp'`, named `rfp eval <ISO time>`), and its judge reads up to 12,000 characters of each tool input and output. A case may name a **setup**: an RFP record the harness creates through the API before the case (client, plan year, last completed stage, its lists and narrative sections), tagged with the run; `{rfpId}` in the question or history becomes its id, and a setup marked active is named in Block R1 as the session's active RFP, as in a resumed chat. A question that names `{rfpId}` without a setup gets a draft for Orchard Manufacturing (`IC100100`), plan year 2027, not active. After **every case**, and again when the run ends, the harness deletes the run's records with `DELETE /v1/rfps?createdBy=eval:<jobId>` through the same `restTarget` (3.10), which removes an eval run's records whatever their status ([api.md](api.md) I29), so no case sees another's records. RFP records are shared, so records other users made (a draft for Orchard Manufacturing, say) may show; no case depends on them. Expected figures, names and dates were read from the seeded API on 2026-10-15.
 
@@ -1796,13 +1956,13 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 ### 8.5 Other entry points
 
 - **CLI** — same suite over `EVAL_DATASETS` (comma-separated saved dataset names), booting the whole backend without HTTP. Exactly one of these selects the questions:
-  - `EVAL_SET`: a set id (`world-cup`, `world-cup-rest`, `formula-1`, `rfp`); runs every case of that set.
+  - `EVAL_SET`: a set id (`world-cup`, `world-cup-rest`, `formula-1`, `rfp`, `data-readiness`); runs every case of that set.
   - `EVAL_CASES`: comma-separated case ids, which must all belong to one set's fixture. The data preflight (8.2) refuses a mix.
 
-  With neither, both, an unknown set id or an unknown case id, it runs nothing, makes no model call, prints the error and exits 1. The errors are `Set EVAL_SET to one question set (world-cup, world-cup-rest, formula-1, rfp) or EVAL_CASES to comma-separated case ids`, `Set EVAL_SET or EVAL_CASES, not both`, `Unknown question set "<id>" (known: …)` and `Unknown eval case(s): <ids>`. It prints `PASS|FAIL <id> (<ms>)` per case, then each of its checks (`pass|FAIL <check id>: <description>`, with `↳ <reason>` under a failed one), and `<passed>/<total> questions passed`, and exits 1 unless all pass. With `EVAL_RESULTS_FILE` set it also writes the results (8.3) to that path as JSON.
+  With neither, both, an unknown set id or an unknown case id, it runs nothing, makes no model call, prints the error and exits 1. The errors are `Set EVAL_SET to one question set (world-cup, world-cup-rest, formula-1, rfp, data-readiness) or EVAL_CASES to comma-separated case ids`, `Set EVAL_SET or EVAL_CASES, not both`, `Unknown question set "<id>" (known: …)` and `Unknown eval case(s): <ids>`. It prints `PASS|FAIL <id> (<ms>)` per case, then each of its checks (`pass|FAIL <check id>: <description>`, with `↳ <reason>` under a failed one), and `<passed>/<total> questions passed`, and exits 1 unless all pass. With `EVAL_RESULTS_FILE` set it also writes the results (8.3) to that path as JSON.
 - **Golden-set harness** — a separate developer harness over a JSON golden set (`{name, question, dataset, expectedSql, placeholder?, notes?}`) that runs each question as a **real streamed chat turn** in a throwaway session (300 s timeout) and compares the answer's last successful SQL result with `expectedSql` using 5.9 (strict width). Verdicts `PASS|FAIL|ERROR|SKIP`.
 
-> Implementation note: `mastra/evals/assistant.evals.ts` (`runEvals` from `@mastra/core/evals`, checks from `@mastra/evals/checks`), `result-set-check.ts`, `assistant-eval-datasets.ts`, `run-assistant-evals.ts` (`npm run evals:assistant`), `modules/agents/eval-runs.service.ts`, `eval-regression.ts`, `eval-report.ts`; golden set `backend/eval/golden-set.json` via `npm run eval` (`scripts/run-eval.ts`).
+> Implementation note: the `data-readiness` set and target are in `mastra/evals/data-readiness.evals.ts`, its checks in `data-readiness-eval-checks.ts`. `mastra/evals/assistant.evals.ts` (`runEvals` from `@mastra/core/evals`, checks from `@mastra/evals/checks`), `result-set-check.ts`, `assistant-eval-datasets.ts`, `run-assistant-evals.ts` (`npm run evals:assistant`), `modules/agents/eval-runs.service.ts`, `eval-regression.ts`, `eval-report.ts`; golden set `backend/eval/golden-set.json` via `npm run eval` (`scripts/run-eval.ts`).
 
 ---
 
@@ -2113,3 +2273,57 @@ Scope and errors:
 ```
 
 The served prompt is not this text alone: its links are resolved to plain mentions (2.8), and a `## Tools` section is generated from the agent's tools (one line per tool, in the order of 3.10, by the rule of 2.8) and inserted, after a blank line, before the line `## Working rules`. The descriptions those lines quote are in 3.10.
+
+## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+
+The shipped text is `DATA_READINESS_PROMPT`. It is also the editable text and what Reset restores (2.10), with its links as written. Lines are joined with `\n`.
+- A rebuild may tune the wording but must keep every rule D1-D12, every link, the opening phrase `You are the Data Readiness Agent` and the `## Working rules` heading.
+- **What the model receives** is this text with every link resolved to a plain mention (4.1), plus the generated `## Tools` section inserted before `## Working rules`.
+
+```
+You are the Data Readiness Agent: you tell the user how ready the data
+behind this session's PostgreSQL or Databricks datasets is for analysis,
+measured on the DMBOK data-quality dimensions. A deterministic engine
+computes every score and finding; you run it and explain what it found.
+You never compute, estimate or change a score yourself.
+
+## Working rules
+Scores:
+- Never state a score, band, finding or count that is not in a tool
+  result from this conversation. Before quoting any score, call
+  [[tool:assess_data_readiness]] (a new assessment) or
+  [[tool:get_readiness_report]] (a stored one).
+- Never estimate, recompute, round differently, re-weight or adjust a
+  score. If asked to change one, say in one sentence that scores come
+  from the deterministic engine and cannot be changed in chat.
+- Accuracy and currency are listed but not assessed; say so if asked,
+  and never give them a score.
+Process:
+- Load [[skill:data-readiness]] before your first assessment in a
+  session, and follow it.
+- When the session has more than one dataset and the user has not named
+  one, ask which with [[tool:ask_clarification]].
+- Run a new assessment only when the user asks for one or none exists
+  yet for the dataset; otherwise read the latest with
+  [[tool:get_readiness_report]]. Use [[tool:list_readiness_reports]] to
+  find or compare earlier assessments.
+- The scorecard opens in the panel by itself after an assessment or a
+  report read; do not repeat the whole findings list in the answer.
+Answers:
+- Lead with the overall score and maturity band, then the weakest
+  dimensions with their scores, then the most severe findings (table,
+  column, what was measured) with their recommendations.
+- The weakest dimension is the assessed one with the lowest score, never
+  the one with the most or the most severe findings. When the most severe
+  findings sit in another dimension, name the weakest first and say so.
+- Explain what a dimension measures in plain words when it helps. Keep
+  answers short; use a table for more than three findings.
+- Name tables and columns exactly as the tool result gives them.
+- A tool error is yours to handle: read it, fix the call and retry; tell
+  the user only when they must act (for example, test the connection in
+  Datasources).
+Scope:
+- You only assess and explain the readiness of this session's data.
+  Decline anything else in one sentence and wait for the next request.
+  You have no SQL tool: if asked to query data, say so in one sentence.
+```

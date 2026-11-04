@@ -1,0 +1,908 @@
+{
+  "sourceId": "gold-databricks-capital-markets-dbx-01",
+  "sourceType": "databricks",
+  "entities": [
+    {
+      "namespace": "main.markets",
+      "name": "instruments",
+      "rowCount": 1328,
+      "fields": [
+        {
+          "name": "instrument_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1328,
+          "min": "1",
+          "max": "1328"
+        },
+        {
+          "name": "isin_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 962,
+          "normalizedDistinctCount": 962
+        },
+        {
+          "name": "instrument_name",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 981,
+          "normalizedDistinctCount": 981
+        },
+        {
+          "name": "asset_class",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 37,
+          "normalizedDistinctCount": 35
+        },
+        {
+          "name": "currency_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 26,
+          "normalizedDistinctCount": 26
+        },
+        {
+          "name": "listed_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 901,
+          "min": "2022-07-21T12:00:00.000Z",
+          "max": "2026-06-06T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "instrument_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "isin_code"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-10T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.markets",
+      "name": "portfolios",
+      "rowCount": 1120,
+      "fields": [
+        {
+          "name": "portfolio_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1120,
+          "min": "1",
+          "max": "1120"
+        },
+        {
+          "name": "portfolio_name",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 892,
+          "normalizedDistinctCount": 892
+        },
+        {
+          "name": "manager_email",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 932,
+          "normalizedDistinctCount": 932,
+          "formatRule": "email",
+          "invalidFormatCount": 90
+        },
+        {
+          "name": "strategy_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7,
+          "normalizedDistinctCount": 7
+        },
+        {
+          "name": "target_alloc_pct",
+          "type": "double",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 666,
+          "min": "0",
+          "max": "82"
+        },
+        {
+          "name": "inception_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 791,
+          "min": "2021-08-04T12:00:00.000Z",
+          "max": "2026-07-08T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "portfolio_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-07-30T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.markets",
+      "name": "trades",
+      "rowCount": 156359,
+      "fields": [
+        {
+          "name": "trade_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 156359,
+          "min": "1",
+          "max": "156359"
+        },
+        {
+          "name": "portfolio_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1120,
+          "min": "1",
+          "max": "1120"
+        },
+        {
+          "name": "instrument_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1328,
+          "min": "1",
+          "max": "1328"
+        },
+        {
+          "name": "side_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 10,
+          "normalizedDistinctCount": 10
+        },
+        {
+          "name": "quantity_units",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 273,
+          "min": "0",
+          "max": "1928"
+        },
+        {
+          "name": "notional_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 122587,
+          "min": "0",
+          "max": "35251509"
+        },
+        {
+          "name": "traded_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 133635,
+          "min": "2023-04-20T12:00:00.000Z",
+          "max": "2026-07-10T12:00:00.000Z"
+        },
+        {
+          "name": "settled_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 23454,
+          "distinctCount": 128379,
+          "min": "2021-10-26T12:00:00.000Z",
+          "max": "2026-06-17T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "trade_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-07-28T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.markets",
+      "name": "counterparties",
+      "rowCount": 5630,
+      "fields": [
+        {
+          "name": "counterparty_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 5630,
+          "min": "1",
+          "max": "5630"
+        },
+        {
+          "name": "counterparty_name",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4988
+        },
+        {
+          "name": "lei_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 845,
+          "distinctCount": 4785
+        },
+        {
+          "name": "rating_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 12,
+          "normalizedDistinctCount": 12
+        },
+        {
+          "name": "onboarded_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4847,
+          "min": "1900-01-01T00:00:00.000Z",
+          "max": "2026-06-06T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "counterparty_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-09T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.markets",
+      "name": "price_quotes",
+      "rowCount": 77844,
+      "fields": [
+        {
+          "name": "price_quote_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 77844,
+          "min": "1",
+          "max": "77844"
+        },
+        {
+          "name": "instrument_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1328,
+          "min": "1",
+          "max": "1328"
+        },
+        {
+          "name": "bid_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 68235,
+          "min": "-900",
+          "max": "89709980"
+        },
+        {
+          "name": "ask_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 48942,
+          "min": "0",
+          "max": "73748774"
+        },
+        {
+          "name": "quoted_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 61363,
+          "min": "2020-07-16T12:00:00.000Z",
+          "max": "2026-07-14T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "price_quote_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-10T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.markets",
+      "name": "benchmark_weights",
+      "rowCount": 7302,
+      "fields": [
+        {
+          "name": "benchmark_weight_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7302,
+          "min": "1",
+          "max": "7302"
+        },
+        {
+          "name": "portfolio_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1120,
+          "min": "1",
+          "max": "1120"
+        },
+        {
+          "name": "instrument_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1328,
+          "min": "1",
+          "max": "1328"
+        },
+        {
+          "name": "weight_share",
+          "type": "double",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 474,
+          "min": "0",
+          "max": "1.6"
+        },
+        {
+          "name": "rebalanced_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6457,
+          "min": "2021-06-24T12:00:00.000Z",
+          "max": "2026-08-02T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "benchmark_weight_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "natural",
+          "fields": [
+            "portfolio_id",
+            "instrument_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-09T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.markets",
+      "name": "positions_daily",
+      "rowCount": 210669,
+      "fields": [
+        {
+          "name": "record_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 210269,
+          "min": "1",
+          "max": "210669"
+        },
+        {
+          "name": "portfolio_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 209769,
+          "min": "1",
+          "max": "1120"
+        },
+        {
+          "name": "market_value_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 166696,
+          "min": "0",
+          "max": "38915618"
+        },
+        {
+          "name": "snapshot_year",
+          "type": "int",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 20,
+          "min": "2018",
+          "max": "2022"
+        }
+      ],
+      "keys": [],
+      "readable": true,
+      "lastModifiedAt": "2026-07-24T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.markets",
+      "name": "trading_windows",
+      "rowCount": 2038,
+      "fields": [
+        {
+          "name": "trading_window_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2038,
+          "min": "1",
+          "max": "2038"
+        },
+        {
+          "name": "venue_code",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18,
+          "normalizedDistinctCount": 18
+        },
+        {
+          "name": "window_start_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1548,
+          "min": "2019-10-19T12:00:00.000Z",
+          "max": "2026-07-24T12:00:00.000Z"
+        },
+        {
+          "name": "window_end_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1445,
+          "min": "2019-03-13",
+          "max": "2019-10-04"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "trading_window_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-08T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.markets",
+      "name": "research_notes",
+      "rowCount": 4550,
+      "fields": [
+        {
+          "name": "research_note_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4550,
+          "min": "1",
+          "max": "4550"
+        },
+        {
+          "name": "instrument_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1328,
+          "min": "1",
+          "max": "1328"
+        },
+        {
+          "name": "publish_date",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4113,
+          "formatRule": "date-string",
+          "invalidFormatCount": 0
+        },
+        {
+          "name": "document_uuid",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4503,
+          "formatRule": "uuid",
+          "invalidFormatCount": 30
+        },
+        {
+          "name": "source_url",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 3851,
+          "formatRule": "url",
+          "invalidFormatCount": 0
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "research_note_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2023-12-11T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.middle_office",
+      "name": "custody_accounts",
+      "rowCount": 0,
+      "fields": [
+        {
+          "name": "custody_account_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "portfolio_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "custodian_name",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "account_status",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "opened_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "custody_account_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": false,
+      "lastModifiedAt": "2026-07-26T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.middle_office",
+      "name": "compliance_cases",
+      "rowCount": 0,
+      "fields": [
+        {
+          "name": "compliance_case_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "portfolio_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "case_status",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0
+        },
+        {
+          "name": "case_notes",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0
+        },
+        {
+          "name": "raised_at",
+          "type": "timestamp",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "compliance_case_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": false,
+      "lastModifiedAt": "2026-08-12T12:00:00.000Z"
+    },
+    {
+      "namespace": "main.middle_office",
+      "name": "corporate_actions",
+      "rowCount": 7446,
+      "fields": [
+        {
+          "name": "corporate_action_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 7446,
+          "min": "1",
+          "max": "7446"
+        },
+        {
+          "name": "instrument_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1328,
+          "min": "1",
+          "max": "1328"
+        },
+        {
+          "name": "action_type",
+          "type": "string",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 30,
+          "normalizedDistinctCount": 30
+        },
+        {
+          "name": "effective_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6381,
+          "min": "2020-12-30",
+          "max": "2024-02-09"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "corporate_action_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true,
+      "lastModifiedAt": "2026-08-02T12:00:00.000Z"
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "main.markets",
+      "fromEntity": "trades",
+      "fromField": "portfolio_id",
+      "toNamespace": "main.markets",
+      "toEntity": "portfolios",
+      "toField": "portfolio_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.markets",
+      "fromEntity": "trades",
+      "fromField": "instrument_id",
+      "toNamespace": "main.markets",
+      "toEntity": "instruments",
+      "toField": "instrument_id",
+      "orphanCount": 80,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.markets",
+      "fromEntity": "price_quotes",
+      "fromField": "instrument_id",
+      "toNamespace": "main.markets",
+      "toEntity": "instruments",
+      "toField": "instrument_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.markets",
+      "fromEntity": "benchmark_weights",
+      "fromField": "portfolio_id",
+      "toNamespace": "main.markets",
+      "toEntity": "portfolios",
+      "toField": "portfolio_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.markets",
+      "fromEntity": "benchmark_weights",
+      "fromField": "instrument_id",
+      "toNamespace": "main.markets",
+      "toEntity": "instruments",
+      "toField": "instrument_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.markets",
+      "fromEntity": "research_notes",
+      "fromField": "instrument_id",
+      "toNamespace": "main.markets",
+      "toEntity": "instruments",
+      "toField": "instrument_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.middle_office",
+      "fromEntity": "custody_accounts",
+      "fromField": "portfolio_id",
+      "toNamespace": "main.markets",
+      "toEntity": "portfolios",
+      "toField": "portfolio_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.middle_office",
+      "fromEntity": "compliance_cases",
+      "fromField": "portfolio_id",
+      "toNamespace": "main.markets",
+      "toEntity": "portfolios",
+      "toField": "portfolio_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.middle_office",
+      "fromEntity": "corporate_actions",
+      "fromField": "instrument_id",
+      "toNamespace": "main.markets",
+      "toEntity": "instruments",
+      "toField": "instrument_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "main.markets",
+      "fromEntity": "positions_daily",
+      "fromField": "portfolio_id",
+      "toNamespace": "main.markets",
+      "toEntity": "portfolios",
+      "toField": "portfolio_id",
+      "orphanCount": 350,
+      "origin": "inferred"
+    }
+  ]
+}

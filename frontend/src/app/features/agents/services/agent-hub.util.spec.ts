@@ -345,3 +345,23 @@ describe('showcase agents (agents-evals R106)', () => {
     expect(options[1].disabledReason).toBe(reason);
   });
 });
+
+describe('Data Readiness Agent start chat (data-readiness R2)', () => {
+  const base = {
+    ...agent('data-readiness', 'Data Readiness Agent', 'official'),
+    chatRequirement: 'Add a PostgreSQL or Databricks dataset first',
+    missingDatasets: [],
+  };
+
+  it('is blocked with the requirement while no qualifying dataset exists', () => {
+    expect(startChatBlockedReason({ ...base, datasets: [] })).toBe(
+      'Add a PostgreSQL or Databricks dataset first',
+    );
+  });
+
+  it('can start once a qualifying dataset exists, outside the composer', () => {
+    const ready = { ...base, datasets: ['World Cup'] };
+    expect(startChatBlockedReason(ready)).toBeNull();
+    expect(startsInComposer(ready)).toBe(false);
+  });
+});

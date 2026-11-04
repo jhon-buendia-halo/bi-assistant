@@ -804,6 +804,13 @@ export interface EvalTarget {
    * whole records, so its judge reads more of them.
    */
   judgeTraceChars?: number;
+  /**
+   * What the LLM judge reads of a successful tool output, when the model
+   * is handed a projection of it (`toModelOutput`): the Data Readiness
+   * Agent's report tools hand the model only the summary. Unset, the judge
+   * reads the output as the tool returned it.
+   */
+  judgeOutput?: (output: unknown) => unknown;
 }
 
 /** The assistant's sets, run as they always have been. */
@@ -1486,7 +1493,12 @@ export async function runAssistantEvalCase(
             input: encode(call.input, target.judgeTraceChars),
             output: call.failed
               ? undefined
-              : encode(call.output, target.judgeTraceChars),
+              : encode(
+                  target.judgeOutput
+                    ? target.judgeOutput(call.output)
+                    : call.output,
+                  target.judgeTraceChars,
+                ),
             error: call.failed
               ? (encode(call.output, target.judgeTraceChars) ??
                 'Tool call failed')

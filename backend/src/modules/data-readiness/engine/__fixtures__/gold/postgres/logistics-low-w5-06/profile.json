@@ -1,0 +1,427 @@
+{
+  "sourceId": "gold-postgres-logistics-low-w5-06",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "operations",
+      "name": "shpts",
+      "rowCount": 4246,
+      "fields": [
+        {
+          "name": "shpt_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4246,
+          "min": "1",
+          "max": "4246"
+        },
+        {
+          "name": "carrier_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 758,
+          "min": "1",
+          "max": "758"
+        },
+        {
+          "name": "origin_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 13,
+          "normalizedDistinctCount": 13
+        },
+        {
+          "name": "destination_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 34,
+          "normalizedDistinctCount": 34
+        },
+        {
+          "name": "awb_ref",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 764,
+          "distinctCount": 3337
+        },
+        {
+          "name": "shpt_status",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 30,
+          "normalizedDistinctCount": 27
+        },
+        {
+          "name": "weight_kg",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 192,
+          "min": "0",
+          "max": "3601"
+        },
+        {
+          "name": "tendered_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2748,
+          "min": "2022-02-27T12:00:00.000Z",
+          "max": "2026-07-03T12:00:00.000Z"
+        },
+        {
+          "name": "delivered_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 2324,
+          "min": "2022-07-28T12:00:00.000Z",
+          "max": "2026-06-11T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "shpt_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "operations",
+      "name": "carriers",
+      "rowCount": 758,
+      "fields": [
+        {
+          "name": "carrier_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 758,
+          "min": "1",
+          "max": "758"
+        },
+        {
+          "name": "carrier_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 549,
+          "normalizedDistinctCount": 549
+        },
+        {
+          "name": "scac_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 757,
+          "normalizedDistinctCount": 757
+        },
+        {
+          "name": "dispatch_email",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 741,
+          "normalizedDistinctCount": 741,
+          "formatRule": "email",
+          "invalidFormatCount": 28
+        },
+        {
+          "name": "phone_num",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 692,
+          "normalizedDistinctCount": 692,
+          "formatRule": "phone",
+          "invalidFormatCount": 28
+        },
+        {
+          "name": "onboarded_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 680,
+          "min": "2022-11-01",
+          "max": "2069-01-15"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "carrier_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "scac_code"
+          ],
+          "duplicateCount": 33
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "operations",
+      "name": "tracking_events",
+      "rowCount": 3907,
+      "fields": [
+        {
+          "name": "tracking_event_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3907,
+          "min": "1",
+          "max": "3907"
+        },
+        {
+          "name": "shpt_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1302,
+          "min": "1",
+          "max": "4246"
+        },
+        {
+          "name": "event_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 39,
+          "normalizedDistinctCount": 39
+        },
+        {
+          "name": "scanner_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 17,
+          "normalizedDistinctCount": 15
+        },
+        {
+          "name": "facility_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 15,
+          "normalizedDistinctCount": 15
+        },
+        {
+          "name": "recorded_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2898,
+          "min": "2023-04-16",
+          "max": "2026-07-01"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "tracking_event_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "operations",
+      "name": "whs",
+      "rowCount": 462,
+      "fields": [
+        {
+          "name": "wh_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 462,
+          "min": "1",
+          "max": "462"
+        },
+        {
+          "name": "wh_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 341,
+          "normalizedDistinctCount": 341
+        },
+        {
+          "name": "region_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 18,
+          "normalizedDistinctCount": 18
+        },
+        {
+          "name": "dock_count",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 339,
+          "min": "0",
+          "max": "1866"
+        },
+        {
+          "name": "utilization_pct",
+          "type": "numeric",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 195,
+          "min": "0",
+          "max": "70"
+        },
+        {
+          "name": "opened_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 362,
+          "min": "2019-09-05T12:00:00.000Z",
+          "max": "2026-07-24T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "wh_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "operations",
+      "name": "routes",
+      "rowCount": 323,
+      "fields": [
+        {
+          "name": "route_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 323,
+          "min": "1",
+          "max": "323"
+        },
+        {
+          "name": "route_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 303,
+          "normalizedDistinctCount": 303
+        },
+        {
+          "name": "distance_km",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 274,
+          "min": "0",
+          "max": "1411"
+        },
+        {
+          "name": "hazmat_flag",
+          "type": "boolean",
+          "semanticType": "boolean",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2
+        },
+        {
+          "name": "surveyed_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 172,
+          "min": "2020-01-03T12:00:00.000Z",
+          "max": "2022-12-16T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "route_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "operations",
+      "fromEntity": "shpts",
+      "fromField": "carrier_id",
+      "toNamespace": "operations",
+      "toEntity": "carriers",
+      "toField": "carrier_id",
+      "orphanCount": 42,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "operations",
+      "fromEntity": "tracking_events",
+      "fromField": "shpt_id",
+      "toNamespace": "operations",
+      "toEntity": "shpts",
+      "toField": "shpt_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    }
+  ]
+}
