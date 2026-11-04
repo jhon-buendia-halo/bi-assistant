@@ -1,0 +1,108 @@
+Knowledge seed counts, testing-data R26 (roadmap 1.1.10, BA-188)
+Read from backend/src/modules/testing-data/fixtures/registry.ts (the knowledge field) on 2026-10-16.
+
+Sample            | term | instruction | default_filter | entries | metrics
+------------------|------|-------------|----------------|---------|--------
+Finance           | 10   | 1           | 1              | 12      | 3
+Health Insurance  | 6    | 2           | 1              | 9       | 3
+Genomics          | 9    | 2           | 1              | 12      | 2
+Supply Chain      | 9    | 2           | 1              | 12      | 3
+Total             | 34   | 7           | 4              | 45      | 11
+
+Samples with no seed (create no knowledge entry or metric on load): world-cup, formula-1, intellify, world-cup-rest, intellify-api, marketing-analytics, finance-rest, marketing-analytics-rest, world-cup-rest-connector, world-cup-databricks, finance-databricks, marketing-analytics-databricks.
+
+Finance (dataset "Finance", schema finance; entries in seed order)
+  [term] Amounts are stored in minor units
+  [term] Account currency and the USD reporting amount
+  [default_filter] Exclude test accounts
+  [term] Transaction status
+  [term] Transaction type and direction
+  [term] Deposit accounts versus credit accounts
+  [term] Account status vocabulary
+  [term] Loan status vocabulary
+  [term] Merchant category is recorded on card purchases only
+  [instruction] Join transactions to customers, branches and regions
+  [term] Coverage: transactions booked in 2024 and 2025 only
+  [term] Loan payment split
+  [metric] net_customer_flow_usd_minor on finance.v_transactions
+  [metric] card_spend_usd_minor on finance.transactions
+  [metric] interest_share_of_payments on finance.loan_payments
+
+Health Insurance (dataset "Health Insurance", schema health_insurance; entries in seed order)
+  [term] Claim status vocabulary
+  [term] Amounts are stored in cents
+  [default_filter] Exclude test claims
+  [term] Currency is always USD
+  [term] Prior authorization is rare, not a compliance signal
+  [instruction] Join claims to member location
+  [instruction] Claims reference members and providers by id
+  [term] Coverage: 2024 and 2025 claims only
+  [term] Units billed vs. units allowed on claim lines
+  [metric] net_paid on health_insurance.claims
+  [metric] denial_rate on health_insurance.claims
+  [metric] paid_share_of_billed on health_insurance.claims
+
+Genomics (dataset "Genomics", schema genomics; entries in seed order)
+  [term] Read-count columns on variant_calls
+  [term] Genome assembly is always GRCh38
+  [term] dbSNP id (rsid) coverage is low
+  [term] Clinical significance vocabulary
+  [term] Coverage: subjects and samples from 2023–2024 only
+  [instruction] Report genes by symbol, not by id
+  [default_filter] Exclude control samples
+  [instruction] Join subjects to superpopulation via ancestry group
+  [term] Genotype 0/0 is not a carrier
+  [term] A TPM of zero is a real measurement
+  [term] Expression measures: tpm and raw_count
+  [term] Filter status and call confidence
+  [metric] allele_fraction on genomics.variant_calls
+  [metric] high_confidence_call_rate on genomics.variant_calls
+
+Supply Chain (dataset "Supply Chain", schema supply_chain; entries in seed order)
+  [term] Purchase order status vocabulary
+  [default_filter] Exclude test purchase orders
+  [term] Order quantities are in cases, receipts in units
+  [term] Amounts are stored in cents
+  [term] Unit of measure is always EA
+  [term] Receipt inspection vocabulary
+  [term] On-time delivery is measured against the purchase order promise
+  [term] Inventory snapshots are month-end point-in-time balances
+  [instruction] Join shipments and receipts to supplier, warehouse and region
+  [term] Tracking numbers are sparse
+  [term] Coverage: purchase orders raised in 2024 and 2025 only
+  [instruction] Report products and suppliers by name
+  [metric] on_time_delivery_rate on supply_chain.v_shipments
+  [metric] committed_spend_cents on supply_chain.v_purchase_order_lines
+  [metric] receipt_acceptance_rate on supply_chain.receipts
+
+What reaches the assistant: the knowledge block (knowledge R17, 2,000 characters of snippet lines, newest-updated
+first, stopping at the first entry that does not fit). The loader creates each seed in the reverse of its send
+order (default filters, then instructions, then terms, each group in the seed's order), each entry stamped strictly
+later than the one before, so the block sends the seed in exactly that order. Measured by
+backend/src/modules/testing-data/knowledge-seed-block.spec.ts: the real KnowledgeService.contextFor over the
+real SQLite document store (in memory), after TestingDataService.load of each sample on its default database.
+
+Sample            | fits in the block | characters used | sent, in order
+------------------|-------------------|-----------------|------------------------------------------------------------
+Finance           | 3 of 12           | 1,730 of 2,000  | [default_filter] Exclude test accounts (470)
+                  |                   |                 | [instruction] Join transactions to customers, branches and regions (668)
+                  |                   |                 | [term] Amounts are stored in minor units (592)
+                  |                   |                 | first left out: [term] Account currency and the USD reporting amount
+Health Insurance  | 4 of 9            | 1,917 of 2,000  | [default_filter] Exclude test claims (317)
+                  |                   |                 | [instruction] Join claims to member location (616)
+                  |                   |                 | [instruction] Claims reference members and providers by id (387)
+                  |                   |                 | [term] Claim status vocabulary (597)
+                  |                   |                 | first left out: [term] Amounts are stored in cents
+Genomics          | 4 of 12           | 1,980 of 2,000  | [default_filter] Exclude control samples (681)
+                  |                   |                 | [instruction] Report genes by symbol, not by id (373)
+                  |                   |                 | [instruction] Join subjects to superpopulation via ancestry group (425)
+                  |                   |                 | [term] Read-count columns on variant_calls (501)
+                  |                   |                 | first left out: [term] Genome assembly is always GRCh38
+Supply Chain      | 3 of 12           | 1,795 of 2,000  | [default_filter] Exclude test purchase orders (545)
+                  |                   |                 | [instruction] Join shipments and receipts to supplier, warehouse and region (843)
+                  |                   |                 | [instruction] Report products and suppliers by name (407)
+                  |                   |                 | first left out: [term] Purchase order status vocabulary
+
+Every default filter and every instruction is sent for all four samples. Before the reordering (seed order, ties
+left to the store) the same budget sent 4 entries per sample and no default filter. The metrics block (metrics
+R10, 4,000 characters) holds every seeded metric: 1,239, 1,043, 730 and 1,506 characters.

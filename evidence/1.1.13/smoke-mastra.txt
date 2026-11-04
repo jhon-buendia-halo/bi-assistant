@@ -1,0 +1,34 @@
+Judge: off
+Repeats: 1
+Memory: mastra
+PASS  top-scorer-2018-reused-approval-es  (20247ms)
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass result-set-match: Result set matches expectedSql (primary correctness signal)
+      pass check-no-row-values-retained: Checks that nothing the memory holds keeps a row value
+PASS  extra-time-goals-rejected-matches-filter  (19399ms)
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass result-set-match: Result set matches expectedSql (primary correctness signal)
+      pass check-no-row-values-retained: Checks that nothing the memory holds keeps a row value
+      pass check-not-rejected-sql: Checks that the probe neither ran nor answered with a rejected SQL
+2/2 questions passed
+Dev: 2/2 passed · 95% interval 34–100%
+Held-out: 0/0 passed · 95% interval —
+## By category
+| Category | Dev | Held-out | Flaky | Not scored | Total |
+| --- | --- | --- | --- | --- | --- |
+| memory-reuse | 1/1 (21–100%) | — | 0 | 0 | 1 |
+| memory-rejected | 1/1 (21–100%) | — | 0 | 0 | 1 |
+## By criterion
+| Criterion | Passed | Failed | Total |
+| --- | --- | --- | --- |
+| D1 | 4 | 0 | 4 |
+| D3 | 2 | 0 | 2 |
+| M1 | 2 | 0 | 2 |
+| M2 | 1 | 0 | 1 |
+Tokens: 59,998 in (42,169 cached) · 2,097 out (825 reasoning) · 8 calls
+Cost: $0.0069 · $0.0034 per question
+Recall: p50 814 ms · p90 837 ms
+Run id: baaca4dc-dc3a-4fe2-a2dd-f95f2503b4d8
+No comparable earlier run.

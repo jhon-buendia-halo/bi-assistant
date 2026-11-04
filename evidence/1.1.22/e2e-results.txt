@@ -1,0 +1,10 @@
+1.1.22 (BA-244) — Playwright, web target, 2026-10-23
+From frontend/, on this worktree's build of 3f6ebba plus the evidence files (npm run test:e2e:prepare, exit 0), with E2E_SKIP_DOCKER=1
+so the already-running compose Postgres on 55432 was used and not recreated. Desktop not run.
+
+$ E2E_SKIP_DOCKER=1 npx playwright test --project=web e2e/agent-sessions.spec.ts e2e/agent-panel.spec.ts \
+    e2e/assistant-skills.spec.ts e2e/designer-skills.spec.ts e2e/chat-clarification.spec.ts \
+    e2e/builtin-agent-prompts.spec.ts e2e/visual-tailoring.spec.ts e2e/chat-and-visuals.spec.ts e2e/agents.spec.ts
+  62 passed (1.9m)
+
+Screenshots the re-run specs rewrote under evidence/1.14.11/, 1.14.17/ and 1.14.18/ were restored with git checkout.

@@ -1,0 +1,14 @@
+Frontend checks on feat/BA-9-golden-dataset-evals at 3b9c107, 2026-11-04.
+
+$ npx ng build   (frontend/)
+Application bundle generation complete. [2.950 seconds] - 2026-11-04T15:19:04.775Z
+Output location: frontend/dist/frontend
+
+$ CHROME_BIN="~/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing" npx ng test --watch=false --browsers=ChromeHeadless
+Chrome Headless 153.0.0.0 (Mac OS 10.15.7): Executed 435 of 435 SUCCESS (4.699 secs / 4.63 secs)
+
+$ npx tsc --noEmit -p e2e/tsconfig.json
+exit 0, no output
+
+$ npx playwright test --list
+Total: 390 tests in 26 files

@@ -57,6 +57,7 @@ import {
   type AgentOverrides,
   resolveAgentModelConfig,
 } from '../../mastra/model-resolver';
+import type { UsageSink } from '../../mastra/usage-sink';
 import {
   AGENT_TOOLS_CONTEXT_KEY,
   isFullSelection,
@@ -72,6 +73,7 @@ import { toSkillCopy } from '../skills/entities/skill.entity';
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import type { AgentConfig } from '../user-agents/entities/user-agent.entity';
 import {
+  modelIdOf,
   providerOptionsFor,
   type ProviderOptionValue,
   type ProviderOptions,
@@ -289,13 +291,14 @@ export class SessionsService implements OnModuleInit {
       getDatasets: (names) => this.boundDatasets(names),
       sampleRows: (datasourceId, entity, limit) =>
         this.datasourcesService.sampleRows(datasourceId, entity, limit),
-      runReadOnlySql: (datasourceId, sql, limit, datasets) =>
-        this.runSqlWithRepair(datasourceId, sql, limit, datasets),
+      runReadOnlySql: (datasourceId, sql, limit, datasets, usageSink) =>
+        this.runSqlWithRepair(datasourceId, sql, limit, datasets, usageSink),
       createVisual: async (
         sessionId,
         sourceMessageAt,
         instruction,
         turnRecords,
+        usageSink,
       ) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.create(
@@ -303,17 +306,25 @@ export class SessionsService implements OnModuleInit {
           sourceMessageAt,
           instruction,
           turnRecords,
+          usageSink,
         );
         await this.saveVisualMetadata(session, metadata);
         return this.toolResult(metadata);
       },
-      updateVisual: async (sessionId, visualId, instruction, turnRecords) => {
+      updateVisual: async (
+        sessionId,
+        visualId,
+        instruction,
+        turnRecords,
+        usageSink,
+      ) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.update(
           session,
           visualId,
           instruction,
           turnRecords,
+          usageSink,
         );
         await this.saveVisualMetadata(session, metadata);
         return this.toolResult(metadata);
@@ -365,12 +376,13 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * Hybrid context: a cheap orientation block (dataset names + entity keys,
-   * the session's visuals and which one is open), the curated metric
-   * definitions covering those entities, the curated knowledge-store
-   * snippets covering this session's datasets, plus any user-approved
-   * question → SQL pairs resembling `question`, in the system context, and
-   * requestContext scoping the tools to this session.
+   * Hybrid context: a cheap orientation block (dataset names, entity keys
+   * with their columns and types, the session's visuals and which one is
+   * open), the curated metric definitions covering those entities, the
+   * curated knowledge-store snippets covering this session's datasets,
+   * plus any user-approved question → SQL pairs resembling `question`, in
+   * the system context, and requestContext scoping the tools to this
+   * session.
    *
    * Memory-free on purpose — `agentOptions` adds the session's conversation
    * thread, `backgroundAgentOptions` deliberately does not.
@@ -783,6 +795,7 @@ export class SessionsService implements OnModuleInit {
     sql: string,
     limit: number,
     datasetNames: string[],
+    usageSink?: UsageSink,
   ): Promise<SqlRunResult> {
     let statement = sql;
     let fixerContext: { dialect: string; schema: string } | undefined;
@@ -820,6 +833,7 @@ export class SessionsService implements OnModuleInit {
           statement,
           message,
           fixerContext,
+          usageSink,
         );
         if (!corrected || corrected === statement) throw error;
         // `statement`, not `sql`: attempt 2 is repairing the fixer's own
@@ -866,6 +880,7 @@ export class SessionsService implements OnModuleInit {
     sql: string,
     error: string,
     context: { dialect: string; schema: string },
+    usageSink?: UsageSink,
   ): Promise<string | undefined> {
     try {
       const result = await this.mastra
@@ -899,6 +914,15 @@ export class SessionsService implements OnModuleInit {
             },
           },
         );
+      // The fixer runs on the model `resolveAgentModelConfig` names; looked
+      // up only when an eval is listening.
+      if (usageSink) {
+        usageSink(
+          'sql-fixer',
+          result,
+          modelIdOf(await resolveAgentModelConfig()),
+        );
+      }
       const parsed = sqlFixOutputSchema.safeParse(
         result.object ?? parseJsonObject(result.text),
       );
@@ -972,7 +996,8 @@ export class SessionsService implements OnModuleInit {
         { widthTolerant: true },
       );
       // Logged so the agree / shape / disagree / error split is measurable
-      // rather than anecdotal — `npm run eval` reports the same verdicts.
+      // rather than anecdotal — the eval suite's result-set check
+      // (`mastra/evals/result-set-check.ts`) grades with the same comparison.
       this.logger.log(
         `Cross-check ${match ? (shapeDiffers ? 'agree (shape differs)' : 'agree') : 'disagree'}${
           match ? '' : `: ${reason}`

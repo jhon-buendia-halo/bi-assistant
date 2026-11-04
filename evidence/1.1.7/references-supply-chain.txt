@@ -1,0 +1,169 @@
+# supply-chain: every reference query, run before it counts (BA-185, 2026-10-13)
+
+Database: ba9_supply_chain on the shared compose PostgreSQL (127.0.0.1:55432), seeded through TestingDataService.load (the Testing Data panel's path) from backend/src/modules/testing-data/fixtures/ in a throwaway app data dir; validator from a scratch compile of the epic branch (dist untouched).
+
+## 1. The validator: EVAL_SET=supply-chain npm run eval:validate
+
+```
+Validating Supply Chain (supply-chain, postgres) on Supply Chain
+✓ acceptance-rate-by-supplier  postgres  18 rows
+✓ freight-share-of-goods-value-by-mode  postgres  4 rows
+✓ products-by-unit-of-measure  postgres  1 rows
+✓ shipments-with-tracking-number  postgres  1 rows
+✓ suppliers-with-41-orders  postgres  2 rows
+✓ open-purchase-orders  postgres  1 rows
+✓ product-on-most-order-lines-2024  postgres  1 rows
+✓ on-time-delivery-by-supplier-2025  postgres  18 rows
+✓ committed-spend-by-tier-2024  postgres  4 rows
+✓ purchase-orders-january-2025  postgres  1 rows
+✓ deliveries-by-region-2025  postgres  4 rows
+✓ on-hand-end-of-2024-by-warehouse  postgres  7 rows
+✓ units-ordered-of-safety-glasses-2024  postgres  1 rows
+✓ inspection-failure-rate-2025  postgres  1 rows
+✓ suppliers-per-tier  postgres  4 rows
+✓ warehouses-per-region  postgres  4 rows
+✓ products-per-category  postgres  6 rows
+supply-chain: 17 of 17 reference queries passed; 3 cases have no reference query.
+```
+
+## 2. Rows of each reference and its trap query (psql)
+
+
+Summary: 17 references ran, 0 failed, 0 returned 0 rows; trap queries: 14 differ, 0 same or broken, 3 none written
+
+## acceptance-rate-by-supplier  (ratio, dev)
+18 rows: supplier, acceptance_rate
+  Ironclad Fastener Works | 0.9900
+  Voltmark Electronics Ltd. | 0.9775
+  Brightpath Packaging Co. | 0.9650
+  Sentinel Safety Supply | 0.9525
+  Nordhavn Industrial Chemicals | 0.9400
+  Lakeshore Corrugated | 0.9275
+  Takumi Precision Tools | 0.9150
+  Rheinfeld Befestigungstechnik GmbH | 0.9025
+  Kestrel Tool & Die | 0.8900
+  Pacific Crest Components | 0.8775
+  Bolt & Anchor Trading | 0.8650
+  Harborview Packaging Solutions | 0.8525
+  … 6 more
+trap: differs (18 rows: Kestrel Tool & Die | 1.0000 ; Evergreen Safety Products | 1.0000 ; Crescent Lab Chemicals | 1.0000)
+
+## freight-share-of-goods-value-by-mode  (ratio, held-out)
+4 rows: mode, freight_share
+  AIR | 0.1874
+  ROAD | 0.0869
+  RAIL | 0.0597
+  SEA | 0.0340
+trap: differs (4 rows: ROAD | 1.0000 ; RAIL | 1.0000 ; AIR | 1.0000)
+
+## products-by-unit-of-measure  (aggregate, dev)
+1 rows: unit_of_measure, products
+  EA | 80
+trap: differs (2 rows: EA | 16 ; CS | 64)
+
+## shipments-with-tracking-number  (null, dev)
+1 rows: shipments_with_tracking
+  60
+trap: differs (1 rows: 854)
+
+## suppliers-with-41-orders  (ranking, dev)
+2 rows: supplier, purchase_orders
+  Crescent Lab Chemicals | 41
+  Northstar Hand Tools | 41
+trap: differs (1 rows: Crescent Lab Chemicals | 41)
+
+## open-purchase-orders  (encoding, dev)
+1 rows: open_purchase_orders
+  227
+trap: differs (1 rows: 146)
+
+## product-on-most-order-lines-2024  (ranking, held-out)
+1 rows: product, order_lines
+  Nitrile Exam Gloves, Large, Box of 100 | 26
+trap: differs (1 rows: 43 | 26)
+
+## on-time-delivery-by-supplier-2025  (business-term, dev)
+18 rows: supplier, on_time_pct
+  Silverline Electrical Supply | 90.00
+  Crescent Lab Chemicals | 85.71
+  Ironclad Fastener Works | 71.43
+  Sentinel Safety Supply | 70.00
+  Brightpath Packaging Co. | 69.23
+  Pacific Crest Components | 68.75
+  Rheinfeld Befestigungstechnik GmbH | 66.67
+  Harborview Packaging Solutions | 64.71
+  Lakeshore Corrugated | 61.90
+  Voltmark Electronics Ltd. | 59.26
+  Bolt & Anchor Trading | 58.82
+  Meseta Chemical Supply | 58.82
+  … 6 more
+trap: differs (18 rows: Kestrel Tool & Die | 60.87 ; Evergreen Safety Products | 58.82 ; Crescent Lab Chemicals | 71.43)
+
+## committed-spend-by-tier-2024  (business-term, held-out)
+4 rows: tier, committed_spend_cents
+  PREFERRED | 92054255
+  STRATEGIC | 62595677
+  APPROVED | 56790073
+  CONDITIONAL | 30450085
+trap: differs (4 rows: PREFERRED | 106533403 ; CONDITIONAL | 32568528 ; STRATEGIC | 70987624)
+
+## purchase-orders-january-2025  (default-filter, dev)
+1 rows: purchase_orders
+  24
+trap: differs (1 rows: 33)
+
+## deliveries-by-region-2025  (join, dev)
+4 rows: region, deliveries
+  North America West | 113
+  North America East | 94
+  Asia Pacific | 68
+  Europe Middle East and Africa | 64
+trap: differs (4 rows: North America East | 103 ; Asia Pacific | 70 ; North America West | 115)
+
+## on-hand-end-of-2024-by-warehouse  (business-term, dev)
+7 rows: warehouse, on_hand_units
+  Singapore Gateway Warehouse | 143000
+  Columbus Fulfillment Center | 126627
+  Portland Cross-Dock | 121609
+  Leipzig Distribution Center | 93472
+  Charlotte Regional Warehouse | 88019
+  Rotterdam Logistics Hub | 77315
+  Reno Distribution Center | 76338
+trap: differs (7 rows: Reno Distribution Center | 955822 ; Leipzig Distribution Center | 930724 ; Columbus Fulfillment Center | 1312443)
+
+## units-ordered-of-safety-glasses-2024  (encoding, held-out)
+1 rows: units_ordered
+  9000
+trap: differs (1 rows: 375)
+
+## inspection-failure-rate-2025  (default-filter, held-out)
+1 rows: failure_rate_pct
+  18.23
+trap: differs (1 rows: 15.29)
+
+## suppliers-per-tier  (aggregate, dev)
+4 rows: tier, suppliers
+  PREFERRED | 6
+  APPROVED | 5
+  STRATEGIC | 4
+  CONDITIONAL | 3
+trap: none written
+
+## warehouses-per-region  (aggregate, held-out)
+4 rows: region, warehouses
+  Europe Middle East and Africa | 2
+  North America East | 2
+  North America West | 2
+  Asia Pacific | 1
+trap: none written
+
+## products-per-category  (aggregate, dev)
+6 rows: category, products
+  Fasteners | 14
+  Packaging | 14
+  Chemicals | 13
+  Electronic Components | 13
+  Hand Tools | 13
+  Safety Equipment | 13
+trap: none written
+

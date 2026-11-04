@@ -1,0 +1,483 @@
+Knowledge seed facts, testing-data R26/R27 (roadmap 1.1.10, BA-188)
+Generated 2026-10-16T17:56:40 by running each query with psql against
+the isolated PostgreSQL server 127.0.0.1:55433 (container bi-assistant-ba9-postgres-1, user world_cup),
+one database per sample, each loaded from its bundled seed in backend/src/modules/testing-data/fixtures/.
+Seeds: backend/src/modules/testing-data/fixtures/knowledge/{finance,health-insurance,genomics,supply-chain}.ts
+Source: feat/engine-eval-loop. "Unchanged" = same title, body, synonyms (the branch's `column` field is dropped:
+every body already names its column). Every entity is now <schema>.<table> on the sample's own schema.
+Dropped versus the branch: none. The World Cup semantics of the branch are not ported (World Cup ships no seed).
+
+====================================================================================================
+finance  (database finance, seed 007_finance.sql; ported from backend/scripts/semantics/banking.ts (schema banking, 2026-09-28))
+====================================================================================================
+
+## Amounts are stored in minor units
+   Versus the branch: Retargeted banking.* -> finance.*; body unchanged. Holds: every money column is bigint minor units (the wealth *_cents columns are US cents, also minor units).
+   $ SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_schema = 'finance' AND (column_name LIKE '%minor' OR column_name LIKE '%cents') AND table_name NOT LIKE 'v\_%' ORDER BY 1, 2
+     accounts | current_balance_minor | bigint
+     fees | amount_cents | bigint
+     holdings | cost_basis_cents | bigint
+     holdings | market_value_cents | bigint
+     loan_payments | amount_minor | bigint
+     loan_payments | interest_minor | bigint
+     loan_payments | principal_minor | bigint
+     loans | outstanding_minor | bigint
+     loans | principal_minor | bigint
+     transactions | amount_minor | bigint
+     transactions | amount_usd_minor | bigint
+   $ SELECT currency, count(*) FROM finance.accounts GROUP BY 1 ORDER BY 1
+     EUR | 14
+     GBP | 10
+     USD | 176
+
+## Account currency and the USD reporting amount
+   Versus the branch: Retargeted; body unchanged. Same results as the branch (0 mismatches; 5400/5400; 48 rows).
+   $ SELECT count(*) FROM finance.transactions t LEFT JOIN finance.fx_rates r ON r.currency = t.currency AND r.rate_month = date_trunc('month', t.booked_on)::date WHERE t.amount_usd_minor <> CASE WHEN t.currency = 'USD' THEN t.amount_minor ELSE round(t.amount_minor * r.usd_per_unit) END
+     0
+   $ SELECT count(*) FILTER (WHERE t.currency = a.currency), count(*) FROM finance.transactions t JOIN finance.accounts a ON a.id = t.account_id
+     5400 | 5400
+   $ SELECT count(*), min(rate_month), max(rate_month), string_agg(DISTINCT currency, ',') FROM finance.fx_rates
+     48 | 2024-01-01 | 2025-12-01 | EUR,GBP
+
+## Exclude test accounts
+   Versus the branch: Retargeted; body unchanged. Still true that customers, branches, loans and loan payments carry no flag; note finance adds portfolios.is_test (wealth), which this banking entry does not cover.
+   $ SELECT count(*) FILTER (WHERE is_test), count(*) FROM finance.accounts
+     6 | 200
+   $ SELECT count(*) FILTER (WHERE a.is_test), count(*) FROM finance.transactions t JOIN finance.accounts a ON a.id = t.account_id
+     36 | 5400
+   $ SELECT count(*) FILTER (WHERE a.is_test), count(*) FROM finance.cards c JOIN finance.accounts a ON a.id = c.account_id
+     1 | 150
+   $ SELECT table_name FROM information_schema.columns WHERE table_schema = 'finance' AND column_name = 'is_test' ORDER BY 1
+     accounts
+     portfolios
+     v_accounts
+     v_transactions
+
+## Transaction status
+   Versus the branch: Retargeted; body unchanged. Same counts as the branch.
+   $ SELECT status, count(*) FROM finance.transactions GROUP BY 1 ORDER BY 1
+     PENDING | 144
+     POSTED | 5070
+     REVERSED | 186
+
+## Transaction type and direction
+   Versus the branch: Retargeted; body unchanged. Added a check the branch did not record: INTEREST posts only on DEPOSIT accounts, FEE on both kinds.
+   $ SELECT type, direction, count(*) FROM finance.transactions GROUP BY 1, 2 ORDER BY 1, 2
+     CARD_PURCHASE | DEBIT | 803
+     DEPOSIT | CREDIT | 1348
+     FEE | DEBIT | 652
+     INTEREST | CREDIT | 1019
+     TRANSFER_IN | CREDIT | 300
+     TRANSFER_OUT | DEBIT | 300
+     WITHDRAWAL | DEBIT | 978
+   $ SELECT count(*) FROM finance.transactions o WHERE o.type = 'TRANSFER_OUT' AND NOT EXISTS (SELECT 1 FROM finance.transactions i WHERE i.type = 'TRANSFER_IN' AND i.account_id = o.counterparty_account_id AND i.booked_on = o.booked_on AND i.amount_minor = o.amount_minor AND i.status = o.status)
+     0
+   $ SELECT count(*) FROM finance.transactions i WHERE i.type = 'TRANSFER_IN' AND NOT EXISTS (SELECT 1 FROM finance.transactions o WHERE o.type = 'TRANSFER_OUT' AND o.account_id = i.counterparty_account_id AND o.booked_on = i.booked_on AND o.amount_minor = i.amount_minor AND o.status = i.status)
+     0
+   $ SELECT count(*) FILTER (WHERE amount_minor <= 0) FROM finance.transactions
+     0
+   $ SELECT t.type, at.category, count(*) FROM finance.transactions t JOIN finance.accounts a ON a.id = t.account_id JOIN finance.account_types at ON at.id = a.account_type_id WHERE t.type IN ('INTEREST', 'FEE') GROUP BY 1, 2 ORDER BY 1, 2
+     FEE | CREDIT | 306
+     FEE | DEPOSIT | 346
+     INTEREST | DEPOSIT | 1019
+
+## Deposit accounts versus credit accounts
+   Versus the branch: Retargeted; body unchanged.
+   $ SELECT code, name, category FROM finance.account_types ORDER BY id
+     CHK | Everyday Checking | DEPOSIT
+     SAV | High-Yield Savings | DEPOSIT
+     MMA | Money Market Account | DEPOSIT
+     CC | Rewards Credit Card | CREDIT
+     LOC | Personal Line of Credit | CREDIT
+   $ SELECT count(*) FROM finance.accounts a JOIN finance.account_types t ON t.id = a.account_type_id WHERE t.category = 'CREDIT' AND a.currency <> 'USD'
+     0
+
+## Account status vocabulary
+   Versus the branch: Retargeted; body unchanged.
+   $ SELECT status, count(*), count(closed_on), coalesce(sum(current_balance_minor) FILTER (WHERE status = 'CLOSED'), 0) FROM finance.accounts GROUP BY 1 ORDER BY 1
+     ACTIVE | 178 | 0 | 0
+     CLOSED | 12 | 12 | 0
+     DORMANT | 7 | 0 | 0
+     FROZEN | 3 | 0 | 0
+   $ SELECT count(*) FILTER (WHERE t.type <> 'INTEREST'), count(*) FILTER (WHERE t.type = 'INTEREST') FROM finance.transactions t JOIN finance.accounts a ON a.id = t.account_id WHERE a.status = 'DORMANT' AND t.booked_on >= '2025-01-01'
+     0 | 48
+
+## Loan status vocabulary
+   Versus the branch: Retargeted; body unchanged.
+   $ SELECT status, count(*), sum(outstanding_minor) FROM finance.loans GROUP BY 1 ORDER BY 1
+     CHARGED_OFF | 3 | 0
+     CURRENT | 56 | 748784346
+     DEFAULTED | 4 | 7700187
+     DELINQUENT | 8 | 39256190
+     PAID_OFF | 39 | 0
+   $ SELECT DISTINCT currency FROM finance.loans
+     USD
+   $ SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'finance.loans'::regclass AND contype = 'c' ORDER BY conname
+     CHECK ((outstanding_minor <= principal_minor))
+     CHECK (((status <> ALL (ARRAY['PAID_OFF'::text, 'CHARGED_OFF'::text])) OR (outstanding_minor = 0)))
+     CHECK (((status = ANY (ARRAY['PAID_OFF'::text, 'CHARGED_OFF'::text])) OR (outstanding_minor > 0)))
+     CHECK ((currency = 'USD'::text))
+     CHECK ((interest_rate_bps > 0))
+     CHECK (((originated_on >= '2019-01-01'::date) AND (originated_on <= '2025-12-31'::date)))
+     CHECK ((outstanding_minor >= 0))
+     CHECK ((principal_minor > 0))
+     CHECK ((product = ANY (ARRAY['MORTGAGE'::text, 'AUTO'::text, 'PERSONAL'::text])))
+     CHECK ((status = ANY (ARRAY['CURRENT'::text, 'DELINQUENT'::text, 'DEFAULTED'::text, 'PAID_OFF'::text, 'CHARGED_OFF'::text])))
+     CHECK ((term_months > 0))
+
+## Merchant category is recorded on card purchases only
+   Versus the branch: Retargeted; body unchanged.
+   $ SELECT type, count(merchant_category), count(card_id), count(*) FROM finance.transactions GROUP BY 1 ORDER BY 1
+     CARD_PURCHASE | 803 | 803 | 803
+     DEPOSIT | 0 | 0 | 1348
+     FEE | 0 | 0 | 652
+     INTEREST | 0 | 0 | 1019
+     TRANSFER_IN | 0 | 0 | 300
+     TRANSFER_OUT | 0 | 0 | 300
+     WITHDRAWAL | 0 | 0 | 978
+   $ SELECT string_agg(DISTINCT merchant_category, ',') FROM finance.transactions
+     ENTERTAINMENT,FUEL,GROCERY,HEALTH,ONLINE_RETAIL,RESTAURANTS,TRAVEL,UTILITIES
+
+## Join transactions to customers, branches and regions
+   Versus the branch: Retargeted; body unchanged.
+   $ SELECT count(*) FILTER (WHERE a.branch_id <> c.home_branch_id), count(*) FROM finance.accounts a JOIN finance.customers c ON c.id = a.customer_id
+     38 | 200
+   $ SELECT obj_description('finance.v_transactions'::regclass)
+     One row per transaction. branch/region are the ACCOUNT branch, not the customer home branch.
+
+## Coverage: transactions booked in 2024 and 2025 only
+   Versus the branch: Retargeted; body unchanged.
+   $ SELECT min(booked_on), max(booked_on) FROM finance.transactions
+     2024-01-02 | 2025-12-31
+   $ SELECT min(paid_on), max(paid_on) FROM finance.loan_payments
+     2024-01-05 | 2025-12-28
+   $ SELECT min(opened_on), max(opened_on) FROM finance.accounts
+     2019-04-15 | 2025-12-31
+   $ SELECT min(originated_on), max(originated_on) FROM finance.loans
+     2019-02-11 | 2025-11-14
+   $ SELECT min(joined_on), max(joined_on) FROM finance.customers
+     2015-08-28 | 2024-11-30
+
+## Loan payment split
+   Versus the branch: Retargeted; body unchanged.
+   $ SELECT count(*) FROM finance.loan_payments WHERE principal_minor + interest_minor <> amount_minor
+     0
+
+## metric net_customer_flow_usd_minor (finance.v_transactions)
+   Versus the branch: Retargeted; expression unchanged.
+   $ SELECT SUM(CASE WHEN direction = 'CREDIT' THEN amount_usd_minor ELSE -amount_usd_minor END) FILTER (WHERE status = 'POSTED' AND type NOT IN ('TRANSFER_IN', 'TRANSFER_OUT')) FROM finance.v_transactions WHERE NOT is_test
+     413151459
+
+## metric card_spend_usd_minor (finance.transactions)
+   Versus the branch: Retargeted; expression unchanged.
+   $ SELECT SUM(amount_usd_minor) FILTER (WHERE type = 'CARD_PURCHASE' AND status = 'POSTED') FROM finance.transactions WHERE account_id IN (SELECT id FROM finance.accounts WHERE NOT is_test)
+     10552806
+
+## metric interest_share_of_payments (finance.loan_payments)
+   Versus the branch: Retargeted; expression unchanged.
+   $ SELECT SUM(interest_minor) * 1.0 / NULLIF(SUM(amount_minor), 0) FROM finance.loan_payments
+     0.33063056244520935589
+
+====================================================================================================
+health-insurance  (database health_insurance, seed 004_health_insurance.sql; ported from backend/scripts/fixture-semantics.ts HEALTH_INSURANCE (2026-09-23))
+====================================================================================================
+
+## Claim status vocabulary
+   Versus the branch: Unchanged (column folded: the body already names claims.status).
+   $ SELECT status, count(*), count(*) FILTER (WHERE adjudicated_on IS NULL), min(paid_amount_cents) FROM health_insurance.claims GROUP BY 1 ORDER BY 1
+     DENIED | 207 | 0 | 0
+     PAID | 812 | 0 | 3109
+     PENDING | 130 | 130 | 0
+     REVERSED | 51 | 0 | 5339
+
+## Amounts are stored in cents
+   Versus the branch: Unchanged.
+   $ SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_schema = 'health_insurance' AND column_name LIKE '%cents' AND table_name NOT LIKE 'v\_%' ORDER BY 1, 2
+     claim_lines | line_allowed_amount_cents | bigint
+     claim_lines | line_billed_amount_cents | bigint
+     claims | allowed_amount_cents | bigint
+     claims | billed_amount_cents | bigint
+     claims | member_responsibility_cents | bigint
+     claims | paid_amount_cents | bigint
+     plans | annual_deductible_cents | bigint
+     plans | monthly_premium_cents | bigint
+
+## Exclude test claims
+   Versus the branch: Unchanged.
+   $ SELECT count(*) FILTER (WHERE is_test), count(*) FROM health_insurance.claims
+     36 | 1200
+
+## Currency is always USD
+   Versus the branch: Unchanged.
+   $ SELECT DISTINCT currency FROM health_insurance.claims
+     USD
+
+## Prior authorization is rare, not a compliance signal
+   Versus the branch: Unchanged.
+   $ SELECT count(*) FILTER (WHERE preauth_code IS NOT NULL), count(*) FROM health_insurance.claims
+     60 | 1200
+
+## Join claims to member location
+   Versus the branch: Unchanged (the branch cited docker/postgres/init/002_health_insurance.sql; the seed is now fixtures/004_health_insurance.sql).
+   $ SELECT obj_description('health_insurance.v_claim_financials'::regclass)
+     One row per claim. region/state/country are the MEMBER location.
+   $ SELECT conrelid::regclass, pg_get_constraintdef(oid) FROM pg_constraint WHERE connamespace = 'health_insurance'::regnamespace AND contype = 'f' AND conrelid IN ('health_insurance.claims'::regclass, 'health_insurance.members'::regclass, 'health_insurance.regions'::regclass, 'health_insurance.states'::regclass) ORDER BY 1, 2
+     health_insurance.states | FOREIGN KEY (country_code) REFERENCES health_insurance.countries(code)
+     health_insurance.regions | FOREIGN KEY (state_id) REFERENCES health_insurance.states(id)
+     health_insurance.members | FOREIGN KEY (plan_id) REFERENCES health_insurance.plans(id)
+     health_insurance.members | FOREIGN KEY (region_id) REFERENCES health_insurance.regions(id)
+     health_insurance.claims | FOREIGN KEY (member_id) REFERENCES health_insurance.members(id)
+     health_insurance.claims | FOREIGN KEY (plan_id) REFERENCES health_insurance.plans(id)
+     health_insurance.claims | FOREIGN KEY (provider_id) REFERENCES health_insurance.providers(id)
+
+## Claims reference members and providers by id
+   Versus the branch: Unchanged.
+   $ SELECT table_name, string_agg(column_name, ',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema = 'health_insurance' AND table_name IN ('claims', 'members', 'providers') GROUP BY 1 ORDER BY 1
+     claims | id,claim_number,member_id,provider_id,plan_id,claim_type,place_of_service,service_date,received_on,adjudicated_on,status,currency,billed_amount_cents,allowed_amount_cents,paid_amount_cents,member_responsibility_cents,preauth_code,is_test
+     members | id,member_number,full_name,date_of_birth,sex,plan_id,region_id,enrolled_on,terminated_on
+     providers | id,npi,name,specialty,network_status,credentialed_on
+
+## Coverage: 2024 and 2025 claims only
+   Versus the branch: Wording only: "in this fixture" -> "in this dataset".
+   $ SELECT min(service_date), max(service_date) FROM health_insurance.claims
+     2024-01-01 | 2025-12-31
+
+## Units billed vs. units allowed on claim lines
+   Versus the branch: REWRITTEN: the branch body quoted the question wording "units cut on review" (case units-cut-by-procedure), which R27 rules out. Now: "The units a review took off a line are units_billed - units_allowed, a difference — not a ratio of a column to itself." Also states the CHECK constraint.
+   $ SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'health_insurance.claim_lines'::regclass AND contype = 'c' ORDER BY conname
+     CHECK ((units_allowed <= units_billed))
+     CHECK ((line_allowed_amount_cents <= line_billed_amount_cents))
+     CHECK ((line_allowed_amount_cents >= 0))
+     CHECK ((line_billed_amount_cents > 0))
+     CHECK ((line_number > 0))
+     CHECK ((units_allowed >= 0))
+     CHECK ((units_billed > 0))
+   $ SELECT count(*) FILTER (WHERE units_allowed < units_billed), count(*) FROM health_insurance.claim_lines
+     1006 | 2602
+
+## metric net_paid
+   Versus the branch: Unchanged.
+   $ SELECT SUM(paid_amount_cents) FILTER (WHERE status='PAID') - SUM(paid_amount_cents) FILTER (WHERE status='REVERSED') FROM health_insurance.claims WHERE NOT is_test
+     56033136
+
+## metric denial_rate
+   Versus the branch: Unchanged.
+   $ SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'DENIED') / NULLIF(COUNT(*) FILTER (WHERE status <> 'PENDING'), 0), 2) FROM health_insurance.claims WHERE NOT is_test
+     19.83
+
+## metric paid_share_of_billed
+   Versus the branch: Unchanged.
+   $ SELECT SUM(paid_amount_cents) * 1.0 / NULLIF(SUM(billed_amount_cents), 0) FROM health_insurance.claims WHERE NOT is_test
+     0.26509790897190713246
+
+====================================================================================================
+genomics  (database genomics, seed 005_genomics.sql; ported from backend/scripts/fixture-semantics.ts GENOMICS (2026-09-23))
+====================================================================================================
+
+## Read-count columns on variant_calls
+   Versus the branch: Wording only: "in this fixture" -> "in this dataset".
+   $ SELECT count(*) FROM genomics.variant_calls WHERE read_depth <> total_read_count
+     0
+   $ SELECT count(*) FROM genomics.variant_calls WHERE alt_read_count > total_read_count
+     0
+   $ SELECT col_description('genomics.variant_calls'::regclass, attnum) FROM pg_attribute WHERE attrelid = 'genomics.variant_calls'::regclass AND attname = 'read_depth'
+     Total depth at the site; identical to total_read_count in this fixture.
+
+## Genome assembly is always GRCh38
+   Versus the branch: Unchanged.
+   $ SELECT DISTINCT assembly FROM genomics.variants
+     GRCh38
+
+## dbSNP id (rsid) coverage is low
+   Versus the branch: Wording only: "in this fixture" -> "in this dataset".
+   $ SELECT count(*) FILTER (WHERE rsid IS NOT NULL), count(*) FROM genomics.variants
+     46 | 450
+
+## Clinical significance vocabulary
+   Versus the branch: Unchanged.
+   $ SELECT clinical_significance, count(*) FROM genomics.variants GROUP BY 1 ORDER BY 1
+     BENIGN | 68
+     LIKELY_BENIGN | 74
+     LIKELY_PATHOGENIC | 53
+     PATHOGENIC | 96
+     VUS | 159
+
+## Coverage: subjects and samples from 2023–2024 only
+   Versus the branch: Wording only: "in this fixture" -> "in this dataset".
+   $ SELECT min(enrolled_on), max(enrolled_on) FROM genomics.subjects
+     2023-01-01 | 2024-09-19
+   $ SELECT min(collected_on), max(collected_on) FROM genomics.samples
+     2023-02-02 | 2024-12-11
+
+## Report genes by symbol, not by id
+   Versus the branch: Unchanged.
+   $ SELECT string_agg(column_name, ',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema = 'genomics' AND table_name = 'variant_calls'
+     id,sample_id,variant_id,genotype,alt_read_count,total_read_count,read_depth,genotype_quality,filter_status
+
+## Exclude control samples
+   Versus the branch: Unchanged.
+   $ SELECT count(*) FILTER (WHERE is_control), count(*) FROM genomics.samples
+     15 | 140
+   $ SELECT count(*), count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM genomics.samples x WHERE x.subject_id = s.id)) FROM genomics.subjects s
+     120 | 0
+   $ SELECT string_agg(subject_id::text, ',' ORDER BY subject_id) FROM (SELECT subject_id FROM genomics.samples GROUP BY 1 HAVING bool_and(is_control)) only_controls
+     4,7,12,13,69,70,83,120
+
+## Join subjects to superpopulation via ancestry group
+   Versus the branch: Wording only: "There is no direct subjects.superpopulation_id column" -> "subjects has no superpopulation column" (same fact; the new column-reference unit test reads table.column pairs as claims that the column exists).
+   $ SELECT table_name, string_agg(column_name, ',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema = 'genomics' AND table_name IN ('subjects', 'ancestry_groups') GROUP BY 1 ORDER BY 1
+     ancestry_groups | id,superpopulation_id,code,name
+     subjects | id,subject_code,ancestry_group_id,sex,affected_status,age_at_enrollment,enrolled_on
+
+## Genotype 0/0 is not a carrier
+   Versus the branch: Unchanged.
+   $ SELECT genotype, count(*) FROM genomics.variant_calls GROUP BY 1 ORDER BY 1
+     0/0 | 1838
+     0/1 | 2418
+     1/1 | 1007
+
+## A TPM of zero is a real measurement
+   Versus the branch: Unchanged.
+   $ SELECT count(*) FILTER (WHERE tpm = 0), count(*) FROM genomics.gene_expression
+     1172 | 3000
+
+## Expression measures: tpm and raw_count
+   Versus the branch: Unchanged.
+   $ SELECT count(*), count(DISTINCT (sample_id, gene_id)), count(*) FILTER (WHERE (raw_count = 0) <> (tpm = 0)) FROM genomics.gene_expression
+     3000 | 3000 | 0
+
+## Filter status and call confidence
+   Versus the branch: Unchanged.
+   $ SELECT filter_status, count(*) FROM genomics.variant_calls GROUP BY 1 ORDER BY 1
+     LOW_QUAL | 809
+     PASS | 4454
+   $ SELECT genotype, filter_status, count(*) FROM genomics.variant_calls GROUP BY 1, 2 ORDER BY 1, 2
+     0/0 | LOW_QUAL | 325
+     0/0 | PASS | 1513
+     0/1 | LOW_QUAL | 332
+     0/1 | PASS | 2086
+     1/1 | LOW_QUAL | 152
+     1/1 | PASS | 855
+
+## metric allele_fraction
+   Versus the branch: Unchanged.
+   $ SELECT AVG(alt_read_count::numeric / NULLIF(total_read_count, 0)) FILTER (WHERE filter_status = 'PASS' AND total_read_count >= 20) FROM genomics.variant_calls
+     0.41589170298145993506
+
+## metric high_confidence_call_rate
+   Versus the branch: Unchanged.
+   $ SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE filter_status = 'PASS') / NULLIF(COUNT(*), 0), 2) FROM genomics.variant_calls
+     84.63
+
+====================================================================================================
+supply-chain  (database supply_chain, seed 006_supply_chain.sql; ported from backend/scripts/semantics/supply-chain.ts (2026-09-28))
+====================================================================================================
+
+## Purchase order status vocabulary
+   Versus the branch: Unchanged.
+   $ SELECT status, count(*) FROM supply_chain.purchase_orders GROUP BY 1 ORDER BY 1
+     CANCELLED | 83
+     CLOSED | 237
+     DRAFT | 46
+     ISSUED | 146
+     PARTIALLY_RECEIVED | 83
+     RECEIVED | 305
+   $ SELECT po.status, count(DISTINCT po.id) FROM supply_chain.purchase_orders po JOIN supply_chain.shipments s ON s.po_id = po.id GROUP BY 1 ORDER BY 1
+     CLOSED | 237
+     PARTIALLY_RECEIVED | 83
+     RECEIVED | 305
+   $ SELECT count(*) FILTER (WHERE ordered_on IS NULL) FROM supply_chain.purchase_orders
+     0
+
+## Exclude test purchase orders
+   Versus the branch: Unchanged.
+   $ SELECT count(*) FILTER (WHERE is_test), count(*) FROM supply_chain.purchase_orders
+     21 | 900
+   $ SELECT table_name FROM information_schema.columns WHERE table_schema = 'supply_chain' AND column_name = 'is_test' ORDER BY 1
+     purchase_orders
+     v_purchase_order_lines
+     v_receipts
+     v_shipments
+
+## Order quantities are in cases, receipts in units
+   Versus the branch: Unchanged.
+   $ SELECT count(*) FROM supply_chain.purchase_order_lines l JOIN supply_chain.products p ON p.id = l.product_id WHERE l.line_total_cents <> l.cases_ordered * p.case_pack_qty * l.unit_price_cents
+     0
+   $ SELECT min(case_pack_qty), max(case_pack_qty) FROM supply_chain.products
+     1 | 500
+
+## Amounts are stored in cents
+   Versus the branch: Unchanged.
+   $ SELECT DISTINCT currency FROM supply_chain.purchase_orders
+     USD
+   $ SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'supply_chain' AND column_name LIKE '%cents' AND table_name NOT LIKE 'v\_%' ORDER BY 1, 2
+     products | unit_cost_cents
+     purchase_order_lines | line_total_cents
+     purchase_order_lines | unit_price_cents
+     shipments | freight_cost_cents
+     shipments | goods_value_cents
+
+## Unit of measure is always EA
+   Versus the branch: Unchanged.
+   $ SELECT count(DISTINCT unit_of_measure), min(unit_of_measure) FROM supply_chain.products
+     1 | EA
+
+## Receipt inspection vocabulary
+   Versus the branch: Unchanged.
+   $ SELECT qc_status, count(*), sum(units_accepted), count(*) FILTER (WHERE units_accepted < units_received) FROM supply_chain.receipts GROUP BY 1 ORDER BY 1
+     FAILED | 341 | 501328 | 341
+     PASSED | 1631 | 7752458 | 0
+     PENDING | 259 | 0 | 259
+
+## On-time delivery is measured against the purchase order promise
+   Versus the branch: Unchanged.
+   $ SELECT status, count(*), count(delivered_on) FROM supply_chain.shipments GROUP BY 1 ORDER BY 1
+     DELIVERED | 789 | 789
+     EXCEPTION | 58 | 0
+     IN_TRANSIT | 30 | 0
+
+## Inventory snapshots are month-end point-in-time balances
+   Versus the branch: Unchanged.
+   $ SELECT min(snapshot_date), max(snapshot_date), count(DISTINCT snapshot_date), count(*), count(DISTINCT warehouse_id), count(DISTINCT product_id) FROM supply_chain.inventory_snapshots
+     2024-01-31 | 2025-12-31 | 24 | 4704 | 7 | 28
+   $ SELECT count(*) FILTER (WHERE snapshot_date <> (date_trunc('month', snapshot_date) + interval '1 month - 1 day')::date), count(*) FILTER (WHERE allocated_units > on_hand_units) FROM supply_chain.inventory_snapshots
+     0 | 0
+
+## Join shipments and receipts to supplier, warehouse and region
+   Versus the branch: FIXED: the branch said "v_shipments, v_receipts and v_purchase_order_lines already perform these joins"; v_receipts has no region (the query below counts supplier, warehouse and region columns per view). Now: "v_shipments and v_purchase_order_lines already perform these joins up to the region; v_receipts carries the supplier, product and warehouse but not the region."
+   $ SELECT table_name, count(*) FILTER (WHERE column_name = 'supplier_name'), count(*) FILTER (WHERE column_name = 'warehouse_name'), count(*) FILTER (WHERE column_name = 'region_name') FROM information_schema.columns WHERE table_schema = 'supply_chain' AND table_name IN ('v_shipments', 'v_receipts', 'v_purchase_order_lines') GROUP BY 1 ORDER BY 1
+     v_purchase_order_lines | 1 | 1 | 1
+     v_receipts | 1 | 1 | 0
+     v_shipments | 1 | 1 | 1
+
+## Tracking numbers are sparse
+   Versus the branch: Unchanged.
+   $ SELECT count(tracking_number), count(*), count(*) FILTER (WHERE tracking_number IS NOT NULL AND mode <> 'AIR') FROM supply_chain.shipments
+     61 | 877 | 0
+
+## Coverage: purchase orders raised in 2024 and 2025 only
+   Versus the branch: Wording only: "in this fixture" -> "in this dataset".
+   $ SELECT min(ordered_on), max(ordered_on) FROM supply_chain.purchase_orders
+     2024-01-02 | 2025-12-31
+
+## Report products and suppliers by name
+   Versus the branch: Unchanged.
+   $ SELECT table_name, string_agg(column_name, ',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema = 'supply_chain' AND table_name IN ('purchase_order_lines', 'purchase_orders') GROUP BY 1 ORDER BY 1
+     purchase_order_lines | id,po_id,line_number,product_id,cases_ordered,unit_price_cents,line_total_cents
+     purchase_orders | id,po_number,supplier_id,warehouse_id,ordered_on,promised_on,status,currency,payment_terms,buyer_name,is_test
+
+## metric on_time_delivery_rate
+   Versus the branch: Unchanged.
+   $ SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE delivered_on <= promised_on) / NULLIF(COUNT(*) FILTER (WHERE delivered_on IS NOT NULL), 0), 2) FROM supply_chain.v_shipments WHERE NOT is_test
+     61.98
+
+## metric committed_spend_cents
+   Versus the branch: Unchanged.
+   $ SELECT SUM(line_total_cents) FILTER (WHERE po_status NOT IN ('DRAFT', 'CANCELLED')) FROM supply_chain.v_purchase_order_lines WHERE NOT is_test
+     464421244
+
+## metric receipt_acceptance_rate
+   Versus the branch: Unchanged.
+   $ SELECT SUM(units_accepted) FILTER (WHERE qc_status <> 'PENDING') * 1.0 / NULLIF(SUM(units_received) FILTER (WHERE qc_status <> 'PENDING'), 0) FROM supply_chain.receipts WHERE shipment_id IN (SELECT sh.id FROM supply_chain.shipments sh JOIN supply_chain.purchase_orders po ON po.id = sh.po_id WHERE NOT po.is_test)
+     0.93255524228384893035
+

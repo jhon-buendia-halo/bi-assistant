@@ -292,7 +292,7 @@ describeLive('answer-quality guards on live World Cup data', () => {
    * Ties make "top 5" a choice, not a fact: Belgium and England both scored 4,
    * so the fifth row is whichever the engine happened to order first, and four
    * more teams sit level on 2 just below. Asserted against the live totals so
-   * the golden set cannot quietly start expecting one of them.
+   * the World Cup eval set cannot quietly start expecting one of them.
    */
   it('shows that a genuine tie makes the top-N boundary ambiguous', async () => {
     const ranked = await runSql(pool, ALL_TEAM_GOALS_SQL);

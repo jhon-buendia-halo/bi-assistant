@@ -18,6 +18,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **App secret.** The key material from which the key that encrypts stored LLM API keys is derived. On desktop it is generated once and kept in a file in the data directory. See [non-functional.md](non-functional.md).
 
+**Arm.** The configuration an *eval run* measures, recorded on the run. Its memory part selects the assistant's cross-session memory: `none` (the default, and what every run did before arms), `mastra` ("Mastra only") or `hindsight-mastra` ("Hindsight + Mastra"). See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R231 to R246.
+
 **Assistant.** The main agent. It answers business questions over a session's datasets, runs SQL, calls the visual tools and asks clarifying questions.
 
 **Careful mode.** An opt-in per-turn setting in the chat. After the assistant answers, a second agent (the *SQL verifier*) re-derives the SQL independently, runs it, and compares its result set with the answer's. The answer gets an agree, disagree or error badge. Slower per answer. See *Cross-check*.
@@ -66,9 +68,9 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Eval check.** One scorer that grades an eval case's answer or tool calls.
 
-**Eval run.** One execution of selected eval cases against a datasource and its datasets. Records per-question results (pass or fail, scores, tool calls, answer). When a completed earlier run exists for the same agent, datasource and datasets, the run also stores a *regression comparison*.
+**Eval run.** One execution of selected eval cases against a datasource and its datasets, with a *judge option* (off by default) that says whether the LLM judge is called. Records per-question results (passed, failed or not scored, scores, tool calls, answer) and a summary by category and by criterion. When a completed earlier run exists for the same agent, datasource and datasets, the run also stores a *regression comparison*.
 
-**Eval set.** A named group of eval cases bound to one *sample fixture* (World Cup on PostgreSQL, World Cup on REST, Formula 1).
+**Eval set.** A named group of eval cases bound to one *sample fixture* (World Cup on PostgreSQL, on REST and on Databricks, Formula 1, and the synthetic domains such as Finance for the assistant; the Intellify RFP API for the *RFP Builder*). Each of the assistant's sets is one variant of a question bank file, and the RFP Builder's set is defined in code; see [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
 **Exhibit.** A table attached to an *RFP package* as a CSV file with a header row, computed from the Intellify data for the RFP's client and lines in scope: A census, B plan designs, C financials and D carriers.
 
@@ -90,9 +92,13 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Interpretation.** A one-line, deterministic summary of how an answer was produced (which entities, what kind of query), built by the system at save time. Never model output.
 
+**Judge option.** Whether an *eval run* calls the LLM judge: `off` (the default), `on`, or `categories`, which judges only the questions of the listed categories. A judge check the run does not call is *not scored*. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R144.
+
 **Knowledge entry.** A curated piece of business knowledge the assistant treats as authoritative. Three kinds: `term` (glossary definition, with optional synonyms and entity bindings), `instruction` (a standing rule) and `default_filter`. Scoped globally, to a dataset or to a datasource. Only enabled entries reach the assistant, within a size budget per turn. Source is `user` or `mined` (drafted by the bootstrap agent, saved disabled for review). The UI says "Knowledge". Code and Jira call these *snippets*.
 
 **Knowledge bootstrap.** The action that has an agent draft up to 15 knowledge entries from a dataset's schema and a few sample rows. Drafts arrive as "Pending suggestions", disabled.
+
+**Knowledge seed.** The knowledge entries and metrics a synthetic domain sample (Finance, Health Insurance, Genomics, Supply Chain, Marketing Analytics) ships about its data, created when the sample is loaded from Testing Data and then edited or deleted like any other. See [../capabilities/testing-data/spec.md](../capabilities/testing-data/spec.md) R26.
 
 **Knowledge used.** The list of knowledge entries that were actually included in the context of one answer, recorded when the context was built. It shows what the model was given, not what it applied.
 
@@ -106,11 +112,17 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Maturity band.** The DMBOK maturity level of an overall *data readiness* score: Optimised (95 and above), Managed (85 and above), Defined (70 and above), Repeatable (50 and above) or Initial.
 
+**Memory case.** An *eval case* of a memory set (`memory.json`) that has two parts: a *teach* step of one to three signals stored first, and a *probe*, the question actually asked and scored. Six categories (`memory-reuse`, `memory-correction`, `memory-update`, `memory-rejected`, `memory-abstain`, `memory-vs-curated`). See agents-evals R233 to R236.
+
+**Memory scope.** The key under which an eval attempt's memory is kept, `eval-<run id>-<case id>-<attempt>`: empty when the attempt starts, deleted when it ends, never a datasource's own memory. See agents-evals R238.
+
 **Message.** One entry in a session's transcript, from the `user` or the `assistant`, with a timestamp that doubles as its identity (`at`). Assistant messages may carry data records, entities, a clarification, a visual event, feedback, a cross-check, a reasoning trail, knowledge used or a report.
 
 **Metric.** A governed, named SQL aggregation expression over one entity (for example `denial_rate`), with a label, description and dimensions. The assistant reuses its expression verbatim instead of re-deriving it. Metrics are the app's lightweight semantic layer. A metric can be promoted from a *verified query*; the draft is a *metric candidate*.
 
 **Mined entry.** A *knowledge entry* with source `mined`.
+
+**Not scored.** The verdict of an eval check that was not run because the *judge option* was off for its question, and of an eval question none of whose checks was scored. It is never counted as a pass. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R145 to R147.
 
 **Official agent.** One of the app's own agents shown in the agent hub's Official section: the *assistant*, the *RFP Builder* and the four *showcase agents*. The assistant and the RFP Builder are the only built-in agents that can start a chat; the showcase agents cannot yet.
 
@@ -121,6 +133,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Plan design.** One benefit plan a client offers on a *line of coverage*: its carrier, funding type (for example fully insured or self-funded), plan type and state, with the financials of its coverage (premiums, rates by tier, enrolment, contributions and fees).
 
 **Preview chat.** A conversation in the agent editor's Details panel that runs a *user agent*'s saved *draft*. It is held in memory only, never listed with the sessions, and discarded with its memory when the editor closes.
+
+**Probe.** The second part of a *memory case*: the question asked after the *teach* step as the first turn of a new session, with its reference SQL, its trap SQL and its checks. See agents-evals R234.
 
 **Readiness dimension.** One of the ten DMBOK data-quality dimensions a readiness report lists. Eight are assessed: completeness, validity, consistency, uniqueness, integrity, accessibility, timeliness and reasonability. Two are listed but not assessed, because they need reference data: accuracy and currency.
 
@@ -173,6 +187,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Table.** The last level of an *entity* name.
 
 **Tailoring.** Changing an existing visual by describing the change in plain English, through the chat (`update_visual`) or the panel's instruction box. Produces a new *visual version*.
+
+**Teach (signal).** The first part of a *memory case*: a signal (an approval, a reviewer's correction or a rejection, each with the question and SQL it concerns) stored in the attempt's *memory scope* before the *probe*. See agents-evals R234 and R239.
 
 **Term.** A *knowledge entry* of kind `term`.
 

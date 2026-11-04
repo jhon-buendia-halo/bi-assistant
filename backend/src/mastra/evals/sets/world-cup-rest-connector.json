@@ -1,0 +1,284 @@
+{
+  "variants": [
+    {
+      "id": "world-cup-rest-connector",
+      "name": "World Cup (REST connector)",
+      "description": "REST connector cases: paging, nested rows, rows under another key, a row cap, a refused endpoint, a bearer token and the SQLite dialect. Run against the World Cup REST API started with the connector profile (REST_API_PROFILE=connector), once per paging style (REST_API_PAGING=page, offset, cursor or next-url): register each server with 'npm run fixture:rest:setup -- --api-url <its URL> --variant <style>' and select its dataset 'World Cup (REST <style>)'. Its sample requires the profile's extra endpoints (matches_nested, tournament_teams, squad_members), so a dataset of the plain API ('npm run worldcup:api') is refused before the run. True values were read from the World Cup PostgreSQL sample, because each reference runs through the same connector and would be wrong the same way.",
+      "fixtureId": "world-cup-rest-connector",
+      "dialect": "sqlite",
+      "caseIdPrefix": "rest-connector-"
+    }
+  ],
+  "cases": [
+    {
+      "id": "paging-player-count",
+      "category": "aggregate",
+      "tags": ["rest:paging"],
+      "question": "How many players are in the data?",
+      "intent": "The players endpoint holds 50 rows, three pages of 20 under the connector profile: the count is right only if the connector read every page.",
+      "notes": "Needs the connector profile (pages of 20). 50 is read from PostgreSQL (world_cup.players); a connector that stops after page one answers 20, after two 40.",
+      "checks": [
+        { "type": "calledTool", "args": { "tool": "run_readonly_sql" }, "criterion": "D1" },
+        { "type": "noToolErrors", "criterion": "D3" },
+        { "type": "matches", "args": { "pattern": "\\b50\\b" }, "criterion": "G1" },
+        { "type": "noRepairs", "criterion": "D3" },
+        { "type": "rationaleOk", "criterion": "I3" },
+        { "type": "noHtml", "criterion": "I4" },
+        { "type": "dialect", "criterion": "I6" },
+        { "type": "qualifiedNames", "criterion": "I6" },
+        { "type": "numbersGrounded", "criterion": "G1" },
+        { "type": "usesEntities", "criterion": "D2" }
+      ],
+      "expectedSql": {
+        "sqlite": "SELECT COUNT(*) AS players FROM api.world_cup.players"
+      }
+    },
+    {
+      "id": "paging-goalkeepers",
+      "category": "aggregate",
+      "tags": ["rest:paging"],
+      "question": "How many goalkeepers are in the data?",
+      "intent": "Goalkeepers sit on every page of the players endpoint (ids 5 to 50): a filtered count is right only if every page was read.",
+      "notes": "Needs the connector profile. 13 is read from PostgreSQL; page one alone holds 3 goalkeepers, pages one and two 7.",
+      "checks": [
+        { "type": "calledTool", "args": { "tool": "run_readonly_sql" }, "criterion": "D1" },
+        { "type": "noToolErrors", "criterion": "D3" },
+        { "type": "matches", "args": { "pattern": "\\b13\\b" }, "criterion": "G1" },
+        { "type": "noRepairs", "criterion": "D3" },
+        { "type": "rationaleOk", "criterion": "I3" },
+        { "type": "noHtml", "criterion": "I4" },
+        { "type": "dialect", "criterion": "I6" },
+        { "type": "qualifiedNames", "criterion": "I6" },
+        { "type": "numbersGrounded", "criterion": "G1" },
+        { "type": "usesEntities", "criterion": "D2" }
+      ],
+      "expectedSql": {
+        "sqlite": "SELECT COUNT(*) AS goalkeepers FROM api.world_cup.players WHERE position = 'GK'"
+      }
+    },
+    {
+      "id": "paging-last-page-player",
+      "category": "lookup",
+      "tags": ["rest:paging"],
+      "question": "Which national team does Fernando Muslera play for?",
+      "intent": "Fernando Muslera is the last row of the players endpoint (page three under the connector profile): a connector that skips the last page says he is not in the data.",
+      "notes": "Needs the connector profile. Uruguay is read from PostgreSQL.",
+      "checks": [
+        { "type": "calledTool", "args": { "tool": "run_readonly_sql" }, "criterion": "D1" },
+        { "type": "noToolErrors", "criterion": "D3" },
+        { "type": "includes", "args": { "text": "Uruguay" }, "criterion": "G1" },
+        { "type": "noRepairs", "criterion": "D3" },
+        { "type": "rationaleOk", "criterion": "I3" },
+        { "type": "noHtml", "criterion": "I4" },
+        { "type": "dialect", "criterion": "I6" },
+        { "type": "qualifiedNames", "criterion": "I6" },
+        { "type": "namesNotIds", "criterion": "I1" },
+        { "type": "usesEntities", "criterion": "D2" }
+      ],
+      "expectedSql": {
+        "sqlite": "SELECT p.full_name AS player, t.common_name AS national_team FROM api.world_cup.players p JOIN api.world_cup.teams t ON t.id = p.national_team_id WHERE p.full_name = 'Fernando Muslera'"
+      }
+    },
+    {
+      "id": "paging-top-scorers",
+      "category": "ranking",
+      "tags": ["rest:paging"],
+      "question": "Which players scored the most goals across both tournaments combined, and how many each?",
+      "intent": "A join of two paged endpoints (goals, 47 rows, and players, 50 rows) with a tie at the top: Kylian Mbappe and Lionel Messi, 4 goals each.",
+      "notes": "Needs the connector profile. Read from PostgreSQL: Mbappe 4 and Messi 4 (Messi's goals are on page one of goals, Mbappe's span all three); own goals are not the scorer's goals. A connector that misses a page breaks the tie or names someone else.",
+      "checks": [
+        { "type": "calledTool", "args": { "tool": "run_readonly_sql" }, "criterion": "D1" },
+        { "type": "noToolErrors", "criterion": "D3" },
+        { "type": "matches", "args": { "pattern": "^(?=[\\s\\S]*Mbapp)(?=[\\s\\S]*Messi)[\\s\\S]*\\b4\\b" }, "criterion": "G1" },
+        { "type": "noRepairs", "criterion": "D3" },
+        { "type": "rationaleOk", "criterion": "I3" },
+        { "type": "noHtml", "criterion": "I4" },
+        { "type": "dialect", "criterion": "I6" },
+        { "type": "qualifiedNames", "criterion": "I6" },
+        { "type": "namesNotIds", "criterion": "I1" },
+        { "type": "numbersGrounded", "criterion": "G1" }
+      ],
+      "expectedSql": {
+        "sqlite": "WITH totals AS (SELECT p.full_name AS player, COUNT(*) AS goals FROM api.world_cup.goals g JOIN api.world_cup.players p ON p.id = g.scorer_player_id WHERE g.goal_type <> 'own_goal' GROUP BY p.full_name) SELECT player, goals FROM totals WHERE goals = (SELECT MAX(goals) FROM totals) ORDER BY player"
+      }
+    },
+    {
+      "id": "nested-away-wins",
+      "category": "lookup",
+      "tags": ["rest:nested"],
+      "question": "Using the nested match feed, in which matches did the away team score more goals than the home team?",
+      "intent": "matches_nested has home, away and venue as objects; the connector flattens them to dot-keys (\"home.team.name\", \"away.goals\"), which the SQL must quote.",
+      "notes": "Needs the nested endpoint (REST_API_NESTED, on in the connector profile). Read from PostgreSQL: four 2018 and 2022 quarter-finals, Uruguay 0-2 France, Brazil 1-2 Belgium, Sweden 0-2 England (2018) and England 1-2 France (2022). Answering from matches or v_match_results gives the same rows but fails usesEntities: the case is about the nested endpoint.",
+      "checks": [
+        { "type": "calledTool", "args": { "tool": "run_readonly_sql" }, "criterion": "D1" },
+        { "type": "noToolErrors", "criterion": "D3" },
+        { "type": "matches", "args": { "pattern": "^(?=[\\s\\S]*Uruguay)(?=[\\s\\S]*Belgium)(?=[\\s\\S]*Sweden)[\\s\\S]*England" }, "criterion": "G1" },
+        { "type": "sqlMatches", "args": { "pattern": "[\"`\\[](home|away)\\.(goals|team\\.name)", "flags": "i" }, "criterion": "D2" },
+        { "type": "noRepairs", "criterion": "D3" },
+        { "type": "rationaleOk", "criterion": "I3" },
+        { "type": "noHtml", "criterion": "I4" },
+        { "type": "dialect", "criterion": "I6" },
+        { "type": "qualifiedNames", "criterion": "I6" },
+        { "type": "namesNotIds", "criterion": "I1" },
+        { "type": "usesEntities", "criterion": "D2" }
+      ],
+      "expectedSql": {
+        "sqlite": "SELECT m.tournament_year, m.stage, m.\"home.team.name\" AS home_team, m.\"away.team.name\" AS away_team, m.\"home.goals\" AS home_goals, m.\"away.goals\" AS away_goals FROM api.world_cup.matches_nested m WHERE m.\"away.goals\" > m.\"home.goals\" ORDER BY m.tournament_year, m.match_number"
+      }
+    },
+    {
+      "id": "nested-busiest-city",
+      "category": "ranking",
+      "tags": ["rest:nested"],
+      "question": "Using the nested match feed, which host city staged the most matches?",
+      "intent": "A group-by on a nested field (\"venue.city\") with a tie: Lusail and Saint Petersburg, 3 matches each.",
+      "notes": "Needs the nested endpoint. Read from PostgreSQL (matches joined to venues): Lusail 3, Saint Petersburg 3, then four cities with 2.",
+      "checks": [
+        { "type": "calledTool", "args": { "tool": "run_readonly_sql" }, "criterion": "D1" },
+        { "type": "noToolErrors", "criterion": "D3" },
+        { "type": "matches", "args": { "pattern": "^(?=[\\s\\S]*Lusail)(?=[\\s\\S]*Saint Petersburg)[\\s\\S]*\\b3\\b" }, "criterion": "G1" },
+        { "type": "sqlMatches", "args": { "pattern": "[\"`\\[]venue\\.city", "flags": "i" }, "criterion": "D2" },
+        { "type": "noRepairs", "criterion": "D3" },
+        { "type": "rationaleOk", "criterion": "I3" },
+        { "type": "noHtml", "criterion": "I4" },
+        { "type": "dialect", "criterion": "I6" },
+        { "type": "qualifiedNames", "criterion": "I6" },
+        { "type": "numbersGrounded", "criterion": "G1" },
+        { "type": "usesEntities", "criterion": "D2" }
+      ],
+      "expectedSql": {
+        "sqlite": "WITH per_city AS (SELECT n.\"venue.city\" AS city, COUNT(*) AS matches FROM api.world_cup.matches_nested n GROUP BY n.\"venue.city\") SELECT city, matches FROM per_city WHERE matches = (SELECT MAX(matches) FROM per_city) ORDER BY city"
+      }
+    },
+    {
+      "id": "rows-pointer-group",
+      "category": "lookup",
+      "tags": ["rest:rows-pointer"],
+      "question": "Which group did Morocco play in at the 2022 World Cup?",
+      "intent": "The group letter is only in tournament_teams, whose rows the connector profile serves under result.items instead of data: the datasource must read the right rows pointer.",
+      "notes": "Needs REST_API_WRAPPED=tournament_teams (on in the connector profile). Group F, read from PostgreSQL. A wrong rows pointer leaves the endpoint unreadable, and the answer must not guess.",
+      "checks": [
+        { "type": "calledTool", "args": { "tool": "run_readonly_sql" }, "criterion": "D1" },
+        { "type": "noToolErrors", "criterion": "D3" },
+        { "type": "matches", "args": { "pattern": "group\\s*\\**\\s*F\\b", "flags": "i" }, "criterion": "G1" },
+        { "type": "noRepairs", "criterion": "D3" },
+        { "type": "rationaleOk", "criterion": "I3" },
+        { "type": "noHtml", "criterion": "I4" },
+        { "type": "dialect", "criterion": "I6" },
+        { "type": "qualifiedNames", "criterion": "I6" },
+        { "type": "namesNotIds", "criterion": "I1" },
+        { "type": "usesEntities", "args": { "entities": ["world_cup.tournament_teams"] }, "criterion": "D2" }
+      ],
+      "expectedSql": {
+        "sqlite": "SELECT tt.group_letter FROM api.world_cup.tournament_teams tt JOIN api.world_cup.teams t ON t.id = tt.team_id JOIN api.world_cup.tournaments tr ON tr.id = tt.tournament_id WHERE t.common_name = 'Morocco' AND tr.tournament_year = 2022"
+      }
+    },
+    {
+      "id": "cap-total-shots",
+      "category": "aggregate",
+      "tags": ["rest:cap"],
+      "question": "How many shots were taken in total across all matches in the data?",
+      "intent": "The connector-profile datasource caps match_team_statistics at 20 of its 32 rows, so the sum comes from part of the data: the answer must say the figure may be partial.",
+      "notes": "Needs the datasource cap (setup applies the profile's maxRows, match_team_statistics=20). Read from PostgreSQL: 412 shots over 32 rows; the first 20 rows hold 267. The reference runs through the same cap and returns 267, so the result-set check cannot catch it: the matches check does. The connector does not tell the assistant it stopped at the cap (a BA-11 bug candidate), so this case fails until it does.",
+      "checks": [
+        { "type": "calledTool", "args": { "tool": "run_readonly_sql" }, "criterion": "D1" },
+        { "type": "noToolErrors", "criterion": "D3" },
+        { "type": "matches", "args": { "pattern": "\\b412\\b|partial|incomplete|truncat|not (?:all|every|the full|complete)|may (?:not|be missing)|at least|row (?:cap|limit)|capped|limited to", "flags": "i" }, "criterion": "I7" },
+        { "type": "noRepairs", "criterion": "D3" },
+        { "type": "rationaleOk", "criterion": "I3" },
+        { "type": "noHtml", "criterion": "I4" },
+        { "type": "dialect", "criterion": "I6" },
+        { "type": "qualifiedNames", "criterion": "I6" },
+        { "type": "numbersGrounded", "criterion": "G1" },
+        { "type": "usesEntities", "criterion": "D2" }
+      ],
+      "expectedSql": {
+        "sqlite": "SELECT SUM(shots) AS total_shots FROM api.world_cup.match_team_statistics"
+      }
+    },
+    {
+      "id": "down-shirt-number",
+      "category": "lookup",
+      "tags": ["rest:down"],
+      "question": "What shirt number did Lionel Messi wear at the 2022 World Cup?",
+      "intent": "Shirt numbers are only in squad_members, which the connector profile refuses with HTTP 503: the answer must say the squad data is unavailable, not give a number.",
+      "notes": "Needs REST_API_REFUSE=squad_members (on in the connector profile). The sample says 5 (PostgreSQL); the world knows 10, so either number in the answer is a guess or a fabrication. No reference query: it could never run on the variant the case needs. The setup keeps the refused endpoint in the dataset with no columns, as an endpoint that went down after the dataset was saved.",
+      "checks": [
+        { "type": "calledTool", "args": { "tool": "run_readonly_sql" }, "criterion": "D1" },
+        { "type": "matches", "args": { "pattern": "unavailable|not available|could ?n[o']t (?:be )?(?:read|reach|retrieve|load|fetch|access|get)|can ?n?[o']?t (?:be )?(?:read|reach|retrieve|load|fetch|access)|unable to|error|503|refus|down", "flags": "i" }, "criterion": "G2" },
+        { "type": "notMatches", "args": { "pattern": "\\b(?:5|10)\\b" }, "criterion": "G2" },
+        { "type": "rationaleOk", "criterion": "I3" },
+        { "type": "noHtml", "criterion": "I4" },
+        { "type": "dialect", "criterion": "I6" },
+        { "type": "qualifiedNames", "criterion": "I6" }
+      ]
+    },
+    {
+      "id": "auth-champion-2018",
+      "category": "lookup",
+      "tags": ["rest:auth"],
+      "question": "Who won the 2018 World Cup?",
+      "intent": "A plain lookup on an API that requires a bearer token: it passes only if the datasource's auth block reaches every request, the inventory's and the query's.",
+      "notes": "Needs REST_API_TOKEN (set by the connector profile; the setup sends it as the datasource's bearer token). France, read from PostgreSQL.",
+      "checks": [
+        { "type": "calledTool", "args": { "tool": "run_readonly_sql" }, "criterion": "D1" },
+        { "type": "noToolErrors", "criterion": "D3" },
+        { "type": "includes", "args": { "text": "France" }, "criterion": "G1" },
+        { "type": "noRepairs", "criterion": "D3" },
+        { "type": "rationaleOk", "criterion": "I3" },
+        { "type": "noHtml", "criterion": "I4" },
+        { "type": "dialect", "criterion": "I6" },
+        { "type": "qualifiedNames", "criterion": "I6" },
+        { "type": "namesNotIds", "criterion": "I1" },
+        { "type": "numbersGrounded", "criterion": "G1" }
+      ],
+      "expectedSql": {
+        "sqlite": "SELECT champion.common_name AS champion FROM api.world_cup.tournaments tr JOIN api.world_cup.teams champion ON champion.id = tr.champion_team_id WHERE tr.tournament_year = 2018"
+      }
+    },
+    {
+      "id": "dialect-final-weekday",
+      "category": "lookup",
+      "tags": ["rest:dialect"],
+      "question": "On which day of the week was each World Cup final in the data played?",
+      "intent": "A weekday needs a date function, and the REST connector runs SQLite: strftime works, PostgreSQL's TO_CHAR, EXTRACT and DATE_TRUNC do not, and a repair by the SQL fixer counts against the case.",
+      "notes": "Runs on any World Cup REST datasource. Both finals were on a Sunday (2018-07-15 and 2022-12-18), read from PostgreSQL.",
+      "checks": [
+        { "type": "calledTool", "args": { "tool": "run_readonly_sql" }, "criterion": "D1" },
+        { "type": "noToolErrors", "criterion": "D3" },
+        { "type": "includes", "args": { "text": "Sunday" }, "criterion": "G1" },
+        { "type": "noRepairs", "criterion": "D3" },
+        { "type": "rationaleOk", "criterion": "I3" },
+        { "type": "noHtml", "criterion": "I4" },
+        { "type": "dialect", "criterion": "I6" },
+        { "type": "qualifiedNames", "criterion": "I6" },
+        { "type": "numbersGrounded", "criterion": "G1" }
+      ],
+      "expectedSql": {
+        "sqlite": "SELECT tr.tournament_year, CASE CAST(strftime('%w', m.kicked_off_at) AS INTEGER) WHEN 0 THEN 'Sunday' WHEN 1 THEN 'Monday' WHEN 2 THEN 'Tuesday' WHEN 3 THEN 'Wednesday' WHEN 4 THEN 'Thursday' WHEN 5 THEN 'Friday' ELSE 'Saturday' END AS weekday FROM api.world_cup.matches m JOIN api.world_cup.tournaments tr ON tr.id = m.tournament_id WHERE m.stage = 'final' ORDER BY tr.tournament_year"
+      }
+    },
+    {
+      "id": "dialect-penalty-share",
+      "category": "ratio",
+      "tags": ["rest:dialect"],
+      "question": "What percentage of the goals scored in the 2022 matches in the data were penalties, to one decimal place? Shootouts do not count.",
+      "intent": "A share needs a non-integer division: in SQLite that is 100.0 * x / y or CAST(… AS REAL), not PostgreSQL's ::numeric cast, and integer division returns 0.",
+      "notes": "Runs on any World Cup REST datasource. Read from PostgreSQL: 6 penalties of 24 goals (own goals included), 25.0%.",
+      "checks": [
+        { "type": "calledTool", "args": { "tool": "run_readonly_sql" }, "criterion": "D1" },
+        { "type": "noToolErrors", "criterion": "D3" },
+        { "type": "matches", "args": { "pattern": "\\b25(?:\\.0)?\\s*%" }, "criterion": "G1" },
+        { "type": "noRepairs", "criterion": "D3" },
+        { "type": "rationaleOk", "criterion": "I3" },
+        { "type": "noHtml", "criterion": "I4" },
+        { "type": "dialect", "criterion": "I6" },
+        { "type": "qualifiedNames", "criterion": "I6" },
+        { "type": "numbersGrounded", "criterion": "G1" }
+      ],
+      "expectedSql": {
+        "sqlite": "SELECT ROUND(100.0 * SUM(CASE WHEN g.goal_type = 'penalty' THEN 1 ELSE 0 END) / COUNT(*), 1) AS penalty_share_pct FROM api.world_cup.goals g JOIN api.world_cup.matches m ON m.id = g.match_id JOIN api.world_cup.tournaments tr ON tr.id = m.tournament_id WHERE tr.tournament_year = 2022"
+      }
+    }
+  ]
+}

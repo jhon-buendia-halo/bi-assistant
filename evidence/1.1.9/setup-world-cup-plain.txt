@@ -1,0 +1,44 @@
+Fixture API: http://127.0.0.1:55094
+Backend:     http://127.0.0.1:55099
+✔ API reachable: world-cup, switches {"profile":null,"paging":"page","defaultPageSize":100,"maxPageSize":500,"nested":[],"wrapped":[],"refused":[],"retryAfter":null,"tokenRequired":false}
+✔ backend reachable and signed in
+✔ discovery: 14 endpoints
+    confederations               page size 200 rows /data
+    countries                    page size 200 rows /data
+    disciplinary_events          page size 200 rows /data
+    goals                        page size 200 rows /data
+    match_team_statistics        page size 200 rows /data
+    matches                      page size 200 rows /data
+    players                      page size 200 rows /data
+    squad_members                page size 200 rows /data
+    teams                        page size 200 rows /data
+    tournament_teams             page size 200 rows /data
+    tournaments                  page size 200 rows /data
+    v_match_results              page size 200 rows /data
+    v_player_goal_totals         page size 200 rows /data
+    venues                       page size 200 rows /data
+✔ datasource "World Cup REST API" created (a435d5ff-edcd-4273-af18-fdac7a2d5840)
+
+  api.world_cup.confederations  2 columns
+  api.world_cup.countries  3 columns
+  api.world_cup.disciplinary_events  8 columns
+  api.world_cup.goals  10 columns
+  api.world_cup.match_team_statistics  11 columns
+  api.world_cup.matches  16 columns
+  api.world_cup.players  5 columns
+  api.world_cup.squad_members  4 columns
+  api.world_cup.teams  4 columns
+  api.world_cup.tournament_teams  6 columns
+  api.world_cup.tournaments  8 columns
+  api.world_cup.v_match_results  14 columns
+  api.world_cup.v_player_goal_totals  7 columns
+  api.world_cup.venues  5 columns
+
+✔ Dataset "World Cup (REST)" saved — 14 entities
+
+Done.
+  datasource: World Cup REST API (a435d5ff-edcd-4273-af18-fdac7a2d5840)
+  dataset:    World Cup (REST)
+  entities:   14
+
+Run an eval set bound to the "world-cup-rest" sample with the dataset "World Cup (REST)" (Agents → assistant → Evals, or EVAL_DATASETS="World Cup (REST)").

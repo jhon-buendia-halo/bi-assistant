@@ -1,0 +1,643 @@
+[33m[Nest] 1376  - [39m10/13/2026, 1:18:18 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column t.year does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:18:20 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column t.year does not exist — SQL: SELECT t.name AS champion_team FROM world_cup_ba9_baseline.world_cup.tournaments t WHERE t.year = 2022;[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:18:24 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column t.year does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:18:26 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column t.year does not exist — SQL: SELECT t.champion_team_id, t.year FROM world_cup_ba9_baseline.world_cup.tournaments t WHERE t.year = 2022;[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:18:28 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column "name" does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:18:29 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column "name" does not exist — SQL: SELECT name FROM world_cup_ba9_baseline.world_cup.teams WHERE id = '1';[39m
+[33mWARN[39m [2026-10-13 13:18:31.295 -0500] (Mastra): [36mFailed to save score for scorer check-includes:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-includes not found",
+      "stack":
+          Error: Scorer with id check-includes not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:18:31.300 -0500] (Mastra): [36mFailed to save score for scorer check-called-tool:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-called-tool not found",
+      "stack":
+          Error: Scorer with id check-called-tool not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:18:31.301 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+FAIL  champion-2022  (15464ms)
+      check-includes: 1
+      check-called-tool: 1
+      check-no-tool-errors: 1
+[33m[Nest] 1376  - [39m10/13/2026, 1:18:37 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column m.home_team_score does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:18:40 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column m.home_team_score does not exist — SQL: SELECT m.home_team_id, m.away_team_id, m.winner_team_id, m.home_team_score, m.away_team_score FROM world_cup_ba9_baseline.world_cup.matches m JOIN world_cup_ba9_baseline.world_cup.tournaments t ON m.tournament_id = t.id WHERE t.year = 2018 AND m.round = 'Final';[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:18:42 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column t.year does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:18:45 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column t.year does not exist — SQL: SELECT m.home_team_id, m.away_team_id, m.winner_team_id, m.home_goals AS home_team_score, m.away_goals AS away_team_score FROM world_cup_ba9_baseline.world_cup.matches m JOIN world_cup_ba9_baseline.world_cup.tournaments t ON m.tournament_id = t.id WHERE t.year = 2018 AND m.round = 'Final';[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:18:48 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column t.year does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:18:50 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column t.year does not exist — SQL: SELECT m.home_team_id, m.away_team_id, m.winner_team_id, m.home_goals AS home_team_score, m.away_goals AS away_team_score FROM world_cup_ba9_baseline.world_cup.matches m JOIN world_cup_ba9_baseline.world_cup.tournaments t ON m.tournament_id = t.id WHERE t.year = 2018 AND m.round = 'Final';[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:18:51 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column "year" does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:18:53 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column "year" does not exist — SQL: SELECT * FROM world_cup_ba9_baseline.world_cup.tournaments WHERE year = 2018;[39m
+[33mWARN[39m [2026-10-13 13:18:58.499 -0500] (Mastra): [36mFailed to save score for scorer check-matches:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-matches not found",
+      "stack":
+          Error: Scorer with id check-matches not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:18:58.500 -0500] (Mastra): [36mFailed to save score for scorer check-includes:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-includes not found",
+      "stack":
+          Error: Scorer with id check-includes not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:18:58.500 -0500] (Mastra): [36mFailed to save score for scorer check-called-tool:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-called-tool not found",
+      "stack":
+          Error: Scorer with id check-called-tool not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:18:58.500 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+FAIL  final-score-2018  (27197ms)
+      check-matches: 1
+      check-includes: 1
+      check-called-tool: 1
+      check-no-tool-errors: 0
+[33m[Nest] 1376  - [39m10/13/2026, 1:19:23 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column "year" does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:19:25 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column "year" does not exist — SQL: SELECT g.scorer_player_id, COUNT(*) AS total_goals FROM world_cup_ba9_baseline.world_cup.goals AS g JOIN world_cup_ba9_baseline.world_cup.matches AS m ON g.match_id = m.id WHERE m.tournament_id = (SELECT id FROM world_cup_ba9_baseline.world_cup.tournaments WHERE year = 2022) GROUP BY g.scorer_player_id ORDER BY total_goals DESC LIMIT 1[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:19:27 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column "name" does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:19:28 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column "name" does not exist — SQL: SELECT name FROM world_cup_ba9_baseline.world_cup.players WHERE id = '3'[39m
+[33mWARN[39m [2026-10-13 13:19:33.937 -0500] (Mastra): [36mFailed to save score for scorer check-includes:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-includes not found",
+      "stack":
+          Error: Scorer with id check-includes not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:19:33.937 -0500] (Mastra): [36mFailed to save score for scorer check-matches:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-matches not found",
+      "stack":
+          Error: Scorer with id check-matches not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:19:33.938 -0500] (Mastra): [36mFailed to save score for scorer check-called-tool:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-called-tool not found",
+      "stack":
+          Error: Scorer with id check-called-tool not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:19:33.938 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+FAIL  top-scorer-2022  (35440ms)
+      check-includes: 1
+      check-matches: 1
+      check-called-tool: 1
+      check-no-tool-errors: 0
+[33m[Nest] 1376  - [39m10/13/2026, 1:19:40 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column t1.name does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:19:43 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column t1.name does not exist — SQL: SELECT m.id AS match_id, t1.name AS home_team, t2.name AS away_team, m.winner_team_id, m.penalties FROM world_cup_ba9_baseline.world_cup.matches AS m JOIN world_cup_ba9_baseline.world_cup.teams AS t1 ON m.home_team_id = t1.id JOIN world_cup_ba9_baseline.world_cup.teams AS t2 ON m.away_team_id = t2.id WHERE m.stage = 'knockout' AND m.penalties IS NOT NULL;[39m
+[33mWARN[39m [2026-10-13 13:19:57.360 -0500] (Mastra): [36mFailed to save score for scorer check-includes:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-includes not found",
+      "stack":
+          Error: Scorer with id check-includes not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:19:57.360 -0500] (Mastra): [36mFailed to save score for scorer check-matches:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-matches not found",
+      "stack":
+          Error: Scorer with id check-matches not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:19:57.361 -0500] (Mastra): [36mFailed to save score for scorer check-called-tool:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-called-tool not found",
+      "stack":
+          Error: Scorer with id check-called-tool not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:19:57.361 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+FAIL  shootouts  (23426ms)
+      check-includes: 0
+      check-matches: 0
+      check-called-tool: 1
+      check-no-tool-errors: 0
+[33mWARN[39m [2026-10-13 13:20:04.066 -0500] (Mastra): [36mFailed to save score for scorer check-includes:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-includes not found",
+      "stack":
+          Error: Scorer with id check-includes not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:20:04.066 -0500] (Mastra): [36mFailed to save score for scorer check-matches:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-matches not found",
+      "stack":
+          Error: Scorer with id check-matches not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:20:04.067 -0500] (Mastra): [36mFailed to save score for scorer check-called-tool:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-called-tool not found",
+      "stack":
+          Error: Scorer with id check-called-tool not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:20:04.067 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+FAIL  biggest-venue  (6703ms)
+      check-includes: 1
+      check-matches: 1
+      check-called-tool: 1
+      check-no-tool-errors: 0
+[33mWARN[39m [2026-10-13 13:20:08.418 -0500] (Mastra): [36mFailed to save score for scorer check-called-tool:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-called-tool not found",
+      "stack":
+          Error: Scorer with id check-called-tool not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+FAIL  schema-discovery  (4337ms)
+      check-called-tool: 0
+      check-includes: 1
+      check-did-not-call: 1
+      check-no-tool-errors: 1
+[33mWARN[39m [2026-10-13 13:20:08.418 -0500] (Mastra): [36mFailed to save score for scorer check-includes:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-includes not found",
+      "stack":
+          Error: Scorer with id check-includes not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:20:08.418 -0500] (Mastra): [36mFailed to save score for scorer check-did-not-call:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-did-not-call not found",
+      "stack":
+          Error: Scorer with id check-did-not-call not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:20:08.419 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33m[Nest] 1376  - [39m10/13/2026, 1:20:28 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column t.name does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:20:31 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column t.name does not exist — SQL: SELECT t.name AS team_name, COUNT(m.id) AS matches_played, SUM(CASE WHEN m.winner_team_id = t.id THEN 1 ELSE 0 END) AS wins FROM world_cup_ba9_baseline.world_cup.teams t JOIN world_cup_ba9_baseline.world_cup.matches m ON m.home_team_id = t.id OR m.away_team_id = t.id GROUP BY t.id, t.name ORDER BY wins DESC LIMIT 1;[39m
+[33mWARN[39m [2026-10-13 13:20:33.477 -0500] (Mastra): [36mFailed to save score for scorer check-called-tool:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-called-tool not found",
+      "stack":
+          Error: Scorer with id check-called-tool not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:20:33.477 -0500] (Mastra): [36mFailed to save score for scorer check-did-not-call:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-did-not-call not found",
+      "stack":
+          Error: Scorer with id check-did-not-call not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:20:33.477 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+FAIL  ambiguous-best-team  (27147ms)
+      check-called-tool: 0
+      check-did-not-call: 0
+      check-no-tool-errors: 0
+[33m[Nest] 1376  - [39m10/13/2026, 1:20:48 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column "home_team_possession" does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:20:50 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column "home_team_possession" does not exist — SQL: SELECT winner_team_id, home_team_id, home_team_possession, away_team_id, away_team_possession FROM world_cup_ba9_baseline.world_cup.matches WHERE tournament_id = (SELECT id FROM world_cup_ba9_baseline.world_cup.tournaments WHERE year = 2022) AND knockout_round = TRUE;[39m
+[33mWARN[39m [2026-10-13 13:20:53.904 -0500] (Mastra): [36mFailed to save score for scorer check-called-tool:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-called-tool not found",
+      "stack":
+          Error: Scorer with id check-called-tool not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:20:53.905 -0500] (Mastra): [36mFailed to save score for scorer check-matches:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-matches not found",
+      "stack":
+          Error: Scorer with id check-matches not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:20:53.906 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+FAIL  possession-vs-result  (19864ms)
+      check-called-tool: 1
+      check-matches: 1
+      check-no-tool-errors: 0
+[33m[Nest] 1376  - [39m10/13/2026, 1:21:15 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column p.name does not exist — HINT: Perhaps you meant to reference the column "t.name".[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:21:17 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column p.name does not exist — HINT: Perhaps you meant to reference the column "t.name". — SQL: SELECT COUNT(*) AS total_goals FROM world_cup_ba9_baseline.world_cup.goals g JOIN world_cup_ba9_baseline.world_cup.matches m ON g.match_id = m.id JOIN world_cup_ba9_baseline.world_cup.players p ON g.scorer_player_id = p.id JOIN world_cup_ba9_baseline.world_cup.tournaments t ON m.tournament_id = t.id WHERE p.name ILIKE 'Pelé' AND t.year = 1970;[39m
+[33mWARN[39m [2026-10-13 13:21:19.221 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+FAIL  out-of-scope  (25310ms)
+      check-no-tool-errors: 0
+[33m[Nest] 1376  - [39m10/13/2026, 1:21:33 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column "year" does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:21:35 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column "year" does not exist — SQL: SELECT scoring_team_id, COUNT(*) AS goals_scored FROM world_cup_ba9_baseline.world_cup.goals g JOIN world_cup_ba9_baseline.world_cup.matches m ON g.match_id = m.id WHERE m.tournament_id = (SELECT id FROM world_cup_ba9_baseline.world_cup.tournaments WHERE year = 2022) AND m.stage = 'Knockout' GROUP BY scoring_team_id;[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:21:37 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column "year" does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:21:41 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column "year" does not exist — SQL: SELECT scoring_team_id, COUNT(*) AS goals_scored FROM world_cup_ba9_baseline.world_cup.goals g JOIN world_cup_ba9_baseline.world_cup.matches m ON g.match_id = m.id WHERE m.tournament_id = (SELECT id FROM world_cup_ba9_baseline.world_cup.tournaments WHERE year = 2022) AND m.stage = 'Knockout' GROUP BY scoring_team_id;[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:21:44 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column "year" does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:21:46 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column "year" does not exist — SQL: SELECT scoring_team_id, COUNT(*) AS goals_scored FROM world_cup_ba9_baseline.world_cup.goals g JOIN world_cup_ba9_baseline.world_cup.matches m ON g.match_id = m.id WHERE m.tournament_id = (SELECT id FROM world_cup_ba9_baseline.world_cup.tournaments WHERE year = 2022) AND m.stage = 'Knockout' GROUP BY scoring_team_id;[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:21:51 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column "year" does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:21:53 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column "year" does not exist — SQL: SELECT scoring_team_id, COUNT(*) AS goals_scored FROM world_cup_ba9_baseline.world_cup.goals g JOIN world_cup_ba9_baseline.world_cup.matches m ON g.match_id = m.id WHERE m.tournament_id = (SELECT id FROM world_cup_ba9_baseline.world_cup.tournaments WHERE year = 2022) AND m.stage = 'Knockout' GROUP BY scoring_team_id;[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:21:56 PM [33m   WARN[39m [38;5;3m[PostgresConnector] [39m[33mPostgres call failed: column "year" does not exist[39m
+[33m[Nest] 1376  - [39m10/13/2026, 1:21:59 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Postgres — column "year" does not exist — SQL: SELECT scoring_team_id, COUNT(*) AS goals_scored FROM world_cup_ba9_baseline.world_cup.goals g JOIN world_cup_ba9_baseline.world_cup.matches m ON g.match_id = m.id WHERE m.tournament_id = (SELECT id FROM world_cup_ba9_baseline.world_cup.tournaments WHERE year = 2022) AND m.stage = 'Knockout' GROUP BY scoring_team_id;[39m
+[33mWARN[39m [2026-10-13 13:22:07.446 -0500] (Mastra): [36mFailed to save score for scorer check-tool-order:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-tool-order not found",
+      "stack":
+          Error: Scorer with id check-tool-order not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:22:07.447 -0500] (Mastra): [36mFailed to save score for scorer check-called-tool:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-called-tool not found",
+      "stack":
+          Error: Scorer with id check-called-tool not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-10-13 13:22:07.447 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (/Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:10164:16)
+              at async file:///Users/selbver/Developer/question-to-insights/bi-assistant/.claude/worktrees/BA-9-golden-dataset-evals/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+FAIL  visual-request  (48572ms)
+      check-tool-order: 0
+      check-called-tool: 0
+      check-no-tool-errors: 0
+
+0/10 questions passed
+exit 1

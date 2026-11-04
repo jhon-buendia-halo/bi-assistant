@@ -1,0 +1,219 @@
+{
+  "fixture": "marketing-analytics",
+  "schema": "marketing_analytics",
+  "generator": "docker/postgres/generate/marketing-analytics.ts",
+  "seed": 20261013,
+  "note": "Planted truths, computed by the generator from the rows it wrote. Money in dollars (the tables store cents). Every figure excludes test rows and counts only BOUND sales unless its name says otherwise.",
+  "rowCounts": {
+    "regions": 4,
+    "states": 12,
+    "carriers": 6,
+    "lines_of_business": 5,
+    "products": 24,
+    "channels": 4,
+    "periods": 9,
+    "policy_sales": 10822,
+    "revenue_by_period": 191,
+    "campaigns": 26,
+    "campaign_results": 51,
+    "market_benchmarks": 955,
+    "competitor_masks": 30,
+    "analyst_access": 12
+  },
+  "facts": {
+    "harborlinePoliciesSold2025Q2": {
+      "bound": 12415,
+      "withTestRows": 19915,
+      "withNtuAndPending": 13010
+    },
+    "topChannel2025Q2": {
+      "withoutTestRows": {
+        "channel": "Independent agents",
+        "policies": 4419
+      },
+      "withTestRows": {
+        "channel": "Mobile app",
+        "policies": 9971
+      },
+      "testRows": 6
+    },
+    "autoTopStateTie2025Q4": {
+      "states": [
+        "California",
+        "New York"
+      ],
+      "policies": 1062,
+      "next": {
+        "state": "Illinois",
+        "policies": 657
+      }
+    },
+    "currencyCodes": [
+      "USD"
+    ],
+    "walkAways2025": {
+      "harborlineNtuPolicies": 1995,
+      "highestRateChannel": "Mobile app",
+      "highestRate": 0.06578,
+      "mostByCountChannel": "Direct online"
+    },
+    "harborlineWrittenPremiumFy2025": {
+      "fiscalYear2025Dollars": 51360607.47,
+      "calendar2025Dollars": 55064556.78
+    },
+    "campaignFreeze": {
+      "quarterWithoutSpend": "2024-Q3",
+      "harborlinePolicies": {
+        "2024-Q2": 11337,
+        "2024-Q3": 10028,
+        "2024-Q4": 11457
+      }
+    },
+    "notReportedPeriod": "2026-Q1",
+    "promoCodes": {
+      "harborlineCampaigns": 14,
+      "withPromoCode": 5,
+      "topPromoCode": "PETPAL",
+      "topPromoLeads": 5004,
+      "leadsWithoutPromoCode": 21517
+    },
+    "topCtrCampaigns2025": [
+      {
+        "campaign": "Renters Campus Push",
+        "ctr": 0.030643
+      },
+      {
+        "campaign": "Drive Smart Rewards",
+        "ctr": 0.03034
+      },
+      {
+        "campaign": "Pet Parents Week",
+        "ctr": 0.027836
+      }
+    ],
+    "topBudgetShareCampaigns2025": [
+      {
+        "campaign": "Renters Campus Push",
+        "spentShareOfBudget": 1.121568
+      },
+      {
+        "campaign": "Year-End Life Check",
+        "spentShareOfBudget": 1.076436
+      },
+      {
+        "campaign": "Spring Home Refresh",
+        "spentShareOfBudget": 1.053789
+      }
+    ],
+    "harborlineCampaignSpend2025Dollars": 678055.93,
+    "channelFunnel2025": {
+      "highestLeadToPolicy": "Call center",
+      "highestQuoteToPolicy": "Independent agents",
+      "mostPoliciesBound": "Mobile app",
+      "lowestCostPerAcquisition": "Call center",
+      "lowestCostPerAcquisitionDollars": 165.08,
+      "lowestCostPerLead": "Mobile app"
+    },
+    "shareOfMarket2025": {
+      "largestShareLine": "Pet health",
+      "largestShare": 0.33111,
+      "biggestLineByPremium": "Personal auto",
+      "byLine": {
+        "Pet health": 0.33111,
+        "Term life": 0.177195,
+        "Personal auto": 0.162879,
+        "Renters": 0.160749,
+        "Homeowners": 0.159005
+      }
+    },
+    "premiumPerPolicy2025": {
+      "highestLine": "Homeowners",
+      "highestDollars": 1807.17,
+      "highestByRowAverage": "Personal auto"
+    },
+    "digitalShare2025": {
+      "highestShareRegion": "West",
+      "highestShare": 0.564464,
+      "mostDigitalPoliciesRegion": "Northeast"
+    },
+    "marketGrowth2024To2025": {
+      "highestPercentLine": "Pet health",
+      "highestPercent": 0.39906,
+      "highestDollarLine": "Personal auto"
+    },
+    "topFiveStates2025": [
+      {
+        "state": "California",
+        "policies": 38043
+      },
+      {
+        "state": "Florida",
+        "policies": 32189
+      },
+      {
+        "state": "New York",
+        "policies": 31183
+      },
+      {
+        "state": "Illinois",
+        "policies": 25288
+      },
+      {
+        "state": "Ohio",
+        "policies": 24451
+      }
+    ],
+    "harborlineLowestPremiumChannel2025": {
+      "channel": "Call center",
+      "dollars": 7824261.43
+    },
+    "topLeadCampaigns2025": [
+      {
+        "campaign": "Drive Smart Rewards",
+        "leads": 6170
+      },
+      {
+        "campaign": "Pet Parents Week",
+        "leads": 4102
+      },
+      {
+        "campaign": "Agent Referral Drive",
+        "leads": 3414
+      }
+    ],
+    "harborlineRevenue2025": {
+      "revenueDollars": 51761131.22,
+      "earnedPremiumDollars": 51176321.77,
+      "feeIncomeDollars": 584809.45,
+      "writtenPremiumDollars": 55064556.78
+    },
+    "fastestAutoGrowthCompetitor2025Q1ToQ2": {
+      "viewer": "Harborline Mutual",
+      "label": "Competitor C",
+      "carrier": "Tidewater Insurance Group",
+      "growth": 0.501491
+    },
+    "harborlineMasks": {
+      "Competitor A": "Bluefield General",
+      "Competitor B": "Northgate Assurance",
+      "Competitor C": "Tidewater Insurance Group",
+      "Competitor D": "Crestview Insurance",
+      "Competitor E": "Pinecrest Casualty"
+    },
+    "harborlineAutoVsMarket2025Q2": {
+      "harborlineDollars": 7706049.37,
+      "marketDollars": 51837930.58,
+      "share": 0.148657
+    },
+    "pinecrestPetVsRest2025": {
+      "pinecrestDollars": 369903.65,
+      "restOfMarketDollars": 6795824.44,
+      "petSellers": [
+        "Crestview Insurance",
+        "Harborline Mutual",
+        "Pinecrest Casualty"
+      ]
+    },
+    "harborlinePoliciesAllPeriods": 89954
+  }
+}

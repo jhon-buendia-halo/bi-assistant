@@ -1,0 +1,17 @@
+SQLite references (the REST connector's engine): world-cup.json
+Checked 2026-10-13 by the BA-187 dialect work. Every case of the file with a PostgreSQL reference (5).
+The set that grades against them: world-cup-rest (fixture world-cup-rest).
+
+How each reference was checked
+- PostgreSQL: the case's PostgreSQL reference on database ba9_world_cup_dialects (127.0.0.1:55432, schema world_cup), created from backend/src/modules/testing-data/fixtures/001_world_cup.sql.
+- SQLite: the dump in backend/scripts/worldcup-rest-api/data materialised as rest.connector.ts materialises endpoints: one table per relation named by its key "api.world_cup.<table>", column affinity from the first non-null JSON value (number REAL, boolean INTEGER 1/0, string TEXT); every unquoted api.world_cup.<table> in the reference rewritten to the quoted key, as the connector does. Run on Python's sqlite3 (SQLite 3.51.0) and on better-sqlite3 (the engine the connector bundles, SQLite 3.53.4).
+- Comparison: as backend/src/modules/sessions/result-compare.ts compares (the result-set match): same row count and column count, rows in any order, each row's values normalised (numbers at 6 significant figures, dates as YYYY-MM-DD, text trimmed and case-folded) and sorted.
+- Static: the Step 1b check modules (backend/src/mastra/evals/checks/): dialectProblem(sql, 'sqlite') finds nothing (agents-evals R74); every table reference has 3 parts (R75), is api.world_cup.<table> and a required table of the sample; the reference reads the same tables as the PostgreSQL one.
+
+✓ champion-2022  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Argentina
+✓ final-score-2018  sqlite  1 rows, equal to the PostgreSQL reference on both engines: France, Croatia, 4, 2
+✓ top-scorer-2022  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Lionel Messi, 4
+✓ shootouts  sqlite  4 rows, equal to the PostgreSQL reference on both engines: 2018, Russia, Croatia, Croatia; 2022, Croatia, Brazil, Croatia; 2022, Netherlands, Argentina, Argentina; … (4 rows)
+✓ biggest-venue  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Lusail Stadium, 88966
+
+world-cup: 5 of 5 SQLite references return the rows of their PostgreSQL reference and pass the static checks.

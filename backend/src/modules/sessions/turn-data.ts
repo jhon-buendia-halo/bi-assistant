@@ -6,6 +6,7 @@ import type { RequestContext } from '@mastra/core/request-context';
 import type { Logger } from '@nestjs/common';
 import type { Agent } from '@mastra/core/agent';
 import type { ProviderOptions } from '../../mastra/model-compat';
+import { usageSinkFrom } from '../../mastra/usage-sink';
 import type { ToolDataRecord } from './entities/session.entity';
 
 /** Rows kept per captured tool result — enough for the transcript, the visual
@@ -218,6 +219,9 @@ export async function synthesizeToolOnlyTurn(
         ...(requestContext ? { requestContext } : {}),
       },
     );
+    // The synthesis is the assistant's own model call (R219); the eval names
+    // the model, so none is passed here.
+    usageSinkFrom(requestContext)?.('assistant', result);
     return (result.text ?? '').trim() || EMPTY_RESPONSE_FALLBACK;
   } catch (error) {
     if (abortSignal.aborted) return '';

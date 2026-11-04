@@ -95,6 +95,33 @@ describe('computeRegressionDiff', () => {
     ]);
   });
 
+  it('skips a question not scored in either run (R40, R147)', () => {
+    const notScored = (id: string): ComparableCaseResult => ({
+      id,
+      question: `question ${id}`,
+      passed: false,
+      status: 'not-scored',
+    });
+    const previous = [
+      result('a', true),
+      notScored('judge-only'),
+      result('judged-before', true),
+      result('steady', false),
+    ];
+    const current = [
+      result('a', false),
+      notScored('judge-only'),
+      notScored('judged-before'),
+      { ...result('steady', false), status: 'failed' as const },
+    ];
+
+    const diff = computeRegressionDiff(previous, current);
+
+    expect(diff.regressions).toEqual([{ id: 'a', question: 'question a' }]);
+    expect(diff.improvements).toEqual([]);
+    expect(diff.unchanged.map((d) => d.id)).toEqual(['steady']);
+  });
+
   it('returns empty diffs for two empty runs', () => {
     const diff = computeRegressionDiff([], []);
 

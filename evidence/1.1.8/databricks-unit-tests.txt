@@ -1,0 +1,249 @@
+$ npx jest src/modules/testing-data src/mastra/evals/assistant-eval-datasets.spec.ts src/mastra/evals/databricks-references.spec.ts src/mastra/evals/databricks-catalog.spec.ts src/mastra/evals/result-set-check.spec.ts src/mastra/evals/validate-eval-sets.spec.ts src/mastra/evals/eval-sets.spec.ts   (backend/, 2026-10-13)
+11 of 11 suites and 235 of 235 tests passed. The whole backend suite (npx jest) passed too: 91 suites, 1476 tests.
+
+src/mastra/evals/assistant-eval-datasets.spec.ts
+  ✓ assistant eval dataset preflight › rejects the F1 scope from the failed report, even if renamed World Cup
+  ✓ assistant eval dataset preflight › accepts arbitrary dataset names and tables split across the same source
+  ✓ assistant eval dataset preflight › accepts schema.table keys as well as catalog.schema.table
+  ✓ assistant eval dataset preflight › does not accept matching table names under a different schema
+  ✓ assistant eval dataset preflight › rejects missing selections and does not use unselected snapshots
+  ✓ assistant eval dataset preflight › rejects an incomplete dataset with an actionable list
+  ✓ assistant eval dataset preflight › rejects a fixture spread across multiple datasources
+  ✓ assistant eval dataset preflight › rejects unsupported or missing datasource metadata: {"datasourceId": undefined}
+  ✓ assistant eval dataset preflight › rejects unsupported or missing datasource metadata: {"datasourceKind": undefined}
+  ✓ assistant eval dataset preflight › rejects unsupported or missing datasource metadata: {"datasourceKind": "databricks"}
+  ✓ the fixture registry is the single source of required entities › requires every table the registry entry lists, and nothing else
+  ✓ the fixture registry is the single source of required entities › validates a synthetic fixture against its own tables and schema
+  ✓ the fixture registry is the single source of required entities › requires a REST datasource for the REST fixture and matches api.* keys
+  ✓ the fixture registry is the single source of required entities › requires a Databricks datasource for the world-cup Databricks sample and matches catalog keys (agents-evals R141)
+  ✓ the fixture registry is the single source of required entities › requires a Databricks datasource for the finance Databricks sample and matches catalog keys (agents-evals R141)
+  ✓ the fixture registry is the single source of required entities › requires a Databricks datasource for the marketing-analytics Databricks sample and matches catalog keys (agents-evals R141)
+  ✓ the fixture registry is the single source of required entities › accepts a Databricks sample in any one catalog, and refuses one spread over several (agents-evals R148)
+  ✓ the fixture registry is the single source of required entities › refuses a PostgreSQL set on a Databricks datasource, and the other way round
+  ✓ the fixture registry is the single source of required entities › fails loudly when a question set points at an unknown fixture
+src/mastra/evals/databricks-catalog.spec.ts
+  ✓ the catalog of the selected datasets (agents-evals R148) › is the first part of every entity key, compared ignoring case
+  ✓ the catalog of the selected datasets (agents-evals R148) › is refused when the entities name several catalogs, none, or a key has no catalog
+  ✓ a reference rewritten to the catalog (agents-evals R148) › rewrites every backticked `evals`. of a real reference, and nothing else
+  ✓ a reference rewritten to the catalog (agents-evals R148) › backticks the new catalog, doubling a backtick in its name
+  ✓ a reference rewritten to the catalog (agents-evals R148) › leaves every other form as written
+  ✓ a reference rewritten to the catalog (agents-evals R148) › changes nothing when the catalog is evals
+  ✓ a reference for the selected datasets, by dialect › runs a Databricks reference in the datasets catalog
+  ✓ a reference for the selected datasets, by dialect › changes no PostgreSQL or SQLite reference, and reads no catalog for them
+src/mastra/evals/databricks-references.spec.ts
+  ✓ the static check of a Databricks reference (agents-evals R144) › passes a backticked three-part reference in Databricks SQL
+  ✓ the static check of a Databricks reference (agents-evals R144) › refuses SELECT * FROM world_cup.matches
+  ✓ the static check of a Databricks reference (agents-evals R144) › refuses SELECT * FROM evals.world_cup.matches
+  ✓ the static check of a Databricks reference (agents-evals R144) › refuses SELECT * FROM `main`.world_cup.matches
+  ✓ the static check of a Databricks reference (agents-evals R144) › refuses SELECT * FROM `evals`.finance.matches
+  ✓ the static check of a Databricks reference (agents-evals R144) › refuses SELECT * FROM `evals`.world_cup.countries
+  ✓ the static check of a Databricks reference (agents-evals R144) › refuses SELECT SUM(a)::numeric FROM `evals`.world_cup.matches
+  ✓ the static check of a Databricks reference (agents-evals R144) › refuses SELECT age(x) FROM `evals`.world_cup.matches
+  ✓ the static check of a Databricks reference (agents-evals R144) › refuses SELECT * FROM "evals"."world_cup"."matches"
+  ✓ the static check of a Databricks reference (agents-evals R144) › refuses SELECT DISTINCT ON (a) a FROM `evals`.world_cup.matches
+  ✓ the static check of a Databricks reference (agents-evals R144) › refuses SELECT 1
+  ✓ the static check of a Databricks reference (agents-evals R144) › ignores the constructs inside a string literal
+  ✓ the Databricks-only World Cup set (agents-evals R145 to R147) › is bound to the World Cup Databricks sample, ten questions, the cold-start one first
+  ✓ the Databricks-only World Cup set (agents-evals R145 to R147) › tags every question with a dbx: tag and holds every one to the Databricks dialect
+  ✓ the Databricks-only World Cup set (agents-evals R145 to R147) › gives every question but the browse-only one a reference, and guards that one against fabrication
+  ✓ the Databricks-only World Cup set (agents-evals R145 to R147) › uses the Databricks constructs it is about
+  ✓ the Databricks-only World Cup set (agents-evals R145 to R147) › has references that pass the static check
+  ✓ every Databricks reference of every set › runs in another catalog once rewritten: every table then names that catalog, backticked (R148)
+  ✓ every Databricks reference of every set › passes the static check (backticked catalog, three parts, a table of the sample, no PostgreSQL-only syntax)
+src/mastra/evals/eval-sets.spec.ts
+  ✓ eval set files › keep every question, reference and check the TypeScript defined (a superset since BA-183)
+  ✓ eval set files › lists the sets in the suite order, the World Cup golden set before the domains
+  ✓ eval set files › holds the golden set: 11 World Cup questions, each scored on SQL, tools and rows
+  ✓ eval set files › gives every case a category from the list, and dev unless held out
+  ✓ eval set files › keeps the World Cup and Formula 1 sets all dev
+  ✓ eval set files › holds out about 30% of every synthetic domain set, each bank on PostgreSQL first (agents-evals R90, R160)
+  ✓ eval set files › registers every file in sets/, so none is silently left out
+  ✓ the deterministic checks on the moved sets (agents-evals R82) › attaches the checks of each category to every set of the moved banks
+  ✓ the deterministic checks on the moved sets (agents-evals R82) › names a criterion on every check, the moved ones included
+  ✓ the deterministic checks on the moved sets (agents-evals R82) › guards the out-of-scope questions without the judge (G2)
+  ✓ the deterministic checks on the moved sets (agents-evals R82) › binds the dialect checks to each set, so the REST sets are held to SQLite and the Databricks sets to Databricks SQL
+  ✓ the set loader refuses an incomplete or inconsistent file › a case without id, naming the file and the case
+  ✓ the set loader refuses an incomplete or inconsistent file › a case without category, naming the file and the case
+  ✓ the set loader refuses an incomplete or inconsistent file › a case without question, naming the file and the case
+  ✓ the set loader refuses an incomplete or inconsistent file › a case without intent, naming the file and the case
+  ✓ the set loader refuses an incomplete or inconsistent file › a case without checks, naming the file and the case
+  ✓ the set loader refuses an incomplete or inconsistent file › a category, split or dialect outside its list
+  ✓ the set loader refuses an incomplete or inconsistent file › an unknown check type, or one type twice in a case
+  ✓ the set loader refuses an incomplete or inconsistent file › a check with missing, unknown or unusable arguments
+  ✓ the set loader refuses an incomplete or inconsistent file › a reference query missing for a dialect one of the variants uses
+  ✓ the set loader refuses an incomplete or inconsistent file › a set id or case id another set already uses
+  ✓ the set loader refuses an incomplete or inconsistent file › a sample fixture the registry does not have, or one of another kind
+  ✓ the set loader refuses an incomplete or inconsistent file › an unknown field, or a variant without its case-id prefix
+  ✓ the set loader expands variants › prefixes case ids and picks the reference for each dialect
+  ✓ the deterministic checks in a set file (R68, R81) › accepts each new type, with its default criterion unless the file names one
+  ✓ the deterministic checks in a set file (R68, R81) › refuses a criterion outside the research 2.5 list, on any check
+  ✓ the deterministic checks in a set file (R68, R81) › refuses missing, unknown or unusable arguments
+  ✓ the deterministic checks in a set file (R68, R81) › refuses usesEntities with nothing to compare
+  ✓ choosing one set by id (EVAL_SET) › selects every case when no set is named, as before
+  ✓ choosing one set by id (EVAL_SET) › selects only the named set's case ids
+  ✓ choosing one set by id (EVAL_SET) › refuses an unknown set, naming the known ones
+  ✓ the REST-only set (agents-evals R120 to R124, BA-187) › holds twelve dev questions on the World Cup REST sample, in SQLite
+  ✓ the REST-only set (agents-evals R120 to R124, BA-187) › tags every question with one REST tag, four of them paging
+  ✓ the REST-only set (agents-evals R120 to R124, BA-187) › gives every question but the refused one a SQLite reference over api.world_cup, and names a criterion on every check
+src/mastra/evals/result-set-check.spec.ts
+  ✓ lastSuccessfulSqlRecord › returns undefined when there are no run_readonly_sql records
+  ✓ lastSuccessfulSqlRecord › skips errored sql calls and picks the last successful one
+  ✓ lastSuccessfulSqlRecord › returns the most recent successful call when several succeeded
+  ✓ runResultSetCheck › returns undefined when the case has no expectedSql
+  ✓ runResultSetCheck › fails when the agent never ran a successful SQL call
+  ✓ runResultSetCheck › fails when no datasource can be resolved
+  ✓ runResultSetCheck › passes when the agent rows match the expectedSql rows
+  ✓ runResultSetCheck › fails with a reason when the rows differ
+  ✓ runResultSetCheck › scores 0 with a reason when expectedSql fails to run
+  ✓ runResultSetCheck › uses the top-scorer answer even when a broader leaderboard follows it
+  ✓ runResultSetCheck › uses all four shootouts even when the last query only checks tournament coverage
+  ✓ runResultSetCheck › uses possession counts even when match-level examples follow them
+  ✓ runResultSetCheck › allows repeated venue facts only when the case explicitly uses distinct rows
+  ✓ runResultSetCheck › rejects incorrect or missing distinct facts: {"rows": [Array]}
+  ✓ runResultSetCheck › rejects incorrect or missing distinct facts: {"rows": [Array]}
+  ✓ runResultSetCheck › rejects incorrect or missing distinct facts: {"rows": [Array]}
+  ✓ runResultSetCheck › rejects incorrect or missing distinct facts: {"rows": [Array]}
+  ✓ runResultSetCheck › does not discard extra rows from a leaderboard to manufacture a match
+  ✓ runResultSetCheck › requires every reference fact, even when a narrower SQL result agrees
+  ✓ runResultSetCheck › does not combine incomplete results from different queries
+  ✓ runResultSetCheck › does not accept unusable evidence: {"error": "failed"}
+  ✓ runResultSetCheck › does not accept unusable evidence: {"tool": "sample_rows"}
+  ✓ runResultSetCheck › does not accept unusable evidence: {"rowCount": 2, "truncated": true}
+  ✓ runResultSetCheck › does not accept unusable evidence: {"rowCount": 2}
+  ✓ runResultSetCheck › does not accept unusable evidence: {"rows": undefined}
+  ✓ runResultSetCheck › does not confuse missing rows with a verified empty result
+  ✓ runResultSetCheck › fails if the reference itself is truncated
+  ✓ runResultSetCheck › a result truncated at its own row limit (R31, BA-183) › reads the baseline trace as one captured row, flagged truncated
+  ✓ runResultSetCheck › a result truncated at its own row limit (R31, BA-183) › matches when the truncated capture holds every reference row
+  ✓ runResultSetCheck › a result truncated at its own row limit (R31, BA-183) › still fails when the truncated capture misses a reference row
+  ✓ runResultSetCheck › a result truncated at its own row limit (R31, BA-183) › still fails when the truncated capture carries a row the reference lacks
+  ✓ the catalog a Databricks reference runs in (agents-evals R148) › runs a real reference in the catalog of the selected datasets
+  ✓ the catalog a Databricks reference runs in (agents-evals R148) › refuses datasets whose entities span catalogs, and runs nothing
+  ✓ the catalog a Databricks reference runs in (agents-evals R148) › runs a reference on any other datasource as written
+src/mastra/evals/validate-eval-sets.spec.ts
+  ✓ eval:validate › prints a ✓ line per reference query and exits 0 when all run
+  ✓ eval:validate › fails on a broken reference, naming the case, and still runs the others
+  ✓ eval:validate › fails a reference truncated at the row limit, the way the result-set check does
+  ✓ eval:validate › fails a reference that returns no rows
+  ✓ eval:validate › stops at the dataset preflight: prints it, runs nothing, exits 1
+  ✓ eval:validate › validates the REST variant against its SQLite references
+  ✓ eval:validate › references read only dataset entities (R66, BA-183) › fails a reference reading a table the datasets lack, without running it
+  ✓ eval:validate › references read only dataset entities (R66, BA-183) › passes every moved reference against the full World Cup dataset
+  ✓ eval:validate › references read only dataset entities (R66, BA-183) › holds for every reference of every set against its sample’s required entities, with no database
+  ✓ eval:validate › references read only dataset entities (R66, BA-183) › compares on the last two name parts, ignoring case, and skips what is not a table
+  ✓ eval:validate on a Databricks set (agents-evals R148) › runs every reference in the catalog of the selected datasets
+  ✓ eval:validate on a Databricks set (agents-evals R148) › runs them as written when the datasets are in the evals catalog
+  ✓ eval:validate on a Databricks set (agents-evals R148) › refuses entities that span catalogs before running anything
+  ✓ eval:validate on a Databricks set (agents-evals R148) › leaves a PostgreSQL set as written, whatever its datasets are called
+src/modules/testing-data/databricks/fixture-load.spec.ts
+  ✓ Databricks column types › maps PostgreSQL bigint to BIGINT
+  ✓ Databricks column types › maps PostgreSQL integer to INT
+  ✓ Databricks column types › maps PostgreSQL smallint to SMALLINT
+  ✓ Databricks column types › maps PostgreSQL numeric(5,2) to DECIMAL(5,2)
+  ✓ Databricks column types › maps PostgreSQL numeric(18, 4) to DECIMAL(18,4)
+  ✓ Databricks column types › maps PostgreSQL numeric(10) to DECIMAL(10,0)
+  ✓ Databricks column types › maps PostgreSQL double precision to DOUBLE
+  ✓ Databricks column types › maps PostgreSQL real to FLOAT
+  ✓ Databricks column types › maps PostgreSQL text to STRING
+  ✓ Databricks column types › maps PostgreSQL char(3) to STRING
+  ✓ Databricks column types › maps PostgreSQL character to STRING
+  ✓ Databricks column types › maps PostgreSQL character varying(20) to STRING
+  ✓ Databricks column types › maps PostgreSQL boolean to BOOLEAN
+  ✓ Databricks column types › maps PostgreSQL date to DATE
+  ✓ Databricks column types › maps PostgreSQL timestamptz to TIMESTAMP
+  ✓ Databricks column types › maps PostgreSQL timestamp with time zone to TIMESTAMP
+  ✓ Databricks column types › maps PostgreSQL timestamp without time zone to TIMESTAMP_NTZ
+  ✓ Databricks column types › maps PostgreSQL jsonb to STRING
+  ✓ Databricks column types › gives a bare numeric the most decimals its values carry
+  ✓ Databricks column types › refuses a type it cannot map, or a decimal Databricks cannot hold
+  ✓ Databricks column types › infers a type from values when the dump records none
+  ✓ the seed DDL › reads each CREATE TABLE with its declared types and NOT NULLs
+  ✓ the seed DDL › reads the World Cup seed: twelve tables, precise numerics, nullable foreign keys
+  ✓ literals › escapes a string the way Databricks reads it: backslash escapes, never doubled quotes
+  ✓ literals › backticks identifiers, doubling a backtick
+  ✓ literals › writes NULLs, booleans, whole numbers and their ranges
+  ✓ literals › writes decimals at their scale and refuses one that would lose digits
+  ✓ literals › writes dates and timestamps as typed literals
+  ✓ literals › writes text, numbers held as text and JSON values as escaped strings
+  ✓ statements › creates the table with backticked columns and NOT NULL where the source has it
+  ✓ statements › inserts one row per line, in batches of at most the row limit
+  ✓ statements › closes a batch before it passes the character limit, and sends an oversized row alone
+  ✓ statements › names the row and the column of a value that does not fit
+  ✓ the dump › refuses a relation whose row count differs from _meta.json
+  ✓ the dump › refuses a relation _meta.json lists but the dump lacks
+  ✓ the dump › refuses rows whose columns differ from the declared ones, and a seed that disagrees with the dump
+  ✓ the three Databricks samples › are World Cup, finance and marketing analytics, each mirroring its PostgreSQL sample
+  ✓ the three Databricks samples › resolves --fixture by the source id or the Databricks id, and refuses any other
+  ✓ the three Databricks samples › plans world-cup from its committed dump: 14 relations, every required one, every value typed
+  ✓ the three Databricks samples › plans finance from its committed dump: 17 relations, every required one, every value typed
+  ✓ the three Databricks samples › plans marketing-analytics from its committed dump: 14 relations, every required one, every value typed
+  ✓ the three Databricks samples › keeps the World Cup types: precise decimals, instants, NOT NULL keys, inferred views
+  ✓ the three Databricks samples › keeps the domain types from the seed, and the view columns from the dump
+  ✓ the three Databricks samples › honours another catalog or schema in every statement
+  ✓ the load › runs the plan in order, and a second run leaves the same rows (idempotent)
+  ✓ the load › fails naming every relation whose count on the warehouse differs from the dump
+  ✓ the load › fails naming the statement the warehouse refused
+  ✓ the load › reads counts as numbers, bigints or numeric text, and reports a relation left out
+  ✓ the dry run › prints every statement with the types, abbreviating the INSERTs unless asked
+  ✓ errors › are FixtureLoadErrors, so the script reports them without a stack
+src/modules/testing-data/databricks/register.spec.ts
+  ✓ registering a loaded Databricks sample › signs in, creates the datasource, reads the inventory and saves the required entities
+  ✓ registering a loaded Databricks sample › updates the datasource of the same name on a second run (idempotent)
+  ✓ registering a loaded Databricks sample › refuses an org server backend, where it cannot sign in
+  ✓ registering a loaded Databricks sample › reports an unreachable backend with how to start it
+  ✓ registering a loaded Databricks sample › saves no dataset when a required table is missing from the inventory
+  ✓ the dataset entities › match the catalog and schema ignoring case and keep the inventory spelling
+  ✓ the dataset entities › report every browse-only or empty table, and a schema the inventory lacks
+  ✓ the connection from the environment › takes the warehouse from the HTTP path or the id, and strips the scheme from the host
+  ✓ the connection from the environment › reports every missing or wrong variable at once, never the token
+src/modules/testing-data/fixtures/registry.spec.ts
+  ✓ bundled sample seeds › world-cup: the seed file exists and creates its schema and every required entity
+  ✓ bundled sample seeds › formula-1: the seed file exists and creates its schema and every required entity
+  ✓ bundled sample seeds › finance: the seed file exists and creates its schema and every required entity
+  ✓ bundled sample seeds › health-insurance: the seed file exists and creates its schema and every required entity
+  ✓ bundled sample seeds › genomics: the seed file exists and creates its schema and every required entity
+  ✓ bundled sample seeds › supply-chain: the seed file exists and creates its schema and every required entity
+  ✓ bundled sample seeds › marketing-analytics: the seed file exists and creates its schema and every required entity
+  ✓ bundled sample seeds › gives every sample its own id, and every seedable one its own database and schema
+src/modules/testing-data/sql-statements.spec.ts
+  ✓ splitSqlStatements › splits on top-level semicolons and drops the terminator
+  ✓ splitSqlStatements › ignores a trailing statement with no terminator
+  ✓ splitSqlStatements › skips blank statements from stray semicolons
+  ✓ splitSqlStatements › keeps a semicolon inside a string literal
+  ✓ splitSqlStatements › handles a doubled quote inside a string literal
+  ✓ splitSqlStatements › keeps a semicolon inside a quoted identifier
+  ✓ splitSqlStatements › keeps a semicolon inside a line comment
+  ✓ splitSqlStatements › keeps a semicolon inside a nested block comment
+  ✓ splitSqlStatements › keeps a semicolon inside a dollar-quoted body
+  ✓ splitSqlStatements › keeps a semicolon inside a tagged dollar-quoted body
+  ✓ splitSqlStatements › does not treat a bare dollar sign as a quote
+  ✓ splitSqlStatements › returns nothing for an empty or whitespace-only script
+  ✓ splitSqlStatements › splits a multi-row INSERT the way pg_dump emits it
+src/modules/testing-data/testing-data.service.spec.ts
+  ✓ TestingDataService.load › rejects an unknown fixture id before touching anything
+  ✓ TestingDataService.load › refuses a REST fixture before touching anything
+  ✓ TestingDataService.load › refuses the Databricks fixture world-cup-databricks, naming the loader and its sample, before touching anything
+  ✓ TestingDataService.load › refuses the Databricks fixture finance-databricks, naming the loader and its sample, before touching anything
+  ✓ TestingDataService.load › refuses the Databricks fixture marketing-analytics-databricks, naming the loader and its sample, before touching anything
+  ✓ TestingDataService.load › rejects a bad connection before touching the network
+  ✓ TestingDataService.load › rejects a database name containing a double quote
+  ✓ TestingDataService.load › writes nothing when the connection is refused
+  ✓ TestingDataService.load › names the host and the user when authentication fails
+  ✓ TestingDataService.load › creates the database when it does not exist, then seeds it
+  ✓ TestingDataService.load › writes nothing when the database is missing and cannot be created
+  ✓ TestingDataService.load › seeds the fixture and saves the datasource and dataset
+  ✓ TestingDataService.load › reuses the existing datasource instead of creating a duplicate
+  ✓ TestingDataService.load › reports the entity that is still missing after seeding
+  ✓ TestingDataService.load › derives the entity keys from the supplied database name
+  ✓ a register-only fixture (no bundled SQL) › skips DROP SCHEMA and the seed, and still registers both records
+  ✓ a register-only fixture (no bundled SQL) › does not create the database it cannot seed
+  ✓ a register-only fixture (no bundled SQL) › is reported as not seedable, alongside the seedable samples
+  ✓ TestingDataService.clear › removes both records without running any SQL
+  ✓ TestingDataService.clear › is a no-op when nothing is loaded
+  ✓ TestingDataService.clear › refuses an unknown fixture id and deletes nothing
+  ✓ TestingDataService.status › describes every registered fixture, loaded or not
+  ✓ TestingDataService.status › shows a registered Databricks sample as loaded, with no PostgreSQL connection
+  ✓ TestingDataService.status › is not loaded when the dataset is missing entities
+  ✓ TestingDataService.status › is not loaded when the datasource exists but the dataset does not
+  ✓ TestingDataService.status › is loaded once the dataset covers all ten entities, and never echoes a password
+  ✓ TestingDataService.describe › lists the registry without reading a single store

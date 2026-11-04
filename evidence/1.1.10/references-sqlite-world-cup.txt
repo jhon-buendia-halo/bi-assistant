@@ -1,0 +1,64 @@
+SQLite references (the REST connector's engine): world-cup.json, the 40 questions added on 2026-10-16 (roadmap 1.1.10)
+Checked 2026-10-16 the way evidence/1.1.9 checked the first five (agents-evals R208). Every added case with a
+reference (34: 17 questions and their 17 paraphrases, which share the reference); the first five are re-run as a control.
+The set that grades against them: world-cup-rest (fixture world-cup-rest).
+
+How each reference was checked
+- PostgreSQL: the case's PostgreSQL reference on world_cup at 127.0.0.1:55433 (see references-postgres-world-cup.txt).
+- SQLite: the dump in backend/scripts/worldcup-rest-api/data materialised as rest.connector.ts materialises endpoints:
+  one table per relation named by its key "api.world_cup.<table>", column affinity from the first non-null JSON value
+  (number REAL, boolean INTEGER 1/0, string TEXT), every unquoted api.world_cup.<table> rewritten to the quoted key, as
+  the connector does. Run on Python's sqlite3 (SQLite 3.51.0) and on better-sqlite3 (the engine the
+  connector bundles, SQLite 3.53.4; script sqlite-run.js).
+- Comparison: as backend/src/modules/sessions/result-compare.ts compares (the result-set match): same row count and
+  column count, rows in any order, values normalised (numbers at 6 significant figures, text trimmed and case-folded).
+- Static (static-checks.ts, with the repository's check modules): dialectProblem(sql, 'sqlite') finds nothing (R118);
+  no FILTER, no DATE literal, no alias match (R205); every table reference is api.world_cup.<table>, a required table
+  of the sample; the reference reads the same tables as the PostgreSQL one.
+- Ported from the branch (feat/engine-eval-loop, suites/world-cup-rest.json), with the alias match renamed m in 7
+  (busiest-stadium, semi-final-goals-2022, third-place-2022, booked-in-2022-final, mandzukic-goals-2018,
+  argentina-draws-2022, third-placed-team-scorers-2018): the branch ports ran with it, but R205 forbids it.
+  Written here: south-american-goals and third-placed-team-scorers-2018, whose PostgreSQL reference was adapted.
+
+✓ champion-2022  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Argentina
+✓ final-score-2018  sqlite  1 rows, equal to the PostgreSQL reference on both engines: France, Croatia, 4, 2
+✓ top-scorer-2022  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Lionel Messi, 4
+✓ shootouts  sqlite  4 rows, equal to the PostgreSQL reference on both engines: 2018, Russia, Croatia, Croatia; 2022, Croatia, Brazil, Croatia; 2022, Netherlands, Argentina, Argentina; 2022, Argentina, France, Argentina
+✓ biggest-venue  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Lusail Stadium, 88966
+✓ shot-accuracy-by-team-2022  sqlite  3 rows, equal to the PostgreSQL reference on both engines: Brazil; Argentina; England
+✓ shot-conversion-2022  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Netherlands
+✓ busiest-stadium  sqlite  2 rows, equal to the PostgreSQL reference on both engines: Saint Petersburg Stadium; Lusail Stadium
+✓ highest-scoring-match  sqlite  2 rows, equal to the PostgreSQL reference on both engines: Argentina, France; France, Croatia
+✓ top-scorer-both-tournaments  sqlite  2 rows, equal to the PostgreSQL reference on both engines: Kylian Mbappe; Lionel Messi
+✓ semi-final-goals-2022  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 5
+✓ goals-by-defenders  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 11
+✓ third-place-2022  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Croatia
+✓ most-fouls-team  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Croatia
+✓ booked-in-2022-final  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Emiliano Martinez
+✓ quickest-goal-scorer  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Thomas Meunier
+✓ top-assist-provider  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Lionel Messi
+✓ mandzukic-goals-2018  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 2
+✓ extra-time-goals  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 7
+✓ argentina-draws-2022  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 2
+✓ south-american-goals  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 10
+✓ third-placed-team-scorers-2018  sqlite  3 rows, equal to the PostgreSQL reference on both engines: Eden Hazard; Kevin De Bruyne; Thomas Meunier
+✓ shot-accuracy-by-team-2022-reworded  sqlite  3 rows, equal to the PostgreSQL reference on both engines: Brazil; Argentina; England
+✓ shot-conversion-2022-reworded  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Netherlands
+✓ busiest-stadium-reworded  sqlite  2 rows, equal to the PostgreSQL reference on both engines: Saint Petersburg Stadium; Lusail Stadium
+✓ highest-scoring-match-reworded  sqlite  2 rows, equal to the PostgreSQL reference on both engines: Argentina, France; France, Croatia
+✓ top-scorer-both-tournaments-reworded  sqlite  2 rows, equal to the PostgreSQL reference on both engines: Kylian Mbappe; Lionel Messi
+✓ semi-final-goals-2022-reworded  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 5
+✓ goals-by-defenders-reworded  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 11
+✓ third-place-2022-reworded  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Croatia
+✓ most-fouls-team-reworded  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Croatia
+✓ booked-in-2022-final-reworded  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Emiliano Martinez
+✓ quickest-goal-scorer-reworded  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Thomas Meunier
+✓ top-assist-provider-reworded  sqlite  1 rows, equal to the PostgreSQL reference on both engines: Lionel Messi
+✓ mandzukic-goals-2018-reworded  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 2
+✓ extra-time-goals-reworded  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 7
+✓ argentina-draws-2022-reworded  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 2
+✓ south-american-goals-reworded  sqlite  1 rows, equal to the PostgreSQL reference on both engines: 10
+✓ third-placed-team-scorers-2018-reworded  sqlite  3 rows, equal to the PostgreSQL reference on both engines: Eden Hazard; Kevin De Bruyne; Thomas Meunier
+
+world-cup: 39 of 39 SQLite references (5 earlier, 34 added) return the rows of their PostgreSQL reference on both engines and pass the static checks.
+finalists-groups-2022: left out of the set, see agents-evals.

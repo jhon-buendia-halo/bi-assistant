@@ -1,0 +1,25 @@
+BA-242 (roadmap 1.1.20), acceptance gate step 9, 2026-10-22, at 11984d4 (round 9 kept)
+
+E2E, web target, after npm run test:e2e:prepare (backend build:all and the web UI):
+  E2E_SKIP_DOCKER=1 npx playwright test --project=web e2e/agents.spec.ts e2e/assistant-skills.spec.ts
+    e2e/agent-sessions.spec.ts e2e/agent-panel.spec.ts e2e/chat-and-visuals.spec.ts
+    e2e/designer-skills.spec.ts e2e/visual-tailoring.spec.ts
+  49 passed (agents.spec.ts 15 of 15, the six chat-turn specs 34); output in e2e-results.txt.
+  The six changed and new agents.spec.ts scenarios fail on a build of the base commit 7176755 on the
+  assertion each adds (e2e-impact.md).
+
+Backend unit tests: npx jest in backend/: 133 suites, 2,134 tests passed (run after round 9's prompt
+  fixture and Appendix A update). tsc -p tsconfig.build.json --noEmit: clean.
+Frontend unit tests: CHROME_BIN=<Playwright's Chromium> npx ng test --watch=false
+  --browsers=ChromeHeadless: 366 of 366 passed.
+Lint: npx eslint and npx prettier --check on every file the story touched: clean.
+check-specs: python3 scripts/check-specs.py: ALL CHECKS PASSED.
+
+Evals: the assistant's evals ran in the loop itself (results.tsv rounds 0 to 9, loop-summary.md), on
+  gpt-5.6-luna for rounds 3 to 9. The repo's eval gate (100% of cases, three runs) is NOT met:
+  round 9 has dev 102/130 and held-out 33/51. Rounds 5, 6, 7 and 9 change what the assistant
+  receives; that gate is owed on a Claude model once the Anthropic keys arrive, or a gate change,
+  before PR #81 merges.
+
+Screenshots (the web app on a copy of the loop's Finance data dir, round 9's run 8de2c6ad):
+  evals-executions-repeats-cost.png, evals-run-dev-heldout-by-category.png, evals-trace-attempts.png.

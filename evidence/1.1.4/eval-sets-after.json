@@ -1,0 +1,1105 @@
+{
+  "capturedFrom": "backend/src/mastra/evals/assistant.evals.ts after BA-182 (cases loaded from backend/src/mastra/evals/sets/*.json)",
+  "note": "ASSISTANT_EVAL_SETS as built by the code, with real @mastra/evals scorers (ts-node, no build). Missing optional fields are null. The first three sets equal eval-sets-before.json field by field; world-cup-golden is new.",
+  "caseIds": [
+    "champion-2022",
+    "final-score-2018",
+    "top-scorer-2022",
+    "shootouts",
+    "biggest-venue",
+    "schema-discovery",
+    "ambiguous-best-team",
+    "possession-vs-result",
+    "out-of-scope",
+    "visual-request",
+    "rest-champion-2022",
+    "rest-final-score-2018",
+    "rest-top-scorer-2022",
+    "rest-shootouts",
+    "rest-biggest-venue",
+    "rest-schema-discovery",
+    "rest-ambiguous-best-team",
+    "rest-possession-vs-result",
+    "rest-out-of-scope",
+    "rest-visual-request",
+    "f1-champion-2023",
+    "f1-british-gp-2023",
+    "f1-most-race-wins",
+    "f1-most-titles-tie",
+    "f1-monaco-2024-podium",
+    "f1-schema-discovery",
+    "f1-ambiguous-dominant-driver",
+    "f1-pole-to-win-2023",
+    "f1-out-of-scope-motogp",
+    "f1-visual-request",
+    "pass-accuracy-by-team",
+    "shot-accuracy-by-team",
+    "top-scoring-team",
+    "teams-tied-on-four-goals",
+    "card-types-recorded",
+    "goals-with-recorded-assist",
+    "goals-by-type",
+    "attendance-by-tournament",
+    "matches-by-stage",
+    "pass-completion-by-team",
+    "yellow-card-share"
+  ],
+  "sets": [
+    {
+      "id": "world-cup",
+      "name": "World Cup",
+      "description": "Questions against the bundled World Cup sample (2018 and 2022). Select its PostgreSQL datasource with a saved dataset containing the world_cup tables and views.",
+      "fixtureId": "world-cup",
+      "cases": [
+        {
+          "id": "champion-2022",
+          "question": "Who won the 2022 World Cup?",
+          "intent": "Single-hop lookup against tournaments — the simplest happy path.",
+          "expectedSql": "SELECT champion.common_name AS champion FROM world_cup.tournaments tournament JOIN world_cup.teams champion ON champion.id = tournament.champion_team_id WHERE tournament.tournament_year = 2022",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"Argentina\""
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "final-score-2018",
+          "question": "What was the score of the 2018 World Cup final?",
+          "intent": "Filter matches by stage and tournament, then read both goal columns.",
+          "expectedSql": "SELECT home.common_name AS home_team, away.common_name AS away_team, match.home_goals, match.away_goals FROM world_cup.matches match JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id JOIN world_cup.teams home ON home.id = match.home_team_id JOIN world_cup.teams away ON away.id = match.away_team_id WHERE tournament.tournament_year = 2018 AND match.stage = 'final'",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /4\\s*[-–:]\\s*2/"
+            },
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"France\""
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "top-scorer-2022",
+          "question": "Who scored the most goals in the 2022 World Cup, and how many?",
+          "intent": "Aggregate over goals joined to players, excluding own goals — the classic GROUP BY question.",
+          "expectedSql": "SELECT player, goals FROM world_cup.v_player_goal_totals WHERE tournament_year = 2022 ORDER BY goals DESC, player LIMIT 1",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"Messi\""
+            },
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /\\b4\\b/"
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "shootouts",
+          "question": "Which knockout matches went to a penalty shootout, and who advanced?",
+          "intent": "Requires noticing that shootouts are encoded as non-null penalty columns, not a flag.",
+          "expectedSql": "SELECT tournament_year, home_team, away_team, winner FROM world_cup.v_match_results WHERE home_penalties IS NOT NULL ORDER BY tournament_year, match_number",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"Croatia\""
+            },
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /Argentina/i"
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "biggest-venue",
+          "question": "Which stadium hosted the best-attended match, and what was the attendance?",
+          "intent": "Join matches to venues and order by a nullable measure.",
+          "expectedSql": "SELECT DISTINCT venue, attendance FROM world_cup.v_match_results WHERE attendance = (SELECT MAX(attendance) FROM world_cup.v_match_results)",
+          "resultSetOptions": {
+            "distinctRows": true
+          },
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"Lusail\""
+            },
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /88[,.]?966/"
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "schema-discovery",
+          "question": "What data do I have available to analyse?",
+          "intent": "Pure discovery — must inspect the session datasets rather than invent entities or run SQL.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"list_entities\" was called"
+            },
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"matches\""
+            },
+            {
+              "id": "check-did-not-call",
+              "name": "Did Not Call Check",
+              "description": "Checks that \"run_readonly_sql\" was NOT called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "ambiguous-best-team",
+          "question": "Which team performed best?",
+          "intent": "Ambiguous on both metric and tournament — the agent must ask instead of guessing.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": "The question (\"Which team performed best?\") is ambiguous on both the performance metric (goals? wins? possession?) and the scope (which tournament/year). Score pass=true only if the final answer is itself a clarifying question — not an attempt to answer with data — that offers 2-4 concrete, well-formed options grounded in this World Cup dataset (e.g. naming an actual metric like goals/wins/possession, or an actual tournament year in the data such as 2018 or 2022), and that does not state any performance figures as if they were the answer. Score pass=false if it guesses an answer, invents a metric or scope not in the data, or asks a vague open-ended question with no concrete options.",
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"ask_clarification\" was called"
+            },
+            {
+              "id": "check-did-not-call",
+              "name": "Did Not Call Check",
+              "description": "Checks that \"run_readonly_sql\" was NOT called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "possession-vs-result",
+          "question": "In the 2022 knockout rounds, did the team with more possession usually win?",
+          "intent": "Two-table reasoning over match_team_statistics — the answer must be a judgement backed by counts, not a row dump.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": "The question asks whether, in the 2022 knockout rounds, the team with more possession usually won. In this dataset the answer is NO: of the 8 knockout matches, the team with higher possession won 2 and lost 6. Score pass=true only if the final answer concludes that more possession did NOT usually win, and backs it with counts or percentages consistent with 2 of 8 won / 6 of 8 lost (equivalently 25% / 75%). Any query shape is acceptable — per-stage breakdowns, per-match tables or a single pivoted row all count, as do minor rewordings. Score pass=false if it concludes more possession usually won, gives no counts at all, or states counts that contradict 2 won / 6 lost.",
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /\\b(possession|%)\\b/i"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "out-of-scope",
+          "question": "How many goals did Pelé score in the 1970 World Cup?",
+          "intent": "The fixture only covers 2018 and 2022 — the agent must say so instead of fabricating a number.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": "The question asks about 1970, a year this dataset does not cover (it only has 2018 and 2022). Score pass=true only if the final answer clearly states it cannot answer for 1970 AND explicitly states what the data DOES cover (2018 and/or 2022), without inventing any goal count, statistic or claim about Pelé or the 1970 tournament. Score pass=false if it states or implies any 1970 statistic, or fails to state what the data actually covers.",
+          "scorers": [
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "visual-request",
+          "question": "Chart the goals scored by each team in the 2022 knockout stage.",
+          "intent": "Answer first, then build a visual — checks the SQL → create_visual ordering.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": "The user asked for a chart of goals scored by each team in the 2022 World Cup knockout stage. Score pass=true only if a create_visual (or update_visual) tool call succeeded and its title/description plausibly describes a chart of goals per team for the 2022 knockout matches (not an unrelated metric, an unrelated tournament/year, or a chart that clearly covers something else). Score pass=false if no visual tool call succeeded, or the visual it produced does not match this request.",
+          "scorers": [
+            {
+              "id": "check-tool-order",
+              "name": "Tool Order Check",
+              "description": "Checks tool call order: [run_readonly_sql → create_visual]"
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"create_visual\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "world-cup-rest",
+      "name": "World Cup (REST API)",
+      "description": "The same World Cup questions against the sample served by a local REST API ('npm run worldcup:api'). Select its REST API datasource with a saved dataset containing the api.world_cup endpoints; reference SQL runs in SQLite over the fetched endpoints.",
+      "fixtureId": "world-cup-rest",
+      "cases": [
+        {
+          "id": "rest-champion-2022",
+          "question": "Who won the 2022 World Cup?",
+          "intent": "Single-hop lookup against tournaments — the simplest happy path.",
+          "expectedSql": "SELECT champion.common_name AS champion FROM api.world_cup.tournaments tournament JOIN api.world_cup.teams champion ON champion.id = tournament.champion_team_id WHERE tournament.tournament_year = 2022",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"Argentina\""
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "rest-final-score-2018",
+          "question": "What was the score of the 2018 World Cup final?",
+          "intent": "Filter matches by stage and tournament, then read both goal columns.",
+          "expectedSql": "SELECT home.common_name AS home_team, away.common_name AS away_team, m.home_goals, m.away_goals FROM api.world_cup.matches m JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN api.world_cup.teams home ON home.id = m.home_team_id JOIN api.world_cup.teams away ON away.id = m.away_team_id WHERE tournament.tournament_year = 2018 AND m.stage = 'final'",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /4\\s*[-–:]\\s*2/"
+            },
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"France\""
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "rest-top-scorer-2022",
+          "question": "Who scored the most goals in the 2022 World Cup, and how many?",
+          "intent": "Aggregate over goals joined to players, excluding own goals — the classic GROUP BY question.",
+          "expectedSql": "SELECT player, goals FROM api.world_cup.v_player_goal_totals WHERE tournament_year = 2022 ORDER BY goals DESC, player LIMIT 1",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"Messi\""
+            },
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /\\b4\\b/"
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "rest-shootouts",
+          "question": "Which knockout matches went to a penalty shootout, and who advanced?",
+          "intent": "Requires noticing that shootouts are encoded as non-null penalty columns, not a flag.",
+          "expectedSql": "SELECT tournament_year, home_team, away_team, winner FROM api.world_cup.v_match_results WHERE home_penalties IS NOT NULL ORDER BY tournament_year, match_number",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"Croatia\""
+            },
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /Argentina/i"
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "rest-biggest-venue",
+          "question": "Which stadium hosted the best-attended match, and what was the attendance?",
+          "intent": "Join matches to venues and order by a nullable measure.",
+          "expectedSql": "SELECT DISTINCT venue, attendance FROM api.world_cup.v_match_results WHERE attendance = (SELECT MAX(attendance) FROM api.world_cup.v_match_results)",
+          "resultSetOptions": {
+            "distinctRows": true
+          },
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"Lusail\""
+            },
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /88[,.]?966/"
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "rest-schema-discovery",
+          "question": "What data do I have available to analyse?",
+          "intent": "Pure discovery — must inspect the session datasets rather than invent entities or run SQL.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"list_entities\" was called"
+            },
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"matches\""
+            },
+            {
+              "id": "check-did-not-call",
+              "name": "Did Not Call Check",
+              "description": "Checks that \"run_readonly_sql\" was NOT called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "rest-ambiguous-best-team",
+          "question": "Which team performed best?",
+          "intent": "Ambiguous on both metric and tournament — the agent must ask instead of guessing.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": "The question (\"Which team performed best?\") is ambiguous on both the performance metric (goals? wins? possession?) and the scope (which tournament/year). Score pass=true only if the final answer is itself a clarifying question — not an attempt to answer with data — that offers 2-4 concrete, well-formed options grounded in this World Cup dataset (e.g. naming an actual metric like goals/wins/possession, or an actual tournament year in the data such as 2018 or 2022), and that does not state any performance figures as if they were the answer. Score pass=false if it guesses an answer, invents a metric or scope not in the data, or asks a vague open-ended question with no concrete options.",
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"ask_clarification\" was called"
+            },
+            {
+              "id": "check-did-not-call",
+              "name": "Did Not Call Check",
+              "description": "Checks that \"run_readonly_sql\" was NOT called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "rest-possession-vs-result",
+          "question": "In the 2022 knockout rounds, did the team with more possession usually win?",
+          "intent": "Two-table reasoning over match_team_statistics — the answer must be a judgement backed by counts, not a row dump.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": "The question asks whether, in the 2022 knockout rounds, the team with more possession usually won. In this dataset the answer is NO: of the 8 knockout matches, the team with higher possession won 2 and lost 6. Score pass=true only if the final answer concludes that more possession did NOT usually win, and backs it with counts or percentages consistent with 2 of 8 won / 6 of 8 lost (equivalently 25% / 75%). Any query shape is acceptable — per-stage breakdowns, per-match tables or a single pivoted row all count, as do minor rewordings. Score pass=false if it concludes more possession usually won, gives no counts at all, or states counts that contradict 2 won / 6 lost.",
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /\\b(possession|%)\\b/i"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "rest-out-of-scope",
+          "question": "How many goals did Pelé score in the 1970 World Cup?",
+          "intent": "The fixture only covers 2018 and 2022 — the agent must say so instead of fabricating a number.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": "The question asks about 1970, a year this dataset does not cover (it only has 2018 and 2022). Score pass=true only if the final answer clearly states it cannot answer for 1970 AND explicitly states what the data DOES cover (2018 and/or 2022), without inventing any goal count, statistic or claim about Pelé or the 1970 tournament. Score pass=false if it states or implies any 1970 statistic, or fails to state what the data actually covers.",
+          "scorers": [
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "rest-visual-request",
+          "question": "Chart the goals scored by each team in the 2022 knockout stage.",
+          "intent": "Answer first, then build a visual — checks the SQL → create_visual ordering.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": "The user asked for a chart of goals scored by each team in the 2022 World Cup knockout stage. Score pass=true only if a create_visual (or update_visual) tool call succeeded and its title/description plausibly describes a chart of goals per team for the 2022 knockout matches (not an unrelated metric, an unrelated tournament/year, or a chart that clearly covers something else). Score pass=false if no visual tool call succeeded, or the visual it produced does not match this request.",
+          "scorers": [
+            {
+              "id": "check-tool-order",
+              "name": "Tool Order Check",
+              "description": "Checks tool call order: [run_readonly_sql → create_visual]"
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"create_visual\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "formula-1",
+      "name": "Formula 1",
+      "description": "Questions against the bundled Formula 1 sample (1950 to 2026) — seasons, drivers, constructors, circuits, races, standings and the per-session result views. Select its PostgreSQL datasource with a saved dataset containing the formula1 tables and views.",
+      "fixtureId": "formula-1",
+      "cases": [
+        {
+          "id": "f1-champion-2023",
+          "question": "Who won the 2023 Formula 1 drivers' championship, and how many points did they finish on?",
+          "intent": "Single-hop lookup against the season standings — the simplest happy path.",
+          "expectedSql": "SELECT standing.points FROM formula1.season_driver_standing standing WHERE standing.year = 2023 AND standing.position_number = 1",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"Verstappen\""
+            },
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /575/"
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "f1-british-gp-2023",
+          "question": "At which circuit was the 2023 British Grand Prix held, and how many laps did the race run to?",
+          "intent": "Filter a race by season and grand prix, which needs the race/grand_prix (and circuit) join rather than a single table.",
+          "expectedSql": "SELECT race.laps FROM formula1.race race JOIN formula1.grand_prix grand_prix ON grand_prix.id = race.grand_prix_id WHERE race.year = 2023 AND grand_prix.name = 'Great Britain'",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"Silverstone\""
+            },
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /\\b52\\b/"
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "f1-most-race-wins",
+          "question": "Which driver has won the most Grands Prix in Formula 1 history, and how many did they win?",
+          "intent": "A \"most\" question with a verifiable number — the answer is the same whether it is read off the driver totals or aggregated from race results.",
+          "expectedSql": "SELECT driver.total_race_wins AS wins FROM formula1.driver driver ORDER BY driver.total_race_wins DESC LIMIT 1",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"Hamilton\""
+            },
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /\\b106\\b/"
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "f1-most-titles-tie",
+          "question": "Which drivers have won the most Formula 1 drivers' championships, and how many each?",
+          "intent": "A genuine tie at the top (two drivers on seven titles) — a LIMIT 1 answer is wrong here, so this catches agents that rank instead of handling ties.",
+          "expectedSql": "SELECT driver.name AS driver, COUNT(*) AS championships FROM formula1.season_driver_standing standing JOIN formula1.driver driver ON driver.id = standing.driver_id WHERE standing.position_number = 1 GROUP BY driver.name HAVING COUNT(*) = (SELECT MAX(title_count) FROM (SELECT COUNT(*) AS title_count FROM formula1.season_driver_standing WHERE position_number = 1 GROUP BY driver_id) counts) ORDER BY driver",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"Schumacher\""
+            },
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /Hamilton/i"
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "f1-monaco-2024-podium",
+          "question": "Who finished on the podium at the 2024 Monaco Grand Prix?",
+          "intent": "Needs the race_result view (or the `type` discriminator on race_data) rather than a base table — reading race_data without filtering its type returns every session, not the race.",
+          "expectedSql": "SELECT driver.name AS driver FROM formula1.race_result race_result JOIN formula1.race race ON race.id = race_result.race_id JOIN formula1.driver driver ON driver.id = race_result.driver_id WHERE race.year = 2024 AND race.grand_prix_id = 'monaco' AND race_result.position_number <= 3 ORDER BY race_result.position_number",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"Leclerc\""
+            },
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /Piastri/i"
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "f1-schema-discovery",
+          "question": "What Formula 1 data do I have available to analyse?",
+          "intent": "Pure discovery — must inspect the session datasets rather than invent entities or run SQL.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"list_entities\" was called"
+            },
+            {
+              "id": "check-includes",
+              "name": "Includes Check",
+              "description": "Checks if output includes \"driver\""
+            },
+            {
+              "id": "check-did-not-call",
+              "name": "Did Not Call Check",
+              "description": "Checks that \"run_readonly_sql\" was NOT called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "f1-ambiguous-dominant-driver",
+          "question": "Which driver was the most dominant?",
+          "intent": "Ambiguous on both metric and era — 77 seasons of data, and the agent must ask instead of guessing.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": "The question (\"Which driver was the most dominant?\") is ambiguous on both the metric (race wins? championships? pole positions? points? win rate?) and the scope (this dataset covers every season from 1950 to 2026, so \"dominant\" could mean a single season, an era, or a whole career). Score pass=true only if the final answer is itself a clarifying question — not an attempt to answer with data — that offers 2-4 concrete, well-formed options grounded in this Formula 1 dataset (e.g. naming an actual metric such as race wins, championships won, pole positions or points, or an actual season or era in the data such as 2023 or the 2010s), and that does not state any driver as the answer or quote any figures as if they were the answer. Score pass=false if it guesses an answer, invents a metric or scope not in the data, or asks a vague open-ended question with no concrete options.",
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"ask_clarification\" was called"
+            },
+            {
+              "id": "check-did-not-call",
+              "name": "Did Not Call Check",
+              "description": "Checks that \"run_readonly_sql\" was NOT called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "f1-pole-to-win-2023",
+          "question": "In the 2023 season, did the driver who started on pole usually go on to win the race?",
+          "intent": "Joins the grid/pole position to the race result across 22 races — the answer must be a judgement backed by counts, not a row dump.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": "The question asks whether, in the 2023 Formula 1 season, the driver who started on pole usually won the race. In this dataset the answer is YES: of the 22 races in 2023, the pole-sitter won 14 and failed to win 8 (about 64%). Both readings of \"pole\" — the pole_position flag and grid position 1 — give the same 14 of 22. Score pass=true only if the final answer concludes that the pole-sitter DID usually win, and backs it with counts or percentages consistent with 14 of 22 wins (equivalently 8 non-wins, or roughly 64%). Any query shape is acceptable — a per-race table, a grouped aggregate or a single pivoted row all count, as do minor rewordings and rounding (63%-64%). Score pass=false if it concludes the pole-sitter usually did not win, gives no counts at all, or states counts that contradict 14 of 22.",
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-matches",
+              "name": "Matches Check",
+              "description": "Checks if output matches pattern /\\b(pole|grid)\\b/i"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "f1-out-of-scope-motogp",
+          "question": "Who won the 2023 MotoGP world championship?",
+          "intent": "The fixture covers Formula 1 only — the agent must say so instead of fabricating a MotoGP result.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": "The question asks about MotoGP, a motorcycle racing series this dataset does not contain — it holds Formula 1 world championship data only, for the seasons 1950 to 2026. Score pass=true only if the final answer clearly states it cannot answer the MotoGP question from this data AND explicitly states what the data DOES cover (Formula 1, and ideally its 1950-2026 season range or the kind of entities it holds such as drivers, constructors, races and standings), without naming a MotoGP champion or inventing any MotoGP fact. Score pass=false if it states or implies any 2023 MotoGP result, or fails to state what the data actually covers.",
+          "scorers": [
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "f1-visual-request",
+          "question": "Chart the total points scored by each constructor in the 2023 season.",
+          "intent": "Answer first, then build a visual — checks the SQL → create_visual ordering.",
+          "expectedSql": null,
+          "resultSetOptions": null,
+          "judgeRubric": "The user asked for a chart of the total points scored by each constructor in the 2023 Formula 1 season (ten constructors scored, from Red Bull on 860 down to Haas on 12). Score pass=true only if a create_visual (or update_visual) tool call succeeded and its title/description plausibly describes a chart of points per constructor for the 2023 season (not an unrelated metric, an unrelated season, or drivers instead of constructors). Score pass=false if no visual tool call succeeded, or the visual it produced does not match this request.",
+          "scorers": [
+            {
+              "id": "check-tool-order",
+              "name": "Tool Order Check",
+              "description": "Checks tool call order: [run_readonly_sql → create_visual]"
+            },
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"create_visual\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "world-cup-golden",
+      "name": "World Cup (golden set)",
+      "description": "Questions that each guard a trap a model once fell into (ratios of two different measures, ties, a constant metric, a sparse column), moved from the retired golden-set harness and the answer-quality gate. Select the World Cup PostgreSQL datasource with a saved dataset containing the world_cup tables and views.",
+      "fixtureId": "world-cup",
+      "cases": [
+        {
+          "id": "pass-accuracy-by-team",
+          "question": "Which three teams completed the highest share of their attempted passes across all matches?",
+          "intent": "A ratio of two different measures, completed over attempted passes, ranked top three.",
+          "expectedSql": "SELECT t.common_name, SUM(s.passes_completed)::numeric / SUM(s.passes_attempted) AS pass_accuracy FROM world_cup.match_team_statistics s JOIN world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY pass_accuracy DESC, t.common_name LIMIT 3",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "shot-accuracy-by-team",
+          "question": "Which three teams put the highest share of their shots on target?",
+          "intent": "The same two-measure ratio on a different column pair, shots on target over shots.",
+          "expectedSql": "SELECT t.common_name, SUM(s.shots_on_target)::numeric / SUM(s.shots) AS shot_accuracy FROM world_cup.match_team_statistics s JOIN world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY shot_accuracy DESC, t.common_name LIMIT 3",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "top-scoring-team",
+          "question": "Which team scored the most goals in total?",
+          "intent": "Ranking with an unambiguous winner (France, 14 goals), named rather than reported as an id.",
+          "expectedSql": "SELECT t.common_name, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name ORDER BY goals DESC, t.common_name LIMIT 1",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "teams-tied-on-four-goals",
+          "question": "Which teams scored exactly four goals in total?",
+          "intent": "A tie asked for explicitly: every team on exactly four goals, not one of them.",
+          "expectedSql": "SELECT t.common_name, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name HAVING COUNT(*) = 4 ORDER BY t.common_name",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "card-types-recorded",
+          "question": "What types of disciplinary cards were recorded, and how many of each?",
+          "intent": "A breakdown where only one value occurs: every card recorded is a yellow.",
+          "expectedSql": "SELECT card_type, COUNT(*) AS cards FROM world_cup.disciplinary_events GROUP BY card_type ORDER BY cards DESC, card_type",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "goals-with-recorded-assist",
+          "question": "How many goals have a recorded assisting player?",
+          "intent": "A sparse column: count the goals that have an assist instead of grouping by a mostly blank key.",
+          "expectedSql": "SELECT COUNT(*) AS goals_with_assist FROM world_cup.goals WHERE assist_player_id IS NOT NULL",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "goals-by-type",
+          "question": "How many goals were scored of each goal type?",
+          "intent": "Control: a categorical breakdown with no ratio and no nulls.",
+          "expectedSql": "SELECT goal_type, COUNT(*) AS goals FROM world_cup.goals GROUP BY goal_type ORDER BY goals DESC, goal_type",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "attendance-by-tournament",
+          "question": "What was the total match attendance for each tournament year?",
+          "intent": "Control: a plain aggregate over a join.",
+          "expectedSql": "SELECT tr.tournament_year, SUM(m.attendance) AS total_attendance FROM world_cup.matches m JOIN world_cup.tournaments tr ON tr.id = m.tournament_id GROUP BY tr.tournament_year ORDER BY tr.tournament_year",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "matches-by-stage",
+          "question": "How many matches were played at each stage of the tournaments?",
+          "intent": "A full breakdown whose smallest groups tie (final and third place, 2 matches each).",
+          "expectedSql": "SELECT stage, COUNT(*) AS matches FROM world_cup.matches GROUP BY stage ORDER BY matches DESC, stage",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "pass-completion-by-team",
+          "question": "What share of their attempted passes did each team complete?",
+          "intent": "A share for every team built from two different measures, completed over attempted passes; the rates must differ by team.",
+          "expectedSql": "SELECT t.common_name, SUM(s.passes_completed)::numeric / SUM(s.passes_attempted) AS pass_completion FROM world_cup.match_team_statistics s JOIN world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY t.common_name",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        },
+        {
+          "id": "yellow-card-share",
+          "question": "What share of the disciplinary cards shown were yellow?",
+          "intent": "A share that is 100% everywhere: the answer must say every card was a yellow rather than compare teams.",
+          "expectedSql": "SELECT COUNT(*) FILTER (WHERE card_type = 'yellow') AS yellow_cards, COUNT(*) AS total_cards FROM world_cup.disciplinary_events",
+          "resultSetOptions": null,
+          "judgeRubric": null,
+          "scorers": [
+            {
+              "id": "check-called-tool",
+              "name": "Called Tool Check",
+              "description": "Checks that \"run_readonly_sql\" was called"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "name": "No Tool Errors Check",
+              "description": "Checks that no tool calls resulted in errors"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

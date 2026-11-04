@@ -1,0 +1,113 @@
+# The branch questions in the Step 1a format (BA-185, 2026-10-13)
+
+Source: backend/src/mastra/evals/suites/<domain>.json on feat/engine-eval-loop, converted by a script.
+Category map (branch -> the 18): ratio-trap -> ratio, constant-column -> aggregate, empty-column -> null, ties -> ranking, value-vocabulary -> encoding, out-of-scope -> out-of-scope, clarification -> ambiguous, id-vs-name -> ranking, metric-definition -> business-term, default-filter -> default-filter, multi-step-join -> join, discovery -> discovery, unit-confusion -> encoding, control -> aggregate, domain-semantics -> business-term, quality-filter -> default-filter.
+Split: about 30% of each category held out, spread over it. Tags: trap:<branch category>, difficulty:<level>.
+Kept in notes, since the format has no field for them yet: the trap query, alternative references, paraphrases, a Databricks reference never run, and the provenance.
+Check criteria (research 2.5): calledTool run_readonly_sql D1, noToolErrors D3, includes and matches G1, the ambiguous tool checks D5, out-of-scope didNotCall G2, discovery didNotCall I4.
+
+== health-insurance: 42 cases; dev 28, held-out 14
+   categories: aggregate 6, ambiguous 3, business-term 3, default-filter 3, discovery 3, encoding 6, join 3, null 3, out-of-scope 3, ranking 6, ratio 3
+   checks: finalSqlSucceeded became noToolErrors on 30 cases (stricter: a repaired first query now fails); 0 duplicate noToolErrors dropped; includes, matches, calledTool and didNotCall kept with their arguments
+   tables each reference reads:
+     paid-share-by-specialty: claims, providers
+     plan-share-of-allowed-by-tier: claims, plans
+     claims-by-currency: claims
+     claims-with-preauth: claims
+     specialties-with-48-claims: claims, providers
+     approved-claims-2024: claims
+     member-with-most-claims: claims, members
+     net-paid-by-region-2024: claims, members, regions
+     net-paid-after-reversals-2024: claims
+     claims-march-2024: claims
+     paid-by-country: claims, countries, members, regions, states
+     avg-paid-per-claim-dollars: claims
+     units-cut-by-procedure: claim_lines, claims
+     denial-rate: claims
+     active-members-by-region: members, regions
+     members-per-plan-tier: members, plans
+     providers-per-specialty: providers
+     currency-by-member-country: claims, countries, members, regions, states
+     canadian-claims-by-currency: claims, countries, members, regions, states
+     most-common-revenue-code: claim_lines, claims
+     specialty-most-preauth: claims, providers
+     fewest-claims-specialty: claims, providers
+     least-cited-denial-reason: claim_denials, claims
+     rejected-claims-2025: claims
+     denials-overturned-on-appeal: claim_denials, claims
+     provider-most-claims-2025: claims, providers
+     plan-with-most-members: members, plans
+     members-with-claims-march-2024: claims
+     denied-claims-by-country: claims, countries, members, regions, states
+     claims-by-member-state-2025: claims, members, regions, states
+     plan-monthly-premium-dollars: plans
+     billed-2025-dollars: claims
+     denial-reasons-per-category: denial_reasons
+
+== genomics: 49 cases; dev 33, held-out 16
+   categories: aggregate 6, ambiguous 3, business-term 7, default-filter 6, discovery 3, encoding 6, join 3, null 3, out-of-scope 3, ranking 6, ratio 3
+   checks: finalSqlSucceeded became noToolErrors on 37 cases (stricter: a repaired first query now fails); 0 duplicate noToolErrors dropped; includes, matches, calledTool and didNotCall kept with their arguments
+   tables each reference reads:
+     allele-fraction-by-gene: genes, samples, variant_calls, variants
+     allele-fraction-by-genotype: samples, variant_calls
+     allele-fraction-by-significance: samples, variant_calls, variants
+     variants-by-assembly: variants
+     pathogenic-variants-by-assembly: variants
+     pathogenic-share-by-assembly: variants
+     variants-with-rsid: variants
+     rsid-share-by-significance: variants
+     genes-most-rsid-variants: genes, variants
+     genes-with-seven-pathogenic: genes, variants
+     largest-ancestry-group: subjects
+     rarest-phenotypes: subject_phenotypes
+     damaging-variant-count: variants
+     tumour-sample-count: samples
+     loss-of-function-variant-count: variants
+     most-called-genes: genes, samples, variant_calls, variants
+     most-common-phenotypes: phenotypes, subject_phenotypes
+     genes-longest-canonical-transcripts: genes, transcripts
+     mean-allele-fraction: samples, variant_calls
+     high-confidence-rate-by-sequencer: samples, variant_calls
+     allele-fraction-by-tissue: samples, variant_calls
+     cohort-sample-count: samples
+     cohort-variant-call-total: samples, variant_calls
+     samples-collected-2024: samples
+     subjects-by-superpopulation: ancestry_groups, subjects, superpopulations
+     samples-by-superpopulation: ancestry_groups, samples, subjects, superpopulations
+     neoplasm-subject-samples: phenotypes, samples, subject_phenotypes
+     pathogenic-carrier-samples: samples, variant_calls, variants
+     pathogenic-carriers-by-gene: genes, samples, variant_calls, variants
+     mean-expression-by-gene: gene_expression, genes, samples
+     genes-silent-in-most-samples: gene_expression, genes, samples
+     high-confidence-calls: samples, variant_calls
+     high-confidence-calls-by-assay: samples, variant_calls
+     high-confidence-calls-by-gene: genes, samples, variant_calls, variants
+     coverage-by-assay: samples
+     dmd-gene-span-mb: genes
+     canonical-transcript-length-kb: transcripts
+     variants-by-type: variants
+     samples-per-collection-year: samples
+     genes-by-biotype: genes
+
+== supply-chain: 20 cases; dev 14, held-out 6
+   categories: aggregate 4, ambiguous 1, business-term 3, default-filter 2, discovery 1, encoding 2, join 1, null 1, out-of-scope 1, ranking 2, ratio 2
+   checks: finalSqlSucceeded became noToolErrors on 14 cases (stricter: a repaired first query now fails); 0 duplicate noToolErrors dropped; includes, matches, calledTool and didNotCall kept with their arguments
+   tables each reference reads:
+     acceptance-rate-by-supplier: purchase_orders, receipts, shipments, suppliers
+     freight-share-of-goods-value-by-mode: purchase_orders, shipments
+     products-by-unit-of-measure: products
+     shipments-with-tracking-number: purchase_orders, shipments
+     suppliers-with-41-orders: purchase_orders, suppliers
+     open-purchase-orders: purchase_orders
+     product-on-most-order-lines-2024: products, purchase_order_lines, purchase_orders
+     on-time-delivery-by-supplier-2025: purchase_orders, shipments, suppliers
+     committed-spend-by-tier-2024: purchase_order_lines, purchase_orders, suppliers
+     purchase-orders-january-2025: purchase_orders
+     deliveries-by-region-2025: purchase_orders, regions, shipments, warehouses
+     on-hand-end-of-2024-by-warehouse: inventory_snapshots, warehouses
+     units-ordered-of-safety-glasses-2024: products, purchase_order_lines, purchase_orders
+     inspection-failure-rate-2025: purchase_orders, receipts, shipments
+     suppliers-per-tier: suppliers
+     warehouses-per-region: regions, warehouses
+     products-per-category: product_categories, products
+

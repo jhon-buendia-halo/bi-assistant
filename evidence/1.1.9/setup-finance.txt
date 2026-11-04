@@ -1,0 +1,50 @@
+Fixture API: http://127.0.0.1:55095
+Backend:     http://127.0.0.1:55099
+✔ API reachable: finance, switches {"profile":null,"paging":"page","defaultPageSize":100,"maxPageSize":500,"nested":[],"wrapped":[],"refused":[],"retryAfter":null,"tokenRequired":false}
+✔ backend reachable and signed in
+✔ discovery: 17 endpoints
+    account_types                page size 200 rows /data
+    accounts                     page size 200 rows /data
+    branches                     page size 200 rows /data
+    cards                        page size 200 rows /data
+    customers                    page size 200 rows /data
+    fees                         page size 200 rows /data
+    fiscal_periods               page size 200 rows /data
+    fx_rates                     page size 200 rows /data
+    holdings                     page size 200 rows /data
+    loan_payments                page size 200 rows /data
+    loans                        page size 200 rows /data
+    portfolios                   page size 200 rows /data
+    regions                      page size 200 rows /data
+    securities                   page size 200 rows /data
+    transactions                 page size 200 rows /data
+    v_accounts                   page size 200 rows /data
+    v_transactions               page size 200 rows /data
+✔ datasource "Finance REST API" created (d21461ec-d571-40a2-9e65-e2e49b1bdd61)
+
+  api.finance.account_types  5 columns
+  api.finance.accounts  11 columns
+  api.finance.branches  7 columns
+  api.finance.cards  8 columns
+  api.finance.customers  7 columns
+  api.finance.fees  8 columns
+  api.finance.fiscal_periods  7 columns
+  api.finance.fx_rates  4 columns
+  api.finance.holdings  7 columns
+  api.finance.loan_payments  6 columns
+  api.finance.loans  12 columns
+  api.finance.portfolios  12 columns
+  api.finance.regions  3 columns
+  api.finance.securities  5 columns
+  api.finance.transactions  14 columns
+  api.finance.v_accounts  17 columns
+  api.finance.v_transactions  25 columns
+
+✔ Dataset "Finance (REST)" saved — 17 entities
+
+Done.
+  datasource: Finance REST API (d21461ec-d571-40a2-9e65-e2e49b1bdd61)
+  dataset:    Finance (REST)
+  entities:   17
+
+Run an eval set bound to the "finance-rest" sample with the dataset "Finance (REST)" (Agents → assistant → Evals, or EVAL_DATASETS="Finance (REST)").

@@ -8,12 +8,36 @@ import { WORLD_CUP_DB } from './helpers/world-cup-db';
 // specs/capabilities/testing-data/spec.md. Scenarios not listed here are
 // not automated yet (see the Feature's E2E line).
 
+// In panel order: main's samples first, then the BA-9 eval samples.
 const SAMPLES = [
-  { id: 'world-cup', name: 'World Cup', required: 9 },
+  { id: 'world-cup', name: 'World Cup', required: 10 },
   { id: 'formula-1', name: 'Formula 1', required: 48 },
   { id: 'intellify', name: 'Intellify', required: 49 },
-  { id: 'world-cup-rest', name: 'World Cup (REST API)', required: 9 },
+  { id: 'world-cup-rest', name: 'World Cup (REST API)', required: 10 },
   { id: 'intellify-api', name: 'Intellify RFP API', required: 10 },
+  { id: 'finance', name: 'Finance', required: 17 },
+  { id: 'health-insurance', name: 'Health Insurance', required: 12 },
+  { id: 'genomics', name: 'Genomics', required: 13 },
+  { id: 'supply-chain', name: 'Supply Chain', required: 14 },
+  { id: 'marketing-analytics', name: 'Marketing Analytics', required: 14 },
+  { id: 'finance-rest', name: 'Finance (REST API)', required: 17 },
+  {
+    id: 'marketing-analytics-rest',
+    name: 'Marketing Analytics (REST API)',
+    required: 14,
+  },
+  {
+    id: 'world-cup-rest-connector',
+    name: 'World Cup (REST API, connector profile)',
+    required: 13,
+  },
+  { id: 'world-cup-databricks', name: 'World Cup (Databricks)', required: 10 },
+  { id: 'finance-databricks', name: 'Finance (Databricks)', required: 17 },
+  {
+    id: 'marketing-analytics-databricks',
+    name: 'Marketing Analytics (Databricks)',
+    required: 14,
+  },
 ];
 
 async function openTestingData(page: Page): Promise<void> {

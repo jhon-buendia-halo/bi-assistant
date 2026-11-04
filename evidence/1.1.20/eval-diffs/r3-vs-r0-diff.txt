@@ -1,0 +1,53 @@
+Before: 97d932a5 (63 questions, openai/gpt-4o-mini, repeats 3, judge off); 3ebeaeb7 (68 questions, openai/gpt-4o-mini, repeats 3, judge off); 531236cd (50 questions, openai/gpt-4o-mini, repeats 3, judge off)
+After:  bf98a928 (63 questions, openai/gpt-5.6-luna, repeats 3, judge off); 6383da14 (68 questions, openai/gpt-5.6-luna, repeats 3, judge off); 360c2cd2 (50 questions, openai/gpt-5.6-luna, repeats 3, judge off)
+
+Split     Category        Before          After            Change    95% interval of change  Flag
+dev       lookup          1/6 (3–56%)     5/6 (44–97%)     +67 pts   +11 to +86 pts          up
+dev       aggregate       1/15 (1–30%)    8/15 (30–75%)    +47 pts   +14 to +69 pts          up
+dev       join            1/9 (2–43%)     5/9 (27–81%)     +44 pts   +1 to +72 pts           up
+dev       ranking         0/16 (0–19%)    12/16 (51–90%)   +75 pts   +44 to +90 pts          up
+dev       ratio           0/14 (0–22%)    8/14 (33–79%)    +57 pts   +24 to +79 pts          up
+dev       null            0/6 (0–39%)     3/6 (19–81%)     +50 pts   0 to +81 pts            up
+dev       encoding        0/10 (0–28%)    3/10 (11–60%)    +30 pts   −4 to +60 pts           within
+dev       reasoning       0/2 (0–66%)     1/2 (9–91%)      +50 pts   −27 to +91 pts          within
+dev       discovery       2/4 (15–85%)    4/4 (51–100%)    +50 pts   −10 to +85 pts          within
+dev       ambiguous       1/5 (4–62%)     3/5 (23–88%)     +40 pts   −16 to +73 pts          within
+dev       fuzzy-scope     1/3 (6–79%)     2/3 (21–94%)     +33 pts   −32 to +72 pts          within
+dev       out-of-scope    2/5 (12–77%)    4/5 (38–96%)     +40 pts   −16 to +73 pts          within
+dev       non-existent    2/2 (34–100%)   2/2 (34–100%)    0 pts     −66 to +66 pts          within
+dev       business-term   0/10 (0–28%)    5/10 (24–76%)    +50 pts   +12 to +76 pts          up
+dev       default-filter  0/6 (0–39%)     4/6 (30–90%)     +67 pts   +13 to +90 pts          up
+dev       visual          1/4 (5–70%)     2/4 (15–85%)     +25 pts   −32 to +66 pts          within
+dev       paraphrase      1/13 (1–33%)    3/13 (8–50%)     +15 pts   −14 to +43 pts          within
+dev       all             13/130 (6–16%)  74/130 (48–65%)  +47 pts   +36 to +56 pts          up
+held-out  lookup          1/2 (9–91%)     2/2 (34–100%)    +50 pts   −27 to +91 pts          within
+held-out  aggregate       0/4 (0–49%)     1/4 (5–70%)      +25 pts   −28 to +70 pts          within
+held-out  join            0/5 (0–43%)     1/5 (4–62%)      +20 pts   −26 to +62 pts          within
+held-out  ranking         1/6 (3–56%)     5/6 (44–97%)     +67 pts   +11 to +86 pts          up
+held-out  ratio           0/5 (0–43%)     4/5 (38–96%)     +80 pts   +19 to +96 pts          up
+held-out  null            0/2 (0–66%)     1/2 (9–91%)      +50 pts   −27 to +91 pts          within
+held-out  encoding        0/4 (0–49%)     1/4 (5–70%)      +25 pts   −28 to +70 pts          within
+held-out  discovery       2/3 (21–94%)    1/3 (6–79%)      −33 pts   −72 to +32 pts          within
+held-out  ambiguous       0/3 (0–56%)     2/3 (21–94%)     +67 pts   −6 to +94 pts           within
+held-out  out-of-scope    2/3 (21–94%)    2/3 (21–94%)     0 pts     −53 to +53 pts          within
+held-out  non-existent    0/1 (0–79%)     1/1 (21–100%)    +100 pts  −12 to +100 pts         within
+held-out  business-term   0/4 (0–49%)     1/4 (5–70%)      +25 pts   −28 to +70 pts          within
+held-out  default-filter  1/2 (9–91%)     2/2 (34–100%)    +50 pts   −27 to +91 pts          within
+held-out  paraphrase      0/7 (0–35%)     3/7 (16–75%)     +43 pts   −2 to +75 pts           within
+held-out  all             7/51 (7–26%)    27/51 (40–66%)   +39 pts   +21 to +54 pts          up
+
+Flips, dev:
+  Now passing: schema-discovery (discovery), out-of-scope (out-of-scope), shot-accuracy-by-team-2022 (ratio), busiest-stadium (ranking), highest-scoring-match (ranking), goals-by-defenders (encoding), most-fouls-team (ranking), mandzukic-goals-2018 (business-term), player-data-discovery (discovery), group-stage-goals-2022 (out-of-scope), highest-scoring-match-reworded (paraphrase), top-scoring-team (ranking), teams-tied-on-four-goals (ranking), card-types-recorded (aggregate), goals-with-recorded-assist (null), yellow-card-share (ratio), average-aum-per-client-fy2025-end (business-term), completed-transactions-december-2025 (business-term), portfolios-opened-2024 (default-filter), positions-held-2024-end (default-filter), most-held-securities-fy2025-end (ranking), branch-most-assets-2025-end (ranking), aum-by-asset-class-2025-end (join), unrealized-gain-percent-fy2025-end (ratio), fiscal-2026-q2-months (lookup), biggest-wealth-client (ambiguous), chart-aum-by-quarter-end (visual), wealth-client-count-casual (paraphrase), aum-fy2025-end-typo (paraphrase), outstanding-share-of-principal-by-product (ratio), loans-by-currency (aggregate), transactions-with-merchant-category (null), most-valuable-customer (ambiguous), customer-most-card-purchases-2025 (ranking), deposit-accounts-per-branch (business-term), euro-deposits-2025 (encoding), card-spend-december-2025 (default-filter), customers-per-segment (aggregate), loans-per-product (aggregate), fiscal-quarter-of-july-2024 (lookup), digital-channels (lookup), harborline-pet-launch (lookup), harborline-policies-sold-2025-q2 (aggregate), market-premium-by-line-2025 (aggregate), market-policies-by-channel-2025 (aggregate), harborline-earned-premium-by-quarter-2025 (aggregate), harborline-premium-by-region-2025 (join), harborline-leads-by-line-2025 (join), northeast-auto-policies-q4-2025 (join), top-auto-state-q4-2025 (ranking), top-three-campaigns-by-leads-2025 (ranking), top-five-states-2025 (ranking), gov-fastest-growing-competitor (ranking), top-ctr-campaigns-2025 (ratio), top-budget-share-campaigns-2025 (ratio), premium-per-policy-top-line-2025 (ratio), highest-digital-share-region-2025 (ratio), lowest-cost-per-acquisition-channel-2025 (business-term), harborline-walk-aways-2025 (encoding), top-promo-code-by-leads (null), top-channel-q2-2025 (default-filter), ambiguous-best-campaign (ambiguous), harborline-policies-all-periods (fuzzy-scope), campaign-freeze-impact (reasoning)
+  Now failing: argentina-penalties-2022 (ambiguous), goals-by-defenders-reworded (paraphrase), matches-by-stage (aggregate)
+Flips, held-out:
+  Now passing: top-scorer-both-tournaments (ranking), quickest-goal-scorer (ranking), shot-conversion-2022-reworded (paraphrase), top-scorer-both-tournaments-reworded (paraphrase), largest-portfolio-2025-end (default-filter), top-three-fee-clients-fy2025 (ranking), advisory-fee-rate-by-mandate-fy2025 (ratio), best-performing-portfolio (ambiguous), relationship-manager-assets (non-existent), largest-portfolio-2025-end-casual (paraphrase), interest-share-of-loan-payments-by-product (ratio), customer-deposits-2025-usd (encoding), card-data-discovery (discovery), branches-per-region (aggregate), latest-final-quarter (lookup), harborline-spend-by-channel-2025 (join), fastest-growing-line-2024-to-2025 (ranking), best-lead-to-policy-channel-2025 (ratio), largest-market-share-line-2025 (ratio), highest-walk-away-rate-channel-2025 (business-term), quarter-without-campaign-spend (null), ambiguous-strongest-region (ambiguous)
+  Now failing: team-match-stats-discovery (discovery), benchmark-discovery (discovery)
+Only before: none
+Only after: none
+
+Cost before: $1.4378 · $0.0079 per question
+Cost after: not priced (gpt-4.1-mini)
+Cost per question: —
+Warning: the model differs (before: openai/gpt-4o-mini; after: openai/gpt-5.6-luna)
+
+Draft change log: Round <…>: <…>. <…> Dev 13/130 → 74/130, held-out 7/51 → 27/51; <…>; cost per question $0.0079 → not priced. Runs 97d932a5, 3ebeaeb7, 531236cd → bf98a928, 6383da14, 360c2cd2.

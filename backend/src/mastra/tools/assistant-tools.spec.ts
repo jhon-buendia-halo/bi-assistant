@@ -14,6 +14,7 @@ import {
   TURN_RECORDS_CONTEXT_KEY,
   createVisualTool,
 } from './visual.tools';
+import { USAGE_SINK_CONTEXT_KEY } from '../usage-sink';
 import { showInPanelTool } from './panel.tool';
 import { updateWorkflowTool } from './workflow.tool';
 
@@ -76,7 +77,22 @@ describe('create_visual (agents.md 3.6)', () => {
       undefined,
       'Chart the goals scored by each team in the 2022 knockout stage.',
       undefined,
+      undefined,
     );
+  });
+
+  it("passes the attempt's usage sink on, and none outside an eval", async () => {
+    const sink = jest.fn();
+    requestContext.set(USAGE_SINK_CONTEXT_KEY, sink);
+    await execute({}, { requestContext });
+    const passed = createVisual.mock.calls[0][4];
+    passed?.('designer', { usage: {} }, 'm');
+    expect(sink).toHaveBeenCalledWith('designer', { usage: {} }, 'm');
+
+    createVisual.mockClear();
+    requestContext.set(USAGE_SINK_CONTEXT_KEY, undefined);
+    await execute({}, { requestContext });
+    expect(createVisual.mock.calls[0][4]).toBeUndefined();
   });
 
   it('treats a blank instruction as none', async () => {

@@ -1,0 +1,85 @@
+=== EVAL_SET=world-cup-rest-connector EVAL_DATASETS="World Cup (REST page)"
+Validating World Cup (REST connector) (world-cup-rest-connector, sqlite) on World Cup (REST page)
+
+✓ rest-connector-paging-player-count  sqlite  1 rows
+✓ rest-connector-paging-goalkeepers  sqlite  1 rows
+✓ rest-connector-paging-last-page-player  sqlite  1 rows
+✓ rest-connector-paging-top-scorers  sqlite  2 rows
+✓ rest-connector-nested-away-wins  sqlite  4 rows
+✓ rest-connector-nested-busiest-city  sqlite  2 rows
+✓ rest-connector-rows-pointer-group  sqlite  1 rows
+✓ rest-connector-cap-total-shots  sqlite  1 rows
+✓ rest-connector-auth-champion-2018  sqlite  1 rows
+✓ rest-connector-dialect-final-weekday  sqlite  2 rows
+✓ rest-connector-dialect-penalty-share  sqlite  1 rows
+
+world-cup-rest-connector: 11 of 11 reference queries passed; 1 case has no reference query.
+exit 0
+(0 s)
+
+=== EVAL_SET=world-cup-rest-connector EVAL_DATASETS="World Cup (REST offset)"
+Validating World Cup (REST connector) (world-cup-rest-connector, sqlite) on World Cup (REST offset)
+
+✓ rest-connector-paging-player-count  sqlite  1 rows
+✓ rest-connector-paging-goalkeepers  sqlite  1 rows
+✓ rest-connector-paging-last-page-player  sqlite  1 rows
+✓ rest-connector-paging-top-scorers  sqlite  2 rows
+✓ rest-connector-nested-away-wins  sqlite  4 rows
+✓ rest-connector-nested-busiest-city  sqlite  2 rows
+✓ rest-connector-rows-pointer-group  sqlite  1 rows
+✓ rest-connector-cap-total-shots  sqlite  1 rows
+✓ rest-connector-auth-champion-2018  sqlite  1 rows
+✓ rest-connector-dialect-final-weekday  sqlite  2 rows
+✓ rest-connector-dialect-penalty-share  sqlite  1 rows
+
+world-cup-rest-connector: 11 of 11 reference queries passed; 1 case has no reference query.
+exit 0
+(1 s)
+
+=== EVAL_SET=world-cup-rest-connector EVAL_DATASETS="World Cup (REST cursor)"
+Validating World Cup (REST connector) (world-cup-rest-connector, sqlite) on World Cup (REST cursor)
+
+✓ rest-connector-paging-player-count  sqlite  1 rows
+✓ rest-connector-paging-goalkeepers  sqlite  1 rows
+✓ rest-connector-paging-last-page-player  sqlite  1 rows
+✓ rest-connector-paging-top-scorers  sqlite  2 rows
+✓ rest-connector-nested-away-wins  sqlite  4 rows
+✓ rest-connector-nested-busiest-city  sqlite  2 rows
+✓ rest-connector-rows-pointer-group  sqlite  1 rows
+✓ rest-connector-cap-total-shots  sqlite  1 rows
+✓ rest-connector-auth-champion-2018  sqlite  1 rows
+✓ rest-connector-dialect-final-weekday  sqlite  2 rows
+✓ rest-connector-dialect-penalty-share  sqlite  1 rows
+
+world-cup-rest-connector: 11 of 11 reference queries passed; 1 case has no reference query.
+exit 0
+(0 s)
+
+=== EVAL_SET=world-cup-rest-connector EVAL_DATASETS="World Cup (REST next-url)"
+Validating World Cup (REST connector) (world-cup-rest-connector, sqlite) on World Cup (REST next-url)
+
+✗ rest-connector-paging-player-count  sqlite  REST API — endpoint "players": HTTP 400 — {"error":"Invalid page_token \"http://127.0.0.1:55093/api/world_cup/players?page_token=bzoyMA&limit=20\"."}
+✗ rest-connector-paging-goalkeepers  sqlite  REST API — endpoint "players": HTTP 400 — {"error":"Invalid page_token \"http://127.0.0.1:55093/api/world_cup/players?page_token=bzoyMA&limit=20\"."}
+✗ rest-connector-paging-last-page-player  sqlite  REST API — endpoint "players": HTTP 400 — {"error":"Invalid page_token \"http://127.0.0.1:55093/api/world_cup/players?page_token=bzoyMA&limit=20\"."}
+✗ rest-connector-paging-top-scorers  sqlite  REST API — endpoint "goals": HTTP 400 — {"error":"Invalid page_token \"http://127.0.0.1:55093/api/world_cup/goals?page_token=bzoyMA&limit=20\"."}
+✓ rest-connector-nested-away-wins  sqlite  4 rows
+✓ rest-connector-nested-busiest-city  sqlite  2 rows
+✓ rest-connector-rows-pointer-group  sqlite  1 rows
+✓ rest-connector-cap-total-shots  sqlite  1 rows
+✓ rest-connector-auth-champion-2018  sqlite  1 rows
+✓ rest-connector-dialect-final-weekday  sqlite  2 rows
+✗ rest-connector-dialect-penalty-share  sqlite  REST API — endpoint "goals": HTTP 400 — {"error":"Invalid page_token \"http://127.0.0.1:55093/api/world_cup/goals?page_token=bzoyMA&limit=20\"."}
+
+world-cup-rest-connector: 6 of 11 reference queries passed; 1 case has no reference query.
+exit 1
+(1 s)
+
+=== EVAL_SET=world-cup-rest-connector EVAL_DATASETS="World Cup (REST)"
+Validating World Cup (REST connector) (world-cup-rest-connector, sqlite) on World Cup (REST)
+
+✗ dataset preflight  These evals require the bundled World Cup (REST API, connector profile) sample: The World Cup sample over a local REST API with the connector profile ('REST_API_PROFILE=connector npm run worldcup:api', one server per paging style). Select its REST API datasource and save a dataset containing the world_cup tables and views. Setup: scripts/setup-worldcup-rest.ts. Selected datasets: World Cup (REST). Missing entities: world_cup.matches_nested.
+
+world-cup-rest-connector: the dataset preflight failed; no reference query ran.
+exit 1
+(0 s)
+
