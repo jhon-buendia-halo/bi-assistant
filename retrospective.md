@@ -14,6 +14,32 @@ Entry template:
 
 ---
 
+## 2026-11-04 — Merge of `main` (v0.38.0) into the BA-9, BA-123 and BA-124 branches (PRs #81, #61, #60)
+
+### What went well
+- `git merge-tree --write-tree --name-only` on each branch gave the conflicted files of all three PRs before any worktree was touched. #61 was updated by merging the updated #60 into it, not `main` directly, so it stays stacked.
+- Checking the ids before merging found the one collision: `main` took ADR-0031 and ADR-0032, and the memory ADR on #61 was ADR-0031, cited on #60, #81 and BA-4 too. One script, limited to lines each branch added since the branch point and refusing to write unless the count matched a dry run, gave the lines the branches share the identical edit, so their merges into each other stayed clean.
+- Grepping the whole merged tree for `resolveAgentModel` found two breakages git had merged without a conflict: `main` changed what the function returns, and BA-9's SQL fixer call in `sessions.service.ts` would not have compiled.
+- diff3 markers (`git checkout --conflict=diff3`) showed that `main` had reworded a judge rubric inside the in-code cases BA-9 moved to JSON. The port was checked against `main`'s text word for word, and the 1.1.4 snapshot test applies it as a declared change of `main`'s, without editing the evidence.
+- The user's two unstaged edits were set aside as a patch file in the scratchpad, not in the stash the worktrees share.
+- The one E2E failure was diagnosed from the page snapshot (a missing `intellify_mercer_demo` database), loaded through an isolated CLI, and the spec re-run green: 60 of 60, where the 2026-10-15 merge left it at 2 of 3.
+
+### What went wrong
+- My first `agents.md` resolution script assumed the `rfp` paragraph was unchanged on all sides; BA-9 had rewritten it. The script's assertion stopped it before it wrote anything.
+- The first full backend run failed three suites: `main`'s data-readiness spec had no `createScorer` in its mock, BA-9's CLI spec did not mock the new agent, and the 1.1.4 snapshot predated BA-300. `merge-tree` cannot see any of these; only the full suite did.
+- I wrote `CHROME_BIN` as `Chromium.app`; on this Mac Playwright's Chromium is `Google Chrome for Testing.app`, so one `ng test` run could not launch a browser.
+- `git apply --3way` staged the restored edits, which had been unstaged; they needed a `git restore --staged`.
+- The E2E runs rewrote five screenshots under `evidence/1.14.17/` and `evidence/1.15.2/` again; they were restored with `git checkout`.
+- A memory note said BA-9's `076a850` was not pushed; it had been. I checked `origin` before relying on it.
+
+### What to do differently
+- When `main` changes what an exported function returns (not only its name), grep the merged tree for every call of it and run `tsc -p tsconfig.build.json --noEmit` before the unit tests. A clean merge of the caller proves nothing.
+- When a branch has moved code into data files (the question bank JSON), read `main`'s base-to-theirs diff of the moved code in every conflict and port each change into the data file, with the snapshot test listing it.
+- For an ADR claimed on stacked PRs, renumber the lowest PR first and give the PRs above it, and any branch cut from them, the identical edit on the shared lines.
+- On macOS, set `CHROME_BIN` to `~/Library/Caches/ms-playwright/chromium-*/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`.
+- Before running `testing-data.spec.ts`, check that `intellify_mercer_demo` exists on 55432; if not, load the Intellify sample into it through an isolated CLI (`.claude/skills/intellify-api`, step 2).
+- After `git apply --3way` of edits that were unstaged, run `git restore --staged` on them.
+
 ## 2026-11-03 — 1.17.1 to 1.17.20 acceptance gate of epic BA-281 (custom LLM endpoint)
 
 ### What went well

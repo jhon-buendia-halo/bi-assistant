@@ -2,6 +2,17 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-04
+
+### Changed
+- **`main` (v0.38.0) merged into the BA-9 branch** (epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9), PR #81), and into the Knowledge Store PRs #60 ([BA-123](https://halo-powered.atlassian.net/browse/BA-123)) and #61 ([BA-124](https://halo-powered.atlassian.net/browse/BA-124)). The branch now carries `main`'s Data Readiness Agent (BA-251, ADR-0031) and custom LLM endpoints (BA-281, ADR-0032).
+  - **The memory ADR is ADR-0033.** `main` took ADR-0031 and ADR-0032, so the cross-session memory ADR of BA-124 moved to ADR-0033 on #60, #61, this branch and `feat/BA-4-knowledge-store`, each by a commit before its merge (agents-evals *Memory arms*, agents.md 8.3). The map: [id-map.md](evidence/merge-main-2026-11-04/id-map.md).
+  - **Model resolver** (agents.md 1.3): `resolveAgentModel()` now builds the model and `resolveAgentModelConfig()` gives its config. The eval judge, the run's recorded model (`evalRunModel`, R22, R219) and the SQL fixer's usage report read the config.
+  - **Eval command line** (agents.md 8.5, api.md): `main`'s `EVAL_LLM_*` custom endpoint target is refused last before the backend boots, with exit code 1, and the run prints `Model: <model> on custom endpoint <host> (…)` after it boots.
+  - **Eval sets** (agents.md 8.1): the registry is the assistant's question bank files, the `rfp` set and `main`'s `data-readiness` set (8 cases), listed in the sets table. `main`'s rewording of the `ambiguous-best-team` judge rubric (BA-300: one clarifying dimension is enough) is in `sets/world-cup.json`, so the `rest-` and `dbx-` variants have it too.
+  - Evidence: [evidence/merge-main-2026-11-04/](evidence/merge-main-2026-11-04/).
+- **Roadmap 1.1.9 notes** ([BA-186](https://halo-powered.atlassian.net/browse/BA-186)): the seven connector repros were filed on 2026-10-27 as [BA-246](https://halo-powered.atlassian.net/browse/BA-246) to [BA-249](https://halo-powered.atlassian.net/browse/BA-249) under BA-11, plus [BA-250](https://halo-powered.atlassian.net/browse/BA-250) for the datasource label; 1.1.9 stays In progress until the DIGS and RSS endpoints are checked. Evidence: [evidence/1.1.9/](evidence/1.1.9/).
+
 ## 2026-11-03
 
 ### Added
