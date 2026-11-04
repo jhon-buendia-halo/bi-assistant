@@ -1,0 +1,13 @@
+Model: claude-sonnet-4-6 on custom endpoint 127.0.0.1:8317 (Anthropic-compatible, with API key)
+FAIL  ambiguous-best-team  (8589ms)
+      pass check-called-tool: Checks that "ask_clarification" was called
+      pass check-did-not-call: Checks that "run_readonly_sql" was NOT called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      FAIL llm-judge: LLM judge: The question ("Which team performed best?") is ambiguous on both the performance metric (goals? wins? possess
+           ↳ The clarifying question asks about the performance metric but does not address the scope ambiguity (which tournament/year), and the options offered do not name any specific tournament year from the dataset (e.g., 2018 or 2022) as required by the rubric.
+PASS  possession-vs-result  (49036ms)
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-matches: Checks if output matches pattern /\b(possession|%)\b/i
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass llm-judge: LLM judge: The question asks whether, in the 2022 knockout rounds, the team with more possession usually won. In this da
+1/2 questions passed

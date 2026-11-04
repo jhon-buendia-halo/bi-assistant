@@ -651,5 +651,43 @@ describe('AgentsService (built-in and user agents)', () => {
       }
       db.close();
     });
+
+    it('names a custom endpoint and reports a saved keyless one as configured (R53)', async () => {
+      const db = new BetterSqlite3(':memory:');
+      const llm = {
+        getView: jest.fn().mockResolvedValue({
+          provider: 'custom',
+          model: 'qwen3-coder',
+          baseUrl: 'http://127.0.0.1:8317/v1',
+          apiKeyMasked: null,
+          reasoningEffort: 'medium',
+          configured: true,
+          apiStyle: 'openai',
+        }),
+      };
+      const service = new AgentsService(
+        {
+          listAgents: () => ({ assistant: fakeAgent('assistant', []) }),
+        } as unknown as MastraService,
+        new UserAgentsService(
+          new UserAgentsRepository(new SqliteDocStore(db, 'agents')),
+          new BuiltinAgentPinsRepository(new SqliteDocStore(db, 'settings')),
+          {
+            list: jest.fn().mockResolvedValue([]),
+          } as unknown as DatasetsRepository,
+          new SkillsRepository(new SqliteDocStore(db, 'skills')),
+        ),
+        llm as never,
+      );
+      expect((await service.get('assistant'))?.llm).toEqual({
+        provider: 'custom',
+        providerName: 'Custom endpoint',
+        model: 'qwen3-coder',
+        apiKeyConfigured: true,
+        maxOutputTokens: null,
+        reasoningEffort: 'medium',
+      });
+      db.close();
+    });
   });
 });

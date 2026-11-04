@@ -1,0 +1,202 @@
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m[38;5;3m +23ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mCryptoModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mMastraModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mDatabaseModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mDeveloperSettingsModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mVerifiedQueriesModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mUserAgentsModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mRfpPackagesModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mUiPreferencesModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mDatasourcesModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mLlmModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mDatasetsModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mKnowledgeModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mMetricsModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mSkillsModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mTestingDataModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mSessionsModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mDeepAnalysisModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAgentsModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[Bootstrap] [39m[32mServing web UI from /Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/public[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mDatasourcesController {/datasources}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/datasources, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/datasources/test-connection, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/datasources/rest/discover, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/datasources, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/datasources/:id, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/datasources/:id/inventory, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mLlmController {/llm}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/llm/settings, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/llm/effort-levels, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/llm/settings, PUT} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/llm/reasoning, PUT} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/llm/test-connection, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/llm/models, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mDatasetsController {/datasets}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/datasets, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/datasets, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/datasets/:name, DELETE} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mAgentsController {/agents}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:id/draft, PUT} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:id/publish, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:key/prompt, PUT} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:key/prompt, DELETE} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:key/pin, PUT} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:key/evals/run, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:key/evals/runs, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:key/evals/runs/:jobId, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:key/evals/runs/:jobId/download, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:key/evals/runs/:jobId, DELETE} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:id, DELETE} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:key/skills, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:key/skills/:name/file, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:key/evals, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/agents/:key, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mSessionsController {/sessions}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/visualizations/:visualizationId, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/visualizations/:visualizationId/revert, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/visualizations/:visualizationId/repair, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/visualizations/:visualizationId/tailor, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/visualizations/:visualizationId/refresh, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/visualizations/:visualizationId/download, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/rfp-packages/:rfpId/download, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/panel-items/:itemId/file, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/panel-items/:itemId/download, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id, DELETE} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/visualizations, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/messages/stream, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/messages/feedback, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/messages, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mMetricsController {/metrics}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/metrics, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/metrics/candidates, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/metrics, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/metrics/:id, PUT} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/metrics/:id, DELETE} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mKnowledgeController {/knowledge}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/knowledge, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/knowledge, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/knowledge/:id, PATCH} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/knowledge/:id, DELETE} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/knowledge/bootstrap, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/knowledge/bootstrap/stream, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mSkillsController {/skills}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/skills, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/skills/built-in, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/skills/built-in/:name, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/skills/built-in/:name, PUT} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/skills/built-in/:name, DELETE} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/skills/:id, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/skills, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/skills/:id, PUT} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/skills/:id, DELETE} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mDeepAnalysisController {/sessions}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/deep-analysis, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/deep-analysis/:jobId, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/sessions/:id/deep-analysis/:jobId/download, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mTestingDataController {/testing-data}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/testing-data, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/testing-data/:fixtureId/load, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/testing-data/:fixtureId, DELETE} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mDeveloperSettingsController {/developer-settings}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/developer-settings, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/developer-settings, PUT} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/developer-settings/test-endpoint, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mUiPreferencesController {/ui-preferences}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/ui-preferences, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/ui-preferences, PUT} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[NestApplication] [39m[32mNest application successfully started[39m[38;5;3m +1ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m[38;5;3m +1ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mIntellifyApiModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mIntellifyReadModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mRfpModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPackageModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mServiceController {/}:[39m[38;5;3m +10ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/health, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mIntellifyCollectionsController {/v1}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/clients, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/products, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/funding-types, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/plan-types, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/carriers, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/plan-designs, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/policies, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/financials, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/census, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mIntellifyClientsController {/v1/clients/:oneCode}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/clients/:oneCode, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/clients/:oneCode/renewals, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/clients/:oneCode/program, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/clients/:oneCode/plans/:planDesignId, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/clients/:oneCode/financials, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/clients/:oneCode/census, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/clients/:oneCode/commercials, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/clients/:oneCode/wizards, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mRfpController {/v1/rfps}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps, DELETE} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps/:id, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps/:id, PATCH} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps/:id, DELETE} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps/:id/lines, PUT} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps/:id/carriers, PUT} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps/:id/requirements, PUT} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps/:id/timeline, PUT} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mPackageController {/v1/rfps}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps/:id/document.md, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps/:id/document.pdf, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps/:id/exhibits, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps/:id/exhibits/:name.csv, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/v1/rfps/:id/package.zip, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[NestApplication] [39m[32mNest application successfully started[39m[38;5;3m +1ms[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:07 PM [32m    LOG[39m [38;5;3m[Bootstrap] [39m[32mIntellify API listening on http://127.0.0.1:61888[39m
+
+  Questions to Insights 0.36.0
+  URL:      http://127.0.0.1:3473
+  Data dir: /var/folders/kq/9ys30yds3cv7zl58_xt2lcbh0000gn/T/custom-endpoint-smoke-nEuWdA/data
+  Intellify API: http://127.0.0.1:61888
+  Press Ctrl+C to stop.
+
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:08 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] custom/claude-sonnet-4-6 (openai) via 127.0.0.1:8317 (effort low)[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:09 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:09 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] custom/claude-sonnet-4-6 (openai) via 127.0.0.1:8317 (effort low)[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:09 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[31mERROR[39m [2026-11-03 18:17:11.533 -0500] (Mastra): [36mError executing step workflow.assistant-output-processor.step.processor:message-history: Error: Thread ID is required
+    at MemoryLibSQL.saveMessages (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/libsql/dist/index.cjs:8348:10)
+    at MessageHistory.persistMessages (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:17935:22)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async MessageHistory.processOutputResult (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:17904:4)
+    at async /Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:4706:23
+    at async executePhaseWithSpan (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:4498:21)
+    at async engine.executeStepWithRetry.retries.retries (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2903:18)
+    at async DefaultExecutionEngine.executeStepWithRetry (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:3484:14)
+    at async executeStep (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2888:26)
+    at async executeEntry (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:1914:50)[39m
+    [35mtrace_id[39m: "eb6299ef3a0e63825c7b37a997dc4057"
+    [35mspan_id[39m: "b04ad22c09581c34"
+[33m[Nest] 25729  - [39m11/03/2026, 6:17:11 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mGrounding guard corrective pass failed: Processor workflow assistant-output-processor failed with status: failed — Thread ID is required; step processor:message-history: Thread ID is required[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:11 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] custom/claude-sonnet-4-6 (anthropic) via 127.0.0.1:8317 (effort low)[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:12 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:12 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] custom/claude-sonnet-4-6 (anthropic) via 127.0.0.1:8317 (effort low)[39m
+[32m[Nest] 25729  - [39m11/03/2026, 6:17:13 PM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[31mERROR[39m [2026-11-03 18:17:15.718 -0500] (Mastra): [36mError executing step workflow.assistant-output-processor.step.processor:message-history: Error: Thread ID is required
+    at MemoryLibSQL.saveMessages (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/libsql/dist/index.cjs:8348:10)
+    at MessageHistory.persistMessages (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:17935:22)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async MessageHistory.processOutputResult (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:17904:4)
+    at async /Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:4706:23
+    at async executePhaseWithSpan (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:4498:21)
+    at async engine.executeStepWithRetry.retries.retries (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2903:18)
+    at async DefaultExecutionEngine.executeStepWithRetry (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:3484:14)
+    at async executeStep (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:2888:26)
+    at async executeEntry (/Users/jhonbuendia/Documents/projects/bi-assistant/.claude/worktrees/BA-281-custom-llm-endpoint/backend/node_modules/@mastra/core/dist/agent-BMi0F5ou.cjs:1914:50)[39m
+    [35mtrace_id[39m: "4efde8bb9edfbc7162a5c9a28e8d44bf"
+    [35mspan_id[39m: "9ccf872a00e8b0ad"
+[33m[Nest] 25729  - [39m11/03/2026, 6:17:15 PM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mGrounding guard corrective pass failed: Processor workflow assistant-output-processor failed with status: failed — Thread ID is required; step processor:message-history: Thread ID is required[39m

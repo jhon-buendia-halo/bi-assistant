@@ -36,13 +36,14 @@ Build, packaging and versioning detail is in [../system/delivery.md](../system/d
 
 ### Secrets
 
-- N14. LLM API keys SHALL be encrypted at rest with AES-256-GCM. The key is derived from the app secret (SHA-256); each value has its own random 12-byte IV and an authentication tag.
+- N14. LLM API keys SHALL be encrypted at rest with AES-256-GCM. The key is derived from the app secret (SHA-256); each value has its own random 12-byte IV and an authentication tag. This covers every provider's key, including the optional key of a *custom endpoint* ([glossary.md](glossary.md)).
 - N15. On desktop the app secret SHALL be 32 random bytes (hex), created on first launch and stored in `.app-secret` in the data directory with owner-only permissions (mode 0600). The `APP_SECRET` environment variable, when set, SHALL win. The web command SHALL create and read the same file in its own data directory, and so SHALL a backend started on its own without `APP_SECRET`. No fixed, known secret SHALL ever encrypt a key.
 - N16. If the app secret file cannot be written, the app SHALL log a diagnostic and use a new secret each launch, which makes previously encrypted keys unreadable. The user SHALL back up the data directory together with `.app-secret`.
 - N16a. A key encrypted under the former fixed development secret (used before BA-106 when no `APP_SECRET` was set) SHALL be re-encrypted with the current secret at startup. A key that cannot be read SHALL be reported as needing re-entry, never as an unexplained error.
 - N16b. The Intellify RFP API key is a service secret and the whole access boundary of that API ([../capabilities/rfp/spec.md](../capabilities/rfp/spec.md)): it SHALL come from `INTELLIFY_API_KEY` when set, else from `.intellify-api-key` in the data directory (32 random bytes, hex, created on first start with owner-only permissions, mode 0600, like the app secret), and it SHALL reach the app's tools only as the stored, masked credential of the REST datasource that registers the API (N17).
 - N17. API responses SHALL NEVER contain a stored API key, database password, Databricks token or REST credential in plain text. They SHALL show the mask `••••••••`. When the UI sends the mask back, the system SHALL keep the stored secret.
 - N18. The LLM settings view SHALL show only a masked form of the key.
+- N70. The API key of a custom endpoint SHALL be optional. When one is given it SHALL be encrypted (N14) and masked (N17, N18) like any other key; when none is given and none is stored, the app SHALL call the endpoint with no credential (no `Authorization` or `x-api-key` header). A key typed only to list an endpoint's models or test the connection SHALL NOT be stored. Switching the provider away from custom SHALL treat the key as for any other provider change.
 
 Open question (discrepancy): the README says the application database stores datasource credentials "encrypted". The code encrypts only the LLM API key. Datasource credentials (Databricks token, PostgreSQL password, REST tokens and passwords) are stored as plain JSON in the application database and are only masked in API responses. Decide: encrypt them (preferred) or correct the documentation.
 
@@ -89,7 +90,7 @@ Open question: the desktop main window has no explicit restriction on navigation
 ## 4. Privacy: what leaves the machine
 
 - N30. The only outbound network traffic SHALL be:
-  - requests to the configured LLM provider endpoint,
+  - requests to the configured LLM provider endpoint (for a custom endpoint, the base URL the user typed, which may be a server on the same machine or network; then no LLM traffic leaves that network),
   - queries and metadata reads against the user's configured datasources (Databricks workspace and Unity Catalog API, PostgreSQL, REST API),
   - for REST datasources, fetching the optional OpenAPI spec URL the user typed,
   - for the REST/OpenAPI discovery, nothing else,
@@ -206,7 +207,8 @@ All values are the ones in the code today.
 ## 7. Observability and diagnostics
 
 - N52. The desktop shell SHALL collect diagnostics from its own events, the backend's output and the renderer's errors, with levels `debug`, `info`, `warn`, `error`. It SHALL keep at most 2,000 entries in memory and write them to a log file (`logs/system.ndjson`) in the desktop user-data folder (on Windows this can differ from the data directory in N9). At the next start, a log file larger than 5 MiB SHALL be rotated to `system.previous.ndjson`, and the last 2,000 entries SHALL be reloaded.
-- N53. Before an entry is stored, the system SHALL redact: values of keys named password, token, api key, secret or authorization (quoted or not), bearer tokens, and the password part of `postgres://user:pass@host` URLs. The text `[REDACTED]` replaces them. A message is cut at 10,000 characters and a source name at 120.
+- N53. Before an entry is stored, the system SHALL redact: values of keys named password, token, api key, secret or authorization (quoted or not), bearer tokens, the values of `Authorization` and `x-api-key` headers (any letter case), and the password part of `postgres://user:pass@host` URLs. The text `[REDACTED]` replaces them. A message is cut at 10,000 characters and a source name at 120.
+- N71. No LLM API key, of any provider, SHALL appear in an API response, a backend log line, an error message shown to the user or desktop diagnostics. Where the backend logs or reports an LLM request (test connection, listing an endpoint's models, a failed chat turn), it SHALL name the endpoint by URL or host only and SHALL replace the values of `Authorization` and `x-api-key` with `[REDACTED]` before the text is logged; N53 redacts again on storage.
 - N54. The System logs panel SHALL show a count of errors and warnings on its footer button (capped at "99+"), support filtering to issues and searching, and group entries by backend run. Entries from sources with no process id attach to the run that was alive at the time.
 - N55. The user SHALL be able to export an LLM-readable markdown report (instructions for the analysing LLM, errors and warnings, chronological log). On desktop it SHALL be redacted again as a whole and the user picks the save location. Code fences inside log text SHALL be neutralised.
 - N56. Failed SQL repairs SHALL log a one-line warning with the statement cut to 500 characters, so it can ship in a diagnostics report.

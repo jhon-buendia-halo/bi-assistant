@@ -35,6 +35,7 @@ flowchart LR
     lenai["LenAI<br/>(OpenAI-compatible gateway)"]
     anthropic["Anthropic API"]
     openai["OpenAI API<br/>(configured, or OPENAI_API_KEY fallback)"]
+    custom["Custom model endpoint<br/>(self-hosted or gateway; OpenAI- or Anthropic-compatible; ADR-0032)"]
   end
 
   subgraph gh["GitHub (distribution)"]
@@ -51,12 +52,13 @@ flowchart LR
   system -->|"chat completions (HTTPS)"| lenai
   system -->|"messages API (HTTPS, API key)"| anthropic
   system -->|"chat completions (HTTPS)"| openai
+  system -->|"chat completions or messages API (HTTP or HTTPS, optional key)"| custom
 ```
 
-*System context: the analyst uses Questions to Insights, which queries the user's datasources (PostgreSQL, Databricks, REST/OpenAPI), calls the configured LLM provider, and is distributed through GitHub Releases and GitHub Packages.*
+*System context: the analyst uses Questions to Insights, which queries the user's datasources (PostgreSQL, Databricks, REST/OpenAPI), calls the configured LLM provider (a public API, LenAI or a custom model endpoint the user points it at), and is distributed through GitHub Releases and GitHub Packages.*
 
 
-The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI), GitHub (releases, GitHub Packages). There is one user, a built-in super admin who is always the caller and never signs in (ADR-0030).
+The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI, or a custom endpoint that speaks the OpenAI or Anthropic API, such as Ollama, LM Studio, vLLM, LiteLLM or a relay; ADR-0032), GitHub (releases, GitHub Packages). There is one user, a built-in super admin who is always the caller and never signs in (ADR-0030).
 
 ## Level 2 — Containers
 
@@ -759,6 +761,38 @@ flowchart LR
   - The agent needs an eval set (`data-readiness`). Its prompt, tools or skill changes must pass it at 100 % over 3 runs.
   - A third built-in session agent: the session code's per-agent branches (ADR-0028) grow by one.
   - Stack-neutral: a rebuild needs the pure engine, a profiling interface per supported dialect, one stored report collection, three tools, a scorecard view and the stream event that opens it.
+
+#### ADR-0032 — Custom LLM endpoints: an OpenAI- or Anthropic-compatible server at any base URL, Anthropic-style models built by the app with `@ai-sdk/anthropic`
+- **Status:** Accepted
+- **Date:** 2026-11-03
+- **Context:**
+  - The user asked to run the app on any model server they control or choose, not only OpenAI, Anthropic and LenAI: a self-hosted model (Ollama, LM Studio, vLLM), a gateway (LiteLLM) or a relay that speaks the OpenAI or the Anthropic API ([BA-281](https://halo-powered.atlassian.net/browse/BA-281), [epic spec](../epics/BA-281/spec.md)). Such servers often run on the user's machine over plain HTTP, and many need no key.
+  - Models are resolved at call time through Mastra's model router (ADR-0004; [agents.md](agents.md) 1.3). The router takes plain data (a `provider/model` id, or `{ id, url, apiKey, headers }`) and can point an OpenAI-compatible model at any URL, which is how LenAI already works. It has no way to point an **Anthropic** model at a base URL other than Anthropic's own, so an Anthropic-compatible server cannot be reached through it.
+  - The per-call tuning (reasoning effort, token caps; [agents.md](agents.md) 1.4) and the visual designer's model swap (1.5) read the resolved config as plain data: its id, whether it has a `url`. A built model object would hide that.
+  - Mastra 1.66 bundles several `@ai-sdk/provider` majors and resolves one by default; a provider package built on another major produces a model the framework rejects or mis-drives.
+  - The security boundary is the host (ADR-0030): one super admin on one machine, and anyone who reaches the port already has full access, including the stored key.
+- **Decision:**
+  - **A fourth provider, `custom` ("Custom endpoint"),** stored in the same single LLM settings document with an `apiStyle` (`openai` | `anthropic`), a required base URL, a model and an **optional** key ([data-model.md](data-model.md); [llm-settings](../capabilities/llm-settings/spec.md)). New optional fields only, so no migration.
+  - **OpenAI style goes through the router** as LenAI does: `{ id: "custom/<model>", url: <base URL without trailing slashes>, apiKey }`. The user's base URL includes the version path (`…/v1`).
+  - **Anthropic style is built by the app.** The resolver returns plain data, `{ kind: "custom-anthropic", id: "anthropic/<model>", baseUrl: <root>/v1, apiKey? }` (the app appends `/v1` unless the URL already ends in it), and a **model factory** turns it at call time into a model instance from `@ai-sdk/anthropic` (`createAnthropic({ baseURL, apiKey })`), which Mastra accepts in place of a router config.
+  - **The resolver is split in two.** `resolveAgentModelConfig` returns the plain-data config for every provider; tuning and the visual designer work on it. `resolveAgentModel` returns what an agent is given: the same config for router-backed providers, the built instance for `custom-anthropic`. Built instances never flow back into tuning.
+  - **New dependency `@ai-sdk/anthropic`,** pinned to the major whose `@ai-sdk/provider` is the one `@mastra/core` 1.66 resolves by default (provider 3.x, so `@ai-sdk/anthropic` 3.x when this was written), recorded in [tech-stack.md](tech-stack.md). A Mastra upgrade re-checks the match.
+  - **Keyless endpoints are allowed.** With no key stored for `custom`, requests carry no credential (no `Authorization`, no `x-api-key`). A given key is encrypted at rest and masked as every other key.
+  - **Any http or https URL is allowed**, loopback and private addresses included; there is no SSRF allow-list. Pointing the backend at an internal address is exactly the use case (a model on `127.0.0.1`), and the caller is the super admin on the host that is the boundary (ADR-0030).
+  - **Model discovery** is a non-persisted backend call (`POST /llm/models`, [api.md](api.md)) to the server's own models list, so the renderer never talks to the endpoint directly and the stored key never leaves the backend.
+- **Alternatives considered:**
+  - Treating every custom server as OpenAI-compatible only: rejected, many relays and gateways expose only the Anthropic Messages API, and the user asked for both.
+  - Routing the Anthropic style through the router's `anthropic/…` id with a patched global `fetch` that rewrites `api.anthropic.com` to the custom root: rejected, it would silently redirect every Anthropic call in the process and is invisible in the config.
+  - Building every provider's model with AI SDK packages and dropping the router: rejected, a larger change to working routes (OpenAI, Anthropic, LenAI) with no benefit to this request.
+  - Having the resolver return only built models: rejected, tuning and the visual designer need the id and the presence of a `url` (1.4, 1.5).
+  - An allow-list of hosts or a block on private addresses: rejected, it would block the main use case and protects nothing on a single-user host (ADR-0030).
+- **Consequences:**
+  - The LLM settings, the connection test, the chat error texts, the agent catalogue and the composer chip learn a fourth provider ([llm-settings](../capabilities/llm-settings/spec.md)). OpenAI-style tuning follows the OpenAI-compatible rules, Anthropic-style tuning the Anthropic bucket ([agents.md](agents.md) 1.4); a custom config is never swapped to a public OpenAI model by the visual designer (1.5).
+  - Anthropic-style calls bypass the router's provider registry: the factory owns their base URL and headers (`x-api-key`, `anthropic-version: 2023-06-01`), and the outbound retry wrapper still applies because it patches the process-wide `fetch` ([agents.md](agents.md) 1.6).
+  - Keys of any provider never appear in API responses, logs or desktop diagnostics; `Authorization` and `x-api-key` values are redacted wherever requests are logged.
+  - With a keyless or plain-HTTP endpoint the prompts and data samples travel unencrypted to whatever the user points the app at. That is the user's choice and is not prevented.
+  - The eval runner can target a custom endpoint from environment variables, so a prompt change can be gated on a self-hosted model as on the public ones ([agents-evals](../capabilities/agents-evals/spec.md)).
+  - Stack-neutral: any rebuild needs a resolver that yields plain data for tuning, plus a way to build an Anthropic-protocol model at an arbitrary base URL.
 
 ## Level 4 — Code
 

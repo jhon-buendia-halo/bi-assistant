@@ -18,8 +18,10 @@ jest.mock('@mastra/core/request-context', () => ({
 }));
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
 jest.mock('../../mastra/model-resolver', () => ({
+  isCustomAnthropicConfig: (c: unknown) =>
+    typeof c === 'object' && c !== null && 'kind' in c,
   AGENT_OVERRIDES_CONTEXT_KEY: 'agent-overrides',
-  resolveAgentModel: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
+  resolveAgentModelConfig: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
 }));
 jest.mock('../../mastra/tool-services', () => ({
   setDatasetToolServices: jest.fn(),

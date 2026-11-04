@@ -18,7 +18,9 @@ jest.mock('@mastra/core/request-context', () => ({
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
 jest.mock('../../mastra/model-resolver', () => ({
   AGENT_OVERRIDES_CONTEXT_KEY: 'agent-overrides',
-  resolveAgentModel: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
+  isCustomAnthropicConfig: (c: unknown) =>
+    typeof c === 'object' && c !== null && 'kind' in c,
+  resolveAgentModelConfig: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
 }));
 jest.mock('../../mastra/tool-services', () => ({
   setDatasetToolServices: jest.fn(),
@@ -86,7 +88,7 @@ jest.mock('./workspace-files', () => {
 });
 
 import { BadRequestException, Logger } from '@nestjs/common';
-import { resolveAgentModel } from '../../mastra/model-resolver';
+import { resolveAgentModelConfig } from '../../mastra/model-resolver';
 import { appSkillBody } from '../../mastra/app-skills';
 
 /** No session in these tests was started from a user agent. */
@@ -234,6 +236,9 @@ describe('SessionsService streaming', () => {
             .fn()
             .mockResolvedValue({ columns: ['n'], rows: check.rows ?? [] }),
     };
+    const llm = {
+      getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
+    };
     const service = new SessionsService(
       repository as never,
       {
@@ -270,9 +275,7 @@ describe('SessionsService streaming', () => {
         ]),
       } as never,
       datasources as never,
-      {
-        getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
-      } as never,
+      llm as never,
       {} as never,
       verifiedQueries as never,
       metrics as never,
@@ -289,19 +292,22 @@ describe('SessionsService streaming', () => {
       verifier,
       datasources,
       repository,
+      llm,
     };
   }
 
   beforeEach(() => {
     (sourceEntities as jest.Mock).mockReturnValue([]);
-    (resolveAgentModel as jest.Mock).mockResolvedValue('openai/gpt-4.1-mini');
+    (resolveAgentModelConfig as jest.Mock).mockResolvedValue(
+      'openai/gpt-4.1-mini',
+    );
   });
 
   // Mastra names an OpenAI-compatible client's provider-options bucket after
   // the provider id, so the reasoning-effort chip was a silent no-op on every
   // LenAI deployment while this key was hardcoded to `openai`.
   it('files provider options under the bucket the configured model reads', async () => {
-    (resolveAgentModel as jest.Mock).mockResolvedValue({
+    (resolveAgentModelConfig as jest.Mock).mockResolvedValue({
       id: 'lenai/mmc-tech-gpt-41-mini-1m-2025-04-14',
       apiKey: 'len-key',
       url: 'https://lenai.example.com/openai/v1/deployments/x',
@@ -324,6 +330,54 @@ describe('SessionsService streaming', () => {
         lenai: { reasoningEffort: 'medium' },
       });
     }
+  });
+
+  // llm-settings R51: Mastra reports a failed model call as an `error` chunk;
+  // on a custom endpoint the turn fails with the R50 text.
+  it.each([
+    [
+      'an unreachable host',
+      apiCallError(undefined, {
+        cause: Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:8317'), {
+          code: 'ECONNREFUSED',
+        }),
+      }),
+      'Could not reach 127.0.0.1:8317 — check the base URL and that the server is running',
+    ],
+    [
+      'a 404',
+      apiCallError(404),
+      'The endpoint answered 404 at http://127.0.0.1:8317/v1/chat/completions — check the base URL (OpenAI-compatible servers usually end in /v1)',
+    ],
+    [
+      'a rejected key',
+      apiCallError(401),
+      'The endpoint rejected the API key (401)',
+    ],
+  ])(
+    'fails a custom endpoint turn on %s in the words of R50',
+    async (_label, error, message) => {
+      const { service, llm } = buildStreaming(errorChunkStream(error));
+      llm.getView.mockResolvedValue({
+        provider: 'custom',
+        baseUrl: 'http://127.0.0.1:8317/v1',
+        reasoningEffort: 'medium',
+      });
+
+      await expect(
+        service.streamMessage('session-1', 'Why?', () => {}),
+      ).rejects.toThrow(message);
+    },
+  );
+
+  it("keeps today's handling of a model failure for other providers", async () => {
+    const { service, session } = buildStreaming(
+      errorChunkStream(apiCallError(401)),
+    );
+
+    await service.streamMessage('session-1', 'Why?', () => {});
+
+    expect(session.messages.at(-1)?.role).toBe('assistant');
   });
 
   it('synthesizes a final answer after a tool-only turn', async () => {
@@ -596,7 +650,9 @@ describe('SessionsService streaming', () => {
       expect(options.providerOptions).toEqual({
         openai: { reasoningEffort: 'low' },
       });
-      expect(resolveAgentModel).toHaveBeenCalledWith('historian-deployment');
+      expect(resolveAgentModelConfig).toHaveBeenCalledWith(
+        'historian-deployment',
+      );
     });
 
     it('runs as the plain assistant once the agent is deleted', async () => {
@@ -1935,6 +1991,24 @@ function* retriedClarificationChunks() {
 
 function toolOnlyStream(count: number) {
   return streamOf(toolOnlyChunks(count));
+}
+
+/** A model call that failed: Mastra's `error` chunk, as the stream ends. */
+async function* errorChunkStream(error: unknown): AsyncGenerator<unknown> {
+  yield await Promise.resolve({ type: 'error', payload: { error } });
+}
+
+/** The shape of an AI SDK `APICallError` from an OpenAI-style endpoint. */
+function apiCallError(
+  statusCode: number | undefined,
+  extra: { cause?: unknown } = {},
+): Error {
+  return Object.assign(new Error('API call failed'), {
+    name: 'AI_APICallError',
+    statusCode,
+    url: 'http://127.0.0.1:8317/v1/chat/completions',
+    ...extra,
+  });
 }
 
 /**

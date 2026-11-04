@@ -80,7 +80,7 @@ A **collection** is an unordered-by-contract set of JSON documents (plain object
 
 ### 2.3 Secret handling (`CryptoService`)
 
-Only one persisted value is encrypted: the LLM API key in the settings document (section 3.2). Scheme:
+Only one persisted value is encrypted: the LLM API key in the settings document (section 3.2), whatever the provider. For the `custom` provider the key is optional: a keyless endpoint stores no `apiKeyCiphertext` at all (never an encrypted empty string). Keys are never written to logs or desktop diagnostics in any form, and `Authorization` / `x-api-key` header values are redacted wherever requests are logged ([api.md](api.md) 2.5). Scheme:
 
 - Algorithm AES-256-GCM. Key = SHA-256 of the string `APP_SECRET` (the value of the env var; if unset, the contents of `<APP_DATA_DIR>/.app-secret`, generated and written there first if missing, section 1).
 - Ciphertext string format `base64(iv):base64(authTag):base64(data)`: a fresh 12-byte random IV per encryption, the 16-byte GCM tag, then the encrypted UTF-8 plaintext. Decryption splits on `:`.
@@ -183,12 +183,15 @@ Exactly one LLM document, upserted by `key = "llm"`. A second kind of document h
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `key` | string | yes | Always `"llm"`. |
-| `provider` | enum | yes | `openai` \| `anthropic` \| `lenai` (LenAI = Halo's OpenAI-compatible gateway). |
-| `model` | string | yes | Model id; for `lenai` it is the deployment name. |
-| `baseUrl` | string | yes | `""` for `openai`/`anthropic`; required non-empty for `lenai`. |
-| `apiKeyCiphertext` | string | yes | The API key encrypted per section 2.3. Never returned by the API; the view carries `apiKeyMasked` = `••••••••` + the key's last 4 characters. |
+| `provider` | enum | yes | `openai` \| `anthropic` \| `lenai` \| `custom` (LenAI = Halo's OpenAI-compatible gateway; `custom` = "Custom endpoint", a server the user chooses that speaks the OpenAI or Anthropic API, [ADR-0032](architecture.md)). |
+| `apiStyle` | enum | for `custom` | `openai` ("OpenAI-compatible") \| `anthropic` ("Anthropic-compatible"): which API the custom endpoint speaks. Stored only when `provider` is `custom`; absent otherwise. |
+| `model` | string | yes | Model id; for `lenai` it is the deployment name; for `custom` it is free text (often picked from the endpoint's model list, [api.md](api.md) 32b). |
+| `baseUrl` | string | yes | `""` for `openai`/`anthropic`; required non-empty for `lenai` and `custom`. For `custom` it is an `http`/`https` URL stored trimmed and without trailing slashes: with `apiStyle: openai` it includes the version path (e.g. `http://127.0.0.1:8317/v1`), with `apiStyle: anthropic` it is the server root (e.g. `http://127.0.0.1:8317`; `/v1` is appended at call time, [api.md](api.md) 2.5). |
+| `apiKeyCiphertext` | string | yes, except `custom` | The API key encrypted per section 2.3. Never returned by the API; the view carries `apiKeyMasked` = `••••••••` + the key's last 4 characters. Absent for a `custom` endpoint saved without a key (the endpoint is then called with no credential, and `apiKeyMasked` is `null`). |
 | `reasoningEffort` | enum | no | `none` \| `minimal` \| `low` \| `medium` \| `high` \| `xhigh` \| `max`, limited on save to the levels the model accepts ([agents.md](agents.md) 1.4); absent is read as `high`. A save without an effort keeps the stored value when the model offers it, else the model's default. Settable only once settings exist. Older documents hold only `low` / `medium` / `high`, which stay valid (no migration). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+`apiStyle` and an absent `apiKeyCiphertext` are new optional shapes: older documents stay valid and need no migration. Migration M11 skips a document with no `apiKeyCiphertext`.
 
 No document stored = "not configured": agents fall back to model `openai/gpt-4o-mini` with the `OPENAI_API_KEY` env var. A save is only persisted after a live test call with the submitted settings succeeds. See [agents.md](agents.md) for model routing.
 

@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **59 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 15, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **80 HTTP route handlers** across 12 app controllers (sessions 17, deep analysis 3, agents 17, skills 9, datasources 6, knowledge 6, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2), plus the 33 routes of the embedded Intellify RFP API (2.16). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
 
 ---
 
@@ -346,7 +346,7 @@ Controller prefix `/metrics`. Capability: metrics. Shape `MetricDoc` in data-mod
 
 ### 2.5 LLM settings
 
-Controller prefix `/llm`. Capability: llm-settings. One persisted singleton document, API key encrypted at rest (AES-256-GCM keyed by `APP_SECRET`).
+Controller prefix `/llm`. Capability: [llm-settings](../capabilities/llm-settings/spec.md). One persisted singleton document ([data-model.md](data-model.md) 3.2), API key encrypted at rest (AES-256-GCM keyed by `APP_SECRET`, data-model 2.3). How a provider's settings become a model route is in [agents.md](agents.md) 1.3.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -355,12 +355,18 @@ Controller prefix `/llm`. Capability: llm-settings. One persisted singleton docu
 | 31 | `PUT /llm/reasoning` | Set reasoning effort only | yes |
 | 32 | `POST /llm/test-connection` | Test candidate settings | yes |
 | 32a | `GET /llm/effort-levels` | Effort levels a model accepts | yes |
+| 32b | `POST /llm/models` | List a custom endpoint's models | yes |
 
 ```ts
-type LlmProvider = 'openai' | 'anthropic' | 'lenai';
+type LlmProvider = 'openai' | 'anthropic' | 'lenai' | 'custom';   // custom is shown "Custom endpoint"
+type LlmApiStyle = 'openai' | 'anthropic';   // shown "OpenAI-compatible" / "Anthropic-compatible"; custom only
 // Ordered lowest to highest; each model accepts a subset (agents.md 1.4).
 type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-interface SaveLlmSettingsDto { provider: LlmProvider; model: string; apiKey?: string; baseUrl?: string; reasoningEffort?: ReasoningEffort }
+interface SaveLlmSettingsDto {
+  provider: LlmProvider; model: string; apiKey?: string; baseUrl?: string; reasoningEffort?: ReasoningEffort;
+  apiStyle?: LlmApiStyle;   // required when provider is 'custom'; ignored (not stored) otherwise
+}
+interface ListLlmModelsDto { provider: 'custom'; apiStyle: LlmApiStyle; baseUrl: string; apiKey?: string }
 interface EffortLevelsView {
   levels: ReasoningEffort[];              // lowest first; [] = the model has no reasoning effort
   defaultEffort: ReasoningEffort | null;  // 'high' when offered, else the first level; null when levels is []
@@ -368,37 +374,60 @@ interface EffortLevelsView {
 }
 interface LlmSettingsView {
   provider: LlmProvider | null; model: string | null; baseUrl: string | null;
-  apiKeyMasked: string | null;   // "••••••••" + last 4 chars of the key
+  apiStyle: LlmApiStyle | null;  // set only when provider is 'custom', else null
+  apiKeyMasked: string | null;   // "••••••••" + last 4 chars of the key; null when no key is stored (a keyless custom endpoint)
   reasoningEffort: ReasoningEffort;   // default 'high'
   configured: boolean;
   keyUnreadable?: true;   // present only when a stored key cannot be decrypted with the current APP_SECRET
 }
 ```
 
+**Custom endpoint URLs.** The `baseUrl` of a `custom` provider is trimmed and its trailing slashes are removed; it is stored that way. What the app calls depends on `apiStyle`:
+
+| `apiStyle` | `baseUrl` the user gives | Chat / probe | Model list | Key header (when a key is set) |
+|---|---|---|---|---|
+| `openai` | Includes the version path, e.g. `http://127.0.0.1:8317/v1`; used as given | `<base>/chat/completions` | `GET <base>/models` | `Authorization: Bearer <key>` |
+| `anthropic` | The server root, e.g. `http://127.0.0.1:8317`; the app appends `/v1` (a URL already ending in `/v1` is used as-is) | `<root>/v1/messages` | `GET <root>/v1/models` | `x-api-key: <key>`, always with `anthropic-version: 2023-06-01` |
+
+With no key the request carries no credential header. Any `http`/`https` host is accepted, loopback and private addresses included ([ADR-0032](architecture.md): one super-admin app, the host is the boundary per ADR-0030).
+
+**Custom endpoint error texts.** Used by 32 and 32b, and by chat turns that fail on a custom endpoint ([llm-settings](../capabilities/llm-settings/spec.md)): connection refused, DNS failure or reset `"Could not reach <host> — check the base URL and that the server is running"` (`<host>` = the URL's `host`, port included); HTTP 404 `"The endpoint answered 404 at <url> — check the base URL (OpenAI-compatible servers usually end in /v1)"` (`<url>` = the full URL called); 401 or 403 `"The endpoint rejected the API key (<status>)"`; 429 `"The endpoint is rate limiting requests (429) — try again later"`. Any other status keeps today's text, `"Provider request failed (<status>) — <first 300 characters of the body>"`. No text ever contains the key.
+
+**Key handling.** Keys of every provider never appear in a response body, a log line or the desktop diagnostics; `Authorization` and `x-api-key` header values are redacted wherever requests are logged ([non-functional](../product/non-functional.md)).
+
 #### 29. `GET /llm/settings`
-- Response `200`: `LlmSettingsView` (bare). Nothing stored: `{ provider:null, model:null, baseUrl:null, apiKeyMasked:null, reasoningEffort:"high", configured:false }`.
-- Stored key that cannot be decrypted with the current `APP_SECRET`: still `200`, with `configured:false`, `keyUnreadable:true`, the stored `provider`, `model`, `baseUrl` and `reasoningEffort`, and `apiKeyMasked:null`.
+- Response `200`: `LlmSettingsView` (bare). Nothing stored: `{ provider:null, model:null, baseUrl:null, apiStyle:null, apiKeyMasked:null, reasoningEffort:"high", configured:false }`.
+- A stored `custom` provider answers its `apiStyle` and `baseUrl`; with no stored key `apiKeyMasked` is `null` and `configured` is still `true`.
+- Stored key that cannot be decrypted with the current `APP_SECRET`: still `200`, with `configured:false`, `keyUnreadable:true`, the stored `provider`, `model`, `baseUrl`, `apiStyle` and `reasoningEffort`, and `apiKeyMasked:null`.
 
 #### 30. `PUT /llm/settings`
 - Body: `SaveLlmSettingsDto`. `apiKey` omitted or blank = use the stored key. For `lenai`, `model` is the deployment name and `baseUrl` is required. `anthropic` takes an API key only (no subscription logins).
-- Validation (Style A): `"provider must be one of: openai, anthropic, lenai"`, `"model is required"`, `"baseUrl is required for lenai"`, `"apiKey is required — none stored yet"`, and, with no `apiKey` and a stored key that cannot be decrypted, `"The saved API key can't be read because the app secret changed — enter it again in Settings → LLM Configuration"` (same for `POST /llm/test-connection`).
-- **The settings are tested against the provider before they are persisted**; a failing test fails the save with the provider's error text and nothing is stored.
-- `reasoningEffort` (optional) must be one of the model's levels (32a), else the save fails with `"reasoning effort must be one of: <levels, comma-separated>"` before any provider call. Omitted: the stored effort is kept when the model offers it, else the model's `defaultEffort`; for a model with no levels the stored effort (or `high`) is kept unchanged.
+- For `custom`: `apiStyle` and `baseUrl` are required, `model` is free text. The API key is optional: a given key is encrypted and stored; a blank key keeps the key stored for `custom` (when the stored provider is `custom`), and with none stored the endpoint is called and saved with no credential (no `apiKeyCiphertext`). A key stored for another provider is never sent to a custom endpoint. Switching from `custom` to another provider follows that provider's rules (blank = the stored key, else `"apiKey is required — none stored yet"`).
+- Validation (Style A, HTTP 200 `{ ok:false, message }`), checked in this order: `"provider must be one of: openai, anthropic, lenai, custom"`, `"apiStyle must be one of: openai, anthropic"` (custom only), `"baseUrl is required for custom"`, `"baseUrl must be an http or https URL"` (custom only), `"model is required"`, `"baseUrl is required for lenai"`, `"apiKey is required — none stored yet"` (not for custom), and, with no `apiKey` and a stored key that cannot be decrypted, `"The saved API key can't be read because the app secret changed — enter it again in Settings → LLM Configuration"` (same for `POST /llm/test-connection`).
+- **The settings are tested against the provider before they are persisted**; a failing test fails the save with the provider's error text (for custom, the texts above) and nothing is stored.
+- `reasoningEffort` (optional) must be one of the model's levels (32a), else the save fails with `"reasoning effort must be one of: <levels, comma-separated>"` before any provider call. Omitted: the stored effort is kept when the model offers it, else the model's `defaultEffort`; for a model with no levels the stored effort (or `high`) is kept unchanged. For `custom` the levels are chosen by model name, as for the other providers.
 - Success: `{ ok:true, message:"Configuration saved", settings: LlmSettingsView }`.
-- Side effects: persists (key encrypted); subsequent agent turns resolve the model from these settings.
+- Side effects: persists (key encrypted; `apiStyle` stored only for `custom`); subsequent agent turns resolve the model from these settings.
 
 #### 31. `PUT /llm/reasoning`
 - Body: `{ effort: "low"|"medium"|"high" }`. This is the composer's menu; it still offers only these three.
 - Success: `{ ok:true, message:"Reasoning effort set to <effort>", settings }`. Failures: `"reasoning effort must be one of: low, medium, high"`, `"Configure and save the LLM first — no settings stored yet"`.
-- Applied per model: mapped to the nearest level the model accepts, translated to the provider's native option, and dropped for Anthropic models that reject it (agents.md 1.4).
+- Applied per model: mapped to the nearest level the model accepts, translated to the provider's native option, and dropped for Anthropic models that reject it (agents.md 1.4). A `custom` provider uses the OpenAI-compatible option for `apiStyle: openai` (`reasoning_effort`, sent only when the model has levels) and the Anthropic one for `apiStyle: anthropic`.
 
 #### 32. `POST /llm/test-connection`
 - Body: `SaveLlmSettingsDto` (same rules as save, nothing persisted; `reasoningEffort` is ignored). Sends one cheap fixed prompt using the candidate settings at the model's `probeEffort` (32a; none sent when the model has no levels); 30 s timeout.
-- Success: `{ ok:true, message:"Connection successful — <provider>/<model> replied \"<reply>\" in <ms>ms" }`. Failure: `{ ok:false, message }` (validation errors, provider HTTP errors, `"LLM request timed out after 30s"`).
+- Success: `{ ok:true, message:"Connection successful — <provider>/<model> replied \"<reply>\" in <ms>ms" }` (for custom, `custom/<model>`). Failure: `{ ok:false, message }` (validation errors, provider HTTP errors, `"LLM request timed out after 30s"`; for custom, the error texts above).
+- Custom, `apiStyle: openai`: when the server rejects the strict `json_schema` response format, the probe retries with `json_object`, then with plain text, and passes on the first step whose reply parses to `{ "status": "<non-empty string>" }` (a code fence tolerated); a failure at the plain-text step, or any failure other than a 400 or 422 rejection of the format, fails the test (llm-settings R49). `apiStyle: anthropic` sends one Messages request.
 
 #### 32a. `GET /llm/effort-levels`
-- Query: `provider` (`openai`|`anthropic`|`lenai`) and `model` (the model or deployment name, trimmed). Both optional; an empty model answers `{ levels: [], defaultEffort: null, probeEffort: null }`.
+- Query: `provider` (`openai`|`anthropic`|`lenai`|`custom`) and `model` (the model or deployment name, trimmed). Both optional; an empty model answers `{ levels: [], defaultEffort: null, probeEffort: null }`. Levels are looked up by model name for every provider, `custom` included.
 - Response `200`: `EffortLevelsView` (bare), from the built-in table in [agents.md](agents.md) section 1.4. Pure lookup: no provider call, nothing stored.
+
+#### 32b. `POST /llm/models`
+- Body: `ListLlmModelsDto`. A blank or omitted `apiKey` uses the key stored for `custom` when the stored provider is `custom` and has one; otherwise the request carries no credential. Nothing is persisted.
+- Calls the endpoint's model list (table above) once, 15 s timeout, and reads the ids from `data[].id` (both styles).
+- Success (Style A): `{ ok:true, models: string[] }`: the ids in the server's order, duplicates removed (first kept); `[]` when the server lists none.
+- Failure: `{ ok:false, message }`: `"provider must be custom to load models"`, the custom validation texts of 30 (`apiStyle`, `baseUrl`), a stored key that cannot be decrypted (same text as 30), the custom endpoint error texts above, `"Model list request timed out after 15s"`, and `"The endpoint did not return a model list — type the model name instead"` when the body is not JSON or has no `data` array (llm-settings R48).
 
 ### 2.6 Agents, hub and evals
 
@@ -1193,6 +1222,7 @@ The `Intellify API:` line carries the actual bound port of the embedded API (use
 | `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated dataset names to run the assistant evals against. Required by that script. | none |
 | `EVAL_SET` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | The question set to run (`world-cup`, `world-cup-rest`, `formula-1`, `rfp`). That script needs this or `EVAL_CASES`, not both ([agents.md](agents.md) 8.5). | none |
 | `EVAL_CASES` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated eval case ids to run instead of a whole set; all from one set's fixture. | none |
+| `EVAL_LLM_PROVIDER`, `EVAL_LLM_API_STYLE`, `EVAL_LLM_BASE_URL`, `EVAL_LLM_API_KEY`, `EVAL_LLM_MODEL` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | `EVAL_LLM_PROVIDER=custom` runs the evals on a custom endpoint instead of the saved LLM settings: API style (`openai` \| `anthropic`), base URL and model required, key optional ([agents.md](agents.md) 8.5). | unset (saved settings) |
 
 ### 6.2 CLI-only
 
