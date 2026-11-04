@@ -1,0 +1,348 @@
+{
+  "sourceId": "gold-postgres-banking-low-w1-09",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "bank_core",
+      "name": "custs",
+      "rowCount": 3427,
+      "fields": [
+        {
+          "name": "cust_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 3427,
+          "min": "1",
+          "max": "3427"
+        },
+        {
+          "name": "full_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2549
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 3189,
+          "formatRule": "email",
+          "invalidFormatCount": 15
+        },
+        {
+          "name": "segment_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 14,
+          "normalizedDistinctCount": 14
+        },
+        {
+          "name": "mailing_addr",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 2603
+        },
+        {
+          "name": "credit_score",
+          "type": "integer",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 26,
+          "min": "0",
+          "max": "3952"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2693,
+          "min": "2021-11-06T12:00:00.000Z",
+          "max": "2023-11-11T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "cust_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "bank_core",
+      "name": "accts",
+      "rowCount": 2388,
+      "fields": [
+        {
+          "name": "acct_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2388,
+          "min": "1",
+          "max": "2388"
+        },
+        {
+          "name": "cust_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 1659,
+          "min": "1",
+          "max": "3427"
+        },
+        {
+          "name": "iban_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2320
+        },
+        {
+          "name": "acct_status",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 35,
+          "normalizedDistinctCount": 35
+        },
+        {
+          "name": "bal_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 2055,
+          "min": "0",
+          "max": "67969826"
+        },
+        {
+          "name": "opened_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2027,
+          "min": "2021-05-02T12:00:00.000Z",
+          "max": "2026-06-10T12:00:00.000Z"
+        },
+        {
+          "name": "closed_at",
+          "type": "date",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 0,
+          "distinctCount": 2022,
+          "min": "2019-09-09",
+          "max": "2026-08-06"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "acct_id"
+          ],
+          "duplicateCount": 0
+        },
+        {
+          "kind": "unique",
+          "fields": [
+            "iban_code"
+          ],
+          "duplicateCount": 26
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "bank_core",
+      "name": "txns",
+      "rowCount": 91615,
+      "fields": [
+        {
+          "name": "txn_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 91615,
+          "min": "1",
+          "max": "91615"
+        },
+        {
+          "name": "acct_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 2388,
+          "min": "1",
+          "max": "2388"
+        },
+        {
+          "name": "amt_cents",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 47954,
+          "min": "-1200",
+          "max": "58349954"
+        },
+        {
+          "name": "txn_type",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 28,
+          "normalizedDistinctCount": 28
+        },
+        {
+          "name": "channel_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 30,
+          "normalizedDistinctCount": 30
+        },
+        {
+          "name": "posted_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 71577,
+          "min": "2019-08-25T12:00:00.000Z",
+          "max": "2026-07-25T12:00:00.000Z"
+        },
+        {
+          "name": "settled_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": true,
+          "nullCount": 5497,
+          "distinctCount": 64095,
+          "min": "2020-10-15T12:00:00.000Z",
+          "max": "2026-06-30T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "txn_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    },
+    {
+      "namespace": "bank_core",
+      "name": "branches",
+      "rowCount": 6833,
+      "fields": [
+        {
+          "name": "branch_id",
+          "type": "bigint",
+          "semanticType": "numeric",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6833,
+          "min": "1",
+          "max": "6833"
+        },
+        {
+          "name": "branch_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 6258
+        },
+        {
+          "name": "city_name",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 5665
+        },
+        {
+          "name": "region_code",
+          "type": "text",
+          "semanticType": "text",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 25,
+          "normalizedDistinctCount": 23
+        },
+        {
+          "name": "opened_at",
+          "type": "timestamptz",
+          "semanticType": "temporal",
+          "nullable": false,
+          "nullCount": 0,
+          "distinctCount": 4938,
+          "min": "1883-04-07T00:00:00.000Z",
+          "max": "2026-06-21T12:00:00.000Z"
+        }
+      ],
+      "keys": [
+        {
+          "kind": "primary",
+          "fields": [
+            "branch_id"
+          ],
+          "duplicateCount": 0
+        }
+      ],
+      "readable": true
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "bank_core",
+      "fromEntity": "accts",
+      "fromField": "cust_id",
+      "toNamespace": "bank_core",
+      "toEntity": "custs",
+      "toField": "cust_id",
+      "orphanCount": 35,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "bank_core",
+      "fromEntity": "txns",
+      "fromField": "acct_id",
+      "toNamespace": "bank_core",
+      "toEntity": "accts",
+      "toField": "acct_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    }
+  ]
+}

@@ -38,6 +38,8 @@ export const AGENT_SKILLS: Readonly<Record<string, readonly string[]>> = {
     'rfp-timeline',
     'rfp-package',
   ],
+  // The Data Readiness Agent's only skill (agents.md 7.4).
+  'data-readiness': ['data-readiness'],
 };
 
 /** Built-in skills code sends to each agent itself (agents.md 7.4). */

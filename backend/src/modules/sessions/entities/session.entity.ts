@@ -1,4 +1,5 @@
 import type { KnowledgeUse } from '../../knowledge/entities/knowledge-snippet.entity';
+import type { Maturity } from '../../data-readiness/engine/types';
 
 export type { KnowledgeUse };
 
@@ -118,6 +119,21 @@ export interface ChatMessage {
    * sessions only.
    */
   rfpPackage?: RfpPackageRef;
+  /**
+   * The last report this turn's `assess_data_readiness` or
+   * `get_readiness_report` returned (data-model 3.4.1); drives the readiness
+   * card. Data Readiness Agent sessions only.
+   */
+  readinessReport?: ReadinessReportRef;
+}
+
+/** A readiness report an answer carries (data-model 3.4.1). */
+export interface ReadinessReportRef {
+  reportId: string;
+  datasourceName: string;
+  overallScore: number;
+  maturity: Maturity;
+  generatedAt: string;
 }
 
 /** An RFP package stored in the session workspace (data-model 3.4.1). */
@@ -193,7 +209,8 @@ export interface InteractiveVisualization extends SessionVisualization {
   version: number;
 }
 
-export type PanelItemKind = 'file' | 'document' | 'table' | 'visual';
+export type PanelItemKind =
+  'file' | 'document' | 'table' | 'visual' | 'readiness';
 
 interface PanelItemBase {
   id: string;
@@ -234,8 +251,18 @@ export interface VisualPanelItem extends PanelItemBase {
   visualId: string;
 }
 
+/** A stored readiness report; id `readiness:<reportId>`, upserted. */
+export interface ReadinessPanelItem extends PanelItemBase {
+  kind: 'readiness';
+  reportId: string;
+}
+
 export type PanelItem =
-  FilePanelItem | DocumentPanelItem | TablePanelItem | VisualPanelItem;
+  | FilePanelItem
+  | DocumentPanelItem
+  | TablePanelItem
+  | VisualPanelItem
+  | ReadinessPanelItem;
 
 /** Where the agent is in its `## Workflow` section (1-based phase numbers). */
 export interface WorkflowState {

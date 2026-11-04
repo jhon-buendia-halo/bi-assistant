@@ -5,6 +5,8 @@ import {
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { API_BASE_URL } from '../../../../core/config/api.config';
+import { Gauge } from 'lucide-angular';
+import { sampleReadinessReport } from '../../models/readiness.testing';
 import { PanelItem, Session } from '../../models/session.model';
 import {
   SessionPanel,
@@ -199,5 +201,36 @@ describe('SessionPanel', () => {
     ).toBe('rfp.pdf');
     expect(panelDownloadName(visual)).toBeNull();
     expect(panelDownloadTitle(visual)).toBeNull();
+  });
+
+  it('shows a readiness item as the scorecard, with a gauge entry and no Download', () => {
+    const readiness: PanelItem = {
+      id: 'readiness:r1',
+      kind: 'readiness',
+      title: 'Data readiness — World Cup',
+      shownAt: '2026-10-14T12:00:00Z',
+      reportId: 'r1',
+    };
+    const fixture = create(session({ panelItems: [doc, readiness] }), readiness);
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.textContent).toContain('Data readiness — World Cup');
+    expect(el.querySelector('app-panel-readiness-view')).toBeTruthy();
+    expect(el.querySelector('[title="Download PDF"]')).toBeNull();
+    expect(panelDownloadTitle(readiness)).toBeNull();
+    expect(panelDownloadName(readiness)).toBeNull();
+    http
+      .expectOne(`${API_BASE_URL}/data-readiness/assessments/r1`)
+      .flush(sampleReadinessReport());
+    fixture.detectChanges();
+    expect(
+      el.querySelector('[data-testid="readiness-overall"]')?.textContent,
+    ).toBe('82');
+
+    (el.querySelector('[title="Shown in this session"]') as HTMLElement).click();
+    fixture.detectChanges();
+    const entry = el.querySelector('.menu-item');
+    expect(entry?.textContent).toContain('Data readiness — World Cup');
+    expect(entry?.querySelector('lucide-angular')).toBeTruthy();
+    expect(fixture.componentInstance.kindIcons.readiness).toBe(Gauge);
   });
 });

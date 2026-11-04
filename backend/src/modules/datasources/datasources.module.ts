@@ -6,6 +6,8 @@ import { InventoryCacheRepository } from './repositories/inventory-cache.reposit
 import { DatabricksConnector } from './connectors/databricks.connector';
 import { PostgresConnector } from './connectors/postgres.connector';
 import { RestConnector } from './connectors/rest.connector';
+import { PostgresProfiler } from './connectors/postgres-profiling';
+import { DatabricksProfiler } from './connectors/databricks-profiling';
 
 @Module({
   controllers: [DatasourcesController],
@@ -16,7 +18,9 @@ import { RestConnector } from './connectors/rest.connector';
     DatabricksConnector,
     PostgresConnector,
     RestConnector,
+    PostgresProfiler,
+    DatabricksProfiler,
   ],
-  exports: [DatasourcesService],
+  exports: [DatasourcesService, PostgresProfiler, DatabricksProfiler],
 })
 export class DatasourcesModule {}

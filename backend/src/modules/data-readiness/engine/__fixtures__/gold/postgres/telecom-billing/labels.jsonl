@@ -1,0 +1,47 @@
+# Answer key for the "telecom-billing" gold dataset (telco billing domain, Postgres) — HUMAN-MAINTAINED.
+# One JSON object per line. Blank lines and lines starting with # or // are ignored.
+# Each line is a real defect a human asserts is in profile.json, independent of what the
+# engine reports. Fields: dimension, namespace, entity, field (the tuple the scorer matches
+# on — must equal the engine's emitted tuple), severity (graded within ±1 band), optional note.
+# See ./README.md for the planted-defect table and the expected precision/recall.
+#
+# Shape note: TWO schemas. `billing` (6 tables, readable) and `network` (2 tables, both locked
+# to the billing role) — so accessibility aggregates to ONE finding for a fully-locked namespace
+# (high). `billing.usage_daily` is a materialised rollup view: it declares NO keys, which is the
+# only way the engine's *inferred* candidate-key and *inferred* FK rules ever run.
+#
+# TRUE POSITIVES — real defects the engine SHOULD catch (and does):
+{"dimension":"uniqueness","namespace":"billing","entity":"subscribers","field":"msisdn","severity":"high","note":"planted: 640 duplicate msisdn values on the unique key — the same phone number active on two subscriber records (engine emits medium for a unique key; graded ±1)."}
+{"dimension":"validity","namespace":"billing","entity":"subscribers","field":"account_uuid","severity":"medium","note":"planted: 1850 account_uuid values are not UUIDs (legacy 8-char account refs migrated into a uuid column)."}
+{"dimension":"validity","namespace":"billing","entity":"subscribers","field":"email","severity":"medium","note":"planted: 3200 email values are malformed (fail the email format)."}
+{"dimension":"consistency","namespace":"billing","entity":"subscribers","field":"plan_code","severity":"low","note":"planted: plan_code stored with casing drift against the plans master (UNL-5G / unl-5g / Unl-5G ...) — 140 raw collapse to 120 normalized."}
+{"dimension":"reasonability","namespace":"billing","entity":"plans","field":"discount_share","severity":"medium","note":"planted: discount_share reads as a fraction (bound 1) but its MAX is 1.35 — a percent-vs-fraction unit bug in the promotions loader."}
+{"dimension":"reasonability","namespace":"billing","entity":"plans","field":"effective_to","severity":"medium","note":"planted: 96 open-ended plans carry the sentinel effective_to = 2099-12-31 instead of NULL — future-dated."}
+{"dimension":"integrity","namespace":"billing","entity":"invoices","field":"subscriber_id","severity":"high","note":"planted: 41200 invoices reference a subscriber_id with no matching subscribers row (purged subscribers, declared FK left NOT VALID)."}
+{"dimension":"reasonability","namespace":"billing","entity":"invoices","field":"billing_period_from, billing_period_to","severity":"low","note":"planted: billing_period_to's whole range (2019–2021) precedes billing_period_from's (2024–2026) — the two columns were swapped in the migration mapping."}
+{"dimension":"completeness","namespace":"billing","entity":"invoices","field":"service_address_id","severity":"medium","note":"planted: service_address_id is null on 22% (4092000/18600000) of invoices — a broken join to the address master, so those invoices cannot be geo-attributed."}
+{"dimension":"uniqueness","namespace":"billing","entity":"usage_daily","field":"record_id","severity":"medium","note":"planted: 600 duplicate record_id values in the rollup — the daily job double-inserted a partition. Only visible via the INFERRED candidate-key rule (the view declares no keys)."}
+{"dimension":"integrity","namespace":"billing","entity":"usage_daily","field":"subscriber_id","severity":"medium","note":"planted: 26400 usage_daily rows reference a purged subscriber. No FK is declared on the view, so this fires only via the INFERRED name-matched join (usage_daily.subscriber_id → subscribers.subscriber_id), severity-capped at medium."}
+{"dimension":"accessibility","namespace":"network","severity":"high","note":"planted: the billing role has no SELECT on either table in the network schema (cell_sites, tower_leases) — 2 of 2 locked, so the namespace aggregates to ONE high finding."}
+{"dimension":"validity","namespace":"billing","entity":"prepaid_topups","field":"mobile_number","severity":"medium","note":"planted: 12400 mobile_number values fail the phone format — the decommissioned prepaid platform stored free-text numbers."}
+{"dimension":"consistency","namespace":"billing","entity":"prepaid_topups","field":"channel_cd","severity":"low","note":"planted: channel_cd stored as USSD / ussd / Ussd / RETAIL / retail ... — 24 raw collapse to 18."}
+{"dimension":"timeliness","namespace":"billing","entity":"prepaid_topups","field":"topped_up_at","severity":"high","note":"planted: newest topped_up_at is 2022-11-30 (>730 days stale) — the prepaid platform was decommissioned but its 41M-row table is still in the billing schema (engine emits medium; graded ±1)."}
+{"dimension":"reasonability","namespace":"billing","entity":"prepaid_topups","field":"legacy_load_date","severity":"low","note":"planted: 3900 legacy_load_date values carry the 1899-12-31 sentinel the old ETL wrote for 'unknown load date' — implausibly old."}
+#
+# RECALL GAPS (blind spots) — real defects the engine CANNOT catch today.
+# Keep these labels: they measure the blind spots honestly (they always score as misses / FN).
+{"dimension":"completeness","namespace":"billing","entity":"subscribers","field":"churn_reason","severity":"medium","note":"BLIND SPOT: 812000 churn_reason rows hold the literal string 'N/A' (disguised missing). The engine sees nullCount=0, so completeness never fires. A disguised-missing-token detector (RECOMMENDED RULE) would be needed."}
+{"dimension":"validity","namespace":"billing","entity":"subscribers","field":"msisdn","severity":"medium","note":"BLIND SPOT: ~7000 msisdn values are malformed (letters, wrong length). The format detector is NAME-based and only knows phone/mobile/tel — 'msisdn', the actual industry column name, is never format-checked. Compare prepaid_topups.mobile_number, which IS checked."}
+{"dimension":"validity","namespace":"billing","entity":"subscribers","field":"status","severity":"medium","note":"BLIND SPOT: 3400 status values are outside the documented domain (ACTIVE/SUSPENDED/CHURNED/PENDING/PORTED/BARRED) — e.g. 'ZZ', 'TEMP'. The engine has no allowed-domain rule; validity only checks name-detected format patterns."}
+{"dimension":"accuracy","namespace":"billing","entity":"plans","field":"monthly_fee_cents","severity":"high","note":"BLIND SPOT: 14 plans' monthly_fee_cents disagree with the published rate card (stale price load). Accuracy needs trusted reference data and is out of automated scope by design (see dimensions.ts) — the engine emits nothing for this dimension, ever."}
+{"dimension":"uniqueness","namespace":"billing","entity":"invoice_lines","field":"invoice_id, charge_code","severity":"high","note":"BLIND SPOT: ~180000 duplicate (invoice_id, charge_code) line pairs from a re-rating retry — double-billed lines. No key is declared on that pair, and the inferred candidate-key rule is skipped entirely because the table DOES declare a PK (invoice_line_id), so nothing checks it."}
+#
+# INTENTIONALLY NOT LABELED (precision gaps the harness should surface as false alarms):
+#   - completeness subscribers.churn_date (high): 65% null (1560000/2400000). Active subscribers
+#     have not churned, so a null churn_date is expected — the engine's HIGH finding is a false alarm.
+#   - reasonability invoices.amount_due_cents (low): MIN = -1245000. Credit notes are legitimately
+#     negative in this column, so the negative-minimum finding is a false alarm.
+#   - uniqueness usage_daily.subscriber_id (medium): the INFERRED candidate-key rule treats any
+#     id-like column on a keyless entity as a candidate key. usage_daily is one row per subscriber
+#     per DAY, so subscriber_id repeats ~3650 times by design (6360000 "duplicates"). Same column,
+#     same table as label #11: the inferred-FK finding there is real, this uniqueness one is noise.

@@ -31,7 +31,12 @@ import { LlmService } from '../llm/llm.service';
 import { AgentPromptsService } from './agent-prompts.service';
 import type { AgentPromptView } from './entities/agent-prompt-override.entity';
 import { evalSetsFor } from '../../mastra/evals/eval-sets';
-import { builtinAgentSession } from './builtin-sessions';
+import {
+  builtinAgentSession,
+  builtinSessionDatasets,
+  canStartBuiltinSession,
+  existingDatasetsFor,
+} from './builtin-sessions';
 import {
   SHOWCASE_AGENT_KEYS,
   SHOWCASE_REASON,
@@ -54,10 +59,14 @@ import type {
 
 /** The registry key of the official agent; every other built-in is `system`. */
 const OFFICIAL_AGENT_KEY = 'assistant';
-/** The built-in agents shown as Official (api.md 2.6 #33): the assistant and the RFP Builder. */
+/**
+ * The built-in agents shown as Official (api.md 2.6 #33): the assistant, the
+ * RFP Builder, the Data Readiness Agent and the showcase agents.
+ */
 const OFFICIAL_AGENT_KEYS: readonly string[] = [
   OFFICIAL_AGENT_KEY,
   'rfp',
+  'data-readiness',
   ...SHOWCASE_AGENT_KEYS,
 ];
 
@@ -155,6 +164,7 @@ const PROVIDER_NAMES: Record<string, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   lenai: 'LenAI',
+  custom: 'Custom endpoint',
 };
 
 export interface AgentDetail extends AgentSummary {
@@ -496,14 +506,16 @@ export class AgentsService {
     pins: string[],
   ): Promise<AgentSummary> {
     const official = OFFICIAL_AGENT_KEYS.includes(key);
-    // A built-in agent with a dataset of its own (the RFP Builder) shows it,
-    // and while it is missing, why Start chat is blocked (api.md 2.6 #33).
+    // A built-in agent with datasets of its own (the RFP Builder's named
+    // one, the Data Readiness Agent's kind) shows them, and while none
+    // qualifies, why Start chat is blocked (api.md 2.6 #33).
     const builtinSession = builtinAgentSession(key);
-    const missing =
-      builtinSession &&
-      !(await this.userAgents.datasetNames()).has(builtinSession.datasetName)
-        ? [builtinSession.datasetName]
-        : [];
+    const declared = builtinSession
+      ? builtinSessionDatasets(
+          builtinSession,
+          await existingDatasetsFor(builtinSession, this.userAgents),
+        )
+      : undefined;
     return {
       key,
       id: agent.id ?? key,
@@ -515,10 +527,14 @@ export class AgentsService {
       pinned: pins.includes(key),
       owner: official ? 'Official' : 'System',
       hasUnpublishedChanges: false,
-      missingDatasets: missing,
-      datasets: builtinSession ? [builtinSession.datasetName] : [],
-      starterQuestions: [],
-      ...(builtinSession && missing.length
+      missingDatasets: declared?.missing ?? [],
+      datasets: declared?.datasets ?? [],
+      // A kind-declaring agent lists its starters (api.md 2.6 #33).
+      starterQuestions:
+        builtinSession && 'datasourceKinds' in builtinSession
+          ? [...builtinSession.starterQuestions]
+          : [],
+      ...(builtinSession && declared && !canStartBuiltinSession(declared)
         ? { chatRequirement: builtinSession.requirement }
         : {}),
       // A showcase agent never chats; the hub shows why (R106).

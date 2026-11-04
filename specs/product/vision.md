@@ -51,7 +51,7 @@ The product SHALL follow these principles. Capability specs turn them into testa
 - Not a dashboard builder. Visuals belong to a conversation, not to a shared board. There is no sharing or publishing of visuals beyond export.
 - Not a multi-user or hosted service. It has one built-in user and no accounts, roles or sharing; it makes no calls to a Halo-operated backend, and Halo does not run servers for customers.
 - Not a SQL editor. Users read and learn from the SQL but do not author it in the product. Open question: confirm there is no manual "run SQL" surface (none was found).
-- Not tied to one LLM vendor. OpenAI, Anthropic and an OpenAI-compatible gateway (LenAI) are supported. Claude subscription logins are not a supported provider.
+- Not tied to one LLM vendor. OpenAI, Anthropic, an OpenAI-compatible gateway (LenAI) and any custom endpoint the user chooses that speaks the OpenAI or Anthropic API (a self-hosted model, a gateway or a relay) are supported. Claude subscription logins are not a supported provider.
 - Not a replacement for a governed semantic layer. Metrics and knowledge are lightweight, app-managed definitions that need no feature enabled in the user's warehouse.
 
 ## Where it is going

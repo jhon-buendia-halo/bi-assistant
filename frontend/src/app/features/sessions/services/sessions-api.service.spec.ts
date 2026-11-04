@@ -5,7 +5,15 @@ import {
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { API_BASE_URL } from '../../../core/config/api.config';
-import { SessionsApiService, parseToolEvent } from './sessions-api.service';
+import {
+  sampleReadinessPanelItem,
+  sampleReadinessReport,
+} from '../models/readiness.testing';
+import {
+  SessionsApiService,
+  parseReadinessReportEvent,
+  parseToolEvent,
+} from './sessions-api.service';
 
 describe('SessionsApiService feedback', () => {
   let service: SessionsApiService;
@@ -20,6 +28,15 @@ describe('SessionsApiService feedback', () => {
   });
 
   afterEach(() => http.verify());
+
+  it('reads one readiness report by id', () => {
+    service.getReadinessReport('r 1').subscribe();
+    const req = http.expectOne(
+      `${API_BASE_URL}/data-readiness/assessments/r%201`,
+    );
+    expect(req.request.method).toBe('GET');
+    req.flush(sampleReadinessReport());
+  });
 
   it('creates from an agent, sending the typed name only when given', () => {
     service.createFromAgent('rfp', 'Acme').subscribe();
@@ -248,6 +265,36 @@ describe('SessionsApiService streaming', () => {
     await service.streamMessage('session-1', 'question', { onWorkflow });
 
     expect(onWorkflow).toHaveBeenCalledOnceWith(workflow);
+  });
+
+  it('parses the double-encoded readiness-report frame', async () => {
+    const event = {
+      report: sampleReadinessReport(),
+      panelItem: sampleReadinessPanelItem(),
+    };
+    spyOn(globalThis, 'fetch').and.resolveTo(
+      sseResponse({ type: 'readiness-report', content: JSON.stringify(event) }),
+    );
+    const onReadinessReport = jasmine.createSpy('onReadinessReport');
+
+    await service.streamMessage('session-1', 'question', {
+      onReadinessReport,
+    });
+
+    expect(onReadinessReport).toHaveBeenCalledOnceWith(event);
+  });
+
+  it('ignores a malformed readiness-report frame', () => {
+    expect(parseReadinessReportEvent('not json')).toBeNull();
+    expect(parseReadinessReportEvent('{}')).toBeNull();
+    expect(
+      parseReadinessReportEvent(
+        JSON.stringify({
+          report: sampleReadinessReport(),
+          panelItem: { ...sampleReadinessPanelItem(), kind: 'table' },
+        }),
+      ),
+    ).toBeNull();
   });
 
   it('asks for careful mode only when the turn requested it', async () => {

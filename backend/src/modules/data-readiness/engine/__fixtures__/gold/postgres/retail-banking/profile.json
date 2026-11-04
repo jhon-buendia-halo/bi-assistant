@@ -1,0 +1,101 @@
+{
+  "sourceId": "retail-banking-gold",
+  "sourceType": "postgres",
+  "entities": [
+    {
+      "namespace": "bank",
+      "name": "branches",
+      "rowCount": 240,
+      "readable": true,
+      "keys": [{ "kind": "primary", "fields": ["branch_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "branch_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 240, "min": "1", "max": "240" },
+        { "name": "branch_code", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 240, "normalizedDistinctCount": 240 },
+        { "name": "city", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 85, "normalizedDistinctCount": 85 },
+        { "name": "region", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 9, "normalizedDistinctCount": 9 },
+        { "name": "opened_at", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 233, "min": "1994-03-01", "max": "2026-02-14" }
+      ]
+    },
+    {
+      "namespace": "bank",
+      "name": "customers",
+      "rowCount": 180000,
+      "readable": true,
+      "keys": [{ "kind": "primary", "fields": ["customer_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "customer_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 180000, "min": "1", "max": "180000" },
+        { "name": "full_name", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 174200 },
+        { "name": "email", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 176400, "formatRule": "email", "invalidFormatCount": 2100 },
+        { "name": "phone", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 175900, "formatRule": "phone", "invalidFormatCount": 0 },
+        { "name": "segment_cd", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 14, "normalizedDistinctCount": 9 },
+        { "name": "mailing_address", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 27000, "distinctCount": 151800 },
+        { "name": "credit_score", "type": "integer", "semanticType": "numeric", "nullable": true, "nullCount": 0, "distinctCount": 551, "min": "300", "max": "850" },
+        { "name": "date_of_birth", "type": "date", "semanticType": "temporal", "nullable": true, "nullCount": 0, "distinctCount": 26400, "min": "1931-04-12", "max": "2008-01-30" },
+        { "name": "created_at", "type": "timestamptz", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 179800, "min": "2003-06-01T09:15:00Z", "max": "2026-08-01T17:42:00Z" }
+      ]
+    },
+    {
+      "namespace": "bank",
+      "name": "accounts",
+      "rowCount": 265000,
+      "readable": true,
+      "keys": [
+        { "kind": "primary", "fields": ["account_id"], "duplicateCount": 0 },
+        { "kind": "unique", "fields": ["iban"], "duplicateCount": 380 }
+      ],
+      "fields": [
+        { "name": "account_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 265000, "min": "1", "max": "265000" },
+        { "name": "customer_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 168400, "min": "1", "max": "185200" },
+        { "name": "iban", "type": "text", "semanticType": "text", "nullable": false, "nullCount": 0, "distinctCount": 264620 },
+        { "name": "balance_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 244100, "min": "-842000", "max": "912400000" },
+        { "name": "status", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 6, "normalizedDistinctCount": 6 },
+        { "name": "opened_at", "type": "date", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 9200, "min": "1997-01-15", "max": "2026-08-05" },
+        { "name": "closed_at", "type": "date", "semanticType": "temporal", "nullable": true, "nullCount": 231000, "distinctCount": 6100, "min": "1999-04-02", "max": "2026-07-28" }
+      ]
+    },
+    {
+      "namespace": "bank",
+      "name": "legacy_wire_transfers",
+      "rowCount": 3400000,
+      "readable": true,
+      "keys": [{ "kind": "primary", "fields": ["transfer_id"], "duplicateCount": 0 }],
+      "fields": [
+        { "name": "transfer_id", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 3400000, "min": "1", "max": "3400000" },
+        { "name": "account_id", "type": "integer", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 198700, "min": "1", "max": "265000" },
+        { "name": "amount_cents", "type": "bigint", "semanticType": "numeric", "nullable": false, "nullCount": 0, "distinctCount": 1240000, "min": "50", "max": "480000000" },
+        { "name": "currency_cd", "type": "text", "semanticType": "text", "nullable": true, "nullCount": 0, "distinctCount": 3, "normalizedDistinctCount": 3 },
+        { "name": "executed_at", "type": "timestamptz", "semanticType": "temporal", "nullable": false, "nullCount": 0, "distinctCount": 3140000, "min": "2019-02-01T00:04:00Z", "max": "2023-05-14T21:56:00Z" }
+      ]
+    },
+    {
+      "namespace": "bank",
+      "name": "audit_log",
+      "rowCount": 0,
+      "readable": false,
+      "keys": [],
+      "fields": []
+    }
+  ],
+  "relationships": [
+    {
+      "fromNamespace": "bank",
+      "fromEntity": "accounts",
+      "fromField": "customer_id",
+      "toNamespace": "bank",
+      "toEntity": "customers",
+      "toField": "customer_id",
+      "orphanCount": 5200,
+      "origin": "declared"
+    },
+    {
+      "fromNamespace": "bank",
+      "fromEntity": "legacy_wire_transfers",
+      "fromField": "account_id",
+      "toNamespace": "bank",
+      "toEntity": "accounts",
+      "toField": "account_id",
+      "orphanCount": 0,
+      "origin": "declared"
+    }
+  ]
+}

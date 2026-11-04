@@ -9,6 +9,9 @@ jest.mock('../agents/assistant.agent', () => ({
   assistantAgent: { id: 'assistant' },
 }));
 jest.mock('../agents/rfp.agent', () => ({ rfpAgent: { id: 'rfp-builder' } }));
+jest.mock('../agents/data-readiness.agent', () => ({
+  dataReadinessAgent: { id: 'data-readiness' },
+}));
 jest.mock('../agents/eval-judge.agent', () => ({
   evalJudgeAgent: {},
   evalJudgeOutputSchema: {},
@@ -147,7 +150,7 @@ describe('the rfp eval set (agents.md 8.1)', () => {
     expect(evalSetsFor('rfp')).toEqual([RFP_EVAL_SET]);
     expect(evalSetsFor('sql-fixer')).toEqual([]);
     expect(hasEvals('rfp')).toBe(true);
-    expect(EVAL_SETS).toHaveLength(4);
+    expect(EVAL_SETS).toHaveLength(5);
     const ids = EVAL_SETS.flatMap((set) => set.cases.map((c) => c.id));
     expect(new Set(ids).size).toBe(ids.length);
   });

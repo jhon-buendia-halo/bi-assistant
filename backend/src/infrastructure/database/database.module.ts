@@ -16,6 +16,7 @@ import {
   SETTINGS_STORE,
   SKILLS_STORE,
   AGENT_PROMPT_OVERRIDES_STORE,
+  READINESS_REPORTS_STORE,
   SKILL_OVERRIDES_STORE,
   VERIFIED_QUERIES_STORE,
 } from './doc-store';
@@ -47,6 +48,7 @@ const COLLECTIONS = [
   { token: SKILLS_STORE, table: 'skills' },
   { token: SKILL_OVERRIDES_STORE, table: 'skill_overrides' },
   { token: AGENT_PROMPT_OVERRIDES_STORE, table: 'agent_prompt_overrides' },
+  { token: READINESS_REPORTS_STORE, table: 'readiness_reports' },
 ];
 
 const sqliteDbProvider: Provider = {

@@ -1,0 +1,9 @@
+{"dimension":"timeliness","namespace":"bank_core","entity":"custs","field":"created_at","severity":"medium","note":"customers stopped loading ~2.8 years ago — a paused upstream feed."}
+{"dimension":"integrity","namespace":"bank_core","entity":"accts","field":"cust_id","severity":"high","note":"accounts.customer_id references parent rows an archival job deleted — the declared FK has orphans."}
+{"dimension":"uniqueness","namespace":"bank_core","entity":"accts","field":"iban_code","severity":"medium","note":"The unique key (iban_code) on accounts carries duplicate rows — the constraint is informational/bypassed."}
+{"dimension":"validity","namespace":"bank_core","entity":"custs","field":"email","severity":"medium","note":"customers.email carries values that fail the email pattern — a legacy import bypassed validation."}
+{"dimension":"consistency","namespace":"bank_core","entity":"branches","field":"region_code","severity":"low","note":"branches.region_code stores the same code in multiple casings — two writers disagree."}
+{"dimension":"completeness","namespace":"bank_core","entity":"txns","field":"settled_at","severity":"low","note":"6% of transactions.settled_at is missing — the upstream mapping drops it for a whole segment."}
+{"dimension":"reasonability","namespace":"bank_core","entity":"branches","field":"opened_at","severity":"low","note":"branches.opened_at has pre-1900 values — a two-digit-year parse error."}
+{"dimension":"validity","namespace":"bank_core","entity":"txns","field":"txn_type","severity":"medium","note":"BLIND SPOT: transactions.transaction_type carries codes outside the allowed domain ('ZZ', 'TEMP') — no allowed-domain rule exists."}
+{"dimension":"uniqueness","namespace":"bank_core","entity":"custs","field":"full_name","severity":"medium","note":"BLIND SPOT: the business key full_name repeats, but customers declares a different PK, so the inferred-key path never runs."}

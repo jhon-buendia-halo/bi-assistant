@@ -1,0 +1,7 @@
+{
+  "industry": "healthcare",
+  "complexity": "high",
+  "wave": "W2",
+  "authoring": "generated",
+  "defectPlan": "plans/postgres/healthcare-high-w2-06.plan.json"
+}

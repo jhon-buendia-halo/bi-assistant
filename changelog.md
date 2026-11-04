@@ -2,6 +2,29 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-03
+
+### Added
+- **Custom LLM endpoint provider** (epic [BA-281](https://halo-powered.atlassian.net/browse/BA-281), roadmap 1.17.1 to 1.17.20, stories [BA-282](https://halo-powered.atlassian.net/browse/BA-282) to [BA-301](https://halo-powered.atlassian.net/browse/BA-301), ADR-0032, [specs/epics/BA-281/spec.md](specs/epics/BA-281/spec.md)).
+  - A fourth provider, **Custom endpoint** (`custom`), with an API style: OpenAI-compatible (base URL with `/v1`, key as `Authorization: Bearer`) or Anthropic-compatible (server root, key as `x-api-key`, models built with `@ai-sdk/anthropic` outside Mastra's router). The key is optional, encrypted and masked; another provider's key is never sent to a custom endpoint (llm-settings R44 to R54).
+  - **Load models** lists the endpoint's models through `POST /llm/models` (api.md 32b); **Test connection** probes per API style, tolerates servers without strict JSON-schema output, and names the fix for an unreachable host, a 404 path, a rejected key, a rate limit and a timeout (1.17.1 to 1.17.6, 1.17.12, 1.17.13).
+  - Every agent, the visual designer, effort levels (by model name) and the eval runner (`EVAL_LLM_*`) use the custom endpoint; the agent page and the composer chip show "Custom endpoint" and `<model> · <host>`; chat errors on a failing endpoint name its host (1.17.7 to 1.17.10, 1.17.14, 1.17.19).
+  - API keys and auth headers are redacted in logs and diagnostics (1.17.11). A live smoke script (`backend/scripts/custom-endpoint-smoke/`) and user docs for common servers (1.17.18, 1.17.20).
+  - Playwright `llm-custom-endpoint.spec.ts` covers both API styles against local stubs (`helpers/llm-stub.ts` with `/models`, new `helpers/anthropic-stub.ts`) (1.17.15 to 1.17.17).
+  - Evidence: [evidence/1.17/](evidence/1.17/): impacted E2E 74 passed (1 desktop-only skipped), live smoke 18/18 against a real relay, World Cup evals on the custom Anthropic-compatible route 100% (each case at least 3 consecutive passes, final run 12/12) with a `main` baseline on the same model.
+
+### Fixed
+- **`ambiguous-best-team` eval judge** (1.17.19, [BA-300](https://halo-powered.atlassian.net/browse/BA-300)): the rubric now accepts a clarification with concrete options on one dimension (metric or year), as its example intended; the judge had failed identical metric-only clarifications about 1 run in 4 on `main` too. [specs/capabilities/agents-evals/spec.md](specs/capabilities/agents-evals/spec.md) eval table updated. Evidence: [evidence/1.17/](evidence/1.17/).
+
+- **Data Readiness Agent** (epic [BA-251](https://halo-powered.atlassian.net/browse/BA-251), roadmap 1.16.1 to 1.16.12, stories [BA-252](https://halo-powered.atlassian.net/browse/BA-252) to [BA-263](https://halo-powered.atlassian.net/browse/BA-263); ADR-0031, [specs/epics/BA-251/spec.md](specs/epics/BA-251/spec.md), [specs/capabilities/data-readiness/spec.md](specs/capabilities/data-readiness/spec.md)).
+  - A deterministic engine scores a PostgreSQL or Databricks datasource on the DMBOK dimensions (completeness, validity, consistency, uniqueness, integrity, accessibility, timeliness, reasonability; accuracy and currency listed, not assessed), with a golden conformance suite (1.16.1 to 1.16.4).
+  - Aggregate-only profiling queries for Postgres and Databricks and the adapters that turn them into profiles (1.16.5 to 1.16.7).
+  - Reports are stored and served by `POST` / `GET /data-readiness/assessments` and `GET /data-readiness/assessments/:id` (1.16.8).
+  - The Official `data-readiness` agent, its prompt, skill and the tools `assess_data_readiness`, `get_readiness_report` and `list_readiness_reports`; the model sees only each report's summary (1.16.9).
+  - Start chat is offered when a PostgreSQL or Databricks dataset exists; the session runs the agent and streams the report to the panel (1.16.10). The scorecard with dimension bars and a filterable findings table, the chat card (1.16.11) and Past assessments (1.16.12).
+  - The `data-readiness` eval set (8 cases) passes 8/8 over 3 runs. The acceptance gate fixed one agent fault it found: the prompt and D9 now define the weakest dimension as the lowest assessed score, not the one with the most severe findings.
+  - Evidence: [evidence/1.16/](evidence/1.16/) (114 impacted E2E tests green, eval runs, live smoke, scorecard screenshot).
+
 ## 2026-10-29
 
 ### Added
