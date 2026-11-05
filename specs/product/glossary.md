@@ -144,7 +144,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Row cap.** A limit on rows returned or stored. See [non-functional.md](non-functional.md). A result clipped by a cap is marked *truncated*.
 
-**Sample fixture.** A bundled sample database the app can provision for testing and evals: World Cup (2018 and 2022), Formula 1 and Intellify (an employee-benefits data model with synthetic data). Set up from Settings, Testing Data. Also called *test data* or *sample*.
+**Sample fixture.** A bundled sample database the app can provision for testing and evals: World Cup (2018 and 2022), Formula 1, Intellify (an employee-benefits data model with synthetic data) and US Health (a synthetic Mercer US Health & Benefits business: clients, plans, claims, benchmarks, surveys, life/absence/disability and strategy). Set up from Settings, Testing Data. Also called *test data* or *sample*.
 
 **Sample values.** Up to 5 distinct real values per column, captured when a dataset is saved, so the assistant can match the user's wording to stored values.
 

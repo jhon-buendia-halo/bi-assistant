@@ -1,0 +1,8 @@
+Running 4 tests using 1 worker
+
+  ✓  1 [web] › e2e/testing-data.spec.ts:59:5 › lists the bundled samples and what is loaded (1.2s)
+  ✓  2 [web] › e2e/testing-data.spec.ts:95:7 › loads the Intellify sample into a new database › seeds it, registers it and reports 49/49 (2.1s)
+  ✓  3 [web] › e2e/testing-data.spec.ts:156:7 › loads the US Health sample into a new database › seeds it, registers it and reports 45/45 (9.4s)
+  ✓  4 [web] › e2e/testing-data.spec.ts:209:5 › registers the Intellify RFP API (1.3s)
+
+  4 passed (14.2s)
