@@ -14,6 +14,30 @@ Entry template:
 
 ---
 
+## 2026-11-04 — 1.19.1 US Health sample as a Testing Data fixture (BA-305)
+
+### What went well
+- Publishing the data model as a review page before anything else had three effects. It turned "research Mercer US Health and create a testing data model" into an approved contract: 41 tables, sample rows, planted signals and defects, with four decisions and their defaults. That page then served as the epic spec's scope and every subagent's brief. Nothing was reworked after approval.
+- I sequenced the five units around the one shared file. Unit 1 alone owned the generator and ran first in the epic worktree. Units 2–5 never edited it and reported generator faults back. All three merges were clean, and the only generator fix (missing `carriers` rows) was found once, by the unit that ran it.
+- The replay used the app's own `splitSqlStatements`, in batches of 50 inside one transaction, against the real sample server. That proved the seed loads the way the loader loads it before any app build. It took 5.5 s; the later app load took 7.4 s.
+- Unit 2 kept the trend tests strict. It changed the measure (full years at the generator's calibration basis) rather than the tolerances, so "the 2025→2026 trend looks flat" turned out to be my rough measure, not a generator defect.
+
+### What went wrong
+- The first generator agent was briefed to write the generator, its tests and the seed in one go. It was stopped before its first run, leaving 2,305 untested lines. The work had to be re-planned into five units.
+- The /batch template asks for one PR per unit, which contradicts the repo's one-PR-per-epic rule. I adapted it to local `unit/BA-305-*` branches.
+- The Playwright global setup (`docker compose up -d --wait postgres`) started a Docker Postgres on `*:55432`, alongside the user's embedded Postgres on 127.0.0.1:55432. Nobody asked for it, and unit 4's brief didn't say to set `E2E_SKIP_DOCKER=1`.
+- I briefly started the unit tests and the E2E run in parallel. Both rebuild `backend/dist`, so I had to stop one.
+- Unit 1's code review read only the first ~2 KB of the 2.3k-line generator, so a reviewer pass on a large generated script proved nothing.
+- `registry.spec.ts`'s "qualifies every statement" check only matched double-quoted identifiers. It could never fail for an unquoted seed until unit 3 spotted it.
+- The frontend `npm ci --legacy-peer-deps` drops `@tiptap/suggestion`'s peer `@floating-ui/dom`, so the web build fails in a fresh worktree until it is installed with `--no-save`.
+
+### What to do differently
+- Brief a large generator as "run it first, then extend": one unit owns the file and must run it within its first few steps. Tests and other consumers start only from a committed, green seed.
+- When a sample server is already listening on 55432, run E2E with `E2E_SKIP_DOCKER=1`, and put that flag in every E2E brief. Check `docker ps` before and after any Playwright run.
+- Never run `npm test`/`build` and `test:e2e` in the same worktree at once; run the E2E first, then the rest.
+- For a fixture whose seed writes unquoted identifiers, check schema qualification by parsing the name after the keyword, not by matching a quote.
+- In a fresh worktree, after `npm ci --legacy-peer-deps` in `frontend/`, run `npm install --no-save --no-package-lock --legacy-peer-deps @floating-ui/dom` before `build:all`. Better, fix the lock file in its own change.
+
 ## 2026-11-04 — 1.18.1 Build only the Windows installer (BA-302)
 
 ### What went well

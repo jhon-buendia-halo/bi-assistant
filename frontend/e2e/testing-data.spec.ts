@@ -12,6 +12,7 @@ const SAMPLES = [
   { id: 'world-cup', name: 'World Cup', required: 9 },
   { id: 'formula-1', name: 'Formula 1', required: 48 },
   { id: 'intellify', name: 'Intellify', required: 49 },
+  { id: 'us-health', name: 'US Health', required: 45 },
   { id: 'world-cup-rest', name: 'World Cup (REST API)', required: 9 },
   { id: 'intellify-api', name: 'Intellify RFP API', required: 10 },
 ];
@@ -74,6 +75,9 @@ test('lists the bundled samples and what is loaded', async ({
   }
   await expect(card(page, 'intellify')).toContainText(
     'Intellify employee-benefits data model (Halo × Marsh), synthetic data',
+  );
+  await expect(card(page, 'us-health')).toContainText(
+    'Mercer US Health & Benefits business, synthetic data',
   );
   await page.screenshot({
     path: testInfo.outputPath('testing-data-samples-listed.png'),
@@ -138,6 +142,67 @@ test.describe('loads the Intellify sample into a new database', () => {
       .getByRole('button', { name: 'Datasource Configuration' })
       .click();
     await expect(page.getByText('Intellify PostgreSQL')).toBeVisible();
+  });
+});
+
+test.describe('loads the US Health sample into a new database', () => {
+  // A database name of its own, so the run never drops a shared `us_health`
+  // database and always exercises "created the database".
+  const database = `us_health_e2e_${Date.now().toString(36)}`;
+  test.afterEach(() =>
+    onServer(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`),
+  );
+
+  test('seeds it, registers it and reports 45/45', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(120_000);
+    await openTestingData(page);
+    await card(page, 'us-health').getByRole('button').first().click();
+
+    await page
+      .getByTestId('testing-data-host-us-health')
+      .fill(WORLD_CUP_DB.host);
+    await page
+      .getByTestId('testing-data-port-us-health')
+      .fill(String(WORLD_CUP_DB.port));
+    await page.getByTestId('testing-data-database-us-health').fill(database);
+    await page
+      .getByTestId('testing-data-user-us-health')
+      .fill(WORLD_CUP_DB.user);
+    await page
+      .getByTestId('testing-data-password-us-health')
+      .fill(WORLD_CUP_DB.password);
+
+    await page.getByTestId('testing-data-load-us-health').click();
+    const target = `${WORLD_CUP_DB.host}:${WORLD_CUP_DB.port}`;
+    await expect(
+      page.getByTestId('testing-data-confirm-panel-us-health'),
+    ).toContainText(
+      `This drops and recreates schema us_health on ${target}/${database}`,
+    );
+    await page.getByTestId('testing-data-confirm-us-health').click();
+
+    const message = page
+      .getByRole('region', { name: 'Notifications' })
+      .getByText(
+        `Seeded us_health on ${target} and loaded 45 entities into dataset "US Health"`,
+      );
+    await expect(message).toBeVisible({ timeout: 90_000 });
+    await expect(message).toContainText('— created the database');
+    await expect(status(page, 'us-health')).toHaveText('45/45 entities');
+    await expect(card(page, 'us-health')).toContainText(
+      `${target}/${database}`,
+    );
+    await page.screenshot({
+      path: testInfo.outputPath('testing-data-us-health-loaded.png'),
+    });
+
+    await page
+      .getByRole('navigation', { name: 'Settings navigation' })
+      .getByRole('button', { name: 'Datasource Configuration' })
+      .click();
+    await expect(page.getByText('US Health PostgreSQL')).toBeVisible();
   });
 });
 

@@ -1,0 +1,34 @@
+test_single_2025_claimant_over_2m_born_2025_above_deductible (scripts.test_us_health_signals.TestBrightwaterNicu) ... ok
+test_2023_to_2024_about_5_percent (scripts.test_us_health_signals.TestCostTrend) ... ok
+test_2024_to_2025_about_6_percent (scripts.test_us_health_signals.TestCostTrend) ... ok
+test_2025_to_2026_6_to_7_percent (scripts.test_us_health_signals.TestCostTrend) ... ok
+test_2027_medical_renewals_average_about_8_percent (scripts.test_us_health_signals.TestCostTrend) ... ok
+test_six_paid_weeks_below_state_law (scripts.test_us_health_signals.TestFairhavenLeave) ... ok
+test_northgate_adopted_pbm_carveout_and_glp1_criteria_for_2027 (scripts.test_us_health_signals.TestGlp1) ... ok
+test_rx_trend_gap_between_covering_and_non_covering_clients (scripts.test_us_health_signals.TestGlp1) ... ok
+test_ltd_loss_ratio_above_100_percent (scripts.test_us_health_signals.TestHalvorsenDisability) ... ok
+test_musculoskeletal_is_top_std_diagnosis (scripts.test_us_health_signals.TestHalvorsenDisability) ... ok
+test_hdhp_cheaper_per_member_month_than_ppo (scripts.test_us_health_signals.TestHdhp) ... ok
+test_hdhp_lower_medical_satisfaction_than_ppo (scripts.test_us_health_signals.TestHdhp) ... ok
+test_northeast_and_west_above_south_and_midwest (scripts.test_us_health_signals.TestRegionBenchmarks) ... ok
+test_claims_outside_enrollment (scripts.test_us_health_structure.PlantedDefects) ... ok
+test_duplicated_medical_claims (scripts.test_us_health_structure.PlantedDefects) ... ok
+test_every_table_has_rows (scripts.test_us_health_structure.PlantedDefects) ... ok
+test_late_feed (scripts.test_us_health_structure.PlantedDefects) ... ok
+test_late_feed_claims_thin_aug_sep (scripts.test_us_health_structure.PlantedDefects) ... ok
+test_null_birth_year_only_dependents (scripts.test_us_health_structure.PlantedDefects) ... ok
+test_primary_keys_unique_and_not_null (scripts.test_us_health_structure.PlantedDefects) ... ok
+test_service_after_paid_and_after_today (scripts.test_us_health_structure.PlantedDefects) ... ok
+test_small_subgroup_survey (scripts.test_us_health_structure.PlantedDefects) ... ok
+test_comments_on_every_entity_and_column (scripts.test_us_health_structure.Structure) ... ok
+test_committed_seed_is_reproducible (scripts.test_us_health_structure.Structure) ... ok
+test_committed_seed_sql_matches_generator (scripts.test_us_health_structure.Structure) ... ok
+test_deterministic_render_and_gzip (scripts.test_us_health_structure.Structure) ... ok
+test_foreign_keys (scripts.test_us_health_structure.Structure) ... ok
+test_registry_required_tables_match (scripts.test_us_health_structure.Structure) ... ok
+test_sql_creates_required_entities (scripts.test_us_health_structure.Structure) ... ok
+
+----------------------------------------------------------------------
+Ran 29 tests in 30.821s
+
+OK
