@@ -84,11 +84,18 @@ describe('sample fixture catalogue', () => {
 
     it('qualifies every statement, so it does not depend on search_path', () => {
       const statements = splitSqlStatements(sql);
-      const unqualified = statements.filter((statement) =>
-        /^(?:CREATE (?:OR REPLACE )?(?:TABLE|VIEW)|INSERT INTO|ALTER TABLE|COMMENT ON (?:TABLE|COLUMN|VIEW))\s+"/i.test(
-          statement.trim(),
-        ),
-      );
+      // The us_health seed writes identifiers unquoted, so check that every
+      // object a statement names sits in schema us_health.
+      const unqualified = statements.filter((statement) => {
+        const match =
+          /^(?:CREATE (?:OR REPLACE )?(?:TABLE|VIEW)|INSERT INTO|ALTER TABLE|COMMENT ON (?:TABLE|COLUMN|VIEW))\s+("?[\w]+"?)(\.)?/i.exec(
+            statement.trim(),
+          );
+        return (
+          match !== null &&
+          (match[1].replace(/"/g, '') !== 'us_health' || !match[2])
+        );
+      });
       expect(unqualified).toEqual([]);
       expect(statements.some((s) => /^SET\s+search_path/im.test(s))).toBe(
         false,

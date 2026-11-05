@@ -16,7 +16,8 @@ regenerate; never edit the seed by hand. Benchmark means follow Mercer's publish
 National Survey headlines; every split, client, carrier, vendor and person is invented.
 
 Planted signals and data-quality defects (each asserted by
-scripts/test_generate_us_health_seed.py) are listed in PLANTED below.
+scripts/test_us_health_signals.py and scripts/test_us_health_structure.py) are listed
+in PLANTED below.
 
 See specs/capabilities/testing-data/spec.md. Standard library only:
     python3 scripts/generate-us-health-seed.py [output.sql.gz]
