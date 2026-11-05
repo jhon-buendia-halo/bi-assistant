@@ -1260,12 +1260,12 @@ How the desktop installers are built and published. From 2026-11-04 only the Win
 
 A synthetic Mercer US Health & Benefits world as a seedable Testing Data fixture, so the Assistant, the Data Readiness Agent and the US Health showcase agents (Milestone 1.15) have one coherent dataset. Builds on the Testing Data catalogue (Milestone 1.1). No ADR: a fixture is one seed file plus one catalogue entry. All stories are built on the branch `feat/BA-305-us-health-testing-data` and ship as one PR. Epic spec: [specs/epics/BA-305/spec.md](specs/epics/BA-305/spec.md).
 
-#### 1.19.1 — US Health sample as a Testing Data fixture ([BA-306](https://halo-powered.atlassian.net/browse/BA-306))  `🚧 In progress`
+#### 1.19.1 — US Health sample as a Testing Data fixture ([BA-306](https://halo-powered.atlassian.net/browse/BA-306))  `✅ Done`
 - **Intent:** one click in Settings → Testing Data loads a realistic US Health & Benefits dataset that every agent can answer from.
 - **Scope:** a fifth fixture `us-health` ("US Health"): schema `us_health` in database `us_health` on the sample server, 41 tables and 4 views (45 required entities) in 8 domains, bundled as `004_us_health.sql.gz`, registered as datasource "US Health PostgreSQL" and dataset "US Health"; the deterministic generator `scripts/generate-us-health-seed.py` with tests for the planted signals and defects; testing-data spec R2–R4 and the Testing Data Feature updated.
 - **Out of scope:** showcase agents chatting; eval sets on the fixture; a REST variant; changes to the other fixtures or the loader.
 - **Acceptance:** the panel lists "US Health" with `0/45 entities`; loading it creates and seeds `us_health` and reports `45/45 entities`; the dataset has sample values and the declared join references; re-running the generator reproduces the seed byte for byte; `check-specs.py`, unit tests, lint, builds and the Testing Data Playwright scenarios are green.
-- **Notes:** data model approved on 2026-11-04 ([review page](https://claude.ai/artifact/4msSW6rkyot8Ai8Zvdr9yc)); research notes from public Mercer, KFF, SOA and state-law sources.
+- **Notes:** data model approved on 2026-11-04 ([review page](https://claude.ai/artifact/4msSW6rkyot8Ai8Zvdr9yc)); research notes from public Mercer, KFF, SOA and state-law sources. Built by five parallel units (generator and seed, signal tests, defect and structure tests, app-level load, specs). Passed the acceptance gate on 2026-11-04. Evidence: [evidence/1.19.1/](evidence/1.19.1/).
 
 ---
 
