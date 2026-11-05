@@ -14,6 +14,21 @@ Entry template:
 
 ---
 
+## 2026-11-04 — 1.18.2 Product page offers only the Windows installer (BA-302)
+
+### What went well
+- Checking `/api/latest` on the live page before proposing a change showed both that downloads update themselves (no deploy needed for a release) and which release really carries the macOS installers.
+- The deploy-labs-site skill's verification list (route headers, first bytes of the file, a bogus target, a browser pass for console errors) proved the deploy beyond a 200 on the homepage.
+
+### What went wrong
+- In 1.18.1 I wrote "v0.16.1" as the last macOS release into N1, the epic spec, the roadmap and the changelog without checking a single release's assets; it was v0.13.1. The error merged to `main` and needed a fix-forward.
+- The product page was put out of scope in 1.18.1 and came back as a second story an hour later, after its branch had merged and been deleted, so the epic needed a second branch and PR.
+- I did not ask whether "the page" mattered when dropping a platform; N1 changed but the public page still advertised macOS.
+
+### What to do differently
+- Before writing a version number into a spec, check it: `gh release view <tag> --json assets` (or `/api/latest` for the page).
+- When a change removes a platform or product surface, list every public surface that names it (README, specs, the product page, `site/README.md`) in the first clarifying question, so the epic's scope is set once.
+
 ## 2026-11-04 — 1.19.1 US Health sample as a Testing Data fixture (BA-305)
 
 ### What went well

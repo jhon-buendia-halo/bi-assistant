@@ -1,0 +1,16 @@
+# Live checks of https://bi-assistant.halo-powered-labs.com after deploy d366ce57 (branch ci/BA-302-windows-only-site, 2f35b0f), 2026-11-04T17:00Z
+
+macOS/Gatekeeper/Apple silicon mentions in page HTML: 0
+download cards: data-target="win-x64" 
+
+## Download routes
+win-x64: HTTP/2 302  x-installer-name: Questions-to-Insights-0.38.0-win-x64.exe 
+mac-arm64: HTTP/2 302  x-installer-name: Questions-to-Insights-0.13.1-mac-arm64.dmg 
+mac-x64: HTTP/2 302  x-installer-name: Questions-to-Insights-0.13.1-mac-x64.dmg 
+bogus: HTTP/2 404  
+win-x64 first two bytes: 4d5a (MZ = Windows executable)
+
+## Browser (Chromium 1440x900)
+version line: Latest release v0.38.0 · Nov 4, 2026
+card: Windows | .exe · 219 MB | Download 0.38.0
+console errors / failed requests: none
