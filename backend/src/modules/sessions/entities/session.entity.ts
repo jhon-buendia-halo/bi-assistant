@@ -278,6 +278,8 @@ export interface WorkflowState {
   waiting?: boolean;
   /** What the user must do per step: step number to action, set by `update_workflow`. */
   todos?: Record<string, string>;
+  /** The step of a workflow-backed agent's turn that failed (agents.md 5.11). */
+  failed?: number;
   updatedAt: string;
 }
 
@@ -293,13 +295,18 @@ export interface WorkflowPhase {
 /** The phases of the session's agent with its saved progress (derived). */
 export interface WorkflowView {
   phases: WorkflowPhase[];
-  /** Where the steps come from: the prompt's `## Workflow` or the agent's own. */
-  source: 'prompt' | 'agent';
+  /**
+   * Where the steps come from: the prompt's `## Workflow`, the agent's own,
+   * or a workflow-backed agent's code-defined workflow (agents.md 5.11).
+   */
+  source: 'prompt' | 'agent' | 'workflow';
   current: number | null;
   done: number[];
   skipped: number[];
   waiting?: boolean;
   note?: string;
+  /** The step that failed in a workflow-backed agent's turn. */
+  failed?: number;
 }
 
 export interface SessionDoc {

@@ -1313,6 +1313,38 @@ Users tag each schema in a dataset with its data layer and a description, and th
 - **Acceptance:** text in a chat answer, a result table and the readiness scorecard can be selected and copied; dragging the splitter selects nothing; buttons and toggles work; app unit test and layout/accessibility Playwright scenarios green.
 - **Notes:** requested by the user on 2026-11-09; added to this epic and branch like the other stories.
 
+### Milestone 1.21 — Questions to Insights v2 ([BA-320](https://halo-powered.atlassian.net/browse/BA-320))
+
+A second built-in data-analyst agent, Questions to Insights v2, built up next to the current Questions to Insights Assistant, which stays unchanged. v2 starts minimal; later stories reduce what the assistant carries and bring only the slimmer set into v2. No new ADR: v2 reuses built-in session agents (ADR-0028) and built-in prompt overrides (ADR-0026). All stories are built on the branch `feat/BA-320-questions-to-insights-v2` and ship as one PR. Epic spec: [specs/epics/BA-320/spec.md](specs/epics/BA-320/spec.md).
+
+#### 1.21.1 — Empty Questions to Insights v2 agent ([BA-321](https://halo-powered.atlassian.net/browse/BA-321))  `🚧 In progress`
+- **Intent:** have a v2 agent to chat with, starting from nothing, so the reductions of the current assistant can land in it one by one.
+- **Scope:** a new built-in agent `assistant-v2` ("Questions to Insights v2", id `questions-to-insights-v2`) with an identity-only prompt starting `You are Questions to Insights v2` (overridable, ADR-0026), the tools `list_entities`, `describe_entity` and `run_readonly_sql`, the assistant's memory settings, no skills and no evals; Official in the Agent Hub; sessions started from it are bound to it (ADR-0028); agents.md, api.md, agents-evals and sessions-chat updated.
+- **Out of scope:** moving any assistant rule, tool or skill into v2; grounding guard, tool-only synthesis and deep analysis for v2; user agents on v2; an eval set; changing the current assistant.
+- **Acceptance:** the hub lists v2 as Official with its prompt, three tools and memory; a chat with v2 on a sample dataset answers a data question by running SQL; the assistant's compiled prompt and tool list are byte-identical to `main`; `check-specs.py`, unit tests, lint, builds and the Agent Hub and sessions Playwright specs are green.
+- **Notes:** epic spec confirmed on 2026-11-09.
+
+#### 1.21.2 — Auto-configure local instances: testing data and custom LLM ([BA-325](https://halo-powered.atlassian.net/browse/BA-325))  `🚧 In progress`
+- **Intent:** every local instance the user tests by hand comes up ready to chat: LLM configured and every sample dataset loaded, with no clicks in Settings.
+- **Scope:** `scripts/setup-local.mjs [baseUrl]` configures a running instance through its API: `PUT /llm/settings` from the gitignored `.env.llm.local` (`LLM_PROVIDER` default `custom`, `LLM_API_STYLE` default `anthropic`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`; found in the checkout, else the main checkout), then every seedable Testing Data fixture with its defaults and the Intellify RFP API, skipping those already loaded; committed `.env.llm.example`; delivery.md 2 and the `verify` and `workflow-implement` skills run it after launching an instance.
+- **Out of scope:** the app provisioning itself on startup; the Electron desktop app; REST fixtures other than the Intellify RFP API.
+- **Acceptance:** on a fresh isolated instance the script saves the LLM (connection tested by the save) and loads World Cup, Formula 1, Intellify, US Health and the Intellify RFP API; a second run reports each fixture as already loaded; exit code 0; no key in any tracked file.
+- **Notes:** requested on 2026-11-09 while testing 1.21.1; the user chose to ship it on the BA-320 branch.
+
+#### 1.21.3 — v2 turns run as a Mastra workflow shown in the workflow bar  `🚧 In progress`
+- **Intent:** v2's process is defined in code, not in its prompt: some steps deterministic, some answered by the LLM, and the user sees the steps advance in the workflow bar.
+- **Scope:** ADR-0034. A Mastra workflow `qti-v2-turn` (`createWorkflow` / `createStep`) registered on the Mastra instance runs every v2 turn, as an example with four steps: 1 **Receive question** (deterministic: trims and checks the question), 2 **Load catalog** (deterministic: the entities of the session's datasets, no LLM), 3 **Analyse** (LLM: the `assistant-v2` agent answers with its three tools and the catalog as context, streamed to the chat as today), 4 **Wrap up** (deterministic: counts SQL queries and rows and records a turn summary). The orchestrator writes the session's saved workflow state from the run's step events (current, done, failed), so the workflow bar shows the four steps from the first turn; v2 gets no `update_workflow`. agents.md, agent-panel and sessions-chat specs updated.
+- **Out of scope:** the real steps (the user defines them next); workflows for any other agent; changes to the workflow bar UI beyond showing a failed step if it can't today.
+- **Acceptance:** a v2 turn on World Cup shows the bar with the four steps advancing to all done and an answer computed by SQL; a failing step is marked failed and the turn ends with its error; the assistant's prompt and tools are byte-identical to `main`; unit tests cover the step order, the deterministic steps and the state written from step events; builds and check-specs green.
+- **Notes:** requested on 2026-11-09. From this date the user stopped using Jira: this story has no Jira key and is documented only in the repo. Built in the fast loop on 2026-11-09: the saved workflow state gains `failed` and the view `source: 'workflow'` (additive, no migration); the bar gains a **Failed** status (agent-panel R8a); any model error now fails v2's Analyse step; the non-streamed turn (`POST /sessions/:id/messages`) stays a single agent call.
+
+#### 1.21.4 — Context area on the navigation rail, with Knowledge inside it  `🚧 In progress`
+- **Intent:** the rail gets a **Context** area that will gather what agents are given as context; Knowledge moves inside it instead of having its own rail item.
+- **Scope:** the rail reads Datasets, Agents, **Context**, Sessions (layers icon); Context opens a page of section cards like the Agent Hub's (icon tile, name, two-line description); a card opens its section under a **Context** back control, and the rail's Context returns to the cards; the only card today is **Knowledge**, showing the Knowledge screen unchanged; app-shell R3, R3a, R37 and its Gherkin, knowledge placement, ui.md 2, 3, 4.8 and the new 4.8a; the navigation and layout Playwright selectors renamed.
+- **Out of scope:** any other Context section (the user defines them later); changes to Knowledge itself; the chat's "Edit it under Knowledge" note.
+- **Acceptance:** the rail shows Context in Knowledge's place and no Knowledge item; clicking Context marks it current and shows the Context page with a Knowledge card; the card opens the Knowledge list with Context still current, and Back or the rail returns to the cards; app unit tests, builds, check-specs and the navigation Playwright spec green.
+- **Notes:** requested on 2026-11-09 with a screenshot of the rail; the user chose an empty placeholder area with Knowledge moved inside. First built as a tab strip; the same day the user said more sections are coming and asked for the best pattern, so it became a Settings-style list pane; then the user asked for cards as in the Agents view, which is what shipped. No Jira key (repo only). The `application-shell` screenshot baseline changes with the rail label; it is refreshed at the acceptance gate.
+
 ---
 
 ## Release 2 — Multi-user  (no target date yet)

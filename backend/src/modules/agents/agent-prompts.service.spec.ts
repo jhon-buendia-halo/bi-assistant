@@ -276,6 +276,65 @@ describe('AgentPromptsService (ADR-0026)', () => {
       ).resolves.toBe('data-readiness');
     });
 
+    it("Questions to Insights v2's identity, then any skill link, then tools not its own (BA-320)", async () => {
+      const identity = 'You are Questions to Insights v2';
+      expect(await refusal('assistant-v2', 'Be brief.')).toBe(
+        `The Questions to Insights v2 prompt must start with "${identity}"`,
+      );
+      // The assistant's identity is not v2's.
+      expect(await refusal('assistant-v2', `${IDENTITY}.`)).toBe(
+        `The Questions to Insights v2 prompt must start with "${identity}"`,
+      );
+      const skillRefusal =
+        "Skills can't be linked here: Questions to Insights v2 has no skills";
+      for (const skill of ['x', 'curated-knowledge', 'data-readiness']) {
+        expect(
+          await refusal(
+            'assistant-v2',
+            `${identity}. [[skill:${skill}]] [[tool:x]]`,
+          ),
+        ).toBe(skillRefusal);
+      }
+      // Neither the assistant's other tools nor another agent's.
+      for (const tool of [
+        'x',
+        'sample_rows',
+        'create_visual',
+        'ask_clarification',
+        'show_in_panel',
+        'update_workflow',
+        'get_rfp',
+      ]) {
+        expect(
+          await refusal('assistant-v2', `${identity}. [[tool:${tool}]]`),
+        ).toBe(`Unknown tool "${tool}"`);
+      }
+    });
+
+    it("accepts Questions to Insights v2's own tools in its prompt, and shows it with links allowed", async () => {
+      const { service } = build();
+      expect(await service.view('assistant-v2')).toEqual({
+        editable: shippedAgentPrompt('assistant-v2'),
+        shipped: shippedAgentPrompt('assistant-v2'),
+        modified: false,
+        builtInChanged: false,
+        linksAllowed: true,
+        updatedAt: null,
+      });
+      await service.save('assistant-v2', {
+        prompt:
+          'You are Questions to Insights v2. Call [[tool:list_entities]], [[tool:describe_entity]] and [[tool:run_readonly_sql]].',
+      });
+      expect(agentPromptOverrideFor('assistant-v2')?.prompt).toContain(
+        '[[tool:run_readonly_sql]]',
+      );
+      await expect(
+        service.save('assistant-v2', {
+          prompt: shippedAgentPrompt('assistant-v2'),
+        }),
+      ).resolves.toBe('assistant-v2');
+    });
+
     it("refuses the Data Readiness Agent's tools and skill in other agents' prompts", async () => {
       expect(
         await refusal(

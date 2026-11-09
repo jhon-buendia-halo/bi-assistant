@@ -141,6 +141,43 @@ describe('AgentsService (built-in and user agents)', () => {
   );
 
   it(
+    'lists Questions to Insights v2 as Official, with no datasets or requirement, and details its tools (BA-320)',
+    asDemoUser(async () => {
+      const v2 = build({
+        'assistant-v2': fakeAgent('Questions to Insights v2', [
+          'list_entities',
+          'describe_entity',
+          'run_readonly_sql',
+        ]),
+      });
+      const agents = await v2.service.list();
+      const entry = agents.find((agent) => agent.key === 'assistant-v2');
+      expect(entry).toMatchObject({
+        kind: 'official',
+        owner: 'Official',
+        status: 'builtin',
+        tools: ['describe_entity', 'list_entities', 'run_readonly_sql'],
+        datasets: [],
+        missingDatasets: [],
+        starterQuestions: [],
+      });
+      expect(entry).not.toHaveProperty('chatRequirement');
+      expect(entry).not.toHaveProperty('showcase');
+      const detail = await v2.service.get('assistant-v2');
+      expect(detail?.toolDetails.map((tool) => tool.name)).toEqual([
+        'describe_entity',
+        'list_entities',
+        'run_readonly_sql',
+      ]);
+      expect(await v2.service.skills('assistant-v2')).toMatchObject({
+        skills: [],
+      });
+      expect(v2.service.evalSets('assistant-v2')).toEqual([]);
+      v2.db.close();
+    }),
+  );
+
+  it(
     "adds the editable prompt to a built-in agent's detail only (ADR-0026)",
     asDemoUser(async () => {
       const view = {

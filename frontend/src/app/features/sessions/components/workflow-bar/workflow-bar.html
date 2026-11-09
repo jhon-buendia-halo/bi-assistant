@@ -40,11 +40,7 @@
           <div
             role="listitem"
             class="flex shrink-0 items-center"
-            [attr.aria-current]="
-              step.status === 'current' || step.status === 'waiting'
-                ? 'step'
-                : null
-            "
+            [attr.aria-current]="isActive(step.status) ? 'step' : null"
             [attr.data-status]="step.status"
           >
             <button
@@ -76,6 +72,13 @@
                     <lucide-angular [img]="Clock" [size]="10" />
                   </span>
                 }
+                @case ("failed") {
+                  <span
+                    class="flex size-4 items-center justify-center rounded-full bg-danger-soft text-on-danger-soft"
+                  >
+                    <lucide-angular [img]="X" [size]="10" />
+                  </span>
+                }
                 @case ("current") {
                   <span class="size-2.5 rounded-full bg-primary"></span>
                 }
@@ -88,12 +91,8 @@
               <span
                 class="whitespace-nowrap"
                 [class.hidden]="iconOnly(step.status)"
-                [class.font-semibold]="
-                  step.status === 'current' || step.status === 'waiting'
-                "
-                [class.text-fg-strong]="
-                  step.status === 'current' || step.status === 'waiting'
-                "
+                [class.font-semibold]="isActive(step.status)"
+                [class.text-fg-strong]="isActive(step.status)"
                 [class.text-fg]="step.status === 'done'"
                 [class.text-fg-muted]="
                   step.status === 'upcoming' || step.status === 'skipped'
@@ -200,21 +199,11 @@
         @for (step of steps(); track step.phase.number) {
           <li
             class="flex items-start gap-3 rounded-xl border px-3 py-2"
-            [class.border-border-selected]="
-              step.status === 'current' || step.status === 'waiting'
-            "
-            [class.bg-surface-selected]="
-              step.status === 'current' || step.status === 'waiting'
-            "
-            [class.border-border]="
-              step.status !== 'current' && step.status !== 'waiting'
-            "
+            [class.border-border-selected]="isActive(step.status)"
+            [class.bg-surface-selected]="isActive(step.status)"
+            [class.border-border]="!isActive(step.status)"
             [attr.data-status]="step.status"
-            [attr.data-current]="
-              step.status === 'current' || step.status === 'waiting'
-                ? 'true'
-                : null
-            "
+            [attr.data-current]="isActive(step.status) ? 'true' : null"
             data-testid="workflow-details-step"
           >
             <span
@@ -231,9 +220,7 @@
                   [class.text-fg-muted]="
                     step.status === 'upcoming' || step.status === 'skipped'
                   "
-                  [class.font-semibold]="
-                    step.status === 'current' || step.status === 'waiting'
-                  "
+                  [class.font-semibold]="isActive(step.status)"
                   [class.line-through]="step.status === 'skipped'"
                   >{{ step.phase.title }}</span
                 >
@@ -246,6 +233,9 @@
                   }
                   @case ("waiting") {
                     <span class="chip chip-warning">Waiting for you</span>
+                  }
+                  @case ("failed") {
+                    <span class="chip chip-danger">Failed</span>
                   }
                   @case ("skipped") {
                     <span class="chip chip-neutral">Skipped</span>
@@ -269,10 +259,7 @@
                   {{ step.phase.skill }}
                 </p>
               }
-              @if (
-                (step.status === "current" || step.status === "waiting") &&
-                view().note
-              ) {
+              @if (isActive(step.status) && view().note) {
                 <div
                   class="prose-dark mt-2 text-[13px]"
                   data-testid="workflow-details-note"
@@ -310,6 +297,7 @@
           [class.chip-success]="pop.status === 'done'"
           [class.chip-info]="pop.status === 'current'"
           [class.chip-warning]="pop.status === 'waiting'"
+          [class.chip-danger]="pop.status === 'failed'"
           [class.chip-neutral]="
             pop.status === 'skipped' || pop.status === 'upcoming'
           "

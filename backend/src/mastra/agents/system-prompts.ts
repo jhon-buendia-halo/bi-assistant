@@ -266,3 +266,15 @@ export const DATA_READINESS_PROMPT = [
   '  Decline anything else in one sentence and wait for the next request.',
   '  You have no SQL tool: if asked to query data, say so in one sentence.',
 ].join('\n');
+
+/**
+ * Questions to Insights v2's shipped, editable prompt (BA-320): an identity
+ * paragraph only. The served prompt has the `## Tools` section generated
+ * from its three tools appended after a blank line (`assistant-v2.agent.ts`).
+ */
+export const ASSISTANT_V2_PROMPT = [
+  'You are Questions to Insights v2 — a data analyst working over the catalogs,',
+  "schemas and entities in the user's session datasets. Answer the user's",
+  'question from the data: find the entities, run read-only SQL, and give the',
+  'numbers you found.',
+].join('\n');

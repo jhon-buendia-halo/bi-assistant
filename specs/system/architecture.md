@@ -665,7 +665,7 @@ flowchart LR
   - A System agent's prompt edit can degrade a structured-output pipeline (designer, fixer, verifier, bootstrap, judge); their callers' existing fallbacks for unusable output still apply.
 
 #### ADR-0028 — A built-in RFP Builder agent with dedicated HTTP tools, resolved through a REST datasource; sessions can bind to a built-in agent
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-11-09 (BA-320, see the amendment at the end of this ADR)
 - **Date:** 2026-10-14
 - **Context:**
   - The user asked for an agent that walks a Mercer benefits consultant through building a carrier RFP, built in code with its own prompt, skill and tools (not a user agent, which can only configure the assistant's tools; ADR-0022, ADR-0024).
@@ -682,6 +682,7 @@ flowchart LR
   - The eval harness runs a case on the set's agent, and an `rfp` eval set exists; prompt, skill or tool changes to the agent must pass it at 100% over 3 runs.
   - Evals that create RFPs write to `rfp.*`; they tag records with `created_by = eval:<jobId>` and delete them afterwards.
   - Note (2026-10-14, not a new decision): the single `rfp-process` skill with one reference file per stage was split into seven on-demand stage skills, one per stage; the loading mechanism is unchanged (agents.md 7.4).
+- **Amendment, 2026-11-09 (BA-320):** a bound built-in agent may also take **user-picked datasets**. Questions to Insights v2 (`assistant-v2`, [agents.md](agents.md) 2.11) is bound like `rfp` and `data-readiness` (`agentKey`, every turn runs it, the assistant-only passes do not apply), but it declares no dataset of its own: Start chat opens the New conversation screen with it preselected, and `POST /sessions` with `agentId: "assistant-v2"` takes `name` and `datasets` from the body like a plain session ([api.md](api.md) 3). The decision above is otherwise unchanged. The rule "the assistant keeps the composer" now reads "an agent that declares no dataset keeps the composer". The session code's per-agent branches grow by one.
 
 #### ADR-0029 — One built-in panel tool for every agent; panel items persisted on the session; a `## Workflow` prompt convention; a workflow status bar with its own tool
 - **Status:** Accepted
@@ -819,6 +820,24 @@ flowchart LR
   - The SSE grammar gains one event type; clients that ignore unknown events are unaffected.
   - The `data-readiness` eval set re-runs once: no prompt or tool description changes, but the tool's behaviour does.
   - Stack-neutral: a rebuild needs a way for a tool to push progress to the client during a call, and connection reuse in its profiling layer.
+#### ADR-0034 — Questions to Insights v2 runs each turn as a code-defined Mastra workflow; the workflow bar shows the run's steps
+- **Status:** Accepted
+- **Date:** 2026-11-09
+- **Context:**
+  - Every agent today runs a turn as one agent call; the order of the work lives in the prompt (the assistant's method rules), and the workflow bar is driven by the model calling `update_workflow` under the prompt's `## Workflow` convention (ADR-0029). The model can skip, reorder or misreport steps.
+  - On 2026-11-09 the user asked that Questions to Insights v2 (roadmap 1.21) use a workflow defined in code with Mastra, not one defined in its system prompt: some steps deterministic, only some answered by the LLM, and the workflow rendered in the workflow bar. The first version is an example with four steps; the real steps come later.
+- **Decision:**
+  - **A v2 turn is a Mastra workflow run** (`createWorkflow` / `createStep` from `@mastra/core/workflows`, registered on the `Mastra` instance), not a direct `agent.stream` call. Each step is either deterministic code or a bounded call to the `assistant-v2` agent; the step order is fixed in code.
+  - **The workflow's steps are the session's workflow** in the existing saved workflow state (ADR-0029, R15): the step titles come from the workflow definition, and their status (current, done, failed) is written by the orchestrator from the run's step events, never by the model. v2 is not given `update_workflow`, and its prompt has no `## Workflow` section.
+  - **The LLM step streams as a normal turn**: its text, reasoning and tool calls reach the chat through the same stream events, so the transcript, memory thread and stop button behave as for any bound agent.
+  - Only v2 changes. The assistant, the RFP Builder, the Data Readiness Agent and user agents keep the prompt-driven workflow of ADR-0029.
+- **Rejected:**
+  - **A `## Workflow` section in v2's prompt with `update_workflow`:** that is the prompt-defined workflow the user asked to move away from.
+  - **A Mastra workflow per agent call inside a tool** (the agent calls a tool that runs the workflow): the model would still decide whether to run it.
+- **Consequences:**
+  - The session service gains a second turn path for workflow-backed agents; the workflow bar needs no new UI, only state written from step events. A step failure stops the run, marks that step failed and ends the turn with the error, as a failed turn does today.
+  - Steps can later be added, removed or swapped between deterministic and LLM without touching the prompt or the bar.
+  - Stack-neutral: any rebuild needs an engine that runs typed steps in a fixed order and reports each step's start and end.
 
 ## Level 4 — Code
 

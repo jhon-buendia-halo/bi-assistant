@@ -35,8 +35,12 @@ test('moves between areas from the rail', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
   await expectCurrent(page, 'Agents');
 
-  await railItem(page, 'Knowledge').click();
-  await expectCurrent(page, 'Knowledge');
+  await railItem(page, 'Context').click();
+  await expectCurrent(page, 'Context');
+  await expect(page.getByRole('heading', { name: 'Context' })).toBeVisible();
+  await page.getByTestId('context-section-knowledge').click();
+  await expect(page.getByRole('heading', { name: 'Knowledge' })).toBeVisible();
+  await expectCurrent(page, 'Context');
 
   await railItem(page, 'Sessions').click();
   await expectCurrent(page, 'Sessions');
@@ -141,7 +145,7 @@ test('expands the rail into a drawer with labels', async ({ page }) => {
   const workspace = page.getByRole('navigation', {
     name: 'Workspace navigation',
   });
-  for (const label of ['Datasets', 'Agents', 'Knowledge', 'Sessions']) {
+  for (const label of ['Datasets', 'Agents', 'Context', 'Sessions']) {
     await expect(workspace.getByText(label, { exact: true })).toBeVisible();
   }
   await expect(
@@ -239,9 +243,13 @@ test('the app opens straight into the shell', async ({ page }) => {
   }
 
   // Every area is reachable (app-shell R3, R50).
-  for (const area of ['Datasets', 'Agents', 'Knowledge']) {
+  for (const [area, heading] of [
+    ['Datasets', 'Datasets'],
+    ['Agents', 'Agents'],
+    ['Context', 'Context'],
+  ]) {
     await railItem(page, area).click();
-    await expect(page.getByRole('heading', { name: area })).toBeVisible();
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     await expectCurrent(page, area);
   }
   await railItem(page, 'Sessions').click();

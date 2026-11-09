@@ -42,6 +42,7 @@ All agents are registered once in a single framework instance and looked up by *
 | Registry key | Agent id | Display name | Description (verbatim) |
 |---|---|---|---|
 | `assistant` | `assistant` | Questions to Insights Assistant | Answers business questions over a session's datasets — plans the analysis, writes and runs the SQL, and explains the result. |
+| `assistant-v2` | `questions-to-insights-v2` | Questions to Insights v2 | A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools. |
 | `visualization` | `interactive-visual-designer` | Interactive Visual Designer | Turns a completed analysis answer into an interactive visual, and tailors it on request. |
 | `sql-fixer` | `sql-fixer` | SQL Fixer | Repairs a SQL statement that failed to execute, using the engine error as the signal. |
 | `sql-verifier` | `sql-verifier` | SQL Verifier | Careful mode's second opinion — re-derives the SQL for a question independently to corroborate the answer. |
@@ -54,15 +55,15 @@ All agents are registered once in a single framework instance and looked up by *
 | `data-readiness` | `data-readiness-agent` | Data Readiness Agent | Assesses how ready a PostgreSQL or Databricks dataset is for analysis, scoring it on the DMBOK data-quality dimensions with a deterministic engine and explaining the findings. |
 | `strategy` | `strategy-agent` | Strategy Agent | Builds a multi-year health and benefits strategy: where the client stands, the cost of doing nothing, strategic options and a year-by-year roadmap. |
 
-The prompt each row's agent runs on is the shipped one unless overridden (1.1). Lookup of an unknown key throws. The catalogue lists agents sorted by display name. It shows `assistant`, `rfp`, `data-readiness` (2.10) and the four **showcase agents** `benchmarking`, `survey`, `lad-coe` and `strategy` (2.9) as Official, and the other five as System ([api.md](api.md) 33); the showcase agents are registered but never run.
+The prompt each row's agent runs on is the shipped one unless overridden (1.1). Lookup of an unknown key throws. The catalogue lists agents sorted by display name. It shows `assistant`, `assistant-v2` (2.11), `rfp`, `data-readiness` (2.10) and the four **showcase agents** `benchmarking`, `survey`, `lad-coe` and `strategy` (2.9) as Official, and the other five as System ([api.md](api.md) 33); the showcase agents are registered but never run.
 
-**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the twelve registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0022), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0025). Rules: sessions-chat R52-R59. A session can also be bound to a **built-in** agent that declares a dataset, today `rfp` (2.8) and `data-readiness` (2.10): it stores the agent's registry key and every turn runs that agent instead of the `assistant` (ADR-0028, sessions-chat R61).
+**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the thirteen registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0022), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0025). Rules: sessions-chat R52-R59. A session can also be bound to a **built-in** agent: one that declares a dataset, today `rfp` (2.8) and `data-readiness` (2.10), or `assistant-v2` (2.11), which takes the user's own datasets. It stores the agent's registry key and every turn runs that agent instead of the `assistant` (ADR-0028, sessions-chat R61).
 
 Not registered (never listed in the catalogue):
 
 - **LLM connection probe** (`llm-connection-probe`, "LLM connection probe", instructions `You answer connection probes exactly as asked.`) — a throwaway agent built per test on the *submitted, not yet saved* Anthropic settings, or custom settings with the Anthropic API style (its model comes from the model factory, 1.3). See [llm-settings](../capabilities/llm-settings/spec.md).
 
-> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the twelve agents, a composite storage, a Pino logger and observability. `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
+> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the thirteen agents, a composite storage, a Pino logger and observability. It also registers one workflow, `qti-v2-turn` (5.11). `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `streamWorkflow(key, inputData, requestContext)` (creates a run and streams it), `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
 
 ### 1.3 Model resolution
 
@@ -925,9 +926,47 @@ The rules encoded (prefix D):
 
 > Implementation note: `mastra/agents/data-readiness.agent.ts` (`dataReadinessAgent`, registered as `data-readiness`). The shipped text without `## Tools` is `DATA_READINESS_PROMPT` in `agents/system-prompts.ts` and `SHIPPED['data-readiness']` in `shipped-agent-prompts.ts`. Tools are in `mastra/tools/readiness.tools.ts`. The skill is in `mastra/skills/data-readiness/SKILL.md`. The engine is in `modules/data-readiness/engine/` and has no framework imports.
 
+### 2.11 `assistant-v2` (id `questions-to-insights-v2`) — Questions to Insights v2
+
+**Purpose.** A slimmed-down data analyst, built up next to the `assistant` (BA-320). It maps a question to dataset entities, runs read-only SQL and gives the numbers it found. It starts minimal: a short prompt and only the core data tools. Later stories of the epic move reduced assistant rules, tools and skills into it, so the two can be compared. The `assistant` is not changed by it. Behaviour rules: [agents-evals](../capabilities/agents-evals/spec.md) R107, [sessions-chat](../capabilities/sessions-chat/spec.md) R52, R61, R64.
+
+**Invoked by.**
+
+| Caller | Mode | Memory | Tools | Steps |
+|---|---|---|---|---|
+| The **Analyse** step of the turn workflow `qti-v2-turn` (5.11), which runs every streamed chat turn of a session bound to it (`agentKey: 'assistant-v2'`, sessions-chat R61) | stream | session thread | all | 15 |
+| Non-streamed chat turn of such a session | generate | session thread | all | 15 |
+
+Its streamed turn is a workflow defined in code, not one agent call (5.11, ADR-0034): two deterministic steps, then the agent, then a deterministic wrap-up. The steps are the session's workflow in the workflow bar, and the model never sets them. Inside the **Analyse** step it runs the same turn as the other bound built-in agents (5.1): no grounding-guard corrective pass (5.6) and no careful mode (5.8); the tool-only synthesis pass (5.5) applies as it does to every bound agent, and the result guards' warnings (5.4) come with `run_readonly_sql`, which it shares with the assistant. Its prompt never proposes deep analysis (2.7), which stays an assistant feature. It has no eval set (8) and is never called by a user agent (ADR-0008: user agents run on the `assistant`).
+
+**Inputs.** The user message (4.3), the system prompt, Block 1 only (4.1: without the `sample_rows` clause and without the visuals lines, since it has neither), on a streamed turn the **catalog block** of the Load catalog step after it (5.11), and the requestContext (4.2): `datasets`, `session-id`, `turn-question`, plus `turn-data-records`, which every streamed turn carries. No metrics, knowledge, verified-query or agent-instructions block.
+
+**Output.** Free text (markdown). Tool calls are captured by the orchestrator (5.1); SQL results become data records as for the assistant.
+
+**Tools.** `list_entities` (3.1), `describe_entity` (3.2), `run_readonly_sql` (3.4), in that order: the assistant's core dataset tools, with the same contracts. It has **no** `sample_rows`, no `create_visual` / `update_visual`, no `ask_clarification`, no `show_in_panel`, no `update_workflow` (its workflow bar is written from the turn workflow's steps, 5.11) and no workspace file tools.
+
+**Skills.** None, on demand or harness-loaded (7.4). It declares no `skills`, so the framework adds no skill tools.
+
+**Memory.** As the assistant's: one thread per session, last **40** messages replayed, semantic recall, working memory and generated titles off.
+
+**Max steps.** 15.
+
+**Datasets and chat requirement.** Like the assistant it has no datasets of its own: no `chatRequirement`, empty `datasets`. A session takes the datasets the user picked ([api.md](api.md) 3).
+
+**Prompt requirements.** The prompt MUST start with `You are Questions to Insights v2`.
+- **Structure.** The identity paragraph only (no `## Workflow` section: its steps live in code, 5.11), then the generated `## Tools` section (one line per tool, `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`, as the assistant's and the Data Readiness Agent's). With no `## Working rules` heading the served `## Tools` is appended after a blank line; otherwise it is inserted before the first line that is exactly `## Working rules`. The shipped text has no rules, workflow or links.
+- **Overrides** (ADR-0026) follow the RFP Builder's rules: the editable text and Reset leave out `## Tools`, and an override must start with the identity line.
+- **Links** (`linksAllowed: true`). An override may link only the agent's own three tools, as `[[tool:<name>]]`, and nothing else.
+  - Any `[[skill:…]]` link is refused with `Skills can't be linked here: Questions to Insights v2 has no skills`.
+  - Another tool is refused with `Unknown tool "<name>"` ([api.md](api.md) 103).
+  - Links are **mentions only** and are resolved to plain mentions before the model reads them (4.1); it keeps all three tools.
+- Exact shipped text: Appendix E.
+
+> Implementation note: `mastra/agents/assistant-v2.agent.ts` (`assistantV2Agent`, registered as `assistant-v2`), built from the assistant's dataset tools. The shipped text without `## Tools` is `ASSISTANT_V2_PROMPT` in `agents/system-prompts.ts` and `SHIPPED['assistant-v2']` in `shipped-agent-prompts.ts`. A turn of a session with `agentKey: 'assistant-v2'` runs this agent in place of the `assistant` through the session code's per-agent branch (ADR-0028); a streamed turn runs it from the workflow `qti-v2-turn` (5.11).
+
 ## 3. Tools
 
-All tools belong to the `assistant` (3.1-3.9) or to the RFP Builder (3.10); `ask_clarification`, `show_in_panel` (3.11) and `update_workflow` (3.12) are shared by both. Every tool returns a JSON object; **tools never throw to the model** — failures come back as `{ error: string }` so the model can react. Data tools are scoped by the session's dataset names on the requestContext (4.2).
+All tools belong to the `assistant` (3.1-3.9) or to the RFP Builder (3.10); `assistant-v2` (2.11) reuses three of the assistant's (3.1, 3.2, 3.4); `ask_clarification`, `show_in_panel` (3.11) and `update_workflow` (3.12) are shared by both. Every tool returns a JSON object; **tools never throw to the model** — failures come back as `{ error: string }` so the model can react. Data tools are scoped by the session's dataset names on the requestContext (4.2).
 
 **Entity/datasource resolution rules** (shared):
 
@@ -1260,6 +1299,8 @@ No score is put in the context. The agent reads scores only through its tools (2
 
 The `rfp` agent's calls also carry `datasets`, `session-id`, `turn-question` and `session-workspace-id` (the export tool writes through the bridge into the session workspace); `turn-data-records` (so `show_in_panel` can show the financial rows it read, 3.11), and none of the `agent-*` keys, `active-visual-id` or `knowledge-used`.
 
+The `assistant-v2` agent's calls carry `datasets`, `session-id` and `turn-question` only (2.11).
+
 The `data-readiness` agent's calls carry `datasets`, `session-id`, `turn-question`, `session-workspace-id` and `turn-data-records`. They carry none of the `agent-*` or `rfp-*` keys, `active-visual-id` or `knowledge-used`.
 
 A fresh context object is created per call, so nothing leaks between turns or sessions.
@@ -1301,7 +1342,7 @@ Wire format of these events: [api.md](api.md). Errors thrown during the stream (
 
 **Data record** (from a `run_readonly_sql` / `sample_rows` result; shape in [data-model.md](data-model.md)): `input` = the corrected SQL when repaired, else the SQL, else the entity key; failed calls keep `{tool, input, error, rationale?}`; successful ones keep `columns` (declared, else first row's keys), at most **200** rows, `rowCount` = rows returned, `truncated` when the tool flagged it or rows > 200, `rationale`, and the tool's `warnings`.
 
-**Per-agent turn (ADR-0028).** The turn runs the session's agent: the `assistant`, or the built-in agent named by the session's `agentKey` ([data-model.md](data-model.md) 3.4). For `agentKey: 'rfp'` the steps above change as follows; an assistant turn is unchanged.
+**Per-agent turn (ADR-0028).** The turn runs the session's agent: the `assistant`, or the built-in agent named by the session's `agentKey` ([data-model.md](data-model.md) 3.4). For `agentKey: 'assistant-v2'` (2.11) the streamed turn runs as the workflow `qti-v2-turn` (5.11): steps 2 and 3 happen inside its **Analyse** step, whose context is Block 1 (4.1) and the catalog block; the grounding guard (5.6), careful mode (5.8) and deep analysis do not apply; clarification interception has nothing to intercept (no `ask_clarification`). For `agentKey: 'rfp'` the steps above change as follows; an assistant turn is unchanged.
 
 - Step 2: the context is Block R1 only (4.1) and the requestContext carries the `rfp` keys (4.2); no metrics, knowledge, verified-query or agent-instructions block.
 - Step 3: clarification interception is kept. A `tool-result` that carries `columns` and `rows` (`get_client_financials`) becomes a data record like a SQL result (`{ tool, input: <client and line summary>, columns, rows (≤ 200), rowCount }`; SQL records are unchanged). A `tool-result` of `export_rfp_package` emits the `rfp-package` event ([api.md](api.md) 3.1) and is stored as the answer's `rfpPackage`. Every other RFP tool result emits `tool-result { tool, input: <its first string argument>, error? }`.
@@ -1444,6 +1485,39 @@ data itself argues for another; if you deviate, say why in the description.
 Composed answer: <guidance>          ← only when composition applies
 </recommended-form>
 ```
+
+### 5.11 Workflow-backed turn: `qti-v2-turn` (Questions to Insights v2)
+
+A streamed turn of a session bound to `assistant-v2` (2.11) is one run of a workflow defined in code (ADR-0034), not one agent call. Its steps run in this fixed order. Each is deterministic code or one bounded agent call, and the order never comes from a prompt.
+
+| # | Step id | Title | Kind | Does |
+|---|---|---|---|---|
+| 1 | `receive-question` | Receive question | deterministic | Trims the question; an empty one fails the step with `The question is empty`. |
+| 2 | `load-catalog` | Load catalog | deterministic | Reads the session's datasets through the dataset tools' own services (3.1) and lists their entities as `{ entity, dataset, datasourceId, datasourceKind, columnCount }` (null when unknown), in dataset then table order. No LLM. |
+| 3 | `analyse` | Analyse | LLM | Streams the `assistant-v2` agent with its three tools, its memory thread and the turn's options (2.11, 4.1, 4.2), plus the **catalog block** below as the last system message. Every chunk is handled as in 5.1 step 3, so the chat, the stop button, the transcript and memory behave as for any bound agent. A model error reported in the stream fails the step, whatever the provider (an assistant turn keeps 5.1's handling). Returns the turn's tool calls (`{ tool, rowCount?, failed }`) and whether the user stopped the turn. |
+| 4 | `wrap-up` | Wrap up | deterministic | Counts the turn's `run_readonly_sql` calls: `{ sqlQueries, failedQueries, rows }` (rows summed over the successful calls). This summary is the run's result, and the orchestrator logs it. No UI. |
+
+The catalog block has one line per entity (`?` when the column count is unknown):
+
+```
+Catalog loaded for this turn: <n> entities.
+- <entity> (dataset: <dataset>; <columnCount> columns)
+```
+
+With one entity the first line reads `1 entity.`; with none, the block is `Catalog loaded for this turn: no entities.`
+
+**The steps are the session's workflow** ([agent-panel](../capabilities/agent-panel/spec.md) R8a, R15). The view's phases are the four steps above, numbered 1 to 4 with their titles (no skill, no action), with `source: 'workflow'`, from the session's first view, before any turn. The orchestrator writes the saved workflow state ([data-model.md](data-model.md) 3.4.4) from the run's step events, and emits the `workflow` event ([api.md](api.md) 3.1) after each change:
+
+- A step starts: it is `current`. The first step clears `done` and `failed`, so each turn starts over.
+- A step ends successfully: it joins `done`.
+- A step fails: `failed` is its number and it stays `current`. The run stops there.
+- Any other end (the Analyse step ends early because the user stopped the turn): nothing changes, so the bar keeps that step current, and Wrap up does not run.
+
+The model never writes this state: v2 has no `update_workflow`. A failed step ends the turn with its error, as any failed turn does (5.1: the controller sends `error`). When the Analyse step failed, the error is the agent's own (for a custom endpoint, the R50 text of [llm-settings](../capabilities/llm-settings/spec.md)). After the run succeeds, the turn goes on at 5.1 step 4 (final text, tool-only synthesis 5.5, persist, `done`).
+
+The non-streamed turn (`POST /sessions/:id/messages`, 5.1) is not a workflow run: it calls the agent once, as before.
+
+> Implementation note: `mastra/workflows/qti-v2-turn.workflow.ts` builds the workflow with `createWorkflow` / `createStep` from `@mastra/core/workflows` and registers it on the `Mastra` instance as `qti-v2-turn` (`workflows`), with snapshot persistence off: the session document holds the state. The step ids, titles and pure step code are in `qti-v2-turn.steps.ts`, which imports no framework. The session code starts a run with `run.stream()` and reads `workflow-step-start` and `workflow-step-result` (`status` `success`, `failed`, or `bailed` for a stopped turn) from its `fullStream`. The Analyse step calls back into the session code through a per-run object on the run's `RequestContext`. The event-to-state mapping is `workflowRunState` in `modules/sessions/workflow-run-state.ts`.
 
 ---
 
@@ -1718,6 +1792,7 @@ Skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS` for har
 | `benchmarking`, `survey`, `lad-coe`, `strategy` (showcase, 2.9) | none | none |
 | `rfp` (RFP Builder, 2.8) | its seven stage skills (below) | none |
 | `data-readiness` (Data Readiness Agent, 2.10) | `data-readiness` (below) | none |
+| `assistant-v2` (Questions to Insights v2, 2.11) | none | none |
 
 `curated-knowledge` is the assistant's only built-in skill on demand (ADR-0020), so every assistant call carries the framework's skill catalog and skill tools. Two other on-demand skills were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move.
 
@@ -2357,4 +2432,20 @@ Scope:
 - You only assess and explain the readiness of this session's data.
   Decline anything else in one sentence and wait for the next request.
   You have no SQL tool: if asked to query data, say so in one sentence.
+```
+
+---
+
+## Appendix E — `assistant-v2` (Questions to Insights v2) system prompt (shipped wording)
+
+The shipped text is `ASSISTANT_V2_PROMPT`. It is also the editable text and what Reset restores (2.11). Lines are joined with `
+`.
+- A rebuild may tune the wording but must keep the opening phrase `You are Questions to Insights v2`.
+- **What the model receives** is this text plus the generated `## Tools` section appended after a blank line (it has no `## Working rules`).
+
+```
+You are Questions to Insights v2 — a data analyst working over the catalogs,
+schemas and entities in the user's session datasets. Answer the user's
+question from the data: find the entities, run read-only SQL, and give the
+numbers you found.
 ```

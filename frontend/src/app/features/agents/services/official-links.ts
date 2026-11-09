@@ -84,9 +84,20 @@ export function officialGraphInput(
   };
 }
 
-/** How the copy of the built-in prompt editor names the agent: `the assistant`, `the RFP Builder`. */
+/**
+ * Questions to Insights v2 (agents-evals R107): its copy names it without an
+ * article, and its prompt links tools only (it has no skills).
+ */
+const ASSISTANT_V2_KEY = 'assistant-v2';
+
+/**
+ * How the copy of the built-in prompt editor names the agent: `the assistant`,
+ * `the RFP Builder`, `Questions to Insights v2`.
+ */
 function agentPhrase(agent: { key: string; name: string }): string {
-  return agent.key === ASSISTANT_KEY ? 'the assistant' : `the ${agent.name}`;
+  if (agent.key === ASSISTANT_KEY) return 'the assistant';
+  if (agent.key === ASSISTANT_V2_KEY) return agent.name;
+  return `the ${agent.name}`;
 }
 
 /** The hint, editor note and reading-state note of an Official agent's prompt. */
@@ -96,8 +107,10 @@ export function officialPromptCopy(agent: { key: string; name: string }): {
   generatedToolsNote: string;
 } {
   const who = agentPhrase(agent);
+  const links =
+    agent.key === ASSISTANT_V2_KEY ? 'a tool' : 'a tool or a built-in skill';
   return {
-    toolbarHint: `Type / to link a tool or a built-in skill. Links here are mentions; ${who} keeps all its tools.`,
+    toolbarHint: `Type / to link ${links}. Links here are mentions; ${who} keeps all its tools.`,
     toolsNote: `The ## Tools list is generated from the tools ${who} gets and is inserted before ## Working rules.`,
     generatedToolsNote: `## Tools — generated from the tools ${who} gets`,
   };

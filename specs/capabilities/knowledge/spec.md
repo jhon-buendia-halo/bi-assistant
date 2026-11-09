@@ -72,7 +72,7 @@ Ownership
 
 ## UI
 
-Placement: the **Knowledge** item on the navigation rail opens a full-width screen titled "Knowledge" in the main area (see [../../system/ui.md](../../system/ui.md)). Selecting the item again keeps the screen.
+Placement: the **Context** item on the navigation rail opens the Context page; its **Knowledge** card opens a full-width screen titled "Knowledge" in the main area, under a **Context** back control ([app-shell](../app-shell/spec.md) R3a, [../../system/ui.md](../../system/ui.md) 4.8). Selecting the item again keeps the screen. Before 2026-11-09 (roadmap 1.21.4) Knowledge had its own rail item.
 
 - Header: title, subtitle "Instructions, glossary terms and default filters the assistant uses when answering. Only enabled snippets are applied.", and two buttons, "Generate suggestions" and "New snippet".
 - Filter row: kind pills "All", "Instruction", "Term", "Default filter" (each with a tooltip describing the kind), a "Filter by dataset" select ("All datasets" plus every dataset; shows that dataset's snippets and all global ones), and a toggle "Pending suggestions" with a count badge of mined, still-disabled snippets. Choosing a kind or dataset leaves the pending view.
@@ -93,7 +93,7 @@ Feature: Knowledge snippets (E2E: none yet)
 
   Scenario: The empty library invites the first snippet
     Given no knowledge snippets exist
-    When I click "Knowledge" on the rail
+    When I click "Context" on the rail and then the "Knowledge" card
     Then I see "No knowledge yet"
     And I see the actions "New snippet" and "Generate suggestions"
 

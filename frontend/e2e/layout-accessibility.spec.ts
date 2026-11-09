@@ -120,7 +120,8 @@ test('has no automatically detectable accessibility violations on any screen in 
     [
       'Knowledge',
       async () => {
-        await rail('Knowledge').click();
+        await rail('Context').click();
+        await page.getByTestId('context-section-knowledge').click();
         await expect(
           page.getByRole('heading', { name: 'Knowledge' }),
         ).toBeVisible();

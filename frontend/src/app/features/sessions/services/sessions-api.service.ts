@@ -155,10 +155,20 @@ export class SessionsApiService {
     );
   }
 
-  create(name: string, datasets: string[]): Observable<SessionActionResult> {
+  /**
+   * Start a session over picked datasets. `agentId` binds it to a built-in
+   * agent that picks datasets like the assistant (sessions-chat R64); the
+   * assistant itself sends none.
+   */
+  create(
+    name: string,
+    datasets: string[],
+    agentId?: string,
+  ): Observable<SessionActionResult> {
     return this.http.post<SessionActionResult>(`${API_BASE_URL}/sessions`, {
       name,
       datasets,
+      ...(agentId ? { agentId } : {}),
     });
   }
 
