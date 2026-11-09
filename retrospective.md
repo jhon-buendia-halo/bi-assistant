@@ -14,6 +14,62 @@ Entry template:
 
 ---
 
+## 2026-11-04 — 1.18.2 Product page offers only the Windows installer (BA-302)
+
+### What went well
+- Checking `/api/latest` on the live page before proposing a change showed both that downloads update themselves (no deploy needed for a release) and which release really carries the macOS installers.
+- The deploy-labs-site skill's verification list (route headers, first bytes of the file, a bogus target, a browser pass for console errors) proved the deploy beyond a 200 on the homepage.
+
+### What went wrong
+- In 1.18.1 I wrote "v0.16.1" as the last macOS release into N1, the epic spec, the roadmap and the changelog without checking a single release's assets; it was v0.13.1. The error merged to `main` and needed a fix-forward.
+- The product page was put out of scope in 1.18.1 and came back as a second story an hour later, after its branch had merged and been deleted, so the epic needed a second branch and PR.
+- I did not ask whether "the page" mattered when dropping a platform; N1 changed but the public page still advertised macOS.
+
+### What to do differently
+- Before writing a version number into a spec, check it: `gh release view <tag> --json assets` (or `/api/latest` for the page).
+- When a change removes a platform or product surface, list every public surface that names it (README, specs, the product page, `site/README.md`) in the first clarifying question, so the epic's scope is set once.
+
+## 2026-11-04 — 1.19.1 US Health sample as a Testing Data fixture (BA-305)
+
+### What went well
+- Publishing the data model as a review page before anything else had three effects. It turned "research Mercer US Health and create a testing data model" into an approved contract: 41 tables, sample rows, planted signals and defects, with four decisions and their defaults. That page then served as the epic spec's scope and every subagent's brief. Nothing was reworked after approval.
+- I sequenced the five units around the one shared file. Unit 1 alone owned the generator and ran first in the epic worktree. Units 2–5 never edited it and reported generator faults back. All three merges were clean, and the only generator fix (missing `carriers` rows) was found once, by the unit that ran it.
+- The replay used the app's own `splitSqlStatements`, in batches of 50 inside one transaction, against the real sample server. That proved the seed loads the way the loader loads it before any app build. It took 5.5 s; the later app load took 7.4 s.
+- Unit 2 kept the trend tests strict. It changed the measure (full years at the generator's calibration basis) rather than the tolerances, so "the 2025→2026 trend looks flat" turned out to be my rough measure, not a generator defect.
+
+### What went wrong
+- The first generator agent was briefed to write the generator, its tests and the seed in one go. It was stopped before its first run, leaving 2,305 untested lines. The work had to be re-planned into five units.
+- The /batch template asks for one PR per unit, which contradicts the repo's one-PR-per-epic rule. I adapted it to local `unit/BA-305-*` branches.
+- The Playwright global setup (`docker compose up -d --wait postgres`) started a Docker Postgres on `*:55432`, alongside the user's embedded Postgres on 127.0.0.1:55432. Nobody asked for it, and unit 4's brief didn't say to set `E2E_SKIP_DOCKER=1`.
+- I briefly started the unit tests and the E2E run in parallel. Both rebuild `backend/dist`, so I had to stop one.
+- Unit 1's code review read only the first ~2 KB of the 2.3k-line generator, so a reviewer pass on a large generated script proved nothing.
+- `registry.spec.ts`'s "qualifies every statement" check only matched double-quoted identifiers. It could never fail for an unquoted seed until unit 3 spotted it.
+- The frontend `npm ci --legacy-peer-deps` drops `@tiptap/suggestion`'s peer `@floating-ui/dom`, so the web build fails in a fresh worktree until it is installed with `--no-save`.
+
+### What to do differently
+- Brief a large generator as "run it first, then extend": one unit owns the file and must run it within its first few steps. Tests and other consumers start only from a committed, green seed.
+- When a sample server is already listening on 55432, run E2E with `E2E_SKIP_DOCKER=1`, and put that flag in every E2E brief. Check `docker ps` before and after any Playwright run.
+- Never run `npm test`/`build` and `test:e2e` in the same worktree at once; run the E2E first, then the rest.
+- For a fixture whose seed writes unquoted identifiers, check schema qualification by parsing the name after the keyword, not by matching a quote.
+- In a fresh worktree, after `npm ci --legacy-peer-deps` in `frontend/`, run `npm install --no-save --no-package-lock --legacy-peer-deps @floating-ui/dom` before `build:all`. Better, fix the lock file in its own change.
+
+## 2026-11-04 — 1.18.1 Build only the Windows installer (BA-302)
+
+### What went well
+- Downloading the finished Windows artifact from the stalled run and publishing it the way the publish job does (`gh release create --target <sha> --generate-notes`, then upload with retries) shipped v0.38.0 the same day, without waiting out the outage.
+- Grepping the specs for platform claims before drafting the epic spec found N1 ("SHALL ship … macOS"), so the requirement change was confirmed by the user instead of contradicting the workflow silently.
+- Running `prepare`'s script locally (extracted from the YAML) proved the matrix and tag resolution before any push; the branch test run with `publish=false` then exercised the whole workflow without releasing anything.
+
+### What went wrong
+- The first status check misread GitHub's stale job states as "still building"; only `githubstatus.com` explained that the run was stuck in an Actions outage. The publish job is gated on every build, so one queued platform blocked the whole release.
+- `check-specs` failed on the first run because a new epic spec must also be listed in `specs/README.md`.
+- actionlint could not be fetched in this session (download blocked), so the workflow went out without it.
+
+### What to do differently
+- When a build run looks stuck, check `https://www.githubstatus.com/api/v2/summary.json` (Actions component) before reading job states, and say so to the user.
+- When creating an epic spec, add its row to the epic table in `specs/README.md` in the same edit.
+- Install actionlint once with `brew install actionlint` rather than fetching the binary per session; ask the user if it is missing.
+
 ## 2026-11-03 — 1.17.1 to 1.17.20 acceptance gate of epic BA-281 (custom LLM endpoint)
 
 ### What went well

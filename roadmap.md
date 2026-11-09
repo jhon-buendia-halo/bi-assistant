@@ -1260,6 +1260,37 @@ A fourth LLM provider, `custom` ("Custom endpoint"), connects every agent to any
 - **Acceptance:** as in the Jira story; `check-specs.py`, unit tests, lint and builds are green.
 - **Notes:** created 2026-11-03; built by one of 20 parallel units against a shared contracts scaffold. Passed the acceptance gate on 2026-11-03. Evidence: [evidence/1.17/](evidence/1.17/).
 
+### Milestone 1.18 — Desktop installer builds ([BA-302](https://halo-powered.atlassian.net/browse/BA-302))
+
+How the desktop installers are built and published. From 2026-11-04 only the Windows x64 installer ships. 1.18.1 shipped on `ci/BA-302-windows-only-installer` (PR #84); 1.18.2, added after that merge, is built on `ci/BA-302-windows-only-site` and ships as a second PR. Epic spec: [specs/epics/BA-302/spec.md](specs/epics/BA-302/spec.md).
+
+#### 1.18.1 — Build only the Windows installer ([BA-303](https://halo-powered.atlassian.net/browse/BA-303))  `✅ Done`
+- **Intent:** releases stop waiting on macOS runners and publish only the installer we ship.
+- **Scope:** remove the macOS inputs and matrix entries from `build-desktop.yml`, so manual runs and `v*` tag pushes build and publish Windows x64 only; N1 in `non-functional.md` becomes Windows x64; `delivery.md` §5, the README and the `version-on-merge.yml` comment match.
+- **Out of scope:** the product page's macOS buttons (handled by 1.18.2); local macOS builds with `electron:dist`; macOS app behaviour; code signing.
+- **Acceptance:** the run form has no macOS options; a run with `publish=true` builds only the Windows `.exe` and attaches it to the release; `check-specs.py` and actionlint pass.
+- **Notes:** created 2026-11-04 after a GitHub Actions outage left the v0.38.0 macOS Intel job queued; v0.38.0 was published by hand with the Windows installer only. Passed the acceptance gate on 2026-11-04. Evidence: [evidence/1.18.1/](evidence/1.18.1/).
+
+#### 1.18.2 — Product page offers only the Windows installer ([BA-304](https://halo-powered.atlassian.net/browse/BA-304))  `✅ Done`
+- **Intent:** the product page stops sending visitors to an outdated macOS build and matches N1.
+- **Scope:** remove the macOS download cards, the Gatekeeper note and macOS from the hero badge, the download intro and the Platforms line of bi-assistant.halo-powered-labs.com; redeploy. Correct the last macOS release in the specs and roadmap from v0.16.1 to v0.13.1.
+- **Out of scope:** removing the `/download/mac-*` routes and `/api/latest`'s macOS entries; the Labs home page.
+- **Acceptance:** the live page shows one download card (Windows) serving the newest release; no macOS text on the page; `/download/win-x64` redirects to the `.exe`; `/download/mac-arm64` still resolves; `check-specs.py` passes.
+- **Notes:** created 2026-11-04 after 1.18.1 merged. Deployed and passed the acceptance gate on 2026-11-04. Evidence: [evidence/1.18.2/](evidence/1.18.2/).
+
+### Milestone 1.19 — US Health testing data ([BA-305](https://halo-powered.atlassian.net/browse/BA-305))
+
+A synthetic Mercer US Health & Benefits world as a seedable Testing Data fixture, so the Assistant, the Data Readiness Agent and the US Health showcase agents (Milestone 1.15) have one coherent dataset. Builds on the Testing Data catalogue (Milestone 1.1). No ADR: a fixture is one seed file plus one catalogue entry. All stories are built on the branch `feat/BA-305-us-health-testing-data` and ship as one PR. Epic spec: [specs/epics/BA-305/spec.md](specs/epics/BA-305/spec.md).
+
+#### 1.19.1 — US Health sample as a Testing Data fixture ([BA-306](https://halo-powered.atlassian.net/browse/BA-306))  `✅ Done`
+- **Intent:** one click in Settings → Testing Data loads a realistic US Health & Benefits dataset that every agent can answer from.
+- **Scope:** a fifth fixture `us-health` ("US Health"): schema `us_health` in database `us_health` on the sample server, 41 tables and 4 views (45 required entities) in 8 domains, bundled as `004_us_health.sql.gz`, registered as datasource "US Health PostgreSQL" and dataset "US Health"; the deterministic generator `scripts/generate-us-health-seed.py` with tests for the planted signals and defects; testing-data spec R2–R4 and the Testing Data Feature updated.
+- **Out of scope:** showcase agents chatting; eval sets on the fixture; a REST variant; changes to the other fixtures or the loader.
+- **Acceptance:** the panel lists "US Health" with `0/45 entities`; loading it creates and seeds `us_health` and reports `45/45 entities`; the dataset has sample values and the declared join references; re-running the generator reproduces the seed byte for byte; `check-specs.py`, unit tests, lint, builds and the Testing Data Playwright scenarios are green.
+- **Notes:** data model approved on 2026-11-04 ([review page](https://claude.ai/artifact/4msSW6rkyot8Ai8Zvdr9yc)); research notes from public Mercer, KFF, SOA and state-law sources. Built by five parallel units (generator and seed, signal tests, defect and structure tests, app-level load, specs). Passed the acceptance gate on 2026-11-04. Evidence: [evidence/1.19.1/](evidence/1.19.1/).
+
+---
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.
