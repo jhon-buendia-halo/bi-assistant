@@ -1285,6 +1285,13 @@ Users tag each schema in a dataset with its data layer and a description, and th
 - **Acceptance:** see the epic spec: round-trip in the UI, old datasets unaffected, orphan notes dropped, Testing Data reload keeps notes, unknown layer rejected, context unchanged without notes, unit tests, check-specs, lint, builds, the Datasets Playwright scenarios and the assistant evals at 100 %.
 - **Notes:** first built on 2026-11-09 as datasource-level fields after a misread of the request ("datasource" instead of the schemas in the dataset tree); reverted on the branch the same day. Decisions settled with the user on 2026-11-09: per-dataset notes, right-panel editing with a tree badge, used in agent context. Planned by Opus, implemented by Sonnet units at the user's request.
 
+#### 1.20.2 — Data Readiness fails on a Databricks host saved with https:// ([BA-322](https://halo-powered.atlassian.net/browse/BA-322))  `🚧 In progress`
+- **Intent:** the Data Readiness assessment works on a Databricks datasource whose host was saved as a workspace URL (`https://…/`).
+- **Scope:** one `normalizeDatabricksHost` helper used by the connector, the data-readiness profiler's SQL connection and Unity Catalog calls, and Databricks saves; datasources R4; unit tests.
+- **Out of scope:** migrating stored hosts (every reader normalises); other kinds.
+- **Acceptance:** the profiler connects with the bare hostname for a stored `https://…/` host without a re-save (unit test, and live against the user's workspace: `main` fails with `https://https//… ENOTFOUND`, the branch profiles `samples.tpch.region`); new Databricks saves store the bare hostname; datasources and data-readiness unit tests green.
+- **Notes:** found by the user while testing 1.20.1 on 2026-11-09; fixed on the epic branch at the user's request (not a separate `fix/` branch).
+
 ---
 
 ## Release 2 — Multi-user  (no target date yet)

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DBSQLClient } from '@databricks/sql';
 import type IDBSQLSession from '@databricks/sql/dist/contracts/IDBSQLSession';
 import type { DatabricksConfig } from '../entities/datasource.entity';
+import { normalizeDatabricksHost } from './databricks-host';
 import type {
   ColumnStats,
   FkEdge,
@@ -358,10 +359,7 @@ export class DatabricksProfiler implements ProfilingConnector<DatabricksConfig> 
     let pageToken: string | undefined;
     do {
       const url = new URL(
-        `https://${config.host
-          .trim()
-          .replace(/^https?:\/\//i, '')
-          .replace(/\/+$/, '')}/api/2.1/unity-catalog/${kind}`,
+        `https://${normalizeDatabricksHost(config.host)}/api/2.1/unity-catalog/${kind}`,
       );
       url.searchParams.set('include_browse', 'true');
       if (catalog) url.searchParams.set('catalog_name', catalog);
@@ -410,7 +408,7 @@ export class DatabricksProfiler implements ProfilingConnector<DatabricksConfig> 
     try {
       await raceTimeout(
         client.connect({
-          host: config.host,
+          host: normalizeDatabricksHost(config.host),
           path: `/sql/1.0/warehouses/${config.warehouseId}`,
           authType: 'access-token',
           token: config.token,

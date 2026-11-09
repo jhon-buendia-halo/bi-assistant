@@ -34,6 +34,31 @@ describe('DatabricksProfiler', () => {
     }));
   });
 
+  it('connects with the bare hostname when the stored host has https:// and a trailing slash (BA-322)', async () => {
+    const connect = jest.fn().mockResolvedValue(undefined);
+    (DBSQLClient as unknown as jest.Mock).mockImplementation(() => ({
+      connect,
+      openSession: jest.fn().mockResolvedValue({
+        executeStatement: jest.fn().mockResolvedValue({
+          fetchAll: () => Promise.resolve([{ total: '1' }]),
+        }),
+        close: jest.fn().mockResolvedValue(undefined),
+      }),
+      close: jest.fn().mockResolvedValue(undefined),
+    }));
+    await profiler.columnStats(
+      { ...config, host: '  https://dbc-1.cloud.databricks.com/  ' },
+      'cat.sch',
+      't',
+      [],
+      ['a'],
+      [],
+    );
+    expect(connect).toHaveBeenCalledWith(
+      expect.objectContaining({ host: 'dbc-1.cloud.databricks.com' }),
+    );
+  });
+
   it('columnStats flattens catalog.schema, backtick-quotes and maps results', async () => {
     responder = () => [
       { total: '10', n0: '2', d0: '5', d1: 3, mn0: '1', mx0: '9' },

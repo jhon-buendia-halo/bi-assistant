@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DatabricksConnector } from './connectors/databricks.connector';
+import { normalizeDatabricksHost } from './connectors/databricks-host';
 import { PostgresConnector } from './connectors/postgres.connector';
 import { RestConnector } from './connectors/rest.connector';
 import type {
@@ -110,7 +111,22 @@ export class DatasourcesService {
     const name = (input.name ?? '').trim();
     if (!name) throw new BadRequestException('name is required');
     this.connector(input.kind);
-    const config = await this.withSecrets(input.kind, input.config, input.id);
+    const withSecrets = await this.withSecrets(
+      input.kind,
+      input.config,
+      input.id,
+    );
+    // Store the bare hostname so every reader of the saved config — not only
+    // the connector, which re-normalises — gets a usable host (BA-322).
+    const config =
+      input.kind === 'databricks'
+        ? {
+            ...(withSecrets as DatabricksConfig),
+            host: normalizeDatabricksHost(
+              (withSecrets as DatabricksConfig).host,
+            ),
+          }
+        : withSecrets;
     const saved = await this.repository.save({
       id: input.id,
       name: name.slice(0, 64),

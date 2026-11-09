@@ -22,7 +22,8 @@ When building or editing a dataset, users can say what each **schema** in it is 
 
 ## Out of scope
 
-- Layer or description on datasources, catalogs or entities (tables). (A first cut on datasources was built and reverted on this branch on 2026-11-09 after the requirement was clarified.)
+- Layer or description on datasources, catalogs or entities (tables).
+- (Bug BA-322 is in scope by the user's choice on 2026-11-09: found while testing this epic, fixed on the same branch.) (A first cut on datasources was built and reverted on this branch on 2026-11-09 after the requirement was clarified.)
 - Sharing notes across datasets, or storing them on the datasource.
 - Changing tools (`list_entities`, `describe_entity`) or the SQL verifier and knowledge-bootstrap schema blocks.
 - Filtering or grouping the tree by layer; custom layers.
@@ -33,6 +34,7 @@ When building or editing a dataset, users can say what each **schema** in it is 
 | Story | Summary | Roadmap feature |
 |---|---|---|
 | [BA-319](https://halo-powered.atlassian.net/browse/BA-319) | Layer and description on dataset schemas, used by the assistant | 1.20.1 |
+| [BA-322](https://halo-powered.atlassian.net/browse/BA-322) (Bug) | Data Readiness fails on a Databricks host saved with `https://` | 1.20.2 |
 
 ## Specs touched
 
