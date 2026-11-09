@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { apiJson } from './helpers/api';
@@ -137,6 +140,20 @@ interface ReadinessReport {
   dimensionScores: DimensionScore[];
   findings: { dimension: Dimension; severity: Severity }[];
   sessionId?: string;
+  notProfiled?: {
+    entity: string;
+    reason: 'too-large' | 'timed-out';
+    rowCount?: number;
+  }[];
+}
+
+/** The `data:` frames of an SSE body, parsed in order. */
+function sseFrames(body: string): { type: string; content?: string }[] {
+  return body
+    .split(/\r?\n\r?\n/)
+    .map((block) => block.replace(/^data: ?/, '').trim())
+    .filter((json) => json.startsWith('{'))
+    .map((json) => JSON.parse(json) as { type: string; content?: string });
 }
 
 interface ReadinessReportSummary {
@@ -147,6 +164,7 @@ interface ReadinessReportSummary {
 }
 
 let stub: LlmStub;
+let cappedDir: string | undefined;
 
 // ------------------------------------------------------------ helpers
 
@@ -400,6 +418,15 @@ test.beforeEach(async ({ page }) => {
 
 test.afterEach(async () => {
   await stub.close();
+  // The fixture closes its apps after this hook, so the directory may still be
+  // held open; a failed removal is left to the OS temp cleaner.
+  if (cappedDir)
+    try {
+      fs.rmSync(cappedDir, { recursive: true, force: true });
+    } catch {
+      /* still held by the app */
+    }
+  cappedDir = undefined;
 });
 
 // ------------------------------------------------------------ scenarios
@@ -463,6 +490,9 @@ test('assessing a dataset from the chat shows the scorecard', async ({
   await expect(page.getByPlaceholder('Ask a follow-up question…')).toHaveValue(
     ASSESS_QUESTION,
   );
+  const streamed = page.waitForResponse((r) =>
+    r.url().endsWith('/messages/stream'),
+  );
   await page.getByRole('button', { name: 'Send message' }).click();
 
   // And the agent calls "assess_data_readiness": the step shows in the chat.
@@ -472,6 +502,61 @@ test('assessing a dataset from the chat shows the scorecard', async ({
   await expect(page.getByText(ASSESS_ANSWER)).toBeVisible({
     timeout: TURN_TIMEOUT,
   });
+
+  // R32: the stream carries `tool-progress` frames between the tool call and
+  // its result, in phase order, profiling counting done 1..N of N.
+  const frames = sseFrames((await (await streamed).body()).toString('utf8'));
+  const toolAt = frames.findIndex(
+    (f) =>
+      f.type === 'tool' &&
+      (JSON.parse(f.content ?? '{}') as { name?: string }).name ===
+        'assess_data_readiness',
+  );
+  const resultAt = frames.findIndex((f) => f.type === 'tool-result');
+  expect(toolAt, 'the tool frame').toBeGreaterThanOrEqual(0);
+  expect(resultAt, 'the tool-result frame').toBeGreaterThan(toolAt);
+  const progress = frames
+    .slice(toolAt + 1, resultAt)
+    .filter((f) => f.type === 'tool-progress')
+    .map(
+      (f) =>
+        JSON.parse(f.content ?? '{}') as {
+          tool: string;
+          phase: string;
+          message: string;
+          done?: number;
+          total?: number;
+        },
+    );
+  expect(
+    progress.length,
+    'progress frames between tool and result',
+  ).toBeGreaterThan(0);
+  for (const frame of progress) {
+    expect(frame.tool).toBe('assess_data_readiness');
+  }
+  const phases = [...new Set(progress.map((f) => f.phase))];
+  expect(phases).toEqual([
+    'inventory',
+    'profiling',
+    'relationships',
+    'scoring',
+    'storing',
+  ]);
+  const profiling = progress.filter((f) => f.phase === 'profiling');
+  expect(profiling.every((f) => f.total === WORLD_CUP_TABLES.length)).toBe(
+    true,
+  );
+  const doneCounts = profiling
+    .map((f) => f.done)
+    .filter((d): d is number => d !== undefined);
+  expect(Math.max(...doneCounts)).toBe(WORLD_CUP_TABLES.length);
+  expect(doneCounts).toEqual([...doneCounts].sort((a, b) => a - b));
+  expect(
+    profiling.some((f) => /^Profiling .+ \(\d+\/\d+\)…$/.test(f.message)),
+  ).toBe(true);
+  // The UI part (the running row's `tool-progress`) is not asserted: the
+  // World Cup run lasts about 0.3 s and the fixture has no stream throttle.
 
   // The turn ran the Data Readiness Agent, not the assistant (R2, R3, Block D1).
   const requests = requestsOf(ASSESS_QUESTION);
@@ -546,6 +631,45 @@ test('assessing a dataset from the chat shows the scorecard', async ({
   await page.screenshot({
     path: testInfo.outputPath('data-readiness-scorecard.png'),
   });
+});
+
+test('A table too large to profile is listed as not profiled', async ({
+  launchApp,
+}) => {
+  // Given a table has more rows than the cap: the CLI reads the cap per
+  // assessment (delivery.md), set to 20 so the larger sample tables (79, 50, 47 and 32 rows) exceed it.
+  const cap = 20;
+  // Its own data directory: the default `page` app already holds the fixture's.
+  cappedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qti-e2e-capped-'));
+  const { page } = await launchApp(cappedDir, {
+    READINESS_MAX_PROFILED_ROWS: String(cap),
+  });
+  await saveLenaiSettings(page, stub.baseUrl);
+  const datasourceId = await seedWorldCup(page);
+
+  // When I assess the dataset from the chat.
+  const report = await assessFromChat(page, datasourceId);
+
+  // Then the stored report lists those tables as not profiled (R31).
+  const listed = report.notProfiled ?? [];
+  expect(listed.length, 'some tables exceed the cap').toBeGreaterThan(0);
+  for (const entry of listed) {
+    expect(entry.reason).toBe('too-large');
+    expect(entry.rowCount).toBeGreaterThan(cap);
+  }
+  expect(report.entityCount).toBe(WORLD_CUP_TABLES.length);
+
+  // And the scorecard shows them with the reason and the row count.
+  const section = page.getByTestId('readiness-not-profiled');
+  await expect(section).toBeVisible();
+  await expect(section).toContainText(`Not profiled (${listed.length})`);
+  for (const [index, entry] of listed.entries()) {
+    const row = page.getByTestId(`readiness-not-profiled-${index}`);
+    await expect(row).toContainText(entry.entity);
+    await expect(row).toContainText(
+      `Too large — ${entry.rowCount!.toLocaleString('en-US')} rows, column checks skipped`,
+    );
+  }
 });
 
 test('the scorecard shows the same numbers as the API', async ({ page }) => {

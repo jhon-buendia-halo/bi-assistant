@@ -167,6 +167,28 @@ test('has no automatically detectable accessibility violations on any screen in 
   expect(failures).toEqual([]);
 });
 
+test('text in the app can be selected', async ({ page }) => {
+  const heading = page.getByRole('heading', { name: 'Welcome to Agentic Hub' });
+  await heading.click({ clickCount: 3 });
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toContain(
+    'Welcome to Agentic Hub',
+  );
+  expect(
+    await heading.evaluate((el) => getComputedStyle(el).userSelect),
+  ).not.toBe('none');
+
+  await page.getByTitle('Expand right panel').click();
+  const separator = page.getByRole('separator', { name: 'Resize right panel' });
+  const box = (await separator.boundingBox())!;
+  await page.evaluate(() => window.getSelection()?.removeAllRanges());
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x - 60, box.y + box.height / 2, { steps: 5 });
+  await expect(page.locator('.resizing-right-panel')).toHaveCount(1);
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe('');
+  await page.mouse.up();
+});
+
 test('matches the stable application-shell visual baseline', async ({
   page,
 }) => {

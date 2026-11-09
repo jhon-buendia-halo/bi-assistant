@@ -987,7 +987,7 @@ interface StreamMessageRequest {
 }
 ```
 
-**Response headers.** `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`; headers are flushed immediately, so the HTTP status is **always 200** once the handler runs. Consequently *every* failure, including an unknown session or an empty message, arrives as an in-stream `error` event, not as a 4xx.
+**Response headers.** `Content-Type: text/event-stream; charset=utf-8` (the charset is explicit so every client decodes `…` and other non-ASCII text as UTF-8; without it Chromium's network layer falls back to Windows-1252), `Cache-Control: no-cache`, `Connection: keep-alive`; headers are flushed immediately, so the HTTP status is **always 200** once the handler runs. Consequently *every* failure, including an unknown session or an empty message, arrives as an in-stream `error` event, not as a 4xx.
 
 **Framing.** Each event is a single `data: <JSON>\n\n` frame. No `event:` or `id:` fields, no `retry:`, no heartbeat/comment frames. Readers split on `\n\n`, take the line starting with `data: ` and `JSON.parse` it; malformed frames are skipped.
 

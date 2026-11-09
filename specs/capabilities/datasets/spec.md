@@ -137,7 +137,7 @@ Covered scenarios live in the datasources capability: [Datasources, datasets, an
 
 ### Feature: Dataset management
 
-E2E: none yet
+E2E: `frontend/e2e/dataset-schema-notes.spec.ts` covers "Tags a schema with a layer and description and keeps them after saving"; the other scenarios are not automated yet.
 
 ```gherkin
 Feature: Dataset management
