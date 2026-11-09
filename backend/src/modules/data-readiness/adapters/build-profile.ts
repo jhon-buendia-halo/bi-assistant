@@ -23,7 +23,7 @@ import type {
   SourceProfile,
 } from '../engine/types';
 import {
-  MAX_PROFILED_ROWS,
+  maxProfiledRows,
   PROFILE_CONCURRENCY_BY_DIALECT,
   type ReadinessProgress,
   type ReadinessProgressListener,
@@ -310,7 +310,7 @@ async function profileEntity<TConfig>(
   const counted = canRead
     ? await attempt(() => profiler.rowCount(config, schema, name), signal)
     : undefined;
-  const tooLarge = counted !== undefined && counted > MAX_PROFILED_ROWS;
+  const tooLarge = counted !== undefined && counted > maxProfiledRows();
 
   let stats: ColumnStats | undefined;
   let notProfiled: 'too-large' | 'timed-out' | undefined = tooLarge

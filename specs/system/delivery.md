@@ -331,6 +331,7 @@ Defaults are shared state: the desktop app uses Electron's `userData` directory 
 | Bare backend (`start:dev`) data dir and port | `<cwd>/data`, `PORT` or 3000 | `APP_DATA_DIR`, `PORT` |
 | Secret | persisted `.app-secret` in the data dir | `APP_SECRET` |
 | Intellify API port | 3100 (the embedded Intellify RFP API) | `--intellify-api-port <n>` (CLI) or `INTELLIFY_API_PORT`; `0` picks a free port, printed on the CLI banner (`Intellify API: http://127.0.0.1:<port>`); the E2E fixture sets `0`. `--no-intellify-api` or `INTELLIFY_API=off` skips it |
+| Readiness row cap (tests only) | 100,000,000 rows: tables above it are not column-profiled (ADR-0033) | `READINESS_MAX_PROFILED_ROWS` (positive integer), read per assessment; the E2E sets it low to exercise the `too-large` path on the sample tables |
 | Sample Postgres | project `questions-to-insights-world-cup`, port 55432 | `docker compose -p <name>` plus `WORLD_CUP_DB_PORT=<port>`; the e2e fixtures read the same variable (and `WORLD_CUP_DB_HOST`) |
 | Observability profile | same project; ports 6006, 3001, 4317, 4318 | `docker compose -p <name>` plus `PHOENIX_PORT`, `GRAFANA_PORT`, `OTLP_GRPC_PORT`, `OTLP_HTTP_PORT` (see *Observability profile* above) |
 | Playwright | needs port 3000 free | one e2e run at a time per machine; each test already gets its own temp profile |
