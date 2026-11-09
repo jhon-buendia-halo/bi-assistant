@@ -100,7 +100,15 @@ cd frontend && npm start                             # ng serve :4200
 cd frontend && npm run electron:dev                  # desktop shell on ng serve
 cd frontend && npm run electron                      # production-style desktop run
 cd backend && npm run build:all && npm run start:web # web mode from the working tree
+node scripts/setup-local.mjs http://127.0.0.1:<port>  # configure the running instance (below)
 ```
+
+**Configuring a local instance for hand testing (BA-325).** `scripts/setup-local.mjs [baseUrl]` (default `http://127.0.0.1:3000`, Node only, no dependencies) configures a running instance through its own API:
+
+- **LLM:** saves `PUT /llm/settings` from `.env.llm.local`: `LLM_PROVIDER` (default `custom`), `LLM_API_STYLE` (default `anthropic`), `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`. The file is read from the checkout, else from the main checkout (through `git rev-parse --git-common-dir`), so a worktree needs no copy; environment variables win over it. It is gitignored (`*.local`); [.env.llm.example](../../.env.llm.example) is the committed template. Without `LLM_BASE_URL` and `LLM_MODEL` this step is skipped.
+- **Testing Data:** loads every seedable fixture with its defaults and registers the Intellify RFP API (`POST /testing-data/:id/load`, [api.md](api.md) 56); a fixture already loaded is skipped, so a re-run is safe.
+
+It exits non-zero when any step fails. It writes to the sample Postgres the fixtures name (127.0.0.1:55432 by default), creating their databases if missing.
 
 ### Verification gate (what must be green before a change ships)
 
