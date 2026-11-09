@@ -52,6 +52,13 @@ export interface EntityProfile {
   keys: KeyProfile[];
   readable?: boolean;
   lastModifiedAt?: string;
+  /**
+   * BA-323 / ADR-0033: set when the entity's columns were not profiled —
+   * `too-large` (row count above `MAX_PROFILED_ROWS`, column statistics not
+   * attempted) or `timed-out` (the statistics statement timed out). Checks
+   * that need statistics are skipped, as for any missing statistic.
+   */
+  notProfiled?: 'too-large' | 'timed-out';
 }
 
 export interface RelationshipProfile {

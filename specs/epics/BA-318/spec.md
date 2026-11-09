@@ -23,7 +23,8 @@ When building or editing a dataset, users can say what each **schema** in it is 
 ## Out of scope
 
 - Layer or description on datasources, catalogs or entities (tables).
-- (Bug BA-322 is in scope by the user's choice on 2026-11-09: found while testing this epic, fixed on the same branch.) (A first cut on datasources was built and reverted on this branch on 2026-11-09 after the requirement was clarified.)
+- (Bug BA-322 is in scope by the user's choice on 2026-11-09: found while testing this epic, fixed on the same branch.)
+- (BA-323 and BA-324, Data Readiness speed and live progress, were added to this epic and branch by the user's choice on 2026-11-09. Their decisions are in ADR-0033: one profiling session per assessment, per-table statements, 8 concurrent Databricks tables, tables above 100 M rows not profiled and listed as such, Stop cancels and stores nothing, progress streamed as `tool-progress`. Their acceptance is in the roadmap entries 1.20.3 and 1.20.4; the `data-readiness` evals re-run at 100 %.) (A first cut on datasources was built and reverted on this branch on 2026-11-09 after the requirement was clarified.)
 - Sharing notes across datasets, or storing them on the datasource.
 - Changing tools (`list_entities`, `describe_entity`) or the SQL verifier and knowledge-bootstrap schema blocks.
 - Filtering or grouping the tree by layer; custom layers.
@@ -35,6 +36,8 @@ When building or editing a dataset, users can say what each **schema** in it is 
 |---|---|---|
 | [BA-319](https://halo-powered.atlassian.net/browse/BA-319) | Layer and description on dataset schemas, used by the assistant | 1.20.1 |
 | [BA-322](https://halo-powered.atlassian.net/browse/BA-322) (Bug) | Data Readiness fails on a Databricks host saved with `https://` | 1.20.2 |
+| [BA-323](https://halo-powered.atlassian.net/browse/BA-323) | Faster Data Readiness assessments | 1.20.3 |
+| [BA-324](https://halo-powered.atlassian.net/browse/BA-324) | Live progress while a Data Readiness assessment runs | 1.20.4 |
 
 ## Specs touched
 

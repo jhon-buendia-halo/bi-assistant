@@ -794,6 +794,32 @@ flowchart LR
   - The eval runner can target a custom endpoint from environment variables, so a prompt change can be gated on a self-hosted model as on the public ones ([agents-evals](../capabilities/agents-evals/spec.md)).
   - Stack-neutral: any rebuild needs a resolver that yields plain data for tuning, plus a way to build an Anthropic-protocol model at an arbitrary base URL.
 
+#### ADR-0033 — Long tools stream progress through Mastra's tool writer as `tool-progress` events; readiness profiling uses one session per assessment, a row-count gate and the turn's abort signal
+- **Status:** Accepted
+- **Date:** 2026-11-09
+- **Context:**
+  - A Data Readiness assessment of the 125-table Databricks `samples` catalog took 296 s, of which the model was about 13 s ([BA-323](https://halo-powered.atlassian.net/browse/BA-323), measured 2026-11-09). The chat showed only a spinner for the whole tool call, and the session stream sends nothing during a tool call (no keepalive).
+  - The time went to profiling transport, not to the engine (ADR-0031): every SQL statement opened its own Databricks client and session (about 0.6 s each over about 560 statements), each text column had its own full-scan statement, and about 14 tables of more than 100 M rows each burned the 15 s statement timeout and contributed nothing, silently.
+  - Stop and reload abort the model turn, but the abort never reached the profiler, so warehouse queries ran on and the report was stored anyway.
+  - Mastra 1.66 gives every tool `execute` a `writer` whose custom chunks surface in the agent's `fullStream`, which the session loop already iterates ([BA-324](https://halo-powered.atlassian.net/browse/BA-324)).
+- **Decision:**
+  - **Tool progress is a stream event, not a tool result.** A long tool reports progress through `writer.custom({ type: 'data-<tool>-progress', data })`. The session loop forwards it to the browser as a new SSE event `tool-progress` (`{ tool, phase, message, done?, total?, entity? }`) between the tool's `tool` and `tool-result` events ([api.md](api.md) 3.1). The model never sees progress. The first user is `assess_data_readiness`; other long tools may adopt the same event. Progress frames also act as keepalive.
+  - **Progress is ephemeral.** It is not persisted on the message; after a reload the tool row shows its final state as today.
+  - **One profiling session per assessment.** The profiling interface (ADR-0031) gains a session scope: the adapter opens one connection and session (Databricks) or one client and read-only transaction (PostgreSQL) per worker and reuses it for every statement of the assessment. The statements, the 15 s per-statement timeout and the read-only guard are unchanged.
+  - **Per-table statements.** The per-text-column probes (normalized distinct counts, invalid-format counts) are folded into the per-table statistics statement, with a fallback to split statements when the folded one fails. Exact aggregates only: no approximate counts and no sampling.
+  - **A row-count gate.** The adapter counts rows first; a table above 100 000 000 rows is not column-profiled and is recorded in the report as not profiled, with its reason (`too-large`, or `timed-out` when its statistics statement times out). Its checks are skipped exactly as they are today when statistics are missing, so no score formula changes.
+  - **Concurrency per dialect:** 8 tables at a time on Databricks, 4 on PostgreSQL. The inventory is read once per assessment, scoped to the dataset's catalogs and schemas.
+  - **The turn's abort signal reaches the profiler.** Stop or reload cancels in-flight statements, stops scheduling tables and stores no report.
+- **Rejected:**
+  - Approximate distinct counts and `TABLESAMPLE`: measured slower on medium tables and still too slow on billion-row ones, and they would break the readiness rules that compare exact counts.
+  - Running the assessment as a background job with a progress endpoint and polling (as deep analysis does): survives reloads, but a larger change than "show what it is doing", and Stop is meant to cancel.
+  - A progress callback on the request context instead of the tool writer: kept only as the fallback if the writer's chunks do not reach `fullStream`.
+- **Consequences:**
+  - ADR-0031's "a missing statistic only skips the checks that need it" now applies visibly: a stored report lists its not-profiled entities (an additive field on `readiness_reports`, no migration; [data-model.md](data-model.md)).
+  - The SSE grammar gains one event type; clients that ignore unknown events are unaffected.
+  - The `data-readiness` eval set re-runs once: no prompt or tool description changes, but the tool's behaviour does.
+  - Stack-neutral: a rebuild needs a way for a tool to push progress to the client during a call, and connection reuse in its profiling layer.
+
 ## Level 4 — Code
 
 ```mermaid
