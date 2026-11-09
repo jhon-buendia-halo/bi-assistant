@@ -9,6 +9,8 @@ Terms are defined once in [the glossary](../../product/glossary.md); this capabi
 - **Datasource** — a named, saved connection of one **kind**. The kind is fixed at creation.
 - **Kind** — `databricks`, `postgres` or `rest`. UI labels: "Databricks", "PostgreSQL", "REST API".
 - **Entity** — a queryable object addressed by the three-part key `catalog.schema.table`. Every kind is normalised to this shape (see Rule R30).
+- **Layer** — an optional label for where a datasource sits in the data pipeline: `landing`, `normalized` or `consumption`. UI labels: "Landing", "Normalized", "Consumption". A datasource with no layer shows "None" in the form and no badge in the list.
+- **Description** — optional free text of up to 500 characters saying what a datasource holds and what it is used for.
 - **Inventory** — the catalog → schema → table → column tree a datasource exposes, plus a stored snapshot of it.
 - **Masked secret** — the fixed placeholder `••••••••` (eight bullets) shown and returned in place of a stored secret.
 - **Read-only SQL** — a single `SELECT`/`WITH` statement that passed the read-only guard.
@@ -20,7 +22,7 @@ Terms are defined once in [the glossary](../../product/glossary.md); this capabi
 ### Kinds and configuration
 
 - R1. The system SHALL support exactly three datasource kinds: Databricks SQL warehouse, PostgreSQL and REST API. A request naming any other kind SHALL be rejected with `kind must be one of: databricks, postgres, rest`.
-- R2. A datasource SHALL have a name, a kind, a kind-specific configuration, an id assigned on first save, and created/updated timestamps. Names are trimmed, required (`name is required`) and truncated to 64 characters. Names are not required to be unique.
+- R2. A datasource SHALL have a name, a kind, a kind-specific configuration, an id assigned on first save, and created/updated timestamps. It MAY also have a layer and a description (R52–R55). Names are trimmed, required (`name is required`) and truncated to 64 characters. Names are not required to be unique.
 - R3. The kind of a saved datasource SHALL NOT be changeable; the Kind control is disabled while editing.
 - R4. A Databricks configuration SHALL consist of: server hostname, personal access token, SQL warehouse ID. All three are required. The hostname is normalised by removing a leading `http://`/`https://` and trailing slashes, and SHALL match `[A-Za-z0-9._-]+`; the warehouse ID SHALL match the same pattern. Violations are rejected with `host, token and warehouseId are required`, `Invalid Databricks hostname: <host>` or `Invalid Databricks warehouse id: <id>`.
 - R5. A PostgreSQL configuration SHALL consist of: host, port (default 5432), database, user, password, and a "Use SSL" flag (default off). Host, database and user are required by the form; the password may be empty. The database name becomes the catalog segment of every entity key (R30).
@@ -34,7 +36,7 @@ Terms are defined once in [the glossary](../../product/glossary.md); this capabi
 
 - R11. The user SHALL be able to test a configuration before saving it. "Test connection" is enabled only when the kind's minimum fields are filled (Databricks: hostname, token, warehouse ID; PostgreSQL: host, database, user; REST: base URL and at least one endpoint with both a name and a path) and no test is running.
 - R12. A test SHALL perform the cheapest real round trip for the kind: Databricks and PostgreSQL run `SELECT 1`; REST fetches one row (page size 1) from the first endpoint. REST additionally rejects an empty base URL (`baseUrl is required`) and an empty endpoint list (`At least one endpoint is required`).
-- R13. Saving SHALL be possible only after a successful test of the exact values in the form: any field edit, kind change, endpoint add/remove or opening a datasource for editing resets the "tested" state, and "Save datasource" / "Save changes" is disabled until the next successful test. Save is also disabled while the Name is empty. The backend itself does not require a prior test.
+- R13. Saving SHALL be possible only after a successful test of the exact values in the form: any change to a connection field, a kind change or an endpoint add/remove resets the "tested" state, and "Save datasource" / "Save changes" is disabled until the next successful test. A new datasource always needs a successful test. An existing datasource opened for editing can be saved without a new test while its connection settings are unchanged since the form opened; Name, Layer and Description are not connection settings, so changing only those does not require a test. Save is also disabled while the Name is empty. The backend itself does not require a prior test.
 - R14. Saving an existing datasource (edit) SHALL update it in place under the same id; saving without an id SHALL create one. The list is ordered by most recently updated first.
 - R15. Deleting a datasource SHALL ask for confirmation and, once confirmed, remove the datasource and its stored inventory snapshot. Datasets bound to it SHALL NOT be deleted or modified.
 - R16. Test, save, delete and REST discovery SHALL report outcome as `{ ok, message }`; a failed operation is not an HTTP error. The UI shows `message` as a success or error toast.
@@ -109,6 +111,13 @@ Terms are defined once in [the glossary](../../product/glossary.md); this capabi
 
 - R51. Listing datasources, reading their inventory and creating, testing, discovering REST endpoints for, editing and deleting a datasource SHALL all be available to the user, and the Datasource Configuration settings section is always shown. A datasource has no owner.
 
+### Layer and description
+
+- R52. A datasource's layer, when set, SHALL be exactly one of `landing`, `normalized` or `consumption`; it is optional and applies to every kind. Any other value SHALL be rejected with `layer must be one of: landing, normalized, consumption`.
+- R53. A datasource's description is optional and applies to every kind. It is trimmed and truncated to 500 characters; an empty (or whitespace-only) description means none is stored.
+- R54. A save that omits `layer` or `description` SHALL keep the stored value of that field. Sending `null` or an empty string SHALL clear it. Testing Data re-registers its sample datasources without these fields, so a layer and description the user set on a sample survive a reload.
+- R55. Datasources saved before layer and description existed have neither; there is no migration, and they list and edit normally with Layer "None" and an empty description.
+
 ## Edge cases and errors
 
 - **Wrong credentials / unreachable host:** the form shows the connector's message (for example `Postgres — connect ECONNREFUSED 127.0.0.1:1`), Save stays disabled, and the same message appears in the system logs under Issues without the password.
@@ -133,7 +142,7 @@ Terms are defined once in [the glossary](../../product/glossary.md); this capabi
 
 Lives in Settings → **Datasource Configuration** (see [ui.md](../../system/ui.md)). Heading "Datasource Configuration"; subtitle "Connect the data platforms your datasets draw from — Databricks SQL warehouses, PostgreSQL databases or REST APIs."
 
-**List.** Loading: `Loading datasources…`. Error: `Could not load configured datasources`. Empty: `No datasources yet. Add one to start building datasets.` Populated: one row per datasource with its name, a kind badge (Databricks / PostgreSQL / REST API), a one-line summary, and Edit and Delete icon buttons (titles "Edit", "Delete"). Summaries: Databricks `<host> · warehouse <id>`; PostgreSQL `<host>:<port>/<database>`; REST `REST API · <baseUrl> · <n> endpoint(s)`. A "New datasource" button sits beside the heading and is hidden while the form is open.
+**List.** Loading: `Loading datasources…`. Error: `Could not load configured datasources`. Empty: `No datasources yet. Add one to start building datasets.` Populated: one row per datasource with its name, a kind badge (Databricks / PostgreSQL / REST API), a layer badge (title "Layer", showing Landing / Normalized / Consumption) after the kind badge when a layer is set, the description under the name when set (one truncated line, the full text as a tooltip), a one-line summary, and Edit and Delete icon buttons (titles "Edit", "Delete"). Summaries: Databricks `<host> · warehouse <id>`; PostgreSQL `<host>:<port>/<database>`; REST `REST API · <baseUrl> · <n> endpoint(s)`. A "New datasource" button sits beside the heading and is hidden while the form is open.
 
 **Form** (header "New datasource" or "Edit datasource"). A new datasource defaults to kind Databricks.
 
@@ -141,6 +150,8 @@ Lives in Settings → **Datasource Configuration** (see [ui.md](../../system/ui.
 |---|---|---|
 | Name | all | placeholder "Claims warehouse" |
 | Kind | all | Databricks / PostgreSQL / REST API; disabled when editing |
+| Layer | all | None / Landing / Normalized / Consumption; can be changed when editing (unlike Kind) |
+| Description | all | textarea, placeholder "What this datasource holds and what it is used for", max 500 characters |
 | Server hostname | Databricks | placeholder `adb-1234567890.1.azuredatabricks.net` |
 | Personal access token | Databricks | password field, placeholder `dapi…` |
 | SQL warehouse ID | Databricks | |
@@ -214,13 +225,25 @@ Feature: Datasources, datasets, and sessions (World Cup database)
     And I expand the "world_cup" catalog, the "world_cup" schema and the "goals" table
     Then I see the column "scorer_player_id"
     And I see a "bigint" column type
+
+  Scenario: Tags a datasource with a layer and description, and edits them without re-testing
+    Given the "World Cup PostgreSQL" datasource exists
+    When I click "Edit"
+    And I choose Layer "Consumption" and type the Description "Tournament facts for analysis"
+    Then "Save changes" is enabled without testing
+    When I click "Save changes"
+    Then the list shows a "Consumption" badge and "Tournament facts for analysis"
+    When I reload and click "Edit"
+    Then Layer shows "Consumption" and the Description is kept
+    When I change the Port
+    Then "Save changes" is disabled
 ```
 
 The fourth scenario exercises the dataset catalog browser and is also referenced from [datasets](../datasets/spec.md). Flows for the Databricks and REST kinds, SSL, and OpenAPI discovery have no E2E yet (see Acceptance).
 
 ## Acceptance
 
-1. The four scenarios above pass against the seeded World Cup database (`docker compose up -d postgres`), and every rule R1–R50 is observable through the API, the form, or the logs.
+1. The five scenarios above pass against the seeded World Cup database (`docker compose up -d postgres`), and every rule R1–R55 is observable through the API, the form, or the logs.
 2. For each kind, a valid configuration passes "Test connection", saves, appears in the list with the right badge and summary, reloads with secrets masked, and can be edited and re-tested without retyping secrets.
 3. A wrong host, port, password or token yields a kind-specific message (PostgreSQL `Postgres — …`, REST `REST API — endpoint "<name>": …`, Databricks driver text), disables Save, and appears redacted in the system logs.
 4. `refresh`/`cachedOnly` behave as R27; deleting a datasource removes its snapshot.

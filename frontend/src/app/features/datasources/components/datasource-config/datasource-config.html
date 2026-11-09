@@ -59,7 +59,21 @@
                 class="chip chip-neutral shrink-0 text-[10px] px-1.5 py-0.5"
                 >{{ kindLabel(ds.kind) }}</span
               >
+              @if (ds.layer) {
+                <span
+                  class="chip chip-info shrink-0 text-[10px] px-1.5 py-0.5"
+                  title="Layer"
+                  >{{ layerLabel(ds.layer) }}</span
+                >
+              }
             </span>
+            @if (ds.description) {
+              <span
+                class="truncate text-[12px] text-fg-muted"
+                [title]="ds.description"
+                >{{ ds.description }}</span
+              >
+            }
             <span class="truncate font-mono text-[11px] text-fg-muted">{{
               ds.summary
             }}</span>
@@ -128,6 +142,38 @@
             </option>
           }
         </select>
+      </label>
+
+      <label class="flex flex-col gap-1">
+        <span class="field-label">Layer</span>
+        <select
+          [value]="layer()"
+          (change)="layer.set($any($event.target).value)"
+          class="field"
+        >
+          <option value="" class="bg-surface" [selected]="layer() === ''">None</option>
+          @for (l of layers; track l.value) {
+            <option
+              [value]="l.value"
+              [selected]="l.value === layer()"
+              class="bg-surface"
+            >
+              {{ l.label }}
+            </option>
+          }
+        </select>
+      </label>
+
+      <label class="flex flex-col gap-1">
+        <span class="field-label">Description</span>
+        <textarea
+          rows="3"
+          placeholder="What this datasource holds and what it is used for"
+          [value]="description()"
+          (input)="description.set($any($event.target).value)"
+          [attr.maxlength]="descriptionMax"
+          class="field resize-y"
+        ></textarea>
       </label>
 
       @if (kind() === "databricks") {
@@ -810,7 +856,7 @@
         </button>
         <button
           (click)="save()"
-          [disabled]="!testedOk() || saving() || name().trim() === ''"
+          [disabled]="!canSave()"
           title="Test the connection successfully before saving"
           class="btn btn-primary flex-1"
         >
