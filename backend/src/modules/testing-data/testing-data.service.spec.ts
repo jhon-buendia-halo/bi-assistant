@@ -392,6 +392,16 @@ describe('TestingDataService.load', () => {
     });
   });
 
+  it('saves the postgres dataset without a schemas key, so reloading keeps the notes (BA-319)', async () => {
+    const { service, datasets } = build({});
+
+    const result = await service.load('world-cup', DEFAULT_INPUT);
+
+    expect(result.ok).toBe(true);
+    const [saved] = datasets.save.mock.calls[0] as [object];
+    expect(saved).not.toHaveProperty('schemas');
+  });
+
   it('reuses the existing datasource instead of creating a duplicate', async () => {
     const { service, datasources, datasets } = build({
       existing: [
@@ -863,6 +873,17 @@ describe('TestingDataService.load — self-registering intellify-api (R21)', () 
     };
     expect(dataset.tables).toContain('api.intellify.funding_types');
     expect(dataset.tables).toHaveLength(10);
+  });
+
+  it('saves the REST dataset without a schemas key, so reloading keeps the notes (BA-319)', async () => {
+    health({ ok: true, database: 'up' });
+    const { service, datasets } = buildApi(PATHS);
+
+    const result = await service.load('intellify-api', {});
+
+    expect(result.ok).toBe(true);
+    const dataset = (datasets.save.mock.calls as unknown[][])[0][0] as object;
+    expect(dataset).not.toHaveProperty('schemas');
   });
 
   it('falls back to explicit endpoint definitions and reuses the record', async () => {

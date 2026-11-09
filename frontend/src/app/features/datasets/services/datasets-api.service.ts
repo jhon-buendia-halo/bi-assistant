@@ -61,6 +61,7 @@ export class DatasetsApiService {
     tables: string[],
     entities: DatasetEntitySnapshot[],
     datasource: { id: string; kind: DatasourceKind },
+    schemas?: DatasetSchemaNote[],
   ): Observable<DatasetActionResult> {
     return this.http.post<DatasetActionResult>(`${API_BASE_URL}/datasets`, {
       name,
@@ -68,6 +69,7 @@ export class DatasetsApiService {
       entities,
       datasourceId: datasource.id,
       datasourceKind: datasource.kind,
+      ...(schemas !== undefined ? { schemas } : {}),
     });
   }
 

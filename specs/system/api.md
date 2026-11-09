@@ -297,14 +297,15 @@ Controller prefix `/datasets`. Capability: datasets. Datasets are keyed by `name
 | 23 | `DELETE /datasets/:name` | Delete a dataset | yes |
 
 #### 21. `GET /datasets`
-- Response `200`: `{ datasets: DatasetDoc[] }`, most recently updated first. Legacy single-selection documents in the same table are skipped.
+- Response `200`: `{ datasets: DatasetDoc[] }`, most recently updated first. Legacy single-selection documents in the same table are skipped. Each dataset carries `schemas` (the schema notes) when it has any.
 
 #### 22. `POST /datasets`
 - Body: `{ name: string; tables: string[]; entities: DatasetEntitySnapshot[]; datasourceId: string; datasourceKind?: string }`.
   - `tables`: fully-qualified `catalog.schema.table` keys of the included entities (non-empty).
   - `entities`: schema snapshots `{ key, columns: { name, type, nullable, sampleValues?, description?, references? }[] }` captured by the client from the inventory. Only those whose `key` is in `tables` are processed.
   - `datasourceKind` optional; when present it must equal the datasource's kind.
-- Validation (Style A messages): `"Dataset name is required"`, `"Include at least one entity"`, `"datasourceId is required"`, `"Datasource <id> not found"`, `"Datasource kind must be <kind>"`.
+  - `schemas` optional: `{ key: "catalog.schema"; layer?: "landing" | "normalized" | "consumption" | null; description?: string | null }[]`, the dataset's schema notes. **Omitted** (or anything that is not an array, `null` included) keeps the stored notes (Testing Data re-registers its samples this way); an **array** replaces them, `[]` clearing them all. Malformed keys are ignored, notes for a schema with no included entity are dropped, empty notes (no layer and no description) are dropped, and descriptions are trimmed and cut to 500 characters.
+- Validation (Style A messages): `"Dataset name is required"`, `"Include at least one entity"`, `"datasourceId is required"`, `"Datasource <id> not found"`, `"Datasource kind must be <kind>"`, `"layer must be one of: landing, normalized, consumption"`.
 - Success: `{ ok:true, message:"Dataset \"<name>\" saved — <n> entities" }`. The saved document is **not** returned; the client re-lists.
 - Side effects: enriches each entity snapshot with up to 5 distinct sample values per column (from a live sample of 50 rows per table, 4 tables concurrently; best effort, a failure leaves that snapshot as sent and never fails the save), then attaches the join graph (`references` per key column: declared foreign keys win, naming-based inference fills the rest), then upserts by `name`, binding `datasourceId` + `datasourceKind`. Re-saving an existing name replaces it and re-enriches.
 - Note the controller trims `name` and `datasourceId`; `tables` entries are stringified.

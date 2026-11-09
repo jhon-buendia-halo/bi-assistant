@@ -98,6 +98,7 @@ export function entityOrientationLines(
     ),
   );
   const joinHints = joinHintBlock(datasets);
+  const schemaNotes = schemaNotesBlock(datasets);
   return [
     `Datasets for this session: ${datasetNames.join(', ')}.`,
     'Entities available (fully-qualified catalog.schema.table):',
@@ -106,7 +107,50 @@ export function entityOrientationLines(
       ? 'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.'
       : 'Use describe_entity / run_readonly_sql to inspect and query them.',
     ...(joinHints ? ['', joinHints] : []),
+    ...(schemaNotes ? ['', schemaNotes] : []),
   ];
+}
+
+const LAYER_LABELS = {
+  landing: 'Landing',
+  normalized: 'Normalized',
+  consumption: 'Consumption',
+} as const;
+
+/**
+ * The dataset owner's per-schema notes (layer + description), stated up front
+ * so the assistant picks the right layer when the same data exists in several.
+ * '' when no dataset carries a note, so a turn without notes is unchanged.
+ */
+export function schemaNotesBlock(datasets: DatasetSnapshot[]): string {
+  const lines: string[] = [];
+  let anyLayer = false;
+  for (const dataset of datasets) {
+    const notes = [...(dataset.schemas ?? [])].sort((a, b) =>
+      a.key < b.key ? -1 : a.key > b.key ? 1 : 0,
+    );
+    for (const note of notes) {
+      const description = note.description?.replace(/\s+/g, ' ').trim();
+      const parts: string[] = [];
+      if (note.layer) {
+        anyLayer = true;
+        parts.push(`layer: ${LAYER_LABELS[note.layer]}`);
+      }
+      if (description) parts.push(description);
+      const suffix = parts.length ? ` — ${parts.join('; ')}` : '';
+      lines.push(`- ${note.key} (dataset: ${dataset.name})${suffix}`);
+    }
+  }
+  if (!lines.length) return '';
+  return [
+    'Schema notes (set by the dataset owner):',
+    ...lines,
+    ...(anyLayer
+      ? [
+          'When the same data exists in several layers, prefer the Consumption schema for analysis unless the user asks for another layer.',
+        ]
+      : []),
+  ].join('\n');
 }
 
 /**

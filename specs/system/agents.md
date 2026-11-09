@@ -1156,6 +1156,17 @@ Visual currently open in the right panel: <visualId>.   ← or "No visual is ope
 
 Join hints: one line per column with a reference, `->` when declared by the datasource, `~>` when inferred; de-duplicated; stop adding lines once 1,500 characters are used.
 
+Schema notes (a section of Block 1, built by `entityOrientationLines` and so also sent by the assistant eval harness): present only when at least one of the session's datasets has a schema note (data-model 3.3, `schemas`); with no notes the block is unchanged, byte for byte. It follows the join section and reads:
+
+```
+Schema notes (set by the dataset owner):
+- <catalog.schema> (dataset: <name>) — layer: <Label>; <description>
+…                                   ← one line per note; parts that are absent are omitted
+When the same data exists in several layers, prefer the Consumption schema for analysis unless the user asks for another layer.   ← only when at least one note has a layer
+```
+
+`<Label>` is Landing, Normalized or Consumption.
+
 **Block 2 — governed metrics** (when any metric is defined on an entity in scope, matched case-insensitively):
 
 ```

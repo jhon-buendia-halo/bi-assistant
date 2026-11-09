@@ -93,13 +93,14 @@ export class DatasetsRepository {
     );
   }
 
-  save(
+  async save(
     name: string,
     tables: string[],
     entities: DatasetEntitySnapshot[],
     datasource?: { id: string; kind: DatasourceKind },
+    schemas?: DatasetSchemaNote[],
   ): Promise<DatasetDoc | null> {
-    return this.store.update(
+    const saved = await this.store.update(
       { name },
       {
         name,
@@ -108,9 +109,15 @@ export class DatasetsRepository {
         ...(datasource
           ? { datasourceId: datasource.id, datasourceKind: datasource.kind }
           : {}),
+        ...(schemas?.length ? { schemas } : {}),
       },
       { upsert: true },
     );
+    // The store merges the patch, so an empty list must drop a stored key.
+    if (!schemas?.length && saved?.schemas !== undefined) {
+      return this.store.unset({ name }, 'schemas');
+    }
+    return saved;
   }
 
   getByNames(names: string[]): Promise<DatasetDoc[]> {

@@ -71,6 +71,41 @@
         <p class="text-[11px] uppercase tracking-wider text-fg-muted">
           Schema · {{ sel.catalogName }}
         </p>
+        @for (noteKey of [schemaNoteKey()]; track noteKey) {
+          <div class="flex flex-col gap-2">
+            <label class="flex flex-col gap-1">
+              <span class="field-label">Layer</span>
+              <select
+                class="field"
+                data-testid="schema-layer-select"
+                (change)="setLayer($any($event.target).value)"
+              >
+                <option value="" [selected]="!schemaNote()?.layer">None</option>
+                @for (l of layers; track l.value) {
+                  <option
+                    [value]="l.value"
+                    [selected]="schemaNote()?.layer === l.value"
+                  >
+                    {{ l.label }}
+                  </option>
+                }
+              </select>
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="field-label">Description</span>
+              <textarea
+                class="field resize-y"
+                rows="3"
+                data-testid="schema-description"
+                placeholder="What this schema holds and what it is used for"
+                [attr.maxlength]="descriptionMax"
+                [value]="schemaNote()?.description ?? ''"
+                (input)="setDescription($any($event.target).value)"
+              ></textarea>
+            </label>
+            <p class="text-[12px] text-fg-muted">Saved with the dataset.</p>
+          </div>
+        }
         <div class="flex flex-col gap-2 text-[13px]">
           <div class="flex justify-between">
             <span class="text-fg-muted">Entities</span>

@@ -3,8 +3,14 @@ import { DatasourcesService } from '../datasources/datasources.service';
 import type { ForeignKeyEdge } from '../datasources/connectors/connector';
 import type { QueryResult } from '../datasources/entities/datasource.entity';
 import { applyReferences, inferRelationships } from './relationships';
-import { DatasetsRepository } from './repositories/datasets.repository';
+import {
+  DatasetsRepository,
+  SCHEMA_DESCRIPTION_MAX,
+  SCHEMA_LAYERS,
+} from './repositories/datasets.repository';
 import type {
+  DatasetSchemaNote,
+  SchemaLayer,
   DatasetColumnSnapshot,
   DatasetDoc,
   DatasetEntitySnapshot,
@@ -25,6 +31,8 @@ export interface SaveDatasetInput {
   entities: DatasetEntitySnapshot[];
   datasourceId: string;
   datasourceKind?: unknown;
+  /** Schema notes; `undefined` keeps the stored ones, `[]` clears them. */
+  schemas?: unknown[];
 }
 
 @Injectable()
@@ -66,15 +74,66 @@ export class DatasetsService {
         `Datasource kind must be ${datasource.kind}`,
       );
     }
+    let notes: DatasetSchemaNote[];
+    if (input.schemas === undefined) {
+      const existing = (await this.repository.list()).find(
+        (d) => d.name === name,
+      );
+      notes = this.normalizeSchemas(existing?.schemas ?? [], input.tables);
+    } else {
+      notes = this.normalizeSchemas(input.schemas, input.tables);
+    }
     const entities = await this.enrich(
       datasource.id,
       input.tables,
       input.entities,
     );
-    return this.repository.save(name, input.tables, entities, {
-      id: datasource.id,
-      kind: datasource.kind,
-    });
+    return this.repository.save(
+      name,
+      input.tables,
+      entities,
+      { id: datasource.id, kind: datasource.kind },
+      notes,
+    );
+  }
+
+  /** Validate, trim, prune to included schemas, de-duplicate and sort notes. */
+  private normalizeSchemas(
+    raw: unknown[],
+    tables: string[],
+  ): DatasetSchemaNote[] {
+    const included = new Set(
+      tables.map((t) => t.split('.').slice(0, 2).join('.')),
+    );
+    const byKey = new Map<string, DatasetSchemaNote>();
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const { key, layer, description } = item as Record<string, unknown>;
+      if (typeof key !== 'string') continue;
+      const parts = key.split('.');
+      if (parts.length !== 2 || parts.some((p) => !p)) continue;
+      let noteLayer: SchemaLayer | undefined;
+      if (layer !== undefined && layer !== null && layer !== '') {
+        if (!SCHEMA_LAYERS.includes(layer as SchemaLayer)) {
+          throw new BadRequestException(
+            `layer must be one of: ${SCHEMA_LAYERS.join(', ')}`,
+          );
+        }
+        noteLayer = layer as SchemaLayer;
+      }
+      const text =
+        typeof description === 'string'
+          ? description.trim().slice(0, SCHEMA_DESCRIPTION_MAX).trim()
+          : '';
+      if (!noteLayer && !text) continue;
+      if (!included.has(key)) continue;
+      byKey.set(key, {
+        key,
+        ...(noteLayer ? { layer: noteLayer } : {}),
+        ...(text ? { description: text } : {}),
+      });
+    }
+    return [...byKey.values()].sort((a, b) => a.key.localeCompare(b.key));
   }
 
   /**

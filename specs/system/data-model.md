@@ -217,6 +217,7 @@ A named, saved selection of entities from one datasource, with a point-in-time s
 | `datasourceKind` | enum | no | `databricks` \| `postgres` \| `rest`, copied from the datasource at save. |
 | `tables` | string[] | yes | Fully-qualified included entities `catalog.schema.table`; at least one. |
 | `entities` | `DatasetEntitySnapshot[]` | no | Schema snapshot; absent on very old datasets. |
+| `schemas` | `{ key, layer?, description? }[]` | no | Schema notes, one per `catalog.schema` (`key`). `layer`: `landing` \| `normalized` \| `consumption`, absent when unset. `description`: trimmed, at most 500 characters, absent when empty. A note with neither field is not stored, and only schemas that still have an included entity keep a note. Per dataset: the same schema can carry different notes in two datasets. Absent when there are no notes; datasets saved before this field have none (no migration). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 `DatasetEntitySnapshot`: `key` (string, req, `catalog.schema.table`), `columns` (`DatasetColumnSnapshot[]`, req).
