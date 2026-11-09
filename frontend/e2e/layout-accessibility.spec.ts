@@ -1,4 +1,16 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import type { Page } from '@playwright/test';
 import axe from 'axe-core';
+
+/** Saves an evidence screenshot when E2E_EVIDENCE_DIR names a folder. */
+async function evidence(page: Page, folder: string, name: string) {
+  const root = process.env['E2E_EVIDENCE_DIR'];
+  if (!root) return;
+  const dir = path.join(root, folder);
+  fs.mkdirSync(dir, { recursive: true });
+  await page.screenshot({ path: path.join(dir, name), fullPage: true });
+}
 import { test, expect } from './fixtures/app.fixture';
 import {
   createWorldCupDataset,
@@ -165,6 +177,29 @@ test('has no automatically detectable accessibility violations on any screen in 
     }
   }
   expect(failures).toEqual([]);
+});
+
+test('text in the app can be selected', async ({ page }) => {
+  const heading = page.getByRole('heading', { name: 'Welcome to Agentic Hub' });
+  await heading.click({ clickCount: 3 });
+  expect(
+    await page.evaluate(() => window.getSelection()?.toString()),
+  ).toContain('Welcome to Agentic Hub');
+  await evidence(page, '1.20.5', 'text-selected.png');
+  expect(
+    await heading.evaluate((el) => getComputedStyle(el).userSelect),
+  ).not.toBe('none');
+
+  await page.getByTitle('Expand right panel').click();
+  const separator = page.getByRole('separator', { name: 'Resize right panel' });
+  const box = (await separator.boundingBox())!;
+  await page.evaluate(() => window.getSelection()?.removeAllRanges());
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x - 60, box.y + box.height / 2, { steps: 5 });
+  await expect(page.locator('.resizing-right-panel')).toHaveCount(1);
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe('');
+  await page.mouse.up();
 });
 
 test('matches the stable application-shell visual baseline', async ({

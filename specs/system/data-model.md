@@ -217,6 +217,7 @@ A named, saved selection of entities from one datasource, with a point-in-time s
 | `datasourceKind` | enum | no | `databricks` \| `postgres` \| `rest`, copied from the datasource at save. |
 | `tables` | string[] | yes | Fully-qualified included entities `catalog.schema.table`; at least one. |
 | `entities` | `DatasetEntitySnapshot[]` | no | Schema snapshot; absent on very old datasets. |
+| `schemas` | `{ key, layer?, description? }[]` | no | Schema notes, one per `catalog.schema` (`key`). `layer`: `landing` \| `normalized` \| `consumption`, absent when unset. `description`: trimmed, at most 500 characters, absent when empty. A note with neither field is not stored, and only schemas that still have an included entity keep a note. Per dataset: the same schema can carry different notes in two datasets. Absent when there are no notes; datasets saved before this field have none (no migration). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 `DatasetEntitySnapshot`: `key` (string, req, `catalog.schema.table`), `columns` (`DatasetColumnSnapshot[]`, req).
@@ -568,6 +569,7 @@ One document per assessment ([data-readiness](../capabilities/data-readiness/spe
 | `maturity` | `Initial` \| `Repeatable` \| `Defined` \| `Managed` \| `Optimised` | yes | The band of `overallScore`. |
 | `dimensionScores` | `DimensionScore[]` | yes | Ten entries, in the order completeness, accuracy, validity, consistency, integrity, uniqueness, timeliness, currency, reasonability, accessibility. Each is `{ dimension: Dimension, score: number, findingCount: number, maxSeverity: Severity \| null, assessed: boolean, totalChecks: number }`. `accuracy` and `currency` have `assessed: false`, score 100 and 0 checks. |
 | `findings` | `Finding[]` | yes | In engine order (R23). Each is `{ dimension: Dimension, level: 'entity' \| 'source', namespace?: string, entity?: string, field?: string, severity: 'info' \| 'low' \| 'medium' \| 'high', measured?: string, description: string, recommendation: string }`. `field` may name several columns, comma-separated, for a key or a column pair. |
+| `notProfiled` | `{ entity: string, reason: 'too-large' \| 'timed-out', rowCount?: number }[]` | no | Entities whose column checks were skipped (ADR-0033). Absent when there are none. Older reports lack it; no migration. |
 | `sessionId` | uuid | no | The chat session it was run from, when there was one. |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 

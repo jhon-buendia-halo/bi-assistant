@@ -339,6 +339,15 @@ export class SessionsApiService {
       onTool?: (call: ToolCallEvent) => void;
       /** Summary of one finished call, including why it was run. */
       onToolResult?: (summary: ToolDataRecord) => void;
+      /** A long-running tool reports where it is, between its call and result. */
+      onToolProgress?: (p: {
+        tool: string;
+        phase: string;
+        message: string;
+        done?: number;
+        total?: number;
+        entity?: string;
+      }) => void;
       onVisualUpdated?: (event: VisualEvent) => void;
       /** `show_in_panel` (or an RFP stage change) put an item in the panel. */
       onPanelItem?: (event: PanelItemEvent) => void;
@@ -419,6 +428,20 @@ export class SessionsApiService {
                   handlers.onToolResult?.(JSON.parse(event.content ?? '{}'));
                 } catch {
                   // Malformed summary — ignore.
+                }
+                break;
+              case 'tool-progress':
+                try {
+                  const p = JSON.parse(event.content ?? '{}');
+                  if (
+                    p &&
+                    typeof p.tool === 'string' &&
+                    typeof p.message === 'string'
+                  ) {
+                    handlers.onToolProgress?.(p);
+                  }
+                } catch {
+                  // Malformed event — ignore.
                 }
                 break;
               case 'visual-updated':

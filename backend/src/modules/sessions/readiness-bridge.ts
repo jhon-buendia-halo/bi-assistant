@@ -18,6 +18,7 @@ import type {
   ReadinessSummary,
   Severity,
 } from '../data-readiness/engine/types';
+import type { ReadinessProgressListener } from '../data-readiness/progress';
 import type {
   ReadinessPanelItem,
   ReadinessReportRef,
@@ -68,11 +69,18 @@ export interface ReadinessDataset {
 
 /** The data-readiness service calls the bridge makes (api.md 2.17). */
 export interface ReadinessReports {
-  assess(input: {
-    datasourceId: string;
-    entities?: string[];
-    sessionId?: string;
-  }): Promise<ReadinessReport>;
+  assess(
+    input: {
+      datasourceId: string;
+      entities?: string[];
+      sessionId?: string;
+    },
+    now?: Date,
+    options?: {
+      signal?: AbortSignal;
+      onProgress?: ReadinessProgressListener;
+    },
+  ): Promise<ReadinessReport>;
   list(datasourceId: string): Promise<{ reports: ReadinessReportSummary[] }>;
   get(id: string): Promise<ReadinessReport>;
 }
@@ -98,6 +106,9 @@ export function readinessSummary(report: ReadinessReport): ReadinessSummary {
     maturity: report.maturity,
     dimensionScores: report.dimensionScores.map((d) => ({ ...d })),
     findingCount: report.findings.length,
+    ...(report.notProfiled?.length
+      ? { notProfiled: report.notProfiled.map((n) => ({ ...n })) }
+      : {}),
     topFindings: topFindings(report.findings).map((f) => ({
       severity: f.severity,
       dimension: f.dimension,
@@ -240,6 +251,8 @@ export class ReadinessBridge implements ReadinessToolServices {
   async assessReadiness(input: {
     sessionId: string;
     datasetName?: string;
+    signal?: AbortSignal;
+    onProgress?: ReadinessProgressListener;
   }): Promise<ReadinessToolReport> {
     const dataset = await this.resolveDataset(
       input.sessionId,
@@ -247,11 +260,18 @@ export class ReadinessBridge implements ReadinessToolServices {
     );
     let report: ReadinessReport;
     try {
-      report = await this.deps.readiness.assess({
+      const request = {
         datasourceId: dataset.datasourceId,
         entities: dataset.tables,
         sessionId: input.sessionId,
-      });
+      };
+      report =
+        input.signal || input.onProgress
+          ? await this.deps.readiness.assess(request, undefined, {
+              signal: input.signal,
+              onProgress: input.onProgress,
+            })
+          : await this.deps.readiness.assess(request);
     } catch (error) {
       if (statusOf(error) === 502) {
         const name = await this.deps.datasourceName(dataset.datasourceId);

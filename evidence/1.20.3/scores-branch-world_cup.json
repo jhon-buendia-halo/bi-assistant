@@ -1,0 +1,236 @@
+{
+  "database": "world_cup",
+  "now": "2026-11-09T00:00:00.000Z",
+  "scope": "whole database",
+  "overallScore": 94,
+  "maturity": "Managed",
+  "dimensionScores": [
+    {
+      "dimension": "completeness",
+      "score": 88,
+      "findingCount": 7,
+      "maxSeverity": "high",
+      "assessed": true,
+      "totalChecks": 49
+    },
+    {
+      "dimension": "accuracy",
+      "score": 100,
+      "findingCount": 0,
+      "maxSeverity": null,
+      "assessed": false,
+      "totalChecks": 0
+    },
+    {
+      "dimension": "validity",
+      "score": 100,
+      "findingCount": 0,
+      "maxSeverity": null,
+      "assessed": true,
+      "totalChecks": 0
+    },
+    {
+      "dimension": "consistency",
+      "score": 100,
+      "findingCount": 0,
+      "maxSeverity": null,
+      "assessed": true,
+      "totalChecks": 29
+    },
+    {
+      "dimension": "integrity",
+      "score": 100,
+      "findingCount": 0,
+      "maxSeverity": null,
+      "assessed": true,
+      "totalChecks": 25
+    },
+    {
+      "dimension": "uniqueness",
+      "score": 100,
+      "findingCount": 0,
+      "maxSeverity": null,
+      "assessed": true,
+      "totalChecks": 23
+    },
+    {
+      "dimension": "timeliness",
+      "score": 60,
+      "findingCount": 6,
+      "maxSeverity": "medium",
+      "assessed": true,
+      "totalChecks": 6
+    },
+    {
+      "dimension": "currency",
+      "score": 100,
+      "findingCount": 0,
+      "maxSeverity": null,
+      "assessed": false,
+      "totalChecks": 0
+    },
+    {
+      "dimension": "reasonability",
+      "score": 100,
+      "findingCount": 0,
+      "maxSeverity": null,
+      "assessed": true,
+      "totalChecks": 86
+    },
+    {
+      "dimension": "accessibility",
+      "score": 100,
+      "findingCount": 0,
+      "maxSeverity": null,
+      "assessed": true,
+      "totalChecks": 15
+    }
+  ],
+  "entityCount": 15,
+  "findingCount": 13,
+  "findings": [
+    {
+      "dimension": "completeness",
+      "level": "entity",
+      "namespace": "world_cup",
+      "entity": "goals",
+      "field": "assist_player_id",
+      "severity": "high",
+      "measured": "95.7% null (45/47)",
+      "description": "Column \"assist_player_id\" is missing values in 45 of 47 rows.",
+      "recommendation": "High null rate — confirm the column is still populated upstream, or mark it optional."
+    },
+    {
+      "dimension": "completeness",
+      "level": "entity",
+      "namespace": "world_cup",
+      "entity": "matches",
+      "field": "away_penalties",
+      "severity": "high",
+      "measured": "75.0% null (12/16)",
+      "description": "Column \"away_penalties\" is missing values in 12 of 16 rows.",
+      "recommendation": "High null rate — confirm the column is still populated upstream, or mark it optional."
+    },
+    {
+      "dimension": "completeness",
+      "level": "entity",
+      "namespace": "world_cup",
+      "entity": "matches",
+      "field": "group_letter",
+      "severity": "high",
+      "measured": "100.0% null (16/16)",
+      "description": "Column \"group_letter\" is missing values in 16 of 16 rows.",
+      "recommendation": "High null rate — confirm the column is still populated upstream, or mark it optional."
+    },
+    {
+      "dimension": "completeness",
+      "level": "entity",
+      "namespace": "world_cup",
+      "entity": "matches",
+      "field": "home_penalties",
+      "severity": "high",
+      "measured": "75.0% null (12/16)",
+      "description": "Column \"home_penalties\" is missing values in 12 of 16 rows.",
+      "recommendation": "High null rate — confirm the column is still populated upstream, or mark it optional."
+    },
+    {
+      "dimension": "completeness",
+      "level": "entity",
+      "namespace": "world_cup",
+      "entity": "v_match_results",
+      "field": "away_penalties",
+      "severity": "high",
+      "measured": "75.0% null (12/16)",
+      "description": "Column \"away_penalties\" is missing values in 12 of 16 rows.",
+      "recommendation": "High null rate — confirm the column is still populated upstream, or mark it optional."
+    },
+    {
+      "dimension": "completeness",
+      "level": "entity",
+      "namespace": "world_cup",
+      "entity": "v_match_results",
+      "field": "home_penalties",
+      "severity": "high",
+      "measured": "75.0% null (12/16)",
+      "description": "Column \"home_penalties\" is missing values in 12 of 16 rows.",
+      "recommendation": "High null rate — confirm the column is still populated upstream, or mark it optional."
+    },
+    {
+      "dimension": "completeness",
+      "level": "entity",
+      "namespace": "world_cup",
+      "entity": "v_player_goal_totals",
+      "field": "first_goal_minute",
+      "severity": "low",
+      "measured": "2.8% null (1/36)",
+      "description": "Column \"first_goal_minute\" is missing values in 1 of 36 rows.",
+      "recommendation": "Investigate the source of the missing values or document them as expected."
+    },
+    {
+      "dimension": "timeliness",
+      "level": "entity",
+      "namespace": "world_cup",
+      "entity": "matches",
+      "field": "kicked_off_at",
+      "severity": "medium",
+      "measured": "newest \"kicked_off_at\" = 2022-12-18T15:00:00+00:00 (1421d ago)",
+      "description": "The most recent record in \"matches\" is 1421 days old (by \"kicked_off_at\").",
+      "recommendation": "Confirm the table is still being loaded — stale data often signals a broken or paused pipeline."
+    },
+    {
+      "dimension": "timeliness",
+      "level": "entity",
+      "namespace": "world_cup",
+      "entity": "players",
+      "field": "date_of_birth",
+      "severity": "medium",
+      "measured": "newest \"date_of_birth\" = 2002-01-23 (9056d ago)",
+      "description": "The most recent record in \"players\" is 9056 days old (by \"date_of_birth\").",
+      "recommendation": "Confirm the table is still being loaded — stale data often signals a broken or paused pipeline."
+    },
+    {
+      "dimension": "timeliness",
+      "level": "entity",
+      "namespace": "world_cup",
+      "entity": "tournaments",
+      "field": "ends_on",
+      "severity": "medium",
+      "measured": "newest \"ends_on\" = 2022-12-18 (1422d ago)",
+      "description": "The most recent record in \"tournaments\" is 1422 days old (by \"ends_on\").",
+      "recommendation": "Confirm the table is still being loaded — stale data often signals a broken or paused pipeline."
+    },
+    {
+      "dimension": "timeliness",
+      "level": "entity",
+      "namespace": "world_cup",
+      "entity": "v_match_results",
+      "field": "kicked_off_at",
+      "severity": "medium",
+      "measured": "newest \"kicked_off_at\" = 2022-12-18T15:00:00+00:00 (1421d ago)",
+      "description": "The most recent record in \"v_match_results\" is 1421 days old (by \"kicked_off_at\").",
+      "recommendation": "Confirm the table is still being loaded — stale data often signals a broken or paused pipeline."
+    },
+    {
+      "dimension": "timeliness",
+      "level": "entity",
+      "namespace": "world_cup",
+      "entity": "v_player_goal_totals",
+      "field": "tournament_year",
+      "severity": "medium",
+      "measured": "newest \"tournament_year\" = 2022 (1408d ago)",
+      "description": "The most recent record in \"v_player_goal_totals\" is 1408 days old (by \"tournament_year\").",
+      "recommendation": "Confirm the table is still being loaded — stale data often signals a broken or paused pipeline."
+    },
+    {
+      "dimension": "timeliness",
+      "level": "entity",
+      "namespace": "world_cup",
+      "entity": "v_seeded_team_performance",
+      "field": "tournament_year",
+      "severity": "medium",
+      "measured": "newest \"tournament_year\" = 2022 (1408d ago)",
+      "description": "The most recent record in \"v_seeded_team_performance\" is 1408 days old (by \"tournament_year\").",
+      "recommendation": "Confirm the table is still being loaded — stale data often signals a broken or paused pipeline."
+    }
+  ]
+}

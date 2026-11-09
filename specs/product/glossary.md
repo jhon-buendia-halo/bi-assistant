@@ -150,6 +150,10 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Schema.** The middle level of an *entity* name.
 
+**Schema layer.** The role of a *schema* in the data pipeline, set per schema in a *dataset*: Landing (raw, as ingested), Normalized (cleaned and conformed) or Consumption (modelled for analysis and reporting). See [../capabilities/datasets/spec.md](../capabilities/datasets/spec.md).
+
+**Schema note.** A *dataset*'s *schema layer* and free-text description for one *schema*. Saved with the dataset and given to the assistant. See [../capabilities/datasets/spec.md](../capabilities/datasets/spec.md).
+
 **Session.** One conversation with the assistant, bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Needs a name and at least one dataset. A session started from a *Live* *user agent* is bound to that agent and runs with its instructions (see [../capabilities/sessions-chat/spec.md](../capabilities/sessions-chat/spec.md), R52-R59). A session started from the *RFP Builder* is bound to it and runs it on every turn (see [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md)). Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
 
 **Session panel.** The right-hand panel when the main view is a *session*'s chat. It shows one *panel item* at a time (the *visual* panel, a document, a file or a table), with a menu of everything shown in the session and a Download button. See [agent-panel](../capabilities/agent-panel/spec.md).

@@ -224,11 +224,23 @@ describe('profilePostgres', () => {
       ['email', 'status', 'tags'],
       ['id', 'email', 'status', 'tags'],
       ['id', 'email', 'status'],
+      {
+        // POSIX pattern for the email rule, folded into the statement.
+        formats: [{ column: 'email', pattern: POSTGRES_FORMAT_PATTERNS.email }],
+      },
     ]);
-    // POSIX pattern for the email rule.
-    expect(
-      profiler.calls.find((c) => c.method === 'invalidFormatCount')?.args,
-    ).toEqual(['public', 'customers', 'email', POSTGRES_FORMAT_PATTERNS.email]);
+    // Normalized counts ride a second statement, for the window columns only.
+    const second = profiler.calls.filter(
+      (c) => c.method === 'columnStats' && c.args[1] === 'customers',
+    )[1];
+    expect(second?.args).toEqual([
+      'public',
+      'customers',
+      [],
+      [],
+      [],
+      { normalizedDistinct: ['email', 'status'] },
+    ]);
     // Declared FK columns are passed so inference skips them.
     expect(infer.mock.calls[0][2]).toEqual(
       new Set(['public orders customer_id']),

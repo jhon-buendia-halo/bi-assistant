@@ -457,6 +457,93 @@ describe('SessionsService sessions bound to the Data Readiness Agent (BA-261)', 
       expect(answer).not.toHaveProperty('data');
     });
 
+    it('streams assessment progress as tool-progress between the call and its result, never persisted (BA-324)', async () => {
+      const progress = {
+        phase: 'profiling',
+        message: 'Profiling wc.public.matches',
+        done: 1,
+        total: 2,
+        entity: 'wc.public.matches',
+      };
+      const ctx = build({
+        chunks: [
+          () =>
+            Promise.resolve({
+              type: 'tool-call',
+              payload: {
+                toolCallId: 'c1',
+                toolName: 'assess_data_readiness',
+                args: {},
+              },
+            }),
+          // Verbatim, as `writer.custom` forwards it.
+          () =>
+            Promise.resolve({
+              type: 'data-readiness-progress',
+              data: progress,
+            }),
+          // Wrapped as a tool-output chunk.
+          () =>
+            Promise.resolve({
+              type: 'tool-output',
+              payload: {
+                output: {
+                  type: 'data-readiness-progress',
+                  data: { phase: 'scoring', message: 'Scoring' },
+                },
+              },
+            }),
+          // Malformed: ignored.
+          () =>
+            Promise.resolve({
+              type: 'data-readiness-progress',
+              data: { phase: 'x', message: 42 },
+            }),
+          () =>
+            Promise.resolve({
+              type: 'tool-output',
+              payload: { output: { type: 'other', data: {} } },
+            }),
+          () =>
+            Promise.resolve({
+              type: 'tool-result',
+              payload: {
+                toolCallId: 'c1',
+                toolName: 'assess_data_readiness',
+                result: {},
+              },
+            }),
+          () =>
+            Promise.resolve({
+              type: 'text-delta',
+              payload: { text: 'Done.' },
+            }),
+        ],
+      });
+      await ctx.service.onModuleInit();
+      const events = await turn(ctx, 'Assess the readiness of this dataset');
+
+      const types = events.map((event) => event.type);
+      expect(types.slice(0, 4)).toEqual([
+        'tool',
+        'tool-progress',
+        'tool-progress',
+        'tool-result',
+      ]);
+      expect(JSON.parse(events[1].content!)).toEqual({
+        tool: 'assess_data_readiness',
+        ...progress,
+      });
+      expect(JSON.parse(events[2].content!)).toEqual({
+        tool: 'assess_data_readiness',
+        phase: 'scoring',
+        message: 'Scoring',
+      });
+      const answer = ctx.session.messages.at(-1)!;
+      expect(JSON.stringify(ctx.session.messages)).not.toContain('Profiling');
+      expect(answer).toMatchObject({ role: 'assistant', content: 'Done.' });
+    });
+
     it('upserts the item when the same report is shown again', async () => {
       const ctx = build({
         session: {

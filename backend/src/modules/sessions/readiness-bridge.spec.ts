@@ -106,6 +106,27 @@ function build(sessionDatasets: string[]) {
 }
 
 describe('readiness summary (agents.md 3.13)', () => {
+  it('includes notProfiled only when the report has some', () => {
+    const base = report('r-np', []);
+    expect(readinessSummary(base)).not.toHaveProperty('notProfiled');
+    const np = [{ entity: 'a.b', reason: 'too-large' as const, rowCount: 9 }];
+    expect(readinessSummary({ ...base, notProfiled: np }).notProfiled).toEqual(
+      np,
+    );
+  });
+
+  it('passes signal and onProgress to the data-readiness service only when given', async () => {
+    const ctx = build(['World Cup']);
+    const signal = new AbortController().signal;
+    const onProgress = jest.fn();
+    await ctx.bridge.assessReadiness({ sessionId: 's-1', signal, onProgress });
+    expect(ctx.readiness.assess).toHaveBeenCalledWith(
+      expect.objectContaining({ datasourceId: 'ds-pg' }),
+      undefined,
+      { signal, onProgress },
+    );
+  });
+
   it('keeps at most 20 findings, most severe first, then in report order', () => {
     const findings = [
       finding('low', 'a'),

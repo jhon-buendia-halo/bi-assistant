@@ -20,6 +20,11 @@ type Execute = (
   context: { requestContext: RequestContext },
 ) => Promise<unknown>;
 
+type ExecuteWith = (
+  input: Record<string, unknown>,
+  context: Record<string, unknown>,
+) => Promise<unknown>;
+
 type ToModelOutput = (output: unknown) => unknown;
 
 const REPORT: ReadinessReport = {
@@ -181,6 +186,63 @@ describe('the readiness tools (agents.md 3.13)', () => {
       });
       expect(result).toEqual({ report: REPORT, summary: SUMMARY });
       expect(readinessReportFromToolResult(result)).toBe(REPORT);
+    });
+
+    it('passes the abort signal and a progress listener that writes data-readiness-progress chunks', async () => {
+      const custom = jest.fn().mockResolvedValue(undefined);
+      const signal = new AbortController().signal;
+      const execute = readinessTools.assess_data_readiness
+        .execute as unknown as ExecuteWith;
+
+      await execute(
+        {},
+        {
+          requestContext: contextWith(),
+          abortSignal: signal,
+          writer: { custom },
+        },
+      );
+
+      const input = (assess.mock.calls as unknown[][])[0][0] as {
+        signal?: AbortSignal;
+        onProgress?: (p: unknown) => void;
+      };
+      expect(input.signal).toBe(signal);
+      const progress = { phase: 'profiling', message: 'Profiling…' };
+      input.onProgress?.(progress);
+      expect(custom).toHaveBeenCalledWith({
+        type: 'data-readiness-progress',
+        data: progress,
+        transient: true,
+      });
+    });
+
+    it('does not fail when the writer throws or rejects', async () => {
+      const execute = readinessTools.assess_data_readiness
+        .execute as unknown as ExecuteWith;
+      for (const custom of [
+        jest.fn(() => {
+          throw new Error('boom');
+        }),
+        jest.fn().mockRejectedValue(new Error('boom')),
+      ]) {
+        assess.mockImplementationOnce(
+          (input: { onProgress?: (p: unknown) => void }) => {
+            input.onProgress?.({ phase: 'scoring', message: 'x' });
+            return Promise.resolve({ report: REPORT, summary: SUMMARY });
+          },
+        );
+        await expect(
+          execute({}, { requestContext: contextWith(), writer: { custom } }),
+        ).resolves.toEqual({ report: REPORT, summary: SUMMARY });
+      }
+    });
+
+    it('lets an AbortError propagate instead of returning { error }', async () => {
+      const abort = new Error('aborted');
+      abort.name = 'AbortError';
+      assess.mockRejectedValueOnce(abort);
+      await expect(run('assess_data_readiness', {})).rejects.toBe(abort);
     });
 
     it('sends the model only the summary, never the findings list', async () => {

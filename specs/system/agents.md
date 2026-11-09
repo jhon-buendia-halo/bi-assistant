@@ -883,6 +883,7 @@ It is never called by the grounding guard (5.6), careful mode (5.8) or deep anal
 **Output.** Free text (markdown). Tool calls are captured by the orchestrator (5.1).
 - A successful `assess_data_readiness` or `get_readiness_report` result emits the `readiness-report` stream event ([api.md](api.md) 3.1).
 - It stores a `readiness` panel item for the report and sets the answer's `readinessReport` reference ([data-model.md](data-model.md) 3.4.1).
+- While `assess_data_readiness` runs, its progress chunks are forwarded as `tool-progress` stream events and never reach the model or the stored message (3.13, ADR-0033).
 
 **Tools.** The readiness tools of 3.13 (3), then `show_in_panel` (3.11) and the shared `ask_clarification` (3.5).
 - It has **no SQL tool**, no dataset tools, no visual tools, no `update_workflow` and no workspace tools.
@@ -1115,7 +1116,8 @@ The Data Readiness Agent's tools (2.10, ADR-0031), in the order it is given them
 - `reportId`, `datasourceName`, `generatedAt`, `entityCount`, `overallScore` and `maturity`;
 - `dimensionScores`: all ten, as `{ dimension, score, findingCount, maxSeverity, assessed, totalChecks }`;
 - `findingCount`: all findings;
-- `topFindings`: at most 20, most severe first, then in report order, as `{ severity, dimension, entity, field, measured, description, recommendation }`.
+- `topFindings`: at most 20, most severe first, then in report order, as `{ severity, dimension, entity, field, measured, description, recommendation }`;
+- `notProfiled`: every entity the profiler skipped, as `{ entity, reason: 'too-large' | 'timed-out', rowCount? }` (`entity` is `namespace.name`; `rowCount` for `too-large`), absent when none. Its presence needs no prompt change: the agent may mention these entities as part of explaining the report ([data-readiness](../capabilities/data-readiness/spec.md) R31).
 
 | Tool | Description (first sentence) | Input | Calls | Output |
 |---|---|---|---|---|
@@ -1123,7 +1125,12 @@ The Data Readiness Agent's tools (2.10, ADR-0031), in the order it is given them
 | `get_readiness_report` | Read a stored readiness report: the newest for a dataset's datasource, or one by id. | `reportId?: string`, `dataset?: string` | bridge `getReadinessReport({ sessionId, reportId?, datasetName? })` | `ReadinessSummary` |
 | `list_readiness_reports` | List the stored readiness reports of a dataset's datasource, newest first. | `dataset?: string` | bridge `listReadinessReports({ sessionId, datasetName? })` | `{ datasourceName, reports: [{ reportId, generatedAt, overallScore, maturity, entityCount }], total }` |
 
+**Progress and cancellation (ADR-0033).** `assess_data_readiness` takes the turn's abort signal and passes it to the bridge, so Stop or reload cancels in-flight statements and no report is stored.
+- It emits progress through the tool's `writer`: `writer.custom({ type: 'data-readiness-progress', data })`, where `data` is the `ReadinessProgress` of `modules/data-readiness/progress.ts` (`phase`: `inventory`, `profiling`, `relationships`, `scoring` or `storing`; `message`; `done?`; `total?`; `entity?`). The session loop forwards each chunk as a `tool-progress` event ([api.md](api.md) 3.1).
+- Progress is invisible to the model and is not persisted. The tool's result and description are unchanged apart from `notProfiled` in the summary.
+
 **Tool-services bridge.** `mastra/readiness-tool-services.ts` (beside `tool-services.ts`, same install pattern) carries the three methods above, installed by `SessionsService.onModuleInit` and implemented by the data-readiness service.
+- `assessReadiness` also takes `{ abortSignal?, onProgress? }`; `onProgress` receives the progress frames the tool writes.
 - `assessReadiness` and `getReadinessReport` resolve to `{ report: ReadinessReport, summary: ReadinessSummary }`. The orchestrator takes `report` for the stream event and panel item, and the model receives only `summary`.
 - `listReadinessReports` resolves to the list output.
 
@@ -1155,6 +1162,17 @@ Visual currently open in the right panel: <visualId>.   ← or "No visual is ope
 ```
 
 Join hints: one line per column with a reference, `->` when declared by the datasource, `~>` when inferred; de-duplicated; stop adding lines once 1,500 characters are used.
+
+Schema notes (a section of Block 1, built by `entityOrientationLines` and so also sent by the assistant eval harness): present only when at least one of the session's datasets has a schema note (data-model 3.3, `schemas`); with no notes the block is unchanged, byte for byte. It follows the join section and reads:
+
+```
+Schema notes (set by the dataset owner):
+- <catalog.schema> (dataset: <name>) — layer: <Label>; <description>
+…                                   ← one line per note; parts that are absent are omitted
+When the same data exists in several layers, prefer the Consumption schema for analysis unless the user asks for another layer.   ← only when at least one note has a layer
+```
+
+`<Label>` is Landing, Normalized or Consumption.
 
 **Block 2 — governed metrics** (when any metric is defined on an entity in scope, matched case-insensitively):
 
@@ -1869,6 +1887,7 @@ Built-in check types used by the cases (each exposes an id, name and a descripti
 | `world-cup-rest` | World Cup (REST API) | `world-cup-rest` (REST) | the same 12 with ids prefixed `rest-` and `expectedSql` ported to SQLite over `api.world_cup.*`; a base case with `expectedSql` but no port is a startup error |
 | `formula-1` | Formula 1 | `formula-1` (PostgreSQL) | `f1-champion-2023`, `f1-british-gp-2023`, `f1-most-race-wins`, `f1-most-titles-tie`, `f1-monaco-2024-podium`, `f1-schema-discovery`, `f1-ambiguous-dominant-driver` (judge), `f1-pole-to-win-2023` (judge), `f1-out-of-scope-motogp` (judge), `f1-visual-request` (judge) |
 | `data-readiness` | Data Readiness | `world-cup` (PostgreSQL) | 8, `agentKey: 'data-readiness'`: listed below |
+| `schema-notes` | Schema notes | `world-cup` (PostgreSQL) | 1: `schema-notes-consumption` — the orientation block (only, via the case's `orientationSnapshots`) shows every World Cup table twice, in a non-existent Landing schema `world_cup.world_cup_raw` and in the real Consumption schema, with schema notes; passes only if no statement reads the Landing copy and the 2022 goal total matches (BA-319) |
 | `rfp` | RFP Builder | `intellify-api` (REST, self-registering) | 28, `agentKey: 'rfp'`: listed below |
 
 **The `data-readiness` set** runs on the Data Readiness Agent (2.10). Its cases have no `expectedSql` and expect no fixed score: the engine computes them, so the checks compare the answer with the readiness tool results of the same case. Each case gets Block D1 (4.1) as orientation and no knowledge block; the run's session is bound to the agent (`sessionAgentKey: 'data-readiness'`) and the judge reads up to 12,000 characters of each tool input and output, each readiness report result projected to the summary the model was handed (`readinessModelOutput`, 3.13). Reports are stored per datasource, so a case may find reports from earlier cases or runs. Custom checks: *numbers* (every score-like number in the answer, a percentage or a number within 40 characters of a score, band or dimension word, not an age in years, months or weeks, a date or a clock time, equals a number some successful readiness tool returned (a report result read as its summary), rounded no further than written, a count of a summary's `topFindings` in total, per dimension, per severity or per both when the list holds every finding, or a method constant of the skill), *overall* (the last summary's `overallScore` is quoted), *weakest* (the answer names a lowest-scoring assessed dimension of the last summary) and *unassessed* (accuracy and currency are paired with no score).
@@ -1967,7 +1986,7 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 ### 8.5 Other entry points
 
 - **CLI** — same suite over `EVAL_DATASETS` (comma-separated saved dataset names), booting the whole backend without HTTP. Exactly one of these selects the questions:
-  - `EVAL_SET`: a set id (`world-cup`, `world-cup-rest`, `formula-1`, `rfp`, `data-readiness`); runs every case of that set.
+  - `EVAL_SET`: a set id (`world-cup`, `world-cup-rest`, `formula-1`, `rfp`, `data-readiness`, `schema-notes`); runs every case of that set.
   - `EVAL_CASES`: comma-separated case ids, which must all belong to one set's fixture. The data preflight (8.2) refuses a mix.
 
   With neither, both, an unknown set id or an unknown case id, it runs nothing, makes no model call, prints the error and exits 1. The errors are `Set EVAL_SET to one question set (world-cup, world-cup-rest, formula-1, rfp, data-readiness) or EVAL_CASES to comma-separated case ids`, `Set EVAL_SET or EVAL_CASES, not both`, `Unknown question set "<id>" (known: …)` and `Unknown eval case(s): <ids>`. It prints `PASS|FAIL <id> (<ms>)` per case, then each of its checks (`pass|FAIL <check id>: <description>`, with `↳ <reason>` under a failed one), and `<passed>/<total> questions passed`, and exits 1 unless all pass. With `EVAL_RESULTS_FILE` set it also writes the results (8.3) to that path as JSON.

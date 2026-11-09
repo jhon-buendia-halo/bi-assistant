@@ -14,6 +14,8 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - **Sample values** — up to five distinct stored values per column, captured at save time.
 - **Reference** — for a key column, the entity and column it joins to, marked `declared` (from the datasource's own constraints) or `inferred` (from naming).
 - **Session scope** — the datasets a session was created with.
+- **Schema note** — a dataset's per-schema layer and description, keyed `catalog.schema`. See R40–R47.
+- **Schema layer** — where a schema sits in the data flow: `landing`, `normalized` or `consumption` (UI: Landing, Normalized, Consumption).
 
 ## Rules
 
@@ -83,6 +85,17 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
 - R39. Every session and agent can use any dataset. Listing, creating, saving and deleting a dataset SHALL all be available to the user: **New dataset**, **Delete dataset**, the dataset name field and **Save dataset** are always shown.
 
+### Schema notes
+
+- R40. A dataset MAY carry **schema notes**: per schema, keyed `catalog.schema`, an optional **layer** and an optional **description**. Notes belong to the dataset: the same schema can be noted differently in two datasets. Datasets saved before schema notes existed have none.
+- R41. The layer SHALL be one of `landing`, `normalized` or `consumption` (UI: Landing, Normalized, Consumption; the dropdown's empty option is "None"). Any other value is rejected with `layer must be one of: landing, normalized, consumption`.
+- R42. The description SHALL be trimmed and cut to 500 characters; an empty description counts as absent. A note with neither layer nor description is not stored. A save whose body has `schemas` replaces the stored notes; a save without `schemas` keeps the stored ones (Testing Data re-registers its sample datasets this way, so a reload does not wipe them).
+- R43. On save the system SHALL drop notes for schemas that have no included entity in the dataset, and SHALL ignore malformed keys. Excluding every entity of a noted schema therefore drops its note.
+- R44. The browser SHALL keep note edits in the page until **Save dataset**. Opening a dataset restores its notes; a new dataset, or choosing another datasource, starts with none.
+- R45. The assistant SHALL receive the notes of the session's datasets in its dataset orientation context: see [agents.md](../../system/agents.md), assistant agent. A session whose datasets have no notes gets the same context as before.
+- R46. Endpoint and storage: `schemas` in the body of `POST /datasets` ([api.md](../../system/api.md)) and the `schemas` field of the dataset document ([data-model.md](../../system/data-model.md)).
+- R47. Selecting a schema in the browser SHALL show its Layer and Description controls in the details panel, and its tree row SHALL show the layer chip or, with only a description, a "note" chip (see **UI**).
+
 ## Edge cases and errors
 
 - **No datasource configured:** the browser shows `No datasource configured. Add one in Datasource Configuration first.`
@@ -94,6 +107,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - **A column cannot be sampled** (permissions, timeout): the dataset still saves, without sample values for that entity.
 - **Datasource kind label:** the dataset list and the datasource picker should show "Databricks", "PostgreSQL" or "REST API". Open question: in the current UI a REST datasource is labelled "Databricks" in the picker, and a REST dataset shows no kind in the list.
 - **Inert controls:** the list's search and layout icons do nothing today.
+- **Every entity of a noted schema excluded:** saving drops that schema's note, since it no longer has an included entity (R43).
 
 ## Contracts
 
@@ -113,6 +127,8 @@ Reached from the rail item **Datasets** (main area) — see [ui.md](../../system
 
 **Entity details** — the default content of the right panel outside a session and outside agent detail. Top button: "Include item", "Include item (partially included)" or "Included — click to remove" (R12); then the catalog / schema / entity block (R21).
 
+**Schema notes** — when a schema is selected, the details panel gains a **Layer** dropdown (None, Landing, Normalized, Consumption; test id `schema-layer-select`) and a **Description** textarea (placeholder "What this schema holds and what it is used for", max 500; test id `schema-description`), with the hint "Saved with the dataset." In the tree, a schema row shows a `chip-info` chip with the layer after its entity count (test id `schema-layer-<catalog>-<schema>`; tooltip is the description, or "Layer" when there is none). When only a description is set, the row shows a `chip-neutral` "note" chip instead (test id `schema-note-<catalog>-<schema>`; R47).
+
 ## Flows
 
 ### Feature: Datasources, datasets, and sessions (World Cup database)
@@ -121,7 +137,7 @@ Covered scenarios live in the datasources capability: [Datasources, datasets, an
 
 ### Feature: Dataset management
 
-E2E: none yet
+E2E: `frontend/e2e/dataset-schema-notes.spec.ts` covers "Tags a schema with a layer and description and keeps them after saving"; the other scenarios are not automated yet.
 
 ```gherkin
 Feature: Dataset management
@@ -199,6 +215,15 @@ Feature: Dataset management
     Then I see 'Dataset "World Cup Core" deleted'
     And "World Cup Core" is no longer listed
 
+  Scenario: Tags a schema with a layer and description and keeps them after saving
+    Given the "World Cup PostgreSQL" datasource and the "World Cup Core" dataset exist
+    When I open the "World Cup Core" dataset and select the "world_cup" schema
+    And I choose Layer "Consumption" and type the Description "Tournament facts for analysis"
+    And I click "Save dataset"
+    Then the "world_cup" schema row shows a "Consumption" badge
+    When I reload and open the dataset and select the "world_cup" schema
+    Then Layer shows "Consumption" and the Description shows "Tournament facts for analysis"
+
   Scenario: Empty states
     Given no datasource is configured
     When I click "New dataset"
@@ -215,5 +240,9 @@ Feature: Dataset management
 3. After saving a dataset over the World Cup tables, the stored snapshot of `goals` has sample values for its text/number columns and references such as `goals.scoring_team_id → teams.id` and `goals.match_id → matches.id` (declared by PostgreSQL's constraints; each marked `declared`), and, for a datasource without constraints, inferred references (`~>`) for the same pairs.
 4. A session created from the dataset lists the dataset's entities and join hints in its context, can describe and sample only those entities, and answers questions through the datasource named by the dataset (checked in [sessions-chat](../sessions-chat/spec.md)).
 5. Deleting the dataset removes it from the list; sessions that used it keep working on their remaining datasets.
+6. Schema notes round-trip through the UI: in Edit dataset, selecting a schema, choosing Layer "Consumption" and typing a description, then **Save dataset**, shows a "Consumption" badge on the schema row, and after a reload and reopening the dataset the details panel shows both values. A dataset saved before schema notes existed opens with no badges and Layer "None" (R40–R47).
+7. Saving a dataset that no longer includes any entity of a noted schema drops that schema's note (R43).
+8. Reloading Testing Data, which re-registers its sample datasets without `schemas`, keeps the stored schema notes (R42).
+9. `POST /datasets` with an unknown layer fails with `layer must be one of: landing, normalized, consumption` (R41).
 
 <!-- sources: backend/src/modules/datasets/**, backend/src/mastra/tools/dataset.tools.ts, backend/src/mastra/context-blocks.ts, backend/src/modules/sessions/sessions.service.ts (boundDatasets, agentContext), backend/src/infrastructure/database/database.module.ts (legacy renames), frontend/src/app/features/datasets/** (excluding metrics-panel), frontend/src/app/app.html (Datasets navigation, right panel), frontend/e2e/world-cup-workflow.spec.ts -->

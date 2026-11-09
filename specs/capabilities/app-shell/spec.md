@@ -69,6 +69,7 @@ Sessions area
 
 Single user
 - R52. The shell SHALL appear at once on launch, with no sign-in page, and every control SHALL be shown: the Settings area offers **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** and **Appearance** to the one user (the built-in super admin).
+- R53. All text in the app SHALL be selectable and copyable with the mouse and keyboard (BA-326, 2026-11-09). Selection is disabled only on the Electron window drag region and on the page while the right panel's splitter is being dragged (so the drag does not select across the page); nothing else SHALL set `user-select: none` except click-to-toggle headers.
 
 Appearance
 - R39. The Appearance section SHALL offer a single choice labelled **Theme** with three options: **System**, **Light** and **Dark**. Exactly one is selected. The default, when nothing has been chosen, is Light.
@@ -144,6 +145,13 @@ Feature: Layout and accessibility
     Given the World Cup datasource and dataset exist
     When an automated accessibility scan runs in the light theme and in the dark theme on: Datasets, the dataset editor, Agents, an agent's detail, Knowledge, the Sessions area, the new-session composer, and each Settings section
     Then it finds no violations
+
+  Scenario: Text in the app can be selected
+    Given the app is open on the home view
+    When I triple-click the heading "Welcome to Agentic Hub"
+    Then the selection contains "Welcome to Agentic Hub"
+    When I expand the right panel and press on its resize separator and move the pointer
+    Then nothing is selected while the page is being resized
 
   Scenario: Matches the stable application-shell visual baseline
     When I view the application shell

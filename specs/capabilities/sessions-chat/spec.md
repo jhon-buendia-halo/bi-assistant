@@ -36,6 +36,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - the last ~90 characters of reasoning on one line;
   - one row per tool call: tool name, then "failed", "N rows" or a spinner;
   - the rationale and the input (SQL) of each call;
+  - for a tool that emits `tool-progress` events (today `assess_data_readiness`), the latest progress message on its row while it runs, cleared when its result lands;
   - the answer as rendered Markdown while it streams;
   - an elapsed-seconds counter with one decimal.
 - R14. When `done` arrives, the chat SHALL replace its whole transcript with the persisted one from the event. Streamed text is provisional. The persisted answer is authoritative and may differ, for example after the grounding check.

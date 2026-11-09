@@ -14,6 +14,30 @@ Entry template:
 
 ---
 
+## 2026-11-09 — 1.20.1–1.20.5 Schema notes, readiness speed and progress, text selection (BA-318)
+
+### What went well
+- Measuring before designing. The Fable analysis read the user's stored run (296 s, model only 13 s) and timed variants live (new session per statement 0.8 s vs 0.19 s reused; approximate counts slower), so the speed work targeted transport, not the engine, and rejected sampling with numbers.
+- A score-equality harness built from `main`'s dist before any change (fixed `now`, sorted findings) proved the World Cup and US Health results byte-identical after every round of changes.
+- Live runs against the user's real warehouse caught what unit tests and the small PostgreSQL samples could not: the BA-322 `https://https//` host, and a folded statement that made `tpch.lineitem` 12× slower and pushed 15 small tables into `timed-out`.
+- An independent review after integration found a silent score inflation (not-profiled tables kept their row count, so completeness counted missing nulls as zero) and an abort turned into a 502, before the user saw either.
+- Shared contracts written by the lead before fan-out (types, member names, chunk shapes) let 10 parallel units land with few conflicts.
+
+### What went wrong
+- I misread the first request: "layer and description" were meant for the schemas in the dataset tree (the user was on Edit dataset), and I built them on datasources. The clarifying questions never named the screen. A whole 12-unit round was reverted.
+- The unit tests for the folded statement used a fake profiler with no cost model, so "fold everything into one statement" looked free; only the live Databricks run showed the cost.
+- Subagents' shared `/tmp` scripts clobbered each other twice; one unit's edits silently failed to apply until it switched to the Edit tool.
+- A diagnosis unit force-closed Playwright Chromium processes that may have belonged to another session.
+- The progress line the user reported missing could not be reproduced; the root cause stayed open until the gate's E2E surfaced the missing SSE charset (a different symptom), so the user's report may have had another cause.
+- Checks were run against the user's live data dir early on (the Databricks datasource) before scratch copies became the rule for evals.
+
+### What to do differently
+- When a request names a UI concept ("layer for …"), ask which screen and which object it attaches to, quoting the user's screenshot, before planning; put the object in the first clarifying question.
+- For any change to profiling or SQL shape, time it live on one small and one large real table before integration, not only through fakes.
+- Brief every subagent: Edit/Write tools or a private scratch subfolder, never shared `/tmp` names; never kill processes it did not start (record PIDs).
+- Send `charset=utf-8` with every text response (SSE included) and assert non-ASCII text in an E2E that reads the raw body.
+- Run evals only on a fresh copy of the data dir per run; never on `~/.questions-to-insights`.
+
 ## 2026-11-04 — 1.18.2 Product page offers only the Windows installer (BA-302)
 
 ### What went well

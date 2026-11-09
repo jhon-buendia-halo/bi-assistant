@@ -2,6 +2,25 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-09
+
+### Added
+- **Layer and description on dataset schemas** (epic [BA-318](https://halo-powered.atlassian.net/browse/BA-318), roadmap 1.20.1, story [BA-319](https://halo-powered.atlassian.net/browse/BA-319), [specs/epics/BA-318/spec.md](specs/epics/BA-318/spec.md)).
+  - In Edit dataset, selecting a schema shows a **Layer** dropdown (None / Landing / Normalized / Consumption) and a **Description** in the details panel; the tree row shows the layer as a chip. Notes are saved per dataset with Save dataset ([datasets](specs/capabilities/datasets/spec.md) R40–R47).
+  - `POST /datasets` takes `schemas`: an array replaces the notes, anything else keeps them (Testing Data reloads keep them); notes for schemas with no included entity, malformed keys and empty notes are dropped; an unknown layer is rejected.
+  - The assistant gets a "Schema notes" section in its dataset context, with a hint to prefer the Consumption schema; without notes its context is byte-identical ([agents.md](specs/system/agents.md)). New eval set `schema-notes`.
+  - A first cut put the fields on datasources after a misread of the request; it was reverted on the branch the same day.
+  - Evidence: [evidence/1.20.1/](evidence/1.20.1/): new `dataset-schema-notes.spec.ts`, screenshot, evals (`schema-notes` 3/3, `world-cup` and `data-readiness` at 100 % with a `main` baseline).
+- **Live progress while a Data Readiness assessment runs** (roadmap 1.20.4, story [BA-324](https://halo-powered.atlassian.net/browse/BA-324), ADR-0033). The assess tool streams its phases ("Listing tables…", "Profiling <entity> (n/N)…", "Checking relationships…", "Running checks…", "Writing the report…") as a new `tool-progress` SSE event, shown on the running tool row and never seen by the model ([api.md](specs/system/api.md) 3.1). Evidence: [evidence/1.20.4/](evidence/1.20.4/) (live frame timings; E2E asserts the frames in phase order).
+
+### Changed
+- **Faster Data Readiness assessments** (roadmap 1.20.3, story [BA-323](https://halo-powered.atlassian.net/browse/BA-323), ADR-0033). One pooled profiling session per assessment instead of one per statement, format checks folded into the per-table statistics statement and normalized distinct counts in one second statement for the R10 window columns, 8 concurrent Databricks tables (PostgreSQL 4), and tables above 100 M rows listed as **not profiled** (`too-large`) instead of silently timing out; statements that time out are listed too (`timed-out`), and the report panel has a "Not profiled (n)" section. Stop or reload now cancels in-flight statements and stores no report. Databricks `samples` (124 tables): profiling 42 s instead of about 280 s; World Cup and US Health scores identical to `main`. `READINESS_MAX_PROFILED_ROWS` lowers the cap for tests ([delivery.md](specs/system/delivery.md)). Evidence: [evidence/1.20.3/](evidence/1.20.3/).
+- **All text in the app can be selected and copied** (roadmap 1.20.5, story [BA-326](https://halo-powered.atlassian.net/browse/BA-326)). The root no longer sets `user-select: none`; only the Electron drag region and the page during a splitter drag do ([ui.md](specs/system/ui.md), [app-shell](specs/capabilities/app-shell/spec.md) R53). Evidence: [evidence/1.20.5/](evidence/1.20.5/).
+
+### Fixed
+- **Data Readiness on a Databricks host saved with `https://`** (roadmap 1.20.2, bug [BA-322](https://halo-powered.atlassian.net/browse/BA-322)). The profiler passed the raw host to the driver, which built `https://https//…`; every Databricks connection now normalises the host, and saves store the bare hostname. Evidence: [evidence/1.20.2/](evidence/1.20.2/) (`main` fails live with `ENOTFOUND https`, the branch profiles).
+- **The chat SSE streams declare `charset=utf-8`** (1.20.4), so clients that don't default to UTF-8 (Chromium's network layer, as seen by Playwright) no longer decode "…" as Windows-1252.
+
 ## 2026-11-04
 
 ### Added

@@ -223,6 +223,7 @@ export type StreamEvent = {
     | 'text'
     | 'tool'
     | 'tool-result'
+    | 'tool-progress'
     | 'visual-updated'
     | 'panel-item'
     | 'workflow'
@@ -232,6 +233,41 @@ export type StreamEvent = {
   content?: string;
   session?: SessionDoc;
 };
+
+/**
+ * A Data Readiness progress chunk as a `tool-progress` event (api.md 3.1), or
+ * undefined for any other chunk. The tool writes `{ type:
+ * 'data-readiness-progress', data }`; Mastra forwards it verbatim, or wrapped
+ * in a `tool-output` chunk's `payload.output`. Both are accepted; a malformed
+ * one is ignored. Progress goes to the browser only, never to the model.
+ */
+function readinessProgressEvent(chunk: unknown): StreamEvent | undefined {
+  const outer = chunk as { type?: unknown; payload?: { output?: unknown } };
+  let candidate: unknown;
+  if (outer?.type === 'data-readiness-progress') candidate = chunk;
+  else if (outer?.type === 'tool-output') candidate = outer.payload?.output;
+  const part = candidate as { type?: unknown; data?: unknown } | undefined;
+  if (part?.type !== 'data-readiness-progress') return undefined;
+  const data = part.data as Record<string, unknown> | undefined;
+  if (!data || typeof data !== 'object') return undefined;
+  if (typeof data['phase'] !== 'string' || typeof data['message'] !== 'string')
+    return undefined;
+  const num = (v: unknown) =>
+    typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+  const done = num(data['done']);
+  const total = num(data['total']);
+  return {
+    type: 'tool-progress',
+    content: JSON.stringify({
+      tool: 'assess_data_readiness',
+      phase: data['phase'],
+      message: data['message'],
+      ...(done !== undefined ? { done } : {}),
+      ...(total !== undefined ? { total } : {}),
+      ...(typeof data['entity'] === 'string' ? { entity: data['entity'] } : {}),
+    }),
+  };
+}
 
 /** Id prefix of an agent editor's preview session (agents-evals R60). */
 const PREVIEW_ID_PREFIX = 'preview-';
@@ -1983,6 +2019,11 @@ export class SessionsService implements OnModuleInit {
     let streamError: unknown;
     try {
       for await (const chunk of stream.fullStream) {
+        const progress = readinessProgressEvent(chunk);
+        if (progress) {
+          emit(progress);
+          continue;
+        }
         if (chunk.type === 'error') {
           streamError ??= (chunk.payload as { error?: unknown }).error;
         } else if (chunk.type === 'reasoning-delta') {

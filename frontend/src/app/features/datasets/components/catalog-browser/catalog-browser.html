@@ -237,6 +237,27 @@
                 <span class="text-[12px] text-fg-muted"
                   >{{ schema.tables.length }} entities</span
                 >
+                @if (schemaNote(catalog.name, schema.name); as note) {
+                  @if (note.layer) {
+                    <span
+                      class="chip chip-info shrink-0 text-[10px] px-1.5 py-0.5"
+                      [attr.data-testid]="
+                        'schema-layer-' + catalog.name + '-' + schema.name
+                      "
+                      [title]="note.description || 'Layer'"
+                      >{{ schemaLayerLabel(note.layer) }}</span
+                    >
+                  } @else if (note.description) {
+                    <span
+                      class="chip chip-neutral shrink-0 text-[10px] px-1.5 py-0.5"
+                      [attr.data-testid]="
+                        'schema-note-' + catalog.name + '-' + schema.name
+                      "
+                      [title]="note.description"
+                      >note</span
+                    >
+                  }
+                }
                 @if (isSchemaLocked(schema)) {
                   <lucide-angular
                     [img]="Lock"

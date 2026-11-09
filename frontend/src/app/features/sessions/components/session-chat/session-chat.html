@@ -629,6 +629,14 @@
                     [size]="11"
                     class="animate-spin text-fg-muted"
                   />
+                  @if (tool.progress) {
+                    <span
+                      data-testid="tool-progress"
+                      class="min-w-0 truncate text-[12px] text-fg-muted"
+                      [title]="tool.progress.message"
+                      >{{ tool.progress.message }}</span
+                    >
+                  }
                 }
               </div>
               @if (tool.rationale) {

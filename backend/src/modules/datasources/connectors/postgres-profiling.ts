@@ -3,10 +3,12 @@ import { Client } from 'pg';
 import type { PostgresConfig } from '../entities/datasource.entity';
 import type {
   ColumnStats,
+  ColumnStatsExtras,
   FkEdge,
   KeyConstraint,
   ProfiledTable,
   ProfilingConnector,
+  ScopedProfiler,
   TablePrivilege,
 } from './profiling';
 
@@ -45,6 +47,183 @@ function describeError(err: unknown): string {
   return 'unknown error';
 }
 
+function abortError(): Error {
+  return Object.assign(new Error('Postgres profiling aborted'), {
+    name: 'AbortError',
+  });
+}
+
+/** Postgres error 57014 (query_canceled) is what statement_timeout raises. */
+function isStatementTimeout(err: unknown): boolean {
+  return err instanceof Error && (err as { code?: unknown }).code === '57014';
+}
+
+/**
+ * Every client gets an 'error' listener: pg emits it for a connection lost
+ * while idle (server restart, network drop), and an unhandled 'error' event
+ * would crash the process. `onError` lets a pooled session mark itself broken.
+ */
+function newClient(config: PostgresConfig, onError?: () => void): Client {
+  const client = new Client({
+    host: config.host,
+    port: Number(config.port) || 5432,
+    database: config.database,
+    user: config.user,
+    password: config.password,
+    ssl: config.ssl ? { rejectUnauthorized: false } : undefined,
+    connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+    statement_timeout: STATEMENT_TIMEOUT_MS,
+  });
+  client.on('error', () => onError?.());
+  return client;
+}
+
+/**
+ * BA-323 / ADR-0033: up to `size` clients, each connected once and kept in one
+ * READ ONLY transaction, opened lazily and reused for every statement of an
+ * assessment. A failed statement aborts the Postgres transaction, so the
+ * session rolls back and re-begins before its next statement.
+ */
+class SessionScope {
+  private readonly idle: Client[] = [];
+  private readonly all = new Set<Client>();
+  private readonly busy = new Set<Client>();
+  /** Pooled clients whose connection emitted 'error': never reused. */
+  private readonly dead = new WeakSet<Client>();
+  private readonly waiters: {
+    resolve: (c: Client) => void;
+    reject: (e: Error) => void;
+  }[] = [];
+  private opening = 0;
+  aborted = false;
+  closed = false;
+  readonly abortPromise: Promise<never>;
+  private rejectAbort!: (e: Error) => void;
+  privileges?: Promise<TablePrivilege[]>;
+
+  constructor(
+    private readonly config: PostgresConfig,
+    private readonly size: number,
+  ) {
+    this.abortPromise = new Promise<never>((_, reject) => {
+      this.rejectAbort = reject;
+    });
+    this.abortPromise.catch(() => undefined);
+  }
+
+  async acquire(): Promise<Client> {
+    if (this.aborted) throw abortError();
+    let free = this.idle.pop();
+    while (free && this.dead.has(free)) {
+      // Lost while idle: discard it; its slot reopens below.
+      this.all.delete(free);
+      void free.end().catch(() => undefined);
+      free = this.idle.pop();
+    }
+    if (free) {
+      this.busy.add(free);
+      return free;
+    }
+    if (this.all.size + this.opening < Math.max(1, this.size)) {
+      this.opening += 1;
+      const client: Client = newClient(this.config, () =>
+        this.dead.add(client),
+      );
+      try {
+        await client.connect();
+        await client.query('BEGIN READ ONLY');
+      } catch (err) {
+        this.opening -= 1;
+        await client.end().catch(() => undefined);
+        // The slot is free again: wake one waiter so it does not hang.
+        const waiter = this.waiters.shift();
+        if (waiter) this.acquire().then(waiter.resolve, waiter.reject);
+        throw err;
+      }
+      this.opening -= 1;
+      if (this.aborted || this.closed) {
+        await client.end().catch(() => undefined);
+        throw abortError();
+      }
+      this.all.add(client);
+      this.busy.add(client);
+      return client;
+    }
+    return new Promise<Client>((resolve, reject) =>
+      this.waiters.push({ resolve, reject }),
+    );
+  }
+
+  /** Return a session; `broken` ones are discarded and their slot reopens. */
+  async release(client: Client, broken: boolean): Promise<void> {
+    this.busy.delete(client);
+    if (broken || this.dead.has(client) || this.aborted || this.closed) {
+      this.all.delete(client);
+      await client.end().catch(() => undefined);
+      const waiter = this.waiters.shift();
+      if (waiter) this.acquire().then(waiter.resolve, waiter.reject);
+      return;
+    }
+    const waiter = this.waiters.shift();
+    if (waiter) {
+      this.busy.add(client);
+      waiter.resolve(client);
+    } else {
+      this.idle.push(client);
+    }
+  }
+
+  /** After a failed statement: leave the aborted transaction, start a new one. */
+  async reset(client: Client): Promise<boolean> {
+    try {
+      await client.query('ROLLBACK');
+      await client.query('BEGIN READ ONLY');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Cancel in-flight statements on the server and reject the waiters. */
+  abort(): void {
+    if (this.aborted) return;
+    this.aborted = true;
+    this.rejectAbort(abortError());
+    for (const w of this.waiters.splice(0)) w.reject(abortError());
+    for (const client of this.busy) {
+      const pid = (client as unknown as { processID?: number }).processID;
+      if (typeof pid === 'number') void this.cancelBackend(pid);
+    }
+  }
+
+  private async cancelBackend(pid: number): Promise<void> {
+    const killer = newClient(this.config);
+    try {
+      await killer.connect();
+      await killer.query('SELECT pg_cancel_backend($1)', [pid]);
+    } catch {
+      // best effort: the client is ended when the scope closes
+    } finally {
+      await killer.end().catch(() => undefined);
+    }
+  }
+
+  async close(): Promise<void> {
+    this.closed = true;
+    for (const w of this.waiters.splice(0)) w.reject(abortError());
+    const clients = Array.from(this.all);
+    this.all.clear();
+    this.idle.length = 0;
+    this.busy.clear();
+    await Promise.all(
+      clients.map(async (c) => {
+        await c.query('ROLLBACK').catch(() => undefined);
+        await c.end().catch(() => undefined);
+      }),
+    );
+  }
+}
+
 /**
  * Postgres profiling queries (unit 5, BA-256). Aggregate statistics only,
  * outside the user read-only SQL path; every statement still runs inside a
@@ -54,6 +233,40 @@ function describeError(err: unknown): string {
 export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
   readonly kind = 'postgres' as const;
   private readonly logger = new Logger(PostgresProfiler.name);
+  /** Set on the scoped copy `withSessions` hands to its callback. */
+  private scope?: SessionScope;
+
+  async withSessions<T>(
+    config: PostgresConfig,
+    size: number,
+    signal: AbortSignal | undefined,
+    fn: (scoped: ScopedProfiler<PostgresConfig>) => Promise<T>,
+  ): Promise<T> {
+    const scope = new SessionScope(config, size);
+    const scoped = Object.create(this) as PostgresProfiler;
+    scoped.scope = scope;
+    const onAbort = () => scope.abort();
+    if (signal?.aborted) scope.abort();
+    else signal?.addEventListener('abort', onAbort, { once: true });
+    try {
+      return await fn(scoped);
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+      await scope.close();
+    }
+  }
+
+  async rowCount(
+    config: PostgresConfig,
+    schema: string,
+    table: string,
+  ): Promise<number> {
+    const rows = await this.run<{ n: string }>(
+      config,
+      `SELECT COUNT(*)::bigint AS n FROM ${q(schema)}.${q(table)}`,
+    );
+    return Number(rows[0]?.n ?? 0);
+  }
 
   /**
    * Every table-like relation the inventory lists (TABLE_RELKINDS) and its
@@ -118,6 +331,7 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
     nullableColumns: string[],
     allColumns: string[],
     comparableColumns: string[],
+    extras?: ColumnStatsExtras,
   ): Promise<ColumnStats> {
     const aggregates: string[] = ['COUNT(*)::bigint AS total'];
     nullableColumns.forEach((c, i) =>
@@ -132,9 +346,25 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
       aggregates.push(`MIN(${q(c)})::text AS "mn${i}"`);
       aggregates.push(`MAX(${q(c)})::text AS "mx${i}"`);
     });
+    // BA-323: same expressions as normalizedDistinctCount / invalidFormatCount.
+    const normalized = extras?.normalizedDistinct ?? [];
+    normalized.forEach((c, i) =>
+      aggregates.push(
+        `COUNT(DISTINCT lower(btrim(${q(c)}::text)))::bigint AS "nd${i}"`,
+      ),
+    );
+    const formats = extras?.formats ?? [];
+    const params: unknown[] = [];
+    formats.forEach((f, i) => {
+      params.push(f.pattern);
+      aggregates.push(
+        `COUNT(*) FILTER (WHERE ${q(f.column)} IS NOT NULL AND ${q(f.column)}::text !~* $${params.length})::bigint AS "f${i}"`,
+      );
+    });
     const rows = await this.run<Record<string, string | null>>(
       config,
       `SELECT ${aggregates.join(', ')} FROM ${q(schema)}.${q(table)}`,
+      params,
     );
     const row = rows[0] ?? {};
     const nullCounts: Record<string, number> = {};
@@ -153,13 +383,24 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
       if (mn !== null && mn !== undefined) minValues[c] = String(mn);
       if (mx !== null && mx !== undefined) maxValues[c] = String(mx);
     });
-    return {
+    const stats: ColumnStats = {
       totalRows: Number(row.total ?? 0),
       nullCounts,
       distinctCounts,
       minValues,
       maxValues,
     };
+    if (extras?.normalizedDistinct) {
+      const counts: Record<string, number> = {};
+      normalized.forEach((c, i) => (counts[c] = Number(row[`nd${i}`] ?? 0)));
+      stats.normalizedDistinctCounts = counts;
+    }
+    if (extras?.formats) {
+      const counts: Record<string, number> = {};
+      formats.forEach((f, i) => (counts[f.column] = Number(row[`f${i}`] ?? 0)));
+      stats.invalidFormatCounts = counts;
+    }
+    return stats;
   }
 
   async keys(config: PostgresConfig): Promise<KeyConstraint[]> {
@@ -285,7 +526,22 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
     return Number(rows[0]?.n ?? 0);
   }
 
+  /** Cached per scope: the privilege inventory does not change mid-assessment. */
   async tablePrivileges(config: PostgresConfig): Promise<TablePrivilege[]> {
+    const scope = this.scope;
+    if (!scope) return this.readPrivileges(config);
+    scope.privileges ??= this.readPrivileges(config);
+    try {
+      return await scope.privileges;
+    } catch (err) {
+      scope.privileges = undefined;
+      throw err;
+    }
+  }
+
+  private async readPrivileges(
+    config: PostgresConfig,
+  ): Promise<TablePrivilege[]> {
     const rows = await this.run<{
       schema: string;
       table: string;
@@ -306,22 +562,17 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
     }));
   }
 
-  /** One statement in its own client, inside a READ ONLY transaction. */
+  /**
+   * One statement, inside a READ ONLY transaction: on a pooled session when
+   * scoped, otherwise in its own client.
+   */
   private async run<R>(
     config: PostgresConfig,
     sql: string,
     params: unknown[] = [],
   ): Promise<R[]> {
-    const client = new Client({
-      host: config.host,
-      port: Number(config.port) || 5432,
-      database: config.database,
-      user: config.user,
-      password: config.password,
-      ssl: config.ssl ? { rejectUnauthorized: false } : undefined,
-      connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
-      statement_timeout: STATEMENT_TIMEOUT_MS,
-    });
+    if (this.scope) return this.runScoped<R>(this.scope, sql, params);
+    const client = newClient(config);
     try {
       await client.connect();
       await client.query('BEGIN READ ONLY');
@@ -332,11 +583,55 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
         await client.query('ROLLBACK').catch(() => undefined);
       }
     } catch (err) {
-      const message = describeError(err);
-      this.logger.warn(`Postgres profiling failed: ${message}`);
-      throw new Error(`Postgres — ${message}`);
+      throw this.failure(err);
     } finally {
       await client.end().catch(() => undefined);
     }
+  }
+
+  private async runScoped<R>(
+    scope: SessionScope,
+    sql: string,
+    params: unknown[],
+  ): Promise<R[]> {
+    let client: Client;
+    try {
+      client = await scope.acquire();
+    } catch (err) {
+      throw scope.aborted ? abortError() : this.failure(err);
+    }
+    let broken = false;
+    try {
+      const result = await Promise.race([
+        client.query(sql, params),
+        scope.abortPromise,
+      ]);
+      return result.rows as R[];
+    } catch (err) {
+      if (scope.aborted) {
+        broken = true;
+        throw abortError();
+      }
+      broken = !(await scope.reset(client));
+      throw this.failure(err);
+    } finally {
+      await scope.release(client, broken);
+    }
+  }
+
+  /** Never stringify the error object; classify statement timeouts. */
+  private failure(err: unknown): Error {
+    if (isStatementTimeout(err)) {
+      this.logger.warn('Postgres profiling statement timed out');
+      return Object.assign(
+        new Error(
+          `Postgres — statement timed out after ${STATEMENT_TIMEOUT_MS / 1000} s`,
+        ),
+        { name: 'TimeoutError' },
+      );
+    }
+    const message = describeError(err);
+    this.logger.warn(`Postgres profiling failed: ${message}`);
+    return new Error(`Postgres — ${message}`);
   }
 }

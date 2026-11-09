@@ -1,7 +1,7 @@
 import type { DatabricksConfig } from '../../datasources/entities/datasource.entity';
 import type { ProfilingConnector } from '../../datasources/connectors/profiling';
 import type { AssessScope, SourceProfile } from '../engine/types';
-import { buildSourceProfile } from './build-profile';
+import { buildSourceProfile, type BuildProfileOptions } from './build-profile';
 import { classifyDatabricksType } from './classify';
 import { DATABRICKS_FORMAT_PATTERNS } from './format-rules';
 
@@ -15,6 +15,7 @@ export async function profileDatabricks(
   config: DatabricksConfig,
   sourceId: string,
   scope?: AssessScope,
+  options?: BuildProfileOptions,
 ): Promise<SourceProfile> {
   return buildSourceProfile(
     profiler,
@@ -26,5 +27,6 @@ export async function profileDatabricks(
       formatPatterns: DATABRICKS_FORMAT_PATTERNS,
     },
     scope,
+    options,
   );
 }
