@@ -569,6 +569,7 @@ One document per assessment ([data-readiness](../capabilities/data-readiness/spe
 | `maturity` | `Initial` \| `Repeatable` \| `Defined` \| `Managed` \| `Optimised` | yes | The band of `overallScore`. |
 | `dimensionScores` | `DimensionScore[]` | yes | Ten entries, in the order completeness, accuracy, validity, consistency, integrity, uniqueness, timeliness, currency, reasonability, accessibility. Each is `{ dimension: Dimension, score: number, findingCount: number, maxSeverity: Severity \| null, assessed: boolean, totalChecks: number }`. `accuracy` and `currency` have `assessed: false`, score 100 and 0 checks. |
 | `findings` | `Finding[]` | yes | In engine order (R23). Each is `{ dimension: Dimension, level: 'entity' \| 'source', namespace?: string, entity?: string, field?: string, severity: 'info' \| 'low' \| 'medium' \| 'high', measured?: string, description: string, recommendation: string }`. `field` may name several columns, comma-separated, for a key or a column pair. |
+| `notProfiled` | `{ entity: string, reason: 'too-large' \| 'timed-out', rowCount?: number }[]` | no | Entities whose column checks were skipped (ADR-0033). Absent when there are none. Older reports lack it; no migration. |
 | `sessionId` | uuid | no | The chat session it was run from, when there was one. |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 

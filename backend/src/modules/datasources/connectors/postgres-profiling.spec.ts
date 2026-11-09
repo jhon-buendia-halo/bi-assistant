@@ -23,10 +23,12 @@ describe('PostgresProfiler', () => {
 
   beforeEach(() => {
     query.mockReset();
+    (Client as unknown as jest.Mock).mockReset();
     (Client as unknown as jest.Mock).mockImplementation(() => ({
       connect: jest.fn().mockResolvedValue(undefined),
       query,
       end: jest.fn().mockResolvedValue(undefined),
+      on: jest.fn(),
     }));
     profiler = new PostgresProfiler();
   });
@@ -43,6 +45,18 @@ describe('PostgresProfiler', () => {
         statement_timeout: 15000,
       }),
     );
+  });
+
+  it('columnStats with only a normalized-distinct extra is a valid SELECT', async () => {
+    answer([{ total: '10', nd0: '4' }]);
+    const out = await profiler.columnStats(config, 's', 't', [], [], [], {
+      normalizedDistinct: ['n'],
+    });
+    const [sql] = stmt();
+    expect(sql).toBe(
+      'SELECT COUNT(*)::bigint AS total, COUNT(DISTINCT lower(btrim("n"::text)))::bigint AS "nd0" FROM "s"."t"',
+    );
+    expect(out.normalizedDistinctCounts).toEqual({ n: 4 });
   });
 
   it('builds one aggregate per table and maps the row', async () => {
@@ -233,6 +247,218 @@ describe('PostgresProfiler', () => {
     expect(sql).toContain("c.relkind IN ('r', 'v', 'm', 'p', 'f')");
     expect(sql).not.toContain("c.relkind = 'r'");
     expect(sql).toContain("has_table_privilege(c.oid, 'SELECT')");
+  });
+
+  describe('BA-323 sessions, folded stats, rowCount', () => {
+    const connect = jest.fn();
+    const end = jest.fn();
+
+    beforeEach(() => {
+      connect.mockReset().mockResolvedValue(undefined);
+      end.mockReset().mockResolvedValue(undefined);
+      (Client as unknown as jest.Mock).mockImplementation(() => ({
+        connect,
+        query,
+        end,
+        on: jest.fn(),
+        processID: 4242,
+      }));
+    });
+
+    const sqls = () => (query.mock.calls as string[][]).map((c) => c[0]);
+
+    it('rowCount runs SELECT COUNT(*)', async () => {
+      answer([{ n: '123' }]);
+      expect(await profiler.rowCount(config, 's', 't')).toBe(123);
+      expect(stmt()[0]).toBe('SELECT COUNT(*)::bigint AS n FROM "s"."t"');
+    });
+
+    it('folds normalized distinct and invalid-format counts into one statement', async () => {
+      answer([{ total: '10', d0: '6', nd0: '5', nd1: '4', f0: '2', f1: '0' }]);
+      const s = await profiler.columnStats(config, 's', 't', [], ['a'], [], {
+        normalizedDistinct: ['a', 'b'],
+        formats: [
+          { column: 'e', pattern: 'p1' },
+          { column: 'z', pattern: 'p2' },
+        ],
+      });
+      const [sql, params] = stmt();
+      expect(sql).toContain(
+        'COUNT(DISTINCT lower(btrim("b"::text)))::bigint AS "nd1"',
+      );
+      expect(sql).toContain(
+        `COUNT(*) FILTER (WHERE "z" IS NOT NULL AND "z"::text !~* $2)::bigint AS "f1"`,
+      );
+      expect(params).toEqual(['p1', 'p2']);
+      expect(s.normalizedDistinctCounts).toEqual({ a: 5, b: 4 });
+      expect(s.invalidFormatCounts).toEqual({ e: 2, z: 0 });
+    });
+
+    it('reuses one session across statements, then rolls back and ends it', async () => {
+      answer([{ n: '1' }]);
+      await profiler.withSessions(config, 4, undefined, async (p) => {
+        await p.rowCount(config, 's', 'a');
+        await p.rowCount(config, 's', 'b');
+      });
+      expect(Client).toHaveBeenCalledTimes(1);
+      expect(connect).toHaveBeenCalledTimes(1);
+      expect(sqls()).toEqual([
+        'BEGIN READ ONLY',
+        'SELECT COUNT(*)::bigint AS n FROM "s"."a"',
+        'SELECT COUNT(*)::bigint AS n FROM "s"."b"',
+        'ROLLBACK',
+      ]);
+      expect(end).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens at most `size` sessions for concurrent statements', async () => {
+      answer([{ n: '1' }]);
+      await profiler.withSessions(config, 2, undefined, async (p) => {
+        await Promise.all(
+          ['a', 'b', 'c', 'd'].map((t) => p.rowCount(config, 's', t)),
+        );
+      });
+      expect(Client).toHaveBeenCalledTimes(2);
+      expect(end).toHaveBeenCalledTimes(2);
+    });
+
+    it('closes sessions when the callback throws', async () => {
+      answer([{ n: '1' }]);
+      await expect(
+        profiler.withSessions(config, 2, undefined, async (p) => {
+          await p.rowCount(config, 's', 'a');
+          throw new Error('late');
+        }),
+      ).rejects.toThrow('late');
+      expect(end).toHaveBeenCalledTimes(1);
+      expect(sqls()).toContain('ROLLBACK');
+    });
+
+    it('one failing statement does not break the next on the same session', async () => {
+      query.mockImplementation((sql: string) => {
+        if (sql.includes('"bad"'))
+          return Promise.reject(new Error('relation does not exist'));
+        return Promise.resolve({ rows: [{ n: '7' }] });
+      });
+      await profiler.withSessions(config, 1, undefined, async (p) => {
+        await expect(p.rowCount(config, 's', 'bad')).rejects.toThrow(
+          'Postgres — relation does not exist',
+        );
+        expect(await p.rowCount(config, 's', 'ok')).toBe(7);
+      });
+      expect(Client).toHaveBeenCalledTimes(1);
+      expect(sqls().slice(0, 5)).toEqual([
+        'BEGIN READ ONLY',
+        'SELECT COUNT(*)::bigint AS n FROM "s"."bad"',
+        'ROLLBACK',
+        'BEGIN READ ONLY',
+        'SELECT COUNT(*)::bigint AS n FROM "s"."ok"',
+      ]);
+    });
+
+    it('classifies a statement timeout (57014) as TimeoutError', async () => {
+      query.mockImplementation((sql: string) =>
+        sql.startsWith('SELECT')
+          ? Promise.reject(
+              Object.assign(new Error('canceling statement'), {
+                code: '57014',
+              }),
+            )
+          : Promise.resolve({ rows: [] }),
+      );
+      const err = await profiler
+        .rowCount(config, 's', 't')
+        .catch((e: unknown) => e);
+      expect(err).toMatchObject({ name: 'TimeoutError' });
+      expect((err as Error).message).toContain('timed out');
+      await profiler.withSessions(config, 1, undefined, async (p) => {
+        const e = await p.rowCount(config, 's', 't').catch((x: unknown) => x);
+        expect(e).toMatchObject({ name: 'TimeoutError' });
+      });
+    });
+
+    it('abort cancels the running query and rejects later statements', async () => {
+      const ctrl = new AbortController();
+      query.mockImplementation((sql: string) =>
+        sql.startsWith('SELECT COUNT')
+          ? new Promise(() => undefined)
+          : Promise.resolve({ rows: [] }),
+      );
+      await profiler.withSessions(config, 1, ctrl.signal, async (p) => {
+        const running = p.rowCount(config, 's', 'big');
+        await new Promise((r) => setImmediate(r));
+        ctrl.abort();
+        await expect(running).rejects.toMatchObject({ name: 'AbortError' });
+        await expect(p.rowCount(config, 's', 'x')).rejects.toMatchObject({
+          name: 'AbortError',
+        });
+      });
+      await new Promise((r) => setImmediate(r));
+      expect(query).toHaveBeenCalledWith(
+        'SELECT pg_cancel_backend($1)',
+        [4242],
+      );
+      expect(end).toHaveBeenCalled();
+    });
+
+    it('attaches an error listener to every client it creates', async () => {
+      answer([{ n: '1' }]);
+      await profiler.rowCount(config, 's', 't');
+      await profiler.withSessions(config, 1, undefined, async (p) => {
+        await p.rowCount(config, 's', 't');
+      });
+      const results = (Client as unknown as jest.Mock).mock.results;
+      expect(results.length).toBeGreaterThanOrEqual(2);
+      for (const r of results as { value: { on: jest.Mock } }[]) {
+        expect(r.value.on).toHaveBeenCalledWith('error', expect.any(Function));
+      }
+    });
+
+    it('a pooled client that emits error is discarded; the next statement gets a fresh one', async () => {
+      answer([{ n: '1' }]);
+      await profiler.withSessions(config, 1, undefined, async (p) => {
+        await p.rowCount(config, 's', 'a');
+        const first = (Client as unknown as jest.Mock).mock.results[0]
+          .value as {
+          on: jest.Mock;
+        };
+        const calls = first.on.mock.calls as [string, () => void][];
+        const handler = calls.find((c) => c[0] === 'error')?.[1] as () => void;
+        expect(() => handler()).not.toThrow();
+        expect(await p.rowCount(config, 's', 'b')).toBe(1);
+      });
+      expect(Client).toHaveBeenCalledTimes(2);
+    });
+
+    it('a failed open wakes the queued statement instead of hanging it', async () => {
+      answer([{ n: '1' }]);
+      let n = 0;
+      connect.mockImplementation(() =>
+        ++n === 1
+          ? Promise.reject(new Error('connection refused'))
+          : Promise.resolve(undefined),
+      );
+      await profiler.withSessions(config, 1, undefined, async (p) => {
+        const first = p.rowCount(config, 's', 'a').catch((e: unknown) => e);
+        const second = p.rowCount(config, 's', 'b');
+        expect(((await first) as Error).message).toContain(
+          'connection refused',
+        );
+        expect(await second).toBe(1);
+      });
+      expect(Client).toHaveBeenCalledTimes(2);
+    }, 5000);
+
+    it('caches table privileges per scope', async () => {
+      answer([{ schema: 's', table: 't', selectable: true }]);
+      await profiler.withSessions(config, 2, undefined, async (p) => {
+        await p.tablePrivileges(config);
+        await p.tablePrivileges(config);
+      });
+      expect(
+        sqls().filter((s) => s.includes('has_table_privilege')),
+      ).toHaveLength(1);
+    });
   });
 
   it('never leaks the password in an error', async () => {

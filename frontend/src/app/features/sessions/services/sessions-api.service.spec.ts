@@ -248,6 +248,29 @@ describe('SessionsApiService streaming', () => {
     });
   });
 
+  it('hands a tool-progress frame to onToolProgress and ignores malformed ones', async () => {
+    const progress = {
+      tool: 'assess_data_readiness',
+      phase: 'profiling',
+      message: 'Profiling claims (2 of 5)',
+      done: 2,
+      total: 5,
+      entity: 'claims',
+    };
+    spyOn(globalThis, 'fetch').and.resolveTo(
+      sseResponse(
+        { type: 'tool-progress', content: JSON.stringify(progress) },
+        { type: 'tool-progress', content: 'not json' },
+        { type: 'tool-progress', content: JSON.stringify({ phase: 'x' }) },
+      ),
+    );
+    const onToolProgress = jasmine.createSpy('onToolProgress');
+
+    await service.streamMessage('session-1', 'question', { onToolProgress });
+
+    expect(onToolProgress).toHaveBeenCalledOnceWith(progress);
+  });
+
   it('hands a workflow frame to onWorkflow', async () => {
     const workflow = {
       phases: [{ number: 1, title: 'Scope' }],
@@ -359,11 +382,13 @@ function requestBody(fetchSpy: jasmine.Spy): unknown {
   return JSON.parse(init.body as string);
 }
 
-function sseResponse(event: unknown): Response {
+function sseResponse(...events: unknown[]): Response {
   const body = new ReadableStream({
     start(controller) {
       controller.enqueue(
-        new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`),
+        new TextEncoder().encode(
+          events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(''),
+        ),
       );
       controller.close();
     },

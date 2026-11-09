@@ -59,6 +59,11 @@ export interface EntityProfile {
    * that need statistics are skipped, as for any missing statistic.
    */
   notProfiled?: 'too-large' | 'timed-out';
+  /**
+   * BA-323: the row count that made the entity `too-large`. Report-only: the
+   * engine never reads it (`rowCount` stays 0 for a not-profiled entity).
+   */
+  profiledRowCount?: number;
 }
 
 export interface RelationshipProfile {
@@ -129,7 +134,7 @@ export interface ReadinessReport extends EngineResult {
 
 /** BA-323: one entity left out of column profiling, and why. */
 export interface NotProfiledEntity {
-  /** `namespace.name`, as in `Finding.entity`. */
+  /** `namespace.name` (`Finding.entity` is the bare name). */
   entity: string;
   reason: 'too-large' | 'timed-out';
   /** The row count that triggered `too-large`, when known. */

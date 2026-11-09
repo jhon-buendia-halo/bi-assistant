@@ -91,6 +91,8 @@ interface ToolActivity {
   input?: string;
   rowCount?: number;
   error?: string;
+  /** Live progress of a long-running tool; cleared when its result lands. */
+  progress?: { message: string; done?: number; total?: number };
 }
 
 /** The deep-analysis job this conversation is waiting on, if any. */
@@ -471,6 +473,25 @@ export class SessionChat implements OnDestroy {
           ]);
           this.scrollToBottom();
         },
+        onToolProgress: (p) => {
+          if (this.activeStream !== controller) return;
+          const calls = [...this.toolCalls()];
+          for (let i = calls.length - 1; i >= 0; i--) {
+            const call = calls[i];
+            if (
+              call.name === p.tool &&
+              call.rowCount === undefined &&
+              call.error === undefined
+            ) {
+              calls[i] = {
+                ...call,
+                progress: { message: p.message, done: p.done, total: p.total },
+              };
+              break;
+            }
+          }
+          this.toolCalls.set(calls);
+        },
         onToolResult: (summary) => {
           if (this.activeStream !== controller) return;
           // Attach to the latest call of that tool still missing a result.
@@ -490,6 +511,7 @@ export class SessionChat implements OnDestroy {
                 input: summary.input,
                 rowCount: summary.rowCount,
                 error: summary.error,
+                progress: undefined,
               };
               break;
             }

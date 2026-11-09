@@ -688,6 +688,42 @@ describe('SessionChat stream errors', () => {
     expect(el.textContent).not.toContain('Thinking');
   });
 
+  it('shows live tool progress on the running row and clears it on the result', () => {
+    const el = mount();
+    const api = TestBed.inject(SessionsApiService);
+    let handlers!: Parameters<SessionsApiService['streamMessage']>[2];
+    spyOn(api, 'streamMessage').and.callFake((_id, _content, h) => {
+      handlers = h;
+      return new Promise<void>(() => undefined);
+    });
+
+    fixture.componentInstance.draft.set('Assess readiness');
+    fixture.componentInstance.send();
+    handlers.onTool?.({ name: 'assess_data_readiness' });
+    handlers.onTool?.({ name: 'other_tool' });
+    handlers.onToolProgress?.({
+      tool: 'assess_data_readiness',
+      phase: 'profiling',
+      message: 'Profiling claims (2 of 5)',
+      done: 2,
+      total: 5,
+    });
+    fixture.detectChanges();
+
+    const progress = el.querySelectorAll('[data-testid="tool-progress"]');
+    expect(progress.length).toBe(1);
+    expect(progress[0].textContent).toContain('Profiling claims (2 of 5)');
+    expect(progress[0].getAttribute('title')).toBe('Profiling claims (2 of 5)');
+
+    handlers.onToolResult?.({
+      tool: 'assess_data_readiness',
+      rowCount: 3,
+    } as never);
+    fixture.detectChanges();
+
+    expect(el.querySelector('[data-testid="tool-progress"]')).toBeNull();
+  });
+
   it('keeps any text that had already streamed in before the error', () => {
     const el = mount();
     const api = TestBed.inject(SessionsApiService);

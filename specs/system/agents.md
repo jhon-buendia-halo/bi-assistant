@@ -883,6 +883,7 @@ It is never called by the grounding guard (5.6), careful mode (5.8) or deep anal
 **Output.** Free text (markdown). Tool calls are captured by the orchestrator (5.1).
 - A successful `assess_data_readiness` or `get_readiness_report` result emits the `readiness-report` stream event ([api.md](api.md) 3.1).
 - It stores a `readiness` panel item for the report and sets the answer's `readinessReport` reference ([data-model.md](data-model.md) 3.4.1).
+- While `assess_data_readiness` runs, its progress chunks are forwarded as `tool-progress` stream events and never reach the model or the stored message (3.13, ADR-0033).
 
 **Tools.** The readiness tools of 3.13 (3), then `show_in_panel` (3.11) and the shared `ask_clarification` (3.5).
 - It has **no SQL tool**, no dataset tools, no visual tools, no `update_workflow` and no workspace tools.
@@ -1115,7 +1116,8 @@ The Data Readiness Agent's tools (2.10, ADR-0031), in the order it is given them
 - `reportId`, `datasourceName`, `generatedAt`, `entityCount`, `overallScore` and `maturity`;
 - `dimensionScores`: all ten, as `{ dimension, score, findingCount, maxSeverity, assessed, totalChecks }`;
 - `findingCount`: all findings;
-- `topFindings`: at most 20, most severe first, then in report order, as `{ severity, dimension, entity, field, measured, description, recommendation }`.
+- `topFindings`: at most 20, most severe first, then in report order, as `{ severity, dimension, entity, field, measured, description, recommendation }`;
+- `notProfiled`: every entity the profiler skipped, as `{ entity, reason: 'too-large' | 'timed-out', rowCount? }` (`entity` is `namespace.name`; `rowCount` for `too-large`), absent when none. Its presence needs no prompt change: the agent may mention these entities as part of explaining the report ([data-readiness](../capabilities/data-readiness/spec.md) R31).
 
 | Tool | Description (first sentence) | Input | Calls | Output |
 |---|---|---|---|---|
@@ -1123,7 +1125,12 @@ The Data Readiness Agent's tools (2.10, ADR-0031), in the order it is given them
 | `get_readiness_report` | Read a stored readiness report: the newest for a dataset's datasource, or one by id. | `reportId?: string`, `dataset?: string` | bridge `getReadinessReport({ sessionId, reportId?, datasetName? })` | `ReadinessSummary` |
 | `list_readiness_reports` | List the stored readiness reports of a dataset's datasource, newest first. | `dataset?: string` | bridge `listReadinessReports({ sessionId, datasetName? })` | `{ datasourceName, reports: [{ reportId, generatedAt, overallScore, maturity, entityCount }], total }` |
 
+**Progress and cancellation (ADR-0033).** `assess_data_readiness` takes the turn's abort signal and passes it to the bridge, so Stop or reload cancels in-flight statements and no report is stored.
+- It emits progress through the tool's `writer`: `writer.custom({ type: 'data-readiness-progress', data })`, where `data` is the `ReadinessProgress` of `modules/data-readiness/progress.ts` (`phase`: `inventory`, `profiling`, `relationships`, `scoring` or `storing`; `message`; `done?`; `total?`; `entity?`). The session loop forwards each chunk as a `tool-progress` event ([api.md](api.md) 3.1).
+- Progress is invisible to the model and is not persisted. The tool's result and description are unchanged apart from `notProfiled` in the summary.
+
 **Tool-services bridge.** `mastra/readiness-tool-services.ts` (beside `tool-services.ts`, same install pattern) carries the three methods above, installed by `SessionsService.onModuleInit` and implemented by the data-readiness service.
+- `assessReadiness` also takes `{ abortSignal?, onProgress? }`; `onProgress` receives the progress frames the tool writes.
 - `assessReadiness` and `getReadinessReport` resolve to `{ report: ReadinessReport, summary: ReadinessSummary }`. The orchestrator takes `report` for the stream event and panel item, and the model receives only `summary`.
 - `listReadinessReports` resolves to the list output.
 

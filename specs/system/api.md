@@ -953,7 +953,7 @@ Controller prefix `/data-readiness`. Capability: [data-readiness](../capabilitie
   - `entities` are entity keys (`catalog.schema.table` on Databricks, `database.schema.table` on PostgreSQL, as in the inventory, #20) and narrow the scope. Left out, the scope is every entity in the datasource's inventory. Keys that no longer exist are dropped.
   - `sessionId` is recorded on the report when the assessment comes from a chat.
 - Runs synchronously: profile (connector profiling queries, 15 s per statement), engine with `now` = the request time, store.
-- Response `201`: `ReadinessReport` ([data-model.md](data-model.md)).
+- Response `201`: `ReadinessReport` ([data-model.md](data-model.md)). It carries `notProfiled?: { entity, reason: "too-large"|"timed-out", rowCount? }[]` for entities whose column checks were skipped (ADR-0033); absent when none.
 - Errors:
   - 400 `"datasourceId is required"`;
   - 400 `"Data readiness supports PostgreSQL and Databricks datasources only"` (a `rest` datasource);
@@ -991,7 +991,7 @@ interface StreamMessageRequest {
 
 **Framing.** Each event is a single `data: <JSON>\n\n` frame. No `event:` or `id:` fields, no `retry:`, no heartbeat/comment frames. Readers split on `\n\n`, take the line starting with `data: ` and `JSON.parse` it; malformed frames are skipped.
 
-**Event envelope.** `{ type, content?, session? }`. `content` is a string; for `tool`, `tool-result`, `visual-updated`, `panel-item`, `workflow`, `rfp-package` and `readiness-report` it is itself **a JSON-encoded string** (double encoding) that the client parses.
+**Event envelope.** `{ type, content?, session? }`. `content` is a string; for `tool`, `tool-result`, `visual-updated`, `panel-item`, `workflow`, `rfp-package`, `readiness-report` and `tool-progress` it is itself **a JSON-encoded string** (double encoding) that the client parses.
 
 | `type` | Payload | Meaning |
 |---|---|---|
@@ -999,6 +999,7 @@ interface StreamMessageRequest {
 | `text` | `content: string` (delta) | Answer text delta. Concatenation of all `text` deltas is the streamed answer. One extra full-text `text` event may follow if a tool-only turn needed a synthesis pass. |
 | `tool` | `content: JSON string` `{ name: string; rationale?: string; input?: string }` | A tool call started. `rationale` is the assistant's plain-language reason (flattened, max 400 chars) and is sent **with the call**, before the result. `input` says what the call is about, flattened and clipped to 200 characters: for the framework's skill tools the skill it loads (`skill`: its `name`; `skill_read`: `<skillName>/<path>`; `skill_search`: the query), else the call's first text argument; omitted when there is none. Legacy clients may receive a bare tool name instead of JSON; readers must fall back to treating non-JSON content as the name. Not emitted for `ask_clarification`. |
 | `tool-result` | `content: JSON string` | A tool call finished. For data tools (`run_readonly_sql`, `sample_rows`): `{ tool, input?, rowCount?, error?, rationale? }`. For visual tools (`create_visual`, `update_visual`): `{ tool, input? /* the instruction */, error? }`. In a session bound to the RFP Builder (`agentKey: "rfp"`), every RFP tool ([agents.md](agents.md) 3.10) emits `{ tool, input? /* its first string argument */, rowCount?, error? }` (`rowCount` for a result that carries `columns` and `rows`, such as `get_client_financials`). **No `tool-result` is emitted for other tools** (`list_entities`, `describe_entity`). Row data is not streamed, only persisted in the final message. |
+| `tool-progress` | `content: JSON string` `{ tool: string, phase: "inventory"\|"profiling"\|"relationships"\|"scoring"\|"storing", message: string, done?: number, total?: number, entity?: string }` | Live progress of a running tool (ADR-0033). Zero or more between a tool's `tool` event and its `tool-result`. Only `assess_data_readiness` emits it today. Not persisted. It doubles as a keepalive while the tool runs. The client shows the latest `message` on the tool's row ([ui.md](ui.md) 4.12). |
 | `visual-updated` | `content: JSON string` `VisualEvent` `{ visualId, version, title, action: "created"\|"updated" }` | A visual tool produced a visual this turn; sent just before that tool's `tool-result`. The panel refreshes live. |
 | `panel-item` | `content: JSON string` `PanelItemEvent` `{ item: PanelItem }` ([data-model.md](data-model.md) 3.4.4) | An agent showed something in the right panel this turn (`show_in_panel` returned without an error); never sent for a workflow change (`update_workflow`, the RFP Builder's stage auto-drive); sent just before that tool's `tool-result` `{ tool: "show_in_panel", input? /* the item's title */, error? }`. The client refreshes the session without disturbing the turn, makes the item the active one and opens the panel; for a `visual` item it also loads the visual. Every agent ([agent-panel](../capabilities/agent-panel/spec.md) R12). `visual-updated` stays for visual tools. |
 | `workflow` | `content: JSON string` `WorkflowView` `{ phases: { number, title, skill? }[], source: "prompt"\|"agent", current: number\|null, done: number[], skipped: number[], waiting?: boolean, note?: string }` ([data-model.md](data-model.md) 3.4.4) | The session's workflow changed this turn: after an `update_workflow` result without an error and after an RFP Builder stage was saved. `show_in_panel` never sends it. It carries the whole view, not a delta. It never creates a panel item and does not open the right panel. The client patches the session's `workflow` live, so the workflow bar moves while the turn streams; the persisted view arrives with `done` ([agent-panel](../capabilities/agent-panel/spec.md) R19). Every agent. |
@@ -1010,13 +1011,13 @@ interface StreamMessageRequest {
 **Ordering.**
 
 ```
-[reasoning* | text* | (tool → [visual-updated | panel-item | workflow] → tool-result)*]  interleaved in model order
+[reasoning* | text* | (tool → tool-progress* → [visual-updated | panel-item | workflow] → tool-result)*]  interleaved in model order
  → (optional silent post-processing)
  → done            or            error
 ```
 
-- `tool` always precedes its own `tool-result`; parallel/interleaved calls are possible. `visual-updated`, `panel-item` and `workflow` precede the matching `tool-result` (for an RFP stage auto-drive, which has no tool call of its own, they stand alone).
-- After the model stream ends there can be **silent server-side steps with no events**: a tool-disabled synthesis pass (only if the turn produced no text and no visual; emits one `text` event with the result, or falls back to the fixed message `"I completed the data analysis but could not produce a final response. Please retry your question."`), the **zero-SQL grounding guard** (one corrective pass when a non-empty answer called no tool at all), the verified-query match, and the **careful-mode cross-check** (`crossCheck` verdict). No keepalive is sent during them.
+- `tool` always precedes its own `tool-result`; parallel/interleaved calls are possible. `tool-progress` events fall between a tool's `tool` and its `tool-result`. `visual-updated`, `panel-item` and `workflow` precede the matching `tool-result` (for an RFP stage auto-drive, which has no tool call of its own, they stand alone).
+- After the model stream ends there can be **silent server-side steps with no events**: a tool-disabled synthesis pass (only if the turn produced no text and no visual; emits one `text` event with the result, or falls back to the fixed message `"I completed the data analysis but could not produce a final response. Please retry your question."`), the **zero-SQL grounding guard** (one corrective pass when a non-empty answer called no tool at all), the verified-query match, and the **careful-mode cross-check** (`crossCheck` verdict). No keepalive is sent during them. (While a tool runs, `tool-progress` events, where the tool emits them, act as a keepalive.)
 - **The streamed deltas are not authoritative.** The grounding guard may replace the answer text after it was already streamed. The client must replace its whole message list with `done.session` rather than keep the deltas.
 
 **Termination.**
