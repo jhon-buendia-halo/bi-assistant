@@ -144,13 +144,14 @@ describe('the rfp eval set (agents.md 8.1)', () => {
       'world-cup',
       'world-cup-rest',
       'formula-1',
+      'schema-notes',
     ]);
     expect(ASSISTANT_EVAL_SETS.some((set) => set.agentKey)).toBe(false);
     expect(evalSetsFor('assistant')).toEqual(ASSISTANT_EVAL_SETS);
     expect(evalSetsFor('rfp')).toEqual([RFP_EVAL_SET]);
     expect(evalSetsFor('sql-fixer')).toEqual([]);
     expect(hasEvals('rfp')).toBe(true);
-    expect(EVAL_SETS).toHaveLength(5);
+    expect(EVAL_SETS).toHaveLength(6);
     const ids = EVAL_SETS.flatMap((set) => set.cases.map((c) => c.id));
     expect(new Set(ids).size).toBe(ids.length);
   });

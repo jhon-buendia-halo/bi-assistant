@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { WORLD_CUP_CATALOG } from './helpers/world-cup-db';
 import {
@@ -9,6 +12,15 @@ import {
 
 const DESCRIPTION = 'Tournament facts for analysis';
 const SCHEMA_KEY = `${WORLD_CUP_CATALOG}.world_cup`;
+
+/** Saves an evidence screenshot when E2E_EVIDENCE_DIR names a folder. */
+async function evidence(page: Page, folder: string, name: string) {
+  const root = process.env['E2E_EVIDENCE_DIR'];
+  if (!root) return;
+  const dir = path.join(root, folder);
+  fs.mkdirSync(dir, { recursive: true });
+  await page.screenshot({ path: path.join(dir, name), fullPage: true });
+}
 
 test('tags a schema with a layer and description and keeps them after saving', async ({
   page,
@@ -51,4 +63,5 @@ test('tags a schema with a layer and description and keeps them after saving', a
     'consumption',
   );
   await expect(page.getByTestId('schema-description')).toHaveValue(DESCRIPTION);
+  await evidence(page, '1.20.1', 'dataset-schema-notes-panel.png');
 });

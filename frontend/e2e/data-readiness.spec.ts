@@ -6,6 +6,15 @@ import { test, expect } from './fixtures/app.fixture';
 import { apiJson } from './helpers/api';
 import { saveLenaiSettings } from './helpers/agents-api';
 import { WORLD_CUP_DATASOURCE } from './helpers/app-actions';
+
+/** Saves an evidence screenshot when E2E_EVIDENCE_DIR names a folder. */
+async function evidence(page: Page, folder: string, name: string) {
+  const root = process.env['E2E_EVIDENCE_DIR'];
+  if (!root) return;
+  const dir = path.join(root, folder);
+  fs.mkdirSync(dir, { recursive: true });
+  await page.screenshot({ path: path.join(dir, name), fullPage: true });
+}
 import {
   LlmStub,
   StubReply,
@@ -670,6 +679,7 @@ test('A table too large to profile is listed as not profiled', async ({
       `Too large — ${entry.rowCount!.toLocaleString('en-US')} rows, column checks skipped`,
     );
   }
+  await evidence(page, '1.20.3', 'readiness-not-profiled.png');
 });
 
 test('the scorecard shows the same numbers as the API', async ({ page }) => {

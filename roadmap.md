@@ -1278,35 +1278,35 @@ A synthetic Mercer US Health & Benefits world as a seedable Testing Data fixture
 
 Users tag each schema in a dataset with its data layer and a description, and the assistant uses them. Extends the datasets capability and the session context. No ADR: an optional field on the dataset document and an extra section in an existing context block. All stories are built on the branch `feat/BA-318-datasource-metadata` and ship as one PR. Epic spec: [specs/epics/BA-318/spec.md](specs/epics/BA-318/spec.md).
 
-#### 1.20.1 — Layer and description on dataset schemas ([BA-319](https://halo-powered.atlassian.net/browse/BA-319))  `🚧 In progress`
+#### 1.20.1 — Layer and description on dataset schemas ([BA-319](https://halo-powered.atlassian.net/browse/BA-319))  `✅ Done`
 - **Intent:** in the Edit dataset page, the user selects a schema and sets its layer (Landing, Normalized, Consumption) and a description; the tree shows the layer, and the assistant takes both into account.
 - **Scope:** optional per-dataset schema notes (`schemas` on the dataset document and `POST /datasets`; omitted keeps, present replaces, orphans pruned); Layer dropdown and Description textarea in the details panel for a selected schema; a layer badge on the schema row; a "Schema notes" section in the dataset orientation context when notes exist; datasets spec, api.md, data-model, agents.md, ui.md, glossary; a new Gherkin scenario and one new assistant eval case.
 - **Out of scope:** notes on datasources, catalogs or tables; sharing notes across datasets; tool output changes; filtering by layer.
 - **Acceptance:** see the epic spec: round-trip in the UI, old datasets unaffected, orphan notes dropped, Testing Data reload keeps notes, unknown layer rejected, context unchanged without notes, unit tests, check-specs, lint, builds, the Datasets Playwright scenarios and the assistant evals at 100 %.
 - **Notes:** first built on 2026-11-09 as datasource-level fields after a misread of the request ("datasource" instead of the schemas in the dataset tree); reverted on the branch the same day. Decisions settled with the user on 2026-11-09: per-dataset notes, right-panel editing with a tree badge, used in agent context. Planned by Opus, implemented by Sonnet units at the user's request.
 
-#### 1.20.2 — Data Readiness fails on a Databricks host saved with https:// ([BA-322](https://halo-powered.atlassian.net/browse/BA-322))  `🚧 In progress`
+#### 1.20.2 — Data Readiness fails on a Databricks host saved with https:// ([BA-322](https://halo-powered.atlassian.net/browse/BA-322))  `✅ Done`
 - **Intent:** the Data Readiness assessment works on a Databricks datasource whose host was saved as a workspace URL (`https://…/`).
 - **Scope:** one `normalizeDatabricksHost` helper used by the connector, the data-readiness profiler's SQL connection and Unity Catalog calls, and Databricks saves; datasources R4; unit tests.
 - **Out of scope:** migrating stored hosts (every reader normalises); other kinds.
 - **Acceptance:** the profiler connects with the bare hostname for a stored `https://…/` host without a re-save (unit test, and live against the user's workspace: `main` fails with `https://https//… ENOTFOUND`, the branch profiles `samples.tpch.region`); new Databricks saves store the bare hostname; datasources and data-readiness unit tests green.
 - **Notes:** found by the user while testing 1.20.1 on 2026-11-09; fixed on the epic branch at the user's request (not a separate `fix/` branch).
 
-#### 1.20.3 — Faster Data Readiness assessments ([BA-323](https://halo-powered.atlassian.net/browse/BA-323))  `🚧 In progress`
+#### 1.20.3 — Faster Data Readiness assessments ([BA-323](https://halo-powered.atlassian.net/browse/BA-323))  `✅ Done`
 - **Intent:** an assessment of a large Databricks catalog finishes in well under a minute instead of about five, with the same scores.
 - **Scope:** ADR-0033: one profiling session pool per assessment (Databricks and PostgreSQL); the per-text-column probes folded into the per-table statistics statement; row count first and tables above 100 M rows not profiled, listed in the report as `too-large` (or `timed-out`); 8 concurrent Databricks tables, 4 PostgreSQL; inventory read once; the turn's abort signal cancels statements and stores no report.
 - **Out of scope:** approximate counts or sampling; editable thresholds; background jobs that survive a reload.
 - **Acceptance:** identical scores and findings on the World Cup and US Health samples before and after; the Databricks `samples` assessment (125 entities) measured before (296 s) and after, after well under 60 s, with the huge tables listed as not profiled; Stop leaves no stored report; unit tests, check-specs, builds, the data-readiness Playwright spec and the `data-readiness` evals at 100 %.
 - **Notes:** analysis by a Fable agent on 2026-11-09 (live timings: new session per statement 0.8 s vs 0.19 s reused; `store_sales` 2.9 B rows times out on any column aggregate). Decisions by the user on 2026-11-09: skip and mark huge tables, 8 concurrent, Stop cancels, same epic and branch.
 
-#### 1.20.4 — Live progress while a Data Readiness assessment runs ([BA-324](https://halo-powered.atlassian.net/browse/BA-324))  `🚧 In progress`
+#### 1.20.4 — Live progress while a Data Readiness assessment runs ([BA-324](https://halo-powered.atlassian.net/browse/BA-324))  `✅ Done`
 - **Intent:** while an assessment runs, the chat shows what it is doing, so the user is not left waiting on a bare spinner.
 - **Scope:** ADR-0033: the tool emits progress through Mastra's tool writer; the session stream forwards it as a `tool-progress` SSE event between `tool` and `tool-result`; the running tool row in the Thinking block shows the latest message ("Listing tables…", "Profiling <entity> (n/N)…", "Checking relationships…", "Running checks…", "Writing the report…"); progress is ephemeral and invisible to the model.
 - **Out of scope:** progress for other tools (the event is generic, only readiness emits it now); persisting progress; a determinate progress bar.
 - **Acceptance:** the stream carries `tool-progress` frames in order between `tool` and `tool-result` (API-level E2E on the World Cup sample); the Thinking block row shows the latest message; unit tests for the tool, the stream loop and the chat; api.md 3.1, ui.md, sessions-chat, data-readiness and agents.md updated.
 - **Notes:** design by the Fable analysis on 2026-11-09 (Mastra 1.66 `writer.custom` reaches `fullStream`; fallback: a callback on the request context).
 
-#### 1.20.5 — Let users select and copy any text in the app ([BA-326](https://halo-powered.atlassian.net/browse/BA-326))  `🚧 In progress`
+#### 1.20.5 — Let users select and copy any text in the app ([BA-326](https://halo-powered.atlassian.net/browse/BA-326))  `✅ Done`
 - **Intent:** the user can select any text in the app (chat answers, tables, panels, the readiness scorecard) and copy it.
 - **Scope:** remove the root `user-select: none`; keep it only on the Electron drag region, during the right-panel splitter drag and on a few click-to-toggle headers; ui.md's open question resolved.
 - **Out of scope:** new Copy buttons; changing what the existing Copy buttons copy.
