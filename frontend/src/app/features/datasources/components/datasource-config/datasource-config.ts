@@ -10,14 +10,11 @@ import {
 } from 'lucide-angular';
 import { DatasourcesApiService } from '../../services/datasources-api.service';
 import {
-  DATASOURCE_DESCRIPTION_MAX,
   DATASOURCE_KINDS,
-  DATASOURCE_LAYERS,
   DatabricksConfig,
   Datasource,
   DatasourceConfig as DatasourceConnectionConfig,
   DatasourceKind,
-  DatasourceLayer,
   DiscoveredEndpoint,
   PostgresConfig,
   RestApiConfig,
@@ -25,7 +22,6 @@ import {
   RestDiscoveryResult,
   RestEndpointDef,
   kindLabel,
-  layerLabel,
 } from '../../models/datasource.model';
 import { ToastService } from '../../../../core/toast/toast.service';
 
@@ -87,9 +83,6 @@ export class DatasourceConfig implements OnInit {
   readonly paginationStyles = PAGINATION_STYLES;
   readonly kinds = DATASOURCE_KINDS;
   readonly kindLabel = kindLabel;
-  readonly layers = DATASOURCE_LAYERS;
-  readonly layerLabel = layerLabel;
-  readonly descriptionMax = DATASOURCE_DESCRIPTION_MAX;
 
   private readonly api = inject(DatasourcesApiService);
   private readonly toast = inject(ToastService);
@@ -111,18 +104,6 @@ export class DatasourceConfig implements OnInit {
   readonly saving = signal(false);
   // Only a configuration whose test passed can be saved.
   readonly testedOk = signal(false);
-  /** Optional metadata — editing it never requires a re-test. */
-  readonly layer = signal<DatasourceLayer | ''>('');
-  readonly description = signal('');
-  /** True once any connection field changes after the form opened. */
-  readonly connectionDirty = signal(false);
-  /** A new/changed connection needs a passing test; metadata-only edits do not. */
-  readonly canSave = computed(
-    () =>
-      !this.saving() &&
-      this.name().trim() !== '' &&
-      (this.testedOk() || (!!this.editingId() && !this.connectionDirty())),
-  );
 
   /** Transient OpenAPI discovery state — never part of the saved config. */
   readonly specUrl = signal('');
@@ -200,9 +181,6 @@ export class DatasourceConfig implements OnInit {
   startNew(): void {
     this.editingId.set(null);
     this.name.set('');
-    this.layer.set('');
-    this.description.set('');
-    this.connectionDirty.set(false);
     this.kind.set('databricks');
     this.databricks.set({ ...EMPTY_DATABRICKS });
     this.postgres.set({ ...EMPTY_POSTGRES });
@@ -215,9 +193,6 @@ export class DatasourceConfig implements OnInit {
   startEdit(datasource: Datasource): void {
     this.editingId.set(datasource.id);
     this.name.set(datasource.name);
-    this.layer.set(datasource.layer ?? '');
-    this.description.set(datasource.description ?? '');
-    this.connectionDirty.set(false);
     this.kind.set(datasource.kind);
     this.databricks.set({ ...EMPTY_DATABRICKS });
     this.postgres.set({ ...EMPTY_POSTGRES });
@@ -446,7 +421,6 @@ export class DatasourceConfig implements OnInit {
   onFieldChange(): void {
     // Editing invalidates the previous successful test.
     this.testedOk.set(false);
-    this.connectionDirty.set(true);
   }
 
   private config(): DatasourceConnectionConfig {
@@ -547,7 +521,7 @@ export class DatasourceConfig implements OnInit {
   }
 
   save(): void {
-    if (!this.canSave()) return;
+    if (!this.testedOk() || this.saving()) return;
     const name = this.name().trim();
     if (!name) {
       this.toast.error('Give the datasource a name first');
@@ -560,8 +534,6 @@ export class DatasourceConfig implements OnInit {
         name,
         kind: this.kind(),
         config: this.config(),
-        layer: this.layer() || null,
-        description: this.description().trim() || null,
       })
       .subscribe({
         next: (res) => {

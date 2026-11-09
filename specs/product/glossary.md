@@ -50,8 +50,6 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Datasource.** A saved connection to a data platform. Three kinds: `databricks` (a SQL warehouse, via host, token and warehouse id), `postgres` (host, port, database, user, password, SSL) and `rest` (an HTTP API with a base URL, an auth mode and a list of endpoints that are mapped to tables). Legacy name: *connection* (collection `connections`). The first single Databricks connection was migrated to a datasource with id `legacy-databricks`.
 
-**Datasource layer.** Where a *datasource* sits in the data pipeline: Landing (raw, as ingested), Normalized (cleaned and conformed) or Consumption (modelled for analysis and reporting). Optional and informational only: it is shown as a badge on the datasource and does not change how the datasource is queried. See [../capabilities/datasources/spec.md](../capabilities/datasources/spec.md).
-
 **Deep analysis.** A background investigation of one question from several *angles*, producing a downloadable markdown *report*. One at a time per session. The chat stays usable while it runs. The result is posted as an assistant message whose text is the executive summary.
 
 **Default filter.** A *knowledge entry* of kind `default_filter`: a condition (for example "exclude test accounts") the assistant applies to every query unless the question asks for the excluded rows. The answer names the filters applied.

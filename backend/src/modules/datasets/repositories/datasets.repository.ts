@@ -35,6 +35,30 @@ export interface DatasetEntitySnapshot {
   columns: DatasetColumnSnapshot[];
 }
 
+/** Data layer a schema plays in a dataset (BA-318). */
+export type SchemaLayer = 'landing' | 'normalized' | 'consumption';
+
+export const SCHEMA_LAYERS: SchemaLayer[] = [
+  'landing',
+  'normalized',
+  'consumption',
+];
+
+/** Schema descriptions are trimmed and cut to this many characters. */
+export const SCHEMA_DESCRIPTION_MAX = 500;
+
+/**
+ * The user's note on one schema of a dataset (BA-318). Per dataset: the same
+ * schema can carry different notes in two datasets. Never stored empty: a
+ * note has a layer, a description, or both.
+ */
+export interface DatasetSchemaNote {
+  /** `catalog.schema`. */
+  key: string;
+  layer?: SchemaLayer;
+  description?: string;
+}
+
 export interface DatasetDoc {
   name: string;
   /** Datasource the entities belong to (absent on pre-datasource datasets). */
@@ -47,6 +71,8 @@ export interface DatasetDoc {
    * describe_entity don't need a live datasource round-trip.
    */
   entities?: DatasetEntitySnapshot[];
+  /** Schema notes (BA-318); absent on datasets without any. */
+  schemas?: DatasetSchemaNote[];
   createdAt?: string;
   updatedAt?: string;
 }

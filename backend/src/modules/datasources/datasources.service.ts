@@ -20,11 +20,8 @@ import {
   Datasource,
   DatasourceConfig,
   DatasourceKind,
-  DatasourceLayer,
   DatasourceView,
-  DATASOURCE_DESCRIPTION_MAX,
   DATASOURCE_KINDS,
-  DATASOURCE_LAYERS,
   PostgresConfig,
   QueryResult,
   RestApiConfig,
@@ -109,46 +106,16 @@ export class DatasourcesService {
     name: string;
     kind: DatasourceKind;
     config: DatasourceConfig;
-    layer?: DatasourceLayer | null | '';
-    description?: string | null;
   }): Promise<DatasourceView> {
     const name = (input.name ?? '').trim();
     if (!name) throw new BadRequestException('name is required');
     this.connector(input.kind);
-    if (
-      input.layer !== undefined &&
-      input.layer !== null &&
-      input.layer !== '' &&
-      !DATASOURCE_LAYERS.includes(input.layer)
-    ) {
-      throw new BadRequestException(
-        `layer must be one of: ${DATASOURCE_LAYERS.join(', ')}`,
-      );
-    }
-    if (
-      input.description !== undefined &&
-      input.description !== null &&
-      typeof input.description !== 'string'
-    ) {
-      throw new BadRequestException('description must be a string');
-    }
-    const existing = input.id ? await this.repository.get(input.id) : undefined;
-    const layer: DatasourceLayer | undefined =
-      input.layer === undefined ? existing?.layer : input.layer || undefined;
-    const description =
-      input.description === undefined
-        ? existing?.description
-        : (input.description ?? '')
-            .trim()
-            .slice(0, DATASOURCE_DESCRIPTION_MAX) || undefined;
     const config = await this.withSecrets(input.kind, input.config, input.id);
     const saved = await this.repository.save({
       id: input.id,
       name: name.slice(0, 64),
       kind: input.kind,
       config,
-      ...(layer ? { layer } : {}),
-      ...(description ? { description } : {}),
     });
     return this.view(saved);
   }
@@ -283,8 +250,6 @@ export class DatasourcesService {
       kind: ds.kind,
       summary: connector.summary(ds.config),
       config: connector.mask(ds.config),
-      ...(ds.layer ? { layer: ds.layer } : {}),
-      ...(ds.description ? { description: ds.description } : {}),
       createdAt: ds.createdAt,
       updatedAt: ds.updatedAt,
     };

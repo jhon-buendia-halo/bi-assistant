@@ -254,7 +254,7 @@ Route order matters: `test-connection` and `rest/discover` are declared before t
 **Secret handling shared by 16, 17, 18.** When the body carries `id` of a saved datasource of the same `kind`, any secret that is empty or equal to the mask `••••••••` is replaced by the stored secret before use. Secrets: Databricks `token`; Postgres `password`; REST `auth.token` and `auth.password`. This lets the UI re-test or re-save without retyping secrets. Without `id`, the config is used as sent.
 
 #### 15. `GET /datasources`
-- Response `200`: `{ datasources: DatasourceView[] }` where each is `{ id, name, kind: "databricks"|"postgres"|"rest", summary: string, config /* masked */, layer?: "landing"|"normalized"|"consumption", description?: string, createdAt?, updatedAt? }`. `layer` and `description` are omitted when unset. `summary` is a human line (host/warehouse/database). Ordering is the repository's.
+- Response `200`: `{ datasources: DatasourceView[] }` where each is `{ id, name, kind: "databricks"|"postgres"|"rest", summary: string, config /* masked */, createdAt?, updatedAt? }`. `summary` is a human line (host/warehouse/database). Ordering is the repository's.
 
 #### 16. `POST /datasources/test-connection`
 - Body: `{ kind: "databricks"|"postgres"|"rest"; config: DatasourceConfig; id?: string }`.
@@ -268,9 +268,9 @@ Route order matters: `test-connection` and `rest/discover` are declared before t
 - Side effects: outbound HTTP to the spec URL; nothing persisted.
 
 #### 18. `POST /datasources`
-- Body: `{ kind; config; name: string; id?: string; layer?: "landing"|"normalized"|"consumption"|null; description?: string|null }`. Present `id` = update, absent = create (new id assigned).
-- Validation: `name` required (trimmed, **truncated to 64**); `kind` must be one of the three kinds. `layer`: `null` or `""` clears it, omitted keeps the stored value, any other value outside the three fails. `description`: trimmed and cut to 500 characters; `null` or blank clears it, omitted keeps the stored value.
-- Success: `{ ok:true, message:"Datasource \"<name>\" saved", datasource: DatasourceView }`. Failure (Style A): `"name is required"`, `"kind must be one of: ..."`, `"layer must be one of: landing, normalized, consumption"`, `"description must be a string"`.
+- Body: `{ kind; config; name: string; id?: string }`. Present `id` = update, absent = create (new id assigned).
+- Validation: `name` required (trimmed, **truncated to 64**); `kind` must be one of the three kinds.
+- Success: `{ ok:true, message:"Datasource \"<name>\" saved", datasource: DatasourceView }`. Failure (Style A): `"name is required"`, `"kind must be one of: ..."`.
 - Side effects: persists the datasource (secrets stored as given/restored). It does not test the connection.
 
 #### 19. `DELETE /datasources/:id`

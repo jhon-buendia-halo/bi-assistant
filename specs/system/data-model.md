@@ -129,8 +129,6 @@ One document per saved connection. The `kind` selects the shape of `config`.
 | `name` | string | yes | User-chosen display name, trimmed, non-empty, truncated to 64 characters. Not required to be unique (the testing-data feature looks a sample's datasource up by name). |
 | `kind` | enum | yes | `databricks` \| `postgres` \| `rest`. |
 | `config` | object | yes | One of the three config shapes below. |
-| `layer` | enum | no | `landing` | `normalized` | `consumption`: where the datasource sits in the data pipeline. Informational only. Absent when unset; no migration, older documents simply lack it. |
-| `description` | string | no | Free-text note on what the datasource is for, trimmed, at most 500 characters. Absent when unset; no migration. |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 `DatabricksConfig` (`kind = databricks`):

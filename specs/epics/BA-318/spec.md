@@ -1,56 +1,64 @@
-# BA-318 — Datasource metadata: layer and description
+# BA-318 — Schema metadata in datasets: layer and description
 
 - **Jira:** [BA-318](https://halo-powered.atlassian.net/browse/BA-318) · **Roadmap:** Milestone 1.20 · **Status:** Confirmed (by the user on 2026-11-09).
 
 ## Goal
 
-Users can say what a datasource is for. When adding or editing a datasource, of any kind, they can pick its data **layer** (Landing, Normalized or Consumption) and write a free-text **description**. The Datasources list then shows the layer as a badge and the description under the name, so a list of similar connections can be told apart at a glance.
+When building or editing a dataset, users can say what each **schema** in it is for. In the Edit dataset page's catalog tree, they select a schema and set its data **layer** (Landing, Normalized or Consumption) and a free-text **description**. The tree shows the layer on the schema row, and the assistant receives both, so it can prefer the right schema (for example a Consumption copy over a Landing copy of the same data) and understand what a schema holds.
 
 ## Scope
 
-- **Two optional fields on every datasource**, stored in the datasource document and returned by the API:
-  - `layer`: one of `landing`, `normalized`, `consumption`, or absent. UI labels: "Landing", "Normalized", "Consumption"; the dropdown's empty option is "None".
+- **Schema notes on a dataset.** A dataset document gains an optional list of schema notes, one per schema (`catalog.schema`), each with:
+  - `layer`: one of `landing`, `normalized`, `consumption`, or absent. UI labels "Landing", "Normalized", "Consumption"; the dropdown's empty option is "None".
   - `description`: free text, trimmed and capped at 500 characters; empty means absent.
-- **Form:** a Layer dropdown and a Description textarea, after Kind, for all three kinds, on add and on edit.
-- **No re-test for metadata:** an edited datasource whose connection settings are unchanged since the form opened can be saved without a new connection test. This covers Name, Layer and Description. A new datasource, or any connection-field change, still needs a successful test first (datasources R13).
-- **Saves that leave the fields out keep them:** `POST /datasources` without `layer` or `description` keeps the stored values. Testing Data re-registers its sample datasources this way, so a user's layer and description on a sample survive a reload. Sending `null` or an empty string clears a field.
-- **List:** a layer badge beside the kind badge, and the description under the name (one line, truncated, full text in a tooltip).
-- **Existing data:** datasources saved before this change have no layer and no description. No migration: both fields are optional and new.
+  A note with neither field is not stored. Notes are **per dataset**: the same schema can carry different notes in two datasets.
+- **Saving.** Notes are saved with the dataset by **Save dataset**, through `POST /datasets` (`schemas` in the body). A body with `schemas` replaces the stored notes; the backend keeps only notes for schemas that still have an included entity and rejects an unknown layer with `layer must be one of: landing, normalized, consumption`. A body **without** `schemas` keeps the stored notes: Testing Data re-registers its sample datasets this way, so a reload does not wipe them.
+- **Editing UI (Edit dataset / New dataset page).**
+  - Selecting a schema row in the catalog tree shows, in the right-hand details panel, a **Layer** dropdown and a **Description** textarea (placeholder "What this schema holds and what it is used for", max 500) above the schema's existing details. Changes are kept in the page until **Save dataset**.
+  - The schema row in the tree shows a layer badge after its entity count when a layer is set, with the description as the badge's (or row's) tooltip.
+  - Opening a dataset restores its notes; a new dataset and a datasource switch start with none.
+- **Assistant context.** When at least one schema in a session's datasets has a note, the dataset orientation block the agents receive (`entityOrientationLines`, used by sessions and the assistant evals) gains a "Schema notes" section listing each noted schema with its layer and description, and one line of guidance: prefer the Consumption layer for analysis when the same data exists in several layers, unless the user asks otherwise. With no notes, the block is byte-identical to today.
+- **Existing data:** datasets saved before this change have no notes. No migration.
 
 ## Out of scope
 
-- Using layer or description in agent prompts, dataset pickers, session headers or anywhere outside Settings → Datasource Configuration.
-- Filtering or grouping the list by layer.
-- Layers other than the three named, or user-defined layers.
-- Setting a layer on the Testing Data samples.
+- Layer or description on datasources, catalogs or entities (tables). (A first cut on datasources was built and reverted on this branch on 2026-11-09 after the requirement was clarified.)
+- Sharing notes across datasets, or storing them on the datasource.
+- Changing tools (`list_entities`, `describe_entity`) or the SQL verifier and knowledge-bootstrap schema blocks.
+- Filtering or grouping the tree by layer; custom layers.
+- Setting notes on the Testing Data samples.
 
 ## Stories
 
 | Story | Summary | Roadmap feature |
 |---|---|---|
-| [BA-319](https://halo-powered.atlassian.net/browse/BA-319) | Add layer dropdown and description to the datasource form and list | 1.20.1 |
+| [BA-319](https://halo-powered.atlassian.net/browse/BA-319) | Layer and description on dataset schemas, used by the assistant | 1.20.1 |
 
 ## Specs touched
 
-- [capabilities/datasources](../../capabilities/datasources/spec.md): R2 (the two fields), R13 (save without re-test when only metadata changed), new rules for layer values, description limits and the keep-on-omit save; the UI section (form table, list row); a new Gherkin scenario.
-- [system/api.md](../../system/api.md): 2.2 #15 (`DatasourceView` gains `layer?`, `description?`) and #18 (body fields and keep-on-omit).
-- [system/data-model.md](../../system/data-model.md): the `connections` document gains `layer?` and `description?`.
-- [product/glossary.md](../../product/glossary.md): "Datasource layer".
+- [capabilities/datasets](../../capabilities/datasets/spec.md): schema notes rules (values, limits, per-dataset scope, replace vs keep-on-omit, orphan pruning), the details panel and tree row in the UI section, a new Gherkin scenario.
+- [system/api.md](../../system/api.md): `POST /datasets` body `schemas`, the new failure message, and the dataset shape returned by `GET /datasets`.
+- [system/data-model.md](../../system/data-model.md): the dataset document's `schemas` field.
+- [system/agents.md](../../system/agents.md): the "Schema notes" section of the dataset orientation context.
+- [system/ui.md](../../system/ui.md): the Edit dataset tree row and details panel.
+- [product/glossary.md](../../product/glossary.md): "Schema layer" and "Schema note".
 
-No ADR: two optional fields on an existing document, with no new collection, container or data flow.
+No ADR: an optional field on an existing document and an extra section in an existing context block, with no new collection, container or data flow.
 
 ## Acceptance
 
-- Creating a datasource with Layer "Consumption" and a description shows both in the list, and both are back in the form after a reload and an Edit.
-- Changing only the Layer or Description of a saved datasource, then clicking "Save changes" without testing, saves it. Changing a connection field disables Save until a successful test.
-- A datasource saved before this change lists and edits normally, with Layer "None" and an empty description.
-- Loading a Testing Data sample again keeps the layer and description the user gave its datasource.
-- The API rejects an unknown layer with `layer must be one of: landing, normalized, consumption`.
-- Backend and frontend unit tests, `python3 scripts/check-specs.py`, lint, builds and the Datasources Playwright scenarios (including the new one) pass on the web target.
-- No eval gate: no agent's prompt, tools, skills or context changes.
+- In Edit dataset, selecting the `tpch` schema, choosing Layer "Consumption" and typing a description, then **Save dataset**: the tree row shows a "Consumption" badge, and after a reload and reopening the dataset the details panel shows both values.
+- A dataset saved before this change opens normally with no badges and Layer "None".
+- Excluding every entity of a noted schema and saving drops that schema's note.
+- Loading a Testing Data sample again keeps notes the user set on its dataset.
+- `POST /datasets` with an unknown layer fails with `layer must be one of: landing, normalized, consumption`.
+- A session over a dataset with schema notes sends the "Schema notes" section in its context; a dataset without notes produces the same context as before (unit-tested, byte for byte).
+- Backend and frontend unit tests, `python3 scripts/check-specs.py`, lint, builds and the Datasets Playwright scenarios (including the new one) pass on the web target.
+- **Eval gate:** the assistant's input changes, so the assistant eval set runs at 100 %, plus one new case whose dataset has two copies of the same table in Landing and Consumption schemas and whose expected SQL reads the Consumption one.
 
 ## Dependencies, risks and open questions
 
-- **Depends on** the datasources capability as shipped (R1–R50) and the World Cup sample database for E2E.
-- **Risk:** R13 today resets the tested state when an edit opens. Relaxing it for unchanged connection settings must not let an untested *changed* connection be saved; the unit tests cover both paths.
-- **Open question:** none at drafting time. Optional fields, no re-test for metadata, and showing them in the list only were settled with the user on 2026-11-09.
+- **Depends on** the datasets capability (catalog browser, inclusion, save) and the session context assembly in `SessionsService.agentContext`.
+- **Risk:** the eval round costs LLM credit; check the provider has credit before the gate (retrospective, 2026-10).
+- **Risk:** prompt growth. One line per noted schema, descriptions capped at 500 characters; datasets rarely have more than a few dozen schemas.
+- **Open question:** none at drafting time. Per-dataset scope, right-panel editing with a tree badge, use in agent context, and removing the datasource-level fields were settled with the user on 2026-11-09.

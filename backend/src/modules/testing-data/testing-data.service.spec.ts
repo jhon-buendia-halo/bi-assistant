@@ -411,22 +411,6 @@ describe('TestingDataService.load', () => {
     expect(datasets.save).toHaveBeenCalledTimes(1);
   });
 
-  it('re-registers an existing datasource without layer or description so they are kept', async () => {
-    const { service, datasources } = build({
-      existing: [loadedDatasourceView],
-    });
-
-    await service.load('world-cup', DEFAULT_INPUT);
-
-    expect(datasources.save).toHaveBeenCalledTimes(1);
-    const [saveArg] = datasources.save.mock.calls[0] as [
-      Record<string, unknown>,
-    ];
-    expect(saveArg.id).toBe('ds-1');
-    expect(saveArg).not.toHaveProperty('layer');
-    expect(saveArg).not.toHaveProperty('description');
-  });
-
   it('reports the entity that is still missing after seeding', async () => {
     const { service, datasets } = build({
       catalogs: inventory(

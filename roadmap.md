@@ -1274,16 +1274,16 @@ A synthetic Mercer US Health & Benefits world as a seedable Testing Data fixture
 - **Acceptance:** the panel lists "US Health" with `0/45 entities`; loading it creates and seeds `us_health` and reports `45/45 entities`; the dataset has sample values and the declared join references; re-running the generator reproduces the seed byte for byte; `check-specs.py`, unit tests, lint, builds and the Testing Data Playwright scenarios are green.
 - **Notes:** data model approved on 2026-11-04 ([review page](https://claude.ai/artifact/4msSW6rkyot8Ai8Zvdr9yc)); research notes from public Mercer, KFF, SOA and state-law sources. Built by five parallel units (generator and seed, signal tests, defect and structure tests, app-level load, specs). Passed the acceptance gate on 2026-11-04. Evidence: [evidence/1.19.1/](evidence/1.19.1/).
 
-### Milestone 1.20 — Datasource metadata ([BA-318](https://halo-powered.atlassian.net/browse/BA-318))
+### Milestone 1.20 — Schema metadata in datasets ([BA-318](https://halo-powered.atlassian.net/browse/BA-318))
 
-Users tag each datasource with its data layer and a description, so similar connections can be told apart. Extends the datasources capability (Milestone 1.5). No ADR: two optional fields on the existing datasource document. All stories are built on the branch `feat/BA-318-datasource-metadata` and ship as one PR. Epic spec: [specs/epics/BA-318/spec.md](specs/epics/BA-318/spec.md).
+Users tag each schema in a dataset with its data layer and a description, and the assistant uses them. Extends the datasets capability and the session context. No ADR: an optional field on the dataset document and an extra section in an existing context block. All stories are built on the branch `feat/BA-318-datasource-metadata` and ship as one PR. Epic spec: [specs/epics/BA-318/spec.md](specs/epics/BA-318/spec.md).
 
-#### 1.20.1 — Layer and description on the datasource form and list ([BA-319](https://halo-powered.atlassian.net/browse/BA-319))  `🚧 In progress`
-- **Intent:** when adding or editing a datasource, the user can set its layer (Landing, Normalized, Consumption) and a description, and sees both in the Datasources list.
-- **Scope:** optional `layer` and `description` on the datasource document, the API and the form (all kinds); a layer badge and the description in the list; saving an edit whose connection settings are unchanged needs no re-test; a save that omits the fields keeps the stored values (Testing Data reloads); datasources spec R2/R13 and UI, api.md 2.2, data-model, glossary, a new Gherkin scenario.
-- **Out of scope:** using the fields in agents, dataset pickers or session headers; filtering or grouping by layer; custom layers.
-- **Acceptance:** see the epic spec's Acceptance: create and edit round-trip both fields; a metadata-only edit saves without a test; old datasources load with Layer "None"; a Testing Data reload keeps them; an unknown layer is rejected; unit tests, check-specs, lint, builds and the Datasources Playwright scenarios are green.
-- **Notes:** decisions settled with the user on 2026-11-09: both fields optional, no re-test for metadata, shown in the list only. Planned by Opus, implemented by 12 Sonnet units at the user's request.
+#### 1.20.1 — Layer and description on dataset schemas ([BA-319](https://halo-powered.atlassian.net/browse/BA-319))  `🚧 In progress`
+- **Intent:** in the Edit dataset page, the user selects a schema and sets its layer (Landing, Normalized, Consumption) and a description; the tree shows the layer, and the assistant takes both into account.
+- **Scope:** optional per-dataset schema notes (`schemas` on the dataset document and `POST /datasets`; omitted keeps, present replaces, orphans pruned); Layer dropdown and Description textarea in the details panel for a selected schema; a layer badge on the schema row; a "Schema notes" section in the dataset orientation context when notes exist; datasets spec, api.md, data-model, agents.md, ui.md, glossary; a new Gherkin scenario and one new assistant eval case.
+- **Out of scope:** notes on datasources, catalogs or tables; sharing notes across datasets; tool output changes; filtering by layer.
+- **Acceptance:** see the epic spec: round-trip in the UI, old datasets unaffected, orphan notes dropped, Testing Data reload keeps notes, unknown layer rejected, context unchanged without notes, unit tests, check-specs, lint, builds, the Datasets Playwright scenarios and the assistant evals at 100 %.
+- **Notes:** first built on 2026-11-09 as datasource-level fields after a misread of the request ("datasource" instead of the schemas in the dataset tree); reverted on the branch the same day. Decisions settled with the user on 2026-11-09: per-dataset notes, right-panel editing with a tree badge, used in agent context. Planned by Opus, implemented by Sonnet units at the user's request.
 
 ---
 

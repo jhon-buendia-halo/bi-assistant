@@ -7,7 +7,6 @@ import {
   DatasourceActionResult,
   DatasourceConfig,
   DatasourceKind,
-  DatasourceLayer,
   InventoryResult,
   RestApiConfig,
   RestDiscoveryResult,
@@ -51,8 +50,6 @@ export class DatasourcesApiService {
     name: string;
     kind: DatasourceKind;
     config: DatasourceConfig;
-    layer?: DatasourceLayer | null;
-    description?: string | null;
   }): Observable<DatasourceActionResult> {
     return this.http.post<DatasourceActionResult>(
       `${API_BASE_URL}/datasources`,
