@@ -6,6 +6,18 @@ export const DATASOURCE_KINDS: DatasourceKind[] = [
   'rest',
 ];
 
+/** Data layer a datasource belongs to (BA-318). Optional on every datasource. */
+export type DatasourceLayer = 'landing' | 'normalized' | 'consumption';
+
+export const DATASOURCE_LAYERS: DatasourceLayer[] = [
+  'landing',
+  'normalized',
+  'consumption',
+];
+
+/** Descriptions are trimmed and cut to this many characters (BA-318). */
+export const DATASOURCE_DESCRIPTION_MAX = 500;
+
 export interface DatabricksConfig {
   host: string;
   token: string;
@@ -82,6 +94,10 @@ export interface Datasource {
   name: string;
   kind: DatasourceKind;
   config: DatasourceConfig;
+  /** Absent = no layer. */
+  layer?: DatasourceLayer;
+  /** Absent = no description. Never stored empty. */
+  description?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -94,6 +110,8 @@ export interface DatasourceView {
   /** Human summary of where it points (host / warehouse / database). */
   summary: string;
   config: DatasourceConfig;
+  layer?: DatasourceLayer;
+  description?: string;
   createdAt?: string;
   updatedAt?: string;
 }

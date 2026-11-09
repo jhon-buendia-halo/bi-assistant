@@ -6,6 +6,18 @@ export const DATASOURCE_KINDS: { value: DatasourceKind; label: string }[] = [
   { value: 'rest', label: 'REST API' },
 ];
 
+/** Data layer a datasource belongs to (BA-318). Optional. */
+export type DatasourceLayer = 'landing' | 'normalized' | 'consumption';
+
+export const DATASOURCE_LAYERS: { value: DatasourceLayer; label: string }[] = [
+  { value: 'landing', label: 'Landing' },
+  { value: 'normalized', label: 'Normalized' },
+  { value: 'consumption', label: 'Consumption' },
+];
+
+/** Same cap the backend applies (BA-318). */
+export const DATASOURCE_DESCRIPTION_MAX = 500;
+
 export interface DatabricksConfig {
   host: string;
   token: string;
@@ -91,6 +103,10 @@ export interface Datasource {
   summary: string;
   /** Secrets arrive masked (••••••••); send them back unchanged to keep them. */
   config: DatasourceConfig;
+  /** Absent = no layer. */
+  layer?: DatasourceLayer;
+  /** Absent = no description. */
+  description?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -139,6 +155,10 @@ export interface InventoryResult {
   fetchedAt?: string;
   /** True when the backend served its stored snapshot instead of a live walk. */
   cached?: boolean;
+}
+
+export function layerLabel(layer: DatasourceLayer | undefined): string {
+  return DATASOURCE_LAYERS.find((l) => l.value === layer)?.label ?? '';
 }
 
 export function kindLabel(kind: DatasourceKind | undefined): string {

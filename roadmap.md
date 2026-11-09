@@ -1274,6 +1274,17 @@ A synthetic Mercer US Health & Benefits world as a seedable Testing Data fixture
 - **Acceptance:** the panel lists "US Health" with `0/45 entities`; loading it creates and seeds `us_health` and reports `45/45 entities`; the dataset has sample values and the declared join references; re-running the generator reproduces the seed byte for byte; `check-specs.py`, unit tests, lint, builds and the Testing Data Playwright scenarios are green.
 - **Notes:** data model approved on 2026-11-04 ([review page](https://claude.ai/artifact/4msSW6rkyot8Ai8Zvdr9yc)); research notes from public Mercer, KFF, SOA and state-law sources. Built by five parallel units (generator and seed, signal tests, defect and structure tests, app-level load, specs). Passed the acceptance gate on 2026-11-04. Evidence: [evidence/1.19.1/](evidence/1.19.1/).
 
+### Milestone 1.20 — Datasource metadata ([BA-318](https://halo-powered.atlassian.net/browse/BA-318))
+
+Users tag each datasource with its data layer and a description, so similar connections can be told apart. Extends the datasources capability (Milestone 1.5). No ADR: two optional fields on the existing datasource document. All stories are built on the branch `feat/BA-318-datasource-metadata` and ship as one PR. Epic spec: [specs/epics/BA-318/spec.md](specs/epics/BA-318/spec.md).
+
+#### 1.20.1 — Layer and description on the datasource form and list ([BA-319](https://halo-powered.atlassian.net/browse/BA-319))  `🚧 In progress`
+- **Intent:** when adding or editing a datasource, the user can set its layer (Landing, Normalized, Consumption) and a description, and sees both in the Datasources list.
+- **Scope:** optional `layer` and `description` on the datasource document, the API and the form (all kinds); a layer badge and the description in the list; saving an edit whose connection settings are unchanged needs no re-test; a save that omits the fields keeps the stored values (Testing Data reloads); datasources spec R2/R13 and UI, api.md 2.2, data-model, glossary, a new Gherkin scenario.
+- **Out of scope:** using the fields in agents, dataset pickers or session headers; filtering or grouping by layer; custom layers.
+- **Acceptance:** see the epic spec's Acceptance: create and edit round-trip both fields; a metadata-only edit saves without a test; old datasources load with Layer "None"; a Testing Data reload keeps them; an unknown layer is rejected; unit tests, check-specs, lint, builds and the Datasources Playwright scenarios are green.
+- **Notes:** decisions settled with the user on 2026-11-09: both fields optional, no re-test for metadata, shown in the list only. Planned by Opus, implemented by 12 Sonnet units at the user's request.
+
 ---
 
 ## Release 2 — Multi-user  (no target date yet)

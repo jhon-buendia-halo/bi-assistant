@@ -1,6 +1,7 @@
 import type {
   DatasourceConfig,
   DatasourceKind,
+  DatasourceLayer,
   RestApiConfig,
 } from '../entities/datasource.entity';
 
@@ -13,6 +14,10 @@ export class TestDatasourceDto {
 
 export class SaveDatasourceDto extends TestDatasourceDto {
   name: string;
+  /** Omitted (undefined) = keep the stored layer; null or '' = clear it. */
+  layer?: DatasourceLayer | null | '';
+  /** Omitted (undefined) = keep the stored description; null or blank = clear it. */
+  description?: string | null;
 }
 
 export class DiscoverRestEndpointsDto {
