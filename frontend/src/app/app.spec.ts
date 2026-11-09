@@ -21,6 +21,15 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
+  it('lets the user select text anywhere (BA-326)', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    const root = (fixture.nativeElement as HTMLElement)
+      .firstElementChild as HTMLElement;
+    expect(root.classList.contains('select-none')).toBeFalse();
+    expect(getComputedStyle(root).userSelect).not.toBe('none');
+  });
+
   it('should render the navigation rail', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();

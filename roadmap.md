@@ -1306,6 +1306,13 @@ Users tag each schema in a dataset with its data layer and a description, and th
 - **Acceptance:** the stream carries `tool-progress` frames in order between `tool` and `tool-result` (API-level E2E on the World Cup sample); the Thinking block row shows the latest message; unit tests for the tool, the stream loop and the chat; api.md 3.1, ui.md, sessions-chat, data-readiness and agents.md updated.
 - **Notes:** design by the Fable analysis on 2026-11-09 (Mastra 1.66 `writer.custom` reaches `fullStream`; fallback: a callback on the request context).
 
+#### 1.20.5 — Let users select and copy any text in the app ([BA-326](https://halo-powered.atlassian.net/browse/BA-326))  `🚧 In progress`
+- **Intent:** the user can select any text in the app (chat answers, tables, panels, the readiness scorecard) and copy it.
+- **Scope:** remove the root `user-select: none`; keep it only on the Electron drag region, during the right-panel splitter drag and on a few click-to-toggle headers; ui.md's open question resolved.
+- **Out of scope:** new Copy buttons; changing what the existing Copy buttons copy.
+- **Acceptance:** text in a chat answer, a result table and the readiness scorecard can be selected and copied; dragging the splitter selects nothing; buttons and toggles work; app unit test and layout/accessibility Playwright scenarios green.
+- **Notes:** requested by the user on 2026-11-09; added to this epic and branch like the other stories.
+
 ---
 
 ## Release 2 — Multi-user  (no target date yet)

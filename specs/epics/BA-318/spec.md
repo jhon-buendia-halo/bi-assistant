@@ -38,6 +38,7 @@ When building or editing a dataset, users can say what each **schema** in it is 
 | [BA-322](https://halo-powered.atlassian.net/browse/BA-322) (Bug) | Data Readiness fails on a Databricks host saved with `https://` | 1.20.2 |
 | [BA-323](https://halo-powered.atlassian.net/browse/BA-323) | Faster Data Readiness assessments | 1.20.3 |
 | [BA-324](https://halo-powered.atlassian.net/browse/BA-324) | Live progress while a Data Readiness assessment runs | 1.20.4 |
+| [BA-326](https://halo-powered.atlassian.net/browse/BA-326) | Let users select and copy any text in the app | 1.20.5 |
 
 ## Specs touched
 

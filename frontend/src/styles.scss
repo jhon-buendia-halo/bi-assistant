@@ -32,6 +32,8 @@ body {
 // Electron window dragging (title bar is hidden)
 .app-drag {
   -webkit-app-region: drag;
+  // A window drag region is not text to select (BA-326).
+  user-select: none;
 }
 
 .app-drag button,
