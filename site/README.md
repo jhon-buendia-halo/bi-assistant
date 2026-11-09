@@ -48,8 +48,11 @@ Override the project or hostname with `CF_PAGES_PROJECT` / `CUSTOM_DOMAIN`.
 
 ## Downloads
 
-The download buttons link to this site's own routes — `/download/mac-arm64`,
-`/download/mac-x64`, `/download/win-x64` — not to versioned GitHub URLs. **A new
+The page offers one download, Windows x64 (BA-304): only the Windows installer
+is built since BA-302. Its button links to this site's own route,
+`/download/win-x64`, not to a versioned GitHub URL. `/download/mac-arm64` and
+`/download/mac-x64` still exist, unlinked, so old links keep resolving to the
+last macOS installers (v0.13.1). **A new
 release needs no edit here**: the route resolves the newest published installer
 and redirects to it.
 
@@ -70,8 +73,8 @@ leaves the edge, and the installer streams from GitHub's CDN rather than through
 a Worker.
 
 Per platform it picks the newest release that actually carries that installer,
-so a Windows-only build (as v0.10.1 was) leaves the macOS buttons pointing at
-the last release that had them, instead of breaking. When a platform lags the
+so a Windows-only release leaves the macOS routes pointing at the last release
+that had them (v0.13.1), instead of breaking. When a platform lags the
 headline release, its card names its own version.
 
 ### The token

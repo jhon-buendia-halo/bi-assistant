@@ -4,7 +4,7 @@ Platforms, storage, security, privacy, limits, accessibility, reliability and ob
 
 ## 1. Platforms and delivery
 
-- N1. The product SHALL ship as a desktop app for macOS arm64, macOS x64 and Windows x64.
+- N1. The product SHALL ship as a desktop app for Windows x64. Since 2026-11-04 (BA-302) no macOS installer is built or published; the last one is v0.13.1.
 - N2. The product SHALL also run in a browser through an npm package with one command, on Node.js 22.13.0 or later. It serves the same UI and API from one origin.
 - N3. The web server SHALL bind to `127.0.0.1` by default and listen on port 3000. If port 3000 is busy and no port was requested, it SHALL fall back to a free port. If an explicitly requested port is busy, it SHALL exit with code 1. Another interface MAY be bound only by an explicit choice (`--host`, N67).
 - N4. The desktop window SHALL open at 1440 x 900 and SHALL NOT shrink below 960 x 600.

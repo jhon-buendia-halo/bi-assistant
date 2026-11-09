@@ -31,6 +31,7 @@ a{color:inherit;text-decoration:none}
 .download{position:relative;overflow:hidden;padding:104px 0;border-top:1px solid var(--hairline)}
 .download-inner{position:relative;z-index:1}
 .dl-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:44px}
+.dl-grid-single{grid-template-columns:minmax(0,420px)}
 .dl-card{display:flex;flex-direction:column;gap:14px;background:var(--ink-2);border:1px solid var(--hairline);border-radius:var(--radius);padding:30px 26px}
 .dl-os{font-size:20px;font-weight:700}
 .dl-meta{color:var(--text-mute);font-size:14.5px}
