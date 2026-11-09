@@ -14,6 +14,22 @@ Entry template:
 
 ---
 
+## 2026-11-09 — Merge of `main` (v0.40.0) into the BA-9, BA-123 and BA-124 branches (PRs #81, #61, #60)
+
+### What went well
+- `git merge-tree` with diff3 output showed the conflicts in the registry and the E2E list had an empty base: two additions in one place, so both were kept without reading line by line.
+- Word-level diffs of each side against the base for R2 to R4 showed the edits fell in different places, so `main`'s were applied onto BA-9's text and each insert was checked to be present afterwards.
+- Reading what merged cleanly near the conflicts found `data-model.md` 4.10's seed list missing `main`'s new seed.
+
+### What went wrong
+- My one-command redirect `2>&1 > file` sent Jest's summary (stderr) to the terminal, not the file, so the full suite was run a second time to record it.
+- The scratchpad scripts of 2026-11-04 were gone; the changelog resolver was written again.
+- `main` and BA-9 now both have a seed numbered `004_`. Nothing reads the number, but nobody checked the numbering when the two seeds were written.
+
+### What to do differently
+- Write `> file 2>&1`, never `2>&1 > file`, when a run's summary is evidence.
+- When a branch adds numbered files to a folder `main` also adds to (seeds, migrations), check the numbers in the merge-tree before resolving, as for ADRs.
+
 ## 2026-11-04 — 1.18.2 Product page offers only the Windows installer (BA-302)
 
 ### What went well

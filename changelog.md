@@ -2,6 +2,13 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-09
+
+### Changed
+- **`main` (v0.40.0) merged into the BA-9 branch** (epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9), PR #81), and into the Knowledge Store PRs #60 ([BA-123](https://halo-powered.atlassian.net/browse/BA-123)) and #61 ([BA-124](https://halo-powered.atlassian.net/browse/BA-124)). The branch now carries `main`'s US Health Testing Data sample (BA-305) and Windows-only builds (BA-302).
+  - **Testing Data** ([testing-data](specs/capabilities/testing-data/spec.md) R2 to R4, the sample-list scenario, `testing-data.spec.ts`): US Health sits next to BA-9's synthetic domain samples, after Intellify in the panel. [data-model.md](specs/system/data-model.md) 4.10 lists its seed, `004_us_health.sql.gz`, beside `004_health_insurance.sql`.
+  - Evidence: [evidence/merge-main-2026-11-09/](evidence/merge-main-2026-11-09/): backend 180 suites, 3088 tests; Testing Data E2E 4 of 4 on web.
+
 ## 2026-11-04
 
 ### Added

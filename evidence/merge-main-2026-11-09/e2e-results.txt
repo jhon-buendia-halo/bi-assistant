@@ -1,0 +1,9 @@
+# E2E, web target: E2E_SKIP_DOCKER=1 npm run test:e2e -- e2e/testing-data.spec.ts
+# merge commit 5bacadbc; shared Postgres on 55432
+
+Running 4 tests using 1 worker
+  ✓  1 [web] › e2e/testing-data.spec.ts:83:5 › lists the bundled samples and what is loaded (1.5s)
+  ✓  2 [web] › e2e/testing-data.spec.ts:119:7 › loads the Intellify sample into a new database › seeds it, registers it and reports 49/49 (1.9s)
+  ✓  3 [web] › e2e/testing-data.spec.ts:180:7 › loads the US Health sample into a new database › seeds it, registers it and reports 45/45 (6.0s)
+  ✓  4 [web] › e2e/testing-data.spec.ts:233:5 › registers the Intellify RFP API (1.4s)
+  4 passed (11.1s)

@@ -1,0 +1,25 @@
+# Backend checks after merging main v0.40.0 (5bacadbc), 2026-11-09
+
+## npx tsc -p tsconfig.build.json --noEmit
+exit 0, no output
+
+## npx prettier --check src/modules/testing-data/fixtures/registry.ts ../frontend/e2e/testing-data.spec.ts
+All matched files use Prettier code style!
+
+## npx eslint src/modules/testing-data/fixtures/registry.ts
+exit 0, no problems
+
+## npx jest src/modules/testing-data
+Test Suites: 7 passed, 7 total
+Tests:       271 passed, 271 total
+
+## npx jest (full)
+Test Suites: 180 passed, 180 total
+Tests:       3088 passed, 3088 total
+Time:        2.439 s, estimated 3 s
+
+## python3 scripts/check-specs.py
+ALL CHECKS PASSED (also on docs/BA-123-knowledge-store-research b3a494af and docs/BA-124-knowledge-store-execution-plan e6228590)
+
+## frontend: npx tsc -p e2e/tsconfig.json --noEmit; npx playwright test --list
+exit 0; Total: 392 tests in 26 files
