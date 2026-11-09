@@ -119,6 +119,21 @@ export interface ReadinessReport extends EngineResult {
   /** ISO time the assessment ran (the engine's `now`). */
   generatedAt: string;
   sessionId?: string;
+  /**
+   * BA-323 / ADR-0033: entities whose columns were not profiled, in profile
+   * order. Built by the service from `EntityProfile.notProfiled` (the engine
+   * stays pure). Absent when every entity was profiled, and on older reports.
+   */
+  notProfiled?: NotProfiledEntity[];
+}
+
+/** BA-323: one entity left out of column profiling, and why. */
+export interface NotProfiledEntity {
+  /** `namespace.name`, as in `Finding.entity`. */
+  entity: string;
+  reason: 'too-large' | 'timed-out';
+  /** The row count that triggered `too-large`, when known. */
+  rowCount?: number;
 }
 
 /** Compact list row for `GET /data-readiness/assessments`. */
@@ -145,6 +160,8 @@ export interface ReadinessSummary {
   maturity: Maturity;
   dimensionScores: DimensionScore[];
   findingCount: number;
+  /** BA-323: entities not column-profiled (same list as the report's). */
+  notProfiled?: NotProfiledEntity[];
   /** At most 20, most severe first, then in report order. */
   topFindings: Pick<
     Finding,
