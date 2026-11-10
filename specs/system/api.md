@@ -1,10 +1,10 @@
 # API contract
 
-The complete contract between the renderer (or any HTTP client) and the backend, plus the desktop IPC bridge, the CLI and the environment. Persisted document shapes (session, dataset, datasource, metric, knowledge snippet, verified query, LLM settings, eval run) live in [data-model.md](data-model.md); this file links to them and only restates a shape where the wire format differs from the stored one.
+The complete contract between the renderer (or any HTTP client) and the backend, plus the desktop IPC bridge, the CLI and the environment. Persisted document shapes (session, dataset, datasource, metric, ontology item, verified query, LLM settings, eval run) live in [data-model.md](data-model.md); this file links to them and only restates a shape where the wire format differs from the stored one.
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **80 HTTP route handlers** across 12 app controllers (sessions 17, deep analysis 3, agents 17, skills 9, datasources 6, knowledge 6, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2), plus the 33 routes of the embedded Intellify RFP API (2.16). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **84 HTTP route handlers** across 13 app controllers (sessions 17, deep analysis 3, agents 17, skills 9, datasources 6, ontology 6, personas 4, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2), plus the 33 routes of the embedded Intellify RFP API (2.16). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
 
 ---
 
@@ -42,7 +42,7 @@ interface ActionResult { ok: boolean; message: string; /* + endpoint-specific pa
 - On success: `{ ok: true, message: "<human sentence>", ...payload }`.
 - `message` is user-displayable and clients show it verbatim in toasts or inline errors. Exact success sentences are listed per endpoint because UI tests assert some of them.
 
-**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the deep-analysis download, and the whole knowledge controller.
+**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the deep-analysis download, and the whole ontology and personas controllers.
 
 ```ts
 interface HttpErrorBody { statusCode: number; message: string | string[]; error: string }   // NestJS default
@@ -51,7 +51,7 @@ interface HttpErrorBody { statusCode: number; message: string | string[]; error:
 | Status | When |
 |---|---|
 | 400 Bad Request | Validation failure thrown by a service (`BadRequestException`): missing/empty field, bad enum value, unknown version. |
-| 404 Not Found | Unknown session/agent/snippet/visual/report, or an unmatched route (`Cannot GET /x`). |
+| 404 Not Found | Unknown session/agent/ontology item/visual/report, or an unmatched route (`Cannot GET /x`). |
 | 408 Request Timeout | A visual generation exceeded 120 s (`RequestTimeoutException`). Under Style A this surfaces as `ok:false`. |
 | 500 Internal Server Error | Any unhandled error (framework default body `{ statusCode: 500, message: "Internal server error" }`). |
 
@@ -59,14 +59,14 @@ Clients read the error text from `error.message` (Style B) or `body.message` wit
 
 ### 1.4 Success status codes
 
-POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56). GET/PUT/DELETE return **200**; `DELETE /knowledge/:id` returns **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
+POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56). GET/PUT/DELETE return **200**; `DELETE /ontology/:id` and `DELETE /personas/:id` return **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
 
 ### 1.5 Validation
 
 - There is **no global validation pipe** and no DTO validation library. DTO classes (`SaveDatasourceDto`, `SaveMetricDto`, ...) are plain TypeScript shapes; nothing rejects extra or mistyped fields at the edge.
 - Validation is done by services/controllers: fields are coerced defensively (`typeof x === 'string' ? x : ''`), trimmed, and checked with explicit `BadRequestException`s. Rules per endpoint are listed in section 2.
 - Unknown body fields are ignored. Missing body is treated as `{}`.
-- Query params are strings. Booleans are accepted only as the literal `"true"`. The knowledge list drops unrecognised filter values instead of rejecting them.
+- Query params are strings. Booleans are accepted only as the literal `"true"`. The ontology list drops unrecognised filter values instead of rejecting them.
 
 ### 1.6 CORS
 
@@ -103,7 +103,7 @@ The one exception is the Intellify RFP API (2.16), a separate NestJS application
 
 ## 2. Endpoints
 
-Legend for **FE**: whether the shipped frontend calls it. Document types referenced (`SessionDoc`, `ChatMessage`, `SessionVisualization`, `DatasetDoc`, `MetricDoc`, `KnowledgeSnippet`, `DatasourceView`, `CatalogInfo`, `LlmSettingsView`, `EvalRunView`) are defined in [data-model.md](data-model.md) and the shared ones in [section 2.10](#210-shared-wire-shapes).
+Legend for **FE**: whether the shipped frontend calls it. Document types referenced (`SessionDoc`, `ChatMessage`, `SessionVisualization`, `DatasetDoc`, `MetricDoc`, `OntologyItem`, `DatasourceView`, `CatalogInfo`, `LlmSettingsView`, `EvalRunView`) are defined in [data-model.md](data-model.md) and the shared ones in [section 2.10](#210-shared-wire-shapes).
 
 ### 2.1 Sessions
 
@@ -313,7 +313,7 @@ Controller prefix `/datasets`. Capability: datasets. Datasets are keyed by `name
 
 #### 23. `DELETE /datasets/:name`
 - Success: `{ ok:true, message:"Dataset \"<name>\" deleted" }`; if no dataset matched: `{ ok:false, message:"Dataset \"<name>\" not found" }`.
-- Does not cascade to sessions or knowledge that reference the name (G6).
+- Also deletes the ontology items whose `dataset` is that name (shared items stay; [data-model.md](data-model.md) 3.13). Does not cascade to sessions that reference the name (G6).
 
 ### 2.4 Metrics
 
@@ -646,48 +646,78 @@ Controller prefix `/sessions` (same prefix as 2.1, separate controller). Capabil
 - Errors (Style B): `400 "invalid deep analysis id"` (jobId must match `^[a-zA-Z0-9-]+$`), `404 "No deep analysis report for <jobId>"`, session not found.
 - Reads the stored report from the workspace (`reports/` directory) by id, independent of in-memory state.
 
-### 2.8 Knowledge
+### 2.8 Ontology
 
-Controller prefix `/knowledge`. Capability: knowledge. **Style B throughout** (real status codes, bare bodies). Shape `KnowledgeSnippet` in data-model.
+No controller prefix: the routes sit under `/datasets/:name/ontology` and `/ontology/:id`. Capability: dataset-ontology. **Style B throughout** (real status codes, bare bodies). Shape `OntologyItem` in data-model (3.9). The routes replace the former `/knowledge` routes with the same numbers; no aliases remain (ADR-0036).
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
-| 49 | `GET /knowledge` | List snippets (filterable) | yes |
-| 50 | `POST /knowledge` | Create a user snippet | yes |
-| 51 | `PATCH /knowledge/:id` | Partial update | yes |
-| 52 | `DELETE /knowledge/:id` | Delete (204) | yes |
-| 53 | `POST /knowledge/bootstrap` | Draft snippets from a dataset (one shot) | **no** |
-| 54 | `POST /knowledge/bootstrap/stream` | Same run, streamed progress (SSE) | yes |
+| 49 | `GET /datasets/:name/ontology` | List a dataset's ontology (its items plus shared ones; filterable) | yes |
+| 50 | `POST /datasets/:name/ontology` | Create a user item in the dataset (or shared) | yes |
+| 51 | `PATCH /ontology/:id` | Partial update | yes |
+| 52 | `DELETE /ontology/:id` | Delete (204) | yes |
+| 53 | `POST /datasets/:name/ontology/bootstrap` | Draft ontology items from the dataset (one shot) | **no** |
+| 54 | `POST /datasets/:name/ontology/bootstrap/stream` | Same run, streamed progress (SSE) | yes |
 
-Route order: `bootstrap` and `bootstrap/stream` are POST-only literals and do not collide with `PATCH/DELETE :id`.
+Route order: `/datasets/:name/ontology...` and `/ontology/:id` do not collide with the datasets routes (2.3).
 
-#### 49. `GET /knowledge`
-- Query (all optional, lenient: an unrecognised value is dropped, not rejected): `datasetId` (that dataset's snippets **plus every global one**), `kind` (`instruction | term | default_filter`), `source` (`user | mined`), `enabled` (`true | false`).
-- Response `200`: **`KnowledgeSnippet[]`** (a bare array, unlike the other list endpoints), `updatedAt` descending.
+#### 49. `GET /datasets/:name/ontology`
+- Query (all optional, lenient: an unrecognised value is dropped, not rejected): `kind` (`concept | relation | constraint | instruction`), `source` (`user | mined`), `enabled` (`true | false`).
+- Response `200`: **`OntologyItem[]`** (a bare array, unlike the other list endpoints): the items with `dataset === name` **plus every shared item** (`dataset: null`), `updatedAt` descending.
+- Errors: `404 "Dataset \"<name>\" not found"`.
 
-#### 50. `POST /knowledge`
-- Body: `{ kind; title: string; body: string; scope?: { datasetId?: string; datasourceId?: string } | null; synonyms?: string[]; entities?: string[]; enabled?: boolean }`.
-- Validation: `400` `"kind must be one of: instruction, term, default_filter"`, `"title is required"`, `"body is required"` (title/body trimmed). `scope` is normalised: non-object, or an object with neither id, becomes `null` (global). `synonyms`/`entities` are trimmed and de-blanked. `enabled` defaults to `true`.
-- Response `201`: the created `KnowledgeSnippet` (`source:"user"`, `id` generated, timestamps set).
+#### 50. `POST /datasets/:name/ontology`
+- Body: `{ kind; name: string; description?: string; enabled?: boolean; shared?: boolean }` plus the kind's fields: concept `synonyms?: string[]`, `mappings?: { entity: string; column?: string; expression?: string }[]`; relation `from`, `type`, `to?`, `metricId?`; constraint `predicate`, `conceptId?`, `entities?`; instruction `entities?`. Fields that do not belong to the kind are dropped; strings are trimmed and list items trimmed and de-blanked. `enabled` defaults to `true`; `shared: true` stores `dataset: null`.
+- Validation (`400`, messages exact): `"kind must be one of: concept, relation, constraint, instruction"`; `"name is required"`; concept and instruction `"description is required"`; constraint `"predicate is required"`; concept mapping `"each mapping needs an entity"` and, for an item of a dataset, `"Entity \"<entity>\" is not in dataset \"<name>\""` (a shared item accepts any entity); relation `"from is required"`, `"type must be one of: is-a, part-of, has-many, related-to, measured-by"`, `"to is required"` (not for `measured-by`), `"metricId is required for measured-by"`, `"Concept \"<id>\" is not in this ontology"` (a `from`, `to` or constraint `conceptId` that is not a concept of the same dataset or a shared concept) and `"Metric \"<id>\" not found"`. `404 "Dataset \"<name>\" not found"`.
+- Response `201`: the created `OntologyItem` (`source:"user"`, `id` generated, timestamps set).
 
-#### 51. `PATCH /knowledge/:id`
-- Body: any subset of the create fields. **Only fields present on the body are applied**; absent fields are untouched. A present `scope: null` makes the snippet global; a present `synonyms: []` clears them.
-- Validation: `400` on invalid `kind`, `"title must not be empty"`, `"body must not be empty"`. `404 "Knowledge snippet <id> not found"`.
-- Response `200`: the updated `KnowledgeSnippet`.
+#### 51. `PATCH /ontology/:id`
+- Body: any subset of the create fields. **Only fields present on the body are validated and applied**; absent fields are untouched, `updatedAt` is restamped. `kind` cannot change (`400 "kind cannot be changed"` when it differs). A present `synonyms: []`, `mappings: []` or `entities: []` clears them.
+- Validation: `400` `"name must not be empty"`, `"description must not be empty"` (concept, instruction), `"predicate must not be empty"` (constraint) and the mapping and relation messages of 50. `404 "Ontology item <id> not found"`.
+- Response `200`: the updated `OntologyItem`.
 
-#### 52. `DELETE /knowledge/:id`
-- Response `204` (empty). `404 "Knowledge snippet <id> not found"`.
+#### 52. `DELETE /ontology/:id`
+- Response `204` (empty). `404 "Ontology item <id> not found"`.
+- Deleting a concept also deletes the relations whose `from` or `to` is that concept and clears `conceptId` on the constraints that name it.
 
-#### 53. `POST /knowledge/bootstrap`
-- Body: `{ datasetId: string }` (the dataset's **name**).
-- Response `201`: `{ created: KnowledgeSnippet[] }`.
-- Errors: `400 "datasetId is required"`, `400 "Dataset \"<id>\" not found"`, `400 "Knowledge bootstrap failed: <reason>"` (LLM error, malformed output, no usable drafts). Never a raw 500 by design.
+#### 53. `POST /datasets/:name/ontology/bootstrap`
+- No body.
+- Response `201`: `{ created: OntologyItem[] }`.
+- Errors: `400 "dataset is required"`, `400 "Dataset \"<name>\" not found"`, `400 "Ontology bootstrap failed: <reason>"` (LLM error, malformed output), `400 "Ontology bootstrap failed: the bootstrap agent returned no usable drafts"`. Never a raw 500 by design.
 - Not called by the frontend; the streamed variant (54) replaced it for UX (G3).
 
-#### 54. `POST /knowledge/bootstrap/stream`
-See [section 3.4](#34-knowledge-bootstrap-stream-post-knowledgebootstrapstream).
+#### 54. `POST /datasets/:name/ontology/bootstrap/stream`
+See [section 3.4](#34-ontology-bootstrap-stream-post-datasetsnameontologybootstrapstream).
 
-Bootstrap semantics shared by 53 and 54: the `knowledge-bootstrap` agent drafts kinds `instruction | term | default_filter` from the dataset's stored schema snapshot plus a sample of rows (see [agents.md](agents.md)); at most `MAX_BOOTSTRAP_DRAFTS` drafts are kept; a draft is skipped when its title (case-insensitive) already exists for that dataset or in the same batch; survivors are persisted with `scope: { datasetId }`, `source: "mined"`, **`enabled: false`** for human review.
+Bootstrap semantics shared by 53 and 54: the `knowledge-bootstrap` agent (shown as Ontology Bootstrap) drafts concepts, relations, constraints and instructions from the dataset's stored schema snapshot, sample rows, column references and governed metrics (see [agents.md](agents.md) 2.5); at most 15 drafts are kept; concepts are inserted first, relations resolve against concepts and metrics by name and are dropped when unresolved, mappings to entities outside the dataset are dropped, and a draft is skipped when its name (case-insensitive) already exists for the same kind in the dataset or earlier in the run; survivors are persisted with `dataset: <name>`, `source: "mined"`, **`enabled: false`** for human review.
+
+### 2.8a Personas
+
+Controller prefix `/personas`. Capability: [user-personas](../capabilities/user-personas/spec.md). **Style B throughout** (real status codes, bare bodies). Shape `Persona` in data-model (3.9a): `{ id, name, role, description, goals, typicalQuestions: string[], expertise: "novice"|"intermediate"|"expert", answerStyle, createdAt, updatedAt }`.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 49a | `GET /personas` | List personas sorted by name | yes |
+| 49b | `POST /personas` | Create a persona | yes |
+| 49c | `PATCH /personas/:id` | Partial update | yes |
+| 49d | `DELETE /personas/:id` | Delete (204) | yes |
+
+#### 49a. `GET /personas`
+- Response `200`: **`Persona[]`** (a bare array), sorted by `name` ignoring case.
+
+#### 49b. `POST /personas`
+- Body: `{ name: string; role?: string; description?: string; goals?: string; typicalQuestions?: string[]; expertise?: "novice"|"intermediate"|"expert"; answerStyle?: string }`. Every string is trimmed.
+- Validation `400` (messages exact): `"Name is required"`, `"Name is at most 80 characters"`, `"Role is at most 80 characters"`, `"Description is at most 2,000 characters"`, `"Goals are at most 2,000 characters"`, `"Typical questions must be an array"`, `"At most 10 typical questions"` (blank questions are dropped first), `"A typical question is at most 300 characters"`, `"Expertise must be novice, intermediate or expert"`, `"Answer style is at most 500 characters"`. `expertise` defaults to `intermediate`; omitted strings default to `""` and `typicalQuestions` to `[]`.
+- `409 "A persona named \"<name>\" already exists"` when another persona has the name, ignoring case.
+- Response `201`: the created `Persona` (`id` generated, timestamps set).
+
+#### 49c. `PATCH /personas/:id`
+- Body: any subset of the create fields. **Only fields present on the body are validated and applied**; omitted fields are kept and `updatedAt` is restamped. Same `400` and `409` messages as create (a persona renamed to its own name, in any case, is not a conflict).
+- `404 "Persona not found"`.
+- Response `200`: the updated `Persona`.
+
+#### 49d. `DELETE /personas/:id`
+- Response `204` (empty). `404 "Persona not found"`.
 
 ### 2.9 Testing data
 
@@ -974,7 +1004,7 @@ Controller prefix `/data-readiness`. Capability: [data-readiness](../capabilitie
 
 ## 3. Streaming and long-running work
 
-Two Server-Sent-Events endpoints exist (chat, knowledge bootstrap). Both are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. Two background-job patterns use start + poll instead of SSE (deep analysis, eval runs).
+Two Server-Sent-Events endpoints exist (chat, ontology bootstrap). Both are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. Two background-job patterns use start + poll instead of SSE (deep analysis, eval runs).
 
 ### 3.1 Chat stream: `POST /sessions/:id/messages/stream`
 
@@ -1060,14 +1090,14 @@ Pattern: **start, poll, list, download, delete**. Endpoints 36-40.
 - On completion the run is compared with the most recent previous completed run for the same agent, datasource and datasets, and `comparison` (regressions, improvements, unchanged by case id) is attached; a comparison failure never fails the run.
 - Cannot delete a run while it is `running`.
 
-### 3.4 Knowledge bootstrap stream: `POST /knowledge/bootstrap/stream`
+### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
 
-**Request.** `{ datasetId: string }` (dataset name). Same headers and framing as 3.1 (`data: <JSON>\n\n`, HTTP 200 once started; even `datasetId is required` arrives as an `error` event).
+**Request.** No body; the dataset is the `:name` path segment. Same headers and framing as 3.1 (`data: <JSON>\n\n`, HTTP 200 once started; even `dataset is required` or `Dataset "<name>" not found` arrives as an `error` event).
 
 | `type` | Payload | Meaning |
 |---|---|---|
-| `progress` | `{ type:"progress", key: "dataset"\|"schema"\|"sample"\|"draft"\|"save", message: string }` | A stage started. Messages: `Opening dataset “<name>”`, `Reading schema — <n> table(s)`, `Sampling rows — <done> of <total> table(s)` (repeats as tables complete), `Drafting instructions, terms and default filters`, `Saving <n> draft(s) for review`. |
-| `done` | `{ type:"done", created: KnowledgeSnippet[] }` | **Terminal, success.** Persisted drafts (disabled, `source:"mined"`). May be empty. |
+| `progress` | `{ type:"progress", key: "dataset"\|"schema"\|"sample"\|"draft"\|"save", message: string }` | A stage started. Messages: `Opening dataset “<name>”`, `Reading schema — <n> table(s)`, `Sampling rows — <done> of <total> table(s)` (repeats as tables complete), `Drafting concepts, relations, constraints and instructions`, `Saving <n> draft(s) for review`. |
+| `done` | `{ type:"done", created: OntologyItem[] }` | **Terminal, success.** Persisted drafts (disabled, `source:"mined"`). May be empty. |
 | `error` | `{ type:"error", message: string }` | **Terminal, failure.** Reasons as in endpoint 53. |
 
 Note the error text is in **`message`** here but in **`content`** for the chat stream. Clients treat end-of-stream without a terminal event as failure. The shipped client's fallback texts: `"Backend unreachable"`, `"Could not generate suggestions (<status>)"`, `"Could not generate suggestions — try again shortly"`.
@@ -1258,12 +1288,12 @@ No environment variables. The only runtime switch is the page protocol (`file:` 
 
 - **G1. Desktop base URL is hardcoded.** The renderer uses `http://localhost:3000` under `file://`; the preload bridge does not expose the port, so a non-default `BACKEND_PORT` breaks the desktop app (roadmap 1.7.20, BA-109). A rebuild should expose the port via the bridge.
 - **G2. `POST /sessions/:id/messages` is unused** by the frontend and is a degraded duplicate of the streaming path (no tool-data capture, clarification, grounding guard or careful mode). Open question: keep as a public non-streaming API or remove.
-- **G3. `POST /knowledge/bootstrap` is unused** (superseded by the streamed variant); it shares the service call.
+- **G3. `POST /datasets/:name/ontology/bootstrap` is unused** (superseded by the streamed variant); it shares the service call.
 - **G4. Eval run recovery.** In-flight run state lives in memory with write-through persistence per question. Open question: what status a run left `running` by a crash shows after restart (no reconciliation code was found).
 - **G5. Frontend type drift.** The frontend `EvalRunView` omits `comparison` (present on the wire, only used in the Markdown report). The frontend `getEvalRun` result is a loose merge type.
-- **G6. No cascade.** Deleting a datasource leaves datasets pointing at it; deleting a dataset leaves sessions/knowledge that name it. Behaviour of such dangling references is not specified in the API.
+- **G6. No cascade.** Deleting a datasource leaves datasets pointing at it; deleting a dataset deletes its own ontology items but leaves sessions that name it. Behaviour of such dangling references is not specified in the API.
 - **G7. `POST /sessions` does not verify the named datasets exist.** Open question whether that is intended.
-- **G8. Error-style inconsistency.** Style A (`200 { ok:false }`) vs Style B (real 4xx) is endpoint-specific and also differs in list shapes (`{ sessions }`, `{ datasources }`, `{ metrics }`, `{ datasets }`, bare array for knowledge, bare `SessionDoc`). Several read endpoints (`GET /datasources`, eval-run listing) can still return a framework 500.
+- **G8. Error-style inconsistency.** Style A (`200 { ok:false }`) vs Style B (real 4xx) is endpoint-specific and also differs in list shapes (`{ sessions }`, `{ datasources }`, `{ metrics }`, `{ datasets }`, bare array for ontology, bare `SessionDoc`). Several read endpoints (`GET /datasources`, eval-run listing) can still return a framework 500.
 - **G9. Request body size.** No explicit JSON body limit is configured, so the framework default (about 100 kB) applies; large dataset snapshots in `POST /datasets` could exceed it. Not verified against a real large dataset.
 - **G10. Desktop backend bind address.** `main.ts` calls `createApp` without a host, so the Electron-spawned backend listens on **all interfaces** with CORS enabled and no authentication (G14); only the CLI binds `127.0.0.1` by default. Kept by the user's choice (ADR-0030).
 - **G11. `message` timing on feedback.** `POST …/messages/feedback` with `up` reports `"Answer saved as a verified query"` even when the answer had no SQL and nothing was saved.

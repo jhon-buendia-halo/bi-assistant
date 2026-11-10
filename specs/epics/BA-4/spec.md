@@ -18,14 +18,16 @@ Curated knowledge the assistant treats as authoritative: business-glossary terms
 ## Stories
 | Story | Summary | Roadmap feature |
 |---|---|---|
-| [BA-78](https://halo-powered.atlassian.net/browse/BA-78) | Research and ontology design | 1.3.1 |
-| [BA-79](https://halo-powered.atlassian.net/browse/BA-79) | Ontology model, knowledge graph and bootstrap | 1.3.2 |
+| [BA-78](https://halo-powered.atlassian.net/browse/BA-78) | Research and ontology design (moved to BA-320 as 1.21.7–1.21.9 on 2026-11-09) | 1.3.1 |
+| [BA-79](https://halo-powered.atlassian.net/browse/BA-79) | Ontology model, knowledge graph and bootstrap (moved to BA-320 as 1.21.7–1.21.9 on 2026-11-09) | 1.3.2 |
 | [BA-80](https://halo-powered.atlassian.net/browse/BA-80) | Ontology-grounded retrieval and SQL generation, measured by evals | 1.3.3 |
 | [BA-81](https://halo-powered.atlassian.net/browse/BA-81) | Curation UI, feedback learning and provenance | 1.3.4 |
 
+**Moved on 2026-11-09:** at the user's request roadmap stories 1.3.1 and 1.3.2 (BA-78, BA-79) were built on BA-320 as 1.21.7–1.21.9, "Knowledge becomes each dataset's ontology" ([dataset-ontology](../../capabilities/dataset-ontology/spec.md), ADR-0036): the per-dataset ontology of concepts, relations, constraints and instructions, its tab in the dataset editor and its bootstrap. Stories 1.3.3 (ontology-grounded retrieval and SQL generation) and 1.3.4 (curation UI, feedback learning and provenance) remain on this epic and build on that ontology.
+
 ## Specs touched
-- Capabilities: [knowledge](../../capabilities/knowledge/spec.md) (concept/relation model, retrieval, curation), [verified-queries](../../capabilities/verified-queries/spec.md) and [metrics](../../capabilities/metrics/spec.md) (linked to concepts), [sessions-chat](../../capabilities/sessions-chat/spec.md) (retrieval, provenance in the answer panel), [agents-evals](../../capabilities/agents-evals/spec.md) (knowledge on/off eval).
-- System: [data-model](../../system/data-model.md) (concept/relation collections, snippet migration), [api](../../system/api.md) (knowledge endpoints), [agents](../../system/agents.md) (`knowledge-bootstrap`, `sql-verifier`, `sql-fixer`), [ui](../../system/ui.md) (curation surface). Needs an ADR (BA-78).
+- Capabilities: [dataset-ontology](../../capabilities/dataset-ontology/spec.md) (concept/relation model, retrieval, curation), [verified-queries](../../capabilities/verified-queries/spec.md) and [metrics](../../capabilities/metrics/spec.md) (linked to concepts), [sessions-chat](../../capabilities/sessions-chat/spec.md) (retrieval, provenance in the answer panel), [agents-evals](../../capabilities/agents-evals/spec.md) (knowledge on/off eval).
+- System: [data-model](../../system/data-model.md) (the `ontology_items` collection and migration M15, built), [api](../../system/api.md) (ontology endpoints, built), [agents](../../system/agents.md) (`knowledge-bootstrap`, `sql-verifier`, `sql-fixer`), [ui](../../system/ui.md) (curation surface). Needs an ADR (BA-78).
 
 ## Acceptance
 Per story, from Jira and the roadmap:
@@ -35,7 +37,7 @@ Per story, from Jira and the roadmap:
 - An analyst can fix a wrong answer by editing a concept and the next answer cites it (BA-81).
 
 ## Dependencies, risks and open questions
-- **Partly built already:** `backend/src/modules/knowledge` and `frontend/src/app/features/knowledge` exist (snippets of kind instruction / term / default_filter with scope, synonyms, entities, enabled flag, a `knowledge-bootstrap` agent, and a per-turn injected block). Open: which of BA-79 to BA-81 is genuinely new versus an extension of this?
-- BA-79 depends on BA-78; BA-80 depends on BA-79 and the golden dataset ([BA-9](../BA-9/spec.md)); BA-81's provenance display ties into [BA-12](../BA-12/spec.md).
+- **Built since:** the flat knowledge snippets became each dataset's ontology (concepts with column mappings, relations, constraints, instructions; shared items; bootstrap from schema, samples, references and metrics) under BA-320 (1.21.7–1.21.9), so BA-78 and BA-79 are delivered there. Open for BA-80 and BA-81: retrieval by question relevance, SQL checks against the ontology, feedback learning and provenance.
+- BA-80 depends on the ontology built in BA-320 (1.21.7) and the golden dataset ([BA-9](../BA-9/spec.md)); BA-81's provenance display ties into [BA-12](../BA-12/spec.md).
 - Depends on the DSL's logical references ([BA-2](../BA-2/spec.md)), which are not on `main` yet.
 - Assignee in Jira: Sergio Berrospi (epic); stories unassigned.

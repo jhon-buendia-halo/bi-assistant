@@ -54,7 +54,7 @@ Status and download
 - Endpoints under a session: start (POST with the question), status (GET by job id) and download (GET by job id, markdown attachment). See [../../system/api.md](../../system/api.md). Start and status always answer with a success flag and message; download returns the file or an HTTP error.
 - Job, status and report-reference shapes, the report file location and the message's report field: see [../../system/data-model.md](../../system/data-model.md). The plan and report output schemas (title; angles with title and question, 1 to 5 in the prompt; title, executive summary, report body) are specified in [../../system/agents.md](../../system/agents.md).
 - Agent: the assistant, called three ways (plan, investigate, write): see [../../system/agents.md](../../system/agents.md).
-- Related: [../sessions-chat/spec.md](../sessions-chat/spec.md) (composer, transcript), [../knowledge/spec.md](../knowledge/spec.md), [../metrics/spec.md](../metrics/spec.md), [../verified-queries/spec.md](../verified-queries/spec.md) (grounding blocks reused per call).
+- Related: [../sessions-chat/spec.md](../sessions-chat/spec.md) (composer, transcript), [../dataset-ontology/spec.md](../dataset-ontology/spec.md), [../metrics/spec.md](../metrics/spec.md), [../verified-queries/spec.md](../verified-queries/spec.md) (grounding blocks reused per call).
 
 ## UI
 

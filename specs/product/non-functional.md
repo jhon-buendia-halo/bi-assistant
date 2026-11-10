@@ -21,7 +21,7 @@ Build, packaging and versioning detail is in [../system/delivery.md](../system/d
 ## 2. Local-first data
 
 - N8. All application data SHALL be stored on the user's machine in one data directory. It contains:
-  - the application database (settings, datasources, datasets, sessions, metrics, knowledge, verified queries, eval runs, schema inventory cache),
+  - the application database (settings, datasources, datasets, sessions, metrics, ontology items, verified queries, eval runs, schema inventory cache),
   - agent memory,
   - agent observability data (traces, metrics, logs),
   - one workspace folder per session (visuals, reports),
@@ -95,7 +95,7 @@ Open question: the desktop main window has no explicit restriction on navigation
   - for REST datasources, fetching the optional OpenAPI spec URL the user typed,
   - for the REST/OpenAPI discovery, nothing else,
 - N31. The product SHALL NOT send analytics, usage telemetry or crash reports to Halo or any third party, and SHALL NOT auto-update itself. Installers are fetched manually from the release page.
-- N32. Data sent to the LLM provider includes: the user's questions and chat history; schema names and column types; sample values (up to 5 distinct values per column, 40 characters each) captured when a dataset is saved; sample rows (up to 5 per entity) for knowledge bootstrap; and result rows of queries the assistant ran (up to the row caps in section 5). Users SHOULD be told that data returned by their queries is shared with their LLM provider.
+- N32. Data sent to the LLM provider includes: the user's questions and chat history; schema names and column types; sample values (up to 5 distinct values per column, 40 characters each) captured when a dataset is saved; sample rows (up to 5 per entity) for ontology bootstrap; and result rows of queries the assistant ran (up to the row caps in section 5). Users SHOULD be told that data returned by their queries is shared with their LLM provider.
 - N33. Agent observability data (traces, which include prompts and tool results, plus metrics and logs) SHALL stay in the local data directory.
 - N34. The diagnostics report SHALL be created only on user action (export) and saved where the user chooses.
 
@@ -131,9 +131,9 @@ All values are the ones in the code today.
 | Verified-query reference (3 pairs at most) | 3,000 |
 | Schema block handed to the SQL fixer | 4,000 |
 | Schema block handed to the SQL verifier | 6,000 |
-| Schema block handed to knowledge bootstrap | 6,000 (sample rows 4,000) |
+| Schema block handed to ontology bootstrap | 6,000 (sample rows 4,000) |
 
-- N37. Context that exceeds a budget SHALL be cut, not sent in full. The "knowledge used" record SHALL list only entries that fit.
+- N37. Context that exceeds a budget SHALL be cut, not sent in full. The "knowledge used" record SHALL list only ontology items that fit.
 
 ### Datasource time limits
 
@@ -184,7 +184,7 @@ All values are the ones in the code today.
 | Deep analysis jobs retained for polling | 50 |
 | Eval runs per agent at once | 1 |
 | Eval result-set comparison rows | 500 |
-| Knowledge bootstrap drafts | 15 at most |
+| Ontology bootstrap drafts | 15 at most |
 | Metric name length | 64 characters |
 | Metric candidates offered | 12 |
 

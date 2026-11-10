@@ -4,7 +4,7 @@ A session is a named, persistent conversation over one or more datasets. The use
 
 ## Concepts
 
-All terms are defined in [glossary](../../product/glossary.md): **Session**, **Dataset**, **Datasource**, **Entity** (fully-qualified `catalog.schema.table`), **Turn**, **Answer**, **Tool call**, **Data record** (one captured tool result), **Rationale**, **Reasoning trail**, **Interpretation line**, **Clarification**, **Careful mode**, **Cross-check**, **Verified query**, **Knowledge snippet**, **Metric definition**, **Session workspace**, **Agent memory thread**, **Visual** (see [visuals](../visuals/spec.md)), **Deep analysis** (see [deep-analysis](../deep-analysis/spec.md)).
+All terms are defined in [glossary](../../product/glossary.md): **Session**, **Dataset**, **Datasource**, **Entity** (fully-qualified `catalog.schema.table`), **Turn**, **Answer**, **Tool call**, **Data record** (one captured tool result), **Rationale**, **Reasoning trail**, **Interpretation line**, **Clarification**, **Careful mode**, **Cross-check**, **Verified query**, **Ontology item**, **Metric definition**, **Session workspace**, **Agent memory thread**, **Visual** (see [visuals](../visuals/spec.md)), **Deep analysis** (see [deep-analysis](../deep-analysis/spec.md)).
 
 ## Rules
 
@@ -64,7 +64,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - the session's dataset and entity orientation;
   - the session's visuals (id, title, current version) and which one is open;
   - the curated metric definitions for those entities;
-  - the enabled knowledge snippets for the session's datasets;
+  - the enabled ontology items for the session's datasets (its datasets' own items and shared ones);
   - up to 3 verified question → SQL pairs most similar to the question (by word overlap, within a 3,000-character budget);
   - for a session bound to an agent, the agent's Live instructions, last (R54).
 
@@ -99,11 +99,11 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - the entities its SQL referenced;
   - a deterministic interpretation line (R31);
   - a reasoning trail: one step per call that carried a rationale, in run order, with that call's row count or error;
-  - the knowledge snippets that were in its context.
+  - the ontology items that were in its context.
 - R31. The interpretation line SHALL be built from the successful SQL runs only, never from model output: `Computed from <N> quer(y|ies)[ over <entity, …>] — <R> row(s) analyzed.` It is absent when no SQL succeeded.
 - R32. Under an answer, the chat SHALL show these blocks, each only when non-empty:
   - a collapsible "How I worked this out (N step(s))" list, each step's rationale followed by "N rows" or "failed — <error>";
-  - a collapsible "Knowledge in context (N)" list (kind, title, dataset or "global", body), with a note that disabled snippets are never included;
+  - a collapsible "Ontology in context (N)" list (kind, name, dataset or "all datasets", body), with a note that disabled items are never included and that the ontology is edited in the dataset's Ontology tab;
   - the interpretation line;
   - "Data entities" chips;
   - a collapsible "Data used (N query|queries)" list.
@@ -195,7 +195,7 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 
   Publishing a new version SHALL change the next turn of every session bound to the agent. A draft SHALL never apply to a session. The only exception is the agent editor's preview chat, an in-memory session that runs the draft (agents-evals R60, R61).
 - R55. An agent's instructions SHALL NOT relax any rule enforced in code: the read-only SQL guard, dataset scoping (R22), SQL repair (R25-R28), the grounding pass (R19) and the result-quality warnings hold whatever the instructions say. A write statement attempted under an agent's instructions SHALL be rejected by the read-only guard and shown as a failed tool call.
-- R56. A model override SHALL name a model or deployment of the configured provider. It SHALL replace the configured model for the assistant's calls only. The SQL fixer, SQL verifier, visual designer, knowledge bootstrap and eval judge keep the configured model and their own efforts. A reasoning-effort override SHALL replace the user's setting for the same assistant calls. With no LLM settings saved, the model override SHALL be ignored and the fallback model applies. A model the provider rejects SHALL fail the turn with the provider's error, like any model error (R45).
+- R56. A model override SHALL name a model or deployment of the configured provider. It SHALL replace the configured model for the assistant's calls only. The SQL fixer, SQL verifier, visual designer, ontology bootstrap and eval judge keep the configured model and their own efforts. A reasoning-effort override SHALL replace the user's setting for the same assistant calls. With no LLM settings saved, the model override SHALL be ignored and the fallback model applies. A model the provider rejects SHALL fail the turn with the provider's error, like any model error (R45).
 - R57. A session bound to an agent SHALL show the agent's name in the page header's session context (`Agent` and a chip with the name, before the datasources) and in its row of the Sessions page list (R63), as the row's agent chip. The name SHALL be the agent's current Live name.
 - R58. The welcome block (R50) of a session bound to an agent SHALL use the agent's Live description as its one-line description when that is not empty, and the agent's Live starter questions (up to 5, in order) as the starter prompts when there are any. Otherwise R50's text and prompts apply. Clicking a starter question SHALL fill the composer and SHALL NOT send it.
 - R59. When the agent is deleted, its sessions SHALL keep their transcript, memory and datasets and continue with the plain assistant: no instructions block and no overrides. The page header chip and the list row's agent chip SHALL read `<agent name> · agent deleted`, using the name the agent last had for the session, and the welcome block falls back to R50.
@@ -248,7 +248,7 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 - Data in [data-model.md](../../system/data-model.md): the `sessions` collection (session document, chat message, data record, reasoning step, cross-check, clarification, visual event), the `verified_queries` collection, the agent memory store, and the per-session workspace directory and its legacy migrations.
 - Agents in [agents.md](../../system/agents.md): `assistant` (prompt, tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`, `create_visual`, `update_visual`, and memory), `sql-fixer`, `sql-verifier`. Model resolution is in [llm-settings](../llm-settings/spec.md).
 - Agent sessions: `POST /sessions` with an `agentId`, and the session's derived `agent` field, in [api.md](../../system/api.md); the session's `agentId` and `agentName` in [data-model.md](../../system/data-model.md) section 3.4; the agent instructions block, the `agent-overrides` requestContext key and the model override in [agents.md](../../system/agents.md) sections 1.3, 4.1 and 4.2.
-- Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents, the Agent Hub and its **Start chat**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [knowledge](../knowledge/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
+- Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents, the Agent Hub and its **Start chat**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [dataset-ontology](../dataset-ontology/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
 
 ## UI
 
@@ -654,13 +654,25 @@ Feature: Sessions started from an agent
     When I send "And in 2010?"
     Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
     And the model's skill catalog lists "fiscal-calendar"
+
+  Scenario: A Questions to Insights v2 session runs v2 on every turn
+    When I click "Agents"
+    And I click "Start chat with Questions to Insights v2"
+    And I select "World Cup Core", type "V2 turn" as the session name and click "Create"
+    Then I see the toast 'Session "V2 turn" created'
+    And the page header shows the agent "Questions to Insights v2"
+    When I send "How many matches are there?"
+    Then the model received the prompt starting "You are Questions to Insights v2" and not the assistant's
+    And the model was offered only "list_entities", "describe_entity" and "run_readonly_sql"
+    When I send "And in 2014?"
+    Then the model again received v2's prompt and only its three tools
 ```
 
 ### Feature: Skills the assistant is given
 
 E2E: `frontend/e2e/assistant-skills.spec.ts`
 
-What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0021 and ADR-0025; the prompt's sections are in agents.md 2.1, and the framework's catalog and skill tools in agents.md 3.9 and 7.5. The plain assistant gets only the skills that ship with the app. The old skills folder is written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([knowledge](../knowledge/spec.md) R15-R19).
+What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0021 and ADR-0025; the prompt's sections are in agents.md 2.1, and the framework's catalog and skill tools in agents.md 3.9 and 7.5. The plain assistant gets only the skills that ship with the app. The old skills folder is written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([dataset-ontology](../dataset-ontology/spec.md) R15-R19).
 
 ```gherkin
 Feature: Skills the assistant is given

@@ -6,7 +6,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Active visual.** The visual currently open in the right-hand panel. The assistant tailors it by default when the user asks for a change. See *Visual*.
 
-**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships thirteen built-in agents (the assistant, *Questions to Insights v2*, the *RFP Builder*, the *Data Readiness Agent*, the four *showcase agents*, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all.
+**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships thirteen built-in agents (the assistant, *Questions to Insights v2*, the *RFP Builder*, the *Data Readiness Agent*, the four *showcase agents*, the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all.
 
 **Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant, the *RFP Builder*, the *Data Readiness Agent* and the *showcase agents*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
@@ -30,6 +30,10 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Clarification.** A question the assistant asks the user, with 2 to 4 options, when interpretations diverge materially. The turn ends; the user's pick (or typed answer) arrives as the next message. At most one per user question.
 
+**Concept.** An *ontology item* of kind `concept`: a business term with a name, a definition, optional synonyms and optional **mappings** that say where it lives in the data (an entity, and optionally a column and/or a SQL expression). Rendered to the assistant as a `[term]` line. Replaces the former knowledge entry of kind `term`.
+
+**Constraint.** An *ontology item* of kind `constraint`: a SQL predicate (for example "exclude test accounts") with an optional note on when to apply it, an optional concept it is about and optional entities. The assistant applies it to every query unless the question asks for the excluded rows, and the answer names the filters applied. Rendered as a `[default_filter]` line. Replaces the former *default filter*.
+
 **Cross-check.** The result of *careful mode* on one answer: status `agree` (same results), `disagree` (results differ) or `error` (the check could not finish), plus a short note.
 
 **Custom endpoint.** The *LLM provider* `custom`: a model server the user chooses, such as a self-hosted model (Ollama, LM Studio, vLLM), a gateway (LiteLLM) or a relay, that speaks the OpenAI or Anthropic API. It is set by an *API style*, a base URL, an optional API key and a model, which the user can pick from the server's own model list. See [../capabilities/llm-settings/spec.md](../capabilities/llm-settings/spec.md).
@@ -38,7 +42,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Data readiness.** How fit the data behind a *dataset* is for analysis, measured by the *Data Readiness Agent* on the DMBOK data-quality *readiness dimensions*. It is expressed as a score per dimension, an overall score from 0 to 100 and a *maturity band*. A deterministic engine computes every number from aggregate statistics of the data, never a model. See [../capabilities/data-readiness/spec.md](../capabilities/data-readiness/spec.md).
 
-**Data Readiness Agent.** The built-in Official agent (`data-readiness`) that runs *data readiness* assessments of a session's PostgreSQL or Databricks datasets and explains the stored reports. It has no SQL tool and never computes or changes a score. See [../system/agents.md](../system/agents.md) 2.10.
+**Data Readiness Agent.** The built-in Official agent (`data-readiness`) that runs *data readiness* assessments of a session's PostgreSQL or Databricks datasets and explains the stored reports. It can run read-only SQL to show the records behind a finding, but never computes or changes a score. See [../system/agents.md](../system/agents.md) 2.10.
 
 **Developer observability.** An opt-in developer setting, off by default. When it is on, the backend exports agent traces to Arize Phoenix and backend traces, metrics and logs to an OpenTelemetry (OTLP) endpoint, in addition to the local observability store. It takes effect when the backend restarts. See [../capabilities/developer-settings/spec.md](../capabilities/developer-settings/spec.md).
 
@@ -51,8 +55,6 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Datasource.** A saved connection to a data platform. Three kinds: `databricks` (a SQL warehouse, via host, token and warehouse id), `postgres` (host, port, database, user, password, SSL) and `rest` (an HTTP API with a base URL, an auth mode and a list of endpoints that are mapped to tables). Legacy name: *connection* (collection `connections`). The first single Databricks connection was migrated to a datasource with id `legacy-databricks`.
 
 **Deep analysis.** A background investigation of one question from several *angles*, producing a downloadable markdown *report*. One at a time per session. The chat stays usable while it runs. The result is posted as an assistant message whose text is the executive summary.
-
-**Default filter.** A *knowledge entry* of kind `default_filter`: a condition (for example "exclude test accounts") the assistant applies to every query unless the question asks for the excluded rows. The answer names the filters applied.
 
 **Diagnostics.** The system log of the app: backend log lines, desktop shell events and interface errors, kept in a bounded buffer, shown in the System logs panel and exportable as a redacted, LLM-readable markdown report. A *log run* groups entries by backend process lifetime.
 
@@ -86,15 +88,13 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **In-app skill.** A *skill* a user writes in the app (the skills library) instead of a folder: a name, a "Use when…" description, a body and reference files, stored in the database. It reaches a session only through a *user agent* whose instructions *link* it, and a *Live* agent runs on the copy taken when it was published. See [../system/data-model.md](../system/data-model.md) 3.10.1 and ADR-0022.
 
+**Instruction.** An *ontology item* of kind `instruction`: a standing rule, data quirk or coverage fact the assistant follows, with optional entities.
+
 **Intellify RFP API.** The REST API the app ships for the *RFP Builder*: read routes over the Intellify sample data and the store of *RFP* records, protected by an API key and described by an OpenAPI document. It starts with the app by default, on its own port, and can also run on its own. The app reaches it through the REST *datasource* that the "Intellify RFP API" *sample fixture* registers. See [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md) and ADR-0027.
 
 **Interpretation.** A one-line, deterministic summary of how an answer was produced (which entities, what kind of query), built by the system at save time. Never model output.
 
-**Knowledge entry.** A curated piece of business knowledge the assistant treats as authoritative. Three kinds: `term` (glossary definition, with optional synonyms and entity bindings), `instruction` (a standing rule) and `default_filter`. Scoped globally, to a dataset or to a datasource. Only enabled entries reach the assistant, within a size budget per turn. Source is `user` or `mined` (drafted by the bootstrap agent, saved disabled for review). The UI says "Knowledge". Code and Jira call these *snippets*.
-
-**Knowledge bootstrap.** The action that has an agent draft up to 15 knowledge entries from a dataset's schema and a few sample rows. Drafts arrive as "Pending suggestions", disabled.
-
-**Knowledge used.** The list of knowledge entries that were actually included in the context of one answer, recorded when the context was built. It shows what the model was given, not what it applied.
+**Knowledge used.** The list of *ontology items* that were actually included in the context of one answer, recorded when the context was built and stored on the answer in the field `knowledge`. It shows what the model was given, not what it applied. The UI says "Ontology in context".
 
 **Line of coverage.** A kind of employee benefit a client offers and a *carrier* insures, such as medical, dental, vision, life, disability, voluntary benefits or an employee assistance programme. The Intellify data has 12 (its *products*). Also called a *line*. An *RFP* markets one or more lines.
 
@@ -110,9 +110,15 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Metric.** A governed, named SQL aggregation expression over one entity (for example `denial_rate`), with a label, description and dimensions. The assistant reuses its expression verbatim instead of re-deriving it. Metrics are the app's lightweight semantic layer. A metric can be promoted from a *verified query*; the draft is a *metric candidate*.
 
-**Mined entry.** A *knowledge entry* with source `mined`.
+**Mined item.** An *ontology item* with source `mined`: drafted by the *ontology bootstrap*, saved disabled until a human accepts it.
 
 **Official agent.** One of the app's own agents shown in the agent hub's Official section: the *assistant*, the *RFP Builder* and the four *showcase agents*. The assistant and the RFP Builder are the only built-in agents that can start a chat; the showcase agents cannot yet.
+
+**Ontology.** What a dataset means, written down for the assistant: the *ontology items* (concepts, relations, constraints and instructions) that belong to the dataset, plus the *shared items*. Edited in the dataset's Ontology tab. Only enabled items reach the assistant, within a size budget per turn. Replaces the knowledge library, whose entries became ontology items (ADR-0036). See [dataset-ontology](../capabilities/dataset-ontology/spec.md).
+
+**Ontology bootstrap.** The action that has an agent (Ontology Bootstrap, registry key `knowledge-bootstrap`) draft up to 15 ontology items for a dataset from its schema, sample rows, column references and governed metrics. Drafts arrive as "Pending suggestions", disabled. Replaces the *knowledge bootstrap*.
+
+**Ontology item.** One entry of an ontology: a *concept*, *relation*, *constraint* or *instruction*, with a name, a description, an enabled flag and a source (`user`, or `mined` when drafted by the bootstrap). It belongs to one dataset, or is a *shared item*. Code and the former UI called the same thing a *knowledge snippet*.
 
 **Panel item.** One thing an agent showed in the right panel with `show_in_panel`, saved on the *session* with the time it was shown: a workspace file, a Markdown document, a query result table or a *visual*. The latest one is what the panel opens on; every one is listed in the *session panel*'s shown-items menu. See [agent-panel](../capabilities/agent-panel/spec.md).
 
@@ -129,6 +135,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Reasoning effort.** How hard a model reasons before answering: one of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, of which each model accepts its own subset (its *effort levels*; default `high` when offered). A global setting chosen in Settings → LLM, passed to models that support it, mapped to the nearest level a model accepts, and dropped for models that reject it.
 
 **Reasoning trail.** The "How I worked this out" list on an answer: one step per data-gathering call, with the assistant's plain-language rationale, the statement used and the outcome. The prose is the model's; ordering and outcomes come from what actually ran.
+
+**Relation.** An *ontology item* of kind `relation`: how two concepts connect (`is-a`, `part-of`, `has-many`, `related-to`), or that a concept is `measured-by` a governed metric. Rendered as a `[relation]` line the assistant uses to choose joins and the governed metric.
 
 **Renewal kick-off.** The date work on a line's renewal starts: the renewal effective date minus the policy's kick-off timing, a number of days. Intellify plans are taken to run by calendar year, so a renewal takes effect on 1 January after the plan year. An *RFP*'s timeline is built from the kick-off and the effective date.
 
@@ -158,6 +166,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Session panel.** The right-hand panel when the main view is a *session*'s chat. It shows one *panel item* at a time (the *visual* panel, a document, a file or a table), with a menu of everything shown in the session and a Download button. See [agent-panel](../capabilities/agent-panel/spec.md).
 
+**Shared item.** An *ontology item* that belongs to no dataset (`dataset` is null) and so appears in every dataset's Ontology tab, marked "All datasets", and applies to every session. Chosen with "Share with all datasets" when creating an item; old global knowledge snippets migrated to shared items.
+
 **Showcase agent.** An *Official agent* shown to present a further US Health use case before it can chat: the Benchmarking Agent, the Survey Agent, the LAD COE Agent (Life, Absence and Disability Center of Excellence) and the Strategy Agent. It has a description and an editable system prompt, but no tools, dataset, skills or evals; its card carries a `Showcase` chip and its Start chat is always disabled with `Showcase agent: not available to chat yet.` See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R106 and [../system/agents.md](../system/agents.md) 2.9.
 
 **Skill.** A folder of instructions an agent gets: a `SKILL.md` (a name, a "Use when…" description, then a short phase map or router) plus the `phases/` and `reference/` files it names. It loads *on demand* (the framework lists it in a catalog and the model loads it with the skill tool when a request matches) or *by the app* (code sends it when a condition holds). Built-in skills ship with the app (there are no user or project skills); a user can also write *in-app skills* for her agents, and edit a built-in skill's text, which overrides the bundled one. The agent page's Skills tab shows them (see [../system/agents.md](../system/agents.md) 7.3, [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R63-R67).
@@ -170,15 +180,13 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **SQL verifier.** The agent behind *careful mode*.
 
-**System agent.** One of the built-in helper agents (the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge). It is read-only, runs inside the app's own flows and cannot start a chat.
+**System agent.** One of the built-in helper agents (the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent and the eval judge). It is read-only, runs inside the app's own flows and cannot start a chat.
 
 **System logs.** The UI name for *diagnostics*.
 
 **Table.** The last level of an *entity* name.
 
 **Tailoring.** Changing an existing visual by describing the change in plain English, through the chat (`update_visual`) or the panel's instruction box. Produces a new *visual version*.
-
-**Term.** A *knowledge entry* of kind `term`.
 
 **Tool call.** One invocation of a capability by the assistant during a turn. Data tools: `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`. Visual tools: `create_visual`, `update_visual`. UI tool: `ask_clarification`. Calls to the data tools are captured as *data records*.
 
@@ -187,6 +195,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Turn.** One user message and everything the assistant does in response, up to its final answer or a clarification. Includes streamed reasoning, tool calls and their results.
 
 **User agent.** An agent a user builds: a name, a description, instructions, the datasets it may query, starter questions and an optional model or reasoning-effort override. It runs on the *assistant* with the same guards and the tools its *tool selection* gives it, and it has a *draft* and, once published, a *Live* version.
+
+**User persona.** A short profile of a kind of person who asks the questions: a name, role, description, goals, typical questions, an expertise and a preferred answer style. Kept in the Context area under "User personas". Manage-only today: agents and sessions do not use personas yet. Not a login or an account. The **expertise** is `novice`, `intermediate` (the default) or `expert`; a **typical question** is one question the persona would ask (up to 10, 300 characters each); the **answer style** is how they like answers (up to 500 characters). See [user-personas](../capabilities/user-personas/spec.md).
 
 **Verified answer.** An answer whose final SQL matches a stored *verified query*, or that the user thumbed up. Shown with a "Verified" badge.
 

@@ -38,7 +38,8 @@ specs/
 | [developer-settings](capabilities/developer-settings/spec.md) | Developer observability switch, endpoints, restart to apply | Developer settings (`developer-settings.spec.ts`), Developer observability export (`developer-observability.spec.ts`) |
 | [sessions-chat](capabilities/sessions-chat/spec.md) | Sessions, streamed chat, tools, SQL repair and verification, clarification, memory | Chat and visuals (`chat-and-visuals.spec.ts`) |
 | [visuals](capabilities/visuals/spec.md) | Interactive visuals: create, tailor, version, revert, refresh, repair, export | — (covered by the Chat and visuals Feature) |
-| [knowledge](capabilities/knowledge/spec.md) | Knowledge entries and bootstrap from data | — |
+| [dataset-ontology](capabilities/dataset-ontology/spec.md) | Each dataset's ontology: concepts, relations, constraints and instructions, shared items, bootstrap from data; the Ontology tab and "Ontology in context" | Dataset ontology (`dataset-ontology.spec.ts`) |
+| [user-personas](capabilities/user-personas/spec.md) | User personas: who asks the questions (role, goals, typical questions, expertise, answer style); manage-only | User personas (`user-personas.spec.ts`) |
 | [verified-queries](capabilities/verified-queries/spec.md) | Saved, trusted question → SQL pairs | — |
 | [metrics](capabilities/metrics/spec.md) | Metric definitions and the metrics panel | — |
 | [deep-analysis](capabilities/deep-analysis/spec.md) | Multi-step deep analysis runs | — |

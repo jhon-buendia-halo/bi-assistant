@@ -291,7 +291,8 @@ The structure the assistant reasons over, as a single, versionable source of tru
 
 Curated knowledge the assistant treats as authoritative: glossary terms, standing instructions and default filters, scoped to a datasource or dataset. Covers authoring, mining suggestions from past sessions, and injecting the relevant snippets into each turn. Assignee: Sergio Berrospi.
 
-#### 1.3.1 — Research and ontology design ([BA-78](https://halo-powered.atlassian.net/browse/BA-78))  `📋 Planned`
+#### 1.3.1 — Research and ontology design ([BA-78](https://halo-powered.atlassian.net/browse/BA-78))  `🚫 Cut`
+- **Moved:** on 2026-11-09 the user had this built on BA-320 as roadmap 1.21.7–1.21.9 (design approved from a review page; ADR-0036).
 - **Intent:** an evidence-based design for how the knowledge store models business meaning, so query generation follows each data store's ontology.
 - **Scope:**
   - Compare Databricks Genie, Snowflake Cortex Analyst semantic models, the dbt Semantic Layer, Cube and knowledge-graph text-to-SQL research.
@@ -301,7 +302,8 @@ Curated knowledge the assistant treats as authoritative: glossary terms, standin
 - **Out of scope:** implementation.
 - **Acceptance:** the decision record is merged in `docs/` (as an ADR in [specs/system/architecture.md](specs/system/architecture.md)) and the model is agreed.
 
-#### 1.3.2 — Ontology model, knowledge graph and bootstrap ([BA-79](https://halo-powered.atlassian.net/browse/BA-79))  `📋 Planned`
+#### 1.3.2 — Ontology model, knowledge graph and bootstrap ([BA-79](https://halo-powered.atlassian.net/browse/BA-79))  `🚫 Cut`
+- **Moved:** on 2026-11-09 the user had this built on BA-320 as roadmap 1.21.7–1.21.9 (design approved from a review page; ADR-0036).
 - **Intent:** business concepts and their relations live in one graph and are drafted automatically, so setup takes minutes.
 - **Scope:**
   - The concept and relation schema and its storage.
@@ -485,7 +487,7 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
 
 #### 1.7.17 — Datasource-scoped knowledge is never used ([BA-98](https://halo-powered.atlassian.net/browse/BA-98))  `📋 Planned`
 - **Intent:** every saved knowledge entry can reach the assistant.
-- **Scope:** see the Jira bug and the Open question in [capabilities/knowledge/spec.md](specs/capabilities/knowledge/spec.md).
+- **Scope:** see the Jira bug and the Open question in [capabilities/knowledge/spec.md](specs/capabilities/dataset-ontology/spec.md).
 - **Acceptance:** Datasource-scoped entries are injected for sessions on that datasource, or the scope is removed.
 
 #### 1.7.18 — Stale application-shell visual baseline ([BA-99](https://halo-powered.atlassian.net/browse/BA-99))  `📋 Planned`
@@ -1317,34 +1319,85 @@ Users tag each schema in a dataset with its data layer and a description, and th
 
 A second built-in data-analyst agent, Questions to Insights v2, built up next to the current Questions to Insights Assistant, which stays unchanged. v2 starts minimal; later stories reduce what the assistant carries and bring only the slimmer set into v2. No new ADR: v2 reuses built-in session agents (ADR-0028) and built-in prompt overrides (ADR-0026). All stories are built on the branch `feat/BA-320-questions-to-insights-v2` and ship as one PR. Epic spec: [specs/epics/BA-320/spec.md](specs/epics/BA-320/spec.md).
 
-#### 1.21.1 — Empty Questions to Insights v2 agent ([BA-321](https://halo-powered.atlassian.net/browse/BA-321))  `🚧 In progress`
+#### 1.21.1 — Empty Questions to Insights v2 agent ([BA-321](https://halo-powered.atlassian.net/browse/BA-321))  `✅ Done`
 - **Intent:** have a v2 agent to chat with, starting from nothing, so the reductions of the current assistant can land in it one by one.
 - **Scope:** a new built-in agent `assistant-v2` ("Questions to Insights v2", id `questions-to-insights-v2`) with an identity-only prompt starting `You are Questions to Insights v2` (overridable, ADR-0026), the tools `list_entities`, `describe_entity` and `run_readonly_sql`, the assistant's memory settings, no skills and no evals; Official in the Agent Hub; sessions started from it are bound to it (ADR-0028); agents.md, api.md, agents-evals and sessions-chat updated.
 - **Out of scope:** moving any assistant rule, tool or skill into v2; grounding guard, tool-only synthesis and deep analysis for v2; user agents on v2; an eval set; changing the current assistant.
 - **Acceptance:** the hub lists v2 as Official with its prompt, three tools and memory; a chat with v2 on a sample dataset answers a data question by running SQL; the assistant's compiled prompt and tool list are byte-identical to `main`; `check-specs.py`, unit tests, lint, builds and the Agent Hub and sessions Playwright specs are green.
 - **Notes:** epic spec confirmed on 2026-11-09.
 
-#### 1.21.2 — Auto-configure local instances: testing data and custom LLM ([BA-325](https://halo-powered.atlassian.net/browse/BA-325))  `🚧 In progress`
+#### 1.21.2 — Auto-configure local instances: testing data and custom LLM ([BA-325](https://halo-powered.atlassian.net/browse/BA-325))  `✅ Done`
 - **Intent:** every local instance the user tests by hand comes up ready to chat: LLM configured and every sample dataset loaded, with no clicks in Settings.
 - **Scope:** `scripts/setup-local.mjs [baseUrl]` configures a running instance through its API: `PUT /llm/settings` from the gitignored `.env.llm.local` (`LLM_PROVIDER` default `custom`, `LLM_API_STYLE` default `anthropic`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`; found in the checkout, else the main checkout), then every seedable Testing Data fixture with its defaults and the Intellify RFP API, skipping those already loaded; committed `.env.llm.example`; delivery.md 2 and the `verify` and `workflow-implement` skills run it after launching an instance.
 - **Out of scope:** the app provisioning itself on startup; the Electron desktop app; REST fixtures other than the Intellify RFP API.
 - **Acceptance:** on a fresh isolated instance the script saves the LLM (connection tested by the save) and loads World Cup, Formula 1, Intellify, US Health and the Intellify RFP API; a second run reports each fixture as already loaded; exit code 0; no key in any tracked file.
 - **Notes:** requested on 2026-11-09 while testing 1.21.1; the user chose to ship it on the BA-320 branch.
 
-#### 1.21.3 — v2 turns run as a Mastra workflow shown in the workflow bar  `🚧 In progress`
+#### 1.21.3 — v2 turns run as a Mastra workflow shown in the workflow bar  `✅ Done`
 - **Intent:** v2's process is defined in code, not in its prompt: some steps deterministic, some answered by the LLM, and the user sees the steps advance in the workflow bar.
 - **Scope:** ADR-0034. A Mastra workflow `qti-v2-turn` (`createWorkflow` / `createStep`) registered on the Mastra instance runs every v2 turn, as an example with four steps: 1 **Receive question** (deterministic: trims and checks the question), 2 **Load catalog** (deterministic: the entities of the session's datasets, no LLM), 3 **Analyse** (LLM: the `assistant-v2` agent answers with its three tools and the catalog as context, streamed to the chat as today), 4 **Wrap up** (deterministic: counts SQL queries and rows and records a turn summary). The orchestrator writes the session's saved workflow state from the run's step events (current, done, failed), so the workflow bar shows the four steps from the first turn; v2 gets no `update_workflow`. agents.md, agent-panel and sessions-chat specs updated.
 - **Out of scope:** the real steps (the user defines them next); workflows for any other agent; changes to the workflow bar UI beyond showing a failed step if it can't today.
 - **Acceptance:** a v2 turn on World Cup shows the bar with the four steps advancing to all done and an answer computed by SQL; a failing step is marked failed and the turn ends with its error; the assistant's prompt and tools are byte-identical to `main`; unit tests cover the step order, the deterministic steps and the state written from step events; builds and check-specs green.
 - **Notes:** requested on 2026-11-09. From this date the user stopped using Jira: this story has no Jira key and is documented only in the repo. Built in the fast loop on 2026-11-09: the saved workflow state gains `failed` and the view `source: 'workflow'` (additive, no migration); the bar gains a **Failed** status (agent-panel R8a); any model error now fails v2's Analyse step; the non-streamed turn (`POST /sessions/:id/messages`) stays a single agent call.
 
-#### 1.21.4 — Context area on the navigation rail, with Knowledge inside it  `🚧 In progress`
+#### 1.21.4 — Context area on the navigation rail, with Knowledge inside it  `✅ Done`
 - **Intent:** the rail gets a **Context** area that will gather what agents are given as context; Knowledge moves inside it instead of having its own rail item.
 - **Scope:** the rail reads Datasets, Agents, **Context**, Sessions (layers icon); Context opens a page of section cards like the Agent Hub's (icon tile, name, two-line description); a card opens its section under a **Context** back control, and the rail's Context returns to the cards; the only card today is **Knowledge**, showing the Knowledge screen unchanged; app-shell R3, R3a, R37 and its Gherkin, knowledge placement, ui.md 2, 3, 4.8 and the new 4.8a; the navigation and layout Playwright selectors renamed.
 - **Out of scope:** any other Context section (the user defines them later); changes to Knowledge itself; the chat's "Edit it under Knowledge" note.
 - **Acceptance:** the rail shows Context in Knowledge's place and no Knowledge item; clicking Context marks it current and shows the Context page with a Knowledge card; the card opens the Knowledge list with Context still current, and Back or the rail returns to the cards; app unit tests, builds, check-specs and the navigation Playwright spec green.
 - **Notes:** requested on 2026-11-09 with a screenshot of the rail; the user chose an empty placeholder area with Knowledge moved inside. First built as a tab strip; the same day the user said more sections are coming and asked for the best pattern, so it became a Settings-style list pane; then the user asked for cards as in the Agents view, which is what shipped. No Jira key (repo only). The `application-shell` screenshot baseline changes with the rail label; it is refreshed at the acceptance gate.
 
+#### 1.21.5 — Data Readiness Agent drills into findings with read-only SQL  `✅ Done`
+- **Intent:** asked for the records behind a finding ("which rows have `second_nationality_country_id` null?"), the Data Readiness Agent runs the query and shows them, instead of saying it has no SQL tool.
+- **Scope:** ADR-0035 (amends ADR-0031). The agent gains the shared `describe_entity` and `run_readonly_sql` (same guards, session scoping, fixer and result checks as the assistant's) and a second on-demand built-in skill `readiness-drilldown`: one SQL recipe per assessed dimension (completeness, validity, consistency, uniqueness, integrity, timeliness, reasonability) for PostgreSQL and Databricks, and how to present rows (count first, then a capped table). Its prompt allows SQL only to show the records behind findings and answer data-quality questions about the session's data; general analysis is declined with a pointer to Questions to Insights. Scores stay engine-only: a query result never changes, recomputes or replaces a score. agents.md 2.10, 3.13, 7.4, D12 and Appendix D; data-readiness R3, R4 and a scenario; the agent's unit tests and evals (`dr-no-sql` rewritten, a drill-down case added).
+- **Out of scope:** sample_rows, list_entities, visuals or workspace tools for the agent; changes to the engine, profiling or scores; the assistant and v2.
+- **Acceptance:** in a Data Readiness session on Formula 1, "what are the records with second_nationality_country_id null values" runs one `run_readonly_sql` with `IS NULL` on `driver` and answers with the count and a table of rows; "how many races were there in 2010?" is declined with a pointer to Questions to Insights; asked to change a score after a query, it still refuses; the hub shows the agent's five tools plus `describe_entity` and `run_readonly_sql` and two skills; unit tests, builds, check-specs green; the Data Readiness evals at 100 % at the gate.
+- **Notes:** requested on 2026-11-09 with a screenshot of the agent saying it has no SQL tool; built in the fast loop the same day. Live runs showed the agent fanning a query out to every datasource of a multi-dataset session (and the SQL fixer rewriting the strays into unrelated queries), so Block D1 now carries each dataset's `datasourceId` and an example entity key, and the skill requires passing that id. The user chose to ship it on the BA-320 branch, `describe_entity` + `run_readonly_sql`, drill-down-only scope and a separate skill. No Jira key (repo only).
+
+#### 1.21.6 — User personas section in the Context area  `✅ Done`
+- **Intent:** the user can describe who asks the questions (role, goals, typical questions, expertise, preferred answer style) as user personas, kept in the app, ready for agents to use as context in a later story.
+- **Scope:** a second Context card **User personas** after Knowledge (app-shell R3a), opening a User personas section: a list of personas sorted by name with an empty state, a **New persona** button, and an editor to create, edit and delete one. A persona has `name` (required, unique ignoring case, at most 80 characters), `role` (at most 80), `description` (at most 2,000), `goals` (at most 2,000), `typicalQuestions` (0 to 10, each at most 300), `expertise` (`novice`, `intermediate` default, `expert`) and `answerStyle` (at most 500). Backend module `personas` with collection `user_personas` and `GET/POST /personas`, `PATCH/DELETE /personas/:id`. New capability spec `user-personas`; api.md, data-model.md, ui.md and app-shell R3a updated.
+- **Out of scope:** agents or sessions using personas; picking a persona for a session; importing or generating personas; evals.
+- **Default data:** every data dir starts with **Demo Finance Analyst** (every field filled), seeded once on backend start and marked by the `settings` key `personas-seed`, so deleting it is permanent (user-personas R13). Requested the same day after trying the section.
+- **Acceptance:** the Context page shows Knowledge then User personas; the card opens the section under the Context back control; a persona can be created with every field, edited and deleted, and survives a restart; a duplicate name or a blank name is refused with its message; backend and frontend unit tests, builds, check-specs and the navigation Playwright spec green.
+- **Notes:** requested on 2026-11-09; the user chose a manage-only section (agents use personas later), the richer profile and the card after Knowledge. No Jira key (repo only).
+
+#### 1.21.7 — Knowledge becomes each dataset's ontology: model, migration, API and context  `✅ Done`
+- **Intent:** business meaning lives in a per-dataset ontology (concepts, relations, constraints, instructions) instead of flat snippets, with no change to what the assistant is told.
+- **Scope:** ADR-0036. Collection `ontology_items` and migration M15 (snippets copied, `knowledge_snippets` renamed `knowledge_snippets_legacy`); module `ontology` replacing `knowledge` with `GET/POST /datasets/:name/ontology`, `PATCH/DELETE /ontology/:id` and per-kind validation; deleting a dataset deletes its items; the per-turn block rendered from the ontology, byte-identical for migrated data; `[relation]` lines and one bullet in the `curated-knowledge` skill. Contract: [docs/plans/ba-320-dataset-ontology.md](docs/plans/ba-320-dataset-ontology.md).
+- **Out of scope:** ontology-grounded retrieval and SQL checks (1.3.3); provenance and feedback (1.3.4); renaming the skill.
+- **Acceptance:** an install with snippets starts with the same items as ontology items and the same context block for a session; the old table is kept as `knowledge_snippets_legacy`; every validation message and cascade has a unit test; the assistant's prompt is byte-identical to before; unit tests, builds and check-specs green.
+- **Notes:** requested on 2026-11-09 ("refactor the current knowledge functionality to datasets ontology"); design approved the same day from a review page. Moves roadmap 1.3.1 and 1.3.2 (BA-4) to BA-320 at the user's request. No Jira key (repo only).
+
+#### 1.21.8 — Ontology tab in the dataset editor  `✅ Done`
+- **Intent:** a dataset's ontology is edited next to its schema.
+- **Scope:** Schema and Ontology tabs on a saved dataset; the Ontology tab lists concepts, relations, constraints and instructions with shared items marked "All datasets", filters, Pending suggestions, Generate suggestions and an editor per kind; the Knowledge card leaves the Context page; the chat reads "Ontology in context". Datasets, app-shell, sessions-chat specs and ui.md.
+- **Out of scope:** a graph view of the ontology.
+- **Acceptance:** a concept with column mappings, a relation, a constraint and an instruction can be created, edited, disabled and deleted from a dataset; shared items appear in every dataset; the Context page shows only User personas; unit tests, builds and the navigation and dataset Playwright specs green.
+- **Notes:** depends on 1.21.7. No Jira key (repo only).
+
+#### 1.21.9 — Ontology suggestions from the data  `✅ Done`
+- **Intent:** a dataset's ontology is drafted in minutes from its schema, samples, relationships and metrics.
+- **Scope:** the `knowledge-bootstrap` agent (key kept, shown as Ontology Bootstrap) drafts up to 15 concepts with column mappings, relations between them, constraints and instructions; drafts arrive disabled in Pending suggestions. agents.md 2.5.
+- **Out of scope:** learning from thumbs-down corrections (1.3.4).
+- **Acceptance:** Generate suggestions on a sample dataset stores disabled concepts with valid mappings and relations that resolve; bad mappings and unresolved relations are dropped; unit tests cover the post-processing.
+- **Notes:** depends on 1.21.7. No Jira key (repo only).
+
+- **Notes (fix, 2026-11-09):** the first live run failed with `Structured output validation failed: drafts: Too big` because the output format capped the list at 15; the cap moved to after post-processing.
+
+#### 1.21.10 — Ontology relations as a graph  `✅ Done`
+- **Intent:** see how a dataset's concepts connect, and review generated relations, at a glance.
+- **Scope:** a **Graph** option at the end of the Ontology tab's filter row; an SVG graph drawn by the app (no new dependency) with concept and metric nodes, labelled relation arrows, disabled and pending items faded and dashed, shared items marked; pan, zoom, drag; selecting a node or arrow highlights its neighbours and shows details with Edit opening the existing editor; the Pending suggestions toggle filters the graph. dataset-ontology R38, R39 and three scenarios; ui.md 4.8.
+- **Out of scope:** editing relations by drawing arrows; graphs across datasets; saving node positions.
+- **Acceptance:** on World Cup with generated suggestions the graph shows the concepts and their relations, faded while pending; clicking a node highlights its neighbours and Edit opens its editor; unit tests and the build green.
+- **Notes:** requested on 2026-11-09 with a screenshot of the filter row; the user chose the filter-row placement, all items with disabled ones faded, and select + edit. No Jira key (repo only).
+
+#### 1.21.11 — Ontologies on the Context page  `✅ Done`
+- **Intent:** see and edit every dataset's ontology from Context, next to the other things agents are given, without opening each dataset.
+- **Scope:** an **Ontologies** card first on the Context page; a list of every dataset with the size of its ontology, pending suggestions and shared items counted once; choosing one opens the same Ontology panel as the dataset's Ontology tab, under an Ontologies back control. dataset-ontology R40 and a scenario; app-shell R3a and its scenario; ui.md 4.8a; a note on ADR-0036.
+- **Out of scope:** a separate editor for shared items; ontologies across datasets in one view.
+- **Acceptance:** the Context page shows Ontologies then User personas; World Cup shows its counts and pending chip; opening it shows its ontology and edits there show in the dataset's Ontology tab; unit tests and the build green.
+- **Notes:** requested on 2026-11-09 with a screenshot of the Context page showing only User personas; it partly reverses 1.21.8's removal of the Knowledge card, keeping a single editor. No Jira key (repo only).
 ---
 
 ## Release 2 — Multi-user  (no target date yet)

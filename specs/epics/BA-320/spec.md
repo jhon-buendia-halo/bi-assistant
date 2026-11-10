@@ -33,6 +33,13 @@ A second built-in data-analyst agent, **Questions to Insights v2**, is built up 
 | [BA-325](https://halo-powered.atlassian.net/browse/BA-325) | Auto-configure local instances: testing data and custom LLM (dev tooling, shipped with this epic at the user's request) | 1.21.2 |
 | — (no Jira, repo only) | v2 turns run as a Mastra workflow shown in the workflow bar (ADR-0034) | 1.21.3 |
 | — (no Jira, repo only) | Context area on the navigation rail, with Knowledge inside it (shipped with this epic at the user's request) | 1.21.4 |
+| — (no Jira, repo only) | Data Readiness Agent drills into findings with read-only SQL (ADR-0035; shipped with this epic at the user's request) | 1.21.5 |
+| — (no Jira, repo only) | User personas section in the Context area (shipped with this epic at the user's request) | 1.21.6 |
+| — (no Jira, repo only) | Knowledge becomes each dataset's ontology: model, migration, API and context (ADR-0036; moved from BA-4 1.3.1–1.3.2 at the user's request) | 1.21.7 |
+| — (no Jira, repo only) | Ontology tab in the dataset editor | 1.21.8 |
+| — (no Jira, repo only) | Ontology suggestions from the data | 1.21.9 |
+| — (no Jira, repo only) | Ontology relations as a graph | 1.21.10 |
+| — (no Jira, repo only) | Ontologies on the Context page | 1.21.11 |
 
 Later stories (the reductions) are added here as they are defined. From 2026-11-09 stories are tracked only in the repo, not in Jira.
 
@@ -46,6 +53,11 @@ Later stories (the reductions) are added here as they are defined. From 2026-11-
 - [capabilities/agents-evals](../../capabilities/agents-evals/spec.md): the Official agents list (R3) and v2's Start chat, page and prompt editor (R107).
 - [capabilities/sessions-chat](../../capabilities/sessions-chat/spec.md): sessions bound to `assistant-v2` (R61) the Start chat and Agent picker rules (R52, R64), and `product/glossary.md`'s agent count.
 - 1.21.3 (ADR-0034): [system/agents.md](../../system/agents.md) 1.2, 2.11, 5.1 and the new 5.11 (the `qti-v2-turn` workflow); [capabilities/agent-panel](../../capabilities/agent-panel/spec.md) R8a, R15, R16, R19 and two scenarios (workflow-backed steps, the Failed status); [system/data-model.md](../../system/data-model.md) 3.4.4 (`failed`, `source: 'workflow'`); [system/api.md](../../system/api.md) 2.1 and 3.1 (the `workflow` view and event); [system/ui.md](../../system/ui.md) 4.12.1 (the Failed status); [capabilities/sessions-chat](../../capabilities/sessions-chat/spec.md) R61.
+
+- 1.21.5 (ADR-0035, amends ADR-0031): [system/agents.md](../../system/agents.md) 2.10, 3.13, 7.4, the D12 eval rule and Appendix D; [capabilities/data-readiness](../../capabilities/data-readiness/spec.md) R3, R4 and a drill-down scenario.
+- 1.21.6: the new capability [capabilities/user-personas](../../capabilities/user-personas/spec.md); [capabilities/app-shell](../../capabilities/app-shell/spec.md) R3a; [system/api.md](../../system/api.md) (`/personas`); [system/data-model.md](../../system/data-model.md) (`user_personas`); [system/ui.md](../../system/ui.md) (the User personas section).
+
+- 1.21.7–1.21.9 (ADR-0036; contract [docs/plans/ba-320-dataset-ontology.md](../../../docs/plans/ba-320-dataset-ontology.md)): the new capability `dataset-ontology` replacing `knowledge`; [system/data-model.md](../../system/data-model.md) (`ontology_items`, M15); [system/api.md](../../system/api.md); [system/agents.md](../../system/agents.md) (Block 3, 2.5, Appendix B); [system/ui.md](../../system/ui.md); [capabilities/datasets](../../capabilities/datasets/spec.md); [capabilities/app-shell](../../capabilities/app-shell/spec.md) R3a; [capabilities/sessions-chat](../../capabilities/sessions-chat/spec.md); [epics/BA-4](../BA-4/spec.md).
 
 ## Acceptance
 
