@@ -2,7 +2,7 @@
 
 The **Monitoring** area shows every LLM call the app's agents make, so a person can spot the slow, failing or expensive ones without a developer tool. It also shows what the agents did across a whole session. It has two tabs and two detail pages. The **LLM calls** tab is a filterable, paged table of calls, newest first. A **call page** opens from a row and shows the call's facts, what filled its **context window** (seven boxes, each tagged by who owns it, with an estimated size and the exact text), and the model steps of the run. The **Sessions** tab is a filterable, paged table of sessions, most recent first. A **session page** opens from a row and shows the **session flow**: each question with the path the agent took (model requests and tool calls, in order), its answer, and, on demand, a **waterfall** of the turn's timeline.
 
-The app records nothing of its own for this. It reads the trace store the agent framework already writes (ADR-0037). The area is read-only: it edits no prices, deletes and exports no calls, and sends nothing anywhere.
+The app records nothing of its own for this. It reads the trace store the agent framework already writes (ADR-0038). The area is read-only: it edits no prices, deletes and exports no calls, and sends nothing anywhere.
 
 ## Concepts
 
@@ -15,7 +15,7 @@ A **turn** is one question of a session and the agent's work to answer it. In th
 ## Rules
 
 The table
-- R1. The system SHALL list **LLM calls**: one row per model call of one agent run, read from the trace store `observability.duckdb` ([../../system/data-model.md](../../system/data-model.md) 1.2, ADR-0037). Calls recorded before this feature existed are listed too. A model call the agent framework does not trace is not listed.
+- R1. The system SHALL list **LLM calls**: one row per model call of one agent run, read from the trace store `observability.duckdb` ([../../system/data-model.md](../../system/data-model.md) 1.2, ADR-0038). Calls recorded before this feature existed are listed too. A model call the agent framework does not trace is not listed.
 - R2. Rows SHALL be ordered by start time, newest first.
 - R3. Each row SHALL show: **Started** (local date and time), **Agent** (its display name), **Model** (with its provider below it, muted), **Session** (its name; when the session has no name, the first 8 characters of its id; a dash when the call belongs to no session), **Tokens in / out** (for example `61,185 / 2,445`; the input count includes cache reads and writes), **Duration** (for example `17.3 s`), **Cost** (for example `$0.0213`) and **Status**. A value the trace does not hold is shown as a dash.
 - R4. **Status** SHALL be **Succeeded**, **Failed** or **Running**. A call with no end recorded yet is Running. A call whose end carries an error is Failed. Any other call is Succeeded.
@@ -78,7 +78,7 @@ Tabs
 - R26. The Monitoring page SHALL show two tabs under its heading, **LLM calls** and **Sessions** (`role="tablist"`, the arrow keys move between them). **LLM calls** is chosen when the page opens for the first time. The note under the heading follows the tab: "LLM calls made by the app's agents, newest first." or "Sessions with recorded agent runs, most recent first.". The chosen tab, and each tab's own filters, page and page size, SHALL be kept while the app runs, so leaving to a call page or a session page and coming back finds them as they were left.
 
 The Sessions table
-- R27. The **Sessions** tab SHALL list **sessions**: one row per session that has at least one recorded agent run, read from the trace store (ADR-0037). A session is a distinct `threadId` on the agent runs. Rows SHALL be ordered by last activity, newest first. A session whose chat was deleted, or that was a preview or an eval, is listed too.
+- R27. The **Sessions** tab SHALL list **sessions**: one row per session that has at least one recorded agent run, read from the trace store (ADR-0038). A session is a distinct `threadId` on the agent runs. Rows SHALL be ordered by last activity, newest first. A session whose chat was deleted, or that was a preview or an eval, is listed too.
 - R28. Each row SHALL show: **Session** (its name, read from the sessions collection; "Unnamed session" with the first 8 characters of its id, muted, when it has no name), **Agent** (the display names of the agents that ran in it), **Turns**, **Last activity** (local date and time), **Wall time** (the sum of the turns' durations), **Model time** (the sum of the model calls' durations), **Tools** (the number of tool calls), **Tokens in / out**, **Cost** (the sum of the estimated costs, R5) and **Status**. A value the trace does not hold is shown as a dash.
 - R29. A session's **Status** SHALL be **Failed** when it has at least one failed span (an agent run, a model call or a tool call that ended with an error or `success: false`), else **Running** when a turn has no end recorded yet, else **Succeeded**. The row's error count SHALL equal the number of those failed spans.
 - R30. The tab SHALL offer the filters **Agent** (sessions in which that agent ran) and **Date** (Any time, Last hour, Last 24 hours, Last 7 days, Custom with **From** and **To**; a session is kept when one of its turns started inside the range, ends included), and **Clear filters**. Agent choices SHALL be the agents present among all sessions and SHALL NOT shrink as the date is set. R8 and R9 apply to these filters, and R10 and R11 to the paging, with the same page sizes and messages.
@@ -124,7 +124,7 @@ Navigation
 
 - Endpoints: `GET /monitoring/llm-calls`, `GET /monitoring/llm-calls/:id`, `GET /monitoring/sessions`, `GET /monitoring/sessions/:id` and `GET /monitoring/traces/:traceId`. See [../../system/api.md](../../system/api.md) (section 2.8c).
 - Source data: the `span_events` table of `observability.duckdb`, read in-process, no new collection. See [../../system/data-model.md](../../system/data-model.md) (1.2).
-- Decision: [../../system/architecture.md](../../system/architecture.md) ADR-0037.
+- Decision: [../../system/architecture.md](../../system/architecture.md) ADR-0038.
 - Related: [../app-shell/spec.md](../app-shell/spec.md) R3b (the rail item and the page), [../../system/agents.md](../../system/agents.md) 4.1 (the per-turn context blocks that fill the Dataset box), [../developer-settings/spec.md](../developer-settings/spec.md) (the opt-in trace viewers this area does not depend on).
 
 ## UI
@@ -299,7 +299,7 @@ Feature: Session flow
 
 ## Acceptance
 
-- Every Gherkin scenario above passes against the running app. Backend unit tests cover R1–R11 and R16–R22 at service and controller level, including the reader of the trace store pinned to a fixture of Mastra's real `span_events` shape (ADR-0037).
+- Every Gherkin scenario above passes against the running app. Backend unit tests cover R1–R11 and R16–R22 at service and controller level, including the reader of the trace store pinned to a fixture of Mastra's real `span_events` shape (ADR-0038).
 - After a chat turn the call is listed with its agent, model, session, tokens, duration, cost and status; each filter narrows the list and Clear filters restores it; paging and the page-size choice work; a failed call shows Failed (R1–R10).
 - A chat turn's call page shows the seven boxes with text matching what was sent: the system prompt, the skills list, the tool definitions, the earlier turns, the session's dataset blocks, the question, and the SQL run with its rows; the box estimates add up to the step's real input tokens (R18–R21).
 - Back keeps the filters and page (R13).

@@ -26,7 +26,10 @@ import {
   optionalToolOf,
   parseLinks,
 } from '../../mastra/agent-links';
-import { effortLevelsFor, nearestEffort } from '../../mastra/effort-levels';
+import {
+  effortLevelsForProvider,
+  nearestEffort,
+} from '../../mastra/effort-levels';
 import { LlmService } from '../llm/llm.service';
 import { AgentPromptsService } from './agent-prompts.service';
 import type { AgentPromptView } from './entities/agent-prompt-override.entity';
@@ -169,6 +172,7 @@ const PROVIDER_NAMES: Record<string, string> = {
   anthropic: 'Anthropic',
   lenai: 'LenAI',
   custom: 'Custom endpoint',
+  copilot: 'GitHub Copilot',
 };
 
 export interface AgentDetail extends AgentSummary {
@@ -289,7 +293,7 @@ export class AgentsService {
     }
     const model = config?.model || view.model;
     const wanted = config?.reasoningEffort ?? view.reasoningEffort;
-    const levels = effortLevelsFor(model);
+    const levels = effortLevelsForProvider(view.provider, model);
     return {
       provider: view.provider,
       providerName: PROVIDER_NAMES[view.provider] ?? view.provider,

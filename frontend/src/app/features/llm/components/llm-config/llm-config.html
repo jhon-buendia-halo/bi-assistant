@@ -17,8 +17,36 @@
       <option value="anthropic" class="bg-surface">Anthropic</option>
       <option value="lenai" class="bg-surface">LenAI (Halo gateway)</option>
       <option value="custom" class="bg-surface">Custom endpoint</option>
+      <option value="copilot" class="bg-surface">GitHub Copilot</option>
     </select>
   </label>
+
+  @if (provider() === 'copilot') {
+    <p
+      data-testid="llm-copilot-status"
+      role="status"
+      class="flex items-start gap-2 rounded-md px-3 py-2 text-[12px]"
+      [class.text-fg-muted]="copilotStatusLoading()"
+      [class.bg-warning-soft]="!copilotStatusLoading() && !copilotSignedIn"
+      [class.text-on-warning-soft]="
+        !copilotStatusLoading() && !copilotSignedIn
+      "
+      [class.text-on-success-soft]="copilotSignedIn"
+    >
+      @if (copilotStatusLoading()) {
+        <lucide-angular
+          [img]="Loader2"
+          [size]="14"
+          class="mt-0.5 shrink-0 animate-spin"
+        />
+      } @else if (copilotSignedIn) {
+        <lucide-angular [img]="CircleCheck" [size]="14" class="mt-0.5 shrink-0" />
+      } @else {
+        <lucide-angular [img]="TriangleAlert" [size]="14" class="mt-0.5 shrink-0" />
+      }
+      <span>{{ copilotStatusText }}</span>
+    </p>
+  }
 
   <!-- Custom endpoint: style, base URL and key come before the model so its list can be loaded. -->
   @if (provider() === 'custom') {
@@ -82,9 +110,14 @@
         [value]="model()"
         (input)="setModel($any($event.target).value)"
         class="field min-w-0 flex-1"
+        [attr.aria-describedby]="
+          provider() === 'copilot' ? 'llm-model-hint' : null
+        "
       />
-      @if (provider() === 'custom') {
+      @if (provider() === 'custom' || provider() === 'copilot') {
         <app-llm-model-picker
+          [provider]="provider() === 'copilot' ? 'copilot' : 'custom'"
+          [signedIn]="copilotSignedIn"
           [apiStyle]="apiStyle()"
           [baseUrl]="baseUrl()"
           [apiKey]="apiKey()"
@@ -92,6 +125,11 @@
         />
       }
     </div>
+    @if (provider() === 'copilot') {
+      <span id="llm-model-hint" class="text-[10px] leading-4 text-fg-muted">
+        Leave as auto to let Copilot choose from your plan's models.
+      </span>
+    }
   </div>
 
   <!-- Always shown so it can be discovered; disabled when the model has no levels. -->
@@ -140,7 +178,7 @@
     </label>
   }
 
-  @if (provider() !== 'custom') {
+  @if (provider() !== 'custom' && provider() !== 'copilot') {
     <label class="flex flex-col gap-1">
       <span class="field-label">API key</span>
       <input

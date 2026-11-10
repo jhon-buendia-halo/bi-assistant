@@ -1,5 +1,6 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
+import { createCopilotModel } from './copilot';
 import {
   BASE_URL_INVALID,
   BASE_URL_REQUIRED,
@@ -8,6 +9,7 @@ import {
 // circular.
 import type {
   AgentModelConfig,
+  CopilotModelConfig,
   CustomAnthropicModelConfig,
 } from './model-resolver';
 
@@ -17,7 +19,8 @@ import type {
 // Mastra's router cannot aim an Anthropic route at another base URL.
 
 export type BuiltModel =
-  Exclude<AgentModelConfig, CustomAnthropicModelConfig> | LanguageModelV3;
+  | Exclude<AgentModelConfig, CustomAnthropicModelConfig | CopilotModelConfig>
+  | LanguageModelV3;
 
 /** The Anthropic Messages API version every request carries (R46). */
 export const ANTHROPIC_VERSION = '2023-06-01';
@@ -90,7 +93,14 @@ export async function buildModel(
   // Same check as isCustomAnthropicConfig, inlined to avoid a circular value
   // import of model-resolver.
   if (typeof config === 'object' && 'kind' in config) {
-    return Promise.resolve(buildCustomAnthropic(config));
+    if (config.kind === 'copilot') {
+      return Promise.resolve(
+        createCopilotModel({ model: config.id.slice('copilot/'.length) }),
+      );
+    }
+    if (config.kind === 'custom-anthropic') {
+      return Promise.resolve(buildCustomAnthropic(config));
+    }
   }
   return Promise.resolve(config);
 }

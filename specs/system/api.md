@@ -357,18 +357,28 @@ Controller prefix `/llm`. Capability: [llm-settings](../capabilities/llm-setting
 | 31 | `PUT /llm/reasoning` | Set reasoning effort only | yes |
 | 32 | `POST /llm/test-connection` | Test candidate settings | yes |
 | 32a | `GET /llm/effort-levels` | Effort levels a model accepts | yes |
-| 32b | `POST /llm/models` | List a custom endpoint's models | yes |
+| 32b | `POST /llm/models` | List a custom endpoint's or the Copilot seat's models | yes |
+| 32c | `GET /llm/copilot/status` | Whether the machine is signed in to GitHub for Copilot | yes |
 
 ```ts
-type LlmProvider = 'openai' | 'anthropic' | 'lenai' | 'custom';   // custom is shown "Custom endpoint"
+type LlmProvider = 'openai' | 'anthropic' | 'lenai' | 'custom' | 'copilot';   // custom is shown "Custom endpoint", copilot "GitHub Copilot"
 type LlmApiStyle = 'openai' | 'anthropic';   // shown "OpenAI-compatible" / "Anthropic-compatible"; custom only
 // Ordered lowest to highest; each model accepts a subset (agents.md 1.4).
 type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 interface SaveLlmSettingsDto {
   provider: LlmProvider; model: string; apiKey?: string; baseUrl?: string; reasoningEffort?: ReasoningEffort;
   apiStyle?: LlmApiStyle;   // required when provider is 'custom'; ignored (not stored) otherwise
+  // provider 'copilot': model blank or omitted = 'auto'; apiKey, baseUrl and apiStyle ignored (not stored)
 }
-interface ListLlmModelsDto { provider: 'custom'; apiStyle: LlmApiStyle; baseUrl: string; apiKey?: string }
+type ListLlmModelsDto =
+  | { provider: 'custom'; apiStyle: LlmApiStyle; baseUrl: string; apiKey?: string }
+  | { provider: 'copilot' };
+interface CopilotStatusView {
+  signedIn: boolean;
+  login: string | null;    // the GitHub login, when signed in
+  method: string | null;   // how the runtime signed in (e.g. "gh-cli"), when signed in
+  message: string;         // see 32c
+}
 interface EffortLevelsView {
   levels: ReasoningEffort[];              // lowest first; [] = the model has no reasoning effort
   defaultEffort: ReasoningEffort | null;  // 'high' when offered, else the first level; null when levels is []
@@ -377,7 +387,7 @@ interface EffortLevelsView {
 interface LlmSettingsView {
   provider: LlmProvider | null; model: string | null; baseUrl: string | null;
   apiStyle: LlmApiStyle | null;  // set only when provider is 'custom', else null
-  apiKeyMasked: string | null;   // "••••••••" + last 4 chars of the key; null when no key is stored (a keyless custom endpoint)
+  apiKeyMasked: string | null;   // "••••••••" + last 4 chars of the key; null when no key is stored (a keyless custom endpoint, or copilot)
   reasoningEffort: ReasoningEffort;   // default 'high'
   configured: boolean;
   keyUnreadable?: true;   // present only when a stored key cannot be decrypted with the current APP_SECRET
@@ -395,18 +405,22 @@ With no key the request carries no credential header. Any `http`/`https` host is
 
 **Custom endpoint error texts.** Used by 32 and 32b, and by chat turns that fail on a custom endpoint ([llm-settings](../capabilities/llm-settings/spec.md)): connection refused, DNS failure or reset `"Could not reach <host> — check the base URL and that the server is running"` (`<host>` = the URL's `host`, port included); HTTP 404 `"The endpoint answered 404 at <url> — check the base URL (OpenAI-compatible servers usually end in /v1)"` (`<url>` = the full URL called); 401 or 403 `"The endpoint rejected the API key (<status>)"`; 429 `"The endpoint is rate limiting requests (429) — try again later"`. Any other status keeps today's text, `"Provider request failed (<status>) — <first 300 characters of the body>"`. No text ever contains the key.
 
+**GitHub Copilot.** Provider `copilot` runs on the user's Copilot seat through the local Copilot runtime, signed in with the GitHub login already on the machine ([ADR-0037](architecture.md)). It has no key, no base URL and no API style; the app stores no GitHub credential. Its texts, used by 32, 32b, 32c and by chat turns that fail on Copilot ([llm-settings](../capabilities/llm-settings/spec.md) R57, R58, R64): not signed in `"Not signed in to GitHub — run \"gh auth login\" (or sign in to the GitHub Copilot CLI or app) on this machine, then test again"`; runtime failure `"The GitHub Copilot runtime could not start — <detail>"`; a Copilot request error `"GitHub Copilot request failed — <message>"`.
+
 **Key handling.** Keys of every provider never appear in a response body, a log line or the desktop diagnostics; `Authorization` and `x-api-key` header values are redacted wherever requests are logged ([non-functional](../product/non-functional.md)).
 
 #### 29. `GET /llm/settings`
 - Response `200`: `LlmSettingsView` (bare). Nothing stored: `{ provider:null, model:null, baseUrl:null, apiStyle:null, apiKeyMasked:null, reasoningEffort:"high", configured:false }`.
 - A stored `custom` provider answers its `apiStyle` and `baseUrl`; with no stored key `apiKeyMasked` is `null` and `configured` is still `true`.
+- A stored `copilot` provider answers `baseUrl:null`, `apiStyle:null`, `apiKeyMasked:null`, its `model` (`auto` by default) and `configured:true`.
 - Stored key that cannot be decrypted with the current `APP_SECRET`: still `200`, with `configured:false`, `keyUnreadable:true`, the stored `provider`, `model`, `baseUrl`, `apiStyle` and `reasoningEffort`, and `apiKeyMasked:null`.
 
 #### 30. `PUT /llm/settings`
 - Body: `SaveLlmSettingsDto`. `apiKey` omitted or blank = use the stored key. For `lenai`, `model` is the deployment name and `baseUrl` is required. `anthropic` takes an API key only (no subscription logins).
 - For `custom`: `apiStyle` and `baseUrl` are required, `model` is free text. The API key is optional: a given key is encrypted and stored; a blank key keeps the key stored for `custom` (when the stored provider is `custom`), and with none stored the endpoint is called and saved with no credential (no `apiKeyCiphertext`). A key stored for another provider is never sent to a custom endpoint. Switching from `custom` to another provider follows that provider's rules (blank = the stored key, else `"apiKey is required — none stored yet"`).
-- Validation (Style A, HTTP 200 `{ ok:false, message }`), checked in this order: `"provider must be one of: openai, anthropic, lenai, custom"`, `"apiStyle must be one of: openai, anthropic"` (custom only), `"baseUrl is required for custom"`, `"baseUrl must be an http or https URL"` (custom only), `"model is required"`, `"baseUrl is required for lenai"`, `"apiKey is required — none stored yet"` (not for custom), and, with no `apiKey` and a stored key that cannot be decrypted, `"The saved API key can't be read because the app secret changed — enter it again in Settings → LLM Configuration"` (same for `POST /llm/test-connection`).
-- **The settings are tested against the provider before they are persisted**; a failing test fails the save with the provider's error text (for custom, the texts above) and nothing is stored.
+- For `copilot`: a blank or omitted `model` is stored as `auto`; `apiKey`, `baseUrl` and `apiStyle` are ignored. The document is stored with `baseUrl: ""` and no `apiKeyCiphertext`, so saving `copilot` removes any stored key, and a later switch to `openai`, `anthropic` or `lenai` needs a key (`"apiKey is required — none stored yet"`).
+- Validation (Style A, HTTP 200 `{ ok:false, message }`), checked in this order: `"provider must be one of: openai, anthropic, lenai, custom, copilot"`, `"apiStyle must be one of: openai, anthropic"` (custom only), `"baseUrl is required for custom"`, `"baseUrl must be an http or https URL"` (custom only), `"model is required"`, `"baseUrl is required for lenai"`, `"apiKey is required — none stored yet"` (not for custom or copilot), and, with no `apiKey` and a stored key that cannot be decrypted, `"The saved API key can't be read because the app secret changed — enter it again in Settings → LLM Configuration"` (same for `POST /llm/test-connection`).
+- **The settings are tested against the provider before they are persisted**; a failing test fails the save with the provider's error text (for custom and copilot, the texts above) and nothing is stored.
 - `reasoningEffort` (optional) must be one of the model's levels (32a), else the save fails with `"reasoning effort must be one of: <levels, comma-separated>"` before any provider call. Omitted: the stored effort is kept when the model offers it, else the model's `defaultEffort`; for a model with no levels the stored effort (or `high`) is kept unchanged. For `custom` the levels are chosen by model name, as for the other providers.
 - Success: `{ ok:true, message:"Configuration saved", settings: LlmSettingsView }`.
 - Side effects: persists (key encrypted; `apiStyle` stored only for `custom`); subsequent agent turns resolve the model from these settings.
@@ -414,22 +428,30 @@ With no key the request carries no credential header. Any `http`/`https` host is
 #### 31. `PUT /llm/reasoning`
 - Body: `{ effort: "low"|"medium"|"high" }`. This is the composer's menu; it still offers only these three.
 - Success: `{ ok:true, message:"Reasoning effort set to <effort>", settings }`. Failures: `"reasoning effort must be one of: low, medium, high"`, `"Configure and save the LLM first — no settings stored yet"`.
-- Applied per model: mapped to the nearest level the model accepts, translated to the provider's native option, and dropped for Anthropic models that reject it (agents.md 1.4). A `custom` provider uses the OpenAI-compatible option for `apiStyle: openai` (`reasoning_effort`, sent only when the model has levels) and the Anthropic one for `apiStyle: anthropic`.
+- Applied per model: mapped to the nearest level the model accepts, translated to the provider's native option, and dropped for Anthropic models that reject it (agents.md 1.4). A `custom` provider uses the OpenAI-compatible option for `apiStyle: openai` (`reasoning_effort`, sent only when the model has levels) and the Anthropic one for `apiStyle: anthropic`. A `copilot` provider sends it as the Copilot session's reasoning effort, only when the model has levels (none for `auto`).
 
 #### 32. `POST /llm/test-connection`
 - Body: `SaveLlmSettingsDto` (same rules as save, nothing persisted; `reasoningEffort` is ignored). Sends one cheap fixed prompt using the candidate settings at the model's `probeEffort` (32a; none sent when the model has no levels); 30 s timeout.
-- Success: `{ ok:true, message:"Connection successful — <provider>/<model> replied \"<reply>\" in <ms>ms" }` (for custom, `custom/<model>`). Failure: `{ ok:false, message }` (validation errors, provider HTTP errors, `"LLM request timed out after 30s"`; for custom, the error texts above).
+- Success: `{ ok:true, message:"Connection successful — <provider>/<model> replied \"<reply>\" in <ms>ms" }` (for custom, `custom/<model>`; for copilot, `copilot/<model>`, e.g. `copilot/auto`). Failure: `{ ok:false, message }` (validation errors, provider HTTP errors, `"LLM request timed out after 30s"`; for custom, the error texts above).
 - Custom, `apiStyle: openai`: when the server rejects the strict `json_schema` response format, the probe retries with `json_object`, then with plain text, and passes on the first step whose reply parses to `{ "status": "<non-empty string>" }` (a code fence tolerated); a failure at the plain-text step, or any failure other than a 400 or 422 rejection of the format, fails the test (llm-settings R49). `apiStyle: anthropic` sends one Messages request.
+- Copilot: checks the sign-in first (32c) and fails with the not-signed-in or runtime text above, then sends the probe as one Copilot session turn with the probe's JSON schema as the response format, through the same agent runtime real calls use; a Copilot request error answers `"GitHub Copilot request failed — <message>"`, a reply that is not the JSON the structured-output text of [llm-settings](../capabilities/llm-settings/spec.md) R18.
 
 #### 32a. `GET /llm/effort-levels`
-- Query: `provider` (`openai`|`anthropic`|`lenai`|`custom`) and `model` (the model or deployment name, trimmed). Both optional; an empty model answers `{ levels: [], defaultEffort: null, probeEffort: null }`. Levels are looked up by model name for every provider, `custom` included.
+- Query: `provider` (`openai`|`anthropic`|`lenai`|`custom`|`copilot`) and `model` (the model or deployment name, trimmed). Both optional; an empty model answers `{ levels: [], defaultEffort: null, probeEffort: null }`. Levels are looked up by model name for every provider, `custom` included. For `copilot` they are restricted to `low`, `medium`, `high`, `xhigh`, `max` (`none` and `minimal` dropped), and `auto` answers no levels ([llm-settings](../capabilities/llm-settings/spec.md) R60).
 - Response `200`: `EffortLevelsView` (bare), from the built-in table in [agents.md](agents.md) section 1.4. Pure lookup: no provider call, nothing stored.
 
 #### 32b. `POST /llm/models`
-- Body: `ListLlmModelsDto`. A blank or omitted `apiKey` uses the key stored for `custom` when the stored provider is `custom` and has one; otherwise the request carries no credential. Nothing is persisted.
+- Body: `ListLlmModelsDto`. For `copilot` the body carries only the provider: the backend asks the Copilot runtime for the signed-in seat's models (15 s timeout) and answers their ids in its order, duplicates removed, `[]` when it lists none (a Copilot Free seat); not signed in or a runtime failure answers the Copilot texts above. The rest of this section is about `custom`.
+- A blank or omitted `apiKey` uses the key stored for `custom` when the stored provider is `custom` and has one; otherwise the request carries no credential. Nothing is persisted.
 - Calls the endpoint's model list (table above) once, 15 s timeout, and reads the ids from `data[].id` (both styles).
 - Success (Style A): `{ ok:true, models: string[] }`: the ids in the server's order, duplicates removed (first kept); `[]` when the server lists none.
-- Failure: `{ ok:false, message }`: `"provider must be custom to load models"`, the custom validation texts of 30 (`apiStyle`, `baseUrl`), a stored key that cannot be decrypted (same text as 30), the custom endpoint error texts above, `"Model list request timed out after 15s"`, and `"The endpoint did not return a model list — type the model name instead"` when the body is not JSON or has no `data` array (llm-settings R48).
+- Failure: `{ ok:false, message }`: `"provider must be custom or copilot to load models"`, the custom validation texts of 30 (`apiStyle`, `baseUrl`), a stored key that cannot be decrypted (same text as 30), the custom endpoint error texts above, `"Model list request timed out after 15s"`, and `"The endpoint did not return a model list — type the model name instead"` when the body is not JSON or has no `data` array (llm-settings R48).
+
+#### 32c. `GET /llm/copilot/status`
+- Response `200`: `CopilotStatusView` (bare). Asks the local Copilot runtime (started on first use) for its auth status; nothing is stored and no GitHub credential is returned.
+- Signed in: `{ signedIn:true, login:"<login>", method:"<how>", message:"Signed in to GitHub as <login>" }`.
+- Not signed in: `{ signedIn:false, login:null, method:null, message:"Not signed in to GitHub — run \"gh auth login\" (or sign in to the GitHub Copilot CLI or app) on this machine, then test again" }`.
+- Runtime cannot start: `{ signedIn:false, login:null, method:null, message:"The GitHub Copilot runtime could not start — <detail>" }`.
 
 ### 2.6 Agents, hub and evals
 
@@ -749,7 +771,7 @@ Controller prefix `/visuals`. Capability: [visuals-library](../capabilities/visu
 
 ### 2.8c Monitoring
 
-Controller prefix `/monitoring`. Capability: [monitoring](../capabilities/monitoring/spec.md). Decision: ADR-0037. **Style B throughout** (real status codes, bare bodies). All five routes are read-only and read Mastra's trace store (`observability.duckdb`, data-model 1.2), not an app collection. A data dir with no trace table yet gives an empty page, not an error.
+Controller prefix `/monitoring`. Capability: [monitoring](../capabilities/monitoring/spec.md). Decision: ADR-0038. **Style B throughout** (real status codes, bare bodies). All five routes are read-only and read Mastra's trace store (`observability.duckdb`, data-model 1.2), not an app collection. A data dir with no trace table yet gives an empty page, not an error.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -1186,6 +1208,8 @@ Note the error text is in **`message`** here but in **`content`** for the chat s
 | `GET /datasources/:id/inventory?refresh=true` (or first load) | Synchronous live walk; can take minutes on a cold warehouse. |
 | `POST /testing-data/:id/load` | Synchronous; up to ~120 s seed timeout plus inventory walk. |
 | `PUT /llm/settings`, `POST /llm/test-connection` | Synchronous; 30 s provider timeout. |
+| `POST /llm/models` | Synchronous; 15 s timeout (custom endpoint or Copilot runtime). |
+| `GET /llm/copilot/status` | Synchronous; the first call starts the local Copilot runtime (a few seconds). |
 
 ---
 

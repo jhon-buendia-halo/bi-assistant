@@ -689,6 +689,42 @@ describe('AgentsService (built-in and user agents)', () => {
       db.close();
     });
 
+    it('names GitHub Copilot and reports it as configured without a key', async () => {
+      const db = new BetterSqlite3(':memory:');
+      const llm = {
+        getView: jest.fn().mockResolvedValue({
+          provider: 'copilot',
+          model: 'auto',
+          baseUrl: null,
+          apiKeyMasked: null,
+          reasoningEffort: 'high',
+          configured: true,
+          apiStyle: null,
+        }),
+      };
+      const service = new AgentsService(
+        {
+          listAgents: () => ({ assistant: fakeAgent('assistant', []) }),
+        } as unknown as MastraService,
+        new UserAgentsService(
+          new UserAgentsRepository(new SqliteDocStore(db, 'agents')),
+          new BuiltinAgentPinsRepository(new SqliteDocStore(db, 'settings')),
+          {
+            list: jest.fn().mockResolvedValue([]),
+          } as unknown as DatasetsRepository,
+          new SkillsRepository(new SqliteDocStore(db, 'skills')),
+        ),
+        llm as never,
+      );
+      expect((await service.get('assistant'))?.llm).toMatchObject({
+        provider: 'copilot',
+        providerName: 'GitHub Copilot',
+        model: 'auto',
+        apiKeyConfigured: true,
+      });
+      db.close();
+    });
+
     it('names a custom endpoint and reports a saved keyless one as configured (R53)', async () => {
       const db = new BetterSqlite3(':memory:');
       const llm = {
