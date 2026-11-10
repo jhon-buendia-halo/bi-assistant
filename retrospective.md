@@ -71,6 +71,24 @@ Entry template:
 
 ---
 
+## 2026-11-10 — Merge of `main` (v0.44.0) into the BA-9, BA-123 and BA-124 branches (PRs #81, #61, #60)
+
+### What went well
+- Checking ids on every branch on origin, not only `main`, found that open PR #91 claims ADR-0037, so the memory ADR went straight to ADR-0038 instead of being renumbered a third time when #91 merges.
+- For each file `main` deleted, BA-9's diff to it was read first. That showed what the modify/delete conflict would lose: the memory kinds on `KnowledgeUse`, the 7,000-character budget and the seed loader. The port reuses `main`'s own M15 mapping, so the block is the same lines, and the ported block test runs the real `OntologyService` over SQLite.
+- Building `main` and the branch before the merge in throwaway worktrees measured the bundle overrun (986 kB plus 17 kB) instead of guessing where it came from.
+
+### What went wrong
+- `merge-tree` listed 19 conflicted files, but several breakages were in files git merged cleanly: imports of the deleted module, a test list git spliced `main`'s `'schema-notes'` into, `main`'s ontology tests pinning 2,000 and BA-9's E2E set list.
+- `tsc -p tsconfig.json` found a type error the 2026-11-04 merge left in `eval-set-files.spec.ts`. That merge ran only the build config, and Jest does not type-check specs.
+- The first rewrite of an R107 range read "R108-R111 and R247 and R134", and my first #61 renumber count was a typo (14 for 13); the script refused it.
+- The E2E run rewrote seven evidence screenshots again and wrote a macOS web visual baseline the repository does not have; all were restored or removed by hand.
+
+### What to do differently
+- Before merging `main`, list the ADR numbers on every ref of origin (`git for-each-ref refs/remotes/origin`) and take the next number free on all of them.
+- For a modify/delete conflict, diff the branch's changes to each deleted file and port each one before accepting the delete; then grep the merged tree for imports of the deleted path.
+- After a merge, run `tsc -p tsconfig.json --noEmit` (specs included) as well as the build config, and run the production `ng build`: a bundle budget is a merge-time failure that unit tests do not catch.
+
 ## 2026-11-09 — 0.4.3 Agent roles for the token-minimal agent org (BA-119)
 
 ### What went well
