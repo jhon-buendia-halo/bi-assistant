@@ -238,6 +238,147 @@ Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the wor
   - `check-specs.py` passes.
 - **Notes:** same branch `feat/BA-119-harness-adjustments`. The user chose an MCP server over scripts and over the claude.ai Atlassian connector, and chose to replace `jira.sh`, on 2026-10-16. `update_issue` replaces the `raw` calls earlier stories needed to set a parent or edit a description. Evidence: [evidence/0.4.2/](evidence/0.4.2/).
 
+#### 0.4.3 — Agent roles: builder, reviewer and a manager that only answers the human  `🚧 In progress`
+- **Intent:** an LLM is used only where the work needs judgment: writing code, reviewing a diff, and talking to the human. Every other part of the org chart is a script, a hook or the pipeline's JavaScript, so it costs no tokens.
+- **Scope:**
+  - `.claude/agents/builder.md` (`isolation: worktree`):
+    - Works one story on a `unit/<EPIC-ID>-<roadmap-id>` branch, from the brief made by `scripts/brief.mjs` (0.4.4). It does not read the whole retrospective or every skill.
+    - Writes the failing unit test first, then the code.
+    - For a UI story, writes the story's main Gherkin scenario once, as a Playwright test whose `test.step` titles are the Given/When/Then lines. This file is the demo in the fast loop (0.4.5) and grows into the E2E spec in the gate.
+    - Carries the standing rules:
+      - write files with Edit/Write or in a private scratch folder, never under shared `/tmp` names
+      - never kill a process it did not start
+      - set `E2E_SKIP_DOCKER=1`
+      - never run `npm test`/`build` alongside `test:e2e`
+  - `.claude/agents/reviewer.md`:
+    - Read-only, on a cheaper model than the builder.
+    - Runs only after the deterministic checks have passed (0.4.4).
+    - Gets the diff and the story, never the builder's transcript.
+    - Returns findings or `approve`.
+  - `.claude/agents/manager.md`:
+    - Tools: read, search, `AskUserQuestion`, `PushNotification`. No Edit, Write or Bash.
+    - Runs only when the human asks "what needs me?" or a story fails review 3 times. It answers with one question, recommended option first.
+    - It does not dispatch or poll. The pipeline (0.4.4) and `scripts/board.mjs` (0.4.7) do that.
+  - Manager mode is opt-in (`claude --agent manager`). A plain session keeps today's single-agent workflow.
+  - Unit worktrees made by `isolation: worktree` are temporary and exempt from the epic worktree naming rule. `workflow-plan` says so.
+- **Out of scope:** app code; Jira; cloud agents; an LLM QA agent (QA is the script in 0.4.5).
+- **Acceptance:**
+  - A new session lists the three agents.
+  - A headless `claude --agent manager` run asked to edit a file cannot: Edit, Write and Bash are not available to it.
+  - A headless reviewer run on a scratch diff with a planted bug reports the bug.
+  - `check-specs.py` passes.
+- **Notes:**
+  - Branch: `feat/BA-119-harness-adjustments`, reopened because the epic's first branch merged.
+  - On 2026-11-09 the user chose this design from an "org chart" diagram, with three decisions:
+    1. Builders write failing **unit** tests first. E2E stays in the acceptance gate, after the human tests by hand.
+    2. One PR per epic.
+    3. `roadmap.md` is the ticket board, with no Jira.
+  - The same day the user chose the token-minimal version: LLM only for judgment, scripts for the rest. They also chose to write the main scenario once, as both the demo and the start of the E2E spec, and to commit videos under `evidence/`.
+
+#### 0.4.4 — Story pipeline: brief, build, deterministic checks, review up to 3×  `📋 Planned`
+- **Intent:** every story takes the same path in the same order, fixed in code rather than by an LLM. The LLM sees as little context as possible, and only diffs that already pass the mechanical checks.
+- **Scope:**
+  - `scripts/brief.mjs <roadmap-id>` prints the builder's brief:
+    - the roadmap entry
+    - the epic spec's section for it
+    - the lessons from `lessons.md` (0.4.8) tagged for the areas the story touches
+    - the files likely touched, by grepping the Scope's paths
+  - A saved workflow, `.claude/workflows/story-pipeline.js`. Input: an epic ID and roadmap story IDs. For each story:
+    1. Build the brief with `brief.mjs`.
+    2. The builder writes the code. Builders run in parallel, at most 4 by default.
+    3. The deterministic checks run on the unit branch: `tsc`, lint, the related unit tests (Jest `--findRelatedTests`) and `check-specs.py`. If one fails, its output goes straight back to the builder, with no review.
+    4. The reviewer reviews. Findings go back to the builder, at most 3 rounds. After the third, the story escalates to the manager.
+    5. QA runs `scripts/qa.mjs --fast` (0.4.5).
+    6. A passing unit branch is merged into the epic worktree.
+  - The pipeline writes a log per story: steps, review rounds, check failures and retries, as JSON under `evidence/<roadmap-id>/pipeline.json`.
+  - Fallback: if the saved workflow can't be run in this setup, the same steps run from a single `scripts/pipeline.mjs` that calls `claude -p --agent builder|reviewer` headless.
+- **Out of scope:** per-worktree ports and databases, which more than one QA lane would need.
+- **Acceptance:**
+  - A dry run on two throwaway stories in a scratch epic shows:
+    - parallel builds
+    - a planted type error returned to the builder without a review
+    - a review loop that stops at 3
+    - both unit branches merged, confirmed with `git merge-base --is-ancestor`
+  - `brief.mjs` output for a sample story stays under a set size, checked in a unit test.
+- **Notes:** depends on 0.4.3. Uses `lessons.md` from 0.4.8 if it is there, otherwise only the brief's other parts.
+
+#### 0.4.5 — Deterministic QA: impacted tests, demo video, test-run evidence  `📋 Planned`
+- **Intent:** checks, test selection, the demo video and the evidence are produced by a script, with no LLM. Each story ends with a captioned demo video and a `tests.md` that proves which tests ran.
+- **Scope:**
+  - `scripts/qa.mjs <roadmap-id> [--fast|--gate]` runs one story at a time (a lock file makes it the single QA lane), because worktrees share Postgres on 55432, the default ports and `backend/dist`. It selects tests mechanically:
+    - Playwright `--only-changed=<epic base>` for the specs touched through imports, plus the specs of the Features the story names in its spec
+    - Jest `--findRelatedTests` on the changed files
+  - **`--fast` (fast loop):**
+    - Runs the related unit tests, the builds, `check-specs.py` and the selected Playwright specs.
+    - Records the **demo**: for a UI story, it runs the story's main scenario with `DEMO=1`, which turns on `slowMo`, 1280×720 video and a caption overlay showing each `test.step` title. It saves `evidence/<roadmap-id>/demo.webm`.
+    - For a story with no UI, the demo is a text transcript of its main scenario's commands and output (`demo.txt`).
+  - **`--gate` (acceptance gate):**
+    - Runs the step-6 spec list, the unit tests, lint and the builds, with Playwright JSON and HTML reporters and Jest `--json`. Video and trace are kept for failures.
+    - Writes `evidence/<roadmap-id>/tests.md`:
+      - each command with passed / failed / skipped counts, read from the reports
+      - the specs run, compared with step 6's list: a listed spec that did not run fails the gate and is named
+      - links to `demo.webm`, the reports and any failure videos
+  - `frontend/playwright.config.ts` gets the `DEMO` switch and the reporters. A `frontend/e2e/support/demo-captions.ts` fixture draws the captions.
+  - **Videos are committed** under `evidence/<roadmap-id>/`. `qa.mjs` fails a demo over 5 MB.
+  - `verify` and `workflow-ship` call `qa.mjs` instead of listing commands, and the changelog entry links `demo.webm` and `tests.md`.
+- **Out of scope:** recording the desktop (Electron) app; narration; editing videos together.
+- **Acceptance:**
+  - `qa.mjs --fast` on a sample UI story produces one captioned `demo.webm` under 5 MB. Without `DEMO=1`, the same spec runs at normal speed with no captions.
+  - `qa.mjs --gate` writes a `tests.md` whose counts match the JSON reports.
+  - Removing one impacted spec from the run fails the gate, naming the spec.
+  - Two `qa.mjs` runs started together run one after the other.
+  - This epic's own evidence includes a demo and a `tests.md`.
+- **Notes:** depends on 0.4.4. Touches test configuration and a test fixture under `frontend/`, not app code.
+
+#### 0.4.6 — "ship it": a human-typed gate on the epic PR  `📋 Planned`
+- **Intent:** only a human opens or merges the epic PR, by typing `ship it <EPIC-ID>`. Today that is a convention. This story makes it a hard gate that no agent can get past.
+- **Scope:**
+  - A `UserPromptSubmit` hook. When the prompt is exactly `ship it <EPIC-ID>`, it writes a one-time ship token for that epic. The token is stored in git's common dir and never committed.
+  - A `PreToolUse` hook on Bash and PowerShell. It blocks `gh pr create` and `gh pr merge` on a branch for `<EPIC-ID>` unless that epic has a token, and uses up the token.
+  - Both hooks live in `.claude/hooks/` with unit tests and are registered in `.claude/settings.json`.
+  - `workflow-ship` says to wait for `ship it`.
+- **Out of scope:** GitHub branch protection. Approval on `main` stays as set in 0.2.4.
+- **Acceptance:**
+  - Unit tests show that:
+    - the token is written only for the exact phrase
+    - `gh pr create` is blocked without a token and allowed with one
+    - the token works only once
+  - In a headless session, a `gh pr create` call is denied when the phrase was not typed.
+- **Notes:** independent of the other stories.
+
+#### 0.4.7 — Board status and check-ins without an LLM  `📋 Planned`
+- **Intent:** the 10-minute check-in costs no tokens. A script watches the board and notifies the human only when something needs them. The manager LLM wakes only then.
+- **Scope:**
+  - `scripts/board.mjs [--watch 10m]` reads `roadmap.md`, the `unit/<EPIC-ID>-*` branches, the latest `pipeline.json` and `tests.md`, and the QA lock. It prints, per story:
+    - status
+    - review round
+    - last check result
+    - whether a human is needed: hand test ready, escalation, or ready for `ship it`
+  - `--watch` re-runs it every 10 minutes and sends a desktop notification only when the "needs human" list changes. It is a plain process or OS scheduled task, with no LLM.
+  - `scripts/board.mjs --set <roadmap-id> <status>` updates the status in `roadmap.md`. The pipeline calls it, so no LLM edits the board.
+  - CLAUDE.md gets a short **Agent roles** section: the three agents, the scripts, the opt-in, and links to the skills.
+- **Out of scope:** voice input setup; a live board page.
+- **Acceptance:**
+  - Unit tests cover parsing `roadmap.md` statuses and the "needs human" rules on fixture data.
+  - A `--watch` run notifies once per change and stays silent otherwise.
+  - The `workflow-steps` mod still parses CLAUDE.md, and `check-specs.py` passes.
+- **Notes:** depends on 0.4.4 for `pipeline.json`, and on 0.4.5 for `tests.md`.
+
+#### 0.4.8 — Tagged lessons digest and token metering  `📋 Planned`
+- **Intent:** an agent reads only the past lessons that apply to its work, not the whole `retrospective.md` (over 1,100 lines). Token use per story is measured, so savings are known rather than guessed.
+- **Scope:**
+  - `lessons.md`: every "What to do differently" bullet from `retrospective.md`, de-duplicated, one line each, tagged by area (`e2e`, `worktree`, `subagents`, `evals`, `release`, `specs`, `sql`, …), with a link back to its entry.
+    - `scripts/lessons.mjs --check` fails when a new retrospective entry adds a lesson that `lessons.md` does not yet include.
+    - `scripts/lessons.mjs --tags e2e,worktree` prints the matching lessons for `brief.mjs`.
+  - CLAUDE.md's mandatory first action becomes "read `lessons.md`", or the lessons for your tags. `retrospective.md` stays the full record, and `workflow-retrospective` adds each new lesson to the digest.
+  - `scripts/tokens.mjs <roadmap-id>` totals input, output and cache tokens of the story's agent runs from the Claude Code session transcripts and writes them into `pipeline.json` and `tests.md`.
+- **Out of scope:** rewriting past retrospective entries.
+- **Acceptance:**
+  - `lessons.md` covers every existing lesson, checked by `lessons.mjs --check`.
+  - `tokens.mjs` totals match a hand count on one sample transcript.
+  - The dry-run stories in 0.4.4 report their token totals.
+- **Notes:** `brief.mjs` (0.4.4) uses this digest. It is a rule change to the first action, approved by the user on 2026-11-09.
+
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
 Source of truth for scope and dates: Jira project **BA**, version *1.0 Beta* ([timeline](https://halo-powered.atlassian.net/jira/software/projects/BA/boards/2688/timeline)). Each milestone mirrors one Jira epic and each feature mirrors one story, so IDs map 1:1. Imported 2026-10-01. Status changes are made in both places.
