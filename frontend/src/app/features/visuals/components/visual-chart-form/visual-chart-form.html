@@ -1,0 +1,227 @@
+<div
+  data-testid="visual-chart-form"
+  class="flex flex-col gap-3 rounded-xl border border-border-strong bg-surface-muted p-4"
+>
+  <div class="flex items-center justify-between">
+    <p class="text-[13px] font-medium text-fg">
+      {{ isEdit() ? "Edit chart" : "New chart" }}
+    </p>
+    <button
+      type="button"
+      title="Close"
+      aria-label="Close"
+      (click)="cancel()"
+      class="btn-icon"
+    >
+      <lucide-angular [img]="X" [size]="14" />
+    </button>
+  </div>
+
+  <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <label class="flex flex-col gap-1">
+      <span class="field-label">Name</span>
+      <input
+        type="text"
+        data-testid="visual-form-name"
+        placeholder="Bar chart"
+        [attr.maxlength]="limits.name"
+        [value]="name()"
+        (input)="name.set($any($event.target).value)"
+        class="field"
+      />
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="field-label">Category</span>
+      <input
+        type="text"
+        data-testid="visual-form-category"
+        placeholder="Comparison"
+        [attr.list]="datalistId"
+        [attr.maxlength]="limits.category"
+        [value]="category()"
+        (input)="category.set($any($event.target).value)"
+        class="field"
+      />
+      <datalist [id]="datalistId">
+        @for (item of categories(); track item) {
+          <option [value]="item"></option>
+        }
+      </datalist>
+    </label>
+  </div>
+
+  <div class="grid grid-cols-1 items-start gap-3 sm:grid-cols-[1fr_1fr_140px]">
+    <label class="flex flex-col gap-1">
+      <span class="field-label">Preview</span>
+      <select
+        data-testid="visual-form-preview"
+        [value]="previewKey()"
+        (change)="previewKey.set($any($event.target).value)"
+        class="field"
+      >
+        <option
+          [value]="noPreview"
+          [selected]="previewKey() === noPreview"
+          class="bg-surface"
+        >
+          No preview
+        </option>
+        @for (option of previewOptions; track option.value) {
+          <option
+            [value]="option.value"
+            [selected]="option.value === previewKey()"
+            class="bg-surface"
+          >
+            {{ option.label }}
+          </option>
+        }
+      </select>
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="field-label">Drawn by the app as</span>
+      <select
+        data-testid="visual-form-renderer"
+        [value]="rendererForm()"
+        (change)="rendererForm.set($any($event.target).value)"
+        class="field"
+      >
+        <option value="" [selected]="rendererForm() === ''" class="bg-surface">
+          Not drawn by the app
+        </option>
+        @for (option of rendererOptions; track option.value) {
+          <option
+            [value]="option.value"
+            [selected]="option.value === rendererForm()"
+            class="bg-surface"
+          >
+            {{ option.label }}
+          </option>
+        }
+      </select>
+    </label>
+    <div
+      class="h-[84px] rounded-lg border border-border bg-surface-muted p-1.5"
+      data-testid="visual-form-preview-live"
+    >
+      <app-visual-preview class="h-full w-full" [previewKey]="previewKey()" />
+    </div>
+  </div>
+
+  <label class="flex flex-col gap-1">
+    <span class="field-label">Description</span>
+    <textarea
+      rows="2"
+      data-testid="visual-form-description"
+      placeholder="What the chart shows."
+      [attr.maxlength]="limits.description"
+      [value]="description()"
+      (input)="description.set($any($event.target).value)"
+      class="field resize-y"
+    ></textarea>
+  </label>
+
+  <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <label class="flex flex-col gap-1">
+      <span class="field-label">When to use</span>
+      <textarea
+        rows="3"
+        data-testid="visual-form-when-to-use"
+        placeholder="The questions it answers well."
+        [attr.maxlength]="limits.whenToUse"
+        [value]="whenToUse()"
+        (input)="whenToUse.set($any($event.target).value)"
+        class="field resize-y"
+      ></textarea>
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="field-label">When to avoid</span>
+      <textarea
+        rows="3"
+        data-testid="visual-form-when-to-avoid"
+        placeholder="Where it misleads or a better chart exists."
+        [attr.maxlength]="limits.whenToAvoid"
+        [value]="whenToAvoid()"
+        (input)="whenToAvoid.set($any($event.target).value)"
+        class="field resize-y"
+      ></textarea>
+    </label>
+  </div>
+
+  <div class="grid grid-cols-1 items-end gap-3 sm:grid-cols-2">
+    <label class="flex flex-col gap-1">
+      <span class="field-label">Data needed</span>
+      <input
+        type="text"
+        data-testid="visual-form-data-shape"
+        placeholder="1 category + 1 measure"
+        [attr.maxlength]="limits.dataShape"
+        [value]="dataShape()"
+        (input)="dataShape.set($any($event.target).value)"
+        class="field"
+      />
+    </label>
+    <label class="flex items-center gap-2 pb-2 text-[13px] text-fg">
+      <input
+        type="checkbox"
+        data-testid="visual-form-enabled"
+        [checked]="enabled()"
+        (change)="enabled.set($any($event.target).checked)"
+        class="h-4 w-4 accent-primary"
+      />
+      <span>Enabled</span>
+    </label>
+  </div>
+
+  @if (error(); as err) {
+    <p
+      data-testid="visual-form-error"
+      role="alert"
+      class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  }
+
+  <div class="mt-1 flex flex-wrap items-center gap-2 text-[13px]">
+    @if (isEdit()) {
+      <button
+        type="button"
+        data-testid="visual-form-delete"
+        (click)="remove()"
+        [disabled]="deleting() || saving()"
+        class="btn btn-danger"
+      >
+        @if (deleting()) {
+          <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+        } @else {
+          <lucide-angular [img]="Trash2" [size]="14" />
+        }
+        <span>Delete</span>
+      </button>
+    }
+    <span class="flex-1"></span>
+    <button
+      type="button"
+      data-testid="visual-form-cancel"
+      (click)="cancel()"
+      class="btn btn-outline"
+    >
+      Cancel
+    </button>
+    <button
+      type="button"
+      data-testid="visual-form-save"
+      (click)="save()"
+      [disabled]="!canSave()"
+      title="Name and category are required"
+      class="btn btn-primary"
+    >
+      @if (saving()) {
+        <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+        <span>Saving…</span>
+      } @else {
+        <span>Save</span>
+      }
+    </button>
+  </div>
+</div>

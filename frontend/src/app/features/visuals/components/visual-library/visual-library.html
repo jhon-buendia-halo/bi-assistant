@@ -1,0 +1,207 @@
+<div class="flex flex-col" data-testid="visuals-section">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h2
+        class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
+      >
+        Visuals
+      </h2>
+      <p class="mt-1 max-w-xl text-[13px] text-fg-muted">
+        Chart types for data visualization, grouped by what they show.
+      </p>
+    </div>
+    <div class="flex shrink-0 items-center gap-2">
+      <button
+        type="button"
+        data-testid="visuals-add"
+        (click)="openNew()"
+        [disabled]="adding()"
+        class="btn btn-primary"
+      >
+        <lucide-angular [img]="Plus" [size]="14" />
+        <span>Add chart</span>
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading charts…</span>
+    </div>
+  } @else if (error(); as err) {
+    <p
+      data-testid="visuals-error"
+      role="alert"
+      class="mt-8 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  } @else {
+    @if (charts().length > 0) {
+      <div class="mt-6 flex flex-col gap-3">
+        <label class="relative block max-w-md">
+          <span class="sr-only">Search charts</span>
+          <lucide-angular
+            [img]="Search"
+            [size]="14"
+            class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-fg-muted"
+          />
+          <input
+            type="search"
+            data-testid="visuals-search"
+            aria-label="Search charts"
+            placeholder="Search charts"
+            [value]="search()"
+            (input)="search.set($any($event.target).value)"
+            class="field pl-10"
+          />
+        </label>
+        <div
+          class="flex flex-wrap items-center gap-2"
+          role="group"
+          aria-label="Filter by category"
+        >
+          <button
+            type="button"
+            data-testid="visuals-category-all"
+            (click)="setCategory(null)"
+            [attr.aria-pressed]="categoryFilter() === null"
+            class="filter-pill"
+            [class.filter-pill-active]="categoryFilter() === null"
+          >
+            All
+          </button>
+          @for (category of categories(); track category) {
+            <button
+              type="button"
+              [attr.data-testid]="'visuals-category-' + category"
+              (click)="setCategory(category)"
+              [attr.aria-pressed]="categoryFilter() === category"
+              class="filter-pill"
+              [class.filter-pill-active]="categoryFilter() === category"
+            >
+              {{ category }}
+            </button>
+          }
+        </div>
+      </div>
+    }
+
+    @if (adding()) {
+      <div class="mt-6">
+        <app-visual-chart-form
+          [chart]="null"
+          [categories]="categories()"
+          (saved)="onSaved()"
+          (cancelled)="closeForm()"
+        />
+      </div>
+    }
+
+    @if (charts().length === 0) {
+      @if (!adding()) {
+        <div
+          data-testid="visuals-empty"
+          class="mt-8 flex flex-col items-start gap-3 rounded-xl border border-dashed border-border px-6 py-8"
+        >
+          <span
+            class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"
+          >
+            <lucide-angular [img]="ChartColumn" [size]="17" />
+          </span>
+          <p class="text-[13px] text-fg">No charts yet.</p>
+        </div>
+      }
+    } @else if (groups().length === 0) {
+      <p data-testid="visuals-no-match" class="mt-8 text-[13px] text-fg-muted">
+        No charts match your search.
+      </p>
+    } @else {
+      <div class="mt-6 flex flex-col gap-7">
+        @for (group of groups(); track group.category) {
+          <section
+            class="flex flex-col gap-3"
+            [attr.data-testid]="'visuals-group-' + group.category"
+          >
+            <h3
+              class="flex items-baseline gap-2 text-[14px] font-medium text-fg-strong"
+            >
+              <span>{{ group.category }}</span>
+              <span class="text-[12px] font-normal text-fg-muted">{{
+                group.charts.length
+              }}</span>
+            </h3>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              @for (chart of group.charts; track chart.id) {
+                @if (editingId() === chart.id) {
+                  <div class="col-span-full" data-testid="visual-form-slot">
+                    <app-visual-chart-form
+                      [chart]="chart"
+                      [categories]="categories()"
+                      (saved)="onSaved()"
+                      (deleted)="onDeleted($event)"
+                      (cancelled)="closeForm()"
+                    />
+                  </div>
+                } @else {
+                  <div
+                    [attr.data-testid]="'visual-card-' + chart.id"
+                    (click)="openEdit(chart)"
+                    class="card flex cursor-pointer flex-col gap-2.5 p-3 hover:border-border-strong"
+                    [class.opacity-60]="!chart.enabled"
+                  >
+                    <div class="h-[84px] rounded-lg bg-surface-muted p-1.5">
+                      <app-visual-preview
+                        class="h-full w-full"
+                        [previewKey]="chart.previewKey"
+                      />
+                    </div>
+                    <div class="flex items-start gap-2">
+                      <span
+                        class="min-w-0 flex-1 truncate text-[14px] font-medium text-fg-strong"
+                        >{{ chart.name }}</span
+                      >
+                      <button
+                        type="button"
+                        title="Edit"
+                        [attr.aria-label]="'Edit ' + chart.name"
+                        [attr.data-testid]="'visual-edit-' + chart.id"
+                        (click)="$event.stopPropagation(); openEdit(chart)"
+                        class="shrink-0 btn-icon"
+                      >
+                        <lucide-angular [img]="Pencil" [size]="14" />
+                      </button>
+                    </div>
+                    @if (chart.description) {
+                      <p
+                        class="line-clamp-2 text-[12px] leading-relaxed text-fg-muted"
+                      >
+                        {{ chart.description }}
+                      </p>
+                    }
+                    @if (chart.rendererForm !== null || !chart.enabled) {
+                      <div class="flex flex-wrap items-center gap-1.5">
+                        @if (chart.rendererForm !== null) {
+                          <span class="chip chip-info px-1.5 py-0.5 text-[10px]"
+                            >Drawn by the app</span
+                          >
+                        }
+                        @if (!chart.enabled) {
+                          <span
+                            class="chip chip-neutral px-1.5 py-0.5 text-[10px]"
+                            >Disabled</span
+                          >
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              }
+            </div>
+          </section>
+        }
+      </div>
+    }
+  }
+</div>
