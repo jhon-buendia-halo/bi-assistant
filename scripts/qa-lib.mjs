@@ -229,7 +229,7 @@ export function renderDemoTxt(id, title, steps) {
   const out = [`Demo — ${id}${title ? ` ${title}` : ''}`, '', 'No UI scenario carries this story\'s tag, so the demo is this transcript of the checks scripts/qa.mjs ran.', ''];
   for (const s of steps) {
     out.push(`$ ${s.command}`, `  exit ${s.exitCode} (${s.status})`);
-    for (const line of s.summary ?? []) out.push(`  ${line}`);
+    for (const line of s.summary ?? []) out.push(`  ${stripAnsi(line).trim()}`);
     out.push('');
   }
   return out.join('\n');
@@ -303,6 +303,12 @@ function defaultIsAlive(pid) {
   } catch (err) {
     return err.code === 'EPERM';
   }
+}
+
+/** Removes terminal colour codes from command output. */
+export function stripAnsi(text) {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\u001b\[[0-9;]*m/g, '');
 }
 
 export function toPosix(p) {

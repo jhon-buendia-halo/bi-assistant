@@ -180,6 +180,12 @@ test('renderDemoTxt and storyTitle describe a story with no UI', () => {
     { command: 'node --test scripts/qa-lib.test.mjs', exitCode: 0, status: 'passed', summary: ['# pass 9'] },
   ]);
   assert.match(txt, /\$ node --test scripts\/qa-lib\.test\.mjs\n {2}exit 0 \(passed\)\n {2}# pass 9/);
+  // Terminal colour codes are stripped from the transcript.
+  const colored = renderDemoTxt('0.4.5', 'x', [
+    { command: 'npm run build', exitCode: 0, status: 'passed', summary: ['\u001b[33m▲ \u001b[1mWARNING\u001b[0m budget'] },
+  ]);
+  assert.match(colored, / {2}▲ WARNING budget/);
+  assert.doesNotMatch(colored, /\u001b/);
 });
 
 test('acquireLock makes runs wait their turn and clears a stale lock', async () => {

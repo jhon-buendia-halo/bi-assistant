@@ -13,6 +13,8 @@ Part of the workflow in [CLAUDE.md](../../../CLAUDE.md), which keeps the always-
 
     The changelog entry links the story's `evidence/<roadmap-id>/demo.webm` (or `demo.txt`) and `tests.md`, both written by `scripts/qa.mjs` ([delivery.md](../../../specs/system/delivery.md) 13).
 
+    **A story with a demo also ships a demo artifact** (required): see **Demo artifact** below.
+
 ## Logging convention — record every change
 
 **Every meaningful change must be logged in [changelog.md](../../../changelog.md), as the *final* implementation step (step 10).** Reverse-chronological dated sections (`## YYYY-MM-DD`) with categorized subsections (`### Added`, `### Changed`, `### Removed`, `### Cut`, `### Fixed`). Bundle related edits from one session into one bullet; reference the affected file or roadmap feature ID. Never rewrite past entries — fix forward with a new dated entry. Roadmap status transitions get a matching changelog entry at the same time. **Every entry links to its evidence.**
@@ -25,9 +27,20 @@ Layout: one folder per shipped change, keyed by roadmap feature ID — `evidence
 
 - **E2E results** — the `npm run test:e2e` summary (`e2e-results.txt`) and/or the Playwright HTML report / trace (`frontend/playwright-report/`, `frontend/test-results/`) for the specs exercising the change, naming the spec files so evidence maps back to Gherkin scenarios.
 - **Screenshots** — of the running web app (Playwright `page.screenshot` in the app fixture works; desktop screenshots only when the user asked for a desktop run), named for what they show (`visual-panel-revert.png`, not `screenshot1.png`), capturing the actual claimed state.
-- **Other artifacts** — exported visuals (`index.html`, `answer.md`, `data.json`), sample API responses, diagnostics reports, short recordings.
+- **Other artifacts** — exported visuals (`index.html`, `answer.md`, `data.json`), sample API responses, diagnostics reports, short recordings. For a story with a demo, also `demo-page.html` and the demo artifact URL in the folder's `README.md` (**Demo artifact** below).
 
 Link with a relative path: `Evidence: [evidence/1.2.3/](../../../evidence/1.2.3/)`. Keep artifacts lightweight. If a change genuinely produces no observable artifact, say so explicitly — *"Evidence: existing E2E suite green, no UI change"*.
+
+## Demo artifact — the video and the work description on one link
+
+For a story with a demo (`demo.webm` or `demo.txt`), the demo is shared as a Claude artifact so a teammate can watch it and read what was done from one link ([delivery.md](../../../specs/system/delivery.md) 13):
+
+1. `node scripts/demo-page.mjs <roadmap-id>` (no LLM) writes `evidence/<roadmap-id>/demo-page.html` from the roadmap entry, the changelog entry, `tests.md` and the demo.
+2. Publish it with the Artifact tool: `file_path` = that `demo-page.html`, `files` = `{ "demo.webm": "evidence/<roadmap-id>/demo.webm" }` (omit `files` for `demo.txt`), `icon` such as `video` on the first publish, and a one-sentence `description`. Re-publishing the same story updates the same artifact: pass its `url`.
+3. Record the artifact URL in `evidence/<roadmap-id>/README.md` and add `Demo: <artifact url>` to the story's changelog entry.
+4. Tell the human to share the link from the page's Share menu. Artifacts are private by default, and sharing is the human's step.
+
+At step 10, regenerate and republish to the same URL once `tests.md` exists, and only then link it from the changelog. In the fast loop it is first published right after `qa.mjs --fast` (see `verify`).
 
 ## The epic PR and cleanup
 

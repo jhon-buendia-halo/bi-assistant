@@ -80,10 +80,10 @@ async function main() {
   const commonDir = path.resolve(root, git(['rev-parse', '--git-common-dir'], root));
   const base = opts.base ?? git(['merge-base', 'HEAD', 'origin/main'], root);
   const evidenceDir = path.join(root, 'evidence', id);
-  const reportDir = path.join(root, 'frontend', 'test-results', 'qa', id);
+  // Outside frontend/test-results, which Playwright empties at the start of
+  // every run (it is its outputDir); git-ignored (delivery.md 13).
+  const reportDir = path.join(root, '.qa-reports', id);
   fs.mkdirSync(evidenceDir, { recursive: true });
-  fs.rmSync(reportDir, { recursive: true, force: true });
-  fs.mkdirSync(reportDir, { recursive: true });
 
   const release = await acquireLock(path.join(commonDir, 'qa.lock'), {
     pid: process.pid,
@@ -91,6 +91,9 @@ async function main() {
     mode,
     startedAt: new Date().toISOString(),
   });
+  // Only once the lane is ours: a waiting run must not touch shared state.
+  fs.rmSync(reportDir, { recursive: true, force: true });
+  fs.mkdirSync(reportDir, { recursive: true });
   const onSignal = () => {
     release();
     process.exit(130);
@@ -256,8 +259,8 @@ async function main() {
     for (const name of ['demo.webm', 'demo.txt']) {
       if (fs.existsSync(path.join(evidenceDir, name))) links.push(`[${name}](${name})`);
     }
-    links.push(`Playwright report (local): \`frontend/test-results/qa/${id}/html/index.html\``);
-    links.push(`Command logs (local): \`frontend/test-results/qa/${id}/\``);
+    links.push(`Playwright report (local): \`.qa-reports/${id}/html/index.html\``);
+    links.push(`Command logs and reports (local): \`.qa-reports/${id}/\``);
     fs.writeFileSync(
       path.join(evidenceDir, 'tests.md'),
       renderTestsMd({
