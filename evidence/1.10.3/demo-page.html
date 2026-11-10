@@ -1,0 +1,173 @@
+<title>Copilot provider demo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --fg: #1d1f23;
+  --muted: #5b616b;
+  --border: #dcdde0;
+  --accent: #2f5bd3;
+  --code-bg: #eef0f3;
+  --focus: #2f5bd3;
+  --ok-bg: #e3f4e8;
+  --ok-fg: #17663a;
+  --warn-bg: #fdf0d8;
+  --warn-fg: #7a4d00;
+  --bad-bg: #fbe4e2;
+  --bad-fg: #a3261b;
+  --neutral-bg: #eceef1;
+  --neutral-fg: #444a53;
+  --video-bg: #e9eaed;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141518;
+    --surface: #1c1e22;
+    --fg: #e7e8ea;
+    --muted: #a0a6b0;
+    --border: #33363d;
+    --accent: #8aa8ff;
+    --code-bg: #262930;
+    --focus: #8aa8ff;
+    --ok-bg: #173523;
+    --ok-fg: #8fdcaa;
+    --warn-bg: #3a2c10;
+    --warn-fg: #f2c46b;
+    --bad-bg: #42201d;
+    --bad-fg: #ff9d92;
+    --neutral-bg: #2a2d33;
+    --neutral-fg: #c3c7ce;
+    --video-bg: #0e0f11;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141518;
+  --surface: #1c1e22;
+  --fg: #e7e8ea;
+  --muted: #a0a6b0;
+  --border: #33363d;
+  --accent: #8aa8ff;
+  --code-bg: #262930;
+  --focus: #8aa8ff;
+  --ok-bg: #173523;
+  --ok-fg: #8fdcaa;
+  --warn-bg: #3a2c10;
+  --warn-fg: #f2c46b;
+  --bad-bg: #42201d;
+  --bad-fg: #ff9d92;
+  --neutral-bg: #2a2d33;
+  --neutral-fg: #c3c7ce;
+  --video-bg: #0e0f11;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-wrap: anywhere;
+}
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 48px;
+}
+header { margin-bottom: 20px; }
+.eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 0.8125rem; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 1.2rem + 1.4vw, 2rem); line-height: 1.2; letter-spacing: -0.01em; }
+h2 { margin: 36px 0 10px; font-size: 1.125rem; line-height: 1.3; }
+p, li { max-width: 65ch; }
+p { margin: 0 0 10px; }
+.intent { color: var(--muted); font-size: 1.0625rem; margin-bottom: 12px; }
+ul, ol { margin: 0 0 10px; padding-left: 1.4em; }
+li { margin: 3px 0; }
+li > ul, li > ol { margin: 4px 0 0; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, video:focus-visible, .scroll:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+code, pre { font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace; font-size: 0.875em; }
+code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+.chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.8125rem; font-weight: 600; line-height: 1.6; }
+.chip.ok { background: var(--ok-bg); color: var(--ok-fg); }
+.chip.warn { background: var(--warn-bg); color: var(--warn-fg); }
+.chip.bad { background: var(--bad-bg); color: var(--bad-fg); }
+.chip.neutral { background: var(--neutral-bg); color: var(--neutral-fg); }
+.demo { margin: 0; }
+.demo video { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; height: auto; background: var(--video-bg); border: 1px solid var(--border); border-radius: 8px; }
+.demo pre { margin: 0; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; white-space: pre; line-height: 1.45; }
+.demo figcaption { margin-top: 8px; color: var(--muted); font-size: 0.8125rem; max-width: 65ch; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; }
+.card > :last-child { margin-bottom: 0; }
+.shipped { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.shipped > li { max-width: none; margin: 0; }
+.date { color: var(--muted); font-size: 0.8125rem; margin: 0 0 4px; }
+.aside { color: var(--muted); font-size: 0.9375rem; }
+.scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td code { font-size: 0.8125em; color: var(--muted); }
+td:first-child { min-width: 16ch; }
+.result-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.8125rem; }
+footer p { margin: 0 0 4px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+</style>
+<main>
+<header>
+<p class="eyebrow"><a href="https://halo-powered.atlassian.net/browse/BA-159">LLM configuration</a> · roadmap 1.10.3</p>
+<h1>GitHub Copilot as an LLM provider</h1>
+<p class="intent">a developer with a GitHub Copilot seat picks <strong>GitHub Copilot</strong> in Settings → LLM Configuration, tests and saves, and every agent then runs on their own seat, with no API key and no extra spend.</p>
+<span class="chip ok">Done</span>
+</header>
+<section aria-label="Demo">
+<figure class="demo">
+<video src="demo.webm" controls playsinline muted preload="metadata" aria-label="Demo of 1.10.3 GitHub Copilot as an LLM provider"></video>
+<figcaption>Recorded by <code>scripts/qa.mjs 1.10.3 --fast</code> with <code>DEMO=1</code>; captions are the scenario's Gherkin lines.</figcaption>
+</figure>
+</section>
+<section aria-labelledby="h-shipped">
+<h2 id="h-shipped">What shipped</h2>
+<ul class="shipped">
+<li class="card"><p class="date">2026-11-10 · Added</p><strong>GitHub Copilot as an LLM provider</strong> (epic BA-159, roadmap 1.10.3, ADR-0037, specs/epics/BA-159/spec.md, llm-settings R55–R66).<ul><li>Settings → LLM Configuration offers <strong>GitHub Copilot</strong>: every agent runs on the developer&#39;s own Copilot seat, signed in with the GitHub login already on the machine (GitHub CLI, Copilot CLI or app). No API key, base URL or API style; the form shows who is signed in, or how to sign in. Model <code>auto</code> lets Copilot choose; <strong>Load models</strong> lists the seat&#39;s models (none on a Free seat). Test connection, real streaming, reasoning effort by model name, and <code>&lt;model&gt; · GitHub Copilot</code> in the composer, the agent page and the catalogue. Saving Copilot removes any stored API key.</li><li>Backend: the official <code>@github/copilot-sdk</code> 1.0.30 (pinned) drives one local Copilot runtime per process. An AI SDK model over it declares the agents&#39; tools without handlers, so Mastra keeps the tool loop; Copilot&#39;s built-in tools stay off and the system prompt is replaced. New <code>GET /llm/copilot/status</code>; <code>POST /llm/models</code> and the effort levels take the provider (api.md, agents.md, data-model.md, ui.md, tech-stack.md).</li><li>R66, found by the evals: when the model writes a tool&#39;s arguments as its message instead of calling the tool, the message is never shown and the model is asked once, in the same session, to make the call.</li><li>Evidence: evidence/1.10.3/: tests.md, demo.webm, evals.md (custom endpoint 100%; GitHub Copilot on a Free seat 32/36 after R66, the rest answer quality of the auto-routed model, documented), unit-baseline.txt. E2E <code>llm-copilot.spec.ts</code> runs against a stub of the Copilot runtime written from a recorded trace of the real one. Desktop not run; the installers and the npm package are story 1.10.4.</li></ul></li>
+</ul>
+</section>
+<section aria-labelledby="h-scope">
+<h2 id="h-scope">Scope</h2>
+<ul><li>a fifth provider <code>copilot</code> (&quot;GitHub Copilot&quot;) on the official Copilot SDK (ADR-0037): the backend starts one Copilot runtime and builds an AI SDK model whose tools are declared to Copilot without handlers, so Mastra keeps the tool loop, built-in Copilot tools are off and the system prompt is replaced</li><li>sign-in reuses the GitHub login already on the machine (gh CLI or Copilot CLI/app), and the form shows who is signed in or how to sign in</li><li>no API key or base URL</li><li>model defaults to <code>auto</code> (Copilot picks), <strong>Load models</strong> lists the seat&#39;s models, any typed name is accepted</li><li>Test connection runs the structured-output probe through the adapter</li><li>answers stream word by word</li><li>reasoning effort by model name, none for <code>auto</code></li><li>abandoned Copilot sessions time out and the turn&#39;s abort signal stops them</li><li>the composer chip, the agent page and the catalogue name the provider</li><li>llm-settings, api.md, data-model, agents.md, ui.md, tech-stack, glossary and architecture (ADR-0037) updated</li><li>Gherkin for the new flows.</li></ul>
+<p class="aside"><strong>Out of scope:</strong> a Sign in with GitHub button or pasted GitHub tokens; Copilot BYOK; the eval CLI&#39;s <code>EVAL_LLM_PROVIDER=copilot</code>; per-agent providers; bundling the runtime in installers (1.10.4).</p>
+</section>
+<section aria-labelledby="h-acceptance">
+<h2 id="h-acceptance">Acceptance</h2>
+<ul><li>with a signed-in seat, Settings → LLM Configuration offers GitHub Copilot, shows the GitHub login, tests and saves with model <code>auto</code></li><li>a chat turn on World Cup Core answers with real SQL tool calls and streams text</li><li>Load models answers (an empty list on a Free seat reads as Copilot choosing)</li><li>with no GitHub login the test reports how to sign in and nothing is saved</li><li>switching back to another provider still needs that provider&#39;s key</li><li>unit tests for the adapter (tool loop, pending tool results, structured output, streaming, timeout and abort), the settings rules and the form</li><li>check-specs, lint, builds and the LLM settings Playwright specs green.</li></ul>
+</section>
+<section aria-labelledby="h-gate">
+<h2 id="h-gate">Gate results</h2>
+<div class="result-line"><span class="chip bad">Failed</span><span class="aside">From <code>evidence/1.10.3/tests.md</code>, written by <code>scripts/qa.mjs 1.10.3 --gate</code>.</span></div>
+<div class="scroll" tabindex="0" role="region" aria-label="Gate steps">
+<table>
+<thead><tr><th scope="col">Step</th><th scope="col">Result</th><th scope="col" class="num">Passed</th><th scope="col" class="num">Failed</th><th scope="col" class="num">Skipped</th></tr></thead>
+<tbody>
+<tr><td>build<br><code>npm --prefix backend run build:all</code></td><td><span class="chip ok">passed</span></td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+<tr><td>backend unit<br><code>npx jest --json --outputFile=&quot;C:\\Users\\jhonc\\Documents\\projects\\bi-assistant\\.claude\\worktrees\\BA-159-github-copilot-provider\\.qa-reports\\1.10.3\\jest.json&quot;</code></td><td><span class="chip bad">failed</span></td><td class="num">2321</td><td class="num">43</td><td class="num">0</td></tr>
+<tr><td>frontend unit<br><code>npx ng test --watch=false --browsers=ChromeHeadless</code></td><td><span class="chip bad">failed</span></td><td class="num">502</td><td class="num">3</td><td class="num">0</td></tr>
+<tr><td>backend lint<br><code>npx eslint &quot;{src,apps,libs,test}/**/*.ts&quot; --rule &quot;{\&quot;prettier/prettier\&quot;: [\&quot;error\&quot;, {\&quot;endOfLine\&quot;: \&quot;auto\&quot;}]}&quot;</code></td><td><span class="chip ok">passed</span></td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+<tr><td>check-specs<br><code>py -3 scripts/check-specs.py</code></td><td><span class="chip ok">passed</span></td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+<tr><td>playwright (step 6)<br><code>npx playwright test --project=web e2e/llm-copilot.spec.ts e2e/llm-settings.spec.ts e2e/llm-custom-endpoint.spec.ts e2e/agent-editor.spec.ts e2e/navigation.spec.ts</code></td><td><span class="chip ok">passed</span></td><td class="num">59</td><td class="num">0</td><td class="num">0</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<footer>
+<p>epic BA-159 · branch <code>feat/BA-159-github-copilot-provider</code> · commit <code>40fde67</code> · generated 2026-11-10</p>
+<p>Generated by scripts/demo-page.mjs from roadmap.md, changelog.md and evidence/1.10.3/</p>
+</footer>
+</main>
