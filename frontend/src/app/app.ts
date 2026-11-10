@@ -38,6 +38,7 @@ import {
   Users,
   Wrench,
   Network,
+  ChartColumn,
 } from 'lucide-angular';
 import { DatasourceConfig } from './features/datasources/components/datasource-config/datasource-config';
 import {
@@ -78,6 +79,7 @@ import {
   AgentsApiService,
 } from './features/agents/services/agents-api.service';
 import { PersonaList } from './features/personas/components/persona-list/persona-list';
+import { VisualLibrary } from './features/visuals/components/visual-library/visual-library';
 import { OntologyOverview } from './features/ontology/components/ontology-overview/ontology-overview';
 import { CatalogBrowser } from './features/datasets/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
@@ -132,6 +134,7 @@ type MainView =
   | 'builtin-skill-editor'
   | 'context'
   | 'personas'
+  | 'visuals'
   | 'ontologies'
   | 'sessions'
   | 'conversation-new'
@@ -159,6 +162,7 @@ const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   'builtin-skill-editor': 'agents',
   context: 'context',
   personas: 'context',
+  visuals: 'context',
   ontologies: 'context',
   sessions: 'sessions',
   'conversation-new': 'sessions',
@@ -221,6 +225,7 @@ function urlHost(baseUrl: string): string {
     BuiltInSkillEditor,
     AgentPreview,
     PersonaList,
+    VisualLibrary,
     OntologyOverview,
     CatalogBrowser,
     EntityDetails,
@@ -1336,6 +1341,13 @@ export class App {
       description:
         'Who asks the questions: their role, goals, typical questions and the answers they prefer.',
       icon: Users,
+    },
+    {
+      view: 'visuals',
+      label: 'Visuals',
+      description:
+        'Chart types for data visualization, grouped by category, with when to use each.',
+      icon: ChartColumn,
     },
   ];
 

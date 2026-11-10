@@ -11,6 +11,7 @@ import { VerifiedQueriesModule } from './modules/verified-queries/verified-queri
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { OntologyModule } from './modules/ontology/ontology.module';
 import { PersonasModule } from './modules/personas/personas.module';
+import { VisualsModule } from './modules/visuals/visuals.module';
 import { DeepAnalysisModule } from './modules/deep-analysis/deep-analysis.module';
 import { TestingDataModule } from './modules/testing-data/testing-data.module';
 import { DeveloperSettingsModule } from './modules/developer-settings/developer-settings.module';
@@ -31,6 +32,7 @@ import { DataReadinessModule } from './modules/data-readiness/data-readiness.mod
     MetricsModule,
     OntologyModule,
     PersonasModule,
+    VisualsModule,
     SessionsModule,
     RfpPackagesModule,
     DeepAnalysisModule,
