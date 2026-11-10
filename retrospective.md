@@ -14,6 +14,28 @@ Entry template:
 
 ---
 
+## 2026-11-09 — 0.4.3 Agent roles for the token-minimal agent org (BA-119)
+
+### What went well
+- The design was settled on the roadmap before any code. The user's three decisions, the token-minimal rework and the video placement were all written into the stories and the epic spec, so the build itself had no rework.
+- A docs check before writing the agents found that `isolation: worktree` starts from `main`, not the epic branch, and that subagents cannot call `Workflow`. Both shaped the definitions: the builder cuts its unit branch first, and nothing depends on an agent starting the pipeline.
+- Each headless session's `init` message lists the tools and agents it actually has. That proved the manager cannot edit, which a permission denial alone would not.
+- The dry run surfaced facts that no plan would have: the fixture's own browser context ignores Playwright's `video` setting, the frontend has no lint config, the builder's allowed commands lacked Python, and linking `node_modules` from the main checkout makes a unit worktree ready instantly.
+
+### What went wrong
+- A stray `git checkout origin/main -- .`, tacked onto a spec-check command, reset my uncommitted roadmap and epic-spec edits. They had to be re-applied.
+- The first demo story was backend-only, so it produced no video, the very thing the user wanted to see. I didn't say so before running it.
+- A `sed` that set the epic spec's status dropped the "Confirmed (0.4.1–0.4.2)" part, and a follow-up commit had to restore it.
+- Every agent still loads the full CLAUDE.md, although its brief replaces it. The UI builder took 28 turns and $0.68.
+- Heredoc-written helper scripts were mangled twice (a regex lost its backslash, `python3` is missing on Windows). Writing them with the Write tool worked first time.
+
+### What to do differently
+- Never append a `git checkout … -- .` or another destructive command to a check command. Run destructive git commands alone, after `git status`.
+- When a demo or dry run is meant to show a specific artifact (a video, a screenshot), pick a story that produces it, and say up front what the run will and won't show.
+- Edit a status line with the Edit tool and show the result, not a `sed` that rewrites the whole value.
+- Add `omitClaudeMd: true` to agents that work from a brief, and measure the builder's turns and cost before and after.
+- On Windows, use `py -3` for Python, and write any script longer than a line with the Write tool, not a heredoc.
+
 ## 2026-11-09 — 1.20.1–1.20.5 Schema notes, readiness speed and progress, text selection (BA-318)
 
 ### What went well

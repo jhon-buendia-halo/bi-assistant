@@ -238,7 +238,7 @@ Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the wor
   - `check-specs.py` passes.
 - **Notes:** same branch `feat/BA-119-harness-adjustments`. The user chose an MCP server over scripts and over the claude.ai Atlassian connector, and chose to replace `jira.sh`, on 2026-10-16. `update_issue` replaces the `raw` calls earlier stories needed to set a parent or edit a description. Evidence: [evidence/0.4.2/](evidence/0.4.2/).
 
-#### 0.4.3 — Agent roles: builder, reviewer and a manager that only answers the human  `🚧 In progress`
+#### 0.4.3 — Agent roles: builder, reviewer and a manager that only answers the human  `✅ Done`
 - **Intent:** an LLM is used only where the work needs judgment: writing code, reviewing a diff, and talking to the human. Every other part of the org chart is a script, a hook or the pipeline's JavaScript, so it costs no tokens.
 - **Scope:**
   - `.claude/agents/builder.md` (`isolation: worktree`):
