@@ -1,0 +1,17 @@
+PASS  dr-assess  (14825ms)
+      pass check-called-tool: Checks that "assess_data_readiness" was called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-the-first-data-tool-call-is-assess-data-readiness: the first data tool call is "assess_data_readiness"
+      pass dr-the-data-readiness-skill-is-loaded-before-the-first-assessme: the "data-readiness" skill is loaded before the first assessment
+      pass dr-the-answer-quotes-the-overall-score-the-tool-returned: the answer quotes the overall score the tool returned
+      pass dr-every-score-like-number-in-the-answer-is-one-a-readiness-too: every score-like number in the answer is one a readiness tool returned
+      pass llm-judge: LLM judge: The user asked for a fresh readiness assessment of the session data. Score pass=true only if the answer gives
+PASS  dr-drilldown-nulls  (14315ms)
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-run-readonly-sql-read-goals-with-assist-player-id-is-null: run_readonly_sql read goals with "assist_player_id IS NULL"
+      pass dr-no-new-assessment-unless-no-report-exists: no new assessment unless no report exists
+      pass llm-judge: LLM judge: The user asked the Data Readiness Agent for the records behind the completeness finding on goals.assist_playe
+
+2/2 questions passed
+exit 0

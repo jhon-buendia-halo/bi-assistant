@@ -1,0 +1,40 @@
+$ claude -p --agent reviewer "<story 9.9.1 clampPage + diff with a planted off-by-one>"
+
+--- prompt ---
+## Story 9.9.1 — Clamp the page number in paged lists
+- **Intent:** a paged list never shows an empty page when the requested page is out of range.
+- **Scope:** `clampPage(page, totalPages)` in `backend/src/common/paging.ts`, used by list endpoints.
+- **Out of scope:** UI changes.
+- **Acceptance:** `clampPage` returns `page` when 1 ≤ page ≤ totalPages; returns 1 when page < 1; returns totalPages when page > totalPages; returns 1 when totalPages is 0. Unit tests cover each case.
+
+## Diff (unit/BA-999-9.9.1 against the epic branch)
+```diff
+--- /dev/null
++++ b/backend/src/common/paging.ts
+@@ -0,0 +1,6 @@
++export function clampPage(page: number, totalPages: number): number {
++  if (totalPages <= 0) return 1;
++  if (page < 1) return 1;
++  if (page >= totalPages) return totalPages - 1;
++  return page;
++}
+--- /dev/null
++++ b/backend/src/common/paging.spec.ts
+@@ -0,0 +1,9 @@
++import { clampPage } from './paging';
++describe('clampPage', () => {
++  it('keeps an in-range page', () => expect(clampPage(2, 5)).toBe(2));
++  it('raises a page below 1', () => expect(clampPage(0, 5)).toBe(1));
++  it('handles no pages', () => expect(clampPage(3, 0)).toBe(1));
++});
+```
+These files exist only in this diff (a scratch review); do not look for them on disk.
+
+--- answer ---
+FINDINGS
+1. backend/src/common/paging.ts:4 — `page >= totalPages` returns `totalPages - 1`, so the last valid page is wrongly moved back, and page > totalPages is not clamped to totalPages — fails when `clampPage(5, 5)` returns 4 (expected 5) and `clampPage(9, 5)` returns 4 (expected 5). It also returns 0 when `clampPage(1, 1)` is called, which is an empty page. — fix: use `if (page > totalPages) return totalPages;`
+2. backend/src/common/paging.spec.ts:9 — there is no test for page > totalPages, and none for the page == totalPages boundary, so the acceptance criterion "returns totalPages when page > totalPages" has no test, and the bug in finding 1 goes uncaught — fails when the code clamps the upper bound incorrectly, because the suite still passes — fix: add `expect(clampPage(9, 5)).toBe(5)` and `expect(clampPage(5, 5)).toBe(5)`.
+3. backend/src/common/paging.ts:1 — the Scope says `clampPage` is "used by list endpoints", but the diff adds no caller, so no list endpoint clamps its page — fails when a list endpoint is requested with an out-of-range page, because it still returns an empty page — fix: call `clampPage` in the list endpoints' paging code.
+
+model: claude-sonnet-5-5
+cost_usd: 0.04833

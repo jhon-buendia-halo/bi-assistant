@@ -1,8 +1,20 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { apiJson } from './helpers/api';
 import { saveLenaiSettings } from './helpers/agents-api';
 import { WORLD_CUP_DATASOURCE } from './helpers/app-actions';
+
+/** Saves an evidence screenshot when E2E_EVIDENCE_DIR names a folder. */
+async function evidence(page: Page, folder: string, name: string) {
+  const root = process.env['E2E_EVIDENCE_DIR'];
+  if (!root) return;
+  const dir = path.join(root, folder);
+  fs.mkdirSync(dir, { recursive: true });
+  await page.screenshot({ path: path.join(dir, name), fullPage: true });
+}
 import {
   LlmStub,
   StubReply,
@@ -11,7 +23,11 @@ import {
   startLlmStub,
   systemTexts,
 } from './helpers/llm-stub';
-import { WORLD_CUP_DB, worldCupKey } from './helpers/world-cup-db';
+import {
+  WORLD_CUP_DB,
+  worldCupKey,
+  worldCupScalar,
+} from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "Data readiness" in
@@ -77,6 +93,8 @@ const READINESS_TOOLS = [
   'get_readiness_report',
   'list_readiness_reports',
 ];
+/** The shared dataset tools the agent drills down with (R3, ADR-0035). */
+const DRILLDOWN_TOOLS = ['describe_entity', 'run_readonly_sql'];
 /** Every table of the seeded `world_cup` schema (docker/postgres/init). */
 const WORLD_CUP_TABLES = [
   'confederations',
@@ -137,6 +155,20 @@ interface ReadinessReport {
   dimensionScores: DimensionScore[];
   findings: { dimension: Dimension; severity: Severity }[];
   sessionId?: string;
+  notProfiled?: {
+    entity: string;
+    reason: 'too-large' | 'timed-out';
+    rowCount?: number;
+  }[];
+}
+
+/** The `data:` frames of an SSE body, parsed in order. */
+function sseFrames(body: string): { type: string; content?: string }[] {
+  return body
+    .split(/\r?\n\r?\n/)
+    .map((block) => block.replace(/^data: ?/, '').trim())
+    .filter((json) => json.startsWith('{'))
+    .map((json) => JSON.parse(json) as { type: string; content?: string });
 }
 
 interface ReadinessReportSummary {
@@ -147,6 +179,7 @@ interface ReadinessReportSummary {
 }
 
 let stub: LlmStub;
+let cappedDir: string | undefined;
 
 // ------------------------------------------------------------ helpers
 
@@ -400,6 +433,15 @@ test.beforeEach(async ({ page }) => {
 
 test.afterEach(async () => {
   await stub.close();
+  // The fixture closes its apps after this hook, so the directory may still be
+  // held open; a failed removal is left to the OS temp cleaner.
+  if (cappedDir)
+    try {
+      fs.rmSync(cappedDir, { recursive: true, force: true });
+    } catch {
+      /* still held by the app */
+    }
+  cappedDir = undefined;
 });
 
 // ------------------------------------------------------------ scenarios
@@ -463,6 +505,9 @@ test('assessing a dataset from the chat shows the scorecard', async ({
   await expect(page.getByPlaceholder('Ask a follow-up question…')).toHaveValue(
     ASSESS_QUESTION,
   );
+  const streamed = page.waitForResponse((r) =>
+    r.url().endsWith('/messages/stream'),
+  );
   await page.getByRole('button', { name: 'Send message' }).click();
 
   // And the agent calls "assess_data_readiness": the step shows in the chat.
@@ -473,19 +518,78 @@ test('assessing a dataset from the chat shows the scorecard', async ({
     timeout: TURN_TIMEOUT,
   });
 
+  // R32: the stream carries `tool-progress` frames between the tool call and
+  // its result, in phase order, profiling counting done 1..N of N.
+  const frames = sseFrames((await (await streamed).body()).toString('utf8'));
+  const toolAt = frames.findIndex(
+    (f) =>
+      f.type === 'tool' &&
+      (JSON.parse(f.content ?? '{}') as { name?: string }).name ===
+        'assess_data_readiness',
+  );
+  const resultAt = frames.findIndex((f) => f.type === 'tool-result');
+  expect(toolAt, 'the tool frame').toBeGreaterThanOrEqual(0);
+  expect(resultAt, 'the tool-result frame').toBeGreaterThan(toolAt);
+  const progress = frames
+    .slice(toolAt + 1, resultAt)
+    .filter((f) => f.type === 'tool-progress')
+    .map(
+      (f) =>
+        JSON.parse(f.content ?? '{}') as {
+          tool: string;
+          phase: string;
+          message: string;
+          done?: number;
+          total?: number;
+        },
+    );
+  expect(
+    progress.length,
+    'progress frames between tool and result',
+  ).toBeGreaterThan(0);
+  for (const frame of progress) {
+    expect(frame.tool).toBe('assess_data_readiness');
+  }
+  const phases = [...new Set(progress.map((f) => f.phase))];
+  expect(phases).toEqual([
+    'inventory',
+    'profiling',
+    'relationships',
+    'scoring',
+    'storing',
+  ]);
+  const profiling = progress.filter((f) => f.phase === 'profiling');
+  expect(profiling.every((f) => f.total === WORLD_CUP_TABLES.length)).toBe(
+    true,
+  );
+  const doneCounts = profiling
+    .map((f) => f.done)
+    .filter((d): d is number => d !== undefined);
+  expect(Math.max(...doneCounts)).toBe(WORLD_CUP_TABLES.length);
+  expect(doneCounts).toEqual([...doneCounts].sort((a, b) => a - b));
+  expect(
+    profiling.some((f) => /^Profiling .+ \(\d+\/\d+\)…$/.test(f.message)),
+  ).toBe(true);
+  // The UI part (the running row's `tool-progress`) is not asserted: the
+  // World Cup run lasts about 0.3 s and the fixture has no stream throttle.
+
   // The turn ran the Data Readiness Agent, not the assistant (R2, R3, Block D1).
   const requests = requestsOf(ASSESS_QUESTION);
   expect(requests.length).toBeGreaterThanOrEqual(2);
   const first = requests[0];
+  // The drill-down tools are offered besides the readiness tools (R3,
+  // ADR-0035); no other dataset-browsing, visual or workspace tool is.
   expect(first.tools).toEqual(
     expect.arrayContaining([
       ...READINESS_TOOLS,
+      ...DRILLDOWN_TOOLS,
       'show_in_panel',
       'ask_clarification',
     ]),
   );
   for (const forbidden of [
-    'run_readonly_sql',
+    'list_entities',
+    'sample_rows',
     'update_workflow',
     'create_visual',
     'mastra_workspace_write_file',
@@ -497,8 +601,10 @@ test('assessing a dataset from the chat shows the scorecard', async ({
   ).toBe(true);
   const system = systemTexts(first).join('\n');
   expect(system).toContain('Datasets for this session (data readiness):');
+  // Each dataset line carries the datasource id and an example entity key
+  // for the drill-down tools (ADR-0035, agents.md 4.1).
   expect(system).toContain(
-    `- ${DATASET} — PostgreSQL datasource "${WORLD_CUP_DATASOURCE}", ${WORLD_CUP_TABLES.length} entities`,
+    `- ${DATASET} — PostgreSQL datasource "${WORLD_CUP_DATASOURCE}" (datasourceId ${datasourceId}), ${WORLD_CUP_TABLES.length} entities, named like ${worldCupKey(WORLD_CUP_TABLES[0])}`,
   );
   expect(system).toContain(
     `Today is ${new Date().toISOString().slice(0, 10)}.`,
@@ -546,6 +652,46 @@ test('assessing a dataset from the chat shows the scorecard', async ({
   await page.screenshot({
     path: testInfo.outputPath('data-readiness-scorecard.png'),
   });
+});
+
+test('A table too large to profile is listed as not profiled', async ({
+  launchApp,
+}) => {
+  // Given a table has more rows than the cap: the CLI reads the cap per
+  // assessment (delivery.md), set to 20 so the larger sample tables (79, 50, 47 and 32 rows) exceed it.
+  const cap = 20;
+  // Its own data directory: the default `page` app already holds the fixture's.
+  cappedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qti-e2e-capped-'));
+  const { page } = await launchApp(cappedDir, {
+    READINESS_MAX_PROFILED_ROWS: String(cap),
+  });
+  await saveLenaiSettings(page, stub.baseUrl);
+  const datasourceId = await seedWorldCup(page);
+
+  // When I assess the dataset from the chat.
+  const report = await assessFromChat(page, datasourceId);
+
+  // Then the stored report lists those tables as not profiled (R31).
+  const listed = report.notProfiled ?? [];
+  expect(listed.length, 'some tables exceed the cap').toBeGreaterThan(0);
+  for (const entry of listed) {
+    expect(entry.reason).toBe('too-large');
+    expect(entry.rowCount).toBeGreaterThan(cap);
+  }
+  expect(report.entityCount).toBe(WORLD_CUP_TABLES.length);
+
+  // And the scorecard shows them with the reason and the row count.
+  const section = page.getByTestId('readiness-not-profiled');
+  await expect(section).toBeVisible();
+  await expect(section).toContainText(`Not profiled (${listed.length})`);
+  for (const [index, entry] of listed.entries()) {
+    const row = page.getByTestId(`readiness-not-profiled-${index}`);
+    await expect(row).toContainText(entry.entity);
+    await expect(row).toContainText(
+      `Too large — ${entry.rowCount!.toLocaleString('en-US')} rows, column checks skipped`,
+    );
+  }
+  await evidence(page, '1.20.3', 'readiness-not-profiled.png');
 });
 
 test('the scorecard shows the same numbers as the API', async ({ page }) => {
@@ -713,4 +859,99 @@ test('filtering findings by dimension and severity', async ({ page }) => {
   await dimensionFilter.selectOption({ label: 'All' });
   await severityFilter.selectOption({ label: 'All' });
   await expect(findingRows(page)).toHaveCount(report.findings.length);
+});
+
+test('the agent shows the records behind a finding', async ({ page }) => {
+  // The Gherkin's Formula 1 `driver.second_nationality_country_id` stands in
+  // here as the World Cup `goals.assist_player_id`, null for unassisted goals:
+  // the suite's database is the World Cup sample.
+  const datasourceId = await seedWorldCup(page);
+  const before = await assessThroughApi(page, datasourceId);
+  const nulls = Number(
+    await worldCupScalar(
+      'select count(*) from world_cup.goals where assist_player_id is null',
+    ),
+  );
+  expect(nulls, 'the sample has unassisted goals').toBeGreaterThan(0);
+  const shown = Math.min(nulls, 20);
+  const goals = worldCupKey('goals');
+  const question =
+    'what are the records with assist_player_id null values in goals';
+  const sql = `SELECT id, scorer_player_id, assist_player_id FROM ${goals} WHERE assist_player_id IS NULL ORDER BY id LIMIT 20`;
+
+  // The model drills down: describe_entity, run_readonly_sql, then answers
+  // with the count first and a table built from the rows the query returned.
+  stub.reply = (request) => {
+    if (lastUserText(request) !== question) return { text: 'Noted.' };
+    const results = turnToolResults(request);
+    if (results.length === 0) {
+      return {
+        toolCall: {
+          name: 'describe_entity',
+          arguments: { entity: goals, datasourceId },
+        },
+      };
+    }
+    if (results.length === 1) {
+      return {
+        toolCall: {
+          name: 'run_readonly_sql',
+          arguments: {
+            sql,
+            datasourceId,
+            rationale: 'List the goals with no assist.',
+          },
+        },
+      };
+    }
+    const { rows = [] } = JSON.parse(results[1]) as {
+      rows?: Record<string, unknown>[];
+    };
+    const table = [
+      '| id | scorer_player_id |',
+      '| --- | --- |',
+      ...rows.map((row) => `| ${String(row['id'])} | ${String(row['scorer_player_id'])} |`),
+    ].join('\n');
+    return {
+      text: `There are ${rows.length} goals with a null assist_player_id.\n\n${table}`,
+    };
+  };
+
+  await startReadinessChat(page);
+  await send(
+    page,
+    question,
+    `There are ${shown} goals with a null assist_player_id.`,
+  );
+
+  // The agent ran one read-only IS NULL query on goals, which returned rows.
+  const requests = requestsOf(question);
+  expect(requests[0].tools).toEqual(expect.arrayContaining(DRILLDOWN_TOOLS));
+  const last = requests[requests.length - 1];
+  const sqlResult = JSON.parse(turnToolResults(last)[1]) as {
+    rows?: Record<string, unknown>[];
+    error?: string;
+  };
+  expect(sqlResult.error).toBeUndefined();
+  expect(sqlResult.rows).toHaveLength(shown);
+  expect(sqlResult.rows!.every((row) => row['assist_player_id'] === null)).toBe(
+    true,
+  );
+
+  // The answer leads with the count and shows the rows in a table.
+  const answer = page.locator('table').last();
+  await expect(answer.locator('tbody tr')).toHaveCount(shown);
+  await expect(answer.locator('tbody tr').first()).toContainText(
+    String(sqlResult.rows![0]['id']),
+  );
+  await page.getByText('Data used (1 query)').click();
+  await expect(page.getByText(`run_readonly_sql — ${shown} rows`)).toBeVisible();
+  await expect(page.getByText('WHERE assist_player_id IS NULL')).toBeVisible();
+
+  // No score changes: the stored report is the same one, unchanged.
+  const reports = await listReports(page, datasourceId);
+  expect(reports).toHaveLength(1);
+  const after = await getReport(page, before.id);
+  expect(after.overallScore).toBe(before.overallScore);
+  expect(after.dimensionScores).toEqual(before.dimensionScores);
 });

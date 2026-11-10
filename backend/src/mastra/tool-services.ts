@@ -29,6 +29,12 @@ export interface DatasetSnapshot {
     key: string;
     columns: DatasetColumnSnapshot[];
   }[];
+  /** Mirrors `DatasetSchemaNote` (datasets.repository.ts), BA-318. */
+  schemas?: {
+    key: string;
+    layer?: 'landing' | 'normalized' | 'consumption';
+    description?: string;
+  }[];
 }
 
 /** A SQL run, plus what the repair loop had to do to make it succeed. */

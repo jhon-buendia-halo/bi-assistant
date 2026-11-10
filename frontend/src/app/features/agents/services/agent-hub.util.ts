@@ -198,21 +198,45 @@ export interface NewSessionAgentOption {
 }
 
 /**
+ * Built-in agents that, like the assistant, answer over the datasets the user
+ * picks (sessions-chat R64): today Questions to Insights v2 (BA-320). In the
+ * New conversation screen they keep the dataset picker and a required name,
+ * and Create sends `{ name, datasets, agentId }`; their Start chat opens that
+ * screen with them preselected.
+ */
+export const DATASET_PICKER_AGENTS: ReadonlySet<string> = new Set([
+  'assistant-v2',
+]);
+
+/** Whether the agent runs on picked datasets, like the assistant (R64). */
+export function picksDatasets(
+  agent: Pick<Agent, 'key'> | null | undefined,
+): boolean {
+  return !!agent && DATASET_PICKER_AGENTS.has(agent.key);
+}
+
+/**
  * The agents the New conversation screen offers besides the assistant
- * (sessions-chat R64): Official agents that bring their own dataset (today the
- * RFP Builder), then Live user agents, each group alphabetical. System agents,
- * drafts and the assistant itself are left out; one that cannot start a chat
- * now stays listed with its reason.
+ * (sessions-chat R64): the built-in agents that pick datasets like it (today
+ * Questions to Insights v2), then Official agents that bring their own dataset
+ * (the RFP Builder, the Data Readiness Agent) with showcase agents last, then
+ * Live user agents, each group alphabetical. System agents, drafts and the
+ * assistant itself are left out; one that cannot start a chat now stays
+ * listed with its reason.
  */
 export function newSessionAgentOptions(
   agents: Agent[],
 ): NewSessionAgentOption[] {
+  const pickers = agents
+    .filter((agent) => picksDatasets(agent) && canStartChat(agent))
+    .sort(byName);
   const startable = agents.filter(
-    (agent) => canStartChat(agent) && !startsInComposer(agent),
+    (agent) =>
+      canStartChat(agent) && !startsInComposer(agent) && !picksDatasets(agent),
   );
   const group = (kind: AgentKind) =>
     startable.filter((agent) => agentKind(agent) === kind).sort(showcaseLast);
-  return [...group('official'), ...group('user')].map((agent) => ({
+  return [...pickers, ...group('official'), ...group('user')].map((agent) => ({
     agent,
     disabledReason: startChatBlockedReason(agent),
   }));

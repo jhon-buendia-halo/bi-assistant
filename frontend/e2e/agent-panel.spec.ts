@@ -1014,3 +1014,148 @@ test('shown items survive reopening the session', async ({ page }) => {
   ).toBeVisible();
   await expect(rightPanel(page).locator('table')).toHaveCount(0);
 });
+
+// ------------------------------------------- Questions to Insights v2 (R8a)
+
+const V2 = 'Questions to Insights v2';
+const V2_STEPS = ['Receive question', 'Load catalog', 'Analyse', 'Wrap up'];
+const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
+const V2_QUESTION = 'How many matches were played in 2018?';
+const V2_ANSWER = 'There were 64 matches.';
+
+/** Creates a session bound to v2 over World Cup Core from New conversation. */
+async function v2Session(page: Page): Promise<string> {
+  await openSessions(page);
+  await page
+    .locator('header')
+    .getByRole('button', { name: 'Start New Conversation' })
+    .click();
+  await page.getByTestId('new-session-agent').click();
+  await page
+    .getByRole('listbox', { name: 'Agent' })
+    .getByRole('option')
+    .filter({ hasText: V2 })
+    .click();
+  await page.getByPlaceholder('My new session').fill('V2 workflow');
+  await page
+    .getByRole('button', { name: new RegExp(`^${WORLD_CUP_DATASET}`) })
+    .click();
+  await page.getByRole('button', { name: /^Create$/ }).click();
+  await expect(page.getByTestId('session-agent')).toHaveText(V2);
+  return sessionIdFromHeader(page);
+}
+
+function v2Items(page: Page): Locator {
+  return bar(page).getByRole('list', { name: 'Workflow' }).getByRole('listitem');
+}
+
+test('Questions to Insights v2 shows its code-defined steps advancing', async ({
+  page,
+}) => {
+  const turn: TurnScript = {
+    question: V2_QUESTION,
+    calls: [
+      {
+        name: 'run_readonly_sql',
+        arguments: {
+          sql: `SELECT COUNT(*) AS matches FROM ${worldCupKey('matches')}`,
+          rationale: 'Count the matches.',
+        },
+      },
+    ],
+    answer: V2_ANSWER,
+  };
+  script([turn]);
+  const sessionId = await v2Session(page);
+
+  // The four steps show from the session's first view, all upcoming (R8a).
+  await expect(v2Items(page)).toHaveText(V2_STEPS.map((t) => new RegExp(t)));
+  await expect(
+    v2Items(page).and(page.locator('[data-status="upcoming"]')),
+  ).toHaveCount(4);
+  await expect(bar(page)).toContainText('0/4 done');
+  expect(stub.requests, 'no message has been sent').toHaveLength(0);
+
+  // While the answer streams, Analyse is the current step (R19).
+  const release = holdFinalAnswer([turn], turn.question);
+  await send(page, turn.question);
+  await expect(step(page, 'Receive question')).toHaveAttribute(
+    'data-status',
+    'done',
+  );
+  await expect(step(page, 'Load catalog')).toHaveAttribute('data-status', 'done');
+  await expect(step(page, 'Analyse')).toHaveAttribute('data-status', 'current');
+  await expect(step(page, 'Analyse')).toHaveAttribute('aria-current', 'step');
+  await expect(step(page, 'Wrap up')).toHaveAttribute('data-status', 'upcoming');
+  release();
+
+  await expect(page.getByText(V2_ANSWER)).toBeVisible();
+  await expect(bar(page).getByTestId('workflow-bar-done')).toHaveText(
+    /All steps done/,
+  );
+  await expect(bar(page)).toContainText('4/4 done');
+  await expect(
+    v2Items(page).and(page.locator('[data-status="done"]')),
+  ).toHaveCount(4);
+
+  // The turn ran v2 with its three tools, never update_workflow (R8a), and
+  // the SQL ran for real.
+  const request = turnRequests(stub, V2_QUESTION)[0];
+  expect([...request.tools].sort()).toEqual([...V2_TOOLS].sort());
+  expect(toolResultsOf(V2_QUESTION).join('\n')).toContain('matches');
+
+  const { workflow } = await getSession(page, sessionId);
+  expect(workflow?.source).toBe('workflow');
+  expect(workflow?.phases.map((phase) => phase.title)).toEqual(V2_STEPS);
+  expect(workflow?.done).toEqual([1, 2, 3, 4]);
+});
+
+test('a failing step of the v2 workflow is marked failed', async ({ page }) => {
+  const sessionId = await v2Session(page);
+  // The stub fails every model call: the connection drops before a reply.
+  stub.hold = (request) =>
+    request.stream ? Promise.reject(new Error('model down')) : undefined;
+
+  // The streamed turn's frames, to check it ended with the step's error.
+  const streamed = page.waitForResponse((r) =>
+    r.url().endsWith('/messages/stream'),
+  );
+  await send(page, V2_QUESTION);
+  // The provider retries a dropped connection before the step fails.
+  await expect(step(page, 'Analyse')).toHaveAttribute('data-status', 'failed', {
+    timeout: 45_000,
+  });
+  await expect(step(page, 'Receive question')).toHaveAttribute(
+    'data-status',
+    'done',
+  );
+  await expect(step(page, 'Load catalog')).toHaveAttribute('data-status', 'done');
+  await expect(step(page, 'Analyse')).toHaveAttribute('aria-current', 'step');
+  await expect(
+    step(page, 'Analyse').getByRole('button', {
+      name: 'Step 3: Analyse, Failed',
+    }),
+  ).toHaveAttribute('title', 'Failed');
+  await expect(step(page, 'Wrap up')).toHaveAttribute('data-status', 'upcoming');
+  await expect(bar(page)).toContainText('2/4 done');
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+  expect(turnRequests(stub, V2_QUESTION).length).toBeGreaterThan(0);
+
+  const session = await getSession(page, sessionId);
+  expect(session.workflow).toMatchObject({ current: 3, done: [1, 2] });
+  expect((session.workflow as { failed?: number }).failed).toBe(3);
+
+  // The turn ends with its error (R8a, sessions-chat R61): the stream's last
+  // frame is the error, and the chat keeps the question and shows the error.
+  const frames = (await (await streamed).text())
+    .split(/\r?\n\r?\n/)
+    .map((block) => block.replace(/^data: ?/, '').trim())
+    .filter((json) => json.startsWith('{'))
+    .map((json) => JSON.parse(json) as { type: string; content?: string });
+  const last = frames[frames.length - 1];
+  expect(last.type).toBe('error');
+  expect(last.content).toBeTruthy();
+  await expect(page.getByText(V2_QUESTION).first()).toBeVisible();
+  await expect(page.getByText('Something went wrong')).toBeVisible();
+  await expect(page.getByText(last.content!).first()).toBeVisible();
+});

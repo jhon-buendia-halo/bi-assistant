@@ -7,6 +7,7 @@ import {
   hubEmptyMessage,
   matchesQuery,
   newSessionAgentOptions,
+  picksDatasets,
   startChatBlockedReason,
   startsInComposer,
   visibleCards,
@@ -263,6 +264,16 @@ describe('RFP Builder start chat', () => {
     expect(startsInComposer(rfp)).toBe(false);
     expect(startsInComposer(agent('assistant', 'A', 'official'))).toBe(true);
   });
+
+  it('opens the composer for Questions to Insights v2, which picks datasets (BA-321)', () => {
+    const v2 = agent('assistant-v2', 'Questions to Insights v2', 'official');
+    expect(startsInComposer(v2)).toBe(true);
+    expect(startChatBlockedReason(v2)).toBeNull();
+    expect(picksDatasets(v2)).toBe(true);
+    expect(picksDatasets(rfp)).toBe(false);
+    expect(picksDatasets(agent('assistant', 'A', 'official'))).toBe(false);
+    expect(picksDatasets(null)).toBe(false);
+  });
 });
 
 describe('newSessionAgentOptions (New conversation Agent picker)', () => {
@@ -293,6 +304,29 @@ describe('newSessionAgentOptions (New conversation Agent picker)', () => {
       'Zeta',
     ]);
     expect(options.every((o) => o.disabledReason === null)).toBe(true);
+  });
+
+  it('lists Questions to Insights v2 first, before the agents with their own datasets (BA-321)', () => {
+    const v2 = agent('assistant-v2', 'Questions to Insights v2', 'official');
+    const readiness: Agent = {
+      ...agent('data-readiness', 'Data Readiness Agent', 'official'),
+      datasets: ['Core'],
+      chatRequirement: 'Add a PostgreSQL or Databricks dataset first',
+    };
+    const options = newSessionAgentOptions([
+      live('Alpha'),
+      readiness,
+      rfp,
+      agent('assistant', 'Assistant', 'official'),
+      v2,
+    ]);
+    expect(options.map((o) => o.agent.key)).toEqual([
+      'assistant-v2',
+      'data-readiness',
+      'rfp',
+      'alpha',
+    ]);
+    expect(options[0].disabledReason).toBeNull();
   });
 
   it('keeps an agent that cannot start listed, with its reason', () => {

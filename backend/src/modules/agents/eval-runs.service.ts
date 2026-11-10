@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
 import { SessionsService } from '../sessions/sessions.service';
-import { KnowledgeService } from '../knowledge/knowledge.service';
+import { OntologyService } from '../ontology/ontology.service';
 import { EvalRunsRepository } from './repositories/eval-runs.repository';
 import {
   computeRegressionDiff,
@@ -76,7 +76,7 @@ export class EvalRunsService {
     private readonly repository: EvalRunsRepository,
     private readonly datasources: DatasourcesService,
     private readonly sessions: SessionsService,
-    private readonly knowledge: KnowledgeService,
+    private readonly knowledge: OntologyService,
   ) {}
 
   /** Display name for a datasource id, falling back to the id itself. */

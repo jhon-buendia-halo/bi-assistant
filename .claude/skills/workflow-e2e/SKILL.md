@@ -10,6 +10,8 @@ Part of the workflow in [CLAUDE.md](../../../CLAUDE.md), which keeps the always-
 ## The steps
 
 6. **Component impact-based analysis on E2E** — for every component / page / service / backend module touched, enumerate the Gherkin scenarios (in the capability specs) that exercise it and decide per scenario: *add / update / delete / re-run-as-is*. Produce the explicit list before writing any test or implementation code.
+
+   Write the list to `evidence/<roadmap-id>/e2e-impact.md` as a Markdown table, first column the spec path in backticks (`` `frontend/e2e/<name>.spec.ts` ``), second the decision (`add`, `update`, `delete`, `re-run`), then the scenarios. `scripts/qa.mjs --gate` reads it and fails if a listed spec did not run. For a UI story, tag its main scenario's test `@demo` and `@story-<roadmap-id>` and write its Given/When/Then lines with `scenarioStep` (`frontend/e2e/support/demo-captions.ts`), so `qa.mjs --fast` records it as the story's captioned demo.
 7. **Implement / update / delete E2E** — apply the step-6 decisions to [frontend/e2e/](../../../frontend/e2e/) (and backend `test/*.e2e-spec.ts` where the flow is API-level). They are written in the acceptance gate, after the code exists, so each added or updated scenario must assert the specific behaviour the change introduced: it would fail on the base commit.
 
 ## E2E test convention — every flow change triggers an impact analysis on Playwright

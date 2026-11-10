@@ -39,6 +39,7 @@ import { setAgentPromptOverrides } from '../agent-prompt-overrides';
 import { shippedAgentPrompt } from '../shipped-agent-prompts';
 import { toolSection } from '../tool-section';
 import { readinessTools } from '../tools/readiness.tools';
+import { describeEntityTool, runReadOnlySqlTool } from '../tools/dataset.tools';
 import {
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_MAX_STEPS,
@@ -66,6 +67,8 @@ const TOOL_NAMES = [
   'assess_data_readiness',
   'get_readiness_report',
   'list_readiness_reports',
+  'describe_entity',
+  'run_readonly_sql',
   'show_in_panel',
   'ask_clarification',
 ];
@@ -87,12 +90,14 @@ describe('the Data Readiness Agent (agents.md 2.10)', () => {
     );
   });
 
-  it('has the three readiness tools, show_in_panel and ask_clarification, in order, and nothing else', async () => {
+  it('has the three readiness tools, describe_entity, run_readonly_sql, show_in_panel and ask_clarification, in order, and nothing else', async () => {
     expect(Object.keys(await dataReadinessAgent.listTools())).toEqual(
       TOOL_NAMES,
     );
-    // No SQL, no workflow bar and no workspace (so no workspace tools).
-    expect(Object.keys(readinessTools)).not.toContain('run_readonly_sql');
+    // The shared read-only SQL tool for drill-down (ADR-0035), but no
+    // workflow bar and no workspace (so no workspace tools).
+    expect(readinessTools.run_readonly_sql).toBe(runReadOnlySqlTool);
+    expect(readinessTools.describe_entity).toBe(describeEntityTool);
     expect(Object.keys(readinessTools)).not.toContain('update_workflow');
     expect(config['workspace']).toBeUndefined();
   });
@@ -135,15 +140,20 @@ describe("the Data Readiness Agent's prompt (agents.md 2.10, Appendix D)", () =>
     expect(toolSection(readinessTools)).toEqual(expected.slice(start, end - 1));
   });
 
-  it('links its own skill and the tools its working rules use', () => {
+  it('links its own skills and the tools its working rules use', () => {
     const links = parseLinks(DATA_READINESS_PROMPT);
-    expect(links.skills).toEqual(['data-readiness']);
+    expect([...links.skills]).toEqual([
+      'data-readiness',
+      'readiness-drilldown',
+    ]);
     expect([...links.tools].sort()).toEqual(
       [
         'ask_clarification',
         'assess_data_readiness',
+        'describe_entity',
         'get_readiness_report',
         'list_readiness_reports',
+        'run_readonly_sql',
       ].sort(),
     );
     for (const tool of links.tools) expect(TOOL_NAMES).toContain(tool);
@@ -189,21 +199,29 @@ describe("the Data Readiness Agent's prompt (agents.md 2.10, Appendix D)", () =>
   });
 });
 
-describe("the Data Readiness Agent's skill (agents.md 7.4)", () => {
-  it('declares the data-readiness skill on demand, its links resolved, with no reference files', async () => {
+describe("the Data Readiness Agent's skills (agents.md 7.4)", () => {
+  it('declares the data-readiness and readiness-drilldown skills on demand, their links resolved, with no reference files', async () => {
     const skills = await (
       dataReadinessAgent as unknown as {
         resolveSkills(): Promise<InlineSkill[]>;
       }
     ).resolveSkills();
 
-    expect(skills.map((skill) => skill.name)).toEqual(['data-readiness']);
-    const [skill] = skills;
+    expect(skills.map((skill) => skill.name)).toEqual([
+      'data-readiness',
+      'readiness-drilldown',
+    ]);
+    const [skill, drilldown] = skills;
     expect(skill.description).toMatch(/^Use when assessing a dataset's/);
     expect(skill.instructions).not.toContain('[[');
     expect(skill.instructions).toContain(
       'Tools for this skill: the "assess_data_readiness" tool, the "get_readiness_report" tool, the "list_readiness_reports" tool.',
     );
     expect([...(skill.references ?? [])]).toEqual([]);
+    expect(drilldown.instructions).not.toContain('[[');
+    expect(drilldown.instructions).toContain(
+      'Tools for this skill: the "describe_entity" tool, the "run_readonly_sql" tool.',
+    );
+    expect([...(drilldown.references ?? [])]).toEqual([]);
   });
 });

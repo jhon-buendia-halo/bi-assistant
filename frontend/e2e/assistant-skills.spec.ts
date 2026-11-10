@@ -7,7 +7,7 @@ import {
   createWorldCupSession,
 } from './helpers/app-actions';
 import {
-  createKnowledgeSnippet,
+  createOntologyItem,
   saveLenaiSettings,
   seedWorldCupDataset,
 } from './helpers/agents-api';
@@ -141,11 +141,10 @@ test('a turn with curated knowledge carries the block, and the rules stay on dem
   page,
 }) => {
   const instruction = 'Only the 2018 and 2022 tournaments are in this data.';
-  await createKnowledgeSnippet(page, {
+  await createOntologyItem(page, WORLD_CUP_DATASET, {
     kind: 'instruction',
-    title: 'Coverage',
-    body: instruction,
-    datasetId: WORLD_CUP_DATASET,
+    name: 'Coverage',
+    description: instruction,
   });
   await createWorldCupSession(page);
   const request = await ask(page, QUESTION);
@@ -267,11 +266,10 @@ test('the assistant loads a skill with the skill tool', async ({ page }) => {
       };
     return { text: STUB_ANSWER };
   };
-  await createKnowledgeSnippet(page, {
+  await createOntologyItem(page, WORLD_CUP_DATASET, {
     kind: 'instruction',
-    title: 'Coverage',
-    body: 'Only the 2018 and 2022 tournaments are in this data.',
-    datasetId: WORLD_CUP_DATASET,
+    name: 'Coverage',
+    description: 'Only the 2018 and 2022 tournaments are in this data.',
   });
   await createWorldCupSession(page);
   await ask(page, QUESTION);

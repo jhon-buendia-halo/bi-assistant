@@ -72,7 +72,9 @@ check(not gaps, "every capability spec has the required sections", gaps)
 
 # 4. Every Playwright spec mirrors a Gherkin Feature in exactly one capability spec, and every E2E reference exists.
 #    The owning Feature carries a line that starts with "E2E: `<path>`"; inline mentions elsewhere are cross-references.
-e2e_files = sorted(glob.glob("frontend/e2e/*.spec.ts"))
+# Forward slashes on every OS: specs reference `frontend/e2e/x.spec.ts`, and
+# Windows' glob would return `frontend/e2e\x.spec.ts` (delivery.md 13).
+e2e_files = sorted(p.replace(os.sep, "/") for p in glob.glob("frontend/e2e/*.spec.ts"))
 problems = []
 for path in e2e_files:
     homes = [c for c, t in capabilities.items() if re.search(r"^E2E: `" + re.escape(path) + "`", t, flags=re.M)]

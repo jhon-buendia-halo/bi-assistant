@@ -15,6 +15,7 @@ import {
   ReadinessDimension,
   ReadinessFinding,
   ReadinessMaturity,
+  ReadinessNotProfiled,
   ReadinessReport,
   ReadinessSeverity,
   readinessLabel,
@@ -103,6 +104,16 @@ export function readinessMeasured(value: number | string | undefined): string {
       : String(value);
   }
   return value;
+}
+
+/** Why an entity's column checks were skipped, in words. */
+export function readinessNotProfiledReason(np: ReadinessNotProfiled): string {
+  if (np.reason === 'too-large') {
+    return np.rowCount !== undefined
+      ? `Too large — ${np.rowCount.toLocaleString('en-US')} rows, column checks skipped`
+      : 'Too large — column checks skipped';
+  }
+  return 'Timed out — column checks skipped';
 }
 
 /** The band pill's status colour (ui.md 4.13.5). */
@@ -245,6 +256,34 @@ export function readinessSeverityClass(severity: ReadinessSeverity): string {
             }
           </ul>
         </section>
+
+        @if (r.notProfiled?.length) {
+          <section
+            class="mt-6"
+            aria-labelledby="readiness-not-profiled-heading"
+            data-testid="readiness-not-profiled"
+          >
+            <h3
+              id="readiness-not-profiled-heading"
+              class="text-[13px] font-medium text-fg-strong"
+            >
+              Not profiled ({{ r.notProfiled!.length }})
+            </h3>
+            <ul class="mt-2 flex flex-col gap-1">
+              @for (np of r.notProfiled; track $index) {
+                <li
+                  class="flex flex-wrap items-baseline gap-x-3 text-[12px]"
+                  [attr.data-testid]="'readiness-not-profiled-' + $index"
+                >
+                  <span class="font-mono text-[11px] text-fg">{{
+                    np.entity
+                  }}</span>
+                  <span class="text-fg-muted">{{ notProfiledReason(np) }}</span>
+                </li>
+              }
+            </ul>
+          </section>
+        }
 
         <section class="mt-6" aria-labelledby="readiness-findings-heading">
           <div class="flex flex-wrap items-end gap-3">
@@ -410,6 +449,7 @@ export class PanelReadinessView {
   protected readonly maturityClass = readinessMaturityClass;
   protected readonly severityClass = readinessSeverityClass;
   protected readonly time = readinessTime;
+  protected readonly notProfiledReason = readinessNotProfiledReason;
 
   constructor() {
     effect((onCleanup) => {

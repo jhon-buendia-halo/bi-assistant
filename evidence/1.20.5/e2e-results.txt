@@ -1,0 +1,7 @@
+Impacted E2E, web target, branch feat/BA-318-datasource-metadata at 4a12b45, run together on 2026-11-09 (19 passed, 1 failed: the visual-baseline test has no win32 baseline on this Windows machine and fails the same way on main).
+  ok  8 [web] › e2e\layout-accessibility.spec.ts:9:5 › supports keyboard layout controls and persists the right-panel width (8.9s)
+  ok  9 [web] › e2e\layout-accessibility.spec.ts:38:5 › has no automatically detectable accessibility violations in the application shell (6.8s)
+  ok 10 [web] › e2e\layout-accessibility.spec.ts:48:5 › has no automatically detectable accessibility violations on any screen in either theme (19.8s)
+  ok 11 [web] › e2e\layout-accessibility.spec.ts:170:5 › text in the app can be selected (4.8s)
+  x  12 [web] › e2e\layout-accessibility.spec.ts:192:5 › matches the stable application-shell visual baseline (5.0s)
+    ..\..\..\..\..\..\..\AppData\Local\Temp\claude\149fe254f4742656\468b8997-4ea7-4efe-b1b7-c343c8b7d2ef\scratchpad\gate\test-results\layout-accessibility-match-f768a-ation-shell-visual-baseline-web\test-failed-1.png

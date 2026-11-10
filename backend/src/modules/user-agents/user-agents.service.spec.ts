@@ -16,7 +16,7 @@ import type {
   UserAgentDoc,
 } from './entities/user-agent.entity';
 
-/** Real `SqliteDocStore`s over an in-memory database, as in the knowledge
+/** Real `SqliteDocStore`s over an in-memory database, as in the ontology
  * repository spec; only the dataset catalogue is stubbed. */
 function build(datasetNames: string[] = ['World Cup Core']) {
   const db = new BetterSqlite3(':memory:');

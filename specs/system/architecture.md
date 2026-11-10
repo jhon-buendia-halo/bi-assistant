@@ -185,7 +185,7 @@ flowchart TB
     - A user's roles are the union of direct assignments and group-to-role mappings.
     - Every route declares the permission it needs, and one global guard checks it. The renderer reads the caller's permissions only to show or hide controls.
   - **Data ownership.**
-    - Private documents gain an `ownerId`: sessions, visuals and their workspaces, memory threads, agents, knowledge, verified queries, metrics and eval runs. Repositories scope every read and write to the caller.
+    - Private documents gain an `ownerId`: sessions, visuals and their workspaces, memory threads, agents, ontology items, verified queries, metrics and eval runs. Repositories scope every read and write to the caller.
     - Datasources and datasets are org-wide, with no owner filter.
     - In local mode, every document belongs to the local user, so existing data needs no rewrite: a missing `ownerId` reads as the local user.
   - **Storage stays SQLite (ADR-0003).** New collections hold users, groups, group memberships, role assignments, group-to-role mappings, sign-in sessions and activity events. Activity events feed the admin overview's active-user counts and recent activity.
@@ -268,7 +268,7 @@ flowchart LR
     visualization["VisualizationService<br/>(sessions module)"]
     agentsmod["AgentsModule<br/>(AgentsService, EvalRunsService)"]
     deep["DeepAnalysisModule"]
-    knowledge["KnowledgeModule"]
+    ontology["OntologyModule"]
     datasets["DatasetsModule"]
     datasources["DatasourcesModule<br/>(postgres, databricks, rest connectors)"]
     testing["TestingDataModule"]
@@ -289,7 +289,7 @@ flowchart LR
     assistant["assistant agent"]
     designer["visualization agent"]
     sqlagents["sql-fixer, sql-verifier agents"]
-    bootstrap["knowledge-bootstrap agent"]
+    bootstrap["knowledge-bootstrap agent<br/>(Ontology Bootstrap)"]
     rfpagent["rfp agent"]
     tools["tools/<br/>(dataset, create/update_visual, ask_clarification)"]
     rfptools["tools/rfp.tools.ts (HTTP)"]
@@ -303,21 +303,21 @@ flowchart LR
   sessions --> llm
   sessions --> verified
   sessions --> metrics
-  sessions --> knowledge
+  sessions --> ontology
   sessions -->|"assistant, sql-fixer, sql-verifier"| mastrasvc
   sessions -->|"installs on init"| toolsvc
   visualization -->|"visualization agent, workspace fs"| mastrasvc
   agentsmod --> sessions
-  agentsmod --> knowledge
+  agentsmod --> ontology
   agentsmod --> datasources
   agentsmod --> datasets
   agentsmod -->|"list agents"| mastrasvc
   agentsmod -->|"runs eval cases"| evals
   deep --> sessions
   deep -->|"assistant"| mastrasvc
-  knowledge --> datasets
-  knowledge --> datasources
-  knowledge -->|"knowledge-bootstrap"| mastrasvc
+  ontology --> datasets
+  ontology --> datasources
+  ontology -->|"knowledge-bootstrap"| mastrasvc
   datasets --> datasources
   testing --> datasources
   testing --> datasets
@@ -356,7 +356,7 @@ flowchart LR
     sessions["sessions<br/>(session-chat, interactive-visual-panel, sessions-api)"]
     datasets["datasets<br/>(catalog-browser, dataset-list, entity-details, metrics-panel)"]
     datasources["datasources<br/>(datasource-config, datasources-api)"]
-    knowledge["knowledge<br/>(knowledge-list, knowledge-form)"]
+    ontology["ontology<br/>(ontology-panel, ontology-form)"]
     llm["llm<br/>(llm-config, llm-api)"]
     agents["agents<br/>(agent-hub, agent-card, agent-detail, eval-trace)"]
     testing["testing-data<br/>(testing-data-config)"]
@@ -379,14 +379,14 @@ flowchart LR
   app --> sessions
   app --> datasets
   app --> datasources
-  app --> knowledge
   app --> llm
   app --> agents
   app --> testing
   app --> sharedui
   app --> diagnostics
   datasets --> datasources
-  knowledge --> datasets
+  datasets --> ontology
+  ontology --> datasets
   agents --> datasources
   testing --> datasources
   sessions --> sharedui
@@ -665,7 +665,7 @@ flowchart LR
   - A System agent's prompt edit can degrade a structured-output pipeline (designer, fixer, verifier, bootstrap, judge); their callers' existing fallbacks for unusable output still apply.
 
 #### ADR-0028 — A built-in RFP Builder agent with dedicated HTTP tools, resolved through a REST datasource; sessions can bind to a built-in agent
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-11-09 (BA-320, see the amendment at the end of this ADR)
 - **Date:** 2026-10-14
 - **Context:**
   - The user asked for an agent that walks a Mercer benefits consultant through building a carrier RFP, built in code with its own prompt, skill and tools (not a user agent, which can only configure the assistant's tools; ADR-0022, ADR-0024).
@@ -682,6 +682,7 @@ flowchart LR
   - The eval harness runs a case on the set's agent, and an `rfp` eval set exists; prompt, skill or tool changes to the agent must pass it at 100% over 3 runs.
   - Evals that create RFPs write to `rfp.*`; they tag records with `created_by = eval:<jobId>` and delete them afterwards.
   - Note (2026-10-14, not a new decision): the single `rfp-process` skill with one reference file per stage was split into seven on-demand stage skills, one per stage; the loading mechanism is unchanged (agents.md 7.4).
+- **Amendment, 2026-11-09 (BA-320):** a bound built-in agent may also take **user-picked datasets**. Questions to Insights v2 (`assistant-v2`, [agents.md](agents.md) 2.11) is bound like `rfp` and `data-readiness` (`agentKey`, every turn runs it, the assistant-only passes do not apply), but it declares no dataset of its own: Start chat opens the New conversation screen with it preselected, and `POST /sessions` with `agentId: "assistant-v2"` takes `name` and `datasets` from the body like a plain session ([api.md](api.md) 3). The decision above is otherwise unchanged. The rule "the assistant keeps the composer" now reads "an agent that declares no dataset keeps the composer". The session code's per-agent branches grow by one.
 
 #### ADR-0029 — One built-in panel tool for every agent; panel items persisted on the session; a `## Workflow` prompt convention; a workflow status bar with its own tool
 - **Status:** Accepted
@@ -727,7 +728,7 @@ flowchart LR
   - Re-introducing multi-user access later needs a new ADR; ADR-0010 to ADR-0012 stay as the record of the design that was removed.
 
 #### ADR-0031 — A deterministic DMBOK readiness engine owns every score; the Data Readiness Agent only presents stored reports; profiling is a connector capability
-- **Status:** Accepted
+- **Status:** Accepted; "the agent has no SQL" amended by ADR-0035 (2026-11-09): it may run read-only SQL to drill into findings, and scores stay engine-only
 - **Date:** 2026-11-03
 - **Context:**
   - The user asked on 2026-11-03 for a Data Readiness Agent that uses only the deterministic DMBOK metrics of the separate `data-readiness-agent` project ([BA-251](https://halo-powered.atlassian.net/browse/BA-251)).
@@ -793,6 +794,98 @@ flowchart LR
   - With a keyless or plain-HTTP endpoint the prompts and data samples travel unencrypted to whatever the user points the app at. That is the user's choice and is not prevented.
   - The eval runner can target a custom endpoint from environment variables, so a prompt change can be gated on a self-hosted model as on the public ones ([agents-evals](../capabilities/agents-evals/spec.md)).
   - Stack-neutral: any rebuild needs a resolver that yields plain data for tuning, plus a way to build an Anthropic-protocol model at an arbitrary base URL.
+
+#### ADR-0033 — Long tools stream progress through Mastra's tool writer as `tool-progress` events; readiness profiling uses one session per assessment, a row-count gate and the turn's abort signal
+- **Status:** Accepted
+- **Date:** 2026-11-09
+- **Context:**
+  - A Data Readiness assessment of the 125-table Databricks `samples` catalog took 296 s, of which the model was about 13 s ([BA-323](https://halo-powered.atlassian.net/browse/BA-323), measured 2026-11-09). The chat showed only a spinner for the whole tool call, and the session stream sends nothing during a tool call (no keepalive).
+  - The time went to profiling transport, not to the engine (ADR-0031): every SQL statement opened its own Databricks client and session (about 0.6 s each over about 560 statements), each text column had its own full-scan statement, and about 14 tables of more than 100 M rows each burned the 15 s statement timeout and contributed nothing, silently.
+  - Stop and reload abort the model turn, but the abort never reached the profiler, so warehouse queries ran on and the report was stored anyway.
+  - Mastra 1.66 gives every tool `execute` a `writer` whose custom chunks surface in the agent's `fullStream`, which the session loop already iterates ([BA-324](https://halo-powered.atlassian.net/browse/BA-324)).
+- **Decision:**
+  - **Tool progress is a stream event, not a tool result.** A long tool reports progress through `writer.custom({ type: 'data-<tool>-progress', data })`. The session loop forwards it to the browser as a new SSE event `tool-progress` (`{ tool, phase, message, done?, total?, entity? }`) between the tool's `tool` and `tool-result` events ([api.md](api.md) 3.1). The model never sees progress. The first user is `assess_data_readiness`; other long tools may adopt the same event. Progress frames also act as keepalive.
+  - **Progress is ephemeral.** It is not persisted on the message; after a reload the tool row shows its final state as today.
+  - **One profiling session per assessment.** The profiling interface (ADR-0031) gains a session scope: the adapter opens one connection and session (Databricks) or one client and read-only transaction (PostgreSQL) per worker and reuses it for every statement of the assessment. The statements, the 15 s per-statement timeout and the read-only guard are unchanged.
+  - **Per-table statements.** The per-text-column probes (normalized distinct counts, invalid-format counts) are folded into the per-table statistics statement, with a fallback to split statements when the folded one fails. Exact aggregates only: no approximate counts and no sampling.
+  - **A row-count gate.** The adapter counts rows first; a table above 100 000 000 rows is not column-profiled and is recorded in the report as not profiled, with its reason (`too-large`, or `timed-out` when its statistics statement times out). Its checks are skipped exactly as they are today when statistics are missing, so no score formula changes.
+  - **Concurrency per dialect:** 8 tables at a time on Databricks, 4 on PostgreSQL. The inventory is read once per assessment, scoped to the dataset's catalogs and schemas.
+  - **The turn's abort signal reaches the profiler.** Stop or reload cancels in-flight statements, stops scheduling tables and stores no report.
+- **Rejected:**
+  - Approximate distinct counts and `TABLESAMPLE`: measured slower on medium tables and still too slow on billion-row ones, and they would break the readiness rules that compare exact counts.
+  - Running the assessment as a background job with a progress endpoint and polling (as deep analysis does): survives reloads, but a larger change than "show what it is doing", and Stop is meant to cancel.
+  - A progress callback on the request context instead of the tool writer: kept only as the fallback if the writer's chunks do not reach `fullStream`.
+- **Consequences:**
+  - ADR-0031's "a missing statistic only skips the checks that need it" now applies visibly: a stored report lists its not-profiled entities (an additive field on `readiness_reports`, no migration; [data-model.md](data-model.md)).
+  - The SSE grammar gains one event type; clients that ignore unknown events are unaffected.
+  - The `data-readiness` eval set re-runs once: no prompt or tool description changes, but the tool's behaviour does.
+  - Stack-neutral: a rebuild needs a way for a tool to push progress to the client during a call, and connection reuse in its profiling layer.
+#### ADR-0034 — Questions to Insights v2 runs each turn as a code-defined Mastra workflow; the workflow bar shows the run's steps
+- **Status:** Accepted
+- **Date:** 2026-11-09
+- **Context:**
+  - Every agent today runs a turn as one agent call; the order of the work lives in the prompt (the assistant's method rules), and the workflow bar is driven by the model calling `update_workflow` under the prompt's `## Workflow` convention (ADR-0029). The model can skip, reorder or misreport steps.
+  - On 2026-11-09 the user asked that Questions to Insights v2 (roadmap 1.21) use a workflow defined in code with Mastra, not one defined in its system prompt: some steps deterministic, only some answered by the LLM, and the workflow rendered in the workflow bar. The first version is an example with four steps; the real steps come later.
+- **Decision:**
+  - **A v2 turn is a Mastra workflow run** (`createWorkflow` / `createStep` from `@mastra/core/workflows`, registered on the `Mastra` instance), not a direct `agent.stream` call. Each step is either deterministic code or a bounded call to the `assistant-v2` agent; the step order is fixed in code.
+  - **The workflow's steps are the session's workflow** in the existing saved workflow state (ADR-0029, R15): the step titles come from the workflow definition, and their status (current, done, failed) is written by the orchestrator from the run's step events, never by the model. v2 is not given `update_workflow`, and its prompt has no `## Workflow` section.
+  - **The LLM step streams as a normal turn**: its text, reasoning and tool calls reach the chat through the same stream events, so the transcript, memory thread and stop button behave as for any bound agent.
+  - Only v2 changes. The assistant, the RFP Builder, the Data Readiness Agent and user agents keep the prompt-driven workflow of ADR-0029.
+- **Rejected:**
+  - **A `## Workflow` section in v2's prompt with `update_workflow`:** that is the prompt-defined workflow the user asked to move away from.
+  - **A Mastra workflow per agent call inside a tool** (the agent calls a tool that runs the workflow): the model would still decide whether to run it.
+- **Consequences:**
+  - The session service gains a second turn path for workflow-backed agents; the workflow bar needs no new UI, only state written from step events. A step failure stops the run, marks that step failed and ends the turn with the error, as a failed turn does today.
+  - Steps can later be added, removed or swapped between deterministic and LLM without touching the prompt or the bar.
+  - Stack-neutral: any rebuild needs an engine that runs typed steps in a fixed order and reports each step's start and end.
+
+#### ADR-0035 — The Data Readiness Agent may run read-only SQL to drill into findings; scores stay engine-only
+- **Status:** Accepted
+- **Date:** 2026-11-09
+- **Context:**
+  - ADR-0031 gave the Data Readiness Agent three tools and no SQL: it only presented stored reports. A finding says "12 % of `driver.second_nationality_country_id` is null", and the user's next question is which rows. The agent could not answer it.
+  - The assistant already has the tools to read rows safely: `describe_entity` and `run_readonly_sql`, session-scoped, behind the read-only guard, the SQL Fixer and the result guards ([agents.md](agents.md) 3.2, 3.4).
+- **Decision:**
+  - **The agent gains the shared `describe_entity` and `run_readonly_sql`**, unchanged, after its three readiness tools ([agents.md](agents.md) 2.10). Nothing new is built for them.
+  - **A new on-demand skill `readiness-drilldown`** holds one SQL recipe per assessed dimension for PostgreSQL and Databricks and the presentation rules: the count first, then a table of up to 20 rows ([agents.md](agents.md) 7.4).
+  - **Scores stay engine-only.** A query result never changes, recomputes or replaces a score or a finding. When a query's count differs from a finding's, the agent gives both and says the data may have changed since the report was generated.
+  - **The scope is narrow.** SQL is for the records behind findings and for data-quality questions about the session's data. General analysis (totals, trends, rankings) is declined in one sentence with a pointer to Questions to Insights.
+  - **Profiling is unchanged.** "Reads no row values" ([data-readiness](../capabilities/data-readiness/spec.md) R6) is about the assessment's profiler. The chat's drill-down queries are separate and run through the user SQL path.
+- **Rejected:**
+  - **A dedicated drill-down tool per dimension:** one more tool surface to build and keep, when `run_readonly_sql` with a recipe does the same.
+  - **Leaving SQL out and sending the user to Questions to Insights for every "which rows" question:** it loses the finding's context and makes the user retype it.
+  - **Open SQL access with no scope rule:** the agent would become a second Questions to Insights.
+- **Consequences:**
+  - The agent now reads row values in chat, within the same limits as the assistant (row cap, read-only guard, SQL repair).
+  - The `data-readiness` eval set changes: the case that expected "cannot run queries" now expects the general count to be declined with a pointer, and it re-runs at 100 % over 3 runs (ADR-0031).
+  - Stack-neutral: a rebuild needs the read-only dataset tools available to this agent and a skill with the per-dimension recipes.
+
+#### ADR-0036 — Knowledge becomes a per-dataset ontology of concepts, relations, constraints and instructions; the per-turn block is rendered from it unchanged
+- **Status:** Accepted
+- **Date:** 2026-11-09
+- **Context:**
+  - Curated knowledge was a flat library of snippets (`term`, `default_filter`, `instruction`), global or scoped to one dataset, edited on its own screen under Context. A term could not say which columns it means, nothing could say how two business concepts connect, and a metric could not be tied to a concept.
+  - On 2026-11-09 the user asked to refactor knowledge into each dataset's ontology (roadmap 1.21.7–1.21.9, moving 1.3.1–1.3.2). The design was approved from a review page, decisions A–E below.
+  - The assistant's prompt must not change: the curated-knowledge block, its character budget and the `curated-knowledge` skill were tuned and evaluated (ADR-0021, ADR-0022).
+- **Decision:**
+  - **The store is `ontology_items`, one document per item, four kinds:** `concept` (a business term with optional synonyms and column mappings), `relation` (two concepts joined by `is-a`, `part-of`, `has-many` or `related-to`, or a concept `measured-by` a governed metric), `constraint` (a SQL predicate plus when to apply it, optionally about a concept) and `instruction` (a standing rule). An item belongs to one dataset by name, or is shared (`dataset: null`).
+  - **The per-turn block is rendered from the ontology and stays byte-identical for migrated data.** Concepts render as the old `[term]` line (with `maps to` added only when a mapping has a column or expression), constraints as `[default_filter]`, instructions as `[instruction]`, and relations as a new `[relation]` line. Selection, order, header and the 2,000-character budget are unchanged; the `knowledge-used` context key, the message field `knowledge` and the `KnowledgeUse` shape keep their names.
+  - **A. Global snippets become shared items** (`dataset: null`), shown in every dataset's Ontology tab as "All datasets".
+  - **B. The `/knowledge` routes are replaced**, with no aliases: `GET/POST /datasets/:name/ontology`, `PATCH/DELETE /ontology/:id` and the two bootstrap routes.
+  - **C. The skill keeps the name `curated-knowledge`** and gains one bullet explaining `[relation]` lines.
+  - **D. Deleting a dataset deletes its own items; shared items stay.** Saving a dataset under a new name starts an empty ontology. Deleting a concept deletes the relations from or to it and clears the concept on constraints that name it.
+  - **E. Migration M15 copies each snippet into `ontology_items` and renames `knowledge_snippets` to `knowledge_snippets_legacy`**, kept for one release ([data-model.md](data-model.md) section 5). A snippet scoped only to a datasource becomes a disabled shared item, since the old selection never used it.
+  - **The bootstrap agent keeps its registry key `knowledge-bootstrap`** (in-app prompt overrides are keyed by it) and its display name becomes Ontology Bootstrap. It drafts the four kinds; the service resolves relations and mappings and drops what does not resolve. Drafts stay disabled and `mined`.
+- **Rejected:**
+  - **Copies of each global snippet into every dataset:** edits would have to be repeated, and new datasets would start without them. Shared items keep one copy.
+  - **Keeping `/knowledge` as an alias of the new routes:** the two shapes differ (kinds, fields), so the alias would translate forever; the only client is the app itself.
+  - **Renaming the skill to match:** it is a built-in, overridable by name and evaluated at 100 %; a rename buys nothing for the assistant.
+  - **Rewriting the block format for the ontology:** it would change every prompt and force the evals to be re-baselined for no benefit.
+- **Consequences:**
+  - An upgraded install starts with the same items and the same block per session; the old table stays one release as `knowledge_snippets_legacy`.
+  - The Knowledge card leaves the Context page; the dataset editor gains Schema and Ontology tabs. (Same day, roadmap 1.21.11: an **Ontologies** card on Context lists every dataset's ontology and opens the same panel, so the ontology still has one editor.)
+  - Retrieval by question relevance and SQL checks against the ontology (roadmap 1.3.3) and provenance and feedback (1.3.4) can build on stored concepts and relations.
+  - Stack-neutral: a rebuild needs a per-dataset item store with four item kinds, a shared flag, per-kind validation, concept-delete cascades and a block renderer with the line formats in [agents.md](agents.md) 4.1.
 
 ## Level 4 — Code
 

@@ -13,7 +13,7 @@ import {
   LucideIconData,
   ArrowLeft,
   Bot,
-  BookOpen,
+  Layers,
   ChevronDown,
   CircleCheck,
   CornerDownLeft,
@@ -35,7 +35,9 @@ import {
   TestTube,
   Workflow,
   SunMoon,
+  Users,
   Wrench,
+  Network,
 } from 'lucide-angular';
 import { DatasourceConfig } from './features/datasources/components/datasource-config/datasource-config';
 import {
@@ -68,13 +70,15 @@ import {
   ASSISTANT_PICKER_KEY,
   NewSessionAgentOption,
   newSessionAgentOptions,
+  picksDatasets,
   startsInComposer,
 } from './features/agents/services/agent-hub.util';
 import {
   Agent as AgentEntry,
   AgentsApiService,
 } from './features/agents/services/agents-api.service';
-import { KnowledgeList } from './features/knowledge/components/knowledge-list/knowledge-list';
+import { PersonaList } from './features/personas/components/persona-list/persona-list';
+import { OntologyOverview } from './features/ontology/components/ontology-overview/ontology-overview';
 import { CatalogBrowser } from './features/datasets/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
 import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
@@ -126,19 +130,21 @@ type MainView =
   | 'skills'
   | 'skill-editor'
   | 'builtin-skill-editor'
-  | 'knowledge'
+  | 'context'
+  | 'personas'
+  | 'ontologies'
   | 'sessions'
   | 'conversation-new'
   | 'session-chat';
 
 /** What the navigation rail selects (app-shell R3–R5, R46). */
-type Area = 'datasets' | 'agents' | 'knowledge' | 'sessions' | 'settings';
+type Area = 'datasets' | 'agents' | 'context' | 'sessions' | 'settings';
 
 /** The view each workspace area opens on. */
 const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
   datasets: 'dataset',
   agents: 'agents',
-  knowledge: 'knowledge',
+  context: 'context',
   sessions: 'sessions',
 };
 
@@ -151,7 +157,9 @@ const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   skills: 'agents',
   'skill-editor': 'agents',
   'builtin-skill-editor': 'agents',
-  knowledge: 'knowledge',
+  context: 'context',
+  personas: 'context',
+  ontologies: 'context',
   sessions: 'sessions',
   'conversation-new': 'sessions',
   'session-chat': 'sessions',
@@ -212,7 +220,8 @@ function urlHost(baseUrl: string): string {
     SkillEditor,
     BuiltInSkillEditor,
     AgentPreview,
-    KnowledgeList,
+    PersonaList,
+    OntologyOverview,
     CatalogBrowser,
     EntityDetails,
     ToastContainer,
@@ -232,7 +241,6 @@ export class App {
 
   readonly ArrowLeft = ArrowLeft;
   readonly Bot = Bot;
-  readonly BookOpen = BookOpen;
   readonly ChevronDown = ChevronDown;
   readonly CircleCheck = CircleCheck;
   readonly CornerDownLeft = CornerDownLeft;
@@ -403,14 +411,16 @@ export class App {
   readonly startingAgentKey = signal<string | null>(null);
 
   /**
-   * Start chat on a hub card or an agent's detail (agents-evals R53). The
-   * Official agent has no datasets of its own, so it opens the New-session
-   * composer; a Live user agent gets its session created and opened at once
-   * (sessions-chat R52). A refusal keeps the user where they are.
+   * Start chat on a hub card or an agent's detail (agents-evals R53). An
+   * Official agent with no datasets of its own opens the New-session
+   * composer, preselected to it when it picks datasets like the assistant
+   * (Questions to Insights v2, sessions-chat R64); a Live user agent gets its
+   * session created and opened at once (sessions-chat R52). A refusal keeps
+   * the user where they are.
    */
   startChatWithAgent(agent: Agent): void {
     if (startsInComposer(agent)) {
-      this.openComposer();
+      this.openComposer(picksDatasets(agent) ? agent.key : undefined);
       return;
     }
     if (this.startingAgentKey()) return;
@@ -481,6 +491,15 @@ export class App {
   readonly composerAgentDatasets = computed(
     () => this.composerAgent()?.datasets ?? [],
   );
+  /**
+   * Whether the screen shows the dataset picker and requires a name: the
+   * assistant and the agents that pick datasets like it (R64), not an agent
+   * that brings its own datasets.
+   */
+  readonly composerPicksDatasets = computed(() => {
+    const agent = this.composerAgent();
+    return !agent || picksDatasets(agent);
+  });
 
   pickComposerAgent(key: string): void {
     const option = this.composerAgents().find((o) => o.agent.key === key);
@@ -1139,13 +1158,20 @@ export class App {
     if (this.creatingSession()) return;
     const name = this.composerName().trim();
     const agent = this.composerAgent();
-    if (!agent && (!name || this.selectedDatasets().size === 0)) return;
+    const picks = this.composerPicksDatasets();
+    if (picks && (!name || this.selectedDatasets().size === 0)) return;
     this.creatingSession.set(true);
-    // An agent starts through the same path as Start chat, with the typed
+    // The assistant and the agents that pick datasets like it send the
+    // picked datasets (with `agentId` for the latter); an agent with its own
+    // datasets starts through the same path as Start chat, with the typed
     // name when there is one (sessions-chat R64).
-    (agent
-      ? this.sessionsApi.createFromAgent(agent.key, name || undefined)
-      : this.sessionsApi.create(name, Array.from(this.selectedDatasets()))
+    (picks
+      ? this.sessionsApi.create(
+          name,
+          Array.from(this.selectedDatasets()),
+          agent?.key,
+        )
+      : this.sessionsApi.createFromAgent(agent!.key, name || undefined)
     ).subscribe({
       next: (res) => {
         this.creatingSession.set(false);
@@ -1165,16 +1191,27 @@ export class App {
     });
   }
 
-  openComposer(): void {
+  /**
+   * Open the New conversation screen. The Agent field starts on Assistant on
+   * every visit (R64), except from Start chat on an agent that picks datasets
+   * like the assistant, which passes its key to preselect it.
+   */
+  openComposer(preselectAgentKey?: string): void {
     if (!this.confirmLeaveAgentEditor()) return;
     this.mainView.set('conversation-new');
     this.selectedDatasets.set(new Set());
-    this.composerAgentKey.set(ASSISTANT_PICKER_KEY);
+    this.composerAgentKey.set(preselectAgentKey ?? ASSISTANT_PICKER_KEY);
     this.composerAgents.set([]);
     this.agentsApi.getAgents().subscribe({
-      next: (res) =>
-        this.composerAgents.set(newSessionAgentOptions(res.agents)),
-      error: () => this.composerAgents.set([]),
+      next: (res) => {
+        this.composerAgents.set(newSessionAgentOptions(res.agents));
+        // Falls back to Assistant when the preselected agent is not offered.
+        this.pickComposerAgent(this.composerAgentKey());
+      },
+      error: () => {
+        this.composerAgents.set([]);
+        this.composerAgentKey.set(ASSISTANT_PICKER_KEY);
+      },
     });
     this.llmApi.getSettings().subscribe({
       next: (v) => {
@@ -1244,7 +1281,7 @@ export class App {
   }[] = [
     { area: 'datasets', label: 'Datasets', icon: FlaskConical },
     { area: 'agents', label: 'Agents', icon: Bot },
-    { area: 'knowledge', label: 'Knowledge', icon: BookOpen },
+    { area: 'context', label: 'Context', icon: Layers },
     { area: 'sessions', label: 'Sessions', icon: FolderKanban },
   ];
 
@@ -1275,6 +1312,37 @@ export class App {
     },
     { key: 'appearance', label: 'Appearance', icon: SunMoon },
   ];
+
+  /**
+   * The Context area's sections, one card each in this order (app-shell R3a).
+   * A new section is one entry here plus its view in the template.
+   */
+  readonly contextSections: {
+    view: MainView;
+    label: string;
+    description: string;
+    icon: LucideIconData;
+  }[] = [
+    {
+      view: 'ontologies',
+      label: 'Ontologies',
+      description:
+        "Each dataset's concepts, relations, constraints and instructions the assistant applies.",
+      icon: Network,
+    },
+    {
+      view: 'personas',
+      label: 'User personas',
+      description:
+        'Who asks the questions: their role, goals, typical questions and the answers they prefer.',
+      icon: Users,
+    },
+  ];
+
+  /** Opens a Context section from its card (app-shell R3a). */
+  openContextSection(view: MainView): void {
+    this.mainView.set(view);
+  }
 
   /** Every Settings section is always offered, in their fixed order. */
   readonly visibleSettingsSections = computed(() => this.settingsSections);
@@ -1327,11 +1395,13 @@ export class App {
     // to the hub (agents-evals R59).
     const leavingEditor = !this.settingsOpen() && this.inEditor();
     // Sessions is shown only on its list: from a chat or the composer the
-    // rail returns to the list (app-shell R3).
+    // rail returns to the list (app-shell R3). Context likewise returns from
+    // a section to its cards (R3a).
     const alreadyShown =
       this.currentArea() === area &&
       !leavingEditor &&
-      (area !== 'sessions' || this.mainView() === 'sessions');
+      (area !== 'sessions' || this.mainView() === 'sessions') &&
+      (area !== 'context' || this.mainView() === 'context');
     if (!alreadyShown && !this.confirmLeaveAgentEditor()) return;
     if (area === 'settings') {
       // Settings covers the main view; the editor closes rather than wait

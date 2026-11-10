@@ -238,6 +238,152 @@ Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the wor
   - `check-specs.py` passes.
 - **Notes:** same branch `feat/BA-119-harness-adjustments`. The user chose an MCP server over scripts and over the claude.ai Atlassian connector, and chose to replace `jira.sh`, on 2026-10-16. `update_issue` replaces the `raw` calls earlier stories needed to set a parent or edit a description. Evidence: [evidence/0.4.2/](evidence/0.4.2/).
 
+#### 0.4.3 — Agent roles: builder, reviewer and a manager that only answers the human  `✅ Done`
+- **Intent:** an LLM is used only where the work needs judgment: writing code, reviewing a diff, and talking to the human. Every other part of the org chart is a script, a hook or the pipeline's JavaScript, so it costs no tokens.
+- **Scope:**
+  - `.claude/agents/builder.md` (`isolation: worktree`):
+    - Works one story on a `unit/<EPIC-ID>-<roadmap-id>` branch, from the brief made by `scripts/brief.mjs` (0.4.4). It does not read the whole retrospective or every skill.
+    - Writes the failing unit test first, then the code.
+    - For a UI story, writes the story's main Gherkin scenario once, as a Playwright test whose `test.step` titles are the Given/When/Then lines. This file is the demo in the fast loop (0.4.5) and grows into the E2E spec in the gate.
+    - Carries the standing rules:
+      - write files with Edit/Write or in a private scratch folder, never under shared `/tmp` names
+      - never kill a process it did not start
+      - set `E2E_SKIP_DOCKER=1`
+      - never run `npm test`/`build` alongside `test:e2e`
+  - `.claude/agents/reviewer.md`:
+    - Read-only, on a cheaper model than the builder.
+    - Runs only after the deterministic checks have passed (0.4.4).
+    - Gets the diff and the story, never the builder's transcript.
+    - Returns findings or `approve`.
+  - `.claude/agents/manager.md`:
+    - Tools: read, search, `AskUserQuestion`, `PushNotification`. No Edit, Write or Bash.
+    - Runs only when the human asks "what needs me?" or a story fails review 3 times. It answers with one question, recommended option first.
+    - It does not dispatch or poll. The pipeline (0.4.4) and `scripts/board.mjs` (0.4.7) do that.
+  - Manager mode is opt-in (`claude --agent manager`). A plain session keeps today's single-agent workflow.
+  - Unit worktrees made by `isolation: worktree` are temporary and exempt from the epic worktree naming rule. `workflow-plan` says so.
+- **Out of scope:** app code; Jira; cloud agents; an LLM QA agent (QA is the script in 0.4.5).
+- **Acceptance:**
+  - A new session lists the three agents.
+  - A headless `claude --agent manager` run asked to edit a file cannot: Edit, Write and Bash are not available to it.
+  - A headless reviewer run on a scratch diff with a planted bug reports the bug.
+  - `check-specs.py` passes.
+- **Notes:**
+  - Branch: `feat/BA-119-harness-adjustments`, reopened because the epic's first branch merged.
+  - On 2026-11-09 the user chose this design from an "org chart" diagram, with three decisions:
+    1. Builders write failing **unit** tests first. E2E stays in the acceptance gate, after the human tests by hand.
+    2. One PR per epic.
+    3. `roadmap.md` is the ticket board, with no Jira.
+  - The same day the user chose the token-minimal version: LLM only for judgment, scripts for the rest. They also chose to write the main scenario once, as both the demo and the start of the E2E spec, and to commit videos under `evidence/`.
+
+#### 0.4.4 — Story pipeline: brief, build, deterministic checks, review up to 3×  `📋 Planned`
+- **Intent:** every story takes the same path in the same order, fixed in code rather than by an LLM. The LLM sees as little context as possible, and only diffs that already pass the mechanical checks.
+- **Scope:**
+  - `scripts/brief.mjs <roadmap-id>` prints the builder's brief:
+    - the roadmap entry
+    - the epic spec's section for it
+    - the lessons from `lessons.md` (0.4.8) tagged for the areas the story touches
+    - the files likely touched, by grepping the Scope's paths
+  - A saved workflow, `.claude/workflows/story-pipeline.js`. Input: an epic ID and roadmap story IDs. For each story:
+    1. Build the brief with `brief.mjs`.
+    2. The builder writes the code. Builders run in parallel, at most 4 by default.
+    3. The deterministic checks run on the unit branch: `tsc`, lint, the related unit tests (Jest `--findRelatedTests`) and `check-specs.py`. If one fails, its output goes straight back to the builder, with no review.
+    4. The reviewer reviews. Findings go back to the builder, at most 3 rounds. After the third, the story escalates to the manager.
+    5. QA runs `scripts/qa.mjs --fast` (0.4.5).
+    6. A passing unit branch is merged into the epic worktree.
+  - The pipeline writes a log per story: steps, review rounds, check failures and retries, as JSON under `evidence/<roadmap-id>/pipeline.json`.
+  - Fallback: if the saved workflow can't be run in this setup, the same steps run from a single `scripts/pipeline.mjs` that calls `claude -p --agent builder|reviewer` headless.
+- **Out of scope:** per-worktree ports and databases, which more than one QA lane would need.
+- **Acceptance:**
+  - A dry run on two throwaway stories in a scratch epic shows:
+    - parallel builds
+    - a planted type error returned to the builder without a review
+    - a review loop that stops at 3
+    - both unit branches merged, confirmed with `git merge-base --is-ancestor`
+  - `brief.mjs` output for a sample story stays under a set size, checked in a unit test.
+- **Notes:** depends on 0.4.3. Uses `lessons.md` from 0.4.8 if it is there, otherwise only the brief's other parts.
+
+#### 0.4.5 — Deterministic QA: impacted tests, demo video, test-run evidence  `✅ Done`
+- **Intent:** checks, test selection, the demo video and the evidence are produced by a script, with no LLM. Each story ends with a captioned demo video and a `tests.md` that proves which tests ran.
+- **Scope:**
+  - `scripts/qa.mjs <roadmap-id> [--fast|--gate]` runs one story at a time (a lock file makes it the single QA lane), because worktrees share Postgres on 55432, the default ports and `backend/dist`. It selects tests mechanically:
+    - Playwright `--only-changed=<epic base>` for the specs touched through imports, plus the specs of the Features the story names in its spec
+    - Jest `--findRelatedTests` on the changed files
+  - **`--fast` (fast loop):**
+    - Runs the related unit tests, the builds, `check-specs.py` and the selected Playwright specs.
+    - Records the **demo**: for a UI story, it runs the story's main scenario with `DEMO=1`, which turns on `slowMo`, 1280×720 video and a caption overlay showing each `test.step` title. It saves `evidence/<roadmap-id>/demo.webm`.
+    - For a story with no UI, the demo is a text transcript of its main scenario's commands and output (`demo.txt`).
+  - **`--gate` (acceptance gate):**
+    - Runs the step-6 spec list, the unit tests, lint and the builds, with Playwright JSON and HTML reporters and Jest `--json`. Video and trace are kept for failures.
+    - Writes `evidence/<roadmap-id>/tests.md`:
+      - each command with passed / failed / skipped counts, read from the reports
+      - the specs run, compared with step 6's list: a listed spec that did not run fails the gate and is named
+      - links to `demo.webm`, the reports and any failure videos
+  - `frontend/playwright.config.ts` gets the `DEMO` switch and the reporters. A `frontend/e2e/support/demo-captions.ts` fixture draws the captions.
+  - **Videos are committed** under `evidence/<roadmap-id>/`. `qa.mjs` fails a demo over 5 MB.
+  - `verify` and `workflow-ship` call `qa.mjs` instead of listing commands, and the changelog entry links `demo.webm` and `tests.md`.
+  - `scripts/demo-page.mjs <roadmap-id>` (no LLM) writes `evidence/<roadmap-id>/demo-page.html` from the story's roadmap entry, changelog entry, `tests.md` and demo. The Claude session publishes it as an artifact with the Artifact tool (`demo.webm` as a supporting file), so a teammate watches the demo and reads the work description from one link. The link goes in the evidence README and the changelog entry.
+- **Out of scope:** recording the desktop (Electron) app; narration; editing videos together.
+- **Acceptance:**
+  - `qa.mjs --fast` on a sample UI story produces one captioned `demo.webm` under 5 MB. Without `DEMO=1`, the same spec runs at normal speed with no captions.
+  - `qa.mjs --gate` writes a `tests.md` whose counts match the JSON reports.
+  - Removing one impacted spec from the run fails the gate, naming the spec.
+  - Two `qa.mjs` runs started together run one after the other.
+  - This epic's own evidence includes a demo and a `tests.md`.
+  - `demo-page.mjs 1.21.6` generates a page that, published as an artifact with `demo.webm`, plays the captioned demo beside the story's description, and the evidence README and changelog link it.
+- **Notes:** depends on 0.4.4. Touches test configuration and a test fixture under `frontend/`, not app code.
+  - Started 2026-11-10 on a second `feat/BA-119-harness-adjustments` branch (the first merged as PR #88). The user chose to build it **standalone**: `qa.mjs` runs on its own (by hand, `verify`, `workflow-ship`), and 0.4.4's pipeline calls it later. It starts from the `DEMO=1` switch and `scenarioStep` caption helper kept from the 0.4.3 dry run (`unit/BA-119-0.4.5-demo-captions`).
+  - Decisions (user, 2026-11-10): a story's main scenario is the Playwright test tagged `@demo` and `@story-<roadmap-id>`, written with `scenarioStep` so each Gherkin line is a caption; step 6's list is the spec-file column of `evidence/<roadmap-id>/e2e-impact.md`; the sample UI story is 1.21.6 User personas ("A new install starts with the demo persona"), whose `demo.webm` and `tests.md` are this story's showcase.
+  - Added 2026-11-10 (user): "As part of the workflow the video should be uploaded as a Claude artifact with the work description." Built as `scripts/demo-page.mjs` plus a publish step in `verify` and `workflow-ship`.
+
+#### 0.4.6 — "ship it": a human-typed gate on the epic PR  `📋 Planned`
+- **Intent:** only a human opens or merges the epic PR, by typing `ship it <EPIC-ID>`. Today that is a convention. This story makes it a hard gate that no agent can get past.
+- **Scope:**
+  - A `UserPromptSubmit` hook. When the prompt is exactly `ship it <EPIC-ID>`, it writes a one-time ship token for that epic. The token is stored in git's common dir and never committed.
+  - A `PreToolUse` hook on Bash and PowerShell. It blocks `gh pr create` and `gh pr merge` on a branch for `<EPIC-ID>` unless that epic has a token, and uses up the token.
+  - Both hooks live in `.claude/hooks/` with unit tests and are registered in `.claude/settings.json`.
+  - `workflow-ship` says to wait for `ship it`.
+- **Out of scope:** GitHub branch protection. Approval on `main` stays as set in 0.2.4.
+- **Acceptance:**
+  - Unit tests show that:
+    - the token is written only for the exact phrase
+    - `gh pr create` is blocked without a token and allowed with one
+    - the token works only once
+  - In a headless session, a `gh pr create` call is denied when the phrase was not typed.
+- **Notes:** independent of the other stories.
+
+#### 0.4.7 — Board status and check-ins without an LLM  `📋 Planned`
+- **Intent:** the 10-minute check-in costs no tokens. A script watches the board and notifies the human only when something needs them. The manager LLM wakes only then.
+- **Scope:**
+  - `scripts/board.mjs [--watch 10m]` reads `roadmap.md`, the `unit/<EPIC-ID>-*` branches, the latest `pipeline.json` and `tests.md`, and the QA lock. It prints, per story:
+    - status
+    - review round
+    - last check result
+    - whether a human is needed: hand test ready, escalation, or ready for `ship it`
+  - `--watch` re-runs it every 10 minutes and sends a desktop notification only when the "needs human" list changes. It is a plain process or OS scheduled task, with no LLM.
+  - `scripts/board.mjs --set <roadmap-id> <status>` updates the status in `roadmap.md`. The pipeline calls it, so no LLM edits the board.
+  - CLAUDE.md gets a short **Agent roles** section: the three agents, the scripts, the opt-in, and links to the skills.
+- **Out of scope:** voice input setup; a live board page.
+- **Acceptance:**
+  - Unit tests cover parsing `roadmap.md` statuses and the "needs human" rules on fixture data.
+  - A `--watch` run notifies once per change and stays silent otherwise.
+  - The `workflow-steps` mod still parses CLAUDE.md, and `check-specs.py` passes.
+- **Notes:** depends on 0.4.4 for `pipeline.json`, and on 0.4.5 for `tests.md`.
+
+#### 0.4.8 — Tagged lessons digest and token metering  `📋 Planned`
+- **Intent:** an agent reads only the past lessons that apply to its work, not the whole `retrospective.md` (over 1,100 lines). Token use per story is measured, so savings are known rather than guessed.
+- **Scope:**
+  - `lessons.md`: every "What to do differently" bullet from `retrospective.md`, de-duplicated, one line each, tagged by area (`e2e`, `worktree`, `subagents`, `evals`, `release`, `specs`, `sql`, …), with a link back to its entry.
+    - `scripts/lessons.mjs --check` fails when a new retrospective entry adds a lesson that `lessons.md` does not yet include.
+    - `scripts/lessons.mjs --tags e2e,worktree` prints the matching lessons for `brief.mjs`.
+  - CLAUDE.md's mandatory first action becomes "read `lessons.md`", or the lessons for your tags. `retrospective.md` stays the full record, and `workflow-retrospective` adds each new lesson to the digest.
+  - `scripts/tokens.mjs <roadmap-id>` totals input, output and cache tokens of the story's agent runs from the Claude Code session transcripts and writes them into `pipeline.json` and `tests.md`.
+- **Out of scope:** rewriting past retrospective entries.
+- **Acceptance:**
+  - `lessons.md` covers every existing lesson, checked by `lessons.mjs --check`.
+  - `tokens.mjs` totals match a hand count on one sample transcript.
+  - The dry-run stories in 0.4.4 report their token totals.
+- **Notes:** `brief.mjs` (0.4.4) uses this digest. It is a rule change to the first action, approved by the user on 2026-11-09.
+
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
 Source of truth for scope and dates: Jira project **BA**, version *1.0 Beta* ([timeline](https://halo-powered.atlassian.net/jira/software/projects/BA/boards/2688/timeline)). Each milestone mirrors one Jira epic and each feature mirrors one story, so IDs map 1:1. Imported 2026-10-01. Status changes are made in both places.
@@ -305,7 +451,8 @@ Curated knowledge the assistant treats as authoritative: glossary terms, standin
 - **Acceptance:** `docs/plans/BA-4.md` exists, [specs/epics/BA-4/spec.md](specs/epics/BA-4/spec.md) is `Status: Confirmed`, and every story of the epic has a feature in this milestone.
 - **Notes:** starts after 1.3.5 is Done. No other story in the epic branches until it is Done, except stories already in progress on 2026-10-06.
 
-#### 1.3.1 — Research and ontology design ([BA-78](https://halo-powered.atlassian.net/browse/BA-78))  `📋 Planned`
+#### 1.3.1 — Research and ontology design ([BA-78](https://halo-powered.atlassian.net/browse/BA-78))  `🚫 Cut`
+- **Moved:** on 2026-11-09 the user had this built on BA-320 as roadmap 1.21.7–1.21.9 (design approved from a review page; ADR-0036).
 - **Intent:** an evidence-based design for how the knowledge store models business meaning, so query generation follows each data store's ontology.
 - **Scope:**
   - Compare Databricks Genie, Snowflake Cortex Analyst semantic models, the dbt Semantic Layer, Cube and knowledge-graph text-to-SQL research.
@@ -315,7 +462,8 @@ Curated knowledge the assistant treats as authoritative: glossary terms, standin
 - **Out of scope:** implementation.
 - **Acceptance:** the decision record is merged in `docs/` (as an ADR in [specs/system/architecture.md](specs/system/architecture.md)) and the model is agreed.
 
-#### 1.3.2 — Ontology model, knowledge graph and bootstrap ([BA-79](https://halo-powered.atlassian.net/browse/BA-79))  `📋 Planned`
+#### 1.3.2 — Ontology model, knowledge graph and bootstrap ([BA-79](https://halo-powered.atlassian.net/browse/BA-79))  `🚫 Cut`
+- **Moved:** on 2026-11-09 the user had this built on BA-320 as roadmap 1.21.7–1.21.9 (design approved from a review page; ADR-0036).
 - **Intent:** business concepts and their relations live in one graph and are drafted automatically, so setup takes minutes.
 - **Scope:**
   - The concept and relation schema and its storage.
@@ -499,7 +647,7 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
 
 #### 1.7.17 — Datasource-scoped knowledge is never used ([BA-98](https://halo-powered.atlassian.net/browse/BA-98))  `📋 Planned`
 - **Intent:** every saved knowledge entry can reach the assistant.
-- **Scope:** see the Jira bug and the Open question in [capabilities/knowledge/spec.md](specs/capabilities/knowledge/spec.md).
+- **Scope:** see the Jira bug and the Open question in [capabilities/knowledge/spec.md](specs/capabilities/dataset-ontology/spec.md).
 - **Acceptance:** Datasource-scoped entries are injected for sessions on that datasource, or the scope is removed.
 
 #### 1.7.18 — Stale application-shell visual baseline ([BA-99](https://halo-powered.atlassian.net/browse/BA-99))  `📋 Planned`
@@ -1288,6 +1436,128 @@ A synthetic Mercer US Health & Benefits world as a seedable Testing Data fixture
 - **Acceptance:** the panel lists "US Health" with `0/45 entities`; loading it creates and seeds `us_health` and reports `45/45 entities`; the dataset has sample values and the declared join references; re-running the generator reproduces the seed byte for byte; `check-specs.py`, unit tests, lint, builds and the Testing Data Playwright scenarios are green.
 - **Notes:** data model approved on 2026-11-04 ([review page](https://claude.ai/artifact/4msSW6rkyot8Ai8Zvdr9yc)); research notes from public Mercer, KFF, SOA and state-law sources. Built by five parallel units (generator and seed, signal tests, defect and structure tests, app-level load, specs). Passed the acceptance gate on 2026-11-04. Evidence: [evidence/1.19.1/](evidence/1.19.1/).
 
+### Milestone 1.20 — Schema metadata in datasets ([BA-318](https://halo-powered.atlassian.net/browse/BA-318))
+
+Users tag each schema in a dataset with its data layer and a description, and the assistant uses them. Extends the datasets capability and the session context. No ADR: an optional field on the dataset document and an extra section in an existing context block. All stories are built on the branch `feat/BA-318-datasource-metadata` and ship as one PR. Epic spec: [specs/epics/BA-318/spec.md](specs/epics/BA-318/spec.md).
+
+#### 1.20.1 — Layer and description on dataset schemas ([BA-319](https://halo-powered.atlassian.net/browse/BA-319))  `✅ Done`
+- **Intent:** in the Edit dataset page, the user selects a schema and sets its layer (Landing, Normalized, Consumption) and a description; the tree shows the layer, and the assistant takes both into account.
+- **Scope:** optional per-dataset schema notes (`schemas` on the dataset document and `POST /datasets`; omitted keeps, present replaces, orphans pruned); Layer dropdown and Description textarea in the details panel for a selected schema; a layer badge on the schema row; a "Schema notes" section in the dataset orientation context when notes exist; datasets spec, api.md, data-model, agents.md, ui.md, glossary; a new Gherkin scenario and one new assistant eval case.
+- **Out of scope:** notes on datasources, catalogs or tables; sharing notes across datasets; tool output changes; filtering by layer.
+- **Acceptance:** see the epic spec: round-trip in the UI, old datasets unaffected, orphan notes dropped, Testing Data reload keeps notes, unknown layer rejected, context unchanged without notes, unit tests, check-specs, lint, builds, the Datasets Playwright scenarios and the assistant evals at 100 %.
+- **Notes:** first built on 2026-11-09 as datasource-level fields after a misread of the request ("datasource" instead of the schemas in the dataset tree); reverted on the branch the same day. Decisions settled with the user on 2026-11-09: per-dataset notes, right-panel editing with a tree badge, used in agent context. Planned by Opus, implemented by Sonnet units at the user's request.
+
+#### 1.20.2 — Data Readiness fails on a Databricks host saved with https:// ([BA-322](https://halo-powered.atlassian.net/browse/BA-322))  `✅ Done`
+- **Intent:** the Data Readiness assessment works on a Databricks datasource whose host was saved as a workspace URL (`https://…/`).
+- **Scope:** one `normalizeDatabricksHost` helper used by the connector, the data-readiness profiler's SQL connection and Unity Catalog calls, and Databricks saves; datasources R4; unit tests.
+- **Out of scope:** migrating stored hosts (every reader normalises); other kinds.
+- **Acceptance:** the profiler connects with the bare hostname for a stored `https://…/` host without a re-save (unit test, and live against the user's workspace: `main` fails with `https://https//… ENOTFOUND`, the branch profiles `samples.tpch.region`); new Databricks saves store the bare hostname; datasources and data-readiness unit tests green.
+- **Notes:** found by the user while testing 1.20.1 on 2026-11-09; fixed on the epic branch at the user's request (not a separate `fix/` branch).
+
+#### 1.20.3 — Faster Data Readiness assessments ([BA-323](https://halo-powered.atlassian.net/browse/BA-323))  `✅ Done`
+- **Intent:** an assessment of a large Databricks catalog finishes in well under a minute instead of about five, with the same scores.
+- **Scope:** ADR-0033: one profiling session pool per assessment (Databricks and PostgreSQL); the per-text-column probes folded into the per-table statistics statement; row count first and tables above 100 M rows not profiled, listed in the report as `too-large` (or `timed-out`); 8 concurrent Databricks tables, 4 PostgreSQL; inventory read once; the turn's abort signal cancels statements and stores no report.
+- **Out of scope:** approximate counts or sampling; editable thresholds; background jobs that survive a reload.
+- **Acceptance:** identical scores and findings on the World Cup and US Health samples before and after; the Databricks `samples` assessment (125 entities) measured before (296 s) and after, after well under 60 s, with the huge tables listed as not profiled; Stop leaves no stored report; unit tests, check-specs, builds, the data-readiness Playwright spec and the `data-readiness` evals at 100 %.
+- **Notes:** analysis by a Fable agent on 2026-11-09 (live timings: new session per statement 0.8 s vs 0.19 s reused; `store_sales` 2.9 B rows times out on any column aggregate). Decisions by the user on 2026-11-09: skip and mark huge tables, 8 concurrent, Stop cancels, same epic and branch.
+
+#### 1.20.4 — Live progress while a Data Readiness assessment runs ([BA-324](https://halo-powered.atlassian.net/browse/BA-324))  `✅ Done`
+- **Intent:** while an assessment runs, the chat shows what it is doing, so the user is not left waiting on a bare spinner.
+- **Scope:** ADR-0033: the tool emits progress through Mastra's tool writer; the session stream forwards it as a `tool-progress` SSE event between `tool` and `tool-result`; the running tool row in the Thinking block shows the latest message ("Listing tables…", "Profiling <entity> (n/N)…", "Checking relationships…", "Running checks…", "Writing the report…"); progress is ephemeral and invisible to the model.
+- **Out of scope:** progress for other tools (the event is generic, only readiness emits it now); persisting progress; a determinate progress bar.
+- **Acceptance:** the stream carries `tool-progress` frames in order between `tool` and `tool-result` (API-level E2E on the World Cup sample); the Thinking block row shows the latest message; unit tests for the tool, the stream loop and the chat; api.md 3.1, ui.md, sessions-chat, data-readiness and agents.md updated.
+- **Notes:** design by the Fable analysis on 2026-11-09 (Mastra 1.66 `writer.custom` reaches `fullStream`; fallback: a callback on the request context).
+
+#### 1.20.5 — Let users select and copy any text in the app ([BA-326](https://halo-powered.atlassian.net/browse/BA-326))  `✅ Done`
+- **Intent:** the user can select any text in the app (chat answers, tables, panels, the readiness scorecard) and copy it.
+- **Scope:** remove the root `user-select: none`; keep it only on the Electron drag region, during the right-panel splitter drag and on a few click-to-toggle headers; ui.md's open question resolved.
+- **Out of scope:** new Copy buttons; changing what the existing Copy buttons copy.
+- **Acceptance:** text in a chat answer, a result table and the readiness scorecard can be selected and copied; dragging the splitter selects nothing; buttons and toggles work; app unit test and layout/accessibility Playwright scenarios green.
+- **Notes:** requested by the user on 2026-11-09; added to this epic and branch like the other stories.
+
+### Milestone 1.21 — Questions to Insights v2 ([BA-320](https://halo-powered.atlassian.net/browse/BA-320))
+
+A second built-in data-analyst agent, Questions to Insights v2, built up next to the current Questions to Insights Assistant, which stays unchanged. v2 starts minimal; later stories reduce what the assistant carries and bring only the slimmer set into v2. No new ADR: v2 reuses built-in session agents (ADR-0028) and built-in prompt overrides (ADR-0026). All stories are built on the branch `feat/BA-320-questions-to-insights-v2` and ship as one PR. Epic spec: [specs/epics/BA-320/spec.md](specs/epics/BA-320/spec.md).
+
+#### 1.21.1 — Empty Questions to Insights v2 agent ([BA-321](https://halo-powered.atlassian.net/browse/BA-321))  `✅ Done`
+- **Intent:** have a v2 agent to chat with, starting from nothing, so the reductions of the current assistant can land in it one by one.
+- **Scope:** a new built-in agent `assistant-v2` ("Questions to Insights v2", id `questions-to-insights-v2`) with an identity-only prompt starting `You are Questions to Insights v2` (overridable, ADR-0026), the tools `list_entities`, `describe_entity` and `run_readonly_sql`, the assistant's memory settings, no skills and no evals; Official in the Agent Hub; sessions started from it are bound to it (ADR-0028); agents.md, api.md, agents-evals and sessions-chat updated.
+- **Out of scope:** moving any assistant rule, tool or skill into v2; grounding guard, tool-only synthesis and deep analysis for v2; user agents on v2; an eval set; changing the current assistant.
+- **Acceptance:** the hub lists v2 as Official with its prompt, three tools and memory; a chat with v2 on a sample dataset answers a data question by running SQL; the assistant's compiled prompt and tool list are byte-identical to `main`; `check-specs.py`, unit tests, lint, builds and the Agent Hub and sessions Playwright specs are green.
+- **Notes:** epic spec confirmed on 2026-11-09.
+
+#### 1.21.2 — Auto-configure local instances: testing data and custom LLM ([BA-325](https://halo-powered.atlassian.net/browse/BA-325))  `✅ Done`
+- **Intent:** every local instance the user tests by hand comes up ready to chat: LLM configured and every sample dataset loaded, with no clicks in Settings.
+- **Scope:** `scripts/setup-local.mjs [baseUrl]` configures a running instance through its API: `PUT /llm/settings` from the gitignored `.env.llm.local` (`LLM_PROVIDER` default `custom`, `LLM_API_STYLE` default `anthropic`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`; found in the checkout, else the main checkout), then every seedable Testing Data fixture with its defaults and the Intellify RFP API, skipping those already loaded; committed `.env.llm.example`; delivery.md 2 and the `verify` and `workflow-implement` skills run it after launching an instance.
+- **Out of scope:** the app provisioning itself on startup; the Electron desktop app; REST fixtures other than the Intellify RFP API.
+- **Acceptance:** on a fresh isolated instance the script saves the LLM (connection tested by the save) and loads World Cup, Formula 1, Intellify, US Health and the Intellify RFP API; a second run reports each fixture as already loaded; exit code 0; no key in any tracked file.
+- **Notes:** requested on 2026-11-09 while testing 1.21.1; the user chose to ship it on the BA-320 branch.
+
+#### 1.21.3 — v2 turns run as a Mastra workflow shown in the workflow bar  `✅ Done`
+- **Intent:** v2's process is defined in code, not in its prompt: some steps deterministic, some answered by the LLM, and the user sees the steps advance in the workflow bar.
+- **Scope:** ADR-0034. A Mastra workflow `qti-v2-turn` (`createWorkflow` / `createStep`) registered on the Mastra instance runs every v2 turn, as an example with four steps: 1 **Receive question** (deterministic: trims and checks the question), 2 **Load catalog** (deterministic: the entities of the session's datasets, no LLM), 3 **Analyse** (LLM: the `assistant-v2` agent answers with its three tools and the catalog as context, streamed to the chat as today), 4 **Wrap up** (deterministic: counts SQL queries and rows and records a turn summary). The orchestrator writes the session's saved workflow state from the run's step events (current, done, failed), so the workflow bar shows the four steps from the first turn; v2 gets no `update_workflow`. agents.md, agent-panel and sessions-chat specs updated.
+- **Out of scope:** the real steps (the user defines them next); workflows for any other agent; changes to the workflow bar UI beyond showing a failed step if it can't today.
+- **Acceptance:** a v2 turn on World Cup shows the bar with the four steps advancing to all done and an answer computed by SQL; a failing step is marked failed and the turn ends with its error; the assistant's prompt and tools are byte-identical to `main`; unit tests cover the step order, the deterministic steps and the state written from step events; builds and check-specs green.
+- **Notes:** requested on 2026-11-09. From this date the user stopped using Jira: this story has no Jira key and is documented only in the repo. Built in the fast loop on 2026-11-09: the saved workflow state gains `failed` and the view `source: 'workflow'` (additive, no migration); the bar gains a **Failed** status (agent-panel R8a); any model error now fails v2's Analyse step; the non-streamed turn (`POST /sessions/:id/messages`) stays a single agent call.
+
+#### 1.21.4 — Context area on the navigation rail, with Knowledge inside it  `✅ Done`
+- **Intent:** the rail gets a **Context** area that will gather what agents are given as context; Knowledge moves inside it instead of having its own rail item.
+- **Scope:** the rail reads Datasets, Agents, **Context**, Sessions (layers icon); Context opens a page of section cards like the Agent Hub's (icon tile, name, two-line description); a card opens its section under a **Context** back control, and the rail's Context returns to the cards; the only card today is **Knowledge**, showing the Knowledge screen unchanged; app-shell R3, R3a, R37 and its Gherkin, knowledge placement, ui.md 2, 3, 4.8 and the new 4.8a; the navigation and layout Playwright selectors renamed.
+- **Out of scope:** any other Context section (the user defines them later); changes to Knowledge itself; the chat's "Edit it under Knowledge" note.
+- **Acceptance:** the rail shows Context in Knowledge's place and no Knowledge item; clicking Context marks it current and shows the Context page with a Knowledge card; the card opens the Knowledge list with Context still current, and Back or the rail returns to the cards; app unit tests, builds, check-specs and the navigation Playwright spec green.
+- **Notes:** requested on 2026-11-09 with a screenshot of the rail; the user chose an empty placeholder area with Knowledge moved inside. First built as a tab strip; the same day the user said more sections are coming and asked for the best pattern, so it became a Settings-style list pane; then the user asked for cards as in the Agents view, which is what shipped. No Jira key (repo only). The `application-shell` screenshot baseline changes with the rail label; it is refreshed at the acceptance gate.
+
+#### 1.21.5 — Data Readiness Agent drills into findings with read-only SQL  `✅ Done`
+- **Intent:** asked for the records behind a finding ("which rows have `second_nationality_country_id` null?"), the Data Readiness Agent runs the query and shows them, instead of saying it has no SQL tool.
+- **Scope:** ADR-0035 (amends ADR-0031). The agent gains the shared `describe_entity` and `run_readonly_sql` (same guards, session scoping, fixer and result checks as the assistant's) and a second on-demand built-in skill `readiness-drilldown`: one SQL recipe per assessed dimension (completeness, validity, consistency, uniqueness, integrity, timeliness, reasonability) for PostgreSQL and Databricks, and how to present rows (count first, then a capped table). Its prompt allows SQL only to show the records behind findings and answer data-quality questions about the session's data; general analysis is declined with a pointer to Questions to Insights. Scores stay engine-only: a query result never changes, recomputes or replaces a score. agents.md 2.10, 3.13, 7.4, D12 and Appendix D; data-readiness R3, R4 and a scenario; the agent's unit tests and evals (`dr-no-sql` rewritten, a drill-down case added).
+- **Out of scope:** sample_rows, list_entities, visuals or workspace tools for the agent; changes to the engine, profiling or scores; the assistant and v2.
+- **Acceptance:** in a Data Readiness session on Formula 1, "what are the records with second_nationality_country_id null values" runs one `run_readonly_sql` with `IS NULL` on `driver` and answers with the count and a table of rows; "how many races were there in 2010?" is declined with a pointer to Questions to Insights; asked to change a score after a query, it still refuses; the hub shows the agent's five tools plus `describe_entity` and `run_readonly_sql` and two skills; unit tests, builds, check-specs green; the Data Readiness evals at 100 % at the gate.
+- **Notes:** requested on 2026-11-09 with a screenshot of the agent saying it has no SQL tool; built in the fast loop the same day. Live runs showed the agent fanning a query out to every datasource of a multi-dataset session (and the SQL fixer rewriting the strays into unrelated queries), so Block D1 now carries each dataset's `datasourceId` and an example entity key, and the skill requires passing that id. The user chose to ship it on the BA-320 branch, `describe_entity` + `run_readonly_sql`, drill-down-only scope and a separate skill. No Jira key (repo only).
+
+#### 1.21.6 — User personas section in the Context area  `✅ Done`
+- **Intent:** the user can describe who asks the questions (role, goals, typical questions, expertise, preferred answer style) as user personas, kept in the app, ready for agents to use as context in a later story.
+- **Scope:** a second Context card **User personas** after Knowledge (app-shell R3a), opening a User personas section: a list of personas sorted by name with an empty state, a **New persona** button, and an editor to create, edit and delete one. A persona has `name` (required, unique ignoring case, at most 80 characters), `role` (at most 80), `description` (at most 2,000), `goals` (at most 2,000), `typicalQuestions` (0 to 10, each at most 300), `expertise` (`novice`, `intermediate` default, `expert`) and `answerStyle` (at most 500). Backend module `personas` with collection `user_personas` and `GET/POST /personas`, `PATCH/DELETE /personas/:id`. New capability spec `user-personas`; api.md, data-model.md, ui.md and app-shell R3a updated.
+- **Out of scope:** agents or sessions using personas; picking a persona for a session; importing or generating personas; evals.
+- **Default data:** every data dir starts with **Demo Finance Analyst** (every field filled), seeded once on backend start and marked by the `settings` key `personas-seed`, so deleting it is permanent (user-personas R13). Requested the same day after trying the section.
+- **Acceptance:** the Context page shows Knowledge then User personas; the card opens the section under the Context back control; a persona can be created with every field, edited and deleted, and survives a restart; a duplicate name or a blank name is refused with its message; backend and frontend unit tests, builds, check-specs and the navigation Playwright spec green.
+- **Notes:** requested on 2026-11-09; the user chose a manage-only section (agents use personas later), the richer profile and the card after Knowledge. No Jira key (repo only).
+
+#### 1.21.7 — Knowledge becomes each dataset's ontology: model, migration, API and context  `✅ Done`
+- **Intent:** business meaning lives in a per-dataset ontology (concepts, relations, constraints, instructions) instead of flat snippets, with no change to what the assistant is told.
+- **Scope:** ADR-0036. Collection `ontology_items` and migration M15 (snippets copied, `knowledge_snippets` renamed `knowledge_snippets_legacy`); module `ontology` replacing `knowledge` with `GET/POST /datasets/:name/ontology`, `PATCH/DELETE /ontology/:id` and per-kind validation; deleting a dataset deletes its items; the per-turn block rendered from the ontology, byte-identical for migrated data; `[relation]` lines and one bullet in the `curated-knowledge` skill. Contract: [docs/plans/ba-320-dataset-ontology.md](docs/plans/ba-320-dataset-ontology.md).
+- **Out of scope:** ontology-grounded retrieval and SQL checks (1.3.3); provenance and feedback (1.3.4); renaming the skill.
+- **Acceptance:** an install with snippets starts with the same items as ontology items and the same context block for a session; the old table is kept as `knowledge_snippets_legacy`; every validation message and cascade has a unit test; the assistant's prompt is byte-identical to before; unit tests, builds and check-specs green.
+- **Notes:** requested on 2026-11-09 ("refactor the current knowledge functionality to datasets ontology"); design approved the same day from a review page. Moves roadmap 1.3.1 and 1.3.2 (BA-4) to BA-320 at the user's request. No Jira key (repo only).
+
+#### 1.21.8 — Ontology tab in the dataset editor  `✅ Done`
+- **Intent:** a dataset's ontology is edited next to its schema.
+- **Scope:** Schema and Ontology tabs on a saved dataset; the Ontology tab lists concepts, relations, constraints and instructions with shared items marked "All datasets", filters, Pending suggestions, Generate suggestions and an editor per kind; the Knowledge card leaves the Context page; the chat reads "Ontology in context". Datasets, app-shell, sessions-chat specs and ui.md.
+- **Out of scope:** a graph view of the ontology.
+- **Acceptance:** a concept with column mappings, a relation, a constraint and an instruction can be created, edited, disabled and deleted from a dataset; shared items appear in every dataset; the Context page shows only User personas; unit tests, builds and the navigation and dataset Playwright specs green.
+- **Notes:** depends on 1.21.7. No Jira key (repo only).
+
+#### 1.21.9 — Ontology suggestions from the data  `✅ Done`
+- **Intent:** a dataset's ontology is drafted in minutes from its schema, samples, relationships and metrics.
+- **Scope:** the `knowledge-bootstrap` agent (key kept, shown as Ontology Bootstrap) drafts up to 15 concepts with column mappings, relations between them, constraints and instructions; drafts arrive disabled in Pending suggestions. agents.md 2.5.
+- **Out of scope:** learning from thumbs-down corrections (1.3.4).
+- **Acceptance:** Generate suggestions on a sample dataset stores disabled concepts with valid mappings and relations that resolve; bad mappings and unresolved relations are dropped; unit tests cover the post-processing.
+- **Notes:** depends on 1.21.7. No Jira key (repo only).
+
+- **Notes (fix, 2026-11-09):** the first live run failed with `Structured output validation failed: drafts: Too big` because the output format capped the list at 15; the cap moved to after post-processing.
+
+#### 1.21.10 — Ontology relations as a graph  `✅ Done`
+- **Intent:** see how a dataset's concepts connect, and review generated relations, at a glance.
+- **Scope:** a **Graph** option at the end of the Ontology tab's filter row; an SVG graph drawn by the app (no new dependency) with concept and metric nodes, labelled relation arrows, disabled and pending items faded and dashed, shared items marked; pan, zoom, drag; selecting a node or arrow highlights its neighbours and shows details with Edit opening the existing editor; the Pending suggestions toggle filters the graph. dataset-ontology R38, R39 and three scenarios; ui.md 4.8.
+- **Out of scope:** editing relations by drawing arrows; graphs across datasets; saving node positions.
+- **Acceptance:** on World Cup with generated suggestions the graph shows the concepts and their relations, faded while pending; clicking a node highlights its neighbours and Edit opens its editor; unit tests and the build green.
+- **Notes:** requested on 2026-11-09 with a screenshot of the filter row; the user chose the filter-row placement, all items with disabled ones faded, and select + edit. No Jira key (repo only).
+
+#### 1.21.11 — Ontologies on the Context page  `✅ Done`
+- **Intent:** see and edit every dataset's ontology from Context, next to the other things agents are given, without opening each dataset.
+- **Scope:** an **Ontologies** card first on the Context page; a list of every dataset with the size of its ontology, pending suggestions and shared items counted once; choosing one opens the same Ontology panel as the dataset's Ontology tab, under an Ontologies back control. dataset-ontology R40 and a scenario; app-shell R3a and its scenario; ui.md 4.8a; a note on ADR-0036.
+- **Out of scope:** a separate editor for shared items; ontologies across datasets in one view.
+- **Acceptance:** the Context page shows Ontologies then User personas; World Cup shows its counts and pending chip; opening it shows its ontology and edits there show in the dataset's Ontology tab; unit tests and the build green.
+- **Notes:** requested on 2026-11-09 with a screenshot of the Context page showing only User personas; it partly reverses 1.21.8's removal of the Knowledge card, keeping a single editor. No Jira key (repo only).
 ---
 
 ## Release 2 — Multi-user  (no target date yet)

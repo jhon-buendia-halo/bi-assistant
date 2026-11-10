@@ -18,6 +18,7 @@ import type {
   ReadinessSummary,
   Severity,
 } from '../data-readiness/engine/types';
+import type { ReadinessProgressListener } from '../data-readiness/progress';
 import type {
   ReadinessPanelItem,
   ReadinessReportRef,
@@ -68,11 +69,18 @@ export interface ReadinessDataset {
 
 /** The data-readiness service calls the bridge makes (api.md 2.17). */
 export interface ReadinessReports {
-  assess(input: {
-    datasourceId: string;
-    entities?: string[];
-    sessionId?: string;
-  }): Promise<ReadinessReport>;
+  assess(
+    input: {
+      datasourceId: string;
+      entities?: string[];
+      sessionId?: string;
+    },
+    now?: Date,
+    options?: {
+      signal?: AbortSignal;
+      onProgress?: ReadinessProgressListener;
+    },
+  ): Promise<ReadinessReport>;
   list(datasourceId: string): Promise<{ reports: ReadinessReportSummary[] }>;
   get(id: string): Promise<ReadinessReport>;
 }
@@ -98,6 +106,9 @@ export function readinessSummary(report: ReadinessReport): ReadinessSummary {
     maturity: report.maturity,
     dimensionScores: report.dimensionScores.map((d) => ({ ...d })),
     findingCount: report.findings.length,
+    ...(report.notProfiled?.length
+      ? { notProfiled: report.notProfiled.map((n) => ({ ...n })) }
+      : {}),
     topFindings: topFindings(report.findings).map((f) => ({
       severity: f.severity,
       dimension: f.dimension,
@@ -203,7 +214,29 @@ export interface ReadinessOrientationRow {
   name: string;
   datasourceKind?: DatasourceKind;
   datasourceName: string;
+  /** Passed as `datasourceId` to the drill-down tools (ADR-0035). */
+  datasourceId?: string;
   entityCount: number;
+  /** One entity key as the dataset stores it, e.g. `db.schema.table`. */
+  exampleEntity?: string;
+}
+
+/**
+ * One Block D1 dataset line (agents.md 4.1). The datasource id and an example
+ * entity key let the drill-down tools address the right datasource with the
+ * names the dataset stores (ADR-0035).
+ */
+export function readinessOrientationLine(row: {
+  name: string;
+  kindLabel: string;
+  datasourceName: string;
+  datasourceId?: string;
+  entityCount: number;
+  exampleEntity?: string;
+}): string {
+  const id = row.datasourceId ? ` (datasourceId ${row.datasourceId})` : '';
+  const example = row.exampleEntity ? `, named like ${row.exampleEntity}` : '';
+  return `- ${row.name} — ${row.kindLabel} datasource "${row.datasourceName}"${id}, ${row.entityCount} entities${example}`;
 }
 
 /** Block D1 (agents.md 4.1): the session's datasets and today; no score. */
@@ -213,9 +246,11 @@ export function readinessOrientationBlock(
 ): string {
   return [
     'Datasets for this session (data readiness):',
-    ...rows.map(
-      (row) =>
-        `- ${row.name} — ${kindLabel(row.datasourceKind)} datasource "${row.datasourceName}", ${row.entityCount} entities`,
+    ...rows.map((row) =>
+      readinessOrientationLine({
+        ...row,
+        kindLabel: kindLabel(row.datasourceKind),
+      }),
     ),
     `Today is ${today}.`,
   ].join('\n');
@@ -240,6 +275,8 @@ export class ReadinessBridge implements ReadinessToolServices {
   async assessReadiness(input: {
     sessionId: string;
     datasetName?: string;
+    signal?: AbortSignal;
+    onProgress?: ReadinessProgressListener;
   }): Promise<ReadinessToolReport> {
     const dataset = await this.resolveDataset(
       input.sessionId,
@@ -247,11 +284,18 @@ export class ReadinessBridge implements ReadinessToolServices {
     );
     let report: ReadinessReport;
     try {
-      report = await this.deps.readiness.assess({
+      const request = {
         datasourceId: dataset.datasourceId,
         entities: dataset.tables,
         sessionId: input.sessionId,
-      });
+      };
+      report =
+        input.signal || input.onProgress
+          ? await this.deps.readiness.assess(request, undefined, {
+              signal: input.signal,
+              onProgress: input.onProgress,
+            })
+          : await this.deps.readiness.assess(request);
     } catch (error) {
       if (statusOf(error) === 502) {
         const name = await this.deps.datasourceName(dataset.datasourceId);

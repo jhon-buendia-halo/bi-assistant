@@ -20,8 +20,10 @@ import { profilePostgres } from './adapters/postgres.adapter';
 import { profileDatabricks } from './adapters/databricks.adapter';
 import { runAssessment } from './engine/check-engine';
 import { DEFAULT_THRESHOLDS } from './engine/types';
+import type { ReadinessProgressListener } from './progress';
 import type {
   AssessScope,
+  NotProfiledEntity,
   ReadinessReport,
   ReadinessReportSummary,
   SourceProfile,
@@ -40,6 +42,35 @@ const UNSUPPORTED_KIND =
 const NONE_EXIST = 'None of the entities to assess exist';
 const ID_REQUIRED = 'datasourceId is required';
 const ENTITIES_INVALID = 'entities must be an array of entity keys';
+
+/** BA-324: cancellation and progress of one assessment. */
+export interface AssessOptions {
+  signal?: AbortSignal;
+  onProgress?: ReadinessProgressListener;
+}
+
+function abortError(): Error {
+  const err = new Error('The assessment was aborted');
+  err.name = 'AbortError';
+  return err;
+}
+
+/** BA-323: the entities left out of column profiling, in profile order. */
+export function notProfiledOf(profile: SourceProfile): NotProfiledEntity[] {
+  const out: NotProfiledEntity[] = [];
+  for (const e of profile.entities) {
+    if (!e.notProfiled) continue;
+    const item: NotProfiledEntity = {
+      entity: `${e.namespace}.${e.name}`,
+      reason: e.notProfiled,
+    };
+    if (e.notProfiled === 'too-large') {
+      item.rowCount = e.profiledRowCount ?? e.rowCount;
+    }
+    out.push(item);
+  }
+  return out;
+}
 
 const refKey = (r: EntityRef): string => `${r.namespace}\u0000${r.name}`;
 
@@ -115,7 +146,9 @@ export class DataReadinessService {
   async assess(
     input: AssessDto,
     now: Date = new Date(),
+    options: AssessOptions = {},
   ): Promise<ReadinessReport> {
+    const { signal, onProgress } = options;
     const datasourceId = requireId(input?.datasourceId);
     // Omitted (or empty) `entities` means the whole datasource.
     const keys = requireKeys(input.entities);
@@ -143,11 +176,13 @@ export class DataReadinessService {
       ds,
       kind,
       refs ? scopeFor(refs) : undefined,
+      options,
     );
     if (profile.entities.length === 0) {
       throw new BadRequestException(NONE_EXIST);
     }
 
+    onProgress?.({ phase: 'scoring', message: 'Running checks…' });
     const result = runAssessment(profile, {
       thresholds: DEFAULT_THRESHOLDS,
       now,
@@ -163,6 +198,10 @@ export class DataReadinessService {
     const sessionId =
       typeof input.sessionId === 'string' ? input.sessionId.trim() : '';
     if (sessionId) report.sessionId = sessionId;
+    const notProfiled = notProfiledOf(profile);
+    if (notProfiled.length > 0) report.notProfiled = notProfiled;
+    onProgress?.({ phase: 'storing', message: 'Writing the report…' });
+    if (signal?.aborted) throw abortError();
     return this.repository.insert(report);
   }
 
@@ -203,6 +242,7 @@ export class DataReadinessService {
     ds: Datasource,
     kind: ReadinessKind,
     scope: AssessScope | undefined,
+    options: AssessOptions,
   ): Promise<SourceProfile> {
     try {
       return kind === 'postgres'
@@ -211,15 +251,23 @@ export class DataReadinessService {
             ds.config as PostgresConfig,
             ds.id,
             scope,
+            options,
           )
         : await profileDatabricks(
             this.databricks,
             ds.config as DatabricksConfig,
             ds.id,
             scope,
+            options,
           );
     } catch (err) {
-      if (err instanceof HttpException || isProgrammingError(err)) throw err;
+      if (
+        err instanceof HttpException ||
+        isProgrammingError(err) ||
+        (err instanceof Error && err.name === 'AbortError')
+      ) {
+        throw err;
+      }
       throw new BadGatewayException(
         err instanceof Error ? err.message : String(err),
       );

@@ -23,7 +23,12 @@ jest.mock('../../modules/sessions/turn-data', () => ({
 
 import { runEvals } from '@mastra/core/evals';
 import { appSkillBody } from '../app-skills';
-import { ASSISTANT_EVAL_SETS, runAssistantEvalCase } from './assistant.evals';
+import {
+  ASSISTANT_EVAL_SETS,
+  createEvalSession,
+  runAssistantEvalCase,
+} from './assistant.evals';
+import type { SessionsService } from '../../modules/sessions/sessions.service';
 import type { AssistantEvalCase } from './assistant.evals';
 
 const BLOCK =
@@ -155,5 +160,53 @@ describe('tool selection in the eval cases (agents.md 8.1, ADR-0022)', () => {
     expect(sentContext()[0].content).toContain(
       'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
     );
+  });
+});
+
+describe('createEvalSession (agents.md 8.1)', () => {
+  function fakeSessions() {
+    return {
+      create: jest
+        .fn()
+        .mockResolvedValue({ id: 'plain', datasets: ['World Cup'] }),
+      createFromAgent: jest.fn().mockResolvedValue({
+        id: 'bound',
+        datasets: ['Formula 1', 'World Cup'],
+      }),
+      narrowDatasets: jest
+        .fn()
+        .mockResolvedValue({ id: 'bound', datasets: ['World Cup'] }),
+      appendAssistantMessage: jest.fn().mockResolvedValue(undefined),
+    };
+  }
+
+  it("narrows an agent-bound session to the run's datasets", async () => {
+    const sessions = fakeSessions();
+    const session = await createEvalSession(
+      sessions as unknown as SessionsService,
+      ['World Cup'],
+      'data-readiness',
+    );
+    expect(sessions.createFromAgent).toHaveBeenCalledWith(
+      'data-readiness',
+      expect.any(String),
+    );
+    expect(sessions.narrowDatasets).toHaveBeenCalledWith('bound', [
+      'World Cup',
+    ]);
+    expect(session).toEqual({ id: 'bound' });
+  });
+
+  it('leaves a plain session and an agent session with no named datasets alone', async () => {
+    const sessions = fakeSessions();
+    await createEvalSession(sessions as unknown as SessionsService, [
+      'World Cup',
+    ]);
+    await createEvalSession(
+      sessions as unknown as SessionsService,
+      [],
+      'data-readiness',
+    );
+    expect(sessions.narrowDatasets).not.toHaveBeenCalled();
   });
 });

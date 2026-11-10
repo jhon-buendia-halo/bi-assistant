@@ -85,14 +85,7 @@ describe('Opening a data dir from the multi-user version (M14)', () => {
     ids.otherSkill = (
       await created('/skills', { name: 'fiscal-other', ...skill })
     ).skill.id;
-    ids.snippet = (
-      await created('/knowledge', {
-        kind: 'instruction',
-        title: "Carol's rule",
-        body: 'Count only finals.',
-        scope: null,
-      })
-    ).id!;
+    ids.snippet = 'snippet-carol';
     await stop(backend);
 
     const db = new Sqlite(join(dataDir, 'app.sqlite'));
@@ -104,7 +97,33 @@ describe('Opening a data dir from the multi-user version (M14)', () => {
         .run(owner, id);
     setOwner('sessions', ids.session, 'u-alice');
     setOwner('agents', ids.agent, 'u-bob');
-    setOwner('knowledge_snippets', ids.snippet, 'u-carol');
+    // A knowledge snippet of Carol's, in the table the knowledge library
+    // used before the dataset ontology (M15 copies it to ontology_items).
+    db.exec(
+      `CREATE TABLE knowledge_snippets (rid INTEGER PRIMARY KEY AUTOINCREMENT, doc TEXT NOT NULL)`,
+    );
+    db.prepare(`INSERT INTO knowledge_snippets (doc) VALUES (?)`).run(
+      JSON.stringify({
+        id: ids.snippet,
+        kind: 'instruction',
+        scope: null,
+        title: "Carol's rule",
+        body: 'Count only finals.',
+        enabled: true,
+        source: 'user',
+        ownerId: 'u-carol',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }),
+    );
+    // A dataset to list the ontology under (the API one above has no
+    // reachable datasource, so it is written here directly).
+    db.prepare(`INSERT INTO datasets (doc) VALUES (?)`).run(
+      JSON.stringify({
+        name: 'Ontology Check',
+        tables: ['world_cup.world_cup.matches'],
+      }),
+    );
     // Bob's skill had the same name as the super admin's.
     setOwner('skills', ids.otherSkill, 'u-bob');
     db.prepare(
@@ -153,11 +172,17 @@ describe('Opening a data dir from the multi-user version (M14)', () => {
       [ids.otherSkill]: 'fiscal-calendar-2',
     });
 
-    // A bare array (api.md 49).
-    const snippets = (await api().get('/knowledge').expect(200)).body as {
-      id: string;
-    }[];
-    expect(snippets.map((s) => s.id)).toContain(ids.snippet);
+    // A bare array; the global snippet became a shared item (M15).
+    const items = (
+      await api().get('/datasets/Ontology%20Check/ontology').expect(200)
+    ).body as { id: string; dataset: string | null; kind: string }[];
+    expect(items).toContainEqual(
+      expect.objectContaining({
+        id: ids.snippet,
+        dataset: null,
+        kind: 'instruction',
+      }),
+    );
   });
 
   it("keeps the super admin's UI preferences under the bare key", async () => {
@@ -176,12 +201,14 @@ describe('Opening a data dir from the multi-user version (M14)', () => {
         )
         .all();
       expect(users).toHaveLength(0);
-      for (const table of [
-        'sessions',
-        'agents',
-        'skills',
-        'knowledge_snippets',
-      ]) {
+      // M15 kept the old knowledge table for one release, renamed.
+      const legacy = db
+        .prepare(
+          `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('knowledge_snippets', 'knowledge_snippets_legacy')`,
+        )
+        .all() as { name: string }[];
+      expect(legacy.map((t) => t.name)).toEqual(['knowledge_snippets_legacy']);
+      for (const table of ['sessions', 'agents', 'skills', 'ontology_items']) {
         const owners = db
           .prepare(
             `SELECT DISTINCT json_extract(doc, '$.ownerId') AS owner FROM "${table}"`,

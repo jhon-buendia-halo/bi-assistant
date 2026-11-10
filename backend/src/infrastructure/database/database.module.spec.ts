@@ -1,6 +1,8 @@
 import BetterSqlite3 from 'better-sqlite3';
 import {
   consolidateOwners,
+  legacySnippetToOntologyItem,
+  migrateKnowledgeToOntology,
   renameLegacyFields,
   renameLegacyTables,
 } from './database.module';
@@ -119,6 +121,8 @@ describe('legacy datastore migrations', () => {
       'metrics',
       'eval_runs',
       'knowledge_snippets',
+      'ontology_items',
+      'user_personas',
       'agents',
       'skills',
     ];
@@ -357,6 +361,235 @@ describe('legacy datastore migrations', () => {
       ]);
       expect(tables().sort()).toEqual(
         ['sessions', 'settings', 'sqlite_sequence'].sort(),
+      );
+    });
+  });
+
+  describe('M15: knowledge snippets become ontology items (ADR-0036)', () => {
+    const stamps = {
+      ownerId: 'local',
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-02-01T00:00:00.000Z',
+    };
+    const silent = { warn: jest.fn() };
+
+    beforeEach(() => silent.warn.mockClear());
+
+    it('maps a term to a concept: synonyms kept, each entity a mapping in order', () => {
+      expect(
+        legacySnippetToOntologyItem({
+          id: 't1',
+          kind: 'term',
+          scope: { datasetId: 'World Cup' },
+          title: 'Host',
+          body: 'the country that staged it',
+          synonyms: ['organiser'],
+          entities: ['wc.core.tournaments', 'wc.core.matches'],
+          enabled: true,
+          source: 'mined',
+          ...stamps,
+        }),
+      ).toEqual({
+        id: 't1',
+        dataset: 'World Cup',
+        kind: 'concept',
+        name: 'Host',
+        description: 'the country that staged it',
+        enabled: true,
+        source: 'mined',
+        synonyms: ['organiser'],
+        mappings: [
+          { entity: 'wc.core.tournaments' },
+          { entity: 'wc.core.matches' },
+        ],
+        ...stamps,
+      });
+    });
+
+    it('maps a default filter to a constraint: body is the predicate, description empty', () => {
+      expect(
+        legacySnippetToOntologyItem({
+          id: 'f1',
+          kind: 'default_filter',
+          scope: null,
+          title: 'No tests',
+          body: 'is_test = false',
+          entities: ['wc.core.matches'],
+          enabled: false,
+          source: 'user',
+          ...stamps,
+        }),
+      ).toEqual({
+        id: 'f1',
+        dataset: null,
+        kind: 'constraint',
+        name: 'No tests',
+        description: '',
+        enabled: false,
+        source: 'user',
+        predicate: 'is_test = false',
+        entities: ['wc.core.matches'],
+        ...stamps,
+      });
+    });
+
+    it('maps an instruction to an instruction', () => {
+      expect(
+        legacySnippetToOntologyItem({
+          id: 'i1',
+          kind: 'instruction',
+          title: 'Coverage',
+          body: '2018 and 2022 only',
+          enabled: true,
+          source: 'user',
+          ...stamps,
+        }),
+      ).toEqual({
+        id: 'i1',
+        dataset: null,
+        kind: 'instruction',
+        name: 'Coverage',
+        description: '2018 and 2022 only',
+        enabled: true,
+        source: 'user',
+        ...stamps,
+      });
+    });
+
+    it('makes a datasource-only snippet shared and disabled', () => {
+      expect(
+        legacySnippetToOntologyItem({
+          id: 'd1',
+          kind: 'instruction',
+          scope: { datasourceId: 'ds-1' },
+          title: 'Rule',
+          body: 'text',
+          enabled: true,
+          source: 'user',
+        }),
+      ).toMatchObject({ dataset: null, enabled: false });
+      // A dataset scope wins over a datasource next to it.
+      expect(
+        legacySnippetToOntologyItem({
+          id: 'd2',
+          kind: 'instruction',
+          scope: { datasetId: 'World Cup', datasourceId: 'ds-1' },
+          title: 'Rule',
+          body: 'text',
+          enabled: true,
+          source: 'user',
+        }),
+      ).toMatchObject({ dataset: 'World Cup', enabled: true });
+    });
+
+    it('skips a document of an unknown kind', () => {
+      expect(
+        legacySnippetToOntologyItem({ id: 'x', kind: 'bogus' }),
+      ).toBeNull();
+    });
+
+    it('is a no-op without a knowledge_snippets table', () => {
+      migrateKnowledgeToOntology(db, silent);
+
+      expect(tables()).toEqual([]);
+    });
+
+    it('copies every snippet, keeps timestamps and renames the table to knowledge_snippets_legacy', () => {
+      createTable('knowledge_snippets');
+      insert('knowledge_snippets', {
+        id: 't1',
+        kind: 'term',
+        scope: { datasetId: 'World Cup' },
+        title: 'Host',
+        body: 'b',
+        enabled: true,
+        source: 'user',
+        ...stamps,
+      });
+      insert('knowledge_snippets', {
+        id: 'f1',
+        kind: 'default_filter',
+        scope: null,
+        title: 'No tests',
+        body: 'is_test = false',
+        enabled: true,
+        source: 'user',
+        ...stamps,
+      });
+
+      migrateKnowledgeToOntology(db, silent);
+
+      expect(tables()).toContain('ontology_items');
+      expect(tables()).toContain('knowledge_snippets_legacy');
+      expect(tables()).not.toContain('knowledge_snippets');
+      expect(docs('ontology_items')).toEqual([
+        expect.objectContaining({ id: 't1', kind: 'concept', ...stamps }),
+        expect.objectContaining({ id: 'f1', kind: 'constraint', ...stamps }),
+      ]);
+      expect(docs('knowledge_snippets_legacy')).toHaveLength(2);
+      expect(silent.warn).not.toHaveBeenCalled();
+    });
+
+    it('does not copy an id already in ontology_items', () => {
+      createTable('ontology_items');
+      insert('ontology_items', { id: 't1', kind: 'concept', name: 'Edited' });
+      createTable('knowledge_snippets');
+      insert('knowledge_snippets', {
+        id: 't1',
+        kind: 'term',
+        title: 'Host',
+        body: 'b',
+        enabled: true,
+        source: 'user',
+      });
+
+      migrateKnowledgeToOntology(db, silent);
+
+      expect(docs('ontology_items')).toEqual([
+        { id: 't1', kind: 'concept', name: 'Edited' },
+      ]);
+    });
+
+    it('is idempotent: a second run changes nothing', () => {
+      createTable('knowledge_snippets');
+      insert('knowledge_snippets', {
+        id: 'i1',
+        kind: 'instruction',
+        title: 'Coverage',
+        body: 'b',
+        enabled: true,
+        source: 'user',
+      });
+
+      migrateKnowledgeToOntology(db, silent);
+      const after = { tables: tables().sort(), items: docs('ontology_items') };
+      migrateKnowledgeToOntology(db, silent);
+
+      expect(tables().sort()).toEqual(after.tables);
+      expect(docs('ontology_items')).toEqual(after.items);
+      expect(docs('ontology_items')).toHaveLength(1);
+    });
+
+    it('copies but does not rename when knowledge_snippets_legacy is taken, and warns', () => {
+      createTable('knowledge_snippets_legacy');
+      createTable('knowledge_snippets');
+      insert('knowledge_snippets', {
+        id: 'i1',
+        kind: 'instruction',
+        title: 'Coverage',
+        body: 'b',
+        enabled: true,
+        source: 'user',
+      });
+
+      migrateKnowledgeToOntology(db, silent);
+      migrateKnowledgeToOntology(db, silent);
+
+      expect(tables()).toContain('knowledge_snippets');
+      expect(tables()).toContain('knowledge_snippets_legacy');
+      expect(docs('ontology_items')).toHaveLength(1);
+      expect(silent.warn).toHaveBeenCalledWith(
+        expect.stringContaining('knowledge_snippets_legacy'),
       );
     });
   });

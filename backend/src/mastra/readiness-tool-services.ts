@@ -3,6 +3,7 @@
 // so SessionsService installs the implementation at boot (unit 10, BA-261).
 // Kept beside tool-services.ts so DatasetToolServices' implementers are untouched.
 
+import type { ReadinessProgressListener } from '../modules/data-readiness/progress';
 import type {
   ReadinessReport,
   ReadinessSummary,
@@ -36,6 +37,10 @@ export interface ReadinessToolServices {
   assessReadiness(input: {
     sessionId: string;
     datasetName?: string;
+    /** BA-324: the turn's abort signal; an abort rejects with AbortError. */
+    signal?: AbortSignal;
+    /** BA-324: live progress, streamed to the chat; never shown to the model. */
+    onProgress?: ReadinessProgressListener;
   }): Promise<ReadinessToolReport>;
   getReadinessReport(input: {
     sessionId: string;

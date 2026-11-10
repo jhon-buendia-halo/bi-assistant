@@ -30,6 +30,9 @@
 .resizing-right-panel,
 .resizing-right-panel * {
   cursor: col-resize !important;
+  // Text is selectable app-wide (BA-326); dragging the splitter must not
+  // select across the page.
+  user-select: none !important;
 }
 
 .resizing-right-panel iframe {
