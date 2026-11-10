@@ -23,7 +23,11 @@ import {
   startLlmStub,
   systemTexts,
 } from './helpers/llm-stub';
-import { WORLD_CUP_DB, worldCupKey } from './helpers/world-cup-db';
+import {
+  WORLD_CUP_DB,
+  worldCupKey,
+  worldCupScalar,
+} from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "Data readiness" in
@@ -89,6 +93,8 @@ const READINESS_TOOLS = [
   'get_readiness_report',
   'list_readiness_reports',
 ];
+/** The shared dataset tools the agent drills down with (R3, ADR-0035). */
+const DRILLDOWN_TOOLS = ['describe_entity', 'run_readonly_sql'];
 /** Every table of the seeded `world_cup` schema (docker/postgres/init). */
 const WORLD_CUP_TABLES = [
   'confederations',
@@ -571,15 +577,19 @@ test('assessing a dataset from the chat shows the scorecard', async ({
   const requests = requestsOf(ASSESS_QUESTION);
   expect(requests.length).toBeGreaterThanOrEqual(2);
   const first = requests[0];
+  // The drill-down tools are offered besides the readiness tools (R3,
+  // ADR-0035); no other dataset-browsing, visual or workspace tool is.
   expect(first.tools).toEqual(
     expect.arrayContaining([
       ...READINESS_TOOLS,
+      ...DRILLDOWN_TOOLS,
       'show_in_panel',
       'ask_clarification',
     ]),
   );
   for (const forbidden of [
-    'run_readonly_sql',
+    'list_entities',
+    'sample_rows',
     'update_workflow',
     'create_visual',
     'mastra_workspace_write_file',
@@ -591,8 +601,10 @@ test('assessing a dataset from the chat shows the scorecard', async ({
   ).toBe(true);
   const system = systemTexts(first).join('\n');
   expect(system).toContain('Datasets for this session (data readiness):');
+  // Each dataset line carries the datasource id and an example entity key
+  // for the drill-down tools (ADR-0035, agents.md 4.1).
   expect(system).toContain(
-    `- ${DATASET} — PostgreSQL datasource "${WORLD_CUP_DATASOURCE}", ${WORLD_CUP_TABLES.length} entities`,
+    `- ${DATASET} — PostgreSQL datasource "${WORLD_CUP_DATASOURCE}" (datasourceId ${datasourceId}), ${WORLD_CUP_TABLES.length} entities, named like ${worldCupKey(WORLD_CUP_TABLES[0])}`,
   );
   expect(system).toContain(
     `Today is ${new Date().toISOString().slice(0, 10)}.`,
@@ -847,4 +859,99 @@ test('filtering findings by dimension and severity', async ({ page }) => {
   await dimensionFilter.selectOption({ label: 'All' });
   await severityFilter.selectOption({ label: 'All' });
   await expect(findingRows(page)).toHaveCount(report.findings.length);
+});
+
+test('the agent shows the records behind a finding', async ({ page }) => {
+  // The Gherkin's Formula 1 `driver.second_nationality_country_id` stands in
+  // here as the World Cup `goals.assist_player_id`, null for unassisted goals:
+  // the suite's database is the World Cup sample.
+  const datasourceId = await seedWorldCup(page);
+  const before = await assessThroughApi(page, datasourceId);
+  const nulls = Number(
+    await worldCupScalar(
+      'select count(*) from world_cup.goals where assist_player_id is null',
+    ),
+  );
+  expect(nulls, 'the sample has unassisted goals').toBeGreaterThan(0);
+  const shown = Math.min(nulls, 20);
+  const goals = worldCupKey('goals');
+  const question =
+    'what are the records with assist_player_id null values in goals';
+  const sql = `SELECT id, scorer_player_id, assist_player_id FROM ${goals} WHERE assist_player_id IS NULL ORDER BY id LIMIT 20`;
+
+  // The model drills down: describe_entity, run_readonly_sql, then answers
+  // with the count first and a table built from the rows the query returned.
+  stub.reply = (request) => {
+    if (lastUserText(request) !== question) return { text: 'Noted.' };
+    const results = turnToolResults(request);
+    if (results.length === 0) {
+      return {
+        toolCall: {
+          name: 'describe_entity',
+          arguments: { entity: goals, datasourceId },
+        },
+      };
+    }
+    if (results.length === 1) {
+      return {
+        toolCall: {
+          name: 'run_readonly_sql',
+          arguments: {
+            sql,
+            datasourceId,
+            rationale: 'List the goals with no assist.',
+          },
+        },
+      };
+    }
+    const { rows = [] } = JSON.parse(results[1]) as {
+      rows?: Record<string, unknown>[];
+    };
+    const table = [
+      '| id | scorer_player_id |',
+      '| --- | --- |',
+      ...rows.map((row) => `| ${String(row['id'])} | ${String(row['scorer_player_id'])} |`),
+    ].join('\n');
+    return {
+      text: `There are ${rows.length} goals with a null assist_player_id.\n\n${table}`,
+    };
+  };
+
+  await startReadinessChat(page);
+  await send(
+    page,
+    question,
+    `There are ${shown} goals with a null assist_player_id.`,
+  );
+
+  // The agent ran one read-only IS NULL query on goals, which returned rows.
+  const requests = requestsOf(question);
+  expect(requests[0].tools).toEqual(expect.arrayContaining(DRILLDOWN_TOOLS));
+  const last = requests[requests.length - 1];
+  const sqlResult = JSON.parse(turnToolResults(last)[1]) as {
+    rows?: Record<string, unknown>[];
+    error?: string;
+  };
+  expect(sqlResult.error).toBeUndefined();
+  expect(sqlResult.rows).toHaveLength(shown);
+  expect(sqlResult.rows!.every((row) => row['assist_player_id'] === null)).toBe(
+    true,
+  );
+
+  // The answer leads with the count and shows the rows in a table.
+  const answer = page.locator('table').last();
+  await expect(answer.locator('tbody tr')).toHaveCount(shown);
+  await expect(answer.locator('tbody tr').first()).toContainText(
+    String(sqlResult.rows![0]['id']),
+  );
+  await page.getByText('Data used (1 query)').click();
+  await expect(page.getByText(`run_readonly_sql — ${shown} rows`)).toBeVisible();
+  await expect(page.getByText('WHERE assist_player_id IS NULL')).toBeVisible();
+
+  // No score changes: the stored report is the same one, unchanged.
+  const reports = await listReports(page, datasourceId);
+  expect(reports).toHaveLength(1);
+  const after = await getReport(page, before.id);
+  expect(after.overallScore).toBe(before.overallScore);
+  expect(after.dimensionScores).toEqual(before.dimensionScores);
 });

@@ -38,8 +38,11 @@ test('moves between areas from the rail', async ({ page }) => {
   await railItem(page, 'Context').click();
   await expectCurrent(page, 'Context');
   await expect(page.getByRole('heading', { name: 'Context' })).toBeVisible();
-  await page.getByTestId('context-section-knowledge').click();
-  await expect(page.getByRole('heading', { name: 'Knowledge' })).toBeVisible();
+  await expect(page.getByTestId('context-section-knowledge')).toHaveCount(0);
+  await page.getByTestId('context-section-personas').click();
+  await expect(
+    page.getByRole('heading', { name: 'User personas' }),
+  ).toBeVisible();
   await expectCurrent(page, 'Context');
 
   await railItem(page, 'Sessions').click();
