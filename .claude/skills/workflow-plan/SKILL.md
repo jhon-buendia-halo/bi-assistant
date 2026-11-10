@@ -58,6 +58,7 @@ The roadmap is read top-to-bottom; ordering and grouping carry meaning.
   git worktree add .claude/worktrees/BA-111-local-observability -b feat/BA-111-local-observability main
   ```
   When the Claude desktop app creates the worktree for the session under another name (e.g. `.claude/worktrees/bridge-cse_…`), bring both to the convention before the first commit: rename the branch (`git branch -m <type>/<EPIC-ID>-<short-description>`) and move the folder (`git worktree move <current-path> .claude/worktrees/<EPIC-ID>-<short-description>`; a worktree the app has locked needs `git worktree unlock` first, or the move after the session ends).
+- **Unit worktrees (agent org).** A `builder` agent ([delivery.md section 12](../../../specs/system/delivery.md)) gets a temporary worktree from the harness, on a `unit/<EPIC-ID>-<roadmap-id>` branch cut from the epic branch. These are exempt from the naming rule above. They never get a PR, and they are removed once their branch is merged into the epic branch.
 - **Bugs:** a Bug whose parent epic has an open branch is fixed on that branch, like a story. A Bug against work that already shipped, whose epic has no open branch, gets its own `fix/<BUG-ID>-<short-description>` branch, worktree and PR (e.g. `fix/BA-83-empty-session-thread`). The bug must still belong to an epic.
 - **Traceability:**
   - Each commit is scoped to the story (or bug) it implements: `feat(BA-115): …`.
