@@ -1,11 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { SessionsRepository } from '../sessions/repositories/sessions.repository';
-import {
-  buildContextSegments,
-  type PromptMessage,
-  type ToolDefinition,
-} from './context-segments';
+import { buildContextSegments, type ToolDefinition } from './context-segments';
 import { parseLlmCallsQuery, type LlmCallsQuery } from './dto/llm-calls-query';
+import {
+  parseFrameworkFlag,
+  parseSessionsQuery,
+  type SessionsQuery,
+} from './dto/sessions-query';
+import type {
+  SessionDetail,
+  SessionRow,
+  SessionsPage,
+  TraceDetail,
+} from './entities/session-flow.entity';
 import type {
   LlmCallDetail,
   LlmCallFacets,
@@ -17,13 +24,17 @@ import { estimateCostUsd, findModelPrice } from './model-prices';
 import {
   SpanEventsRepository,
   type LlmCallRecord,
+  type SessionRecord,
 } from './repositories/span-events.repository';
+import { buildSessionFlows, type SessionFlow } from './session-trajectory';
 import {
   collapseSpans,
   errorMessage,
   toolName,
   type CollapsedSpan,
 } from './span-collapse';
+import { buildTraceTree } from './span-tree';
+import { durationMs, iso, messages, num, usage } from './span-values';
 
 const EMPTY_FACETS: LlmCallFacets = {
   agents: [],
@@ -32,47 +43,17 @@ const EMPTY_FACETS: LlmCallFacets = {
   sessions: [],
 };
 
-function iso(date: Date | null): string | null {
-  return date ? date.toISOString() : null;
-}
-
-function durationMs(start: Date, end: Date | null): number | null {
-  return end ? end.getTime() - start.getTime() : null;
-}
-
-function num(value: unknown): number | null {
-  if (value === null || value === undefined || value === '') return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
+const EMPTY_SESSIONS_FACETS: SessionsPage['facets'] = { agents: [] };
 
 function byLabel<T>(label: (item: T) => string): (a: T, b: T) => number {
   return (a, b) =>
     label(a).localeCompare(label(b), undefined, { sensitivity: 'base' });
 }
 
-function usage(attributes: Record<string, unknown>): Record<string, unknown> {
-  const u = attributes.usage;
-  return u && typeof u === 'object' ? (u as Record<string, unknown>) : {};
-}
-
-/** The prompt messages of a span input: an array, or `{ messages }`. */
-function messages(input: unknown): PromptMessage[] {
-  const list: unknown = Array.isArray(input)
-    ? input
-    : input && typeof input === 'object'
-      ? (input as { messages?: unknown }).messages
-      : undefined;
-  if (!Array.isArray(list)) return [];
-  return (list as unknown[]).filter(
-    (m): m is PromptMessage =>
-      !!m &&
-      typeof m === 'object' &&
-      typeof (m as { role?: unknown }).role === 'string',
-  );
-}
-
-/** Monitoring (roadmap 1.21.14, 1.21.15): the app's LLM calls and their context. */
+/**
+ * Monitoring (roadmap 1.21.14–1.21.16): the app's LLM calls and their
+ * context, the sessions and their execution flow, one turn's span tree.
+ */
 @Injectable()
 export class MonitoringService {
   constructor(
@@ -180,6 +161,76 @@ export class MonitoringService {
     };
   }
 
+  /** `GET /monitoring/sessions`. */
+  async listSessions(query: SessionsQuery = {}): Promise<SessionsPage> {
+    const { page, pageSize, filter } = parseSessionsQuery(query);
+    if (!(await this.spans.hasSpanEvents())) {
+      return {
+        items: [],
+        total: 0,
+        page,
+        pageSize,
+        facets: EMPTY_SESSIONS_FACETS,
+      };
+    }
+    const [records, total, agents] = await Promise.all([
+      this.spans.findSessions(filter, pageSize, (page - 1) * pageSize),
+      this.spans.countSessions(filter),
+      this.spans.sessionAgents(),
+    ]);
+    const ids = records.map((r) => r.id);
+    const [flows, names] = await Promise.all([
+      this.sessionFlows(ids),
+      this.sessionNames(ids),
+    ]);
+    return {
+      items: records.map((r) => toSessionRow(r, flows.get(r.id), names)),
+      total,
+      page,
+      pageSize,
+      facets: {
+        agents: agents
+          .map((a) => ({ id: a.id, name: a.name ?? a.id }))
+          .sort(byLabel((a) => a.name)),
+      },
+    };
+  }
+
+  /** `GET /monitoring/sessions/:id`. */
+  async getSession(id: string): Promise<SessionDetail> {
+    const record = (await this.spans.hasSpanEvents())
+      ? (await this.spans.findSessions({ id }, 1, 0))[0]
+      : undefined;
+    if (!record) throw new NotFoundException('Session not found');
+    const [flows, names] = await Promise.all([
+      this.sessionFlows([id]),
+      this.sessionNames([id]),
+    ]);
+    const flow = flows.get(id);
+    return {
+      ...toSessionRow(record, flow, names),
+      turnList: flow?.turnList ?? [],
+    };
+  }
+
+  /** `GET /monitoring/traces/:traceId`. */
+  async getTrace(traceId: string, framework?: unknown): Promise<TraceDetail> {
+    const rows = (await this.spans.hasSpanEvents())
+      ? await this.spans.traceRows(traceId)
+      : [];
+    if (rows.length === 0) throw new NotFoundException('Trace not found');
+    return buildTraceTree(
+      traceId,
+      [...collapseSpans(rows).values()],
+      parseFrameworkFlag(framework),
+    );
+  }
+
+  private async sessionFlows(ids: string[]): Promise<Map<string, SessionFlow>> {
+    const rows = await this.spans.sessionSpanRows(ids);
+    return buildSessionFlows([...collapseSpans(rows).values()]);
+  }
+
   /** Session names of the given thread ids; absent ids have no entry. */
   private async sessionNames(
     ids: (string | null)[],
@@ -222,6 +273,30 @@ export class MonitoringService {
       status: r.status,
     };
   }
+}
+
+/** A sessions-query record with the totals of its spans. */
+function toSessionRow(
+  record: SessionRecord,
+  flow: SessionFlow | undefined,
+  names: Map<string, string>,
+): SessionRow {
+  return {
+    id: record.id,
+    name: names.get(record.id) ?? null,
+    agents: flow?.agents ?? [],
+    turns: flow?.turns ?? 0,
+    firstAt: new Date(record.firstAt).toISOString(),
+    lastAt: new Date(record.lastAt).toISOString(),
+    wallMs: flow?.wallMs ?? null,
+    modelMs: flow?.modelMs ?? null,
+    toolCalls: flow?.toolCalls ?? 0,
+    inputTokens: flow?.inputTokens ?? null,
+    outputTokens: flow?.outputTokens ?? null,
+    costUsd: flow?.costUsd ?? null,
+    errors: flow?.errors ?? 0,
+    status: flow?.status ?? 'succeeded',
+  };
 }
 
 function stepIndex(span: CollapsedSpan): number {

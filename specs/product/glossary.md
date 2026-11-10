@@ -106,6 +106,12 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **LLM call.** One model call of one agent run, as recorded in the trace store (`observability.duckdb`, a `model_generation` span): its agent, model, provider, session, tokens, duration, estimated cost and status. A run's several requests to the model are its *steps*, inside one LLM call. Listed on the Monitoring page, newest first. See [monitoring](../capabilities/monitoring/spec.md) and ADR-0037.
 
+**Session flow.** The Monitoring view of one *session* as a list of turns. Each turn (one question, one trace) shows the question, the path the agent took (its model requests and tool calls in time order), the answer and its cost, and can open a *waterfall*. Shown on the session page, which opens from the Sessions tab. See [monitoring](../capabilities/monitoring/spec.md) R26–R44.
+
+**Waterfall.** A timeline of one turn on the session page: one row per span, with a bar placed and sized to scale against the turn's total time, coloured by kind (agent, model, request, tool, memory, framework). Selecting a row shows that span's details, input and output. See [monitoring](../capabilities/monitoring/spec.md) R37–R42.
+
+**Framework span.** A trace span the agent framework writes for its own housekeeping, such as skill actions, processor runs, workspace actions and the model inference that repeats a request. The waterfall hides them unless **Show framework spans** is on. See [monitoring](../capabilities/monitoring/spec.md) R39–R40.
+
 **LLM provider.** The service the agents call. `openai`, `anthropic`, `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name) or `custom` (a *custom endpoint*, which needs an *API style* and a base URL, and whose API key is optional). One global setting: provider, model, API key (stored encrypted, shown masked), *reasoning effort* and, for `lenai` and `custom`, the base URL (and for `custom` the API style).
 
 **Maturity band.** The DMBOK maturity level of an overall *data readiness* score: Optimised (95 and above), Managed (85 and above), Defined (70 and above), Repeatable (50 and above) or Initial.

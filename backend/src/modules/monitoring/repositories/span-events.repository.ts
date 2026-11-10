@@ -61,7 +61,99 @@ export interface SpanEventRow {
   input: unknown;
   output: unknown;
   error: unknown;
+  /** Read by the session and trace queries only. */
+  traceId?: string | null;
+  entityName?: string | null;
+  /** `threadId`, else `metadata.threadId`. */
+  threadId?: string | null;
+  requestContext?: unknown;
 }
+
+/** Filters of the sessions list; every value is bound as a parameter. */
+export interface SessionFilter {
+  id?: string;
+  agent?: string;
+  from?: Date;
+  to?: Date;
+}
+
+/** One session as the sessions query returns it (turn starts). */
+export interface SessionRecord {
+  id: string;
+  firstAt: Date;
+  lastAt: Date;
+}
+
+/**
+ * Sessions = the distinct thread ids of `agent_run` spans; a turn = one trace
+ * of the session, started at its earliest agent run.
+ */
+const SESSIONS_CTE = `
+WITH run_rows AS (
+  SELECT spanId, traceId, entityId, entityName,
+    MIN("timestamp") OVER (PARTITION BY spanId) AS startedAt,
+    MAX(COALESCE(threadId, json_extract_string(metadata, '$.threadId')))
+      OVER (PARTITION BY spanId) AS sessionId
+  FROM span_events
+  WHERE spanType = 'agent_run'
+),
+runs AS (
+  SELECT DISTINCT spanId, traceId, entityId, entityName, startedAt, sessionId
+  FROM run_rows
+  WHERE sessionId IS NOT NULL
+),
+turns AS (
+  SELECT sessionId, traceId, MIN(startedAt) AS startedAt
+  FROM runs
+  GROUP BY sessionId, traceId
+),
+sessions AS (
+  SELECT sessionId AS id, MIN(startedAt) AS firstAt, MAX(startedAt) AS lastAt
+  FROM turns
+  GROUP BY sessionId
+)`;
+
+function sessionWhere(filter: SessionFilter): {
+  sql: string;
+  params: unknown[];
+} {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  if (filter.id !== undefined) {
+    conditions.push('s.id = ?');
+    params.push(filter.id);
+  }
+  if (filter.agent !== undefined) {
+    conditions.push(
+      'EXISTS (SELECT 1 FROM runs r WHERE r.sessionId = s.id AND r.entityId = ?)',
+    );
+    params.push(filter.agent);
+  }
+  if (filter.from || filter.to) {
+    const range: string[] = [];
+    if (filter.from) {
+      range.push('t.startedAt >= ?');
+      params.push(filter.from);
+    }
+    if (filter.to) {
+      range.push('t.startedAt <= ?');
+      params.push(filter.to);
+    }
+    conditions.push(
+      `EXISTS (SELECT 1 FROM turns t WHERE t.sessionId = s.id AND ${range.join(' AND ')})`,
+    );
+  }
+  return {
+    sql: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '',
+    params,
+  };
+}
+
+/** The columns a span tree or a session flow reads. */
+const SPAN_COLUMNS = `eventType, "timestamp", cursorId, traceId, spanId, parentSpanId,
+       spanType, name, entityId, entityName, endedAt,
+       COALESCE(threadId, json_extract_string(metadata, '$.threadId')) AS threadId,
+       requestContext, attributes, input, output, error`;
 
 /**
  * `span_events` is event-sourced: a span has one or more `start` rows (the
@@ -227,6 +319,70 @@ SELECT DISTINCT sessionId AS value FROM calls WHERE sessionId IS NOT NULL`,
         WHERE traceId = ?
           AND spanType IN ('model_generation', 'model_step', 'tool_call')
         ORDER BY cursorId NULLS LAST, "timestamp"`,
+      [traceId],
+    );
+  }
+
+  /** One page of sessions, most recent turn first (id breaks ties). */
+  findSessions(
+    filter: SessionFilter,
+    limit: number,
+    offset: number,
+  ): Promise<SessionRecord[]> {
+    const where = sessionWhere(filter);
+    return this.db.query<SessionRecord>(
+      `${SESSIONS_CTE}
+SELECT s.id, s.firstAt, s.lastAt FROM sessions s ${where.sql}
+ORDER BY s.lastAt DESC, s.id DESC
+LIMIT ? OFFSET ?`,
+      [...where.params, limit, offset],
+    );
+  }
+
+  async countSessions(filter: SessionFilter): Promise<number> {
+    const where = sessionWhere(filter);
+    const rows = await this.db.query<{ n: number }>(
+      `${SESSIONS_CTE}
+SELECT COUNT(*) AS n FROM sessions s ${where.sql}`,
+      where.params,
+    );
+    return Number(rows[0]?.n ?? 0);
+  }
+
+  /** The distinct agents that ran in any session. */
+  sessionAgents(): Promise<{ id: string; name: string | null }[]> {
+    return this.db.query<{ id: string; name: string | null }>(
+      `${SESSIONS_CTE}
+SELECT entityId AS id, MAX(entityName) AS name FROM runs
+WHERE entityId IS NOT NULL GROUP BY entityId`,
+    );
+  }
+
+  /**
+   * The agent-run, model-generation, model-step and tool-call rows of every
+   * turn (trace) of the given sessions.
+   */
+  sessionSpanRows(sessionIds: string[]): Promise<SpanEventRow[]> {
+    if (sessionIds.length === 0) return Promise.resolve([]);
+    const marks = sessionIds.map(() => '?').join(', ');
+    return this.db.query<SpanEventRow>(
+      `${SESSIONS_CTE}
+SELECT ${SPAN_COLUMNS}
+  FROM span_events
+ WHERE traceId IN (SELECT traceId FROM turns WHERE sessionId IN (${marks}))
+   AND spanType IN ('agent_run', 'model_generation', 'model_step', 'tool_call')
+ ORDER BY cursorId NULLS LAST, "timestamp"`,
+      sessionIds,
+    );
+  }
+
+  /** Every row of one trace but the `model_chunk` noise. */
+  traceRows(traceId: string): Promise<SpanEventRow[]> {
+    return this.db.query<SpanEventRow>(
+      `SELECT ${SPAN_COLUMNS}
+  FROM span_events
+ WHERE traceId = ? AND spanType <> 'model_chunk'
+ ORDER BY cursorId NULLS LAST, "timestamp"`,
       [traceId],
     );
   }

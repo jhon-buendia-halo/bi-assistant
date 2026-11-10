@@ -899,14 +899,14 @@ flowchart LR
   - **One table row is one `model_generation` span**, the model call of one agent run. Its `model_step` children give the steps and the real input tokens of the largest request. Its `tool_call` spans give the tool results.
   - **The context window is rebuilt from the recorded messages** into seven boxes, with token counts estimated from characters and scaled to the real input tokens ([monitoring](../capabilities/monitoring/spec.md) R17–R22).
   - **Cost is computed on read** from a price table shipped as code (`model-prices.ts`, USD per million tokens, dated 2026-11-03). A model not in the table has no cost.
-  - **Two endpoints, read-only:** `GET /monitoring/llm-calls` and `GET /monitoring/llm-calls/:id` ([api.md](api.md) 2.8c). No new collection and no migration.
+  - **Read-only endpoints:** `GET /monitoring/llm-calls`, `GET /monitoring/llm-calls/:id`, and for the session flow (roadmap 1.21.16) `GET /monitoring/sessions`, `GET /monitoring/sessions/:id` and `GET /monitoring/traces/:traceId` ([api.md](api.md) 2.8c). No new collection and no migration.
 - **Rejected:**
   - **A new `llm_calls` collection written by the app on every call:** it would duplicate what Mastra already stores, add a write on the hot path of every turn, and need hooks into every place a model is called (agents, sub-calls, evals). Calls from before the feature would be missing.
   - **Reading Phoenix or the OTLP stack:** both are developer-only, run from an opt-in Docker profile and are off by default (ADR-0006). End-user installs must not need them.
   - **Opening `observability.duckdb` from a second process or a script:** the running backend holds the file.
 - **Consequences:**
   - Monitoring is coupled to Mastra's `span_events` shape (event-sourced rows, the JSON columns `attributes`, `input`, `output`, `error`). A unit test pins the reader to a fixture of that real shape, so a Mastra upgrade that changes it fails the test instead of the page.
-  - Only what Mastra traces is shown. Model calls that bypass it are not listed.
+  - Only what Mastra traces is shown. Model calls that bypass it are not listed. The same reader also serves the session flow (sessions, a turn's trajectory and the waterfall, [monitoring](../capabilities/monitoring/spec.md) R26–R44) from the same table, with no new store.
   - Calls recorded before this feature show too, because the data was already there.
   - Prices are code, not settings: a change of price needs a release. The table says "as of 2026-11-03", and a model without a price shows a dash for cost and no context limit.
   - Token counts per box are estimates ("≈" in the UI). Only the total is real.

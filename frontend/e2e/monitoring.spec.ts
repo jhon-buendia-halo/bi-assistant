@@ -8,15 +8,19 @@ import {
 import {
   LlmStub,
   STUB_ANSWER,
+  StubRequest,
+  messageText,
   startLlmStub,
   systemTexts,
   turnRequests,
 } from './helpers/llm-stub';
+import { worldCupKey } from './helpers/world-cup-db';
 import { scenarioStep } from './support/demo-captions';
 
 /**
- * Mirrors `Feature: LLM calls` and `Feature: LLM call detail` in
- * specs/capabilities/monitoring/spec.md (roadmap 1.21.14, 1.21.15). The
+ * Mirrors `Feature: LLM calls`, `Feature: LLM call detail` and
+ * `Feature: Session flow` in specs/capabilities/monitoring/spec.md (roadmap
+ * 1.21.14–1.21.16). The
  * calls are real: a chat turn against the recording LLM stub, traced by
  * Mastra into the app's trace store and read back by the Monitoring API.
  */
@@ -37,11 +41,13 @@ const SEGMENTS = [
 ];
 
 let stub: LlmStub;
+/** The World Cup datasource, for scripted tool calls. */
+let datasourceId: string;
 
 test.beforeEach(async ({ page }) => {
   // Background: an LLM is configured and a session has asked one question.
   stub = await startLlmStub();
-  await seedWorldCupDataset(page);
+  datasourceId = await seedWorldCupDataset(page);
   await saveLenaiSettings(page, stub.baseUrl);
 });
 
@@ -271,6 +277,263 @@ test.describe('Feature: LLM calls', () => {
       await expect(page.getByTestId('llm-filters-clear')).toBeDisabled();
       // The page size is not a filter: it stays.
       await expect(page.getByTestId('llm-page-size')).toHaveValue('50');
+    },
+  );
+});
+
+// ------------------------------------------------ Session flow (1.21.16)
+
+const FIRST_QUESTION = 'Which team scored the most goals in total?';
+const FIRST_ANSWER = 'France scored the most goals, with 14 in 6 matches.';
+const SECOND_QUESTION = 'And the second?';
+const SECOND_ANSWER = 'Croatia came second, with 9 goals.';
+
+/** The text of the request's last user message. */
+function lastUserText(request: StubRequest): string {
+  const users = request.messages.filter((m) => m.role === 'user');
+  return users.length ? messageText(users[users.length - 1]) : '';
+}
+
+/** True when a tool result came after the request's last user message. */
+function afterToolResult(request: StubRequest): boolean {
+  const lastUser = request.messages.map((m) => m.role).lastIndexOf('user');
+  return request.messages.slice(lastUser + 1).some((m) => m.role === 'tool');
+}
+
+/**
+ * Turn 1 inspects the matches table with describe_entity, then answers;
+ * turn 2 answers at once.
+ */
+function scriptTwoTurns(): void {
+  stub.reply = (request) => {
+    if (!request.stream) return { text: STUB_ANSWER };
+    const question = lastUserText(request);
+    if (question === FIRST_QUESTION) {
+      if (afterToolResult(request)) return { text: FIRST_ANSWER };
+      return {
+        toolCall: {
+          name:
+            request.tools.find((tool) => tool.endsWith('describe_entity')) ??
+            'describe_entity',
+          arguments: { entity: worldCupKey('matches'), datasourceId },
+        },
+      };
+    }
+    if (question === SECOND_QUESTION) return { text: SECOND_ANSWER };
+    return { text: STUB_ANSWER };
+  };
+}
+
+async function ask(page: Page, question: string, answer: string): Promise<void> {
+  await page.getByPlaceholder('Ask a follow-up question…').fill(question);
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect(page.getByText(answer)).toBeVisible();
+}
+
+/** The World Cup session's row on the Sessions tab. */
+const sessionRow = (page: Page): Locator =>
+  page
+    .getByTestId('monitoring-sessions-table')
+    .locator('[data-testid^="monitoring-session-row-"]')
+    .filter({ hasText: WORLD_CUP_SESSION });
+
+/**
+ * Opens Monitoring → Sessions until the session shows both turns: the
+ * trace exporter writes the spans shortly after each turn ends.
+ */
+async function openSessionsWithTwoTurns(page: Page): Promise<void> {
+  await expect(async () => {
+    await railItem(page, 'Sessions').click();
+    await railItem(page, 'Monitoring').click();
+    await page.getByTestId('monitoring-tab-sessions').click();
+    await expect(
+      sessionRow(page).first().locator('td').nth(2),
+    ).toHaveText('2', { timeout: 2_000 });
+  }).toPass({ timeout: 45_000 });
+}
+
+test.describe('Feature: Session flow', () => {
+  test(
+    'Read a session\'s execution flow and a turn\'s timeline',
+    { tag: ['@demo', '@story-1.21.16'] },
+    async ({ page }) => {
+      scriptTwoTurns();
+      await scenarioStep(
+        page,
+        `Given I asked two questions in the session "${WORLD_CUP_SESSION}"`,
+        async () => {
+          await createWorldCupSession(page);
+          await ask(page, FIRST_QUESTION, FIRST_ANSWER);
+          await ask(page, SECOND_QUESTION, SECOND_ANSWER);
+        },
+      );
+      await scenarioStep(
+        page,
+        'When I open Monitoring and choose the Sessions tab',
+        async () => {
+          await openSessionsWithTwoTurns(page);
+        },
+      );
+      await scenarioStep(
+        page,
+        'Then I see the session with its 2 turns, its agent and status',
+        async () => {
+          await expect(page.getByTestId('monitoring-tab-sessions')).toHaveAttribute(
+            'aria-selected',
+            'true',
+          );
+          await expect(page.getByTestId('monitoring-note')).toHaveText(
+            'Sessions with recorded agent runs, most recent first.',
+          );
+          const cells = sessionRow(page).first().locator('td');
+          await expect(cells.nth(0)).toHaveText(WORLD_CUP_SESSION);
+          await expect(cells.nth(1)).toContainText(ASSISTANT);
+          await expect(cells.nth(2)).toHaveText('2');
+          await expect(cells.nth(9)).toHaveText('Succeeded');
+        },
+      );
+      await scenarioStep(page, 'When I open the session', async () => {
+        await sessionRow(page).first().click();
+      });
+      await scenarioStep(
+        page,
+        'Then I read both questions, their answers and the steps the agent took',
+        async () => {
+          const detail = page.getByTestId('monitoring-session-detail');
+          await expect(detail).toBeVisible();
+          await expect(detail.getByRole('heading', { level: 2 })).toHaveText(
+            WORLD_CUP_SESSION,
+          );
+          await expect(page.getByTestId('session-totals')).toContainText('Turns');
+          await expect(page.getByTestId('turn-question-1')).toHaveText(
+            FIRST_QUESTION,
+          );
+          await expect(page.getByTestId('turn-answer-1')).toHaveText(FIRST_ANSWER);
+          await expect(page.getByTestId('turn-question-2')).toHaveText(
+            SECOND_QUESTION,
+          );
+          await expect(page.getByTestId('turn-answer-2')).toHaveText(
+            SECOND_ANSWER,
+          );
+          // Turn 1: a model request, the describe_entity call, the answer.
+          const steps1 = page.getByTestId('turn-steps-1');
+          await expect(
+            steps1.locator('[data-testid^="turn-step-model-"]'),
+          ).toHaveCount(2);
+          await expect(steps1.getByTestId('turn-step-tool')).toContainText(
+            'describe_entity',
+          );
+          // Turn 2: one model request, no tools.
+          const steps2 = page.getByTestId('turn-steps-2');
+          await expect(
+            steps2.locator('[data-testid^="turn-step-model-"]'),
+          ).toHaveCount(1);
+          await expect(steps2.getByTestId('turn-step-tool')).toHaveCount(0);
+        },
+      );
+      await scenarioStep(page, "When I open turn 1's timeline", async () => {
+        await page.getByTestId('turn-timeline-toggle-1').click();
+      });
+      const waterfall = page.getByTestId('trace-waterfall');
+      const spanRows = waterfall.locator('[data-testid^="trace-span-row-"]');
+      await scenarioStep(
+        page,
+        'Then I see the agent run, the model call and its requests on a time axis',
+        async () => {
+          await expect(page.getByTestId('turn-timeline-toggle-1')).toHaveAttribute(
+            'aria-expanded',
+            'true',
+          );
+          await expect(spanRows.filter({ hasText: 'agent run' })).toHaveCount(1);
+          await expect(spanRows.filter({ hasText: 'model call' })).toHaveCount(1);
+          await expect(spanRows.filter({ hasText: /request \d/ })).toHaveCount(2);
+          await expect(
+            spanRows.filter({ hasText: 'describe_entity' }).first(),
+          ).toBeVisible();
+          await expect(waterfall.getByTestId('trace-axis')).toBeVisible();
+        },
+      );
+      await scenarioStep(page, 'When I select request 2', async () => {
+        await spanRows.filter({ hasText: 'request 2' }).click();
+      });
+      await scenarioStep(
+        page,
+        'Then the panel shows its details and an Open call link',
+        async () => {
+          await expect(
+            spanRows.filter({ hasText: 'request 2' }),
+          ).toHaveAttribute('aria-pressed', 'true');
+          const panel = waterfall.getByTestId('trace-span-panel');
+          await expect(panel.getByTestId('trace-span-panel-label')).toHaveText(
+            'request 2',
+          );
+          await expect(panel).toContainText('Request');
+          await expect(panel.getByTestId('trace-span-open-call')).toBeVisible();
+        },
+      );
+      let shownBefore = 0;
+      await scenarioStep(page, 'When I switch on framework spans', async () => {
+        await expect(waterfall.getByTestId('trace-framework-hidden')).toHaveText(
+          /^\(\d+ hidden\)$/,
+        );
+        shownBefore = await spanRows.count();
+        await waterfall.getByTestId('trace-framework-toggle').click();
+      });
+      await scenarioStep(
+        page,
+        'Then more spans are listed and none is hidden',
+        async () => {
+          await expect(
+            waterfall.getByTestId('trace-framework-toggle'),
+          ).toHaveAttribute('aria-checked', 'true');
+          await expect.poll(() => spanRows.count()).toBeGreaterThan(shownBefore);
+          await expect(waterfall.getByTestId('trace-framework-hidden')).toHaveCount(
+            0,
+          );
+        },
+      );
+      await scenarioStep(
+        page,
+        "When I click Open call on turn 1's first model step",
+        async () => {
+          await page
+            .getByTestId('turn-steps-1')
+            .locator('[data-testid^="step-open-call-"]')
+            .first()
+            .click();
+        },
+      );
+      await scenarioStep(
+        page,
+        'Then I see the call, with a back control reading "Session"',
+        async () => {
+          await expect(page.getByTestId('llm-call-detail')).toBeVisible();
+          await expect(page.getByTestId('context-bar')).toBeVisible();
+          await expect(page.getByTestId('llm-call-back')).toHaveText('Session');
+        },
+      );
+      await scenarioStep(page, 'When I click "Session"', async () => {
+        await page.getByTestId('llm-call-back').click();
+      });
+      await scenarioStep(page, 'Then I am back on the session', async () => {
+        await expect(page.getByTestId('monitoring-session-detail')).toBeVisible();
+        await expect(page.getByTestId('turn-question-1')).toHaveText(
+          FIRST_QUESTION,
+        );
+      });
+      await scenarioStep(page, 'When I click "Monitoring"', async () => {
+        await page.getByTestId('monitoring-session-back').click();
+      });
+      await scenarioStep(
+        page,
+        'Then I see the Sessions tab with the session listed',
+        async () => {
+          await expect(
+            page.getByTestId('monitoring-tab-sessions'),
+          ).toHaveAttribute('aria-selected', 'true');
+          await expect(sessionRow(page).first()).toBeVisible();
+        },
+      );
     },
   );
 });

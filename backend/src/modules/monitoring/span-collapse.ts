@@ -7,6 +7,12 @@ export interface CollapsedSpan {
   spanType: string;
   name: string | null;
   entityId: string | null;
+  /** Set when the rows were read with it (session and trace queries). */
+  entityName: string | null;
+  traceId: string | null;
+  /** `threadId`, else `metadata.threadId`, from any of the span's rows. */
+  threadId: string | null;
+  requestContext: Record<string, unknown>;
   startedAt: Date;
   /** Null while the span has no end row. */
   endedAt: Date | null;
@@ -26,7 +32,7 @@ export function parseJson(value: unknown): unknown {
   }
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
+export function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
@@ -48,10 +54,12 @@ export function collapseSpans(
 ): Map<string, CollapsedSpan> {
   const latest = new Map<string, SpanEventRow>();
   const firstAt = new Map<string, Date>();
+  const threadOf = new Map<string, string>();
   for (const row of rows) {
     const at = toDate(row.timestamp);
     const known = firstAt.get(row.spanId);
     if (at && (!known || at < known)) firstAt.set(row.spanId, at);
+    if (row.threadId) threadOf.set(row.spanId, row.threadId);
     const current = latest.get(row.spanId);
     if (current?.eventType === 'end' && row.eventType !== 'end') continue;
     latest.set(row.spanId, row);
@@ -65,6 +73,10 @@ export function collapseSpans(
       spanType: row.spanType,
       name: row.name ?? null,
       entityId: row.entityId ?? null,
+      entityName: row.entityName ?? null,
+      traceId: row.traceId ?? null,
+      threadId: threadOf.get(spanId) ?? null,
+      requestContext: asRecord(parseJson(row.requestContext)),
       startedAt: firstAt.get(spanId) ?? new Date(0),
       endedAt: ended ? (toDate(row.endedAt) ?? toDate(row.timestamp)) : null,
       attributes: asRecord(parseJson(row.attributes)),
@@ -80,6 +92,19 @@ export function collapseSpans(
 export function toolName(span: CollapsedSpan): string {
   const match = /^tool: '(.+)'$/.exec(span.name ?? '');
   return match?.[1] ?? span.entityId ?? span.name ?? 'tool';
+}
+
+/** A span failed: an error on it, or a tool's `success: false`. */
+export function spanFailed(span: CollapsedSpan): boolean {
+  return errorMessage(span.error) !== null || span.attributes.success === false;
+}
+
+/** No end row yet = running; else failed or succeeded. */
+export function spanStatus(
+  span: CollapsedSpan,
+): 'succeeded' | 'failed' | 'running' {
+  if (span.endedAt === null) return 'running';
+  return spanFailed(span) ? 'failed' : 'succeeded';
 }
 
 /** The message of a span's error JSON, or null when it did not fail. */

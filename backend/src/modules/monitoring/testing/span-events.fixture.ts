@@ -42,6 +42,79 @@ export function fixtureRows(): Record<string, unknown>[] {
   return JSON.parse(JSON.stringify(FIXTURE.rows)) as Record<string, unknown>[];
 }
 
+/**
+ * The rest of the same export's three traces (span-events.flow.json, same
+ * columns): the agent_run, memory_operation and framework spans (end rows;
+ * the running trace's start rows), and the start rows of the model steps and
+ * tool calls above, so the turns have their real tree and timings
+ * (agent_run → skill_action, memory_operation, model_generation → model_step
+ * → workspace_action, skill_action, processor_run, model_inference,
+ * tool_call). `model_chunk` rows are left out; long texts are cut.
+ */
+const FLOW_ROWS = (
+  JSON.parse(
+    readFileSync(join(__dirname, 'span-events.flow.json'), 'utf8'),
+  ) as { rows: Record<string, unknown>[] }
+).rows;
+
+/** Turn 1's trace, turn 2's trace, and the running third run's trace. */
+export const TRACE_1 = '475663b72c2cb0693ab26f2cde457a1c';
+export const TRACE_2 = '53c5d714ae0ecbda0e0dda7fcdc1f509';
+export const TRACE_3 = 'ced504e7a2ff7c0a38f3c66bb685b9d0';
+/** Turn 1's agent run (the trace root). */
+export const RUN_1 = '4b78c9da17ab1160';
+
+/** Deep copies of the fixture rows plus the flow rows of the same traces. */
+export function flowRows(): Record<string, unknown>[] {
+  return [
+    ...fixtureRows(),
+    ...(JSON.parse(JSON.stringify(FLOW_ROWS)) as Record<string, unknown>[]),
+  ];
+}
+
+/** A `timestamp` column value moved by `ms` (same text format). */
+export function shiftTimestamp(value: unknown, ms: number): unknown {
+  if (typeof value !== 'string') return value;
+  const at = new Date(`${value.replace(' ', 'T')}Z`).getTime() + ms;
+  return new Date(at).toISOString().replace('T', ' ').replace('Z', '');
+}
+
+/**
+ * A copy of one trace's rows as another turn: new trace and span ids (a
+ * suffix), moved in time, in another thread (when given) — the threadId
+ * column and `metadata.threadId` of every row that had one, and of the
+ * agent runs always.
+ */
+export function cloneTrace(
+  rows: Record<string, unknown>[],
+  traceId: string,
+  options: { suffix: string; shiftMs?: number; threadId?: string },
+): Record<string, unknown>[] {
+  const { suffix, shiftMs = 0, threadId } = options;
+  return rows
+    .filter((r) => r.traceId === traceId)
+    .map((r) => {
+      const copy: Record<string, unknown> = {
+        ...(JSON.parse(JSON.stringify(r)) as Record<string, unknown>),
+        traceId: `${traceId}-${suffix}`,
+        spanId: `${r.spanId as string}-${suffix}`,
+        timestamp: shiftTimestamp(r.timestamp, shiftMs),
+        endedAt: shiftTimestamp(r.endedAt, shiftMs),
+        cursorId: undefined,
+      };
+      if (r.parentSpanId) {
+        copy.parentSpanId = `${r.parentSpanId as string}-${suffix}`;
+      }
+      if (threadId && (r.threadId || r.spanType === 'agent_run')) {
+        copy.threadId = threadId;
+        if (copy.metadata && typeof copy.metadata === 'object') {
+          copy.metadata = { ...copy.metadata, threadId };
+        }
+      }
+      return copy;
+    });
+}
+
 function toDate(value: unknown): Date | null {
   return typeof value === 'string'
     ? new Date(`${value.replace(' ', 'T')}Z`)
@@ -67,6 +140,14 @@ export function toSpanEventRows(
     input: r.input === undefined ? null : JSON.stringify(r.input),
     output: r.output === undefined ? null : JSON.stringify(r.output),
     error: r.error === undefined ? null : JSON.stringify(r.error),
+    traceId: (r.traceId as string | undefined) ?? null,
+    entityName: (r.entityName as string | undefined) ?? null,
+    threadId:
+      (r.threadId as string | undefined) ??
+      (r.metadata as { threadId?: string } | undefined)?.threadId ??
+      null,
+    requestContext:
+      r.requestContext === undefined ? null : JSON.stringify(r.requestContext),
   }));
 }
 

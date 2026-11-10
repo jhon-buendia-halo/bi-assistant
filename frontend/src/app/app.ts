@@ -82,8 +82,9 @@ import {
 import { PersonaList } from './features/personas/components/persona-list/persona-list';
 import { VisualLibrary } from './features/visuals/components/visual-library/visual-library';
 import { OntologyOverview } from './features/ontology/components/ontology-overview/ontology-overview';
-import { LlmCallsPage } from './features/monitoring/components/llm-calls-page/llm-calls-page';
+import { MonitoringTabs } from './features/monitoring/components/monitoring-tabs/monitoring-tabs';
 import { LlmCallDetailPage } from './features/monitoring/components/llm-call-detail/llm-call-detail';
+import { SessionFlowPage } from './features/monitoring/components/session-flow/session-flow';
 import { CatalogBrowser } from './features/datasets/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
 import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
@@ -143,6 +144,7 @@ type MainView =
   | 'conversation-new'
   | 'session-chat'
   | 'monitoring'
+  | 'monitoring-session'
   | 'llm-call';
 
 /** What the navigation rail selects (app-shell R3–R5, R46). */
@@ -180,6 +182,7 @@ const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   'conversation-new': 'sessions',
   'session-chat': 'sessions',
   monitoring: 'monitoring',
+  'monitoring-session': 'monitoring',
   'llm-call': 'monitoring',
 };
 
@@ -241,8 +244,9 @@ function urlHost(baseUrl: string): string {
     PersonaList,
     VisualLibrary,
     OntologyOverview,
-    LlmCallsPage,
+    MonitoringTabs,
     LlmCallDetailPage,
+    SessionFlowPage,
     CatalogBrowser,
     EntityDetails,
     ToastContainer,
@@ -1376,10 +1380,52 @@ export class App {
   /** The LLM call shown on the `llm-call` view (roadmap 1.21.15). */
   readonly activeLlmCallId = signal<string | null>(null);
 
+  /**
+   * The session page a call was opened from; null when it was opened from
+   * the LLM calls table (its back control then reads Monitoring).
+   */
+  readonly llmCallFromSession = signal<string | null>(null);
+
+  /** The session shown on the `monitoring-session` view (roadmap 1.21.16). */
+  readonly activeMonitoringSessionId = signal<string | null>(null);
+
   /** Opens a call from the Monitoring table. */
   openLlmCall(id: string): void {
+    this.llmCallFromSession.set(null);
     this.activeLlmCallId.set(id);
     this.mainView.set('llm-call');
+  }
+
+  /** Opens a call from the session page; its back control returns there. */
+  openLlmCallFromSession(id: string): void {
+    this.llmCallFromSession.set(this.activeMonitoringSessionId());
+    this.activeLlmCallId.set(id);
+    this.mainView.set('llm-call');
+  }
+
+  /** The call page's back control: to its session page, else the table. */
+  backFromLlmCall(): void {
+    const sessionId = this.llmCallFromSession();
+    if (sessionId !== null) {
+      this.activeMonitoringSessionId.set(sessionId);
+      this.mainView.set('monitoring-session');
+      return;
+    }
+    this.selectArea('monitoring');
+  }
+
+  /** Opens a session's execution flow from the Sessions tab. */
+  openMonitoringSession(id: string): void {
+    this.activeMonitoringSessionId.set(id);
+    this.mainView.set('monitoring-session');
+  }
+
+  /**
+   * The session page's back control: the Monitoring page, on the Sessions
+   * tab it was opened from (the tab is kept in MonitoringStateService).
+   */
+  backFromMonitoringSession(): void {
+    this.selectArea('monitoring');
   }
 
   /** The call page's Session link: opens that session's chat. */

@@ -1,0 +1,286 @@
+<div class="flex flex-col" data-testid="monitoring-session-detail">
+  @if (loading()) {
+    <div class="mt-6 flex items-center gap-2.5 text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading the session…</span>
+    </div>
+  } @else if (error(); as err) {
+    <p
+      data-testid="session-load-error"
+      role="alert"
+      class="mt-2 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  } @else if (session(); as s) {
+    <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+      <h2
+        class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
+      >
+        {{ title() }}
+      </h2>
+      @if (s.name === null) {
+        <span class="font-mono text-[12px] text-fg-muted">{{
+          s.id.slice(0, 8)
+        }}</span>
+      } @else {
+        <button
+          type="button"
+          data-testid="session-open-chat"
+          class="inline-flex items-center gap-1 text-[12px] text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+          (click)="openChat.emit(s.id)"
+        >
+          <lucide-angular [img]="MessageSquare" [size]="13" />
+          <span>Open chat</span>
+        </button>
+      }
+    </div>
+    @if (s.agents.length > 0) {
+      <p class="mt-0.5 text-[12px] text-fg-muted">
+        @for (agent of s.agents; track agent.id; let last = $last) {
+          {{ agent.name }}{{ last ? "" : ", " }}
+        }
+      </p>
+    }
+
+    <!-- Totals -->
+    <dl
+      data-testid="session-totals"
+      class="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-b border-border pb-3 text-[13px]"
+    >
+      <div class="flex items-baseline gap-1.5">
+        <dt class="text-fg-muted">Turns</dt>
+        <dd class="font-medium text-fg tabular-nums">{{ s.turns }}</dd>
+      </div>
+      <div class="flex items-baseline gap-1.5">
+        <dt class="text-fg-muted">Wall time</dt>
+        <dd class="font-medium text-fg tabular-nums">
+          {{ formatDuration(s.wallMs) }}
+        </dd>
+      </div>
+      <div class="flex items-baseline gap-1.5">
+        <dt class="text-fg-muted">Model time</dt>
+        <dd class="font-medium text-fg tabular-nums">
+          {{ formatDuration(s.modelMs) }}
+        </dd>
+      </div>
+      <div class="flex items-baseline gap-1.5">
+        <dt class="text-fg-muted">Tool calls</dt>
+        <dd class="font-medium text-fg tabular-nums">{{ s.toolCalls }}</dd>
+      </div>
+      <div class="flex items-baseline gap-1.5">
+        <dt class="text-fg-muted">Tokens</dt>
+        <dd class="font-medium text-fg tabular-nums">
+          {{ formatTokens(s.inputTokens) }} /
+          {{ formatTokens(s.outputTokens) }}
+        </dd>
+      </div>
+      <div class="flex items-baseline gap-1.5">
+        <dt class="text-fg-muted">Cost</dt>
+        <dd class="font-medium text-fg tabular-nums">
+          {{ formatCost(s.costUsd) }}
+        </dd>
+      </div>
+      <div class="flex items-baseline gap-1.5">
+        <dt class="text-fg-muted">Errors</dt>
+        <dd
+          class="font-medium tabular-nums"
+          [class.text-fg]="s.errors === 0"
+          [class.text-on-danger-soft]="s.errors > 0"
+        >
+          {{ s.errors }}
+        </dd>
+      </div>
+    </dl>
+
+    <!-- Turns -->
+    <div class="mt-5 flex flex-col gap-7">
+      @for (turn of s.turnList; track turn.traceId) {
+        <section
+          class="flex flex-col gap-2"
+          [attr.data-testid]="'session-turn-' + turn.index"
+          [attr.aria-labelledby]="'session-turn-heading-' + turn.index"
+        >
+          @if (turn.question !== null) {
+            <div
+              [attr.data-testid]="'turn-question-' + turn.index"
+              class="max-w-[80%] self-end rounded-[12px_12px_2px_12px] bg-primary px-3 py-2 text-[13px] whitespace-pre-wrap text-on-primary"
+            >{{ turn.question }}</div>
+          }
+
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h3
+              [id]="'session-turn-heading-' + turn.index"
+              class="font-mono text-[12px] font-normal text-fg-muted tabular-nums"
+              [attr.data-testid]="'turn-meta-' + turn.index"
+            >
+              {{ meta(turn) }}
+            </h3>
+            @if (turn.status !== "succeeded") {
+              <span
+                class="chip px-2 py-0.5 text-[11px]"
+                [class]="statusChips[turn.status]"
+                [attr.data-testid]="'turn-status-' + turn.index"
+                >{{ statusLabels[turn.status] }}</span
+              >
+            }
+            <button
+              type="button"
+              class="btn btn-ghost px-2 py-0.5 text-[12px]"
+              [attr.data-testid]="'turn-timeline-toggle-' + turn.index"
+              [attr.aria-expanded]="isTimelineOpen(turn)"
+              [attr.aria-controls]="'turn-timeline-' + turn.index"
+              (click)="toggleTimeline(turn)"
+            >
+              <lucide-angular [img]="ChartGantt" [size]="13" />
+              <span>{{
+                isTimelineOpen(turn) ? "Hide timeline" : "Open timeline"
+              }}</span>
+            </button>
+          </div>
+
+          @if (isTimelineOpen(turn)) {
+            <div [id]="'turn-timeline-' + turn.index">
+              <app-trace-waterfall
+                [traceId]="turn.traceId"
+                (openCall)="openCall.emit($event)"
+              />
+            </div>
+          }
+
+          <!-- The path the agent took -->
+          @if (turn.steps.length > 0) {
+            <ol
+              [attr.data-testid]="'turn-steps-' + turn.index"
+              [attr.aria-label]="'Steps of turn ' + turn.index"
+              class="ml-1.5 flex flex-col gap-1.5 border-l-2 border-border py-0.5 pl-4"
+            >
+              @for (step of turn.steps; track $index) {
+                @if (step.kind === "model") {
+                  <li
+                    class="relative flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 text-[13px]"
+                    [attr.data-testid]="'turn-step-model-' + step.callId + '-' + step.stepIndex"
+                  >
+                    <span
+                      class="absolute top-[5px] -left-[23px] h-2.5 w-2.5 rounded-full border-2 bg-surface"
+                      [style.border-color]="colour('model')"
+                      aria-hidden="true"
+                    ></span>
+                    <span class="font-medium text-fg" [title]="step.model"
+                      >Model</span
+                    >
+                    <span class="font-mono text-[12px] text-fg-muted tabular-nums"
+                      >{{ formatDuration(step.durationMs) }} ·
+                      {{ formatTokens(step.inputTokens) }} in /
+                      {{ formatTokens(step.outputTokens) }} out</span
+                    >
+                    @if (step.finishReason !== null) {
+                      <span class="text-[12px] text-fg-muted">{{
+                        step.finishReason
+                      }}</span>
+                    }
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1 text-[12px] text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+                      [attr.data-testid]="'step-open-call-' + step.callId + '-' + step.stepIndex"
+                      (click)="openCall.emit(step.callId)"
+                    >
+                      <lucide-angular [img]="ExternalLink" [size]="12" />
+                      <span>Open call</span>
+                    </button>
+                    @if (step.text !== null) {
+                      <span
+                        class="w-full truncate text-[12px] text-fg-muted"
+                        [title]="step.text"
+                        data-testid="turn-step-text"
+                        >{{ step.text }}</span
+                      >
+                    }
+                  </li>
+                } @else {
+                  <li
+                    class="relative flex flex-col gap-0.5 text-[13px]"
+                    data-testid="turn-step-tools"
+                  >
+                    <span
+                      class="absolute top-[5px] -left-[23px] h-2.5 w-2.5 rounded-[2px] border-2 bg-surface"
+                      [style.border-color]="colour('tool')"
+                      aria-hidden="true"
+                    ></span>
+                    @for (tool of step.tools; track tool.name) {
+                      <div
+                        class="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5"
+                        data-testid="turn-step-tool"
+                      >
+                        <span class="font-medium text-fg">{{
+                          toolLabel(tool)
+                        }}</span>
+                        <span
+                          class="font-mono text-[12px] text-fg-muted tabular-nums"
+                          >{{ formatSeconds(tool.durationMs) }}</span
+                        >
+                        @if (tool.summary !== null) {
+                          <span
+                            class="min-w-0 text-[12px] break-words text-fg-muted [overflow-wrap:anywhere]"
+                            >{{ tool.summary }}</span
+                          >
+                        }
+                        @if (tool.rows !== null) {
+                          <span class="text-[12px] text-fg-muted tabular-nums">{{
+                            rowsLabel(tool.rows)
+                          }}</span>
+                        }
+                        @if (!tool.ok) {
+                          <span
+                            class="chip chip-danger inline-flex items-center gap-1 px-2 py-0.5 text-[11px]"
+                            data-testid="turn-step-tool-failed"
+                          >
+                            <lucide-angular [img]="TriangleAlert" [size]="11" />
+                            Failed
+                          </span>
+                        }
+                      </div>
+                    }
+                  </li>
+                }
+              }
+            </ol>
+          }
+
+          @if (turn.status === "failed" && turn.error !== null) {
+            <p
+              [attr.data-testid]="'turn-error-' + turn.index"
+              role="alert"
+              class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] whitespace-pre-wrap text-on-danger-soft"
+            >{{ turn.error }}</p>
+          }
+
+          @if (turn.answer !== null) {
+            <div
+              class="flex max-w-[85%] flex-col items-start gap-1 self-start rounded-[12px_12px_12px_2px] border border-border bg-surface px-3 py-2"
+            >
+              <div
+                [attr.data-testid]="'turn-answer-' + turn.index"
+                class="text-[13px] whitespace-pre-wrap text-fg"
+                [class.line-clamp-6]="
+                  isLong(turn.answer) && !isAnswerExpanded(turn)
+                "
+              >{{ turn.answer }}</div>
+              @if (isLong(turn.answer)) {
+                <button
+                  type="button"
+                  class="text-[12px] text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+                  [attr.data-testid]="'turn-answer-more-' + turn.index"
+                  [attr.aria-expanded]="isAnswerExpanded(turn)"
+                  (click)="toggleAnswer(turn)"
+                >
+                  {{ isAnswerExpanded(turn) ? "Show less" : "Show more" }}
+                </button>
+              }
+            </div>
+          }
+        </section>
+      }
+    </div>
+  }
+</div>
