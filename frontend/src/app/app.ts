@@ -82,6 +82,8 @@ import {
 import { PersonaList } from './features/personas/components/persona-list/persona-list';
 import { VisualLibrary } from './features/visuals/components/visual-library/visual-library';
 import { OntologyOverview } from './features/ontology/components/ontology-overview/ontology-overview';
+import { LlmCallsPage } from './features/monitoring/components/llm-calls-page/llm-calls-page';
+import { LlmCallDetailPage } from './features/monitoring/components/llm-call-detail/llm-call-detail';
 import { CatalogBrowser } from './features/datasets/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
 import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
@@ -140,7 +142,8 @@ type MainView =
   | 'sessions'
   | 'conversation-new'
   | 'session-chat'
-  | 'monitoring';
+  | 'monitoring'
+  | 'llm-call';
 
 /** What the navigation rail selects (app-shell R3–R5, R46). */
 type Area =
@@ -177,6 +180,7 @@ const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   'conversation-new': 'sessions',
   'session-chat': 'sessions',
   monitoring: 'monitoring',
+  'llm-call': 'monitoring',
 };
 
 const DEFAULT_RIGHT_PANEL_WIDTH = 572;
@@ -237,6 +241,8 @@ function urlHost(baseUrl: string): string {
     PersonaList,
     VisualLibrary,
     OntologyOverview,
+    LlmCallsPage,
+    LlmCallDetailPage,
     CatalogBrowser,
     EntityDetails,
     ToastContainer,
@@ -1367,6 +1373,28 @@ export class App {
     this.mainView.set(view);
   }
 
+  /** The LLM call shown on the `llm-call` view (roadmap 1.21.15). */
+  readonly activeLlmCallId = signal<string | null>(null);
+
+  /** Opens a call from the Monitoring table. */
+  openLlmCall(id: string): void {
+    this.activeLlmCallId.set(id);
+    this.mainView.set('llm-call');
+  }
+
+  /** The call page's Session link: opens that session's chat. */
+  openSessionById(id: string): void {
+    const known = this.sessions().find((session) => session.id === id);
+    if (known) {
+      this.openSession(known);
+      return;
+    }
+    this.sessionsApi.get(id).subscribe({
+      next: (session) => this.openSession(session),
+      error: () => this.toast.error('Could not open the session'),
+    });
+  }
+
   /** Every Settings section is always offered, in their fixed order. */
   readonly visibleSettingsSections = computed(() => this.settingsSections);
 
@@ -1419,12 +1447,14 @@ export class App {
     const leavingEditor = !this.settingsOpen() && this.inEditor();
     // Sessions is shown only on its list: from a chat or the composer the
     // rail returns to the list (app-shell R3). Context likewise returns from
-    // a section to its cards (R3a).
+    // a section to its cards (R3a), and Monitoring from a call to its table
+    // (roadmap 1.21.15).
     const alreadyShown =
       this.currentArea() === area &&
       !leavingEditor &&
       (area !== 'sessions' || this.mainView() === 'sessions') &&
-      (area !== 'context' || this.mainView() === 'context');
+      (area !== 'context' || this.mainView() === 'context') &&
+      (area !== 'monitoring' || this.mainView() === 'monitoring');
     if (!alreadyShown && !this.confirmLeaveAgentEditor()) return;
     if (area === 'settings') {
       // Settings covers the main view; the editor closes rather than wait

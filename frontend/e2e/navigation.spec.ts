@@ -71,20 +71,22 @@ test('moves between areas from the rail', async ({ page }) => {
 
 test(
   'Opens the empty Monitoring page from the rail',
-  { tag: ['@demo', '@story-1.21.13'] },
   async ({ page }) => {
     await scenarioStep(page, 'When I click "Monitoring" on the rail', async () => {
       await railItem(page, 'Monitoring').click();
     });
     await scenarioStep(
       page,
-      'Then I see the "Monitoring" page with the note "Nothing to monitor yet." and "Monitoring" is the current rail item',
+      'Then I see the "Monitoring" page with "No LLM calls yet." and "Monitoring" is the current rail item',
       async () => {
         await expect(
           page.getByRole('heading', { name: 'Monitoring', exact: true }),
         ).toBeVisible();
-        await expect(page.getByTestId('monitoring-empty')).toHaveText(
-          'Nothing to monitor yet.',
+        await expect(page.getByTestId('monitoring-note')).toHaveText(
+          "LLM calls made by the app's agents, newest first.",
+        );
+        await expect(page.getByTestId('llm-calls-empty')).toHaveText(
+          'No LLM calls yet.',
         );
         await expectCurrent(page, 'Monitoring');
       },

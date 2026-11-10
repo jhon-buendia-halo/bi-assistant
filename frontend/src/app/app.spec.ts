@@ -45,9 +45,10 @@ describe('App', () => {
     expect(compiled.querySelector('[title="Help"]')).toBeFalsy();
   });
 
-  it('opens an empty Monitoring page from the rail (app-shell R3b, BA-320)', () => {
+  it('opens the Monitoring page with the LLM calls table from the rail (app-shell R3b, roadmap 1.21.14)', async () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
 
@@ -63,8 +64,65 @@ describe('App', () => {
     const page = compiled.querySelector('[data-testid="monitoring-page"]');
     expect(page?.querySelector('h2')?.textContent?.trim()).toBe('Monitoring');
     expect(
-      page?.querySelector('[data-testid="monitoring-empty"]')?.textContent?.trim(),
-    ).toBe('Nothing to monitor yet.');
+      page?.querySelector('[data-testid="monitoring-note"]')?.textContent?.trim(),
+    ).toBe("LLM calls made by the app's agents, newest first.");
+
+    // The table is a deferred chunk (kept out of the initial bundle).
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(compiled.querySelector('app-llm-calls-page')).toBeTruthy();
+    http
+      .expectOne((req) => req.url.endsWith('/monitoring/llm-calls'))
+      .flush({
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 25,
+        facets: { agents: [], models: [], providers: [], sessions: [] },
+      });
+    fixture.detectChanges();
+    expect(
+      compiled.querySelector('[data-testid="llm-calls-empty"]')?.textContent?.trim(),
+    ).toBe('No LLM calls yet.');
+  });
+
+  it('opens an LLM call with a Monitoring back control; the rail returns to the table (roadmap 1.21.15)', async () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    app.selectArea('monitoring');
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    app.openLlmCall('call-1');
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('llm-call');
+    expect(app.currentArea()).toBe('monitoring');
+    expect(app.activeLlmCallId()).toBe('call-1');
+    expect(
+      compiled
+        .querySelector('button[aria-label="Monitoring"]')
+        ?.getAttribute('aria-current'),
+    ).toBe('page');
+    const back = compiled.querySelector(
+      '[data-testid="llm-call-back"]',
+    ) as HTMLButtonElement;
+    expect(back.textContent?.trim()).toBe('Monitoring');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const detail = compiled.querySelector('app-llm-call-detail');
+    expect(detail).toBeTruthy();
+
+    back.click();
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('monitoring');
+
+    // Choosing Monitoring on the rail from a call returns to the table.
+    app.openLlmCall('call-2');
+    app.selectArea('monitoring');
+    expect(app.mainView()).toBe('monitoring');
+    // From the table it stays on the table.
+    app.selectArea('monitoring');
+    expect(app.mainView()).toBe('monitoring');
   });
 
   it('offers Context with Ontologies, User personas then Visuals; Knowledge is gone (app-shell R3a, BA-320)', () => {

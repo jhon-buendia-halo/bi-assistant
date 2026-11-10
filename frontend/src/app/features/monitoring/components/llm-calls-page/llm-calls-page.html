@@ -1,0 +1,346 @@
+<div class="flex flex-col gap-4" data-testid="llm-calls-page">
+  <!-- Filter bar -->
+  <div
+    class="flex flex-wrap items-end gap-3"
+    role="group"
+    aria-label="Filter LLM calls"
+  >
+    <label class="flex w-44 flex-col gap-1">
+      <span class="field-label">Agent</span>
+      <select
+        data-testid="llm-filter-agent"
+        class="field"
+        (change)="onSelect('agent', $event)"
+      >
+        <option value="" class="bg-surface" [selected]="filters().agent === ''">
+          All agents
+        </option>
+        @for (agent of facets().agents; track agent.id) {
+          <option
+            [value]="agent.id"
+            class="bg-surface"
+            [selected]="filters().agent === agent.id"
+          >
+            {{ agent.name }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <label class="flex w-44 flex-col gap-1">
+      <span class="field-label">Model</span>
+      <select
+        data-testid="llm-filter-model"
+        class="field"
+        (change)="onSelect('model', $event)"
+      >
+        <option value="" class="bg-surface" [selected]="filters().model === ''">
+          All models
+        </option>
+        @for (model of facets().models; track model) {
+          <option
+            [value]="model"
+            class="bg-surface"
+            [selected]="filters().model === model"
+          >
+            {{ model }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <label class="flex w-40 flex-col gap-1">
+      <span class="field-label">Provider</span>
+      <select
+        data-testid="llm-filter-provider"
+        class="field"
+        (change)="onSelect('provider', $event)"
+      >
+        <option
+          value=""
+          class="bg-surface"
+          [selected]="filters().provider === ''"
+        >
+          All providers
+        </option>
+        @for (provider of facets().providers; track provider) {
+          <option
+            [value]="provider"
+            class="bg-surface"
+            [selected]="filters().provider === provider"
+          >
+            {{ provider }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <label class="flex w-36 flex-col gap-1">
+      <span class="field-label">Status</span>
+      <select
+        data-testid="llm-filter-status"
+        class="field"
+        (change)="onSelect('status', $event)"
+      >
+        <option
+          value=""
+          class="bg-surface"
+          [selected]="filters().status === ''"
+        >
+          Any status
+        </option>
+        @for (status of statuses; track status) {
+          <option
+            [value]="status"
+            class="bg-surface"
+            [selected]="filters().status === status"
+          >
+            {{ statusLabels[status] }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <label class="flex w-44 flex-col gap-1">
+      <span class="field-label">Session</span>
+      <select
+        data-testid="llm-filter-session"
+        class="field"
+        (change)="onSelect('session', $event)"
+      >
+        <option
+          value=""
+          class="bg-surface"
+          [selected]="filters().session === ''"
+        >
+          All sessions
+        </option>
+        @for (session of sessionOptions(); track session.id) {
+          <option
+            [value]="session.id"
+            class="bg-surface"
+            [selected]="filters().session === session.id"
+          >
+            {{ sessionLabel(session) }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <label class="flex w-40 flex-col gap-1">
+      <span class="field-label">Date</span>
+      <select
+        data-testid="llm-filter-range"
+        class="field"
+        (change)="onSelect('range', $event)"
+      >
+        @for (range of ranges; track range.value) {
+          <option
+            [value]="range.value"
+            class="bg-surface"
+            [selected]="filters().range === range.value"
+          >
+            {{ range.label }}
+          </option>
+        }
+      </select>
+    </label>
+
+    @if (filters().range === "custom") {
+      <label class="flex w-52 flex-col gap-1">
+        <span class="field-label">From</span>
+        <input
+          type="datetime-local"
+          data-testid="llm-filter-from"
+          class="field"
+          [value]="filters().from"
+          (change)="onSelect('from', $event)"
+        />
+      </label>
+      <label class="flex w-52 flex-col gap-1">
+        <span class="field-label">To</span>
+        <input
+          type="datetime-local"
+          data-testid="llm-filter-to"
+          class="field"
+          [value]="filters().to"
+          (change)="onSelect('to', $event)"
+        />
+      </label>
+    }
+
+    <button
+      type="button"
+      data-testid="llm-filters-clear"
+      class="btn btn-ghost"
+      [disabled]="!state.hasFilters()"
+      (click)="state.clearFilters()"
+    >
+      <lucide-angular [img]="X" [size]="14" />
+      <span>Clear filters</span>
+    </button>
+  </div>
+
+  @if (error(); as err) {
+    <p
+      data-testid="llm-calls-error"
+      role="alert"
+      class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  }
+
+  @if (result() === null) {
+    @if (loading()) {
+      <div
+        class="mt-6 flex items-center gap-2.5 text-fg-muted"
+        data-testid="llm-calls-loading"
+      >
+        <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+        <span>Loading LLM calls…</span>
+      </div>
+    }
+  } @else if (total() === 0) {
+    <div
+      data-testid="llm-calls-empty"
+      class="mt-2 flex flex-col items-start gap-3 rounded-xl border border-dashed border-border px-6 py-8"
+    >
+      <span
+        class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"
+      >
+        <lucide-angular [img]="Activity" [size]="17" />
+      </span>
+      <p class="text-[13px] text-fg">
+        {{
+          state.hasFilters()
+            ? "No LLM calls match these filters."
+            : "No LLM calls yet."
+        }}
+      </p>
+    </div>
+  } @else {
+    <div
+      class="card overflow-x-auto"
+      [class.opacity-60]="loading()"
+      [attr.aria-busy]="loading()"
+    >
+      <table
+        data-testid="llm-calls-table"
+        class="w-full border-collapse text-left text-[12px]"
+      >
+        <thead>
+          <tr
+            class="border-b border-border bg-surface-muted text-[12px] font-medium text-fg-muted"
+          >
+            <th scope="col" class="px-3 py-2 font-medium">Started</th>
+            <th scope="col" class="px-3 py-2 font-medium">Agent</th>
+            <th scope="col" class="px-3 py-2 font-medium">Model</th>
+            <th scope="col" class="px-3 py-2 font-medium">Session</th>
+            <th scope="col" class="px-3 py-2 text-right font-medium">
+              Tokens in / out
+            </th>
+            <th scope="col" class="px-3 py-2 text-right font-medium">
+              Duration
+            </th>
+            <th scope="col" class="px-3 py-2 text-right font-medium">Cost</th>
+            <th scope="col" class="px-3 py-2 font-medium">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr
+              [attr.data-testid]="'llm-call-row-' + row.id"
+              tabindex="0"
+              [attr.aria-label]="'Open the call of ' + formatStarted(row.startedAt)"
+              (click)="open(row)"
+              (keydown.enter)="open(row)"
+              class="cursor-pointer border-b border-border text-fg last:border-b-0 hover:bg-surface-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+            >
+              <td class="px-3 py-2 whitespace-nowrap">
+                {{ formatStarted(row.startedAt) }}
+              </td>
+              <td class="px-3 py-2">
+                {{ row.agent !== null ? row.agent.name : "—" }}
+              </td>
+              <td class="px-3 py-2">
+                <div class="text-fg">{{ row.model }}</div>
+                <div class="text-[11px] text-fg-muted">{{ row.provider }}</div>
+              </td>
+              <td class="max-w-40 truncate px-3 py-2">
+                {{ row.session !== null ? sessionLabel(row.session) : "—" }}
+              </td>
+              <td class="px-3 py-2 text-right whitespace-nowrap tabular-nums">
+                {{ formatTokens(row.inputTokens) }} /
+                {{ formatTokens(row.outputTokens) }}
+              </td>
+              <td class="px-3 py-2 text-right whitespace-nowrap tabular-nums">
+                {{ formatDuration(row.durationMs) }}
+              </td>
+              <td class="px-3 py-2 text-right whitespace-nowrap tabular-nums">
+                {{ formatCost(row.costUsd) }}
+              </td>
+              <td class="px-3 py-2">
+                <span
+                  class="chip px-2 py-0.5 text-[11px]"
+                  [class]="statusChips[row.status]"
+                  [attr.data-testid]="'llm-call-status-' + row.id"
+                  >{{ statusLabels[row.status] }}</span
+                >
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Paging -->
+    <div
+      class="flex flex-wrap items-center justify-end gap-4 text-[12px] text-fg-muted"
+    >
+      <label class="flex items-center gap-2">
+        <span>Rows per page</span>
+        <select
+          data-testid="llm-page-size"
+          class="field w-20"
+          (change)="onPageSize($event)"
+        >
+          @for (size of pageSizes; track size) {
+            <option
+              [value]="size"
+              class="bg-surface"
+              [selected]="state.pageSize() === size"
+            >
+              {{ size }}
+            </option>
+          }
+        </select>
+      </label>
+      <span data-testid="llm-page-summary" class="tabular-nums">{{
+        summary()
+      }}</span>
+      <div class="flex items-center gap-1">
+        <button
+          type="button"
+          data-testid="llm-page-prev"
+          class="btn btn-outline px-2 py-1"
+          [disabled]="!hasPrevious()"
+          (click)="previous()"
+        >
+          <lucide-angular [img]="ChevronLeft" [size]="14" />
+          <span>Previous</span>
+        </button>
+        <button
+          type="button"
+          data-testid="llm-page-next"
+          class="btn btn-outline px-2 py-1"
+          [disabled]="!hasNext()"
+          (click)="next()"
+        >
+          <span>Next</span>
+          <lucide-angular [img]="ChevronRight" [size]="14" />
+        </button>
+      </div>
+    </div>
+  }
+</div>

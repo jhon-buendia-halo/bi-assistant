@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **88 HTTP route handlers** across 14 app controllers (sessions 17, deep analysis 3, agents 17, skills 9, datasources 6, ontology 6, personas 4, visuals 4, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2), plus the 33 routes of the embedded Intellify RFP API (2.16). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **90 HTTP route handlers** across 15 app controllers (sessions 17, deep analysis 3, agents 17, skills 9, datasources 6, ontology 6, personas 4, visuals 4, monitoring 2, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2), plus the 33 routes of the embedded Intellify RFP API (2.16). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
 
 ---
 
@@ -746,6 +746,28 @@ Controller prefix `/visuals`. Capability: [visuals-library](../capabilities/visu
 
 #### 49h. `DELETE /visuals/:id`
 - Response `204` (empty). `404 "Chart not found"`.
+
+### 2.8c Monitoring
+
+Controller prefix `/monitoring`. Capability: [monitoring](../capabilities/monitoring/spec.md). Decision: ADR-0037. **Style B throughout** (real status codes, bare bodies). Both routes are read-only and read Mastra's trace store (`observability.duckdb`, data-model 1.2), not an app collection. A data dir with no trace table yet gives an empty page, not an error.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 111 | `GET /monitoring/llm-calls` | List LLM calls, filtered and paged, newest first | yes |
+| 112 | `GET /monitoring/llm-calls/:id` | One call with its facts, steps and context window | yes |
+
+#### 111. `GET /monitoring/llm-calls`
+- Query (all optional): `page` (whole number >= 1, default 1); `pageSize` (25, 50 or 100, default 25); `agent` (agent id); `model` and `provider` (exact match); `status` (`succeeded`, `failed` or `running`); `session` (session id); `from` and `to` (ISO date-times, inclusive, on the call's start time).
+- Order: start time descending, span id as the tie-break.
+- Response `200`: `{ items: LlmCallRow[], total: number, page: number, pageSize: number, facets: { agents: { id, name }[], models: string[], providers: string[], sessions: { id, name: string|null }[] } }`. `total` counts every call that matches the filters. The facets come from all calls, not narrowed by the filters, sorted by name.
+- Validation `400` (messages exact): `"Page must be a positive whole number"`, `"Page size must be 25, 50 or 100"`, `"Status must be succeeded, failed or running"`, `"From is not a valid date"`, `"To is not a valid date"`.
+- `LlmCallRow`: `{ id, traceId, startedAt: ISO, endedAt: ISO|null, durationMs: number|null, agent: { id, name }|null, model, provider, session: { id, name: string|null }|null, inputTokens: number|null, outputTokens: number|null, cacheReadTokens: number|null, cacheWriteTokens: number|null, reasoningTokens: number|null, costUsd: number|null, status: 'succeeded'|'failed'|'running' }`. `id` is the span id of the call's `model_generation`. `inputTokens` includes the cache reads and writes. `session.name` is read from the sessions collection and is `null` when no such session exists (a preview, an eval, a deleted session). `costUsd` is `null` when the model has no price.
+
+#### 112. `GET /monitoring/llm-calls/:id`
+- Response `200`: `LlmCallDetail` = `LlmCallRow` plus `{ finishReason: string|null, timeToFirstTokenMs: number|null, error: string|null, contextLimit: number|null, contextTokens: number|null, steps: { index, inputTokens: number|null, outputTokens: number|null, finishReason: string|null, durationMs: number|null }[], segments: ContextSegment[] }`.
+- `contextTokens` is the input tokens of the run's last step (the largest request), falling back to the call's input tokens. `contextLimit` comes from the price table and is `null` for an unknown model.
+- `segments` always holds the seven boxes in this order, empty or not: `{ key: 'system-prompt'|'skills'|'tools'|'chat-history'|'dataset'|'user-prompt'|'tool-results', label, owner: 'US Health'|'Custom', chars, tokens, share: 0..1, items: { title, text }[] }`. How each is built and estimated: [monitoring](../capabilities/monitoring/spec.md) R17–R22.
+- `404 "LLM call not found"`.
 
 ### 2.9 Testing data
 

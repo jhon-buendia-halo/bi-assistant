@@ -36,6 +36,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Cross-check.** The result of *careful mode* on one answer: status `agree` (same results), `disagree` (results differ) or `error` (the check could not finish), plus a short note.
 
+**Context window box.** One of the seven parts the Monitoring call page sorts an LLM call's input into: System prompt, Skill injection and Tools injection (owner **US Health**, what the app ships), and Chat history, Dataset, User prompt and Tool calls and results (owner **Custom**, what comes from the user's data and conversation). Each box shows an estimated token count and its exact text. See [monitoring](../capabilities/monitoring/spec.md) R17–R22.
+
 **Custom endpoint.** The *LLM provider* `custom`: a model server the user chooses, such as a self-hosted model (Ollama, LM Studio, vLLM), a gateway (LiteLLM) or a relay, that speaks the OpenAI or Anthropic API. It is set by an *API style*, a base URL, an optional API key and a model, which the user can pick from the server's own model list. See [../capabilities/llm-settings/spec.md](../capabilities/llm-settings/spec.md).
 
 **Data directory.** The folder holding all app data: application database, agent memory, observability data, per-session *workspaces* and the *app secret* file. Desktop and web mode use different data directories on purpose.
@@ -101,6 +103,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Link (skill or tool).** A reference written in an agent's instructions (or, for a tool, in an in-app skill's body) with `/` in the editor: shown as a chip, saved as `[[skill:<name>]]` or `[[tool:<name>]]`. The links decide which skills and optional tools the agent gets, and the model sees each as a plain mention (`the "x" tool`). See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R81-R86 and ADR-0024.
 
 **Live (agent).** The published version of a *user agent*. It is the version that starts sessions. Editing a Live agent changes only its *draft*, and the Live version keeps serving until the draft is published.
+
+**LLM call.** One model call of one agent run, as recorded in the trace store (`observability.duckdb`, a `model_generation` span): its agent, model, provider, session, tokens, duration, estimated cost and status. A run's several requests to the model are its *steps*, inside one LLM call. Listed on the Monitoring page, newest first. See [monitoring](../capabilities/monitoring/spec.md) and ADR-0037.
 
 **LLM provider.** The service the agents call. `openai`, `anthropic`, `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name) or `custom` (a *custom endpoint*, which needs an *API style* and a base URL, and whose API key is optional). One global setting: provider, model, API key (stored encrypted, shown masked), *reasoning effort* and, for `lenai` and `custom`, the base URL (and for `custom` the API style).
 

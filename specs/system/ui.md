@@ -110,7 +110,8 @@ The main column renders exactly one of these views, held in a single "main view"
 | `sessions` | rail **Sessions** (also from a chat or the composer); deleting the open session | Sessions | page header ("Sessions") + the Sessions list (4.7.1) | Entity details |
 | `conversation-new` | **Start New Conversation** in the page header or on the empty Sessions list | Sessions | page header ("New conversation") + New-session composer (4.7) | Entity details |
 | `session-chat` | a session row on the Sessions page, or creating a session | Sessions | page header (session name + datasource context) + Session chat (4.12) | Session panel (4.13) |
-| `monitoring` | rail **Monitoring** | Monitoring | Monitoring page: `h2` "Monitoring" (20 px light, like Context) and the note "Nothing to monitor yet." (13 px `fg-muted`), `data-testid="monitoring-page"`; empty for now (app-shell R3b) | Entity details |
+| `monitoring` | rail **Monitoring** (also from a call page) | Monitoring | Monitoring page: `h2` "Monitoring" (20 px light, like Context) and the note "LLM calls made by the app's agents, newest first." (13 px `fg-muted`), `data-testid="monitoring-page"`, then the LLM calls table (4.8d) (app-shell R3b) | Entity details |
+| `llm-call` | a row of the LLM calls table | Monitoring | **Monitoring** back control (`llm-call-back`) + the call page (4.8e) | Entity details |
 | Settings area, section `datasources` / `llm` / `testing-data` / `developer` / `appearance` | rail **Settings**, then a section | Settings | Settings list pane + the matching form (4.9-4.12, 4.16), centred column | Entity details |
 
 - Content views (everything except the chat) sit in a vertically scrolling, horizontally centred column with 24 px horizontal / 24 px vertical padding and a max width of 960 px (settings forms: 560 px for datasources, testing data, developer and appearance, 480 px for LLM, 24 px horizontal padding).
@@ -481,6 +482,26 @@ Capability: [visuals-library](../capabilities/visuals-library/spec.md).
 - States: loading; load error `Could not load charts`; empty "No charts yet." (dashed `border` box with **Add chart**); no match "No charts match your search."; populated.
 - Editor (`visual-chart-form`; a `surface-muted` box, 1 px `border`, radius 12): for **Add chart** it sits at the top of the list; for an existing chart it replaces that chart's card in place, spanning the full row of the grid, and is scrolled into view. Fields: **Name**, **Category** (an input with a datalist of the existing categories), **Preview** (a select of the preview keys with "No preview", and a live `app-visual-preview` beside it), **Drawn by the app as** (a select: "Not drawn by the app" then the renderer forms), **Description**, **When to use**, **When to avoid** (textareas), **Data needed** and **Enabled** (checkbox). Buttons: `btn btn-outline` **Cancel**, `btn btn-primary` **Save** (disabled while the name or category is blank), and for an existing chart a `btn btn-danger` **Delete**, which asks for confirmation. One form is open at a time. A backend message (for example a duplicate name) is shown inline (`role="alert"`).
 
+### 4.8d Monitoring: LLM calls table
+
+Capability: [monitoring](../capabilities/monitoring/spec.md). Shown by the `monitoring` main view (`app-llm-calls-page`), under the heading and note of the main-view table.
+
+- Filter bar (a wrapping row, 8 px gap): selects **Agent** ("All agents", `llm-filter-agent`), **Model** ("All models", `llm-filter-model`), **Provider** ("All providers", `llm-filter-provider`), **Status** ("Any status", Succeeded, Failed, Running, `llm-filter-status`), **Session** ("All sessions", `llm-filter-session`) and **Date** ("Any time", "Last hour", "Last 24 hours", "Last 7 days", "Custom", `llm-filter-range`); with Custom, two `datetime-local` inputs **From** (`llm-filter-from`) and **To** (`llm-filter-to`). Then a `btn btn-outline` **Clear filters** (`llm-filters-clear`), disabled when nothing is set. A session without a name is shown as the first 8 characters of its id.
+- Table (`llm-calls-table`), in a `card`: columns Started (local date and time), Agent, Model (the provider under it, 11 px `fg-muted`), Session, Tokens in / out (`61,185 / 2,445`), Duration (`17.3 s`), Cost (`$0.0213`, a dash when unknown) and Status (a `chip`: `chip-success` Succeeded, `chip-danger` Failed, `chip-neutral` Running). A row is a button (`llm-call-row-<id>`), focus outline, Enter opens it.
+- Footer: the range (`llm-page-summary`, `1–25 of 132`), a **Rows per page** select (`llm-page-size`, 25, 50, 100), **Previous** (`llm-page-prev`) and **Next** (`llm-page-next`), each disabled at its end.
+- States: loading; an inline error (`role="alert"`); empty "No LLM calls yet." or "No LLM calls match these filters." (`llm-calls-empty`).
+- The filters, page and page size live in a root-scoped state, so they are kept when a call is opened and the user comes back.
+
+### 4.8e Monitoring: LLM call page
+
+Capability: [monitoring](../capabilities/monitoring/spec.md). The `llm-call` main view, `app-llm-call-detail` (`llm-call-detail`), under a `btn btn-ghost` **Monitoring** back control (`llm-call-back`, the look of the Context back control) that returns to the table.
+
+- Heading: `h2` "<agent name or Model call> · <model>". Under it a facts grid: Started, Duration, Time to first token, Status, Session (a link that opens the session's chat when it has a name), Provider, Finish reason, Tokens in (with "cache read X · cache write Y"), Tokens out (with "reasoning Z") and Estimated cost. A failed call shows its error in a danger box.
+- **Context window** (`h3`): a caption `≈ 17,647 tokens of 1,000,000 (1.8 %)` (without a limit `≈ 17,647 tokens`); a stacked horizontal bar (`context-bar`), one part per non-empty box with a `title` tooltip `<Label>: ≈ <N> tokens (<P> %)`, and a legend. Each box has its own colour token `--qti-context-<box key>` (Light / Dark): system-prompt `#0b41ad` / `#5b95ff`, skills `#7c3aed` / `#b394ff`, tools `#0e7c86` / `#4fd1c5`, chat-history `#b45309` / `#f6ad55`, dataset `#15803d` / `#6ee7a0`, user-prompt `#be185d` / `#f78fbf`, tool-results `#64748b` / `#a0aec0`.
+- The seven boxes in order (`context-segment-<key>`, keys `system-prompt`, `skills`, `tools`, `chat-history`, `dataset`, `user-prompt`, `tool-results`), each a `card`: the label, an owner chip (`chip-info` "US Health" for the first three, `chip-neutral` "Custom" for the rest), `≈ N tokens · P %`, the item count, and a **Show text** / **Hide text** button (`context-segment-toggle-<key>`, `aria-expanded`). Expanded, each item shows its title and its text in a monospace block that wraps and scrolls (max height about 320 px). An empty box shows "Nothing in this call.".
+- **Steps** (`h3`): a table (`llm-call-steps`) with Step, Tokens in, Tokens out, Finish reason and Duration.
+- States: loading; the message `LLM call not found` or another load error inline (`role="alert"`).
+
 ### 4.9 LLM configuration (settings)
 
 Capability: [llm-settings](../capabilities/llm-settings/spec.md).
@@ -750,7 +771,7 @@ Strings below are asserted by the Playwright suite or are user-facing contracts.
 |---|---|
 | Page heading (banner `h1`) | `US Health Agentic Hub` |
 | Window / document title | `Agentic Hub` (OS app name stays `Halo BI Assistant`) |
-| Rail buttons (title and aria-label) | `Expand navigation` / `Collapse navigation` (menu button), `Datasets`, `Agents`, `Context`, `Sessions`, `Settings`; `Open system logs` (title `System logs and diagnostics`) |
+| Rail buttons (title and aria-label) | `Expand navigation` / `Collapse navigation` (menu button), `Datasets`, `Agents`, `Context`, `Sessions`, `Monitoring`, `Settings`; `Open system logs` (title `System logs and diagnostics`) |
 | Drawer labels | `Agentic Hub`, `System logs`, `Settings`; LenAI mark `Powered by LenAI` |
 | Sessions area | `Sessions`, `New conversation` (page title of the composer), `Start New Conversation`, `Session options`, `Options for <session name>`, `Search sessions by name or ID…`, `Session ID copied`, `<first>–<last> of <total>`, `Previous page`, `Next page`, `Page <n> of <pages>`, `Loading sessions…`, `No sessions yet. Start a new conversation or open an agent.`, `No sessions match "<query>".` |
 | Shell aria-labels | `Navigation rail`, `Workspace navigation`, `Sessions`, `Settings navigation`, `Details panel` |

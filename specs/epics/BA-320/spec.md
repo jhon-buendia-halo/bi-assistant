@@ -42,6 +42,8 @@ A second built-in data-analyst agent, **Questions to Insights v2**, is built up 
 | — (no Jira, repo only) | Ontologies on the Context page | 1.21.11 |
 | — (no Jira, repo only) | Visuals library on the Context page | 1.21.12 |
 | — (no Jira, repo only) | Monitoring item on the navigation rail | 1.21.13 |
+| — (no Jira, repo only) | LLM calls table on the Monitoring page (filters, paging, estimated cost; ADR-0037) | 1.21.14 |
+| — (no Jira, repo only) | LLM call detail with its context window in seven boxes | 1.21.15 |
 
 Later stories (the reductions) are added here as they are defined. From 2026-11-09 stories are tracked only in the repo, not in Jira.
 
@@ -60,6 +62,7 @@ Later stories (the reductions) are added here as they are defined. From 2026-11-
 - 1.21.6: the new capability [capabilities/user-personas](../../capabilities/user-personas/spec.md); [capabilities/app-shell](../../capabilities/app-shell/spec.md) R3a; [system/api.md](../../system/api.md) (`/personas`); [system/data-model.md](../../system/data-model.md) (`user_personas`); [system/ui.md](../../system/ui.md) (the User personas section).
 - 1.21.12: the new capability [capabilities/visuals-library](../../capabilities/visuals-library/spec.md); [capabilities/app-shell](../../capabilities/app-shell/spec.md) R3a and its Context scenario; [system/api.md](../../system/api.md) (`/visuals`); [system/data-model.md](../../system/data-model.md) (`visual_charts`, the `visuals-seed` settings key); [system/ui.md](../../system/ui.md) (the Visuals library section); [product/glossary.md](../../product/glossary.md) (Visuals library).
 - 1.21.13: [capabilities/app-shell](../../capabilities/app-shell/spec.md) R3, R3b, R37 and the rail scenario; [system/ui.md](../../system/ui.md) (rail items, the `monitoring` view).
+- 1.21.14–1.21.15 (ADR-0037): the new capability [capabilities/monitoring](../../capabilities/monitoring/spec.md); [capabilities/app-shell](../../capabilities/app-shell/spec.md) R3b and its Monitoring scenario; [system/architecture.md](../../system/architecture.md) (ADR-0037); [system/api.md](../../system/api.md) (2.8c, `/monitoring`); [system/data-model.md](../../system/data-model.md) (1.2, `span_events` read by Monitoring); [system/ui.md](../../system/ui.md) (4.8d, 4.8e, the `monitoring` and `llm-call` views); [product/glossary.md](../../product/glossary.md) (LLM call, Context window box).
 
 - 1.21.7–1.21.9 (ADR-0036; contract [docs/plans/ba-320-dataset-ontology.md](../../../docs/plans/ba-320-dataset-ontology.md)): the new capability `dataset-ontology` replacing `knowledge`; [system/data-model.md](../../system/data-model.md) (`ontology_items`, M15); [system/api.md](../../system/api.md); [system/agents.md](../../system/agents.md) (Block 3, 2.5, Appendix B); [system/ui.md](../../system/ui.md); [capabilities/datasets](../../capabilities/datasets/spec.md); [capabilities/app-shell](../../capabilities/app-shell/spec.md) R3a; [capabilities/sessions-chat](../../capabilities/sessions-chat/spec.md); [epics/BA-4](../BA-4/spec.md).
 
