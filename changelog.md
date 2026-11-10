@@ -52,6 +52,9 @@ Running log of every meaningful change, newest first. See *Logging convention* a
   - **`schema-notes` eval set** (BA-318): kept as `main` wrote it, defined in code after the file sets (agents-evals R11, R247; [agents.md](specs/system/agents.md) 8.1).
   - **Frontend bundle** ([tech-stack.md](specs/system/tech-stack.md)): the initial bundle's error budget is 1.1 MB, from 1 MB (`main` 986 kB plus the BA-9 eval screens made 1,003 kB).
   - Evidence: [evidence/merge-main-2026-11-10/](evidence/merge-main-2026-11-10/): backend 192 suites, 3307 tests; frontend 541 of 541; impacted E2E 87 of 88 on web (the one failure is a visual baseline missing for macOS web, on `main` too).
+- **`main` (v0.45.0) merged into the BA-9 branch** (PR #81), and into PRs #60 and #61 (#61 through the updated #60). v0.45.0 is BA-320's visuals library (roadmap 1.21.12), which no agent, context block or eval run reads ([visuals-library](specs/capabilities/visuals-library/spec.md) R15). No conflicts and no id collisions.
+  - **PR #91 checked ahead** ([pr91-preview.md](evidence/merge-main-2026-11-10-v0.45.0/pr91-preview.md)): once BA-159 merges, #61 conflicts in `specs/system/architecture.md` (ADR-0037 and ADR-0038 added at the same place) and #81 in `specs/system/agents.md` (one sentence on `EVAL_LLM_PROVIDER`); #60 stays clean.
+  - Evidence: [evidence/merge-main-2026-11-10-v0.45.0/](evidence/merge-main-2026-11-10-v0.45.0/): backend 194 suites, 3336 tests; frontend 567 of 567; production build 1.00 MB initial, within the 1.1 MB budget; `check-specs` on all three branches. E2E not run.
 
 ### Fixed
 - **Ontology suggestions failed with "Too big"** (1.21.9): the bootstrap's structured output capped drafts at 15, which the model exceeded (`Structured output validation failed: drafts: Too big`); the cap now applies after post-processing. Evidence: [evidence/1.21.9/](evidence/1.21.9/).

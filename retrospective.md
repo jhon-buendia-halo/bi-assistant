@@ -14,6 +14,21 @@ Entry template:
 
 ---
 
+## 2026-11-10 — Merge of `main` (v0.45.0) into the BA-9, BA-123 and BA-124 branches (PRs #81, #61, #60)
+
+### What went well
+- Simulating `main` plus the open PR #91 (`merge-tree` into an unreferenced `commit-tree` commit) showed the two conflicts that #91 will cause before it merges, with no ref touched and without pulling an unreviewed PR into ours.
+- Listing the numbered ids v0.45.0 adds (api.md 2.8b and 49e to 49h, data-model.md 3.9b, ui.md 4.8c) and grepping each branch for them took a minute and settled the id question for a clean merge.
+
+### What went wrong
+- A duplicate-heading check after the merge found api.md endpoints 53 to 57 and ui.md section 4.12 numbered twice. Both were on `main` already; nobody had checked for repeats when those sections were added.
+
+### What to do differently
+- Before merging `main`, also simulate each open PR that will merge next against the branch, and record the expected conflicts with their resolution.
+- After any merge that touches numbered specs, grep the merged files for repeated headings, and compare with `main` before calling a repeat new.
+
+---
+
 ## 2026-11-10 — 1.21.12 Visuals library on the Context page (BA-320)
 
 ### What went well
