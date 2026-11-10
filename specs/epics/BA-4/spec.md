@@ -18,6 +18,8 @@ Curated knowledge the assistant treats as authoritative: business-glossary terms
 ## Stories
 | Story | Summary | Roadmap feature |
 |---|---|---|
+| [BA-123](https://halo-powered.atlassian.net/browse/BA-123) | Knowledge Store — Research | 1.3.5 |
+| [BA-124](https://halo-powered.atlassian.net/browse/BA-124) | Knowledge Store — Execution plan | 1.3.6 |
 | [BA-78](https://halo-powered.atlassian.net/browse/BA-78) | Research and ontology design (moved to BA-320 as 1.21.7–1.21.9 on 2026-11-09) | 1.3.1 |
 | [BA-79](https://halo-powered.atlassian.net/browse/BA-79) | Ontology model, knowledge graph and bootstrap (moved to BA-320 as 1.21.7–1.21.9 on 2026-11-09) | 1.3.2 |
 | [BA-80](https://halo-powered.atlassian.net/browse/BA-80) | Ontology-grounded retrieval and SQL generation, measured by evals | 1.3.3 |
@@ -37,6 +39,7 @@ Per story, from Jira and the roadmap:
 - An analyst can fix a wrong answer by editing a concept and the next answer cites it (BA-81).
 
 ## Dependencies, risks and open questions
+- **Research:** [docs/research/BA-4.md](../../../docs/research/BA-4.md) (BA-123) holds the findings, options and recommendation, and the decision record BA-78 asks for. The ADR itself is still to be written (BA-124).
 - **Built since:** the flat knowledge snippets became each dataset's ontology (concepts with column mappings, relations, constraints, instructions; shared items; bootstrap from schema, samples, references and metrics) under BA-320 (1.21.7–1.21.9), so BA-78 and BA-79 are delivered there. Open for BA-80 and BA-81: retrieval by question relevance, SQL checks against the ontology, feedback learning and provenance.
 - BA-80 depends on the ontology built in BA-320 (1.21.7) and the golden dataset ([BA-9](../BA-9/spec.md)); BA-81's provenance display ties into [BA-12](../BA-12/spec.md).
 - Depends on the DSL's logical references ([BA-2](../BA-2/spec.md)), which are not on `main` yet.
