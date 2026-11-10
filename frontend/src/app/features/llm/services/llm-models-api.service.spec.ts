@@ -44,4 +44,11 @@ describe('LlmModelsApiService', () => {
     req.flush({ ok: true, models: ['qwen3-8b'] });
     expect(result).toEqual({ ok: true, models: ['qwen3-8b'] });
   });
+
+  it('posts the copilot request body unchanged', () => {
+    service.listModels({ provider: 'copilot' }).subscribe();
+    const req = http.expectOne(`${API_BASE_URL}/llm/models`);
+    expect(req.request.body).toEqual({ provider: 'copilot' });
+    req.flush({ ok: true, models: [] });
+  });
 });

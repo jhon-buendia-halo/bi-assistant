@@ -23,7 +23,8 @@ export const otherHttpMessage = (status: number, body: string): string =>
   `Provider request failed (${status}) — ${body.slice(0, 300)}`;
 
 /** `POST /llm/models` (R48). */
-export const MODELS_PROVIDER_INVALID = 'provider must be custom to load models';
+export const MODELS_PROVIDER_INVALID =
+  'provider must be custom or copilot to load models';
 export const MODELS_TIMEOUT_MESSAGE = 'Model list request timed out after 15s';
 export const MODELS_UNREADABLE_MESSAGE =
   'The endpoint did not return a model list — type the model name instead';

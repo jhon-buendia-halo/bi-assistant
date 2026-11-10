@@ -42,6 +42,27 @@ describe('resolveVisualizationModel', () => {
     apiKey: 'sk-ant-secret',
   };
 
+  describe('GitHub Copilot', () => {
+    it('is never swapped, even for a nano or gpt-5 model', async () => {
+      for (const id of [
+        'copilot/gpt-5-nano',
+        'copilot/gpt-5',
+        'copilot/auto',
+      ]) {
+        const config = { kind: 'copilot' as const, id };
+        await expect(resolvedFrom(config)).resolves.toEqual(config);
+      }
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('VISUAL_MODEL moves only the model name, keeping the kind', async () => {
+      process.env.VISUAL_MODEL = 'openai/gpt-4.1';
+      await expect(
+        resolvedFrom({ kind: 'copilot', id: 'copilot/auto' }),
+      ).resolves.toEqual({ kind: 'copilot', id: 'copilot/gpt-4.1' });
+    });
+  });
+
   describe('public and gateway models (unchanged behaviour)', () => {
     it('swaps a gpt-5 router id for the mini fallback', async () => {
       await expect(resolvedFrom('openai/gpt-5-mini')).resolves.toBe(

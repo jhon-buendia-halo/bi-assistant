@@ -1,6 +1,6 @@
 # LLM settings
 
-The user chooses which language model powers every agent in the app: a provider, a model (or deployment name), an API key and, for Halo's gateway or a custom endpoint, a base URL. A custom endpoint is any model server the user controls or chooses (a self-hosted model, a gateway or a relay) that speaks the OpenAI or the Anthropic API; its key is optional and its models can be listed from the server. The configuration is proven to work before it is saved, the key is stored encrypted and is never shown again, and the choice applies to the very next agent call without restarting anything. A single global reasoning-effort setting tunes how hard models that support it think, chosen from the levels the selected model accepts.
+The user chooses which language model powers every agent in the app: a provider, a model (or deployment name), an API key and, for Halo's gateway or a custom endpoint, a base URL. A custom endpoint is any model server the user controls or chooses (a self-hosted model, a gateway or a relay) that speaks the OpenAI or the Anthropic API; its key is optional and its models can be listed from the server. The configuration is proven to work before it is saved, the key is stored encrypted and is never shown again, and the choice applies to the very next agent call without restarting anything. A developer with a GitHub Copilot seat can instead pick GitHub Copilot, which needs no key: the app uses the GitHub login already on the machine and runs every agent on that seat. A single global reasoning-effort setting tunes how hard models that support it think, chosen from the levels the selected model accepts.
 
 ## Concepts
 
@@ -12,16 +12,17 @@ Capability-local vocabulary:
 - **Model route** — the provider-qualified identifier an agent call uses, `<provider>/<model>`.
 - **API style** — for `custom`, which API the endpoint speaks: `openai` (shown as "OpenAI-compatible") or `anthropic` ("Anthropic-compatible").
 - **Endpoint host** — the host of a custom base URL, with its port when the URL names one (e.g. `127.0.0.1:8317`).
+- **Copilot runtime** — the local process the official Copilot SDK drives; it signs in with the machine's GitHub login and talks to GitHub Copilot ([../../product/glossary.md](../../product/glossary.md), [../../system/architecture.md](../../system/architecture.md) ADR-0037).
 - **Effort levels** — the reasoning-effort values a model accepts, lowest first, from the built-in table in [../../system/agents.md](../../system/agents.md) 1.4 (see R36 to R41).
 
 ## Rules
 
 Configuration
-- R1. The system SHALL support exactly four providers: `openai` (shown as "OpenAI"), `anthropic` ("Anthropic"), `lenai` ("LenAI (Halo gateway)") and `custom` ("Custom endpoint"). Any other provider SHALL be rejected with `provider must be one of: openai, anthropic, lenai, custom`.
-- R2. There SHALL be one global configuration, used by every agent and every session. It SHALL hold: provider, API style (only for `custom`), model, base URL (may be empty), the encrypted API key (may be absent only for `custom`) and the reasoning effort.
-- R3. The model SHALL be a free-text, non-empty value after trimming; otherwise `model is required`. For `lenai` it is labelled "Deployment name".
+- R1. The system SHALL support exactly five providers: `openai` (shown as "OpenAI"), `anthropic` ("Anthropic"), `lenai` ("LenAI (Halo gateway)"), `custom` ("Custom endpoint") and `copilot` ("GitHub Copilot"). Any other provider SHALL be rejected with `provider must be one of: openai, anthropic, lenai, custom, copilot`.
+- R2. There SHALL be one global configuration, used by every agent and every session. It SHALL hold: provider, API style (only for `custom`), model, base URL (may be empty; always empty for `copilot`), the encrypted API key (absent for `copilot`, and may be absent for `custom`) and the reasoning effort.
+- R3. The model SHALL be a free-text, non-empty value after trimming; otherwise `model is required`. For `lenai` it is labelled "Deployment name". For `copilot` a blank or omitted model SHALL mean `auto` and be stored as `auto` (R56).
 - R4. For `lenai`, the base URL SHALL be required (`baseUrl is required for lenai`). It is the gateway root. Requests for a deployment SHALL go to `<base URL without trailing slashes>/openai/v1/deployments/<deployment>`, carrying the key both as a bearer credential and in an `X-Api-Key` header.
-- R5. For `openai` and `anthropic` the base URL SHALL NOT be required and SHALL NOT be used: `openai` goes to the provider's public API and `anthropic` to its native API. For every provider except `custom`, an API style SHALL be ignored and not stored.
+- R5. For `openai` and `anthropic` the base URL SHALL NOT be required and SHALL NOT be used: `openai` goes to the provider's public API and `anthropic` to its native API. For every provider except `custom`, an API style SHALL be ignored and not stored. For `copilot`, a submitted API key, base URL and API style SHALL all be ignored and not stored (R55).
 - R6. For `openai`, `anthropic` and `lenai` the API key SHALL be required the first time. When a request omits the key or sends a blank one, the system SHALL use the stored key; if none is stored, it SHALL fail with `apiKey is required — none stored yet`. Switching from `custom` to another provider SHALL follow this rule unchanged. For `custom` the key is optional (R47).
 - R7. Reasoning effort SHALL default to `high`. The composer menu (R8) SHALL set only `low`, `medium` or `high`; setting any other value there SHALL fail with `reasoning effort must be one of: low, medium, high`, and setting it before any configuration has been saved SHALL fail with `Configure and save the LLM first — no settings stored yet`. Saving SHALL store the effort chosen in Settings (R38), or, when none is sent, keep the stored effort if the model accepts it and otherwise use the model's default (R36).
 - R8. The reasoning effort SHALL be changeable from the new-session composer (a small chip beside the model name) without opening Settings. Success shows "Reasoning effort set to <effort>".
@@ -97,12 +98,26 @@ Custom endpoint
 - R53. Wherever the app names the provider (the agent catalogue, the agent page's Model tab, Settings), `custom` SHALL read "Custom endpoint". The new-session composer SHALL show a `custom` model as `<model> · <endpoint host>`.
 - R54. No API key, of any provider, SHALL appear in an API response, a log line or the desktop diagnostics, apart from the masked form of R10. Error texts (R18, R50) SHALL NOT echo request headers. Values of `Authorization` and `x-api-key` headers SHALL be redacted wherever requests or errors are logged.
 
+GitHub Copilot
+- R55. For `copilot` the system SHALL use the GitHub login already on the machine (the GitHub CLI, the GitHub Copilot CLI or the GitHub Copilot app), through the local Copilot runtime, and SHALL store no GitHub credential. The configuration SHALL hold only the provider, the model and the reasoning effort. Saving a `copilot` configuration SHALL remove any stored API key, so switching later from `copilot` to `openai`, `anthropic` or `lenai` with a blank key SHALL fail with `apiKey is required — none stored yet` (R6).
+- R56. The model `auto` SHALL let Copilot pick a model from the seat's plan. Any other typed name SHALL be passed to Copilot as is; the system SHALL NOT check it against a list.
+- R57. The user SHALL be able to see, before testing, whether the machine is signed in to GitHub. The status SHALL carry whether it is signed in, the GitHub login, how it signed in, and a message: `Signed in to GitHub as <login>` when signed in; otherwise `Not signed in to GitHub — run "gh auth login" (or sign in to the GitHub Copilot CLI or app) on this machine, then test again`; and, when the Copilot runtime cannot start, `The GitHub Copilot runtime could not start — <detail>` (not signed in).
+- R58. Testing a `copilot` configuration SHALL first check the sign-in, failing with the not-signed-in (or could-not-start) text of R57 and saving nothing. It SHALL then run the probe of R14 through the same agent runtime the app uses for real calls (as R19), with the timeout of R16, and report a pass as `Connection successful — copilot/<model> replied "<status>" in <N>ms`. A Copilot request error SHALL be reported as `GitHub Copilot request failed — <message>`; a reply that is not the required JSON SHALL be reported with the structured-output text of R18.
+- R59. The user SHALL be able to list the models of the signed-in seat before saving. The request carries only the provider `copilot`. It SHALL answer, in the body with an ok flag, the model ids the Copilot runtime lists, in its order with duplicates removed, possibly none (a Copilot Free seat lists none and always uses `auto`). Not signed in SHALL report the text of R57. The list SHALL time out after 15 seconds (`Model list request timed out after 15s`). Nothing SHALL be persisted.
+- R60. Effort levels for a `copilot` model SHALL be chosen by its model name, as R36, restricted to the levels the Copilot runtime accepts (`low`, `medium`, `high`, `xhigh`, `max`): `none` and `minimal` are dropped, and a model left with no levels has none. `auto` SHALL have no levels. The effort SHALL be sent as the Copilot session's reasoning effort, mapped as R41, and not at all for a model without levels.
+- R61. Every agent on `copilot` SHALL keep its own tools, prompt, skills and structured outputs. Copilot's own built-in tools (shell, files, its own skills and sub-agents) SHALL never be enabled, and the app's tool calls SHALL be run by the app, exactly as on the other providers.
+- R62. Chat answers on `copilot` SHALL stream word by word, as on the other providers.
+- R63. A Copilot session left waiting for the app's tool results SHALL be closed after 10 minutes. Stopping a turn (Stop, or leaving the page) SHALL close its Copilot session.
+- R64. When a chat turn fails on `copilot`, the session SHALL show `GitHub Copilot request failed — <message>`, or the not-signed-in or could-not-start text of R57, as the turn's error.
+- R65. `copilot` SHALL read "GitHub Copilot" wherever the app names the provider (the agent catalogue, the agent page's Model tab, Settings). The new-session composer SHALL show a `copilot` model as `<model> · GitHub Copilot`.
+- R66. When a Copilot model ends a step that offers tools by writing, as its whole message, a JSON object that fits exactly one of those tools' arguments (every required argument, no unknown key), instead of calling the tool, the system SHALL NOT show that message. It SHALL ask the model once, in the same Copilot session, to call that tool, and continue with its answer. Text that only starts like JSON SHALL be held until it is clearly not such a message, then shown unchanged. Structured-output requests SHALL be left alone.
+
 Availability
 - R43. There SHALL be one LLM configuration for the whole server. Reading it, saving it, testing a connection and changing the reasoning effort SHALL all be available to the user: the LLM Configuration section and the composer's Reasoning effort control are always shown, and the settings view always carries the masked key (never the key itself).
 
 ## Edge cases and errors
 
-- Switching provider in the form keeps the typed model and key; the placeholder example changes (`gpt-4o-mini`, `claude-sonnet-5-5`, `my-deployment`, and `llama3.1:8b` for Custom endpoint). Switching the API style keeps the base URL as typed; the hint below it shows which form that style expects.
+- Switching provider in the form keeps the typed model and key; the placeholder example changes (`gpt-4o-mini`, `claude-sonnet-5-5`, `my-deployment`, `llama3.1:8b` for Custom endpoint, and `auto` for GitHub Copilot). Switching the API style keeps the base URL as typed; the hint below it shows which form that style expects.
 - An OpenAI-style URL typed without its version path (`http://127.0.0.1:8317`) is not corrected: the endpoint usually answers 404, and the R50 text points at `/v1`. An Anthropic-style URL typed with `/v1` is accepted (R46).
 - A keyless `custom` configuration can't be given a key later by leaving the field blank; typing a key and saving stores it. A stored `custom` key can't be removed from the form except by saving a different provider. Open question: add a "clear key" control.
 - A stored key of another provider is never sent to a custom endpoint (R47), so switching from OpenAI to Custom endpoint with a blank key calls the endpoint without a credential. Switching from Custom endpoint back to OpenAI, Anthropic or LenAI with a blank key fails with `apiKey is required — none stored yet` (R6): the custom key is never sent to a public provider.
@@ -116,21 +131,27 @@ Availability
 - Typing a key and leaving it in the field after a successful save is harmless: it is sent again on the next test or save and replaces the stored one.
 - If the app secret changes (a lost secret file on a new install, a different `APP_SECRET`), the stored key can no longer be decrypted. Only a key under the former development secret is recovered (R33); any other must be entered again (R34, R35).
 - Masking shows the last four characters; a key of four characters or fewer would be shown whole, which conflicts with R54. Custom endpoints make this likely (placeholder keys such as `none` or `sk-x`). Open question: pad or fully hide very short keys.
+- **GitHub Copilot on a Copilot Free seat:** the seat can't choose a model. Whatever the model, Copilot answers with a model it picks, and **Load models** returns an empty list; `auto` is the honest setting (R56, R59).
+- **GitHub Copilot allowance used up:** each prompt counts against the user's Copilot allowance. When it runs out, the probe and chat turns fail with `GitHub Copilot request failed — <message>` carrying Copilot's own text (R58, R64).
+- **GitHub Copilot and the app secret:** `copilot` stores no key, so a changed app secret never asks for one again (R34, R35 do not apply).
+- **GitHub Copilot sign-out after saving:** the saved configuration stays; the next chat turn fails with the not-signed-in text of R57 until the machine signs in again.
+- **Earlier turns on GitHub Copilot:** a step that starts without a live Copilot session sends the earlier conversation as one rendered prompt rather than separate messages ([../../system/architecture.md](../../system/architecture.md) ADR-0037).
 - A backend that is unreachable during load leaves the form empty and shows no toast.
 - The composer menu offers only `low`, `medium`, `high`. An effort saved from Settings outside that list (such as `minimal`) shows as the current value but can't be re-selected there; extending the per-model levels to the composer and the agent editor is a possible follow-up (epic [BA-159](../../epics/BA-159/spec.md)).
 - The effort table is fixed in the app. A provider that adds or drops levels for a family needs a table update; until then the unknown-name fallback (R36) keeps new names usable.
 
 ## Contracts
 
-- Endpoints `GET /llm/settings`, `PUT /llm/settings`, `PUT /llm/reasoning`, `POST /llm/test-connection`, `POST /llm/models`: [../../system/api.md](../../system/api.md).
+- Endpoints `GET /llm/settings`, `PUT /llm/settings`, `PUT /llm/reasoning`, `POST /llm/test-connection`, `POST /llm/models`, `GET /llm/copilot/status`: [../../system/api.md](../../system/api.md).
 - Persisted single settings document (key `llm`; provider, API style, model, base URL, encrypted key (optional for `custom`), reasoning effort, timestamps): [../../system/data-model.md](../../system/data-model.md).
 - Model routing per agent (including the plain-data and built-model forms of a custom route), tuning per provider, the visual-designer exception, the connection-probe prompt and the eval runner's custom-endpoint settings: [../../system/agents.md](../../system/agents.md).
 - Why Anthropic-compatible endpoints are built outside the runtime's router, and keyless endpoints: [../../system/architecture.md](../../system/architecture.md) ADR-0032.
+- Why GitHub Copilot runs through the official Copilot SDK with the app keeping the tool loop: [../../system/architecture.md](../../system/architecture.md) ADR-0037.
 - App secret handling, key-at-rest policy and redaction: [../../product/non-functional.md](../../product/non-functional.md).
 
 ## UI
 
-Settings area, **LLM Configuration** ([../app-shell/spec.md](../app-shell/spec.md), [../../system/ui.md](../../system/ui.md)). The form, top to bottom: heading "LLM Configuration" with "Configure the language-model provider and verify the credentials."; **Provider** select (OpenAI, Anthropic, LenAI (Halo gateway), Custom endpoint); for Custom endpoint, before the model so its models can be listed, an **API style** select (OpenAI-compatible, the default, or Anthropic-compatible), a required **Base URL** box whose hint follows the API style (OpenAI-compatible "Include the version path, e.g. http://127.0.0.1:8317/v1; requests use <base URL>/chat/completions.", Anthropic-compatible "Server root, e.g. http://127.0.0.1:8317; requests use <base URL>/v1/messages.") and an **API key (optional)** password box (placeholder "Leave blank if the server needs none", or the masked saved key); **Model** (or **Deployment name**) text box, for Custom endpoint with a **Load models** button beside it, enabled when a base URL is entered and no load is running, reading "Loading models…" while it runs: on success the model box offers the loaded names as a dropdown while still accepting any typed name, an empty list shows "The endpoint listed no models — type the model name." in that dropdown, and a failure shows the R48 or R50 message as an error toast; **Reasoning effort** select (always shown; disabled with a `Default — …` option when the model is empty or has no effort levels, R37); for LenAI a **Base URL** box with the hint "Gateway root; requests use <base URL>/openai/v1/deployments/<deployment>."; for OpenAI, Anthropic and LenAI an **API key** password box; **Test connection** button; **Save connection** button (tooltip "Test the connection successfully before saving"). States: empty (nothing saved), populated (saved values, masked key placeholder), key unreadable (saved values without a key, plus the notice "Your saved API key can't be read because the app secret changed. Enter the key again, test and save."), testing, saving, tested-ok (Save enabled). Results appear as toasts. The new-session composer shows the saved model name (for Custom endpoint `<model> · <endpoint host>`, R53; or "No model configured") and a reasoning-effort chip (Low, Medium, High).
+Settings area, **LLM Configuration** ([../app-shell/spec.md](../app-shell/spec.md), [../../system/ui.md](../../system/ui.md)). The form, top to bottom: heading "LLM Configuration" with "Configure the language-model provider and verify the credentials."; **Provider** select (OpenAI, Anthropic, LenAI (Halo gateway), Custom endpoint); for Custom endpoint, before the model so its models can be listed, an **API style** select (OpenAI-compatible, the default, or Anthropic-compatible), a required **Base URL** box whose hint follows the API style (OpenAI-compatible "Include the version path, e.g. http://127.0.0.1:8317/v1; requests use <base URL>/chat/completions.", Anthropic-compatible "Server root, e.g. http://127.0.0.1:8317; requests use <base URL>/v1/messages.") and an **API key (optional)** password box (placeholder "Leave blank if the server needs none", or the masked saved key); **Model** (or **Deployment name**) text box, for Custom endpoint with a **Load models** button beside it, enabled when a base URL is entered and no load is running, reading "Loading models…" while it runs: on success the model box offers the loaded names as a dropdown while still accepting any typed name, an empty list shows "The endpoint listed no models — type the model name." in that dropdown, and a failure shows the R48 or R50 message as an error toast; **Reasoning effort** select (always shown; disabled with a `Default — …` option when the model is empty or has no effort levels, R37); for LenAI a **Base URL** box with the hint "Gateway root; requests use <base URL>/openai/v1/deployments/<deployment>."; for OpenAI, Anthropic and LenAI an **API key** password box; **Test connection** button; **Save connection** button (tooltip "Test the connection successfully before saving"). States: empty (nothing saved), populated (saved values, masked key placeholder), key unreadable (saved values without a key, plus the notice "Your saved API key can't be read because the app secret changed. Enter the key again, test and save."), testing, saving, tested-ok (Save enabled). Results appear as toasts. For GitHub Copilot the form shows, under **Provider**, a sign-in status line (R57): `Signed in to GitHub as <login>`, or the not-signed-in text as a warning; it has no API key, base URL or API style; the **Model** box has the placeholder `auto`, the hint "Leave as auto to let Copilot choose from your plan's models." and a **Load models** button, enabled when signed in and no load is running, whose empty list reads "Your Copilot plan lists no models to choose — leave the model as auto.". The new-session composer shows the saved model name (for Custom endpoint `<model> · <endpoint host>`, R53; for GitHub Copilot `<model> · GitHub Copilot`, R65; or "No model configured") and a reasoning-effort chip (Low, Medium, High).
 
 ## Flows
 
@@ -357,6 +378,72 @@ Feature: Custom endpoint connection
     And the model field still accepts a typed name
 ```
 
+E2E: `frontend/e2e/llm-copilot.spec.ts` covers every scenario of the Feature "GitHub Copilot connection" (R66 included) against `helpers/copilot-runtime-stub.js`, a stub of the local Copilot runtime that the backend's Copilot SDK spawns through its own `COPILOT_CLI_PATH` variable. The stub speaks the runtime's JSON-RPC as recorded from the real runtime; it reports a chosen sign-in state, lists chosen models, answers structured requests from their schema and plain turns with chosen text, can request one of the app's tools (or first write its arguments as text, for R66), and logs every request so a test can check what the app sent to Copilot. A real Copilot seat is still verified by hand. The controls carry the test ids of [../../system/ui.md](../../system/ui.md) 4.9 (`llm-copilot-status`, `llm-load-models`, `llm-model-options`).
+
+```gherkin
+Feature: GitHub Copilot connection
+
+  Scenario: Shows who is signed in to GitHub
+    Given this machine is signed in to GitHub as "octo-dev"
+    When I open "LLM Configuration"
+    And I choose the provider "GitHub Copilot"
+    Then I see "Signed in to GitHub as octo-dev"
+    And I see no API key, base URL or API style fields
+    And the model field shows the placeholder "auto"
+
+  Scenario: Configures GitHub Copilot by testing and saving with model auto
+    Given this machine is signed in to GitHub with a Copilot seat
+    When I choose the provider "GitHub Copilot" and leave the model empty
+    And I click "Test connection"
+    Then I see a message starting "Connection successful — copilot/auto"
+    When I click "Save connection"
+    Then I see "Configuration saved"
+    And the new-session composer shows "auto · GitHub Copilot"
+
+  Scenario: Says how to sign in when no GitHub login is found
+    Given this machine is not signed in to GitHub
+    When I choose the provider "GitHub Copilot"
+    Then I see "Not signed in to GitHub — run \"gh auth login\" (or sign in to the GitHub Copilot CLI or app) on this machine, then test again"
+    When I click "Test connection"
+    Then I see the same message as an error
+    And "Save connection" stays disabled
+
+  Scenario: Lists the seat's models
+    Given this machine is signed in to GitHub with a Copilot seat that offers "claude-sonnet-5.5" and "gpt-5-mini"
+    When I choose the provider "GitHub Copilot" and click "Load models"
+    Then the model list offers "claude-sonnet-5.5" and "gpt-5-mini"
+    When I pick "gpt-5-mini"
+    Then the model field reads "gpt-5-mini"
+
+  Scenario: A Copilot Free seat lists no models
+    Given this machine is signed in to GitHub with a Copilot Free seat
+    When I choose the provider "GitHub Copilot" and click "Load models"
+    Then the model list reads "Your Copilot plan lists no models to choose — leave the model as auto."
+
+  Scenario: A chat turn runs on GitHub Copilot
+    Given GitHub Copilot is saved as the provider with the model "auto"
+    And a session on the "World Cup Core" dataset
+    When I ask "Who won the 2018 World Cup final and what was the score?"
+    Then the answer streams in as it is written
+    And the thinking steps show the app's own tool calls, such as "run_readonly_sql"
+    And the answer names France and the score 4–2
+
+  Scenario: A tool call written as text is never shown
+    Given GitHub Copilot is saved as the provider
+    And a session on the "World Cup Core" dataset
+    And the Copilot model answers my question with the arguments of "run_readonly_sql" written as text
+    When I ask a question
+    Then I never see those arguments in the chat
+    And the thinking steps show "run_readonly_sql" run by the app
+    And I see the answer that follows
+
+  Scenario: Switching from GitHub Copilot to OpenAI asks for an API key
+    Given GitHub Copilot is saved as the provider
+    When I choose the provider "OpenAI", enter the model "gpt-4o-mini" and leave "API key" empty
+    And I click "Test connection"
+    Then I see "apiKey is required — none stored yet"
+```
+
 ## Acceptance
 
 - The scenarios above pass against a real provider (or a stub that honours the JSON schema).
@@ -369,9 +456,10 @@ Feature: Custom endpoint connection
 - A keyless custom endpoint receives no `Authorization` or `x-api-key` header; a keyed one receives the key only in the header of its style.
 - An OpenAI-compatible server that rejects strict JSON schema still passes the test when it can return the JSON object (R49).
 - No API response, log line, data file other than the encrypted settings document, or desktop diagnostic contains a custom endpoint's key.
+- With a real Copilot seat signed in on the machine, GitHub Copilot tests, saves with `auto`, and an assistant turn answers using the app's tools with streamed text; with no GitHub login the test says how to sign in and nothing is saved.
 
 ## Open questions
 
 - The agents screen's Model tab says "No model resolved — save an LLM configuration in Settings first" when no settings exist, but R25 says a default route is used. Confirm which the Model tab should show with no saved configuration.
 
-<!-- sources: backend/src/modules/llm/{llm.controller,llm.service,llm.types,retry-fetch}.ts, backend/src/modules/llm/repositories/llm-settings.repository.ts, backend/src/infrastructure/crypto/crypto.service.ts, backend/src/mastra/{model-resolver,model-compat}.ts, backend/src/mastra/agents/visualization.agent.ts, backend/src/modules/sessions/sessions.service.ts (reasoning effort use), frontend/src/app/features/llm/, frontend/src/app/app.ts (composer chip, setEffort); custom endpoint provider: epic BA-281 -->
+<!-- sources: backend/src/modules/llm/{llm.controller,llm.service,llm.types,retry-fetch}.ts, backend/src/modules/llm/repositories/llm-settings.repository.ts, backend/src/infrastructure/crypto/crypto.service.ts, backend/src/mastra/{model-resolver,model-compat}.ts, backend/src/mastra/agents/visualization.agent.ts, backend/src/modules/sessions/sessions.service.ts (reasoning effort use), frontend/src/app/features/llm/, frontend/src/app/app.ts (composer chip, setEffort); custom endpoint provider: epic BA-281; GitHub Copilot provider: backend/src/mastra/copilot/{copilot-runtime,copilot-model}.ts, backend/src/mastra/model-factory.ts, epic BA-159 story 1.10.3 -->

@@ -1,9 +1,9 @@
 import { LlmModelsApiService } from '../../services/llm-models-api.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { LlmApiService } from '../../services/llm-api.service';
 import { ToastService } from '../../../../core/toast/toast.service';
-import { LlmSettingsView } from '../../models/llm.model';
+import { CopilotStatusView, LlmSettingsView } from '../../models/llm.model';
 import {
   CUSTOM_BASE_URL_HINTS,
   CUSTOM_BASE_URL_PLACEHOLDERS,
@@ -31,10 +31,19 @@ describe('LlmConfig custom endpoint', () => {
       'testConnection',
       'effortLevels',
       'saveReasoning',
+      'copilotStatus',
     ]);
     api.getSettings.and.returnValue(of(saved));
     api.effortLevels.and.returnValue(
       of({ levels: [], defaultEffort: null, probeEffort: null }),
+    );
+    api.copilotStatus.and.returnValue(
+      of({
+        signedIn: true,
+        login: 'octocat',
+        method: 'gh-cli',
+        message: 'Signed in to GitHub as octocat',
+      }),
     );
     api.testConnection.and.returnValue(of({ ok: true, message: 'ok' }));
     api.saveSettings.and.returnValue(of({ ok: true, message: 'saved' }));
@@ -306,5 +315,126 @@ describe('LlmConfig custom endpoint', () => {
     expect(q<HTMLInputElement>(el, 'llm-api-key')!.placeholder).toBe(
       '••••••••cdef',
     );
+  });
+
+  describe('GitHub Copilot', () => {
+    it('offers GitHub Copilot as the last provider', async () => {
+      const el = await render();
+      const options = Array.from(
+        (el.querySelector('select') as HTMLSelectElement).options,
+      );
+      const last = options[options.length - 1];
+      expect(last.value).toBe('copilot');
+      expect(last.textContent?.trim()).toBe('GitHub Copilot');
+    });
+
+    it('hides API key, base URL and API style and shows the auto model hint', async () => {
+      const el = await render();
+      pickProvider(el, 'copilot');
+      expect(q(el, 'llm-api-key')).toBeNull();
+      expect(q(el, 'llm-base-url')).toBeNull();
+      expect(q(el, 'llm-api-style')).toBeNull();
+      expect(q<HTMLInputElement>(el, 'llm-model')!.placeholder).toBe('auto');
+      expect(el.textContent).toContain(
+        "Leave as auto to let Copilot choose from your plan's models.",
+      );
+      expect(q(el, 'llm-load-models')).not.toBeNull();
+    });
+
+    it('shows the signed-in message in the success style, reloading on each selection', async () => {
+      const el = await render();
+      pickProvider(el, 'copilot');
+      const status = q<HTMLElement>(el, 'llm-copilot-status')!;
+      expect(status.getAttribute('role')).toBe('status');
+      expect(status.textContent).toContain('Signed in to GitHub as octocat');
+      expect(status.classList).toContain('text-on-success-soft');
+      expect(q<HTMLButtonElement>(el, 'llm-load-models')!.disabled).toBeFalse();
+
+      pickProvider(el, 'openai');
+      expect(q(el, 'llm-copilot-status')).toBeNull();
+      pickProvider(el, 'copilot');
+      expect(api.copilotStatus).toHaveBeenCalledTimes(2);
+    });
+
+    it('shows the not-signed-in message as a warning and disables Load models', async () => {
+      const el = await render();
+      api.copilotStatus.and.returnValue(
+        of({
+          signedIn: false,
+          login: null,
+          method: null,
+          message: 'Not signed in to GitHub',
+        }),
+      );
+      pickProvider(el, 'copilot');
+      const status = q<HTMLElement>(el, 'llm-copilot-status')!;
+      expect(status.textContent).toContain('Not signed in to GitHub');
+      expect(status.classList).toContain('text-on-warning-soft');
+      expect(status.classList).toContain('bg-warning-soft');
+      expect(q<HTMLButtonElement>(el, 'llm-load-models')!.disabled).toBeTrue();
+    });
+
+    it('shows a warning when the status request fails', async () => {
+      const el = await render();
+      api.copilotStatus.and.returnValue(throwError(() => new Error('down')));
+      pickProvider(el, 'copilot');
+      const status = q<HTMLElement>(el, 'llm-copilot-status')!;
+      expect(status.classList).toContain('text-on-warning-soft');
+      expect(status.textContent).toContain('Could not check');
+    });
+
+    it('shows Checking GitHub sign-in… while the status loads', async () => {
+      const el = await render();
+      api.copilotStatus.and.returnValue(new Subject<CopilotStatusView>());
+      pickProvider(el, 'copilot');
+      const status = q<HTMLElement>(el, 'llm-copilot-status')!;
+      expect(status.textContent).toContain('Checking GitHub sign-in…');
+      expect(status.classList).toContain('text-fg-muted');
+    });
+
+    it('allows Test and Save with a blank model and keeps a typed model on switching', async () => {
+      const el = await render();
+      type(q<HTMLInputElement>(el, 'llm-model')!, 'gpt-5');
+      pickProvider(el, 'copilot');
+      expect(q<HTMLInputElement>(el, 'llm-model')!.value).toBe('gpt-5');
+      type(q<HTMLInputElement>(el, 'llm-model')!, '');
+      const cmp = fixture.componentInstance;
+      expect(cmp.canTest).toBeTrue();
+      cmp.testConnection();
+      expect(api.testConnection).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          provider: 'copilot',
+          model: '',
+          baseUrl: undefined,
+          apiStyle: undefined,
+        }),
+      );
+      cmp.saveConnection();
+      expect(api.saveSettings).toHaveBeenCalled();
+    });
+
+    it('asks for effort levels with the provider', async () => {
+      const el = await render();
+      pickProvider(el, 'copilot');
+      type(q<HTMLInputElement>(el, 'llm-model')!, 'gpt-5');
+      await new Promise((r) => setTimeout(r, 300));
+      expect(api.effortLevels).toHaveBeenCalledWith('gpt-5', 'copilot');
+    });
+
+    it('loads a saved copilot configuration without a key notice', async () => {
+      const el = await render({
+        provider: 'copilot',
+        model: 'auto',
+        baseUrl: null,
+        apiKeyMasked: null,
+        reasoningEffort: 'high',
+        configured: true,
+        apiStyle: null,
+      });
+      expect(el.querySelector('select')!.value).toBe('copilot');
+      expect(q<HTMLInputElement>(el, 'llm-model')!.value).toBe('auto');
+      expect(q(el, 'llm-key-unreadable-notice')).toBeNull();
+      expect(q(el, 'llm-copilot-status')).not.toBeNull();
+    });
   });
 });

@@ -420,6 +420,12 @@ describe('composerModelLabel (llm-settings R53)', () => {
     ).toBe('claude-sonnet-5-5 · gateway.example.com');
   });
 
+  it('shows <model> · GitHub Copilot for Copilot (R65)', () => {
+    expect(
+      composerModelLabel({ ...view, provider: 'copilot', model: 'gpt-5' }),
+    ).toBe('gpt-5 · GitHub Copilot');
+  });
+
   it('is null when nothing is configured', () => {
     expect(
       composerModelLabel({ ...view, configured: false, model: null }),

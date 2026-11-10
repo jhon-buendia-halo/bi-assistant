@@ -192,6 +192,7 @@ export interface ComposerAgentRow {
  */
 export function composerModelLabel(view: LlmSettingsView): string | null {
   if (!view.configured || !view.model) return null;
+  if (view.provider === 'copilot') return `${view.model} · GitHub Copilot`;
   if (view.provider !== 'custom' || !view.baseUrl) return view.model;
   return `${view.model} · ${urlHost(view.baseUrl)}`;
 }

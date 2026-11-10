@@ -2,6 +2,7 @@ import type { ListModelsDto, ListModelsResult } from './llm.types';
 import { Body, Controller, Get, Post, Put, Query } from '@nestjs/common';
 import { LlmService } from './llm.service';
 import type {
+  CopilotStatusView,
   EffortLevelsView,
   LlmSettingsView,
   ReasoningEffort,
@@ -19,8 +20,17 @@ export class LlmController {
   }
 
   @Get('effort-levels')
-  effortLevels(@Query('model') model?: string): EffortLevelsView {
-    return this.llmService.effortLevels(model);
+  effortLevels(
+    @Query('model') model?: string,
+    @Query('provider') provider?: string,
+  ): EffortLevelsView {
+    return this.llmService.effortLevels(model, provider);
+  }
+
+  /** `GET /llm/copilot/status` (api.md 32c): the machine's GitHub sign-in. */
+  @Get('copilot/status')
+  copilotStatus(): Promise<CopilotStatusView> {
+    return this.llmService.copilotStatus();
   }
 
   @Put('settings')
@@ -71,7 +81,7 @@ export class LlmController {
     }
   }
 
-  /** `POST /llm/models` (BA-281): a custom endpoint's model list. */
+  /** `POST /llm/models` (BA-281): a custom endpoint's or Copilot's models. */
   @Post('models')
   listModels(@Body() dto: ListModelsDto): Promise<ListModelsResult> {
     return this.llmService.listModels(dto);
