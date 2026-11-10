@@ -202,6 +202,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Verified query.** A question and SQL pair saved when the user thumbs up an answer. The last successful SQL statement of the answer is stored, with the datasource and entities. Similar questions later get the closest pairs as reference. Can be promoted to a *metric*.
 
+**Visuals library.** A catalog of chart types for data visualization, grouped by category (Comparison, Change over time, Part-to-whole, Distribution, Relationship, Ranking, Flow, Spatial, Numbers and tables). Each **chart** has a name, category, preview thumbnail, description, when to use, when to avoid, the data shape it needs, an enabled flag and a **renderer form**: the visual-spec form the app draws it with (`bar`, `line`, `scatter`, `heatmap`, `metric-cards`, `table`, `donut`), or none when the app does not draw it. 30 default charts are seeded once and are editable and deletable. Kept in the Context area under "Visuals". Manage-only today: agents, the visual designer and sessions do not use it yet. Not the *visuals* a session creates. See [visuals-library](../capabilities/visuals-library/spec.md).
+
 **Visual / visualization.** An interactive, sandboxed chart document created from an answer's data. Has a title, a description (the takeaway), a *visual version* history and files in the session's workspace. Framed with the question, the analysis, a data provenance section and a footer. The code and API say "visualization"; the UI says "visual".
 
 **Visual spec.** A small JSON description of a chart (forms: bar, line, scatter, heatmap, metric cards, table, donut) rendered by a fixed runtime. Preferred over freeform generation because it cannot break on bad generated code.

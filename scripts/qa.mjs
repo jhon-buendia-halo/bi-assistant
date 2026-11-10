@@ -16,6 +16,7 @@ import {
   UsageError,
   acquireLock,
   backendRelated,
+  demoEvidenceProblems,
   frontendRelated,
   impactSpecs,
   jestCounts,
@@ -255,6 +256,22 @@ async function main() {
       failures = pwReport?.failures ?? [];
     }
     const missing = impactRows ? missingSpecs(listed, ran) : ['(no step-6 list: evidence/' + id + '/e2e-impact.md)'];
+    // The demo is part of the story's evidence: no video or artifact link, no pass.
+    const readmePath = path.join(evidenceDir, 'README.md');
+    const demoProblems = demoEvidenceProblems(id, {
+      hasWebm: fs.existsSync(path.join(evidenceDir, 'demo.webm')),
+      hasTxt: fs.existsSync(path.join(evidenceDir, 'demo.txt')),
+      uiDemo: demoSpecs.length > 0,
+      readme: fs.existsSync(readmePath) ? fs.readFileSync(readmePath, 'utf8') : '',
+    });
+    steps.push({
+      name: 'demo evidence',
+      command: 'demo.webm / demo.txt and the demo artifact link',
+      status: demoProblems.length ? 'failed' : 'passed',
+      exitCode: demoProblems.length ? 1 : 0,
+      summary: demoProblems,
+    });
+    console.log(`▶ demo evidence\n  ${demoProblems.length ? demoProblems.join('\n  ') : 'passed'}`);
     const links = [];
     for (const name of ['demo.webm', 'demo.txt']) {
       if (fs.existsSync(path.join(evidenceDir, name))) links.push(`[${name}](${name})`);
