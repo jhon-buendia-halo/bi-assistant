@@ -97,10 +97,21 @@ Placement: the **Context** item on the navigation rail opens the Context page; i
 
 ## Flows
 
-E2E: none yet
+E2E: `frontend/e2e/visuals-library.spec.ts`
 
 ```gherkin
 Feature: Visuals library
+
+  Scenario: Browse the library and edit a chart in place
+    Given the app starts with a new data dir
+    When I open the Context page and click the "Visuals" card
+    Then I see the charts grouped by category, "Comparison" first
+    When I click the "Part-to-whole" chip
+    Then I see only its 5 charts, "Donut chart" with the badge "Drawn by the app"
+    When I click "All" and type "funnel" in "Search charts"
+    Then only "Funnel chart" is listed, under "Flow"
+    When I clear the search and click the "Pie chart" card
+    Then the editor opens in place of the card, with every field filled in
 
   Scenario: A new install shows the catalog grouped by category
     Given the app starts with a new data dir
