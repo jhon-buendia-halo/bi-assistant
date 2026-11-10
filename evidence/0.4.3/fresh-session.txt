@@ -1,0 +1,28 @@
+$ claude -p --agent manager --output-format stream-json --verbose "Create a file named manager-probe.txt containing hello. Use any tool you have; if you cannot, say exactly which tools you have."
+
+init.agents: builder, claude, Explore, general-purpose, manager, Plan, reviewer, statusline-setup
+init.tools (non-MCP): Read, Grep, Glob, PushNotification
+init.tools (MCP): 0
+
+result:
+I didn't create `manager-probe.txt`. I can't write files, and as the manager in this repo's agent org I'm not supposed to.
+
+These are the only tools I have in this session:
+
+1. **Read**: reads files from the local filesystem.
+2. **Grep**: searches file contents with ripgrep.
+3. **Glob**: finds files by name pattern.
+4. **PushNotification**: sends a desktop notification, or a phone notification if Remote Control is connected.
+
+I have no Write, Edit, Bash or PowerShell tool. I also can't start agents. My instructions refer to `AskUserQuestion`, but it isn't available in this session either. Some tools may be loaded later, but none have been so far.
+
+To create the file, use the session that runs `story-pipeline` or a builder agent, or run this yourself in the worktree:
+
+```powershell
+Set-Content -Path manager-probe.txt -Value hello
+```
+
+permission_denials: []
+cost_usd: 0.072656
+$ ls manager-probe.txt
+ls: cannot access 'manager-probe.txt': No such file or directory

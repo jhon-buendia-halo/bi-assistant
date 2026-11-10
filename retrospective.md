@@ -9,18 +9,12 @@ Entry template:
 
 ### What went well
 ### What went wrong
-- The 1.21.3 workflow bar shipped through the fast loop with a chat bug the user never hit by hand: a failed step's `workflow` event re-synced the transcript over the question and the error. Only the acceptance-gate E2E (stub dropping the connection) found it.
-- The Data Readiness eval harness bound every PostgreSQL dataset to agent sessions and ignored `EVAL_DATASETS`; 1.21.2's setup script loads all four samples, so the agent rightly asked which dataset and cases failed. The harness now narrows agent sessions to the run's datasets.
-- The new drill-down eval caught the agent describing rows its query never returned; the skill now forbids conclusions about unreturned records.
 ### What to do differently
-- Merge `origin/main` into the epic branch at the start of the acceptance gate, not at the end: `main` gained the BA-119 agent org (and its planned demo-video evidence) while this epic was in its fast loop.
-- Give the eval harness the datasets a run names for agent-bound sessions, and run new eval cases several times before calling a prompt done: one rule ("state only facts a tool result shows") took the drill-down case from 2 failures in 9 runs to none.
 ```
 
 ---
 
 ## 2026-11-10 — 1.21.1–1.21.11 Questions to Insights v2, Data Readiness drill-down, User personas and the dataset ontology (BA-320)
-
 
 ### What went well
 - The ontology design was approved from a review page before any code, and its contract was written in [docs/plans/ba-320-dataset-ontology.md](docs/plans/ba-320-dataset-ontology.md). Four parallel units then built the backend core, the bootstrap, the frontend and the specs against that one contract, with few conflicts.
@@ -37,6 +31,9 @@ Entry template:
 - A subagent edited a template with `sed` despite the brief.
 - The stale `backend/public` bundle made Playwright fail until it was rebuilt: the web target serves the built bundle.
 
+- The 1.21.3 workflow bar shipped through the fast loop with a chat bug the user never hit by hand: a failed step's `workflow` event re-synced the transcript over the question and the error. Only the acceptance-gate E2E (stub dropping the connection) found it.
+- The Data Readiness eval harness bound every PostgreSQL dataset to agent sessions and ignored `EVAL_DATASETS`; 1.21.2's setup script loads all four samples, so the agent rightly asked which dataset and cases failed. The harness now narrows agent sessions to the run's datasets.
+- The new drill-down eval caught the agent describing rows its query never returned; the skill now forbids conclusions about unreturned records.
 ### What to do differently
 - For browser checks, run web mode (`build:all` plus `cli.js`), never bare `ng serve`.
 - Compare the full unit suites against `main` before calling a failure "pre-existing".
@@ -44,8 +41,32 @@ Entry template:
 - Review list and editor UX at design time: where the editor opens, and labelled controls.
 - Rebuild `backend/public` before running Playwright.
 - Structured-output schemas must not cap array lengths the service already caps; cap after post-processing.
+- Merge `origin/main` into the epic branch at the start of the acceptance gate, not at the end: `main` gained the BA-119 agent org (and its planned demo-video evidence) while this epic was in its fast loop.
+- Give the eval harness the datasets a run names for agent-bound sessions, and run new eval cases several times before calling a prompt done: one rule ("state only facts a tool result shows") took the drill-down case from 2 failures in 9 runs to none.
 
 ---
+
+## 2026-11-09 — 0.4.3 Agent roles for the token-minimal agent org (BA-119)
+
+### What went well
+- The design was settled on the roadmap before any code. The user's three decisions, the token-minimal rework and the video placement were all written into the stories and the epic spec, so the build itself had no rework.
+- A docs check before writing the agents found that `isolation: worktree` starts from `main`, not the epic branch, and that subagents cannot call `Workflow`. Both shaped the definitions: the builder cuts its unit branch first, and nothing depends on an agent starting the pipeline.
+- Each headless session's `init` message lists the tools and agents it actually has. That proved the manager cannot edit, which a permission denial alone would not.
+- The dry run surfaced facts that no plan would have: the fixture's own browser context ignores Playwright's `video` setting, the frontend has no lint config, the builder's allowed commands lacked Python, and linking `node_modules` from the main checkout makes a unit worktree ready instantly.
+
+### What went wrong
+- A stray `git checkout origin/main -- .`, tacked onto a spec-check command, reset my uncommitted roadmap and epic-spec edits. They had to be re-applied.
+- The first demo story was backend-only, so it produced no video, the very thing the user wanted to see. I didn't say so before running it.
+- A `sed` that set the epic spec's status dropped the "Confirmed (0.4.1–0.4.2)" part, and a follow-up commit had to restore it.
+- Every agent still loads the full CLAUDE.md, although its brief replaces it. The UI builder took 28 turns and $0.68.
+- Heredoc-written helper scripts were mangled twice (a regex lost its backslash, `python3` is missing on Windows). Writing them with the Write tool worked first time.
+
+### What to do differently
+- Never append a `git checkout … -- .` or another destructive command to a check command. Run destructive git commands alone, after `git status`.
+- When a demo or dry run is meant to show a specific artifact (a video, a screenshot), pick a story that produces it, and say up front what the run will and won't show.
+- Edit a status line with the Edit tool and show the result, not a `sed` that rewrites the whole value.
+- Add `omitClaudeMd: true` to agents that work from a brief, and measure the builder's turns and cost before and after.
+- On Windows, use `py -3` for Python, and write any script longer than a line with the Write tool, not a heredoc.
 
 ## 2026-11-09 — 1.20.1–1.20.5 Schema notes, readiness speed and progress, text selection (BA-318)
 
