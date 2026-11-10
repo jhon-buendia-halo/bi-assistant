@@ -39,6 +39,7 @@ import {
   Wrench,
   Network,
   ChartColumn,
+  Activity,
 } from 'lucide-angular';
 import { DatasourceConfig } from './features/datasources/components/datasource-config/datasource-config';
 import {
@@ -138,10 +139,17 @@ type MainView =
   | 'ontologies'
   | 'sessions'
   | 'conversation-new'
-  | 'session-chat';
+  | 'session-chat'
+  | 'monitoring';
 
 /** What the navigation rail selects (app-shell R3–R5, R46). */
-type Area = 'datasets' | 'agents' | 'context' | 'sessions' | 'settings';
+type Area =
+  | 'datasets'
+  | 'agents'
+  | 'context'
+  | 'sessions'
+  | 'monitoring'
+  | 'settings';
 
 /** The view each workspace area opens on. */
 const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
@@ -149,6 +157,7 @@ const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
   agents: 'agents',
   context: 'context',
   sessions: 'sessions',
+  monitoring: 'monitoring',
 };
 
 const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
@@ -167,6 +176,7 @@ const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   sessions: 'sessions',
   'conversation-new': 'sessions',
   'session-chat': 'sessions',
+  monitoring: 'monitoring',
 };
 
 const DEFAULT_RIGHT_PANEL_WIDTH = 572;
@@ -1288,6 +1298,7 @@ export class App {
     { area: 'agents', label: 'Agents', icon: Bot },
     { area: 'context', label: 'Context', icon: Layers },
     { area: 'sessions', label: 'Sessions', icon: FolderKanban },
+    { area: 'monitoring', label: 'Monitoring', icon: Activity },
   ];
 
   readonly settingsSections: {

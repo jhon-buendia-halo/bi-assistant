@@ -62,8 +62,8 @@ Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md
 1. A 20 px window-drag spacer that clears the macOS traffic lights.
 2. The **menu button** (menu icon, 18 px, `icon` colour, a 32 px square, radius 8): `aria-label` and title "Expand navigation" while collapsed, "Collapse navigation" while expanded, with `aria-expanded`. While collapsed it sits alone above the logo; while expanded it sits at the right end of the logo row, beside "Agentic Hub" (the drawer has no separate menu row).
 3. The logo row (36 px tall): a 24 px circle filled with `--logo-gradient` holding `brand/agentic-hub/logo-mark.svg`; when expanded, beside it the label "Agentic Hub" (13 px semibold `fg-strong`, filling the row) and the menu button (item 2).
-4. `nav aria-label="Workspace navigation"`: four 36 px tall buttons (radius 8, 4 px apart), each an 18 px `accent` icon and, when expanded, a 13 px medium `fg` label. Each has `title` and `aria-label` equal to its name:
-   - **Datasets** (flask icon), **Agents** (bot icon), **Context** (layers icon), **Sessions** (folder-kanban icon).
+4. `nav aria-label="Workspace navigation"`: five 36 px tall buttons (radius 8, 4 px apart), each an 18 px `accent` icon and, when expanded, a 13 px medium `fg` label. Each has `title` and `aria-label` equal to its name:
+   - **Datasets** (flask icon), **Agents** (bot icon), **Context** (layers icon), **Sessions** (folder-kanban icon), **Monitoring** (activity icon).
    - Hover: `surface-muted` fill. Current area: `surface-selected` fill and `aria-current="page"`.
 5. A flexible spacer.
 6. Bottom group, 4 px apart (centred while collapsed):
@@ -110,6 +110,7 @@ The main column renders exactly one of these views, held in a single "main view"
 | `sessions` | rail **Sessions** (also from a chat or the composer); deleting the open session | Sessions | page header ("Sessions") + the Sessions list (4.7.1) | Entity details |
 | `conversation-new` | **Start New Conversation** in the page header or on the empty Sessions list | Sessions | page header ("New conversation") + New-session composer (4.7) | Entity details |
 | `session-chat` | a session row on the Sessions page, or creating a session | Sessions | page header (session name + datasource context) + Session chat (4.12) | Session panel (4.13) |
+| `monitoring` | rail **Monitoring** | Monitoring | Monitoring page: `h2` "Monitoring" (20 px light, like Context) and the note "Nothing to monitor yet." (13 px `fg-muted`), `data-testid="monitoring-page"`; empty for now (app-shell R3b) | Entity details |
 | Settings area, section `datasources` / `llm` / `testing-data` / `developer` / `appearance` | rail **Settings**, then a section | Settings | Settings list pane + the matching form (4.9-4.12, 4.16), centred column | Entity details |
 
 - Content views (everything except the chat) sit in a vertically scrolling, horizontally centred column with 24 px horizontal / 24 px vertical padding and a max width of 960 px (settings forms: 560 px for datasources, testing data, developer and appearance, 480 px for LLM, 24 px horizontal padding).

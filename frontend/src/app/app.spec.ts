@@ -45,6 +45,28 @@ describe('App', () => {
     expect(compiled.querySelector('[title="Help"]')).toBeFalsy();
   });
 
+  it('opens an empty Monitoring page from the rail (app-shell R3b, BA-320)', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    app.selectArea('monitoring');
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('monitoring');
+    expect(app.currentArea()).toBe('monitoring');
+    expect(
+      compiled
+        .querySelector('button[aria-label="Monitoring"]')
+        ?.getAttribute('aria-current'),
+    ).toBe('page');
+    const page = compiled.querySelector('[data-testid="monitoring-page"]');
+    expect(page?.querySelector('h2')?.textContent?.trim()).toBe('Monitoring');
+    expect(
+      page?.querySelector('[data-testid="monitoring-empty"]')?.textContent?.trim(),
+    ).toBe('Nothing to monitor yet.');
+  });
+
   it('offers Context with Ontologies, User personas then Visuals; Knowledge is gone (app-shell R3a, BA-320)', () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
@@ -53,7 +75,13 @@ describe('App', () => {
     const labels = Array.from(
       compiled.querySelectorAll('nav[aria-label="Workspace navigation"] button'),
     ).map((b) => b.getAttribute('aria-label'));
-    expect(labels).toEqual(['Datasets', 'Agents', 'Context', 'Sessions']);
+    expect(labels).toEqual([
+      'Datasets',
+      'Agents',
+      'Context',
+      'Sessions',
+      'Monitoring',
+    ]);
 
     // Context opens on one card per section, like the Agent Hub.
     app.selectArea('context');

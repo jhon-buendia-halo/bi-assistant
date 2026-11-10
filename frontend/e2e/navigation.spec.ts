@@ -2,6 +2,7 @@ import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.fixture';
 import { apiFetch } from './helpers/api';
+import { scenarioStep } from './support/demo-captions';
 
 /** Evidence screenshots of the claimed state (CLAUDE.md Evidence convention). */
 const evidence = (feature: string, name: string) =>
@@ -67,6 +68,43 @@ test('moves between areas from the rail', async ({ page }) => {
     page.getByRole('navigation', { name: 'Sessions navigation' }),
   ).toHaveCount(0);
 });
+
+test(
+  'Opens the empty Monitoring page from the rail',
+  { tag: ['@demo', '@story-1.21.13'] },
+  async ({ page }) => {
+    await scenarioStep(page, 'When I click "Monitoring" on the rail', async () => {
+      await railItem(page, 'Monitoring').click();
+    });
+    await scenarioStep(
+      page,
+      'Then I see the "Monitoring" page with the note "Nothing to monitor yet." and "Monitoring" is the current rail item',
+      async () => {
+        await expect(
+          page.getByRole('heading', { name: 'Monitoring', exact: true }),
+        ).toBeVisible();
+        await expect(page.getByTestId('monitoring-empty')).toHaveText(
+          'Nothing to monitor yet.',
+        );
+        await expectCurrent(page, 'Monitoring');
+      },
+    );
+    await scenarioStep(page, 'When I click "Sessions" on the rail', async () => {
+      await railItem(page, 'Sessions').click();
+    });
+    await scenarioStep(
+      page,
+      'Then I see the "Sessions" list and "Monitoring" is no longer the current rail item',
+      async () => {
+        await expect(sessionsList(page)).toBeVisible();
+        await expect(railItem(page, 'Monitoring')).not.toHaveAttribute(
+          'aria-current',
+        );
+        await expect(page.getByTestId('monitoring-page')).toHaveCount(0);
+      },
+    );
+  },
+);
 
 test('the start page explains how the product works', async ({ page }) => {
   await expect(
@@ -157,7 +195,13 @@ test('expands the rail into a drawer with labels', async ({ page }) => {
   const workspace = page.getByRole('navigation', {
     name: 'Workspace navigation',
   });
-  for (const label of ['Datasets', 'Agents', 'Context', 'Sessions']) {
+  for (const label of [
+    'Datasets',
+    'Agents',
+    'Context',
+    'Sessions',
+    'Monitoring',
+  ]) {
     await expect(workspace.getByText(label, { exact: true })).toBeVisible();
   }
   await expect(

@@ -1551,6 +1551,13 @@ A second built-in data-analyst agent, Questions to Insights v2, built up next to
 - **Out of scope:** agents or the visual designer using the library (a later story); drawing new chart types; importing charts; per-chart sample data.
 - **Acceptance:** a new data dir shows the Visuals card and the 30 default charts in 9 categories with previews; search and a category filter narrow the list; a chart can be added, edited, disabled and deleted and survives a restart; a deleted default stays deleted; a duplicate or blank name is refused; unit tests and the build green.
 - **Notes:** requested on 2026-11-10 with a screenshot of the Context page. The user chose a broad catalog marked with what the app draws, shipped + editable, rich entries with a preview, and manage-only for now. No Jira key (repo only).
+
+#### 1.21.13 — Monitoring item on the navigation rail  `🚧 In progress`
+- **Intent:** give monitoring its own place in the app now, so later stories can fill it without reshaping the navigation.
+- **Scope:** a **Monitoring** item (activity icon) on the rail and drawer, after Sessions; choosing it shows an empty Monitoring page (heading "Monitoring", note "Nothing to monitor yet.") and marks the item current. app-shell R3/R3b, R37 and the rail scenario; ui.md rail and main-view table.
+- **Out of scope:** any monitoring content (what is monitored, metrics, alerts); a backend change.
+- **Acceptance:** the rail lists Datasets, Agents, Context, Sessions, Monitoring; clicking Monitoring shows the empty page with Monitoring current, and another rail item leaves it; unit tests and the build green.
+- **Notes:** requested on 2026-11-10 ("add in the left menu an option named Monitoring, leave it empty for now"). The user placed it after Sessions. No Jira key (repo only).
 ---
 
 ## Release 2 — Multi-user  (no target date yet)
