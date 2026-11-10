@@ -1,6 +1,6 @@
 # BA-119 — Harness Adjustments
 
-- **Jira:** [BA-119](https://halo-powered.atlassian.net/browse/BA-119) · **Roadmap:** Milestone 0.4 · **Status:** Confirmed (0.4.3–0.4.8, the token-minimal agent org, confirmed by the user on 2026-11-09)
+- **Jira:** [BA-119](https://halo-powered.atlassian.net/browse/BA-119) · **Roadmap:** Milestone 0.4 · **Status:** Confirmed (0.4.1–0.4.2; 0.4.3–0.4.8, the token-minimal agent org, confirmed by the user on 2026-11-09)
 
 ## Goal
 

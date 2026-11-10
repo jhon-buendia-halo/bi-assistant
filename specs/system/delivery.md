@@ -448,3 +448,22 @@ Developer tooling for people who work on this repository in Claude Code, not par
 | Tool | Kind | Detail |
 |---|---|---|
 | `jira` | MCP server | Jira Cloud REST v3. Read tools: `whoami`, `get_project`, `search_issues`, `get_issue` (with `parent` and `parentType`, for the Epic gate), `list_statuses`, `list_transitions`. Write tools: `create_epic`, `create_issue` (Story, Bug or Task; a Story or Bug must name its epic, checked to be an Epic before anything is created), `update_issue` (summary, description, epic), `add_comment`, `transition_issue`. Credentials `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_PROJECT`: the environment, then `JIRA_CONFIG_FILE`, or else this checkout's `.env` and then the main checkout's (found through `git rev-parse --git-common-dir`), read on every call. `setup.mjs` writes them from the developer's own terminal. No dependencies (Node 22 or later). Tests: `node --test '.claude/tools/jira/tests/*.test.mjs'`, with Jira faked. Replaces the earlier `jira.sh` script ([BA-237](https://halo-powered.atlassian.net/browse/BA-237)). |
+
+## 12. Claude Code agents (`.claude/agents/`)
+
+Developer tooling for people who work on this repository in Claude Code, not part of the app or its releases. Epic [BA-119](../epics/BA-119/spec.md), roadmap 0.4.3–0.4.8. These definitions run the workflow as a **token-minimal agent org**. An LLM is used only where judgment is needed: writing code, reviewing a diff, and talking to the human. Dispatch, checks, QA, the board and the evidence are scripts and hooks. Manager mode is opt-in. A plain session keeps the single-agent workflow, and the eleven steps, the fast loop and acceptance gate, and one branch and PR per epic are unchanged.
+
+| Agent | Model | Tools | Job |
+|---|---|---|---|
+| `builder` | inherits the session's | all, in a temporary worktree (`isolation: worktree`, which starts from `main`, so the builder first cuts its unit branch from the epic branch) | Builds one roadmap story on a `unit/<EPIC-ID>-<roadmap-id>` branch, from the brief it is given. Writes the failing unit test first, then the code. For a UI story, writes the main Gherkin scenario once, as a Playwright test whose `test.step` titles are its Given/When/Then lines. Commits on its unit branch and reports the branch, the commit and the tests it added. |
+| `reviewer` | `sonnet` | read and search only (`Read`, `Grep`, `Glob`) | Reviews one story's diff against the story's Intent, Scope and Acceptance. It is given the diff and the story, never the builder's transcript. It answers `approve`, or a numbered list of findings, each with file, line, the failure it causes and the fix. It flags no style point that lint already covers. |
+| `manager` | inherits the session's | `Read`, `Grep`, `Glob`, `AskUserQuestion`, `PushNotification` | The human's single point of contact, started with `claude --agent manager`. It reads `roadmap.md` (the ticket board), the epic spec and the evidence, and answers "what needs me?" with exactly one question, recommended option first. When a story escalates after 3 failed reviews, it states the disagreement and recommends a way forward. It has no `Edit`, `Write`, `Bash` or `Agent`, so it cannot change files or start work; the pipeline does that. |
+
+Rules every builder follows (from the retrospective):
+- Write files with Edit/Write, or in a scratch folder of its own; never use shared `/tmp` names.
+- Never stop a process it did not start; record the PIDs it starts.
+- Run Playwright with `E2E_SKIP_DOCKER=1` when a Postgres is already listening on 55432.
+- Never run `npm test`/`build` alongside `test:e2e` in the same worktree.
+- Never start the app on the default ports.
+
+Unit worktrees that the harness creates for a builder are temporary. They are exempt from the epic worktree naming rule (`workflow-plan`) and removed once their branch is merged into the epic branch.
