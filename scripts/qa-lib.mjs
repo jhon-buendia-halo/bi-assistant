@@ -172,6 +172,40 @@ export function missingSpecs(listed, ran) {
 }
 
 /**
+ * The stories marked `🚧 In progress` whose evidence folder has no demo.webm
+ * or demo.txt yet: the stories a fast-loop hand-off would be missing a demo
+ * for (the demo reminder hook, delivery.md 13). `roadmap` is roadmap.md or,
+ * as the hook passes it, the branch's diff of it (only added `+####` lines
+ * count, so stale entries elsewhere in the roadmap are ignored).
+ */
+export function storiesWithoutDemo(roadmap, exists) {
+  const ids = [...roadmap.matchAll(/^\+?#### (\d+(?:\.\d+)+) — .*`🚧 In progress`/gmu)].map((m) => m[1]);
+  return ids.filter((id) => !exists(`evidence/${id}/demo.webm`) && !exists(`evidence/${id}/demo.txt`));
+}
+
+/** A published Claude artifact link, as the demo page's URL is recorded. */
+export const ARTIFACT_URL = /https:\/\/claude\.ai\/(?:code\/)?artifact\/[\w-]+/;
+
+/**
+ * Why a story cannot pass the gate without its demo (delivery.md 13): a UI
+ * story (a test tagged @story-<id>) needs demo.webm, any story needs
+ * demo.webm or demo.txt, and the evidence README needs the demo artifact link.
+ * Returns [] when the demo evidence is complete.
+ */
+export function demoEvidenceProblems(id, { hasWebm, hasTxt, uiDemo, readme }) {
+  const problems = [];
+  if (uiDemo && !hasWebm) {
+    problems.push(`No demo video: a test is tagged @story-${id} but evidence/${id}/demo.webm is missing. Run node scripts/qa.mjs ${id} --fast.`);
+  } else if (!hasWebm && !hasTxt) {
+    problems.push(`No demo: evidence/${id}/demo.webm or demo.txt is missing. Run node scripts/qa.mjs ${id} --fast.`);
+  }
+  if (!ARTIFACT_URL.test(readme ?? '')) {
+    problems.push(`No demo artifact link in evidence/${id}/README.md. Run node scripts/demo-page.mjs ${id}, publish it as a Claude artifact and record its URL.`);
+  }
+  return problems;
+}
+
+/**
  * evidence/<id>/tests.md. `steps`: [{ name, command, status: 'passed' |
  * 'failed', counts?: { passed, failed, skipped } }].
  */

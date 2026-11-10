@@ -13,5 +13,19 @@
       "mcp__jira__list_statuses",
       "mcp__jira__list_transitions"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/demo-reminder.mjs\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
   }
 }
