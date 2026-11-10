@@ -52,8 +52,8 @@ jest.mock('../verified-queries/verified-queries.service', () => ({
   VerifiedQueriesService: class {},
 }));
 jest.mock('../metrics/metrics.service', () => ({ MetricsService: class {} }));
-jest.mock('../knowledge/knowledge.service', () => ({
-  KnowledgeService: class {},
+jest.mock('../ontology/ontology.service', () => ({
+  OntologyService: class {},
 }));
 jest.mock('../../mastra/agents/sql-fixer.agent', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -377,8 +377,8 @@ describe('SessionsService sessions bound to the Data Readiness Agent (BA-261)', 
         role: 'system',
         content: [
           'Datasets for this session (data readiness):',
-          '- World Cup — PostgreSQL datasource "World Cup DB", 2 entities',
-          '- Sales — Databricks datasource "Lakehouse", 1 entities',
+          '- World Cup — PostgreSQL datasource "World Cup DB" (datasourceId ds-pg), 2 entities, named like wc.public.matches',
+          '- Sales — Databricks datasource "Lakehouse" (datasourceId ds-dbx), 1 entities, named like main.sales.orders',
           `Today is ${isoToday()}.`,
         ].join('\n'),
       },

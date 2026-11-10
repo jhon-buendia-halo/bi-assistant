@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { assistantShippedPrompt } from './agents/assistant-prompt';
 import {
+  ASSISTANT_V2_PROMPT,
   DATA_READINESS_PROMPT,
   EVAL_JUDGE_PROMPT,
   KNOWLEDGE_BOOTSTRAP_PROMPT,
@@ -18,12 +19,13 @@ import {
 
 /**
  * The shipped, editable system prompt of each built-in agent, by registry
- * key (ADR-0026, data-model 3.10.3): the assistant's, the RFP Builder's and
- * the Data Readiness Agent's without their generated `## Tools` section, a System agent's whole static
+ * key (ADR-0026, data-model 3.10.3): the assistant's, Questions to Insights v2's,
+ * the RFP Builder's and the Data Readiness Agent's without their generated `## Tools` section, a System agent's whole static
  * instructions.
  */
 const SHIPPED: Readonly<Record<string, string>> = {
   assistant: assistantShippedPrompt(),
+  'assistant-v2': ASSISTANT_V2_PROMPT,
   visualization: VISUALIZATION_PROMPT,
   'sql-fixer': SQL_FIXER_PROMPT,
   'sql-verifier': SQL_VERIFIER_PROMPT,

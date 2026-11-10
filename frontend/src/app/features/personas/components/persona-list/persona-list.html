@@ -1,0 +1,125 @@
+<div class="flex flex-col" data-testid="personas-list">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h2 class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong">
+        User personas
+      </h2>
+      <p class="mt-1 max-w-xl text-[13px] text-fg-muted">
+        Describe who asks the questions. Agents will use personas as context in
+        a later release.
+      </p>
+    </div>
+    @if (!formOpen()) {
+      <div class="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          data-testid="persona-new"
+          (click)="openNew()"
+          class="btn btn-primary"
+        >
+          <lucide-angular [img]="Plus" [size]="14" />
+          <span>New persona</span>
+        </button>
+      </div>
+    }
+  </div>
+
+  @if (formOpen()) {
+    <div class="mt-6">
+      <app-persona-form
+        [persona]="editingPersona()"
+        (saved)="onPersonaSaved()"
+        (cancelled)="cancelForm()"
+      />
+    </div>
+  } @else if (loading()) {
+    <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading personas…</span>
+    </div>
+  } @else if (error(); as err) {
+    <p
+      data-testid="personas-error"
+      class="mt-8 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  } @else if (personas().length === 0) {
+    <div
+      data-testid="personas-empty"
+      class="mt-8 flex flex-col items-start gap-3 rounded-xl border border-dashed border-border px-6 py-8"
+    >
+      <span
+        class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"
+      >
+        <lucide-angular [img]="Users" [size]="17" />
+      </span>
+      <p class="text-[13px] text-fg">No personas yet</p>
+      <p class="max-w-md text-[12px] leading-relaxed text-fg-muted">
+        A persona describes someone who asks questions of your data: their role,
+        goals, the questions they typically ask and the kind of answer they
+        prefer.
+      </p>
+      <div class="mt-1 flex items-center gap-2">
+        <button type="button" (click)="openNew()" class="btn btn-primary">
+          <lucide-angular [img]="Plus" [size]="14" />
+          <span>New persona</span>
+        </button>
+      </div>
+    </div>
+  } @else {
+    <div class="mt-6 flex flex-col gap-1.5">
+      @for (item of sortedPersonas(); track item.id) {
+        <div
+          [attr.data-testid]="'persona-row-' + item.id"
+          class="flex items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 py-2.5"
+        >
+          <span
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-on-primary-soft"
+          >
+            <lucide-angular [img]="UserRound" [size]="15" />
+          </span>
+          <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="flex items-center gap-2">
+              <span class="truncate text-[13px] text-fg">{{ item.name }}</span>
+              <span
+                data-testid="persona-expertise-chip"
+                class="chip shrink-0 px-1.5 py-0.5 text-[10px]"
+                [class]="expertiseChipClass(item.expertise)"
+                >{{ expertiseLabel(item.expertise) }}</span
+              >
+            </span>
+            @if (item.role) {
+              <span class="truncate text-[11px] text-fg-muted">{{
+                item.role
+              }}</span>
+            }
+          </span>
+          <button
+            type="button"
+            title="Edit"
+            [attr.data-testid]="'persona-edit-' + item.id"
+            (click)="openEdit(item)"
+            class="shrink-0 btn-icon"
+          >
+            <lucide-angular [img]="Pencil" [size]="14" />
+          </button>
+          <button
+            type="button"
+            title="Delete"
+            [attr.data-testid]="'persona-delete-' + item.id"
+            (click)="deletePersona(item)"
+            [disabled]="deletingId() === item.id"
+            class="shrink-0 btn-icon hover:text-on-danger-soft"
+          >
+            @if (deletingId() === item.id) {
+              <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+            } @else {
+              <lucide-angular [img]="Trash2" [size]="14" />
+            }
+          </button>
+        </div>
+      }
+    </div>
+  }
+</div>

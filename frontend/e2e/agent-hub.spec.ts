@@ -3,6 +3,7 @@ import axe from 'axe-core';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { WORLD_CUP_DATASET, followOsTheme } from './helpers/app-actions';
+import { apiJson } from './helpers/api';
 import {
   createUserAgent,
   publishAgent,
@@ -13,14 +14,27 @@ import {
 /** Mirrors the Feature "Agent Hub" in specs/capabilities/agents-evals/spec.md. */
 
 const ASSISTANT = 'Questions to Insights Assistant';
+/** Questions to Insights v2 (agents-evals R107, BA-320). */
+const V2 = 'Questions to Insights v2';
+const V2_KEY = 'assistant-v2';
+const V2_DESCRIPTION =
+  'A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.';
+const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
 /** The showcase agents in hub order (agents-evals R106). */
 const SHOWCASE_KEYS = ['benchmarking', 'lad-coe', 'strategy', 'survey'];
 /**
  * The Official cards in hub order: the agents that can chat alphabetical by
- * name ("Data Readiness Agent", "Questions to Insights Assistant", "RFP
- * Builder"), then the showcase agents (agents-evals R1, R106).
+ * name ("Data Readiness Agent", "Questions to Insights Assistant",
+ * "Questions to Insights v2", "RFP Builder"), then the showcase agents
+ * (agents-evals R1, R106, R107).
  */
-const OFFICIAL_KEYS = ['data-readiness', 'assistant', 'rfp', ...SHOWCASE_KEYS];
+const OFFICIAL_KEYS = [
+  'data-readiness',
+  'assistant',
+  V2_KEY,
+  'rfp',
+  ...SHOWCASE_KEYS,
+];
 const SHOWCASE_REASON = 'Showcase agent: not available to chat yet.';
 const EVIDENCE_1_15_2 = path.resolve(__dirname, '../../evidence/1.15.2');
 const HEALTH = 'Health plan analyst';
@@ -121,6 +135,9 @@ test('shows the built-in agents and mine in sections', async ({ page }) => {
   await expect(official.getByTestId('agent-card-assistant')).toContainText(
     'Owner: Official',
   );
+  await expect(cards(official)).toHaveCount(OFFICIAL_KEYS.length);
+  expect(await cardKeys(official)).toEqual(OFFICIAL_KEYS);
+  await expect(page.getByTestId('agent-show-more-official')).toHaveCount(0);
 
   const mine = section(page, 'mine');
   await expect(mine.getByTestId(`agent-card-${healthId}`)).toContainText(
@@ -180,11 +197,11 @@ test('filters limit the hub to one kind of agent', async ({ page }) => {
   expect(await sectionIds(page)).toEqual(['mine']);
 
   await filter(page, 'Official').click();
-  // The assistant, the RFP Builder, the Data Readiness Agent and the four
-  // showcase agents are Official; every card shows, alphabetical by name,
-  // showcase agents last (R1-R3, R106).
+  // The assistant, Questions to Insights v2, the RFP Builder, the Data
+  // Readiness Agent and the four showcase agents are Official; every card
+  // shows, alphabetical by name, showcase agents last (R1-R3, R106, R107).
   await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
-  await expect(cards(page)).toHaveCount(7);
+  await expect(cards(page)).toHaveCount(OFFICIAL_KEYS.length);
   expect(await cardKeys(page)).toEqual(OFFICIAL_KEYS);
   await expect(page.getByTestId('agent-show-more-official')).toHaveCount(0);
   expect(await sectionIds(page)).toEqual(['official']);
@@ -480,4 +497,94 @@ test("a showcase agent's page shows its description and System Prompt", async ({
   await page.screenshot({
     path: path.join(EVIDENCE_1_15_2, 'showcase-agent-page.png'),
   });
+});
+
+test('Questions to Insights v2 is an Official card that starts a chat', async ({
+  page,
+}) => {
+  await openHub(page);
+  const official = section(page, 'official');
+  const card = official.getByTestId(`agent-card-${V2_KEY}`);
+  await expect(card).toContainText(V2);
+  await expect(card).toContainText('Owner: Official');
+  await expect(card.getByTestId(`agent-showcase-${V2_KEY}`)).toHaveCount(0);
+  // Right after "Questions to Insights Assistant" (R1, R107).
+  const keys = await cardKeys(official);
+  expect(keys.indexOf(V2_KEY)).toBe(keys.indexOf('assistant') + 1);
+  await expect(
+    card.getByRole('button', { name: `Start chat with ${V2}`, exact: true }),
+  ).toBeEnabled();
+});
+
+test("Questions to Insights v2's page shows its prompt, three tools and no skills", async ({
+  page,
+}) => {
+  await openHub(page);
+  await openAgent(page, V2_KEY, V2);
+  await expect(page.getByText(V2_DESCRIPTION)).toBeVisible();
+  // It opens on the Chat Box, with Start chat (R90, R107).
+  await expect(page.getByTestId('agent-chat-start')).toBeVisible();
+  await expect(
+    page.getByText(`Chats with ${V2} run over datasets you choose.`),
+  ).toBeVisible();
+
+  await page.getByTestId('agent-tab-prompt').click();
+  await expect(
+    page.getByText('Built-in', { exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.getByTestId('agent-prompt-view')).toContainText(
+    'You are Questions to Insights v2',
+  );
+
+  await expect(page.getByTestId('agent-tab-tools')).toHaveText(/Tools \(3\)/);
+  await page.getByTestId('agent-tab-tools').click();
+  for (const tool of V2_TOOLS) {
+    await expect(
+      page.getByText(tool).locator('visible=true').first(),
+    ).toBeVisible();
+  }
+  await expect(
+    page.getByText('create_visual').locator('visible=true'),
+  ).toHaveCount(0);
+
+  await page.getByTestId('agent-tab-skills').click();
+  await expect(page.getByTestId('agent-tab-skills')).toHaveText(/Skills \(0\)/);
+  await expect(page.getByText('This agent has no skills.')).toBeVisible();
+
+  await page.getByTestId('agent-tab-memory').click();
+  await expect(page.getByText('Recent messages replayed')).toBeVisible();
+  await expect(page.getByText('40 messages')).toBeVisible();
+});
+
+test('saving a Questions to Insights v2 prompt that loses its identity line is refused', async ({
+  page,
+}) => {
+  await openHub(page);
+  await openAgent(page, V2_KEY, V2);
+  await page.getByTestId('agent-tab-prompt').click();
+  await page.getByTestId('agent-prompt-edit').click();
+  await expect(page.getByTestId('agent-prompt-editing')).toBeVisible();
+
+  const editor = page.getByRole('textbox', {
+    name: 'System prompt',
+    exact: true,
+  });
+  await editor.focus();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.press('Delete');
+  await page.keyboard.type('You are a data analyst.');
+  await page.getByTestId('agent-prompt-save').click();
+
+  await expect(
+    page.getByText(
+      'The Questions to Insights v2 prompt must start with "You are Questions to Insights v2"',
+    ),
+  ).toBeVisible();
+  await expect(page.getByTestId('agent-prompt-modified')).toHaveCount(0);
+  const agent = await apiJson<{ prompt?: { modified: boolean } }>(
+    page,
+    'GET',
+    `/agents/${V2_KEY}`,
+  );
+  expect(agent.prompt?.modified).toBe(false);
 });

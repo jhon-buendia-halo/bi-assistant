@@ -1,0 +1,96 @@
+@if (selected(); as dataset) {
+  <div class="flex flex-col gap-3" data-testid="ontology-overview-dataset">
+    <button
+      type="button"
+      data-testid="ontologies-back"
+      (click)="back()"
+      class="btn btn-ghost w-fit px-2 py-1 text-[12px]"
+    >
+      <lucide-angular [img]="ArrowLeft" [size]="14" />
+      <span>Ontologies</span>
+    </button>
+    <p class="text-[12px] text-fg-muted">
+      Dataset <span class="font-medium text-fg">{{ dataset.name }}</span>
+    </p>
+    <app-ontology-panel [dataset]="dataset" />
+  </div>
+} @else {
+  <div class="flex flex-col" data-testid="ontology-overview">
+    <h2 class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong">
+      Ontologies
+    </h2>
+    <p class="mt-1 max-w-2xl text-[13px] text-fg-muted">
+      Each dataset's concepts, relations, constraints and instructions. Choose
+      a dataset to review or edit its ontology; it is the same as the Ontology
+      tab of that dataset.
+    </p>
+
+    @if (loading()) {
+      <div class="mt-8 flex items-center gap-2.5 text-fg-muted">
+        <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+        <span>Loading ontologies…</span>
+      </div>
+    } @else if (error(); as err) {
+      <p
+        class="mt-6 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+        data-testid="ontologies-error"
+      >
+        {{ err }}
+      </p>
+    } @else if (summaries().length === 0) {
+      <div
+        class="mt-6 flex flex-col items-start gap-2 rounded-xl border border-dashed border-border px-6 py-8"
+        data-testid="ontologies-empty"
+      >
+        <p class="text-[13px] text-fg">No datasets yet</p>
+        <p class="text-[12px] text-fg-muted">
+          Create a dataset under Datasets; its ontology appears here.
+        </p>
+      </div>
+    } @else {
+      @if (sharedCount() > 0) {
+        <p
+          class="mt-4 flex items-center gap-1.5 text-[12px] text-fg-muted"
+          data-testid="ontologies-shared"
+        >
+          <lucide-angular [img]="Globe" [size]="12" />
+          <span
+            >{{ sharedCount() }} shared
+            {{ sharedCount() === 1 ? "item applies" : "items apply" }} to every
+            dataset.</span
+          >
+        </p>
+      }
+      <div class="mt-4 flex flex-col gap-1.5" data-testid="ontologies-list">
+        @for (s of summaries(); track s.dataset.name) {
+          <button
+            type="button"
+            [attr.data-testid]="'ontology-dataset-' + s.dataset.name"
+            (click)="open(s.dataset)"
+            class="flex items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 py-2.5 text-left transition-colors hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          >
+            <span
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-on-primary-soft"
+            >
+              <lucide-angular [img]="Network" [size]="15" />
+            </span>
+            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span class="truncate text-[13px] text-fg">{{ s.dataset.name }}</span>
+              <span class="truncate text-[11px] text-fg-muted">{{
+                s.failed ? "Could not read this ontology" : countsLine(s)
+              }}</span>
+            </span>
+            @if (s.pending > 0) {
+              <span
+                class="chip chip-info shrink-0 px-1.5 py-0.5 text-[10px]"
+                [attr.data-testid]="'ontology-pending-' + s.dataset.name"
+                >{{ s.pending }} pending</span
+              >
+            }
+            <lucide-angular [img]="ChevronRight" [size]="15" class="shrink-0 text-fg-muted" />
+          </button>
+        }
+      </div>
+    }
+  </div>
+}

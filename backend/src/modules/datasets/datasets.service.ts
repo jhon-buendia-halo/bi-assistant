@@ -1,4 +1,12 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
+import { ONTOLOGY_STORE } from '../../infrastructure/database/doc-store';
+import type { DocStore } from '../../infrastructure/database/doc-store';
+import type { OntologyItem } from '../ontology/entities/ontology-item.entity';
 import { DatasourcesService } from '../datasources/datasources.service';
 import type { ForeignKeyEdge } from '../datasources/connectors/connector';
 import type { QueryResult } from '../datasources/entities/datasource.entity';
@@ -42,14 +50,24 @@ export class DatasetsService {
   constructor(
     private readonly repository: DatasetsRepository,
     private readonly datasources: DatasourcesService,
+    // The ontology collection itself, not OntologyModule: that module
+    // imports DatasetsModule, so importing it here would be circular.
+    @Inject(ONTOLOGY_STORE)
+    private readonly ontologyItems: DocStore<OntologyItem>,
   ) {}
 
   list(): Promise<DatasetDoc[]> {
     return this.repository.list();
   }
 
-  delete(name: string): Promise<number> {
-    return this.repository.delete(name);
+  /**
+   * Delete a dataset and its own ontology items; shared items (`dataset:
+   * null`) stay. Resolves to the number of datasets removed.
+   */
+  async delete(name: string): Promise<number> {
+    const removed = await this.repository.delete(name);
+    await this.ontologyItems.deleteMany({ dataset: name });
+    return removed;
   }
 
   /**

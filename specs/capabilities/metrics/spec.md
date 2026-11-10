@@ -50,7 +50,7 @@ Ownership
 - Endpoints: list (optionally by entities), candidates (optionally by entities), create, replace, delete, all under the metrics resource; mutations answer with a success flag, message and the metric. See [../../system/api.md](../../system/api.md).
 - Collection `metrics` and the metric document: see [../../system/data-model.md](../../system/data-model.md).
 - The assistant's use of the block: see [../../system/agents.md](../../system/agents.md).
-- Verified queries (candidate source): [../verified-queries/spec.md](../verified-queries/spec.md). Dataset editor hosting the panel: [../datasets/spec.md](../datasets/spec.md). Sibling context blocks: [../knowledge/spec.md](../knowledge/spec.md).
+- Verified queries (candidate source): [../verified-queries/spec.md](../verified-queries/spec.md). Dataset editor hosting the panel: [../datasets/spec.md](../datasets/spec.md). Sibling context blocks: [../dataset-ontology/spec.md](../dataset-ontology/spec.md).
 
 ## UI
 
@@ -141,6 +141,6 @@ Feature: Metrics panel (E2E: none yet)
 - Open question: the datasource stored on a metric is whichever datasource is selected in the dataset editor when saving, not necessarily the one the entity came from. Intended?
 - Open question: the assistant instructions do not mention metrics explicitly; the block header itself carries the "ALWAYS prefer these exact expressions" rule. Should the agent prompt state it too (see [../../system/agents.md](../../system/agents.md))?
 - Open question: roadmap Milestone 1.3 (Knowledge Store, BA-4) plans to link metrics, verified queries and relationships to concepts (1.3.2); none of that linkage exists yet beyond the metric's source verified-query id.
-- Open question: metrics are not shown anywhere in chat provenance (unlike knowledge snippets), so a reader cannot tell which metric an answer used.
+- Open question: metrics are not shown anywhere in chat provenance (unlike ontology items), so a reader cannot tell which metric an answer used.
 
 <!-- sources: backend/src/modules/metrics/**, backend/src/modules/sessions/sessions.service.ts (agentContext), frontend/src/app/features/datasets/components/metrics-panel/**, frontend/src/app/features/datasets/services/metrics-api.service.ts, frontend/src/app/features/datasets/models/metric.model.ts, frontend/src/app/features/datasets/components/catalog-browser/catalog-browser.html -->

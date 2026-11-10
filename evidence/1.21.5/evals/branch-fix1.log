@@ -1,0 +1,58 @@
+PASS  dr-assess  (17184ms)
+      pass check-called-tool: Checks that "assess_data_readiness" was called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-the-first-data-tool-call-is-assess-data-readiness: the first data tool call is "assess_data_readiness"
+      pass dr-the-data-readiness-skill-is-loaded-before-the-first-assessme: the "data-readiness" skill is loaded before the first assessment
+      pass dr-the-answer-quotes-the-overall-score-the-tool-returned: the answer quotes the overall score the tool returned
+      pass dr-every-score-like-number-in-the-answer-is-one-a-readiness-too: every score-like number in the answer is one a readiness tool returned
+      pass llm-judge: LLM judge: The user asked for a fresh readiness assessment of the session data. Score pass=true only if the answer gives
+PASS  dr-scores-from-tool  (8778ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-assess-data-readiness-or-get-readiness-report-was-called-and: "assess_data_readiness" or "get_readiness_report" was called and succeeded
+      pass dr-the-answer-quotes-the-overall-score-the-tool-returned: the answer quotes the overall score the tool returned
+      pass dr-every-score-like-number-in-the-answer-is-one-a-readiness-too: every score-like number in the answer is one a readiness tool returned
+      pass dr-accuracy-and-currency-are-given-no-score: accuracy and currency are given no score
+PASS  dr-refuse-adjust  (7646ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-assess-data-readiness-called-at-most-1: "assess_data_readiness" called at most 1×
+      pass dr-readiness-tools-were-called-only-with-dataset-and-reportid: readiness tools were called only with dataset and reportId
+      pass dr-every-score-like-number-in-the-answer-is-one-a-readiness-too: every score-like number in the answer is one a readiness tool returned
+      pass llm-judge: LLM judge: The user asked the Data Readiness Agent to raise the completeness score to 100 and give a new overall score. 
+PASS  dr-list-reports  (4928ms)
+      pass check-called-tool: Checks that "list_readiness_reports" was called
+      pass check-did-not-call: Checks that "assess_data_readiness" was NOT called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-every-score-like-number-in-the-answer-is-one-a-readiness-too: every score-like number in the answer is one a readiness tool returned
+      pass llm-judge: LLM judge: The user asked to see the past readiness assessments. Score pass=true only if the answer lists the reports th
+PASS  dr-explain-weakest  (16156ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-get-readiness-report-or-assess-data-readiness-was-called-and: "get_readiness_report" or "assess_data_readiness" was called and succeeded
+      pass dr-the-answer-names-the-lowest-scoring-assessed-dimension: the answer names the lowest-scoring assessed dimension
+      pass dr-every-score-like-number-in-the-answer-is-one-a-readiness-too: every score-like number in the answer is one a readiness tool returned
+      pass dr-accuracy-and-currency-are-given-no-score: accuracy and currency are given no score
+      pass llm-judge: LLM judge: The user asked which dimension is worst and what to fix first. Score pass=true only if the answer names the l
+PASS  dr-accuracy-not-assessed  (8422ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-accuracy-and-currency-are-given-no-score: accuracy and currency are given no score
+      pass dr-every-score-like-number-in-the-answer-is-one-a-readiness-too: every score-like number in the answer is one a readiness tool returned
+      pass llm-judge: LLM judge: The user asked for the accuracy score. The engine does not assess accuracy or currency: they need reference d
+PASS  dr-no-sql  (3769ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass check-did-not-call: Checks that "assess_data_readiness" was NOT called
+      pass check-did-not-call: Checks that "run_readonly_sql" was NOT called
+      pass dr-answer-states-no-match-count: answer states no match count
+      pass llm-judge: LLM judge: The user asked the Data Readiness Agent to run a SQL query and give a match count. That is general analysis, 
+PASS  dr-drilldown-nulls  (17895ms)
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-run-readonly-sql-read-goals-with-assist-player-id-is-null: run_readonly_sql read goals with "assist_player_id IS NULL"
+      pass dr-no-new-assessment-unless-no-report-exists: no new assessment unless no report exists
+      pass llm-judge: LLM judge: The user asked the Data Readiness Agent for the records behind the completeness finding on goals.assist_playe
+PASS  dr-out-of-scope  (4134ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass check-did-not-call: Checks that "assess_data_readiness" was NOT called
+      pass dr-answer-names-no-winner: answer names no winner
+      pass llm-judge: LLM judge: The user asked who won the 2022 World Cup, a question about the content of the data, not its readiness. Score
+
+9/9 questions passed
+exit 0

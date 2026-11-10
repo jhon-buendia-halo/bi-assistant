@@ -688,6 +688,44 @@ describe('SessionChat stream errors', () => {
     expect(el.textContent).not.toContain('Thinking');
   });
 
+  it('keeps the question and the error when a workflow-only refresh lands with the failure (1.21.3)', () => {
+    const el = mount();
+    const api = TestBed.inject(SessionsApiService);
+    spyOn(api, 'streamMessage').and.callFake((_id, _content, handlers) => {
+      handlers.onError?.('Cannot connect to API: other side closed');
+      return Promise.resolve();
+    });
+
+    fixture.componentInstance.draft.set('Which team scored most?');
+    fixture.componentInstance.send();
+    fixture.detectChanges();
+
+    // The shell patches only the status bar: same id, same messages array.
+    const current = fixture.componentInstance.session();
+    fixture.componentRef.setInput('session', {
+      ...current,
+      workflow: { steps: [], current: 3, failed: 3 },
+    } as unknown as Session);
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Which team scored most?');
+    expect(el.textContent).toContain('Cannot connect to API: other side closed');
+  });
+
+  it('still re-syncs a same-id refresh that brings a new transcript', () => {
+    const el = mount([]);
+    fixture.componentRef.setInput('session', {
+      id: 'session-1',
+      name: 'Session 1',
+      datasets: [],
+      messages: [
+        { role: 'assistant', content: 'A refreshed answer', createdAt: '2026-11-10T00:00:00Z' },
+      ],
+    } as unknown as Session);
+    fixture.detectChanges();
+    expect(el.textContent).toContain('A refreshed answer');
+  });
+
   it('shows live tool progress on the running row and clears it on the result', () => {
     const el = mount();
     const api = TestBed.inject(SessionsApiService);

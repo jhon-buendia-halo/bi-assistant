@@ -34,6 +34,8 @@ import {
   builtinAgentSession,
   builtinSessionDatasets,
   canStartBuiltinSession,
+  PICKED_DATASETS_AGENT_KEYS,
+  runsOnPickedDatasets,
 } from './builtin-sessions';
 
 const READINESS_REQUIREMENT = 'Add a PostgreSQL or Databricks dataset first';
@@ -99,6 +101,16 @@ describe('built-in agents with sessions of their own (ADR-0028)', () => {
     });
     expect(builtinAgentSession('assistant')).toBeUndefined();
     expect(builtinAgentSession('toString')).toBeUndefined();
+    // Questions to Insights v2 declares no dataset: it runs on picked ones.
+    expect(builtinAgentSession('assistant-v2')).toBeUndefined();
+  });
+
+  it('runs Questions to Insights v2 sessions on picked datasets, and only it (BA-320)', () => {
+    expect(PICKED_DATASETS_AGENT_KEYS).toEqual(['assistant-v2']);
+    expect(runsOnPickedDatasets('assistant-v2')).toBe(true);
+    for (const key of ['assistant', 'rfp', 'data-readiness', 'user-1']) {
+      expect(runsOnPickedDatasets(key)).toBe(false);
+    }
   });
 
   it('shows the RFP Builder as Official with its dataset and the chat requirement while it is missing (api.md 2.6 #33)', async () => {

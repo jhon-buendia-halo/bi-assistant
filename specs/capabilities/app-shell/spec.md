@@ -8,8 +8,8 @@ Defined in [../../product/glossary.md](../../product/glossary.md): session, data
 
 Capability-local vocabulary, used only for UI words:
 - **Navigation rail** — the narrow, always-visible left column of icon buttons: the four workspace areas at the top, and the account avatar, system logs and Settings at the bottom.
-- **Area** — what the rail selects: Datasets, Agents, Knowledge, Sessions or Settings. Sessions and Settings show a list pane beside their content.
-- **Main view** — what the central area shows: home (empty), Datasets, dataset editor, Agents, an agent's detail, Knowledge, the Sessions area (with nothing open), new-session composer, a session's chat, or a Settings section.
+- **Area** — what the rail selects: Datasets, Agents, Context, Sessions or Settings. Sessions and Settings show a list pane beside their content.
+- **Main view** — what the central area shows: home (empty), Datasets, dataset editor, Agents, an agent's detail, Context (its section cards) or one of its sections (Ontologies, User personas), the Sessions area (with nothing open), new-session composer, a session's chat, or a Settings section.
 - **Details panel** — the right-hand column. What it shows depends on the main view (see R14).
 - **Backend status** — one of `starting`, `ready`, `restarting`, `down`, reported by the desktop shell's backend supervisor.
 
@@ -18,7 +18,8 @@ Capability-local vocabulary, used only for UI words:
 Layout and navigation
 - R1. The system SHALL present, left to right: the navigation rail (expandable into a drawer, R48), then a column holding the "US Health Agentic Hub" banner above the page and, when open, the details panel. Everything sits inside a textured gradient frame.
 - R2. On launch the navigation drawer SHALL be expanded unless the user last collapsed it (R50), the details panel SHALL be collapsed and the main view SHALL be home. The details panel state SHALL NOT be remembered between launches.
-- R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Agents**, **Knowledge** and **Sessions**. Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it, except in the agent editor and, for **Sessions**, in a chat or the composer: there, **Agents** SHALL return to the hub, after the unsaved-changes question (agents-evals R59). Agents stays current while an agent's detail is open, Datasets while the dataset editor is open, and Sessions while the composer or a chat is open. Choosing **Sessions** SHALL open the Sessions page with the list of sessions (R46), also from an open chat or the composer, and SHALL NOT change the drawer.
+- R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Agents**, **Context** and **Sessions**. Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it, except in the agent editor and, for **Sessions**, in a chat or the composer: there, **Agents** SHALL return to the hub, after the unsaved-changes question (agents-evals R59). Agents stays current while an agent's detail is open, Datasets while the dataset editor is open, and Sessions while the composer or a chat is open. Choosing **Sessions** SHALL open the Sessions page with the list of sessions (R46), also from an open chat or the composer, and SHALL NOT change the drawer.
+- R3a. Choosing **Context** SHALL show the Context page: the level-two heading "Context", the note "What agents are given besides your data." and one card per section, laid out like the Agent Hub cards (three to a row). Each card SHALL show the section's icon tile, name and a two-line description, and clicking it SHALL open that section, with Context still the current rail item and a **Context** back control above the section that returns to the cards. Choosing **Context** on the rail from a section SHALL also return to the cards (as Sessions returns to its list, R3). The sections, in this order, are **Ontologies** ("Each dataset's concepts, relations, constraints and instructions the assistant applies.", network icon), which shows every dataset's ontology ([../dataset-ontology/spec.md](../dataset-ontology/spec.md) R40), and **User personas** ("Who asks the questions: their role, goals, typical questions and the answers they prefer.", Users icon), which shows the User personas section ([../user-personas/spec.md](../user-personas/spec.md)). Context replaced the rail's Knowledge item on 2026-11-09 (roadmap 1.21.4), User personas was added the same day (roadmap 1.21.6), and the Knowledge card left Context when knowledge became each dataset's ontology, edited in the dataset editor ([../dataset-ontology/spec.md](../dataset-ontology/spec.md), roadmap 1.21.8); the Ontologies card brought those ontologies back to Context the same day (roadmap 1.21.11). Later sections are added as cards.
 - R4. Below the workspace items the rail SHALL offer **Open system logs** (tooltip "System logs and diagnostics") and **Settings**, then a divider and the LenAI mark with "Powered by LenAI". The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+". The rail SHALL show no account avatar, no account menu and no Admin item: the app has one built-in super admin and nothing in the UI shows a user name.
 - R5. Choosing **Settings** on the rail SHALL show the Settings area: a list pane with "Settings navigation" offering five sections, **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** ([../developer-settings/spec.md](../developer-settings/spec.md)) and **Appearance** (R39–R45), beside the chosen section's form. Choosing a section SHALL show it and mark it current; choosing the current section again SHALL deselect it and show the prompt "Choose a settings section." Choosing another rail area SHALL leave Settings; coming back SHALL show the section that was chosen.
 - R6. Removed in roadmap 1.8.3: the rail cannot be collapsed. (Previously: the Collapse sidebar and Expand sidebar controls.)
@@ -83,7 +84,7 @@ Appearance
 Accessibility and visual stability
 - R35. The application shell, in its initial state, SHALL produce zero violations when scanned by an automated accessibility engine (axe-core, all default rules).
 - R36. The system SHALL expose labelled landmarks: "Navigation rail" (complementary), "Workspace navigation", "Sessions" (the list on the Sessions page), "Settings navigation" (in the Settings area), and "Details panel".
-- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Agents, Knowledge, Sessions, Open system logs, Settings), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel and Session options.
+- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Agents, Context, Sessions, Open system logs, Settings), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel and Session options.
 - R38. The application shell in its initial state SHALL match the approved `application-shell` screenshot baseline. The baseline SHALL be changed only deliberately, together with an intended visual change.
 
 ## Edge cases and errors
@@ -111,7 +112,7 @@ Accessibility and visual stability
 
 Lives in the shell itself: [../../system/ui.md](../../system/ui.md). States:
 - Banner: hidden (starting, ready), amber (restarting), red (down).
-- Rail: one current area (Datasets, Agents, Knowledge, Sessions or Settings), or none on home.
+- Rail: one current area (Datasets, Agents, Context, Sessions or Settings), or none on home.
 - Details panel: expanded at the remembered width, collapsed.
 - Toasts: success, info, error, several stacked.
 
@@ -143,7 +144,7 @@ Feature: Layout and accessibility
 
   Scenario: Has no automatically detectable accessibility violations on any screen in either theme
     Given the World Cup datasource and dataset exist
-    When an automated accessibility scan runs in the light theme and in the dark theme on: Datasets, the dataset editor, Agents, an agent's detail, Knowledge, the Sessions area, the new-session composer, and each Settings section
+    When an automated accessibility scan runs in the light theme and in the dark theme on: Datasets, the dataset editor, Agents, an agent's detail, Context (User personas), the Sessions area, the new-session composer, and each Settings section
     Then it finds no violations
 
   Scenario: Text in the app can be selected
@@ -170,8 +171,12 @@ Feature: Navigation rail
     Then I see the "Agents" page and "Agents" is the current rail item
     When I click "Agents" on the rail again
     Then I still see the "Agents" page
-    When I click "Knowledge" on the rail
-    Then "Knowledge" is the current rail item
+    When I click "Context" on the rail
+    Then "Context" is the current rail item and I see the "Context" page with an "Ontologies" card and a "User personas" card, and no "Knowledge" card
+    When I click the "User personas" card
+    Then I see the "User personas" page and "Context" is still the current rail item
+    When I click the "Context" back control
+    Then I see the "Context" page with its cards
     When I click "Sessions" on the rail
     Then I see the "Sessions" list in the middle of the page and the "Start New Conversation" button
     And the drawer does not list sessions
@@ -197,7 +202,7 @@ Feature: Navigation rail
   Scenario: Expands the rail into a drawer with labels
     Given the navigation drawer is collapsed
     When I click "Expand navigation"
-    Then I see the labels "Datasets", "Agents", "Knowledge" and "Sessions" next to their icons
+    Then I see the labels "Datasets", "Agents", "Context" and "Sessions" next to their icons
     And I see no list of sessions in the drawer
     When I click "Collapse navigation"
     Then the labels are hidden

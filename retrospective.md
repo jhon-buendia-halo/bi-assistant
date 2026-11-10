@@ -14,6 +14,38 @@ Entry template:
 
 ---
 
+## 2026-11-10 — 1.21.1–1.21.11 Questions to Insights v2, Data Readiness drill-down, User personas and the dataset ontology (BA-320)
+
+### What went well
+- The ontology design was approved from a review page before any code, and its contract was written in [docs/plans/ba-320-dataset-ontology.md](docs/plans/ba-320-dataset-ontology.md). Four parallel units then built the backend core, the bootstrap, the frontend and the specs against that one contract, with few conflicts.
+- A context-equality unit test proved the assistant's context block byte-identical for migrated data, so replacing Knowledge with the ontology changed nothing the assistant is told.
+- Live smoke runs caught real issues the unit tests missed: Data Readiness fanning queries across all datasources of a session and the SQL fixer rewriting the strays into unrelated queries (Block D1 now carries `datasourceId`); the bootstrap failing with the structured-output "Too big" error because the schema capped drafts at 15; the graph layout piling unconnected nodes into the corners.
+- The per-story fast loop, with the user testing each story by hand before the slow steps, kept the later requests (graph, Ontologies card, default persona) small and fast.
+
+### What went wrong
+- The first "run the app" used plain `ng serve`. Its relative API base URL cannot reach the backend in a browser (there is no dev proxy), so the app showed "Could not load configured datasources".
+- The CRLF working copies on Windows make about 10 backend suites and `check-specs`' Playwright-mirror check fail on `main` too. That hid one real regression (the built-in skills list missing `readiness-drilldown`) until a full-suite baseline comparison.
+- An Angular template used `picker()?.index === null`, which is true when the signal itself is null (safe navigation yields null), and that hid the Add mapping button.
+- Edit forms opened at the top of a long list, and the three unlabeled mapping boxes confused the user. That UX was inherited from the old Knowledge form and should have been designed.
+- The dataset editor header is hidden on the Ontology tab, which broke heading order (axe) and left the tab without context.
+- A subagent edited a template with `sed` despite the brief.
+- The stale `backend/public` bundle made Playwright fail until it was rebuilt: the web target serves the built bundle.
+
+- The 1.21.3 workflow bar shipped through the fast loop with a chat bug the user never hit by hand: a failed step's `workflow` event re-synced the transcript over the question and the error. Only the acceptance-gate E2E (stub dropping the connection) found it.
+- The Data Readiness eval harness bound every PostgreSQL dataset to agent sessions and ignored `EVAL_DATASETS`; 1.21.2's setup script loads all four samples, so the agent rightly asked which dataset and cases failed. The harness now narrows agent sessions to the run's datasets.
+- The new drill-down eval caught the agent describing rows its query never returned; the skill now forbids conclusions about unreturned records.
+### What to do differently
+- For browser checks, run web mode (`build:all` plus `cli.js`), never bare `ng serve`.
+- Compare the full unit suites against `main` before calling a failure "pre-existing".
+- In Angular templates compare a signal's value against null explicitly, not through `?.`.
+- Review list and editor UX at design time: where the editor opens, and labelled controls.
+- Rebuild `backend/public` before running Playwright.
+- Structured-output schemas must not cap array lengths the service already caps; cap after post-processing.
+- Merge `origin/main` into the epic branch at the start of the acceptance gate, not at the end: `main` gained the BA-119 agent org (and its planned demo-video evidence) while this epic was in its fast loop.
+- Give the eval harness the datasets a run names for agent-bound sessions, and run new eval cases several times before calling a prompt done: one rule ("state only facts a tool result shows") took the drill-down case from 2 failures in 9 runs to none.
+
+---
+
 ## 2026-11-09 — 0.4.3 Agent roles for the token-minimal agent org (BA-119)
 
 ### What went well

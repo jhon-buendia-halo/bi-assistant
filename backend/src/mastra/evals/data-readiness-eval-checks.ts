@@ -250,8 +250,10 @@ export function sameNumber(quoted: QuotedNumber, allowed: number): boolean {
  * tool returned in this conversation, a count of a complete `topFindings`
  * list (`topFindingCounts`), or a method constant of the skill.
  * An answer that quotes such numbers with no successful readiness call fails.
+ * `allow` adds numbers the case's question states, so a refusal may echo
+ * them ("I can't set completeness to 100").
  */
-export function quotedNumbersFromTools(): EvalCustomCheck {
+export function quotedNumbersFromTools(allow: number[] = []): EvalCustomCheck {
   return drCheck(
     'every score-like number in the answer is one a readiness tool returned',
     ({ answer, toolCalls }) => {
@@ -262,6 +264,7 @@ export function quotedNumbersFromTools(): EvalCustomCheck {
         ...numbersIn(outputs),
         ...topFindingCounts(outputs),
         ...METHOD_CONSTANTS,
+        ...allow,
       ];
       const invented = quoted.filter(
         (q) => !allowed.some((value) => sameNumber(q, value)),
@@ -430,6 +433,67 @@ export function answerExcludes(
     const hit = answer.match(pattern);
     return hit ? `the answer contains "${hit[0]}"` : undefined;
   });
+}
+
+/**
+ * D12 drill-down (ADR-0035): a successful `run_readonly_sql` read `table`
+ * filtering `column IS NULL` (the column may carry a table alias, the table
+ * a schema or catalog prefix).
+ */
+export function sqlSelectsNulls(
+  table: string,
+  column: string,
+): EvalCustomCheck {
+  const tablePattern = new RegExp(
+    `(?:^|[\\s."\`])${table}(?:$|[\\s."\`])`,
+    'i',
+  );
+  const nullPattern = new RegExp(
+    `(?:^|[\\s(.,"\`])${column}["\`]?\\s+IS\\s+NULL\\b`,
+    'i',
+  );
+  return drCheck(
+    `run_readonly_sql read ${table} with "${column} IS NULL"`,
+    ({ toolCalls }) => {
+      const sqls = callsOf(toolCalls, 'run_readonly_sql')
+        .filter((call) => !call.failed)
+        .map((call) => fieldText(callInput(call)['sql']));
+      if (!sqls.length) {
+        return `no successful run_readonly_sql call; tools: ${names(toolCalls)}`;
+      }
+      return sqls.some((sql) => tablePattern.test(sql) && nullPattern.test(sql))
+        ? undefined
+        : `no query reads ${table} with ${column} IS NULL: ${sqls
+            .map((sql) => sql.replace(/\s+/g, ' ').slice(0, 200))
+            .join(' | ')}`.slice(0, 600);
+    },
+  );
+}
+
+/**
+ * D7: a drill-down runs no new assessment unless the dataset has no report
+ * yet (an earlier `get_readiness_report` failed, or `list_readiness_reports`
+ * returned none).
+ */
+export function assessOnlyWithoutReport(): EvalCustomCheck {
+  return drCheck(
+    'no new assessment unless no report exists',
+    ({ toolCalls }) => {
+      const assess = toolCalls.findIndex(
+        (c) => c.name === 'assess_data_readiness',
+      );
+      if (assess < 0) return undefined;
+      const noReport = toolCalls.slice(0, assess).some((call) => {
+        if (call.name === 'get_readiness_report') return call.failed;
+        if (call.name !== 'list_readiness_reports' || call.failed) return false;
+        const reports = outputObject(call)?.['reports'];
+        return Array.isArray(reports) && reports.length === 0;
+      });
+      return noReport
+        ? undefined
+        : `"assess_data_readiness" ran although no lookup showed the dataset without a report; tools: ${names(toolCalls)}`;
+    },
+  );
 }
 
 /** Re-exported for the set and its spec. */

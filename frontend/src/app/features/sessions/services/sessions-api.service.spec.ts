@@ -50,6 +50,20 @@ describe('SessionsApiService feedback', () => {
     });
   });
 
+  it('creates over picked datasets, sending agentId only when given (R64)', () => {
+    service.create('Q', ['Core']).subscribe();
+    expect(http.expectOne(`${API_BASE_URL}/sessions`).request.body).toEqual({
+      name: 'Q',
+      datasets: ['Core'],
+    });
+    service.create('Q', ['Core'], 'assistant-v2').subscribe();
+    expect(http.expectOne(`${API_BASE_URL}/sessions`).request.body).toEqual({
+      name: 'Q',
+      datasets: ['Core'],
+      agentId: 'assistant-v2',
+    });
+  });
+
   it('downloads an RFP package zip or one file as a blob', () => {
     service.downloadRfpPackage('s 1', 'rfp-1').subscribe();
     const zip = http.expectOne(

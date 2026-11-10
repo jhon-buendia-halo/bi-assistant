@@ -17,6 +17,7 @@ Part of the workflow in [CLAUDE.md](../../../CLAUDE.md), which keeps the always-
 2. Launch an isolated instance on free ports with a throwaway data dir (copy a real data dir to test migrations on real data):
    `node backend/dist/cli.js --no-open --port 3400 --data-dir <tmp>/verify-data --intellify-api-port 3420`
    Never use 3000 or a port another app/session runs; stop it by its task/PID afterwards.
+   Once it answers, configure it: `node scripts/setup-local.mjs http://127.0.0.1:3400`. It saves the LLM from `.env.llm.local` (custom endpoint, Anthropic style by default) and loads every Testing Data fixture plus the Intellify RFP API ([delivery.md](../../../specs/system/delivery.md) 2). If `.env.llm.local` is missing, ask the user for the endpoint rather than guessing.
    RFP Builder / Intellify API flows need its database loaded and the app restarted first: see the `intellify-api` skill.
 3. Drive it with Playwright from Node, resolving the package from the frontend:
    `const { chromium } = require(require.resolve('playwright', { paths: ['<worktree>/frontend'] }))`.

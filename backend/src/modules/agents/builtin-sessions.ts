@@ -1,4 +1,5 @@
 import type { DatasourceKind } from '../datasources/entities/datasource.entity';
+import { ASSISTANT_V2_AGENT_KEY } from '../../mastra/agents/assistant-v2-catalog';
 
 /**
  * Built-in agents a session can be bound to (ADR-0028): each declares the
@@ -52,6 +53,23 @@ export const BUILTIN_AGENT_SESSIONS: Readonly<
     ],
   },
 };
+
+/**
+ * Built-in agents whose sessions run over the datasets the user picks, as a
+ * plain session's do (BA-320): Questions to Insights v2. They declare no
+ * dataset, so the hub shows no datasets and no requirement for them, and
+ * `POST /sessions` with their key validates the name and datasets of the
+ * request as for a session without an agent, then binds the session to the
+ * agent by its registry key (ADR-0028).
+ */
+export const PICKED_DATASETS_AGENT_KEYS: readonly string[] = [
+  ASSISTANT_V2_AGENT_KEY,
+];
+
+/** Whether a session bound to built-in `key` runs over picked datasets. */
+export function runsOnPickedDatasets(key: string): boolean {
+  return PICKED_DATASETS_AGENT_KEYS.includes(key);
+}
 
 /** The session descriptor of a built-in agent, if it declares one. */
 export function builtinAgentSession(

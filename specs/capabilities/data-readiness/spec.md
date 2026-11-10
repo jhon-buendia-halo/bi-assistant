@@ -31,7 +31,7 @@ Capability-local vocabulary:
   - While no dataset bound to a PostgreSQL or Databricks datasource exists, Start chat SHALL be disabled, and its title SHALL read `Add a PostgreSQL or Databricks dataset first`.
   - Its detail view SHALL have the Official agent's tabs ([agents-evals](../agents-evals/spec.md) R5):
     - the System Prompt tab shows the prompt as served and allows the built-in prompt edit; an edited prompt SHALL still start with `You are the Data Readiness Agent`;
-    - the Skills tab lists the skill `data-readiness` as Built-in and On demand;
+    - the Skills tab lists the skills `data-readiness` and `readiness-drilldown` as Built-in and On demand;
     - the Tools tab lists its own tools.
 - R2. **Start chat** on the Data Readiness Agent SHALL create a session at once, with no form.
   - The session is named "Data Readiness" and bound to the agent. It covers every dataset bound to a PostgreSQL or Databricks datasource, ordered by dataset name.
@@ -50,9 +50,14 @@ Capability-local vocabulary:
   - `assess_data_readiness` runs an assessment of one session dataset and stores the report.
   - `get_readiness_report` reads a stored report.
   - `list_readiness_reports` lists the stored reports of a session dataset's datasource, newest first.
+  - `describe_entity` and `run_readonly_sql`, the assistant's shared dataset tools, to show the records behind a finding (R4, ADR-0035). They are session-scoped, read-only and guarded as in [agents.md](../../system/agents.md) 3.2 and 3.4.
 
-  It SHALL have no SQL tool, no dataset-browsing tool and no workspace tool. A tool SHALL never fail the turn: errors reach the model as `{ error }` text ([agents.md](../../system/agents.md) 3.13).
-- R4. The agent SHALL quote a score, a band or a finding only from a tool result in the conversation. It SHALL never estimate, round differently, re-weight or "adjust" a score. Asked to change one, it SHALL say in one sentence that scores come from the deterministic engine and cannot be changed in chat. With more than one dataset in the session and none named, it SHALL ask which one with `ask_clarification`. It SHALL decline, in one sentence, anything that is not about the readiness of the session's data. The prompt and its rules are in [agents.md](../../system/agents.md) 2.10.
+  It SHALL have no workspace tool and no other dataset-browsing tool. A tool SHALL never fail the turn: errors reach the model as `{ error }` text ([agents.md](../../system/agents.md) 3.13).
+- R4. The agent SHALL quote a score, a band or a finding only from a tool result in the conversation. It SHALL never estimate, round differently, re-weight or "adjust" a score. Asked to change one, it SHALL say in one sentence that scores come from the deterministic engine and cannot be changed in chat. With more than one dataset in the session and none named, it SHALL ask which one with `ask_clarification`. The prompt and its rules are in [agents.md](../../system/agents.md) 2.10.
+  - **Scope.** It SHALL run SQL only to show the records behind a finding, and to answer data-quality questions about the session's data (which rows are null, invalid, inconsistent, duplicated, orphaned, stale or unreasonable). It SHALL decline anything else in one sentence. General analysis (totals, trends, rankings) is declined with a pointer to Questions to Insights.
+  - **Drill-down.** To show records it SHALL load the `readiness-drilldown` skill, call `describe_entity`, then `run_readonly_sql`. The answer SHALL lead with the count and show up to 20 rows in a table.
+  - A query result SHALL never change, recompute or replace a score or a finding. When a query's count differs from a finding's, the agent SHALL give both and say the data may have changed since the report was generated.
+  - R6 is about the assessment's profiler only. It does not limit the chat's drill-down queries.
 - R5. After a successful `assess_data_readiness` or `get_readiness_report`, the app SHALL:
   - show that report's **scorecard** in the right panel and open the panel (R25);
   - attach a readiness card to the answer that carries the report (R25).
@@ -62,7 +67,7 @@ Capability-local vocabulary:
 ### Profiling
 
 - R6. An assessment SHALL build a source profile from aggregate, read-only queries against the datasource only: counts, distinct counts, minimum and maximum, grouped duplicate counts, orphan counts through a left join, pattern-mismatch counts, and privilege lookups.
-  - It SHALL read no row values, and every statement SHALL pass the read-only guard ([datasources](../datasources/spec.md)).
+  - It SHALL read no row values, and every statement SHALL pass the read-only guard ([datasources](../datasources/spec.md)). This is the profiler's rule; the chat's drill-down queries (R4) read rows through the user SQL path.
   - Each statement SHALL time out after 15 s.
   - A statement that fails or times out SHALL leave the statistic it measures absent. The checks that need that statistic then skip it, and the assessment carries on.
 - R7. Per entity in scope, the profile SHALL hold:
@@ -296,6 +301,20 @@ Feature: Data readiness
     Then the findings table shows only high completeness findings
     When a filter combination matches nothing
     Then the table reads "No findings match these filters."
+
+  Scenario: The agent shows the records behind a finding
+    Given a Data Readiness session on the "Formula 1" dataset
+    When I ask "what are the records with second_nationality_country_id null values"
+    Then the agent runs a read-only query on "driver" for rows where "second_nationality_country_id" is null
+    And the answer leads with the number of such rows and shows them in a table
+    And no score changes
+
+  Scenario: A general analysis question is declined
+    Given a Data Readiness session on the "Formula 1" dataset
+    When I ask "how many races were there in 2010?"
+    Then the agent declines in one sentence
+    And it says Questions to Insights answers that
+    And it runs no query
 ```
 
 ## Acceptance
@@ -308,6 +327,6 @@ Feature: Data readiness
    - completeness at 0 with the other assessed dimensions at 100 gives overall 88, Managed.
 2. The golden suite (R27) meets the reference floors, and a determinism test gives identical reports for the same profile and `now`.
 3. `POST /data-readiness/assessments` on the World Cup PostgreSQL sample stores a report whose overall score is the mean of its eight assessed dimension scores. `GET` lists it and reads it back.
-4. The hub shows the Data Readiness Agent under Official. A session started from it runs the agent: its first request offers no `run_readonly_sql`. An assessment shows the scorecard, and Past assessments reopens an earlier one.
+4. The hub shows the Data Readiness Agent under Official. A session started from it runs the agent: its first request offers `describe_entity` and `run_readonly_sql` besides the readiness tools. An assessment shows the scorecard, and Past assessments reopens an earlier one.
 5. An assessment profiles through one pooled session per worker, folds the text-column probes into the per-table statement, lists tables above 100,000,000 rows as not profiled, shows its phases on the running tool row, and is cancelled by Stop without storing a report (R28 to R33). Its scores equal those of the unpooled profiler for the same profile.
 6. The Data readiness Feature passes on the web target at the acceptance gate. The `data-readiness` eval set passes at 100 % over 3 runs, and the assistant's and RFP Builder's eval sets are unchanged.

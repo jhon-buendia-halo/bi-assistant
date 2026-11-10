@@ -9,7 +9,8 @@ import { SessionsModule } from './modules/sessions/sessions.module';
 import { RfpPackagesModule } from './modules/rfp-packages/rfp-packages.module';
 import { VerifiedQueriesModule } from './modules/verified-queries/verified-queries.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
-import { KnowledgeModule } from './modules/knowledge/knowledge.module';
+import { OntologyModule } from './modules/ontology/ontology.module';
+import { PersonasModule } from './modules/personas/personas.module';
 import { DeepAnalysisModule } from './modules/deep-analysis/deep-analysis.module';
 import { TestingDataModule } from './modules/testing-data/testing-data.module';
 import { DeveloperSettingsModule } from './modules/developer-settings/developer-settings.module';
@@ -28,7 +29,8 @@ import { DataReadinessModule } from './modules/data-readiness/data-readiness.mod
     SkillsModule,
     VerifiedQueriesModule,
     MetricsModule,
-    KnowledgeModule,
+    OntologyModule,
+    PersonasModule,
     SessionsModule,
     RfpPackagesModule,
     DeepAnalysisModule,

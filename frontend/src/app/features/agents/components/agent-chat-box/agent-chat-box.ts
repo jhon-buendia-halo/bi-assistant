@@ -18,7 +18,10 @@ import { firstValueFrom } from 'rxjs';
 import { Session } from '../../../sessions/models/session.model';
 import { SessionsApiService } from '../../../sessions/services/sessions-api.service';
 import { SessionChat } from '../../../sessions/components/session-chat/session-chat';
-import { startChatBlockedReason } from '../../services/agent-hub.util';
+import {
+  picksDatasets,
+  startChatBlockedReason,
+} from '../../services/agent-hub.util';
 import { AgentDetail } from '../../services/agents-api.service';
 
 /** The chat of a draft in the Chat Box (agents-evals R85). */
@@ -62,6 +65,8 @@ export class AgentChatBox implements OnInit, OnDestroy {
   readonly startBlockedReason = computed(() =>
     startChatBlockedReason(this.agent()),
   );
+  /** Questions to Insights v2: chats over picked datasets (R90, R107). */
+  readonly picksDatasets = computed(() => picksDatasets(this.agent()));
 
   private generation = 0;
 

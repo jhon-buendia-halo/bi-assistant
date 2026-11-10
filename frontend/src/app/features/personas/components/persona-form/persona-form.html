@@ -1,0 +1,181 @@
+<div
+  data-testid="persona-form"
+  class="flex flex-col gap-3 rounded-xl border border-border bg-surface-muted p-4"
+>
+  <div class="flex items-center justify-between">
+    <p class="text-[13px] font-medium text-fg">
+      {{ persona() ? "Edit persona" : "New persona" }}
+    </p>
+    <button type="button" title="Close" (click)="cancel()" class="btn-icon">
+      <lucide-angular [img]="X" [size]="14" />
+    </button>
+  </div>
+
+  <div class="grid grid-cols-2 gap-3">
+    <label class="flex flex-col gap-1">
+      <span class="field-label">Name</span>
+      <input
+        type="text"
+        data-testid="persona-name"
+        placeholder="Finance lead"
+        [attr.maxlength]="limits.name"
+        [value]="name()"
+        (input)="name.set($any($event.target).value)"
+        class="field"
+      />
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="field-label">Role</span>
+      <input
+        type="text"
+        data-testid="persona-role"
+        placeholder="CFO"
+        [attr.maxlength]="limits.role"
+        [value]="role()"
+        (input)="role.set($any($event.target).value)"
+        class="field"
+      />
+    </label>
+  </div>
+
+  <label class="flex flex-col gap-1">
+    <span class="field-label">Description</span>
+    <textarea
+      rows="3"
+      data-testid="persona-description"
+      placeholder="Who this person is and how they use the data."
+      [attr.maxlength]="limits.description"
+      [value]="description()"
+      (input)="description.set($any($event.target).value)"
+      class="field resize-y"
+    ></textarea>
+  </label>
+
+  <label class="flex flex-col gap-1">
+    <span class="field-label">Goals</span>
+    <textarea
+      rows="3"
+      data-testid="persona-goals"
+      placeholder="What they are trying to decide or achieve."
+      [attr.maxlength]="limits.goals"
+      [value]="goals()"
+      (input)="goals.set($any($event.target).value)"
+      class="field resize-y"
+    ></textarea>
+  </label>
+
+  <div class="flex flex-col gap-1">
+    <span class="field-label">Typical questions</span>
+    <div class="flex flex-col gap-1.5" data-testid="persona-questions">
+      @for (question of typicalQuestions(); track $index; let i = $index) {
+        <div class="flex items-center gap-2">
+          <input
+            type="text"
+            [attr.data-testid]="'persona-question-' + i"
+            [attr.aria-label]="'Typical question ' + (i + 1)"
+            placeholder="How did revenue change last quarter?"
+            [attr.maxlength]="limits.typicalQuestion"
+            [value]="question"
+            (input)="setQuestion(i, $any($event.target).value)"
+            class="field flex-1"
+          />
+          <button
+            type="button"
+            title="Remove question"
+            [attr.data-testid]="'persona-question-remove-' + i"
+            (click)="removeQuestion(i)"
+            class="shrink-0 btn-icon hover:text-on-danger-soft"
+          >
+            <lucide-angular [img]="Trash2" [size]="14" />
+          </button>
+        </div>
+      }
+    </div>
+    <div class="flex items-center gap-2">
+      <button
+        type="button"
+        data-testid="persona-question-add"
+        (click)="addQuestion()"
+        [disabled]="!canAddQuestion()"
+        class="btn btn-ghost w-fit px-2 py-1 text-[12px]"
+      >
+        <lucide-angular [img]="Plus" [size]="13" />
+        <span>Add question</span>
+      </button>
+      <span class="text-[11px] text-fg-muted"
+        >{{ typicalQuestions().length }} of {{ limits.typicalQuestions }}</span
+      >
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-3">
+    <label class="flex flex-col gap-1">
+      <span class="field-label">Expertise</span>
+      <select
+        data-testid="persona-expertise"
+        [value]="expertise()"
+        (change)="expertise.set($any($event.target).value)"
+        class="field"
+      >
+        @for (option of expertiseOptions; track option.value) {
+          <option
+            [value]="option.value"
+            [selected]="option.value === expertise()"
+            class="bg-surface"
+          >
+            {{ option.label }}
+          </option>
+        }
+      </select>
+    </label>
+  </div>
+
+  <label class="flex flex-col gap-1">
+    <span class="field-label">Answer style</span>
+    <textarea
+      rows="2"
+      data-testid="persona-answer-style"
+      placeholder="Short answers with one chart and the headline number first."
+      [attr.maxlength]="limits.answerStyle"
+      [value]="answerStyle()"
+      (input)="answerStyle.set($any($event.target).value)"
+      class="field resize-y"
+    ></textarea>
+  </label>
+
+  @if (error(); as err) {
+    <p
+      data-testid="persona-error"
+      role="alert"
+      class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  }
+
+  <div class="mt-1 flex items-center gap-2 text-[13px]">
+    <button
+      type="button"
+      data-testid="persona-cancel"
+      (click)="cancel()"
+      class="btn btn-outline flex-1"
+    >
+      Cancel
+    </button>
+    <button
+      type="button"
+      data-testid="persona-save"
+      (click)="save()"
+      [disabled]="!canSave()"
+      title="Name is required"
+      class="btn btn-primary flex-1"
+    >
+      @if (saving()) {
+        <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+        <span>Saving…</span>
+      } @else {
+        <span>{{ persona() ? "Save changes" : "Create persona" }}</span>
+      }
+    </button>
+  </div>
+</div>

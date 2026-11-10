@@ -13,6 +13,7 @@ async function evidence(page: Page, folder: string, name: string) {
 }
 import { test, expect } from './fixtures/app.fixture';
 import {
+  WORLD_CUP_DATASET,
   createWorldCupDataset,
   createWorldCupDatasource,
   followOsTheme,
@@ -118,11 +119,23 @@ test('has no automatically detectable accessibility violations on any screen in 
       },
     ],
     [
-      'Knowledge',
+      'Dataset ontology',
       async () => {
-        await rail('Knowledge').click();
+        await rail('Datasets').click();
+        await page.getByTestId(`dataset-${WORLD_CUP_DATASET}`).click();
+        await page.getByTestId('dataset-tab-ontology').click();
         await expect(
-          page.getByRole('heading', { name: 'Knowledge' }),
+          page.getByRole('heading', { name: 'Ontology', exact: true }),
+        ).toBeVisible();
+      },
+    ],
+    [
+      'User personas',
+      async () => {
+        await rail('Context').click();
+        await page.getByTestId('context-section-personas').click();
+        await expect(
+          page.getByRole('heading', { name: 'User personas' }),
         ).toBeVisible();
       },
     ],

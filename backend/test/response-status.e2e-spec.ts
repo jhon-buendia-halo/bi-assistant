@@ -60,14 +60,21 @@ describe('POST routes the spec answers with 200 (api.md 1.4)', () => {
     ]);
   });
 
-  it('the knowledge bootstrap stream answers 200 and reports a failure in the stream (3.4)', async () => {
-    const res = await post('/knowledge/bootstrap/stream', {});
+  it('the ontology bootstrap stream answers 200 and reports a failure in the stream (3.4)', async () => {
+    const res = await post(
+      '/datasets/no-such-dataset/ontology/bootstrap/stream',
+      {},
+    );
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toMatch(/^text\/event-stream/);
-    // Here the error text is in `message`, not `content` (api.md 3.4).
-    expect(await frames(res)).toEqual([
-      { type: 'error', message: 'datasetId is required' },
-    ]);
+    // Here the error text is in `message`, not `content` (api.md 3.4). The
+    // dataset stage is reported before the lookup fails.
+    const events = (await frames(res)) as { type: string }[];
+    expect(events.at(-1)).toEqual({
+      type: 'error',
+      message: 'Dataset "no-such-dataset" not found',
+    });
+    expect(events.slice(0, -1).every((e) => e.type === 'progress')).toBe(true);
   });
 
   it('the developer endpoint test answers 200 with a Style A body (55)', async () => {

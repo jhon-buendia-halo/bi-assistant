@@ -2,6 +2,7 @@ import { Mastra } from '@mastra/core';
 import { PinoLogger } from '@mastra/loggers';
 import { MastraStorageExporter, Observability } from '@mastra/observability';
 import { assistantAgent } from './agents/assistant.agent';
+import { assistantV2Agent } from './agents/assistant-v2.agent';
 import { dataReadinessAgent } from './agents/data-readiness.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
@@ -14,6 +15,7 @@ import { developerTraceExporters } from './developer-exporters';
 import { mastraStorage } from './storage';
 import { watchSessionWorkspaceRegistry } from './session-workspaces';
 import { appSkills } from './app-skills';
+import { qtiV2TurnWorkflow } from './workflows/qti-v2-turn.workflow';
 
 // Validate every bundled skill before anything is served: a broken skill
 // stops the backend here (agents.md 7.3).
@@ -25,6 +27,7 @@ appSkills();
 export const mastra = new Mastra({
   agents: {
     assistant: assistantAgent,
+    'assistant-v2': assistantV2Agent,
     visualization: visualizationAgent,
     'sql-fixer': sqlFixerAgent,
     'sql-verifier': sqlVerifierAgent,
@@ -37,6 +40,10 @@ export const mastra = new Mastra({
     survey: showcaseAgents.survey,
     'lad-coe': showcaseAgents['lad-coe'],
     strategy: showcaseAgents.strategy,
+  },
+  // Code-defined turn workflows (agents.md 5.11, ADR-0034).
+  workflows: {
+    'qti-v2-turn': qtiV2TurnWorkflow,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

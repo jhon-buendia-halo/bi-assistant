@@ -37,14 +37,17 @@ export function workflowPhasesOf(
 
 /**
  * The steps with the saved progress, or undefined when there are none. A saved
- * step number past the list is dropped.
+ * step number past the list is dropped. `fixedSource` names where fixed steps
+ * come from: a prompt's `## Workflow` (the default) or a workflow-backed
+ * agent's code-defined workflow (agents.md 5.11).
  */
 export function workflowViewOf(
   promptPhases: readonly WorkflowPhase[],
   state: WorkflowState | undefined,
+  fixedSource: 'prompt' | 'workflow' = 'prompt',
 ): WorkflowView | undefined {
   const found = workflowPhasesOf(promptPhases, state);
-  const source = found.source;
+  const source = found.source === 'prompt' ? fixedSource : found.source;
   if (!found.phases.length) return undefined;
   const count = found.phases.length;
   // The agent's todo replaces the prompt's default action of a step.
@@ -55,6 +58,10 @@ export function workflowViewOf(
     return action ? { ...rest, action } : rest;
   });
   const current = state && state.current <= count ? state.current : null;
+  const failed =
+    state?.failed !== undefined && state.failed <= count
+      ? state.failed
+      : undefined;
   return {
     phases,
     source,
@@ -63,6 +70,7 @@ export function workflowViewOf(
     skipped: (state?.skipped ?? []).filter((n) => n <= count),
     ...(current !== null && state?.waiting ? { waiting: true } : {}),
     ...(state?.note ? { note: state.note } : {}),
+    ...(failed !== undefined ? { failed } : {}),
   };
 }
 

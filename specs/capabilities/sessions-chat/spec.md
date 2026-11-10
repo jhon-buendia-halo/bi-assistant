@@ -4,7 +4,7 @@ A session is a named, persistent conversation over one or more datasets. The use
 
 ## Concepts
 
-All terms are defined in [glossary](../../product/glossary.md): **Session**, **Dataset**, **Datasource**, **Entity** (fully-qualified `catalog.schema.table`), **Turn**, **Answer**, **Tool call**, **Data record** (one captured tool result), **Rationale**, **Reasoning trail**, **Interpretation line**, **Clarification**, **Careful mode**, **Cross-check**, **Verified query**, **Knowledge snippet**, **Metric definition**, **Session workspace**, **Agent memory thread**, **Visual** (see [visuals](../visuals/spec.md)), **Deep analysis** (see [deep-analysis](../deep-analysis/spec.md)).
+All terms are defined in [glossary](../../product/glossary.md): **Session**, **Dataset**, **Datasource**, **Entity** (fully-qualified `catalog.schema.table`), **Turn**, **Answer**, **Tool call**, **Data record** (one captured tool result), **Rationale**, **Reasoning trail**, **Interpretation line**, **Clarification**, **Careful mode**, **Cross-check**, **Verified query**, **Ontology item**, **Metric definition**, **Session workspace**, **Agent memory thread**, **Visual** (see [visuals](../visuals/spec.md)), **Deep analysis** (see [deep-analysis](../deep-analysis/spec.md)).
 
 ## Rules
 
@@ -64,7 +64,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - the session's dataset and entity orientation;
   - the session's visuals (id, title, current version) and which one is open;
   - the curated metric definitions for those entities;
-  - the enabled knowledge snippets for the session's datasets;
+  - the enabled ontology items for the session's datasets (its datasets' own items and shared ones);
   - up to 3 verified question → SQL pairs most similar to the question (by word overlap, within a 3,000-character budget);
   - for a session bound to an agent, the agent's Live instructions, last (R54).
 
@@ -99,11 +99,11 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - the entities its SQL referenced;
   - a deterministic interpretation line (R31);
   - a reasoning trail: one step per call that carried a rationale, in run order, with that call's row count or error;
-  - the knowledge snippets that were in its context.
+  - the ontology items that were in its context.
 - R31. The interpretation line SHALL be built from the successful SQL runs only, never from model output: `Computed from <N> quer(y|ies)[ over <entity, …>] — <R> row(s) analyzed.` It is absent when no SQL succeeded.
 - R32. Under an answer, the chat SHALL show these blocks, each only when non-empty:
   - a collapsible "How I worked this out (N step(s))" list, each step's rationale followed by "N rows" or "failed — <error>";
-  - a collapsible "Knowledge in context (N)" list (kind, title, dataset or "global", body), with a note that disabled snippets are never included;
+  - a collapsible "Ontology in context (N)" list (kind, name, dataset or "all datasets", body), with a note that disabled items are never included and that the ontology is edited in the dataset's Ontology tab;
   - the interpretation line;
   - "Data entities" chips;
   - a collapsible "Data used (N query|queries)" list.
@@ -185,7 +185,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decision ADR-0008 in [architecture.md](../../system/architecture.md).
 
-- R52. **Start chat** on a Live user agent SHALL create a session at once, with no form: named after the agent's Live name, over the agent's Live datasets that still exist (missing ones are dropped), and bound to the agent. It SHALL show the toast `Session "<name>" created` and open the session on its welcome block. Several sessions may share a name. The system SHALL refuse, creating nothing: an unknown agent with `Agent "<id>" not found`; an agent with no Live version with `Publish "<name>" before starting a chat`; an agent none of whose Live datasets exist with `None of this agent's datasets exist`. **Start chat** on the Official agent (the assistant) SHALL open the new-session screen instead, since the assistant has no datasets of its own. **Start chat** on the RFP Builder (an Official agent that declares the dataset `Intellify RFP API`) SHALL create a session at once, named `RFP Builder`, over that dataset and bound to the agent (R61), with the same toast; while the dataset does not exist it SHALL refuse, creating nothing, with `Load the "Intellify RFP API" sample in Settings → Testing Data first`. **Start chat** on the Data Readiness Agent SHALL create a session at once, named `Data Readiness`, over every dataset bound to a PostgreSQL or Databricks datasource and bound to the agent (R61), with the same toast; while there is none it SHALL refuse, creating nothing, with `Add a PostgreSQL or Databricks dataset first` ([../data-readiness/spec.md](../data-readiness/spec.md) R2). A session SHALL never start from a showcase agent ([agents-evals](../agents-evals/spec.md) R106): the request is refused with `Showcase agent: not available to chat yet.`, creating nothing.
+- R52. **Start chat** on a Live user agent SHALL create a session at once, with no form: named after the agent's Live name, over the agent's Live datasets that still exist (missing ones are dropped), and bound to the agent. It SHALL show the toast `Session "<name>" created` and open the session on its welcome block. Several sessions may share a name. The system SHALL refuse, creating nothing: an unknown agent with `Agent "<id>" not found`; an agent with no Live version with `Publish "<name>" before starting a chat`; an agent none of whose Live datasets exist with `None of this agent's datasets exist`. **Start chat** on the Official agent (the assistant) SHALL open the new-session screen instead, since the assistant has no datasets of its own. **Start chat** on **Questions to Insights v2** (R61, [agents-evals](../agents-evals/spec.md) R107), which has no datasets of its own either, SHALL open the same screen with the **Agent** field preselected to `Questions to Insights v2` (R64) instead of Assistant, and creates no session by itself. **Start chat** on the RFP Builder (an Official agent that declares the dataset `Intellify RFP API`) SHALL create a session at once, named `RFP Builder`, over that dataset and bound to the agent (R61), with the same toast; while the dataset does not exist it SHALL refuse, creating nothing, with `Load the "Intellify RFP API" sample in Settings → Testing Data first`. **Start chat** on the Data Readiness Agent SHALL create a session at once, named `Data Readiness`, over every dataset bound to a PostgreSQL or Databricks datasource and bound to the agent (R61), with the same toast; while there is none it SHALL refuse, creating nothing, with `Add a PostgreSQL or Databricks dataset first` ([../data-readiness/spec.md](../data-readiness/spec.md) R2). A session SHALL never start from a showcase agent ([agents-evals](../agents-evals/spec.md) R106): the request is refused with `Showcase agent: not available to chat yet.`, creating nothing.
 - R53. A session started from an agent SHALL keep the datasets it was created with (R5). Republishing the agent with other datasets SHALL NOT change them.
 - R54. Every assistant call made for a session bound to a user agent that still exists (chat turns, the grounding pass and deep-analysis calls) SHALL apply the agent's **current Live version**:
   - its instructions, when not empty, as a system context block labelled as user-supplied, after every other context block (R24; the block is in [agents.md](../../system/agents.md) section 4.1, and only the grounding pass's own nudge follows it);
@@ -195,12 +195,12 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 
   Publishing a new version SHALL change the next turn of every session bound to the agent. A draft SHALL never apply to a session. The only exception is the agent editor's preview chat, an in-memory session that runs the draft (agents-evals R60, R61).
 - R55. An agent's instructions SHALL NOT relax any rule enforced in code: the read-only SQL guard, dataset scoping (R22), SQL repair (R25-R28), the grounding pass (R19) and the result-quality warnings hold whatever the instructions say. A write statement attempted under an agent's instructions SHALL be rejected by the read-only guard and shown as a failed tool call.
-- R56. A model override SHALL name a model or deployment of the configured provider. It SHALL replace the configured model for the assistant's calls only. The SQL fixer, SQL verifier, visual designer, knowledge bootstrap and eval judge keep the configured model and their own efforts. A reasoning-effort override SHALL replace the user's setting for the same assistant calls. With no LLM settings saved, the model override SHALL be ignored and the fallback model applies. A model the provider rejects SHALL fail the turn with the provider's error, like any model error (R45).
+- R56. A model override SHALL name a model or deployment of the configured provider. It SHALL replace the configured model for the assistant's calls only. The SQL fixer, SQL verifier, visual designer, ontology bootstrap and eval judge keep the configured model and their own efforts. A reasoning-effort override SHALL replace the user's setting for the same assistant calls. With no LLM settings saved, the model override SHALL be ignored and the fallback model applies. A model the provider rejects SHALL fail the turn with the provider's error, like any model error (R45).
 - R57. A session bound to an agent SHALL show the agent's name in the page header's session context (`Agent` and a chip with the name, before the datasources) and in its row of the Sessions page list (R63), as the row's agent chip. The name SHALL be the agent's current Live name.
 - R58. The welcome block (R50) of a session bound to an agent SHALL use the agent's Live description as its one-line description when that is not empty, and the agent's Live starter questions (up to 5, in order) as the starter prompts when there are any. Otherwise R50's text and prompts apply. Clicking a starter question SHALL fill the composer and SHALL NOT send it.
 - R59. When the agent is deleted, its sessions SHALL keep their transcript, memory and datasets and continue with the plain assistant: no instructions block and no overrides. The page header chip and the list row's agent chip SHALL read `<agent name> · agent deleted`, using the name the agent last had for the session, and the welcome block falls back to R50.
-- R61. A session bound to a built-in agent (today the RFP Builder and the Data Readiness Agent, R52) SHALL run that agent on every turn, not the assistant: its own prompt, tools, skill and per-turn context ([agents.md](../../system/agents.md) 2.8, 4.1, 5.1). The assistant-only passes (the grounding pass R19, careful mode and the result-quality warnings) SHALL NOT apply to it. R54-R56 and R59 do not apply; R57 and R58 do, with the built-in agent's name, description and starter questions. Their behaviour is specified in [../rfp/spec.md](../rfp/spec.md) and [../data-readiness/spec.md](../data-readiness/spec.md).
-- R64. The new-session screen SHALL have an **Agent** field above the session name, with **Assistant** preselected on every visit (never remembered). It is a dropdown (a listbox, keyboard-operable) that lists, each with its name and its description, Assistant, then the Official agents that bring their own datasets (today the RFP Builder and the Data Readiness Agent), then the showcase agents ([agents-evals](../agents-evals/spec.md) R106), then the user's Live agents, each group alphabetical; System agents, draft-only agents and the assistant's own Start chat entry are not listed. An agent that cannot start a chat now (R52) is listed muted and cannot be chosen, with its reason in place of its description (`Load the "Intellify RFP API" sample in Settings → Testing Data first`, `Add a PostgreSQL or Databricks dataset first`, `None of this agent's datasets exist`, and for every showcase agent, always, `Showcase agent: not available to chat yet.`). The selected agent's description shows under the field (Assistant: `Answers questions over the datasets you pick.`). With Assistant selected the screen behaves as R1 says. With another agent selected the dataset picker is replaced by that agent's datasets as read-only chips, a session name is optional, and **Create** starts a session bound to the agent exactly as **Start chat** does (R52, R61), named with the typed name when there is one, else the agent's default name. The model and reasoning-effort chips stay (they are global settings).
+- R61. A session bound to a built-in agent (today the RFP Builder, the Data Readiness Agent and Questions to Insights v2, R52) SHALL run that agent on every turn, not the assistant: its own prompt, tools, skill and per-turn context ([agents.md](../../system/agents.md) 2.8, 4.1, 5.1). The assistant-only passes (the grounding pass R19, careful mode and the result-quality warnings) SHALL NOT apply to it. R54-R56 and R59 do not apply; R57 and R58 do, with the built-in agent's name, description and starter questions. Their behaviour is specified in [../rfp/spec.md](../rfp/spec.md) and [../data-readiness/spec.md](../data-readiness/spec.md). **Questions to Insights v2** (`assistant-v2`, BA-320) is bound the same way but is created from the New conversation screen with the user's own datasets and a required name (R64): the session stores `agentKey: "assistant-v2"` and `agentName: "Questions to Insights v2"`, every turn runs v2 with its three data tools and shipped prompt ([agents.md](../../system/agents.md) 2.11), and a v2 turn runs like the other bound agents' turns: no grounding pass and no careful mode. A streamed v2 turn is a workflow defined in code (ADR-0034, [agents.md](../../system/agents.md) 5.11) whose steps `Receive question`, `Load catalog`, `Analyse` and `Wrap up` show in the workflow bar ([agent-panel](../agent-panel/spec.md) R8a); the answer streams in the Analyse step exactly as above, and a failed step ends the turn with its error. The chat header and the session chip name the agent as for the other built-in agents (R57).
+- R64. The new-session screen SHALL have an **Agent** field above the session name, with **Assistant** preselected on every visit (never remembered). It is a dropdown (a listbox, keyboard-operable) that lists, each with its name and its description, Assistant, then Questions to Insights v2, then the Official agents that bring their own datasets (today the RFP Builder and the Data Readiness Agent), then the showcase agents ([agents-evals](../agents-evals/spec.md) R106), then the user's Live agents, each group alphabetical; System agents, draft-only agents and the assistant's own Start chat entry are not listed. An agent that cannot start a chat now (R52) is listed muted and cannot be chosen, with its reason in place of its description (`Load the "Intellify RFP API" sample in Settings → Testing Data first`, `Add a PostgreSQL or Databricks dataset first`, `None of this agent's datasets exist`, and for every showcase agent, always, `Showcase agent: not available to chat yet.`). The selected agent's description shows under the field (Assistant: `Answers questions over the datasets you pick.`). With Assistant or Questions to Insights v2 selected the screen behaves as R1 says (dataset picker, required name), and for v2 **Create** starts a session bound to v2 with the picked datasets (R61), named with the typed name; v2's description under the field is its catalogue description (`A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.`). With any other agent selected the dataset picker is replaced by that agent's datasets as read-only chips, a session name is optional, and **Create** starts a session bound to the agent exactly as **Start chat** does (R52, R61), named with the typed name when there is one, else the agent's default name. The model and reasoning-effort chips stay (they are global settings).
 - R62. While a chat is open, the page header's session context SHALL end with the session's id: `ID <first 8 characters>` in monospace, with the full id as its tooltip and a copy icon. Clicking it copies the full id and shows the toast "Session ID copied" ("Copy failed" when the browser refuses). A user shares the id so a session can be found and diagnosed in the app's data (BA-231).
 - R63. With no session open, the **Sessions** page (app-shell R46) SHALL list every session of the user in the middle of the page card, newest activity first as the backend returns them, under a "Search sessions by name or ID…" field that filters by name or session id, ignoring case, **ten sessions per page**. A row SHALL show the name, its datasets, the agent it uses as a chip (the bound agent's name, R57, or `<agent name> · agent deleted`, R59, or `Assistant` for a session bound to no agent; full name as tooltip `Agent: <name>`), the session id as `ID <first 8 characters>` (full id as tooltip; a click copies it and toasts "Session ID copied", as R62), the last activity (`updatedAt`, else `createdAt`) as `just now`, `<n> min ago`, `<n> h ago`, `yesterday` or a short date with the full date as tooltip, and an options menu with **Delete session**. Clicking a row SHALL open the session. The list SHALL read "Loading sessions…" until the first answer, "No sessions yet. Start a new conversation or open an agent." when empty (with **Start New Conversation**) and `No sessions match "<query>".` when the search finds none. Under the list SHALL be `<first>–<last> of <total>` and, when there is more than one page, **Previous page** and **Next page** buttons with `Page <n> of <pages>`; a new search returns to page 1, and a deletion that empties the last page moves to the page before.
 
@@ -248,7 +248,7 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 - Data in [data-model.md](../../system/data-model.md): the `sessions` collection (session document, chat message, data record, reasoning step, cross-check, clarification, visual event), the `verified_queries` collection, the agent memory store, and the per-session workspace directory and its legacy migrations.
 - Agents in [agents.md](../../system/agents.md): `assistant` (prompt, tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`, `create_visual`, `update_visual`, and memory), `sql-fixer`, `sql-verifier`. Model resolution is in [llm-settings](../llm-settings/spec.md).
 - Agent sessions: `POST /sessions` with an `agentId`, and the session's derived `agent` field, in [api.md](../../system/api.md); the session's `agentId` and `agentName` in [data-model.md](../../system/data-model.md) section 3.4; the agent instructions block, the `agent-overrides` requestContext key and the model override in [agents.md](../../system/agents.md) sections 1.3, 4.1 and 4.2.
-- Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents, the Agent Hub and its **Start chat**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [knowledge](../knowledge/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
+- Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents, the Agent Hub and its **Start chat**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [dataset-ontology](../dataset-ontology/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
 
 ## UI
 
@@ -381,6 +381,33 @@ Feature: Session management
     And the page header shows the agent "RFP Builder"
     And the "Sessions" list shows it with "Intellify RFP API" under its name and the agent chip "RFP Builder"
 
+  Scenario: I start a Questions to Insights v2 session from New conversation
+    When I click "Sessions" on the rail
+    And I click "Start New Conversation"
+    And I choose "Questions to Insights v2" in the "Agent" field
+    Then the "Agent" field shows "Questions to Insights v2" and its description
+    And I see "Select at least one dataset for this session"
+    And "Create" is disabled
+    When I select the "World Cup Core" dataset
+    And I type "V2 check" into the session name
+    And I click "Create"
+    Then I see the toast 'Session "V2 check" created'
+    And the page header shows the agent "Questions to Insights v2"
+    And the "Sessions" list shows it with the agent chip "Questions to Insights v2"
+
+  Scenario: Start chat on Questions to Insights v2 opens New conversation with v2 selected
+    When I click "Agents"
+    And I click "Start chat with Questions to Insights v2"
+    Then I see the New conversation screen
+    And the "Agent" field shows "Questions to Insights v2"
+    And no session has been created
+
+  Scenario: The Agent field lists Questions to Insights v2 right after Assistant
+    When I click "Sessions" on the rail
+    And I click "Start New Conversation"
+    And I open the "Agent" field
+    Then the options start "Assistant", "Questions to Insights v2", "Data Readiness Agent", "RFP Builder"
+
   Scenario: The Agent field disables an agent that cannot start
     Given the "Intellify RFP API" sample is not loaded
     When I click "Sessions" on the rail
@@ -391,7 +418,7 @@ Feature: Session management
     When I click "Sessions" on the rail
     And I click "Start New Conversation"
     And I open the "Agent" field
-    Then the options after "Assistant" and "RFP Builder" are "Benchmarking Agent", "LAD COE Agent", "Strategy Agent" and "Survey Agent", in that order
+    Then the options after "Assistant", "Questions to Insights v2" and "RFP Builder" are "Benchmarking Agent", "LAD COE Agent", "Strategy Agent" and "Survey Agent", in that order
     And each of the four is disabled and shows "Showcase agent: not available to chat yet."
     When I click "Survey Agent"
     Then the "Agent" field still shows "Assistant"
@@ -627,13 +654,25 @@ Feature: Sessions started from an agent
     When I send "And in 2010?"
     Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
     And the model's skill catalog lists "fiscal-calendar"
+
+  Scenario: A Questions to Insights v2 session runs v2 on every turn
+    When I click "Agents"
+    And I click "Start chat with Questions to Insights v2"
+    And I select "World Cup Core", type "V2 turn" as the session name and click "Create"
+    Then I see the toast 'Session "V2 turn" created'
+    And the page header shows the agent "Questions to Insights v2"
+    When I send "How many matches are there?"
+    Then the model received the prompt starting "You are Questions to Insights v2" and not the assistant's
+    And the model was offered only "list_entities", "describe_entity" and "run_readonly_sql"
+    When I send "And in 2014?"
+    Then the model again received v2's prompt and only its three tools
 ```
 
 ### Feature: Skills the assistant is given
 
 E2E: `frontend/e2e/assistant-skills.spec.ts`
 
-What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0021 and ADR-0025; the prompt's sections are in agents.md 2.1, and the framework's catalog and skill tools in agents.md 3.9 and 7.5. The plain assistant gets only the skills that ship with the app. The old skills folder is written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([knowledge](../knowledge/spec.md) R15-R19).
+What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0021 and ADR-0025; the prompt's sections are in agents.md 2.1, and the framework's catalog and skill tools in agents.md 3.9 and 7.5. The plain assistant gets only the skills that ship with the app. The old skills folder is written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([dataset-ontology](../dataset-ontology/spec.md) R15-R19).
 
 ```gherkin
 Feature: Skills the assistant is given

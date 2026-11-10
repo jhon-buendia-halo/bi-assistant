@@ -74,7 +74,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 ### Listing and deleting
 
 - R35. The dataset list SHALL group datasets by the month of their last update (month name; "Earlier" when there is no date) and show for each: name, a lock icon, and `Edited <Mon D> · <kind> · <n> entities`. Opening a row opens the browser in edit mode; a "⋮" menu offers "Delete dataset".
-- R36. Deleting a dataset SHALL be by name and immediate (no confirmation), toast `Dataset "<name>" deleted`, and remove the row; an unknown name answers `Dataset "<name>" not found`. Sessions that listed the deleted dataset silently lose it from their scope. Open question: decide whether delete needs a confirmation and whether it should warn when sessions use the dataset.
+- R36. Deleting a dataset SHALL be by name and immediate (no confirmation), toast `Dataset "<name>" deleted`, and remove the row; an unknown name answers `Dataset "<name>" not found`. The dataset's ontology items are deleted with it, while shared items stay ([dataset-ontology](../dataset-ontology/spec.md) R20). Sessions that listed the deleted dataset silently lose it from their scope. Open question: decide whether delete needs a confirmation and whether it should warn when sessions use the dataset.
 - R37. Editing a dataset SHALL open the browser with its name and entities prefilled and its datasource selected. If that datasource no longer exists the system SHALL toast `The dataset datasource is no longer available. Choose entities from another datasource.`, clear the inclusion and select another datasource.
 
 ### Legacy
@@ -95,6 +95,8 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - R45. The assistant SHALL receive the notes of the session's datasets in its dataset orientation context: see [agents.md](../../system/agents.md), assistant agent. A session whose datasets have no notes gets the same context as before.
 - R46. Endpoint and storage: `schemas` in the body of `POST /datasets` ([api.md](../../system/api.md)) and the `schemas` field of the dataset document ([data-model.md](../../system/data-model.md)).
 - R47. Selecting a schema in the browser SHALL show its Layer and Description controls in the details panel, and its tree row SHALL show the layer chip or, with only a description, a "note" chip (see **UI**).
+- R48. Opening a **saved** dataset from the list SHALL show the editor with two tabs, **Schema** (the catalog browser, R5 to R22, shown first) and **Ontology** (the dataset's ontology, [dataset-ontology](../dataset-ontology/spec.md)). Creating a dataset SHALL show no tabs, only the Schema content; a dataset that has not been saved has no ontology to edit. Switching tabs SHALL keep the unsaved edits of the Schema tab (name, inclusion, notes) in the page. The tabs carry `data-testid` `dataset-tab-schema` and `dataset-tab-ontology`.
+- R49. The Ontology tab SHALL act on the dataset it was opened from, by name. Saving the dataset under another name starts that dataset with an empty ontology and leaves the original's items where they are ([dataset-ontology](../dataset-ontology/spec.md) R16). Deleting a dataset deletes its ontology items (R36).
 
 ## Edge cases and errors
 
@@ -112,7 +114,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 ## Contracts
 
 - Endpoints: list, create/upsert and delete datasets: [api.md](../../system/api.md), section Datasets. Inventory and sampling come from the datasources endpoints.
-- Collections: `datasets` (legacy name `sandbox_selections`) and the session field `datasets`: [data-model.md](../../system/data-model.md).
+- Collections: `datasets` (legacy name `sandbox_selections`), the session field `datasets` and the dataset's ontology items (`ontology_items`): [data-model.md](../../system/data-model.md). Ontology endpoints: [api.md](../../system/api.md) 2.8.
 - Assistant tools (`list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`) and the per-turn dataset block: [agents.md](../../system/agents.md), assistant agent.
 - Datasource behaviour (inventory, sampling, foreign keys, read-only SQL): [datasources](../datasources/spec.md). Session creation: [sessions-chat](../sessions-chat/spec.md). Metrics shown under the browser: [metrics](../metrics/spec.md).
 - Terms: [glossary](../../product/glossary.md).
@@ -124,6 +126,8 @@ Reached from the rail item **Datasets** (main area) — see [ui.md](../../system
 **Dataset list** — heading "Datasets"; filter chips and icons (inert); **New dataset** button; month sections of rows (see R35).
 
 **Catalog browser** — heading "New dataset" or "Edit dataset"; subtitle "Catalogs, schemas and entities available through the selected datasource."; "Updated <date>" when known. Header controls: a "Datasource" picker, a "Refresh inventory" icon button (tooltip "Re-read catalogs, schemas and entities from the datasource", disabled while loading), a "Dataset name" input, and **Save dataset (N)** ("Saving…" while running; tooltip "Name the dataset and include at least one element"). Body states: choose-datasource prompt (R7), loading with Cancel, error, empty, or the tree with a filter box (placeholder "Filter catalogs, schemas and entities…", with a clear button). Rows: database icon + `<n> schemas` for catalogs, folder icon + `<n> entities` for schemas, table icon + `<n> columns` for entities. Beneath the tree the metrics panel curates metric definitions over the included entities ([metrics](../metrics/spec.md)).
+
+**Dataset tabs** — a saved dataset's editor shows an underlined tab strip, **Schema** (the catalog browser above, `dataset-tab-schema`) and **Ontology** (`dataset-tab-ontology`; the ontology panel, [dataset-ontology](../dataset-ontology/spec.md) UI). A new dataset shows no tab strip.
 
 **Entity details** — the default content of the right panel outside a session and outside agent detail. Top button: "Include item", "Include item (partially included)" or "Included — click to remove" (R12); then the catalog / schema / entity block (R21).
 
@@ -215,6 +219,25 @@ Feature: Dataset management
     Then I see 'Dataset "World Cup Core" deleted'
     And "World Cup Core" is no longer listed
 
+  Scenario: A saved dataset shows Schema and Ontology tabs
+    Given the "World Cup Core" dataset exists
+    When I click the "World Cup Core" dataset
+    Then I see the tabs "Schema" and "Ontology" with "Schema" selected
+    When I click the "Ontology" tab
+    Then I see the dataset's ontology
+    When I click the "Schema" tab
+    Then I see the catalog browser again
+
+  Scenario: A new dataset has no tabs
+    When I click "New dataset"
+    Then I see the catalog browser and no "Schema" or "Ontology" tab
+
+  Scenario: Deleting a dataset deletes its ontology but not shared items
+    Given the "World Cup Core" dataset has an ontology item "Match" and a shared item "Currency" exists
+    When I delete the dataset "World Cup Core"
+    Then "Match" no longer exists
+    And "Currency" still appears in the Ontology tab of another dataset
+
   Scenario: Tags a schema with a layer and description and keeps them after saving
     Given the "World Cup PostgreSQL" datasource and the "World Cup Core" dataset exist
     When I open the "World Cup Core" dataset and select the "world_cup" schema
@@ -239,7 +262,8 @@ Feature: Dataset management
 2. The "Dataset management" scenarios above behave as written once automated.
 3. After saving a dataset over the World Cup tables, the stored snapshot of `goals` has sample values for its text/number columns and references such as `goals.scoring_team_id → teams.id` and `goals.match_id → matches.id` (declared by PostgreSQL's constraints; each marked `declared`), and, for a datasource without constraints, inferred references (`~>`) for the same pairs.
 4. A session created from the dataset lists the dataset's entities and join hints in its context, can describe and sample only those entities, and answers questions through the datasource named by the dataset (checked in [sessions-chat](../sessions-chat/spec.md)).
-5. Deleting the dataset removes it from the list; sessions that used it keep working on their remaining datasets.
+5. Deleting the dataset removes it from the list and deletes its ontology items (shared items stay); sessions that used it keep working on their remaining datasets.
+5a. A saved dataset opens with Schema and Ontology tabs, a new one with neither (R48).
 6. Schema notes round-trip through the UI: in Edit dataset, selecting a schema, choosing Layer "Consumption" and typing a description, then **Save dataset**, shows a "Consumption" badge on the schema row, and after a reload and reopening the dataset the details panel shows both values. A dataset saved before schema notes existed opens with no badges and Layer "None" (R40–R47).
 7. Saving a dataset that no longer includes any entity of a noted schema drops that schema's note (R43).
 8. Reloading Testing Data, which re-registers its sample datasets without `schemas`, keeps the stored schema notes (R42).

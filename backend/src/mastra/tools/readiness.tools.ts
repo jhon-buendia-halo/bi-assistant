@@ -8,6 +8,7 @@ import {
   type ReadinessToolReport,
 } from '../readiness-tool-services';
 import { askClarificationTool } from './clarification.tool';
+import { describeEntityTool, runReadOnlySqlTool } from './dataset.tools';
 import { showInPanelTool } from './panel.tool';
 import { SESSION_ID_CONTEXT_KEY } from './visual.tools';
 
@@ -226,6 +227,10 @@ export const readinessTools = {
   assess_data_readiness: assessDataReadinessTool,
   get_readiness_report: getReadinessReportTool,
   list_readiness_reports: listReadinessReportsTool,
+  // Drill-down into findings (ADR-0035): the shared, session-scoped,
+  // read-only dataset tools. They never touch a score.
+  describe_entity: describeEntityTool,
+  run_readonly_sql: runReadOnlySqlTool,
   show_in_panel: showInPanelTool,
   ask_clarification: askClarificationTool,
 };

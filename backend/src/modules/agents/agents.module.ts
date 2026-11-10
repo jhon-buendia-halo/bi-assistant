@@ -4,7 +4,7 @@ import { MastraModule } from '../../mastra/mastra.module';
 import { DatasetsModule } from '../datasets/datasets.module';
 import { DatasourcesModule } from '../datasources/datasources.module';
 import { SessionsModule } from '../sessions/sessions.module';
-import { KnowledgeModule } from '../knowledge/knowledge.module';
+import { OntologyModule } from '../ontology/ontology.module';
 import { UserAgentsModule } from '../user-agents/user-agents.module';
 import { AgentsController } from './agents.controller';
 import { AgentPromptsService } from './agent-prompts.service';
@@ -16,14 +16,14 @@ import { EvalRunsRepository } from './repositories/eval-runs.repository';
 @Module({
   // SessionsModule: EvalRunsService creates a throwaway session per eval run
   // so create_visual/update_visual work the way they do in a real chat turn.
-  // KnowledgeModule: same curated-knowledge block a real chat turn gets.
+  // OntologyModule: same curated-knowledge block a real chat turn gets.
   // UserAgentsModule: user-agent storage, merged into the agent catalogue.
   imports: [
     MastraModule,
     DatasetsModule,
     DatasourcesModule,
     SessionsModule,
-    KnowledgeModule,
+    OntologyModule,
     UserAgentsModule,
     LlmModule,
   ],

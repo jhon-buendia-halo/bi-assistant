@@ -55,10 +55,10 @@ import {
   VisualEvent,
 } from '../../models/session.model';
 import {
-  kindAccentClass,
-  kindDescription,
-  kindLabel,
-} from '../../../knowledge/models/knowledge.model';
+  legacyTagAccentClass,
+  legacyTagDescription,
+  legacyTagLabel,
+} from '../../../ontology/models/ontology.model';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import { slug } from '../../services/slug';
@@ -161,11 +161,12 @@ export function skillStepLabel(toolName: string): string | null {
   styleUrl: './session-chat.scss',
 })
 export class SessionChat implements OnDestroy {
-  // Labels/colours for the knowledge snippets an answer was produced under —
-  // reused from the Knowledge feature so the chat and that screen never drift.
-  readonly knowledgeKindLabel = kindLabel;
-  readonly knowledgeDescription = kindDescription;
-  readonly knowledgeAccentClass = kindAccentClass;
+  // Labels/colours for the ontology items an answer was produced under. The
+  // per-turn record keeps the legacy tags (term, default_filter, …); the
+  // ontology model maps them so the chat and the Ontology tab never drift.
+  readonly knowledgeKindLabel = legacyTagLabel;
+  readonly knowledgeDescription = legacyTagDescription;
+  readonly knowledgeAccentClass = legacyTagAccentClass;
 
   readonly ArrowUp = ArrowUp;
   readonly BadgeCheck = BadgeCheck;
@@ -312,6 +313,13 @@ export class SessionChat implements OnDestroy {
   private pollFailures = 0;
   private activeStream: AbortController | null = null;
   private syncedSessionId: string | null = null;
+  /**
+   * The `messages` array of the input last synced. A same-id refresh that
+   * keeps this array (e.g. a `workflow` stream event patching only the status
+   * bar) must not overwrite what the chat added since — the user's question
+   * and an error bubble live only here until the server copy catches up.
+   */
+  private syncedMessages: ChatMessage[] | undefined;
 
   private readonly scroller = viewChild<ElementRef<HTMLDivElement>>('scroller');
   private readonly composer =
@@ -344,12 +352,17 @@ export class SessionChat implements OnDestroy {
       if (session.id === this.syncedSessionId) {
         // Same session, refreshed metadata (e.g. a visual was versioned).
         // Never disturb an in-flight turn; `done` brings the final transcript.
-        if (!untracked(() => this.sending())) {
+        if (
+          !untracked(() => this.sending()) &&
+          session.messages !== this.syncedMessages
+        ) {
+          this.syncedMessages = session.messages;
           this.messages.set(session.messages);
         }
         return;
       }
       this.syncedSessionId = session.id;
+      this.syncedMessages = session.messages;
       this.activeStream?.abort();
       this.activeStream = null;
       this.stopTimer();
