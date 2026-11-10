@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { DBSQLClient } from '@databricks/sql';
 import type IDBSQLSession from '@databricks/sql/dist/contracts/IDBSQLSession';
 import type IOperation from '@databricks/sql/dist/contracts/IOperation';
+import { normalizeDatabricksHost } from './databricks-host';
 import type {
   CatalogInfo,
   ColumnInfo,
@@ -667,10 +668,7 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
   }
 
   private validate(dto: Partial<DatabricksConfig>): DatabricksConfig {
-    const host = (dto.host ?? '')
-      .trim()
-      .replace(/^https?:\/\//i, '')
-      .replace(/\/+$/, '');
+    const host = normalizeDatabricksHost(dto.host);
     const token = (dto.token ?? '').trim();
     const warehouseId = (dto.warehouseId ?? '').trim();
     if (!host || !token || !warehouseId) {

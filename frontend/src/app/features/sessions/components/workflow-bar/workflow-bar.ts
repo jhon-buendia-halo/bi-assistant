@@ -20,6 +20,7 @@ import {
   ChevronUp,
   Clock,
   LucideAngularModule,
+  X,
 } from 'lucide-angular';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import { WorkflowPhase, WorkflowView } from '../../models/session.model';
@@ -33,7 +34,7 @@ const NO_WORKFLOW: WorkflowView = {
 };
 
 export type WorkflowStepStatus =
-  'done' | 'current' | 'waiting' | 'skipped' | 'upcoming';
+  'done' | 'current' | 'waiting' | 'failed' | 'skipped' | 'upcoming';
 
 export const WORKFLOW_BAR_COLLAPSED_KEY =
   'questions-to-insights:workflow-bar-collapsed';
@@ -45,6 +46,7 @@ const STATUS_LABEL: Record<WorkflowStepStatus, string> = {
   done: 'Done',
   current: 'Current',
   waiting: 'Waiting for you',
+  failed: 'Failed',
   skipped: 'Skipped',
   upcoming: 'Upcoming',
 };
@@ -55,6 +57,8 @@ export function workflowStepStatus(
   number: number,
 ): WorkflowStepStatus {
   if (wf.done.includes(number)) return 'done';
+  // A workflow-backed agent's step that failed (agent-panel R8a).
+  if (wf.failed === number) return 'failed';
   if (wf.skipped?.includes(number)) return 'skipped';
   if (wf.current === number) return wf.waiting ? 'waiting' : 'current';
   return 'upcoming';
@@ -75,6 +79,7 @@ export class WorkflowBar implements OnDestroy {
   readonly ChevronRight = ChevronRight;
   readonly ChevronUp = ChevronUp;
   readonly Clock = Clock;
+  readonly X = X;
   readonly fadeMask =
     'linear-gradient(to right, #000 calc(100% - 28px), transparent)';
 
@@ -136,9 +141,8 @@ export class WorkflowBar implements OnDestroy {
    */
   readonly currentAction = computed(() => {
     const step =
-      this.steps().find(
-        (s) => s.status === 'current' || s.status === 'waiting',
-      ) ?? this.steps().find((s) => s.status === 'upcoming');
+      this.steps().find((s) => this.isActive(s.status)) ??
+      this.steps().find((s) => s.status === 'upcoming');
     return step?.phase.action ?? null;
   });
 
@@ -156,6 +160,7 @@ export class WorkflowBar implements OnDestroy {
   /** Tooltip of a step button. */
   tooltip(step: { phase: WorkflowPhase; status: WorkflowStepStatus }): string {
     if (step.status === 'waiting') return 'Waiting for you';
+    if (step.status === 'failed') return 'Failed';
     if (step.status === 'upcoming' && step.phase.action) {
       return `To do: ${step.phase.action}`;
     }
@@ -238,6 +243,11 @@ export class WorkflowBar implements OnDestroy {
   /** Done and skipped steps lose their title while the row overflows. */
   iconOnly(status: WorkflowStepStatus): boolean {
     return this.compact() && (status === 'done' || status === 'skipped');
+  }
+
+  /** The step the user is on: current, waiting for them, or failed. */
+  isActive(status: WorkflowStepStatus): boolean {
+    return status === 'current' || status === 'waiting' || status === 'failed';
   }
 
   label(status: WorkflowStepStatus): string {

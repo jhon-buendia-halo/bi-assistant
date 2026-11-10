@@ -133,30 +133,44 @@ export async function publishAgent(page: Page, id: string): Promise<void> {
   await call(page, 'POST', `/agents/${encodeURIComponent(id)}/publish`);
 }
 
-export interface KnowledgeSnippetInput {
-  kind: 'instruction' | 'term' | 'default_filter';
-  title: string;
-  body: string;
-  /** The dataset's name; omit for a global snippet. */
-  datasetId?: string;
+/**
+ * One ontology item's create body (`POST /datasets/:name/ontology`,
+ * docs/plans/ba-320-dataset-ontology.md). Only the kind's fields are kept.
+ */
+export interface OntologyItemInput {
+  kind: 'concept' | 'relation' | 'constraint' | 'instruction';
+  name?: string;
+  description?: string;
+  synonyms?: string[];
+  mappings?: { entity: string; column?: string; expression?: string }[];
+  predicate?: string;
+  conceptId?: string;
+  entities?: string[];
+  from?: string;
+  type?: 'is-a' | 'part-of' | 'has-many' | 'related-to' | 'measured-by';
+  to?: string;
+  metricId?: string;
   enabled?: boolean;
+  /** true → shared by every dataset (`dataset: null`). */
+  shared?: boolean;
 }
 
 /**
- * Saves a curated knowledge snippet (`POST /knowledge`, api.md 50) and
- * returns its id. The knowledge routes answer bare bodies with real status
- * codes (Style B), so this does not go through `call`.
+ * Saves an ontology item on a dataset and returns its id. The ontology
+ * routes answer bare bodies with real status codes (Style B), so this does
+ * not go through `call`.
  */
-export async function createKnowledgeSnippet(
+export async function createOntologyItem(
   page: Page,
-  input: KnowledgeSnippetInput,
+  datasetName: string,
+  item: OntologyItemInput,
 ): Promise<string> {
-  const { datasetId, ...snippet } = input;
-  const response = await page.request.fetch(`${apiBase(page)}/knowledge`, {
+  const route = `/datasets/${encodeURIComponent(datasetName)}/ontology`;
+  const response = await page.request.fetch(`${apiBase(page)}${route}`, {
     method: 'POST',
-    data: { ...snippet, scope: datasetId ? { datasetId } : null },
+    data: item,
   });
-  expect(response.status(), `POST /knowledge → HTTP ${response.status()}`).toBe(
+  expect(response.status(), `POST ${route} → HTTP ${response.status()}`).toBe(
     201,
   );
   return ((await response.json()) as { id: string }).id;

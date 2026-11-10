@@ -20,14 +20,16 @@ Curated knowledge the assistant treats as authoritative: business-glossary terms
 |---|---|---|
 | [BA-123](https://halo-powered.atlassian.net/browse/BA-123) | Knowledge Store — Research | 1.3.5 |
 | [BA-124](https://halo-powered.atlassian.net/browse/BA-124) | Knowledge Store — Execution plan | 1.3.6 |
-| [BA-78](https://halo-powered.atlassian.net/browse/BA-78) | Research and ontology design | 1.3.1 |
-| [BA-79](https://halo-powered.atlassian.net/browse/BA-79) | Ontology model, knowledge graph and bootstrap | 1.3.2 |
+| [BA-78](https://halo-powered.atlassian.net/browse/BA-78) | Research and ontology design (moved to BA-320 as 1.21.7–1.21.9 on 2026-11-09) | 1.3.1 |
+| [BA-79](https://halo-powered.atlassian.net/browse/BA-79) | Ontology model, knowledge graph and bootstrap (moved to BA-320 as 1.21.7–1.21.9 on 2026-11-09) | 1.3.2 |
 | [BA-80](https://halo-powered.atlassian.net/browse/BA-80) | Ontology-grounded retrieval and SQL generation, measured by evals | 1.3.3 |
 | [BA-81](https://halo-powered.atlassian.net/browse/BA-81) | Curation UI, feedback learning and provenance | 1.3.4 |
 
+**Moved on 2026-11-09:** at the user's request roadmap stories 1.3.1 and 1.3.2 (BA-78, BA-79) were built on BA-320 as 1.21.7–1.21.9, "Knowledge becomes each dataset's ontology" ([dataset-ontology](../../capabilities/dataset-ontology/spec.md), ADR-0036): the per-dataset ontology of concepts, relations, constraints and instructions, its tab in the dataset editor and its bootstrap. Stories 1.3.3 (ontology-grounded retrieval and SQL generation) and 1.3.4 (curation UI, feedback learning and provenance) remain on this epic and build on that ontology.
+
 ## Specs touched
-- Capabilities: [knowledge](../../capabilities/knowledge/spec.md) (concept/relation model, retrieval, curation), [verified-queries](../../capabilities/verified-queries/spec.md) and [metrics](../../capabilities/metrics/spec.md) (linked to concepts), [sessions-chat](../../capabilities/sessions-chat/spec.md) (retrieval, provenance in the answer panel), [agents-evals](../../capabilities/agents-evals/spec.md) (knowledge on/off eval).
-- System: [data-model](../../system/data-model.md) (concept/relation collections, snippet migration), [api](../../system/api.md) (knowledge endpoints), [agents](../../system/agents.md) (`knowledge-bootstrap`, `sql-verifier`, `sql-fixer`), [ui](../../system/ui.md) (curation surface). ADRs: [ADR-0038](../../system/architecture.md) (cross-session memory, Proposed, BA-124); the ADR "knowledge as code in packs" comes with BA-79, before its code.
+- Capabilities: [dataset-ontology](../../capabilities/dataset-ontology/spec.md) (concept/relation model, retrieval, curation), [verified-queries](../../capabilities/verified-queries/spec.md) and [metrics](../../capabilities/metrics/spec.md) (linked to concepts), [sessions-chat](../../capabilities/sessions-chat/spec.md) (retrieval, provenance in the answer panel), [agents-evals](../../capabilities/agents-evals/spec.md) (knowledge on/off eval).
+- System: [data-model](../../system/data-model.md) (the `ontology_items` collection and migration M15, built), [api](../../system/api.md) (ontology endpoints, built), [agents](../../system/agents.md) (`knowledge-bootstrap`, `sql-verifier`, `sql-fixer`), [ui](../../system/ui.md) (curation surface). ADRs: [ADR-0038](../../system/architecture.md) (cross-session memory, Proposed, BA-124); the ADR "knowledge as code in packs" comes with BA-79, before its code.
 
 ## Acceptance
 Per story, from Jira and the roadmap:
@@ -40,7 +42,7 @@ Per story, from Jira and the roadmap:
 - **Research:** [docs/research/BA-4.md](../../../docs/research/BA-4.md) (BA-123) holds the findings, options and recommendation, and the decision record BA-78 asks for; BA-78 closed as covered on 2026-10-29. Section 8 records what changed since 2026-10-07.
 - **Execution plan:** [docs/plans/BA-4.md](../../../docs/plans/BA-4.md) (functional) and [docs/plans/BA-4-technical.md](../../../docs/plans/BA-4-technical.md) (technical), BA-124, written against `main` only; branch-only work is listed there as a prerequisite with the merge-or-rebuild decision open. Section 9 of the functional plan records what changed by 2026-10-29.
 - **Memory:** [ADR-0038](../../system/architecture.md) (Proposed). Cross-session memory is built first with Mastra's own memory behind a `LearningStore` port ("Mastra only"); Hindsight is added ("Hindsight + Mastra") only if a three-arm eval shows it is better. The eval pieces are in [BA-190](https://halo-powered.atlassian.net/browse/BA-190) (epic [BA-9](../BA-9/spec.md)); the cases, the implementation and the decision in BA-81.
-- **Partly built already:** `backend/src/modules/knowledge` and `frontend/src/app/features/knowledge` exist (snippets of kind instruction / term / default_filter with scope, synonyms, entities, enabled flag, a `knowledge-bootstrap` agent, and a per-turn injected block). Open: which of BA-79 to BA-81 is genuinely new versus an extension of this?
-- BA-79 depends on BA-78; BA-80 depends on BA-79 and the golden dataset ([BA-9](../BA-9/spec.md)); BA-81's provenance display ties into [BA-12](../BA-12/spec.md).
+- **Built since:** the flat knowledge snippets became each dataset's ontology (concepts with column mappings, relations, constraints, instructions; shared items; bootstrap from schema, samples, references and metrics) under BA-320 (1.21.7–1.21.9), so BA-78 and BA-79 are delivered there. Open for BA-80 and BA-81: retrieval by question relevance, SQL checks against the ontology, feedback learning and provenance.
+- BA-80 depends on the ontology built in BA-320 (1.21.7) and the golden dataset ([BA-9](../BA-9/spec.md)); BA-81's provenance display ties into [BA-12](../BA-12/spec.md).
 - Depends on the DSL's logical references ([BA-2](../BA-2/spec.md)), which are not on `main` yet.
 - Assignee in Jira: Sergio Berrospi (epic); stories unassigned.

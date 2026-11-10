@@ -1,4 +1,52 @@
 <div class="flex flex-col">
+  @if (initial(); as editing) {
+    <!-- Saved dataset: Schema | Ontology (BA-320). A new dataset has no tabs. -->
+    <div
+      role="tablist"
+      aria-label="Dataset sections"
+      class="mb-6 flex items-center gap-1 border-b border-border"
+    >
+      @for (tab of tabs; track tab.id) {
+        <button
+          type="button"
+          role="tab"
+          [id]="'dataset-tab-' + tab.id"
+          [attr.data-testid]="'dataset-tab-' + tab.id"
+          [attr.aria-selected]="activeTab() === tab.id"
+          [attr.aria-controls]="'dataset-panel-' + tab.id"
+          [attr.tabindex]="activeTab() === tab.id ? 0 : -1"
+          (click)="selectTab(tab.id)"
+          (keydown.arrowRight)="selectTab(otherTab(tab.id), true)"
+          (keydown.arrowLeft)="selectTab(otherTab(tab.id), true)"
+          class="-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-[13px]"
+          [class.border-border-selected]="activeTab() === tab.id"
+          [class.text-fg-strong]="activeTab() === tab.id"
+          [class.border-transparent]="activeTab() !== tab.id"
+          [class.text-fg-muted]="activeTab() !== tab.id"
+          [class.hover:text-fg]="activeTab() !== tab.id"
+        >
+          <lucide-angular [img]="tab.icon" [size]="14" />
+          <span>{{ tab.label }}</span>
+        </button>
+      }
+    </div>
+    @if (activeTab() === "ontology") {
+      <div
+        role="tabpanel"
+        id="dataset-panel-ontology"
+        aria-labelledby="dataset-tab-ontology"
+      >
+        <app-ontology-panel [dataset]="editing" />
+      </div>
+    }
+  }
+  @if (!initial() || activeTab() === "schema") {
+  <div
+    [attr.role]="initial() ? 'tabpanel' : null"
+    [attr.id]="initial() ? 'dataset-panel-schema' : null"
+    [attr.aria-labelledby]="initial() ? 'dataset-tab-schema' : null"
+    class="flex flex-col"
+  >
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div class="min-w-[240px] flex-1">
       <h2 class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong">
@@ -237,6 +285,27 @@
                 <span class="text-[12px] text-fg-muted"
                   >{{ schema.tables.length }} entities</span
                 >
+                @if (schemaNote(catalog.name, schema.name); as note) {
+                  @if (note.layer) {
+                    <span
+                      class="chip chip-info shrink-0 text-[10px] px-1.5 py-0.5"
+                      [attr.data-testid]="
+                        'schema-layer-' + catalog.name + '-' + schema.name
+                      "
+                      [title]="note.description || 'Layer'"
+                      >{{ schemaLayerLabel(note.layer) }}</span
+                    >
+                  } @else if (note.description) {
+                    <span
+                      class="chip chip-neutral shrink-0 text-[10px] px-1.5 py-0.5"
+                      [attr.data-testid]="
+                        'schema-note-' + catalog.name + '-' + schema.name
+                      "
+                      [title]="note.description"
+                      >note</span
+                    >
+                  }
+                }
                 @if (isSchemaLocked(schema)) {
                   <lucide-angular
                     [img]="Lock"
@@ -321,4 +390,6 @@
       [datasourceId]="datasourceId() || null"
     />
   </div>
+  </div>
+  }
 </div>

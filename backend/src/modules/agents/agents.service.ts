@@ -57,14 +57,18 @@ import type {
   UserAgentDoc,
 } from '../user-agents/entities/user-agent.entity';
 
+import { ASSISTANT_V2_AGENT_KEY } from '../../mastra/agents/assistant-v2-catalog';
+
 /** The registry key of the official agent; every other built-in is `system`. */
 const OFFICIAL_AGENT_KEY = 'assistant';
 /**
- * The built-in agents shown as Official (api.md 2.6 #33): the assistant, the
- * RFP Builder, the Data Readiness Agent and the showcase agents.
+ * The built-in agents shown as Official (api.md 2.6 #33): the assistant,
+ * Questions to Insights v2, the RFP Builder, the Data Readiness Agent and the
+ * showcase agents.
  */
 const OFFICIAL_AGENT_KEYS: readonly string[] = [
   OFFICIAL_AGENT_KEY,
+  ASSISTANT_V2_AGENT_KEY,
   'rfp',
   'data-readiness',
   ...SHOWCASE_AGENT_KEYS,

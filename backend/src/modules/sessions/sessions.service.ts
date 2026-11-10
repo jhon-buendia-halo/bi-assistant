@@ -27,7 +27,12 @@ import {
   builtinSessionDatasets,
   canStartBuiltinSession,
   existingDatasetsFor,
+  runsOnPickedDatasets,
 } from '../agents/builtin-sessions';
+import {
+  ASSISTANT_V2_AGENT_KEY,
+  ASSISTANT_V2_MAX_STEPS,
+} from '../../mastra/agents/assistant-v2-catalog';
 import { DataReadinessService } from '../data-readiness/data-readiness.service';
 import {
   READINESS_REPORT_EVENT,
@@ -101,7 +106,7 @@ import {
   SESSION_WORKSPACE_CONTEXT_KEY,
   listSessionWorkspaceIds,
 } from '../../mastra/session-workspaces';
-import type { KnowledgeUse } from '../knowledge/entities/knowledge-snippet.entity';
+import type { KnowledgeUse } from '../ontology/entities/ontology-item.entity';
 import {
   entityOrientationLines,
   knowledgeContext,
@@ -113,7 +118,7 @@ import { LlmService } from '../llm/llm.service';
 import { chatTurnError } from './llm-error-message';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
 import { MetricsService } from '../metrics/metrics.service';
-import { KnowledgeService } from '../knowledge/knowledge.service';
+import { OntologyService } from '../ontology/ontology.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
 import { SUPER_ADMIN } from '../../common/super-admin';
@@ -127,6 +132,19 @@ import {
   withVisualItems,
 } from './panel-items';
 import { applyWorkflowUpdate, workflowViewOf } from './workflow-update';
+import {
+  stepEventOf,
+  workflowRunState,
+  workflowStepPhases,
+} from './workflow-run-state';
+import {
+  QTI_V2_TURN_RUNTIME_KEY,
+  QTI_V2_TURN_STEPS,
+  QTI_V2_TURN_WORKFLOW_ID,
+  type AnalyseOutcome,
+  type QtiV2TurnInput,
+  type QtiV2TurnRuntime,
+} from '../../mastra/workflows/qti-v2-turn.steps';
 import { renderPdf } from '../../common/markdown-pdf';
 import { WorkspaceFileError, readWorkspaceFile } from './workspace-files';
 import { compareResults } from './result-compare';
@@ -223,6 +241,7 @@ export type StreamEvent = {
     | 'text'
     | 'tool'
     | 'tool-result'
+    | 'tool-progress'
     | 'visual-updated'
     | 'panel-item'
     | 'workflow'
@@ -232,6 +251,41 @@ export type StreamEvent = {
   content?: string;
   session?: SessionDoc;
 };
+
+/**
+ * A Data Readiness progress chunk as a `tool-progress` event (api.md 3.1), or
+ * undefined for any other chunk. The tool writes `{ type:
+ * 'data-readiness-progress', data }`; Mastra forwards it verbatim, or wrapped
+ * in a `tool-output` chunk's `payload.output`. Both are accepted; a malformed
+ * one is ignored. Progress goes to the browser only, never to the model.
+ */
+function readinessProgressEvent(chunk: unknown): StreamEvent | undefined {
+  const outer = chunk as { type?: unknown; payload?: { output?: unknown } };
+  let candidate: unknown;
+  if (outer?.type === 'data-readiness-progress') candidate = chunk;
+  else if (outer?.type === 'tool-output') candidate = outer.payload?.output;
+  const part = candidate as { type?: unknown; data?: unknown } | undefined;
+  if (part?.type !== 'data-readiness-progress') return undefined;
+  const data = part.data as Record<string, unknown> | undefined;
+  if (!data || typeof data !== 'object') return undefined;
+  if (typeof data['phase'] !== 'string' || typeof data['message'] !== 'string')
+    return undefined;
+  const num = (v: unknown) =>
+    typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+  const done = num(data['done']);
+  const total = num(data['total']);
+  return {
+    type: 'tool-progress',
+    content: JSON.stringify({
+      tool: 'assess_data_readiness',
+      phase: data['phase'],
+      message: data['message'],
+      ...(done !== undefined ? { done } : {}),
+      ...(total !== undefined ? { total } : {}),
+      ...(typeof data['entity'] === 'string' ? { entity: data['entity'] } : {}),
+    }),
+  };
+}
 
 /** Id prefix of an agent editor's preview session (agents-evals R60). */
 const PREVIEW_ID_PREFIX = 'preview-';
@@ -272,7 +326,8 @@ export class SessionsService implements OnModuleInit {
     private readonly visuals: VisualizationService,
     private readonly verifiedQueries: VerifiedQueriesService,
     private readonly metrics: MetricsService,
-    private readonly knowledge: KnowledgeService,
+    // The dataset ontology, rendered as the curated-knowledge block.
+    private readonly knowledge: OntologyService,
     private readonly userAgents: UserAgentsService,
     // The RFP Builder's REST target and package export (agents.md 3.10).
     @Optional() private readonly rfpPackages?: RfpPackagesService,
@@ -549,6 +604,9 @@ export class SessionsService implements OnModuleInit {
     if (session.agentKey === DATA_READINESS_AGENT_KEY) {
       return this.readinessAgentOptions(session, question, abortSignal);
     }
+    if (session.agentKey === ASSISTANT_V2_AGENT_KEY) {
+      return this.assistantV2AgentOptions(session, question, abortSignal);
+    }
     return {
       ...(await this.agentContext(
         session,
@@ -557,6 +615,41 @@ export class SessionsService implements OnModuleInit {
         activeVisualId,
       )),
       // Each session is an isolated, persistent Mastra conversation.
+      memory: { thread: session.id, resource: session.id },
+    };
+  }
+
+  /**
+   * A turn of Questions to Insights v2 (agents.md 2.11, 4.1, 4.2): Block 1's
+   * dataset half only, with the hint of a call without `sample_rows` (no
+   * visuals, metrics, knowledge, verified-query or agent-instructions
+   * block), and only the `datasets`, `session-id` and `turn-question` keys.
+   */
+  private async assistantV2AgentOptions(
+    session: SessionDoc,
+    question?: string,
+    abortSignal?: AbortSignal,
+  ) {
+    const requestContext = new RequestContext();
+    requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
+    requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
+    if (question) requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
+    const datasets = await this.boundDatasets(session.datasets);
+    const { reasoningEffort } = await this.llmService.getView();
+    return {
+      maxSteps: ASSISTANT_V2_MAX_STEPS,
+      providerOptions: await this.providerOptions({ reasoningEffort }),
+      context: [
+        {
+          role: 'system' as const,
+          // An empty selection: neither `sample_rows` nor the visuals.
+          content: entityOrientationLines(session.datasets, datasets, []).join(
+            '\n',
+          ),
+        },
+      ],
+      requestContext,
+      abortSignal,
       memory: { thread: session.id, resource: session.id },
     };
   }
@@ -646,7 +739,9 @@ export class SessionsService implements OnModuleInit {
           datasourceName: dataset.datasourceId
             ? await this.datasourceName(dataset.datasourceId)
             : 'none',
+          datasourceId: dataset.datasourceId,
           entityCount: dataset.tables.length,
+          exampleEntity: dataset.tables[0],
         })),
     );
     return readinessOrientationBlock(rows, isoToday());
@@ -1138,30 +1233,53 @@ export class SessionsService implements OnModuleInit {
     return session;
   }
 
-  /** Create a named session; the conversation starts empty in the chat view. */
-  async create(name: string, datasets: string[]): Promise<SessionDoc> {
+  /**
+   * Create a named session; the conversation starts empty in the chat view.
+   * `agent` binds it to a built-in agent that runs on picked datasets
+   * (Questions to Insights v2, api.md 3).
+   */
+  async create(
+    name: string,
+    datasets: string[],
+    agent?: Pick<SessionDoc, 'agentKey' | 'agentName'>,
+  ): Promise<SessionDoc> {
     const trimmed = (name ?? '').trim();
     if (!trimmed) throw new BadRequestException('session name is required');
     if (!Array.isArray(datasets) || datasets.length === 0) {
       throw new BadRequestException('select at least one dataset');
     }
-    return this.insertSession(trimmed, datasets);
+    return this.insertSession(trimmed, datasets, agent);
   }
 
   /**
    * Start chat on a Live user agent (sessions-chat R52): named after the
    * agent, over those of its Live datasets that still exist, bound to it.
    * A built-in agent that declares a dataset (the RFP Builder, R61) gets a
-   * session over that dataset, bound by its registry key; any other
-   * built-in key is "not found".
+   * session over that dataset, bound by its registry key. A built-in agent
+   * that runs on picked datasets (Questions to Insights v2) takes `name` and
+   * `datasets` validated as `create` does. Any other built-in key is "not
+   * found".
    */
-  async createFromAgent(agentId: string, name?: string): Promise<SessionDoc> {
+  async createFromAgent(
+    agentId: string,
+    name?: string,
+    pickedDatasets?: string[],
+  ): Promise<SessionDoc> {
     // An optional typed name (the New conversation screen) replaces the
     // agent's default one; blank keeps the default.
     const typed = typeof name === 'string' ? name.trim().slice(0, 64) : '';
     // A showcase agent is shown in the hub but never chats (R106).
     if (isShowcaseAgent(agentId))
       throw new BadRequestException(SHOWCASE_REASON);
+    const picked = runsOnPickedDatasets(agentId)
+      ? this.mastra.listAgents()[agentId]
+      : undefined;
+    if (picked) {
+      return this.create(name ?? '', pickedDatasets ?? [], {
+        agentKey: agentId,
+        agentName: picked.name ?? agentId,
+      });
+    }
     const builtin = this.builtinSessionAgent(agentId);
     if (builtin) {
       const declared = builtinSessionDatasets(
@@ -1192,6 +1310,27 @@ export class SessionsService implements OnModuleInit {
       agentId,
       agentName: agent.live.name,
     });
+  }
+
+  /**
+   * Keeps only `datasets` among a session's datasets (agents.md 8.1): an eval
+   * run bound to a built-in agent that takes every qualifying dataset (the
+   * Data Readiness Agent) is narrowed to the datasets the run names, so a data
+   * dir holding more samples does not make the agent ask which one. Datasets
+   * the session does not have are ignored; an empty result keeps the session
+   * as it was.
+   */
+  async narrowDatasets(
+    id: string,
+    datasets: string[],
+  ): Promise<SessionDoc | null> {
+    const session = await this.repository.get(id);
+    if (!session) return null;
+    const keep = session.datasets.filter((name) => datasets.includes(name));
+    if (keep.length === 0 || keep.length === session.datasets.length) {
+      return session;
+    }
+    return this.repository.update(id, { datasets: keep });
   }
 
   /**
@@ -1327,6 +1466,7 @@ export class SessionsService implements OnModuleInit {
     const workflow = workflowViewOf(
       this.effectiveWorkflowFor(session, config),
       session.workflowState,
+      workflowSourceOf(session),
     );
     return {
       ...session,
@@ -1346,6 +1486,11 @@ export class SessionsService implements OnModuleInit {
     session: SessionDoc,
     config?: AgentConfig,
   ): WorkflowPhase[] {
+    // A workflow-backed agent's steps are its code-defined workflow's
+    // (agents.md 5.11, ADR-0034).
+    if (session.agentKey === ASSISTANT_V2_AGENT_KEY) {
+      return workflowStepPhases(QTI_V2_TURN_STEPS);
+    }
     if (session.agentKey) {
       return session.agentKey === RFP_AGENT_KEY
         ? parseWorkflow(
@@ -1456,6 +1601,7 @@ export class SessionsService implements OnModuleInit {
     return workflowViewOf(
       this.effectiveWorkflowFor(session, await this.runningConfig(session)),
       session.workflowState,
+      workflowSourceOf(session),
     );
   }
 
@@ -1963,10 +2109,11 @@ export class SessionsService implements OnModuleInit {
     const data: ToolDataRecord[] = [];
     // The visual tools and `show_in_panel` read them, for every agent (agents.md 4.2).
     options.requestContext.set(TURN_RECORDS_CONTEXT_KEY, data);
-    const stream = await agent.stream(input, options);
+    let stream: Awaited<ReturnType<typeof agent.stream>> | undefined;
 
     let text = '';
-    let clarification: ChatMessage['clarification'] | null = null;
+    // Set inside `consume`, so typed without narrowing to the initial null.
+    let clarification = null as ChatMessage['clarification'] | null;
     let visualEvent: VisualEvent | undefined;
     // The package an `export_rfp_package` call stored this turn (RFP Builder).
     let rfpPackage: RfpPackageRef | undefined;
@@ -1981,218 +2128,264 @@ export class SessionsService implements OnModuleInit {
     const calledTools = new Set<string>();
     // The model call's own failure: Mastra reports it as a chunk, not a throw.
     let streamError: unknown;
-    try {
-      for await (const chunk of stream.fullStream) {
-        if (chunk.type === 'error') {
-          streamError ??= (chunk.payload as { error?: unknown }).error;
-        } else if (chunk.type === 'reasoning-delta') {
-          const delta = (chunk.payload as { text?: string }).text ?? '';
-          if (delta) emit({ type: 'reasoning', content: delta });
-        } else if (chunk.type === 'text-delta') {
-          const delta = (chunk.payload as { text?: string }).text ?? '';
-          if (delta) {
-            text += delta;
-            emit({ type: 'text', content: delta });
+    // Consume one agent stream (agents.md 5.1 step 3).
+    const consume = async (
+      agentStream: Awaited<ReturnType<typeof agent.stream>>,
+    ): Promise<void> => {
+      stream = agentStream;
+      try {
+        for await (const chunk of agentStream.fullStream) {
+          const progress = readinessProgressEvent(chunk);
+          if (progress) {
+            emit(progress);
+            continue;
           }
-        } else if (chunk.type === 'tool-call') {
-          const payload = chunk.payload as {
-            toolCallId?: string;
-            toolName?: string;
-            args?: Record<string, unknown>;
-          };
-          if (payload.toolName) calledTools.add(payload.toolName);
-          // A valid clarification ends the turn — the card renders in the UI
-          // and the user's pick arrives as the next message. Abort so the
-          // model does not keep analysing (and spending) behind the card. A
-          // malformed one runs like any tool: the model gets the validation
-          // error and asks again (agents.md 3.5, 5.1).
-          const asked =
-            payload.toolName === 'ask_clarification'
-              ? parseClarification(payload.args)
-              : undefined;
-          if (asked) {
-            clarification = asked;
-            turn.abort();
-            break;
-          }
-          if (payload.toolCallId) {
-            pendingCalls.set(payload.toolCallId, payload.args ?? {});
-          }
-          // The client shows the reason before the result arrives, so the
-          // rationale travels with the call, not with its rows.
-          const rationale = statedRationale((payload.args ?? {})['rationale']);
-          // What the call is about, shown while it runs: the skill a skill
-          // tool loads, else the call's first text argument (api.md 3.1).
-          const input = toolCallInput(
-            payload.toolName ?? 'tool',
-            payload.args ?? {},
-          );
-          emit({
-            type: 'tool',
-            content: JSON.stringify({
-              name: payload.toolName ?? 'tool',
-              ...(rationale ? { rationale } : {}),
-              ...(input ? { input } : {}),
-            }),
-          });
-        } else if (chunk.type === 'tool-result') {
-          const payload = chunk.payload as {
-            toolCallId?: string;
-            toolName?: string;
-            result?: unknown;
-            args?: Record<string, unknown>;
-          };
-          const toolName = payload.toolName ?? 'tool';
-          const args =
-            payload.args ??
-            (payload.toolCallId ? pendingCalls.get(payload.toolCallId) : {}) ??
-            {};
-          if (VISUAL_TOOLS.has(toolName)) {
-            const result = (payload.result ?? {}) as {
-              visualId?: string;
-              version?: number;
-              title?: string;
-              error?: string;
+          if (chunk.type === 'error') {
+            streamError ??= (chunk.payload as { error?: unknown }).error;
+          } else if (chunk.type === 'reasoning-delta') {
+            const delta = (chunk.payload as { text?: string }).text ?? '';
+            if (delta) emit({ type: 'reasoning', content: delta });
+          } else if (chunk.type === 'text-delta') {
+            const delta = (chunk.payload as { text?: string }).text ?? '';
+            if (delta) {
+              text += delta;
+              emit({ type: 'text', content: delta });
+            }
+          } else if (chunk.type === 'tool-call') {
+            const payload = chunk.payload as {
+              toolCallId?: string;
+              toolName?: string;
+              args?: Record<string, unknown>;
             };
-            if (result.visualId && result.version) {
-              visualEvent = {
-                visualId: result.visualId,
-                version: result.version,
-                title: result.title ?? 'Interactive visual',
-                action: toolName === 'create_visual' ? 'created' : 'updated',
+            if (payload.toolName) calledTools.add(payload.toolName);
+            // A valid clarification ends the turn — the card renders in the UI
+            // and the user's pick arrives as the next message. Abort so the
+            // model does not keep analysing (and spending) behind the card. A
+            // malformed one runs like any tool: the model gets the validation
+            // error and asks again (agents.md 3.5, 5.1).
+            const asked =
+              payload.toolName === 'ask_clarification'
+                ? parseClarification(payload.args)
+                : undefined;
+            if (asked) {
+              clarification = asked;
+              turn.abort();
+              break;
+            }
+            if (payload.toolCallId) {
+              pendingCalls.set(payload.toolCallId, payload.args ?? {});
+            }
+            // The client shows the reason before the result arrives, so the
+            // rationale travels with the call, not with its rows.
+            const rationale = statedRationale(
+              (payload.args ?? {})['rationale'],
+            );
+            // What the call is about, shown while it runs: the skill a skill
+            // tool loads, else the call's first text argument (api.md 3.1).
+            const input = toolCallInput(
+              payload.toolName ?? 'tool',
+              payload.args ?? {},
+            );
+            emit({
+              type: 'tool',
+              content: JSON.stringify({
+                name: payload.toolName ?? 'tool',
+                ...(rationale ? { rationale } : {}),
+                ...(input ? { input } : {}),
+              }),
+            });
+          } else if (chunk.type === 'tool-result') {
+            const payload = chunk.payload as {
+              toolCallId?: string;
+              toolName?: string;
+              result?: unknown;
+              args?: Record<string, unknown>;
+            };
+            const toolName = payload.toolName ?? 'tool';
+            const args =
+              payload.args ??
+              (payload.toolCallId
+                ? pendingCalls.get(payload.toolCallId)
+                : {}) ??
+              {};
+            if (VISUAL_TOOLS.has(toolName)) {
+              const result = (payload.result ?? {}) as {
+                visualId?: string;
+                version?: number;
+                title?: string;
+                error?: string;
               };
-              emit({
-                type: 'visual-updated',
-                content: JSON.stringify(visualEvent),
-              });
-            }
-            emit({
-              type: 'tool-result',
-              content: JSON.stringify({
-                tool: toolName,
-                input:
-                  typeof args['instruction'] === 'string'
-                    ? args['instruction']
-                    : undefined,
-                error: result.error,
-              }),
-            });
-            continue;
-          }
-          if (toolName === SHOW_IN_PANEL_TOOL) {
-            const result = (payload.result ?? {}) as {
-              id?: string;
-              kind?: string;
-              title?: string;
-              error?: string;
-            };
-            if (!result.error && result.id) {
-              await this.emitPanelItem(id, result.id, emit);
-            }
-            emit({
-              type: 'tool-result',
-              content: JSON.stringify({
-                tool: toolName,
-                input:
-                  result.title ??
-                  (typeof args['title'] === 'string'
-                    ? args['title']
-                    : undefined),
-                error: result.error,
-              }),
-            });
-            continue;
-          }
-          if (toolName === UPDATE_WORKFLOW_TOOL) {
-            const error = resultError(payload.result);
-            if (!error) await this.emitWorkflow(id, emit);
-            emit({
-              type: 'tool-result',
-              content: JSON.stringify({
-                tool: toolName,
-                input:
-                  typeof args['note'] === 'string'
-                    ? args['note'].slice(0, 80)
-                    : undefined,
-                error,
-              }),
-            });
-            continue;
-          }
-          if (!isAssistant && READINESS_TOOLS.has(toolName)) {
-            // Each readiness tool shows its step; a report shows the
-            // scorecard first (api.md 3.1, data-readiness R5).
-            const error = resultError(payload.result);
-            if (!error && READINESS_REPORT_TOOLS.has(toolName)) {
-              const shown = await this.showReadinessReport(
-                id,
-                payload.result,
-                emit,
-              );
-              if (shown) readinessReport = shown;
-            }
-            emit({
-              type: 'tool-result',
-              content: JSON.stringify({
-                tool: toolName,
-                input: firstStringArgument(args),
-                error,
-              }),
-            });
-            continue;
-          }
-          if (!isAssistant && RFP_TOOLS.has(toolName)) {
-            // Every RFP tool shows its step (api.md 3.1); a result with
-            // columns and rows is also kept as a data record (agents.md 5.1).
-            const error = resultError(payload.result);
-            if (EXPORT_RFP_PACKAGE_TOOLS.has(toolName) && !error) {
-              const stored = rfpPackageRef(payload.result);
-              if (stored) {
-                rfpPackage = stored;
-                emit({ type: 'rfp-package', content: JSON.stringify(stored) });
+              if (result.visualId && result.version) {
+                visualEvent = {
+                  visualId: result.visualId,
+                  version: result.version,
+                  title: result.title ?? 'Interactive visual',
+                  action: toolName === 'create_visual' ? 'created' : 'updated',
+                };
+                emit({
+                  type: 'visual-updated',
+                  content: JSON.stringify(visualEvent),
+                });
               }
+              emit({
+                type: 'tool-result',
+                content: JSON.stringify({
+                  tool: toolName,
+                  input:
+                    typeof args['instruction'] === 'string'
+                      ? args['instruction']
+                      : undefined,
+                  error: result.error,
+                }),
+              });
+              continue;
+            }
+            if (toolName === SHOW_IN_PANEL_TOOL) {
+              const result = (payload.result ?? {}) as {
+                id?: string;
+                kind?: string;
+                title?: string;
+                error?: string;
+              };
+              if (!result.error && result.id) {
+                await this.emitPanelItem(id, result.id, emit);
+              }
+              emit({
+                type: 'tool-result',
+                content: JSON.stringify({
+                  tool: toolName,
+                  input:
+                    result.title ??
+                    (typeof args['title'] === 'string'
+                      ? args['title']
+                      : undefined),
+                  error: result.error,
+                }),
+              });
+              continue;
+            }
+            if (toolName === UPDATE_WORKFLOW_TOOL) {
+              const error = resultError(payload.result);
+              if (!error) await this.emitWorkflow(id, emit);
+              emit({
+                type: 'tool-result',
+                content: JSON.stringify({
+                  tool: toolName,
+                  input:
+                    typeof args['note'] === 'string'
+                      ? args['note'].slice(0, 80)
+                      : undefined,
+                  error,
+                }),
+              });
+              continue;
+            }
+            if (!isAssistant && READINESS_TOOLS.has(toolName)) {
+              // Each readiness tool shows its step; a report shows the
+              // scorecard first (api.md 3.1, data-readiness R5).
+              const error = resultError(payload.result);
+              if (!error && READINESS_REPORT_TOOLS.has(toolName)) {
+                const shown = await this.showReadinessReport(
+                  id,
+                  payload.result,
+                  emit,
+                );
+                if (shown) readinessReport = shown;
+              }
+              emit({
+                type: 'tool-result',
+                content: JSON.stringify({
+                  tool: toolName,
+                  input: firstStringArgument(args),
+                  error,
+                }),
+              });
+              continue;
+            }
+            if (!isAssistant && RFP_TOOLS.has(toolName)) {
+              // Every RFP tool shows its step (api.md 3.1); a result with
+              // columns and rows is also kept as a data record (agents.md 5.1).
+              const error = resultError(payload.result);
+              if (EXPORT_RFP_PACKAGE_TOOLS.has(toolName) && !error) {
+                const stored = rfpPackageRef(payload.result);
+                if (stored) {
+                  rfpPackage = stored;
+                  emit({
+                    type: 'rfp-package',
+                    content: JSON.stringify(stored),
+                  });
+                }
+              }
+              const record = toolDataRecord(toolName, args, payload.result);
+              if (record) data.push(record);
+              // A saved stage moves the tracker mid-turn (ADR-0029).
+              if (
+                toolName === UPDATE_RFP_TOOL &&
+                !error &&
+                rfpHolder?.stage !== undefined &&
+                rfpHolder.stage !== drivenStage
+              ) {
+                drivenStage = rfpHolder.stage;
+                await this.driveRfpStage(id, drivenStage, emit);
+              }
+              emit({
+                type: 'tool-result',
+                content: JSON.stringify({
+                  tool: toolName,
+                  input: firstStringArgument(args),
+                  rowCount: record?.rowCount,
+                  error,
+                }),
+              });
+              continue;
             }
             const record = toolDataRecord(toolName, args, payload.result);
-            if (record) data.push(record);
-            // A saved stage moves the tracker mid-turn (ADR-0029).
-            if (
-              toolName === UPDATE_RFP_TOOL &&
-              !error &&
-              rfpHolder?.stage !== undefined &&
-              rfpHolder.stage !== drivenStage
-            ) {
-              drivenStage = rfpHolder.stage;
-              await this.driveRfpStage(id, drivenStage, emit);
+            if (record) {
+              data.push(record);
+              emit({
+                type: 'tool-result',
+                content: JSON.stringify({
+                  tool: record.tool,
+                  input: record.input,
+                  rowCount: record.rowCount,
+                  error: record.error,
+                  rationale: record.rationale,
+                }),
+              });
             }
-            emit({
-              type: 'tool-result',
-              content: JSON.stringify({
-                tool: toolName,
-                input: firstStringArgument(args),
-                rowCount: record?.rowCount,
-                error,
-              }),
-            });
-            continue;
-          }
-          const record = toolDataRecord(toolName, args, payload.result);
-          if (record) {
-            data.push(record);
-            emit({
-              type: 'tool-result',
-              content: JSON.stringify({
-                tool: record.tool,
-                input: record.input,
-                rowCount: record.rowCount,
-                error: record.error,
-                rationale: record.rationale,
-              }),
-            });
           }
         }
+      } catch (error) {
+        if (!turn.signal.aborted) throw error;
       }
-    } catch (error) {
-      if (!turn.signal.aborted) throw error;
+    };
+    try {
+      if (agentKey === ASSISTANT_V2_AGENT_KEY) {
+        // v2's turn is a workflow defined in code; its Analyse step streams
+        // the agent through `consume` (agents.md 5.11, ADR-0034).
+        await this.runAssistantV2Workflow(session, trimmed, emit, {
+          analyse: async ({ catalogBlock }) => {
+            await consume(
+              await agent.stream(input, {
+                ...options,
+                context: [
+                  ...options.context,
+                  { role: 'system' as const, content: catalogBlock },
+                ],
+              }),
+            );
+            // Any model error fails the step (agents.md 5.11).
+            if (streamError !== undefined && !turn.signal.aborted) {
+              throw await chatTurnError(streamError, () =>
+                this.llmService.getView(),
+              );
+            }
+            return analyseOutcomeOf(data, turn.signal.aborted);
+          },
+        });
+      } else {
+        await consume(await agent.stream(input, options));
+      }
     } finally {
       abortSignal?.removeEventListener('abort', forwardAbort);
     }
@@ -2208,7 +2401,7 @@ export class SessionsService implements OnModuleInit {
     if (rfpHolder?.stage !== undefined && rfpHolder.stage !== drivenStage) {
       await this.driveRfpStage(id, rfpHolder.stage, emit);
     }
-    if (!turn.signal.aborted && !clarification && !text) {
+    if (!turn.signal.aborted && !clarification && !text && stream) {
       text = ((await stream.text) ?? '').trim();
     }
     if (
@@ -2320,6 +2513,66 @@ export class SessionsService implements OnModuleInit {
     });
     if (!turn.signal.aborted || clarification) {
       emit({ type: 'done', session: await this.toView(updated ?? fresh) });
+    }
+  }
+
+  /**
+   * Run one turn of Questions to Insights v2 as its workflow (agents.md 5.11,
+   * ADR-0034): the session's workflow state follows the run's step events and
+   * each change is emitted as `workflow`, so the bar moves live. A failed step
+   * throws its error (the Analyse step's own error when it failed); a stopped
+   * turn ends at Analyse.
+   */
+  private async runAssistantV2Workflow(
+    session: SessionDoc,
+    question: string,
+    emit: (event: StreamEvent) => void,
+    runtime: QtiV2TurnRuntime,
+  ): Promise<void> {
+    // The Analyse step's own failure, kept so the turn reports it as is.
+    let analyseError: unknown;
+    const requestContext = new RequestContext();
+    requestContext.set(QTI_V2_TURN_RUNTIME_KEY, {
+      analyse: async (input) => {
+        try {
+          return await runtime.analyse(input);
+        } catch (error) {
+          analyseError = error;
+          throw error;
+        }
+      },
+    } satisfies QtiV2TurnRuntime);
+    const turnInput: QtiV2TurnInput = {
+      question,
+      datasets: session.datasets,
+    };
+    const run = await this.mastra.streamWorkflow(
+      QTI_V2_TURN_WORKFLOW_ID,
+      turnInput,
+      requestContext,
+    );
+    const stepIds = QTI_V2_TURN_STEPS.map((step) => step.id);
+    let state = session.workflowState;
+    for await (const event of run.fullStream) {
+      const stepEvent = stepEventOf(event);
+      if (!stepEvent) continue;
+      const next = workflowRunState(state, stepEvent, stepIds);
+      if (!next) continue;
+      state = next;
+      await this.updateDoc(session.id, { workflowState: state });
+      session.workflowState = state;
+      await this.emitWorkflow(session.id, emit);
+    }
+    const result = await run.result;
+    if (result.status === 'failed') {
+      const failure: unknown =
+        analyseError ?? result.error ?? new Error('The turn failed');
+      throw failure;
+    }
+    if (result.status === 'success' && isTurnSummary(result.result)) {
+      this.logger.log(
+        `Questions to Insights v2 turn in session ${session.id}: ${JSON.stringify(result.result)}`,
+      );
     }
   }
 
@@ -2779,4 +3032,34 @@ function parseJsonObject(text: string | undefined): unknown {
   } catch {
     return undefined;
   }
+}
+
+/** Where a session's fixed workflow steps come from (agents.md 5.11). */
+function workflowSourceOf(session: SessionDoc): 'prompt' | 'workflow' {
+  return session.agentKey === ASSISTANT_V2_AGENT_KEY ? 'workflow' : 'prompt';
+}
+
+/** The Analyse step's outcome from the turn's data records (agents.md 5.11). */
+function analyseOutcomeOf(
+  data: readonly ToolDataRecord[],
+  stopped: boolean,
+): AnalyseOutcome {
+  return {
+    calls: data.map((record) => ({
+      tool: record.tool,
+      ...(record.rowCount !== undefined ? { rowCount: record.rowCount } : {}),
+      failed: !!record.error,
+    })),
+    stopped,
+  };
+}
+
+/** A Wrap up summary, as the v2 turn workflow returns it. */
+function isTurnSummary(value: unknown): value is Record<string, number> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'sqlQueries' in value &&
+    'rows' in value
+  );
 }

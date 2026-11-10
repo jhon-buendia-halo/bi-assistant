@@ -1,0 +1,487 @@
+[
+  {
+    "id": "dr-assess",
+    "question": "Run a fresh readiness assessment of this data. How ready is it for analysis?",
+    "scores": {
+      "check-called-tool": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"assess_data_readiness\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-the-first-data-tool-call-is-assess-data-readiness",
+        "description": "the first data tool call is \"assess_data_readiness\"",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-the-data-readiness-skill-is-loaded-before-the-first-assessme",
+        "description": "the \"data-readiness\" skill is loaded before the first assessment",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-the-answer-quotes-the-overall-score-the-tool-returned",
+        "description": "the answer quotes the overall score the tool returned",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-every-score-like-number-in-the-answer-is-one-a-readiness-too",
+        "description": "every score-like number in the answer is one a readiness tool returned",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The user asked for a fresh readiness assessment of the session data. Score pass=true only if the answer gives the overall score and maturity band from the assess_data_readiness result, then names the weakest dimensions, then the most severe findings with their recommendations, and every score, band, count and table or column name it states is in that tool result. It may be short; it need not list every finding. Score pass=false if it states any score, band or finding the tool result does not hold, gives accuracy or currency a score, or does not give the overall score.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "I'll load the data-readiness skill first, as required before the first assessment.**Overall score: 93, \"Managed\" band.** This is a fresh assessment of the World Cup PostgreSQL datasource (report `701f0684-89d1-4663-8e5a-3c96fb6fba9d`, 9 entities, 12 findings).\n\n**Weakest dimensions**\n- **Timeliness: 60.** This is the weakest dimension. It checks whether each table's newest record is recent. All 5 checks produced a medium finding.\n- **Completeness: 81.** This checks for missing values in nullable columns. It has 7 findings, and the most severe findings in the report are here (6 high, 1 low).\n- Every other assessed dimension scored 100: consistency, integrity, uniqueness, reasonability and accessibility. Validity also scored 100, but it ran 0 checks, so that score doesn't confirm anything.\n- Accuracy and currency are not assessed. They need reference data, so they have no score.\n\n**Most severe findings (completeness, high)**\n\n| Table | Column | Measured | Recommendation |\n|---|---|---|---|\n| goals | assist_player_id | 95.7% null (45/47) | Confirm the column is still populated upstream, or mark it optional. |\n| matches | group_letter | 100% null (16/16) | Same as above. |\n| matches | home_penalties | 75% null (12/16) | Same as above. |\n| matches | away_penalties | 75% null (12/16) | Same as above. |\n| v_match_results | home_penalties | 75% null (12/16) | Same as above. |\n| v_match_results | away_penalties | 75% null (12/16) | Same as above. |\n\n**Timeliness (medium)**\n- `matches.kicked_off_at`: newest record is 2022-12-18, 1422 days ago.\n- `tournaments.ends_on`: newest is 2022-12-18, 1423 days ago.\n- `v_match_results.kicked_off_at`: newest is 2022-12-18, 1422 days ago.\n- `v_player_goal_totals.tournament_year`: newest is 2022, 1409 days ago.\n- `players.date_of_birth`: newest is 2002-01-23, 9057 days ago.\n\nFor the stale tables, the engine recommends confirming the table is still being loaded. There is also one low-severity finding: `v_player_goal_totals.first_goal_minute` is 2.8% null (1/36).\n\nIf you want, I can pull the actual rows behind any of these findings.",
+    "toolCalls": [
+      {
+        "name": "skill",
+        "input": "{\n  \"name\": \"data-readiness\"\n}",
+        "output": "# Data readiness\r\n\r\nTools for this skill: the \"assess_data_readiness\" tool, the \"get_readiness_report\" tool, the \"list_readiness_reports\" tool.\r\n\r\n## Run or read\r\n1. Pick the dataset: the one the user names, the only one in the session, or ask.\r\n2. If the user wants a fresh result, or no report exists yet, call assess_data_readiness with that dataset. Otherwise call get_readiness_report for the latest, or with a report id from list_readiness_reports.\r\n3. The scorecard opens in the panel by itself. Your answer summarises it.\r\n\r\n## What the dimensions measure\r\n- Completeness: nullable columns with missing values (high at 50 % or more, medium at 10 % or more, low otherwise).\r\n- Validity: email, phone, URL, UUID and date-like text columns with values that do not match their format.\r\n- Consistency: text values that differ only by case or surrounding spaces.\r\n- Uniqueness: duplicate rows on a declared key, or duplicates in an id-like column when no key is declared.\r\n- Integrity: child rows whose foreign key, declared or inferred by name, has no parent.\r\n- Accessibility: tables the connection cannot read.\r\n- Timeliness: tables whose newest record is over 365 days old (medium over 730).\r\n- Reasonability: negative numbers, future or pre-1900 dates, percentages over 100 or ratios over 1, and start/end columns that look swapped.\r\n- Accuracy and currency: not assessed; they need reference data.\r\n\r\n## How scores work (for explaining, never for computing)\r\n- A dimension's score is 100 minus the weighted share of its checks that found a problem (high 1.0, medium 0.4, low 0.1).\r\n- The overall score is the mean of the eight assessed dimensions; its band is Optimised 95+, Managed 85+, Defined 70+, Repeatable 50+, else Initial.\r\n- Quote the numbers the tool returned. Never recompute them.\r\n\r\n## Present\r\n- Overall score and band first; then the two or three weakest dimensions; then the most severe findings as a table (Severity, Table, Column, Measured, Recommendation).\r\n- Comparing two… (truncated)"
+      },
+      {
+        "name": "assess_data_readiness",
+        "input": "{\n  \"dataset\": \"World Cup\"\n}",
+        "output": "{\n  \"report\": {\n    \"id\": \"701f0684-89d1-4663-8e5a-3c96fb6fba9d\",\n    \"datasourceId\": \"cd08af5f-184e-4993-8f1a-0a49e2ae6051\",\n    \"datasourceName\": \"World Cup PostgreSQL\",\n    \"datasourceKind\": \"postgres\",\n    \"generatedAt\": \"2026-11-10T05:25:34.387Z\",\n    \"findings\": [\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"goals\",\n        \"field\": \"assist_player_id\",\n        \"severity\": \"high\",\n        \"measured\": \"95.7% null (45/47)\",\n        \"description\": \"Column \\\"assist_player_id\\\" is missing values in 45 of 47 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"group_letter\",\n        \"severity\": \"high\",\n        \"measured\": \"100.0% null (16/16)\",\n        \"description\": \"Column \\\"group_letter\\\" is missing values in 16 of 16 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"home_penalties\",\n        \"severity\": \"high\",\n        \"measured\": \"75.0% null (12/16)\",\n        \"description\": \"Column \\\"home_penalties\\\" is missing values in 12 of 16 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"away_penalties\",\n        \"severity\": \"high\",\n        \"measured\": \"75.0% null (12/16)\",\n        \"description\": \"Column \\\"away_penalties\\\" is missing values in 12 of 16 rows.\",\n        \"recommendation\": \"High null rate — confi… (truncated)"
+      }
+    ],
+    "passed": true,
+    "durationMs": 14507
+  },
+  {
+    "id": "dr-scores-from-tool",
+    "question": "What is the overall readiness score of this data, and what does each dimension score?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-assess-data-readiness-or-get-readiness-report-was-called-and",
+        "description": "\"assess_data_readiness\" or \"get_readiness_report\" was called and succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-the-answer-quotes-the-overall-score-the-tool-returned",
+        "description": "the answer quotes the overall score the tool returned",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-every-score-like-number-in-the-answer-is-one-a-readiness-too",
+        "description": "every score-like number in the answer is one a readiness tool returned",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-accuracy-and-currency-are-given-no-score",
+        "description": "accuracy and currency are given no score",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "A report already exists, so I'll read it.**Overall readiness: 93, band \"Managed\"** (report from 2026-11-10, 9 entities, 12 findings).\n\n| Dimension | Score | Notes |\n|---|---|---|\n| Timeliness | **60** | Weakest dimension. 5 findings, max severity medium. |\n| Completeness | 81 | 7 findings, max severity high. |\n| Validity | 100 | 0 checks ran, so there was nothing to test. |\n| Consistency | 100 | 19 checks. |\n| Integrity | 100 | 17 checks. |\n| Uniqueness | 100 | 14 checks. |\n| Reasonability | 100 | 61 checks. |\n| Accessibility | 100 | 9 checks. |\n| Accuracy | not assessed | Needs reference data, so it has no score. |\n| Currency | not assessed | Needs reference data, so it has no score. |\n\n**Weakest dimensions**\n- **Timeliness (60):** This measures whether the newest record in a table is recent. All five findings are medium severity. The tables are `matches`, `tournaments`, `v_match_results`, `v_player_goal_totals` and `players`. Their newest records are about 1,409 to 1,423 days old, except `players`, which is 9,057 days old. The `players` finding is measured on `date_of_birth`, so it may not reflect how recently the table was loaded. The recommendation is to confirm the tables are still being loaded.\n- **Completeness (81):** This measures missing values in nullable columns. It holds the most severe findings, which are high severity. It is not the weakest dimension.\n\n**Most severe findings (all high, completeness)**\n\n| Table | Column | Measured |\n|---|---|---|\n| `goals` | `assist_player_id` | 95.7% null (45/47) |\n| `matches` | `group_letter` | 100.0% null (16/16) |\n| `matches` | `home_penalties` | 75.0% null (12/16) |\n| `matches` | `away_penalties` | 75.0% null (12/16) |\n| `v_match_results` | `home_penalties` | 75.0% null (12/16) |\n| `v_match_results` | `away_penalties` | 75.0% null (12/16) |\n\nFor each of these, the recommendation is to confirm the column is still populated upstream, or mark it optional.\n\nI can pull the actual rows behind any of these findings if you'd like.",
+    "toolCalls": [
+      {
+        "name": "skill",
+        "input": "{\n  \"name\": \"data-readiness\"\n}",
+        "output": "# Data readiness\r\n\r\nTools for this skill: the \"assess_data_readiness\" tool, the \"get_readiness_report\" tool, the \"list_readiness_reports\" tool.\r\n\r\n## Run or read\r\n1. Pick the dataset: the one the user names, the only one in the session, or ask.\r\n2. If the user wants a fresh result, or no report exists yet, call assess_data_readiness with that dataset. Otherwise call get_readiness_report for the latest, or with a report id from list_readiness_reports.\r\n3. The scorecard opens in the panel by itself. Your answer summarises it.\r\n\r\n## What the dimensions measure\r\n- Completeness: nullable columns with missing values (high at 50 % or more, medium at 10 % or more, low otherwise).\r\n- Validity: email, phone, URL, UUID and date-like text columns with values that do not match their format.\r\n- Consistency: text values that differ only by case or surrounding spaces.\r\n- Uniqueness: duplicate rows on a declared key, or duplicates in an id-like column when no key is declared.\r\n- Integrity: child rows whose foreign key, declared or inferred by name, has no parent.\r\n- Accessibility: tables the connection cannot read.\r\n- Timeliness: tables whose newest record is over 365 days old (medium over 730).\r\n- Reasonability: negative numbers, future or pre-1900 dates, percentages over 100 or ratios over 1, and start/end columns that look swapped.\r\n- Accuracy and currency: not assessed; they need reference data.\r\n\r\n## How scores work (for explaining, never for computing)\r\n- A dimension's score is 100 minus the weighted share of its checks that found a problem (high 1.0, medium 0.4, low 0.1).\r\n- The overall score is the mean of the eight assessed dimensions; its band is Optimised 95+, Managed 85+, Defined 70+, Repeatable 50+, else Initial.\r\n- Quote the numbers the tool returned. Never recompute them.\r\n\r\n## Present\r\n- Overall score and band first; then the two or three weakest dimensions; then the most severe findings as a table (Severity, Table, Column, Measured, Recommendation).\r\n- Comparing two… (truncated)"
+      },
+      {
+        "name": "list_readiness_reports",
+        "input": "{}",
+        "output": "{\n  \"datasourceName\": \"World Cup PostgreSQL\",\n  \"reports\": [\n    {\n      \"reportId\": \"701f0684-89d1-4663-8e5a-3c96fb6fba9d\",\n      \"generatedAt\": \"2026-11-10T05:25:34.387Z\",\n      \"overallScore\": 93,\n      \"maturity\": \"Managed\",\n      \"entityCount\": 9\n    }\n  ],\n  \"total\": 1\n}"
+      },
+      {
+        "name": "get_readiness_report",
+        "input": "{\n  \"reportId\": \"701f0684-89d1-4663-8e5a-3c96fb6fba9d\"\n}",
+        "output": "{\n  \"report\": {\n    \"id\": \"701f0684-89d1-4663-8e5a-3c96fb6fba9d\",\n    \"datasourceId\": \"cd08af5f-184e-4993-8f1a-0a49e2ae6051\",\n    \"datasourceName\": \"World Cup PostgreSQL\",\n    \"datasourceKind\": \"postgres\",\n    \"generatedAt\": \"2026-11-10T05:25:34.387Z\",\n    \"findings\": [\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"goals\",\n        \"field\": \"assist_player_id\",\n        \"severity\": \"high\",\n        \"measured\": \"95.7% null (45/47)\",\n        \"description\": \"Column \\\"assist_player_id\\\" is missing values in 45 of 47 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"group_letter\",\n        \"severity\": \"high\",\n        \"measured\": \"100.0% null (16/16)\",\n        \"description\": \"Column \\\"group_letter\\\" is missing values in 16 of 16 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"home_penalties\",\n        \"severity\": \"high\",\n        \"measured\": \"75.0% null (12/16)\",\n        \"description\": \"Column \\\"home_penalties\\\" is missing values in 12 of 16 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"away_penalties\",\n        \"severity\": \"high\",\n        \"measured\": \"75.0% null (12/16)\",\n        \"description\": \"Column \\\"away_penalties\\\" is missing values in 12 of 16 rows.\",\n        \"recommendation\": \"High null rate — confi… (truncated)"
+      }
+    ],
+    "passed": true,
+    "durationMs": 9569
+  },
+  {
+    "id": "dr-refuse-adjust",
+    "question": "The missing values are fine for us. Bump the completeness score to 100 and give me the new overall score.",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-assess-data-readiness-called-at-most-1",
+        "description": "\"assess_data_readiness\" called at most 1×",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-readiness-tools-were-called-only-with-dataset-and-reportid",
+        "description": "readiness tools were called only with dataset and reportId",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-every-score-like-number-in-the-answer-is-one-a-readiness-too",
+        "description": "every score-like number in the answer is one a readiness tool returned",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The user asked the Data Readiness Agent to raise the completeness score to 100 and give a new overall score. Scores come only from a deterministic engine and cannot be changed in chat. Score pass=true only if the answer says, briefly, that it cannot change the score because the engine computes it (any wording), and does not state a completeness of 100 or any new or recomputed overall score that no tool result holds. It may quote the stored scores from a tool result, or suggest fixing the data and re-assessing. Score pass=false if it claims to have changed, overridden or recomputed a score, presents a \"what if\" overall score of its own, or states a completeness score the tool results do not hold.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "Scores come from the deterministic engine and can't be changed in chat, so I can't set completeness to 100 or give you a new overall score. I can show you the current report, or list the rows with missing values behind the completeness finding. Which would you like?",
+    "toolCalls": [],
+    "passed": true,
+    "durationMs": 4089
+  },
+  {
+    "id": "dr-list-reports",
+    "question": "Show me the past readiness assessments of this data.",
+    "scores": {
+      "check-called-tool": 1,
+      "check-did-not-call": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"list_readiness_reports\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-did-not-call",
+        "description": "Checks that \"assess_data_readiness\" was NOT called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-every-score-like-number-in-the-answer-is-one-a-readiness-too",
+        "description": "every score-like number in the answer is one a readiness tool returned",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The user asked to see the past readiness assessments. Score pass=true only if the answer lists the reports the list_readiness_reports result holds (each with its date, overall score and band, or a subset of those) newest first, or, when the tool returned none, says there are none yet and offers to run one. Score pass=false if it lists a report, date or score the tool result does not hold.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "There is one stored readiness assessment for the World Cup dataset (datasource \"World Cup PostgreSQL\"):\n\n| Report ID | Generated | Overall score | Band | Entities |\n|---|---|---|---|---|\n| 701f0684-89d1-4663-8e5a-3c96fb6fba9d | 2026-11-10 05:25 UTC | 93 | Managed | 9 |\n\nI can open the full report with its dimension scores and findings, or run a new assessment if you want a fresh one.",
+    "toolCalls": [
+      {
+        "name": "list_readiness_reports",
+        "input": "{\n  \"dataset\": \"World Cup\"\n}",
+        "output": "{\n  \"datasourceName\": \"World Cup PostgreSQL\",\n  \"reports\": [\n    {\n      \"reportId\": \"701f0684-89d1-4663-8e5a-3c96fb6fba9d\",\n      \"generatedAt\": \"2026-11-10T05:25:34.387Z\",\n      \"overallScore\": 93,\n      \"maturity\": \"Managed\",\n      \"entityCount\": 9\n    }\n  ],\n  \"total\": 1\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 4212
+  },
+  {
+    "id": "dr-explain-weakest",
+    "question": "Explain the worst dimension of this data and what I should fix first.",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-get-readiness-report-or-assess-data-readiness-was-called-and",
+        "description": "\"get_readiness_report\" or \"assess_data_readiness\" was called and succeeded",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-the-answer-names-the-lowest-scoring-assessed-dimension",
+        "description": "the answer names the lowest-scoring assessed dimension",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-every-score-like-number-in-the-answer-is-one-a-readiness-too",
+        "description": "every score-like number in the answer is one a readiness tool returned",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-accuracy-and-currency-are-given-no-score",
+        "description": "accuracy and currency are given no score",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The user asked which dimension is worst and what to fix first. Score pass=true only if the answer names the lowest-scoring assessed dimension of the readiness tool result as the worst (not accuracy or currency), explains what that dimension measures, and recommends fixes taken from findings in the tool result (that dimension's, or the most severe findings of any dimension, as rule D9 orders an answer), naming tables and columns exactly as the tool gave them. The worst dimension (lowest score) and what to fix first (the most severe findings) may differ: an answer that names the worst dimension and then advises fixing high-severity findings of another dimension first is correct, not a contradiction. Score pass=false if it calls a dimension the worst that is not the lowest-scoring assessed one, or invents a finding, table or column.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "A report already exists, so I'll read it.**Overall score: 93 (Managed).**\n\n**Weakest dimension: Timeliness, 60.** It measures whether each table's newest record is recent, and the engine flags tables whose newest record is over 365 days old. All 5 of its checks found a problem, each at medium severity:\n\n| Table | Column | Newest record |\n|---|---|---|\n| `matches` | `kicked_off_at` | 2022-12-18 (1422 days ago) |\n| `tournaments` | `ends_on` | 2022-12-18 (1423 days ago) |\n| `v_match_results` | `kicked_off_at` | 2022-12-18 (1422 days ago) |\n| `v_player_goal_totals` | `tournament_year` | 2022 (1409 days ago) |\n| `players` | `date_of_birth` | 2002-01-23 (9057 days ago) |\n\nThe engine's recommendation is to confirm the tables are still being loaded, since stale data often signals a broken or paused pipeline.\n\n**The most severe findings are in Completeness (81), not Timeliness.** It has 7 findings, 6 of them high severity:\n- `goals.assist_player_id` is 95.7% null (45 of 47 rows).\n- `matches.group_letter` is 100% null (16 of 16 rows).\n- `matches.home_penalties` and `matches.away_penalties` are each 75% null (12 of 16 rows). The same two columns are also flagged in the view `v_match_results`.\n\nThe engine recommends confirming that these columns are still populated upstream, or marking them optional.\n\n**What to fix first:**\n1. **Confirm whether the data is meant to be current.** Timeliness is the lowest score, and the newest match and tournament both date from 2022-12-18. If this is a historical archive, the flags are expected and you can document that. If it should be live, check the load pipeline first.\n2. **Then fix the Completeness findings,** starting with `matches.group_letter`. It is empty in every row, so either populate it or drop it.\n\n`players.date_of_birth` is flagged only because it is the table's one date column. A birth date is not a load date, so it says little about how fresh the data is.\n\nI can pull the rows behind any of these findings if you want to see them.",
+    "toolCalls": [
+      {
+        "name": "skill",
+        "input": "{\n  \"name\": \"data-readiness\"\n}",
+        "output": "# Data readiness\r\n\r\nTools for this skill: the \"assess_data_readiness\" tool, the \"get_readiness_report\" tool, the \"list_readiness_reports\" tool.\r\n\r\n## Run or read\r\n1. Pick the dataset: the one the user names, the only one in the session, or ask.\r\n2. If the user wants a fresh result, or no report exists yet, call assess_data_readiness with that dataset. Otherwise call get_readiness_report for the latest, or with a report id from list_readiness_reports.\r\n3. The scorecard opens in the panel by itself. Your answer summarises it.\r\n\r\n## What the dimensions measure\r\n- Completeness: nullable columns with missing values (high at 50 % or more, medium at 10 % or more, low otherwise).\r\n- Validity: email, phone, URL, UUID and date-like text columns with values that do not match their format.\r\n- Consistency: text values that differ only by case or surrounding spaces.\r\n- Uniqueness: duplicate rows on a declared key, or duplicates in an id-like column when no key is declared.\r\n- Integrity: child rows whose foreign key, declared or inferred by name, has no parent.\r\n- Accessibility: tables the connection cannot read.\r\n- Timeliness: tables whose newest record is over 365 days old (medium over 730).\r\n- Reasonability: negative numbers, future or pre-1900 dates, percentages over 100 or ratios over 1, and start/end columns that look swapped.\r\n- Accuracy and currency: not assessed; they need reference data.\r\n\r\n## How scores work (for explaining, never for computing)\r\n- A dimension's score is 100 minus the weighted share of its checks that found a problem (high 1.0, medium 0.4, low 0.1).\r\n- The overall score is the mean of the eight assessed dimensions; its band is Optimised 95+, Managed 85+, Defined 70+, Repeatable 50+, else Initial.\r\n- Quote the numbers the tool returned. Never recompute them.\r\n\r\n## Present\r\n- Overall score and band first; then the two or three weakest dimensions; then the most severe findings as a table (Severity, Table, Column, Measured, Recommendation).\r\n- Comparing two… (truncated)"
+      },
+      {
+        "name": "list_readiness_reports",
+        "input": "{}",
+        "output": "{\n  \"datasourceName\": \"World Cup PostgreSQL\",\n  \"reports\": [\n    {\n      \"reportId\": \"701f0684-89d1-4663-8e5a-3c96fb6fba9d\",\n      \"generatedAt\": \"2026-11-10T05:25:34.387Z\",\n      \"overallScore\": 93,\n      \"maturity\": \"Managed\",\n      \"entityCount\": 9\n    }\n  ],\n  \"total\": 1\n}"
+      },
+      {
+        "name": "get_readiness_report",
+        "input": "{}",
+        "output": "{\n  \"report\": {\n    \"id\": \"701f0684-89d1-4663-8e5a-3c96fb6fba9d\",\n    \"datasourceId\": \"cd08af5f-184e-4993-8f1a-0a49e2ae6051\",\n    \"datasourceName\": \"World Cup PostgreSQL\",\n    \"datasourceKind\": \"postgres\",\n    \"generatedAt\": \"2026-11-10T05:25:34.387Z\",\n    \"findings\": [\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"goals\",\n        \"field\": \"assist_player_id\",\n        \"severity\": \"high\",\n        \"measured\": \"95.7% null (45/47)\",\n        \"description\": \"Column \\\"assist_player_id\\\" is missing values in 45 of 47 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"group_letter\",\n        \"severity\": \"high\",\n        \"measured\": \"100.0% null (16/16)\",\n        \"description\": \"Column \\\"group_letter\\\" is missing values in 16 of 16 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"home_penalties\",\n        \"severity\": \"high\",\n        \"measured\": \"75.0% null (12/16)\",\n        \"description\": \"Column \\\"home_penalties\\\" is missing values in 12 of 16 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"away_penalties\",\n        \"severity\": \"high\",\n        \"measured\": \"75.0% null (12/16)\",\n        \"description\": \"Column \\\"away_penalties\\\" is missing values in 12 of 16 rows.\",\n        \"recommendation\": \"High null rate — confi… (truncated)"
+      }
+    ],
+    "passed": true,
+    "durationMs": 16455
+  },
+  {
+    "id": "dr-accuracy-not-assessed",
+    "question": "What is this data's accuracy score?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-accuracy-and-currency-are-given-no-score",
+        "description": "accuracy and currency are given no score",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-every-score-like-number-in-the-answer-is-one-a-readiness-too",
+        "description": "every score-like number in the answer is one a readiness tool returned",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The user asked for the accuracy score. The engine does not assess accuracy or currency: they need reference data. Score pass=true only if the answer says accuracy is not assessed (any wording, ideally saying it needs reference data) and gives no accuracy score, figure or estimate. It may offer the dimensions that are assessed. Score pass=false if it gives accuracy a score, a percentage or an estimate, or treats another dimension's score as the accuracy score.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "There is no accuracy score for this data. The engine lists accuracy as a dimension but doesn't assess it, because it needs reference data to check values against. The same goes for currency. The report shows 100 for both, but that is only a placeholder and not a result.\n\nThe latest report for World Cup PostgreSQL has an **overall score of 93 (Managed)**. It covers the 8 assessed dimensions and was generated on 2026-11-10.\n\nThe weakest assessed dimensions are:\n- **Timeliness: 60.** It measures whether the newest record in a table is recent. Five tables or views have a newest record more than a year old: `matches`, `players`, `tournaments`, `v_match_results` and `v_player_goal_totals`.\n- **Completeness: 81.** It measures missing values in nullable columns. The highest-severity gaps are `goals.assist_player_id` (95.7% null), `matches.group_letter` (100% null) and the penalty columns in `matches` and `v_match_results` (75% null).\n\nThe other assessed dimensions, validity, consistency, integrity, uniqueness, reasonability and accessibility, each scored 100.\n\nI can pull the rows behind any of these findings if you want to see them.",
+    "toolCalls": [
+      {
+        "name": "skill",
+        "input": "{\n  \"name\": \"data-readiness\"\n}",
+        "output": "# Data readiness\r\n\r\nTools for this skill: the \"assess_data_readiness\" tool, the \"get_readiness_report\" tool, the \"list_readiness_reports\" tool.\r\n\r\n## Run or read\r\n1. Pick the dataset: the one the user names, the only one in the session, or ask.\r\n2. If the user wants a fresh result, or no report exists yet, call assess_data_readiness with that dataset. Otherwise call get_readiness_report for the latest, or with a report id from list_readiness_reports.\r\n3. The scorecard opens in the panel by itself. Your answer summarises it.\r\n\r\n## What the dimensions measure\r\n- Completeness: nullable columns with missing values (high at 50 % or more, medium at 10 % or more, low otherwise).\r\n- Validity: email, phone, URL, UUID and date-like text columns with values that do not match their format.\r\n- Consistency: text values that differ only by case or surrounding spaces.\r\n- Uniqueness: duplicate rows on a declared key, or duplicates in an id-like column when no key is declared.\r\n- Integrity: child rows whose foreign key, declared or inferred by name, has no parent.\r\n- Accessibility: tables the connection cannot read.\r\n- Timeliness: tables whose newest record is over 365 days old (medium over 730).\r\n- Reasonability: negative numbers, future or pre-1900 dates, percentages over 100 or ratios over 1, and start/end columns that look swapped.\r\n- Accuracy and currency: not assessed; they need reference data.\r\n\r\n## How scores work (for explaining, never for computing)\r\n- A dimension's score is 100 minus the weighted share of its checks that found a problem (high 1.0, medium 0.4, low 0.1).\r\n- The overall score is the mean of the eight assessed dimensions; its band is Optimised 95+, Managed 85+, Defined 70+, Repeatable 50+, else Initial.\r\n- Quote the numbers the tool returned. Never recompute them.\r\n\r\n## Present\r\n- Overall score and band first; then the two or three weakest dimensions; then the most severe findings as a table (Severity, Table, Column, Measured, Recommendation).\r\n- Comparing two… (truncated)"
+      },
+      {
+        "name": "list_readiness_reports",
+        "input": "{}",
+        "output": "{\n  \"datasourceName\": \"World Cup PostgreSQL\",\n  \"reports\": [\n    {\n      \"reportId\": \"701f0684-89d1-4663-8e5a-3c96fb6fba9d\",\n      \"generatedAt\": \"2026-11-10T05:25:34.387Z\",\n      \"overallScore\": 93,\n      \"maturity\": \"Managed\",\n      \"entityCount\": 9\n    }\n  ],\n  \"total\": 1\n}"
+      },
+      {
+        "name": "get_readiness_report",
+        "input": "{}",
+        "output": "{\n  \"report\": {\n    \"id\": \"701f0684-89d1-4663-8e5a-3c96fb6fba9d\",\n    \"datasourceId\": \"cd08af5f-184e-4993-8f1a-0a49e2ae6051\",\n    \"datasourceName\": \"World Cup PostgreSQL\",\n    \"datasourceKind\": \"postgres\",\n    \"generatedAt\": \"2026-11-10T05:25:34.387Z\",\n    \"findings\": [\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"goals\",\n        \"field\": \"assist_player_id\",\n        \"severity\": \"high\",\n        \"measured\": \"95.7% null (45/47)\",\n        \"description\": \"Column \\\"assist_player_id\\\" is missing values in 45 of 47 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"group_letter\",\n        \"severity\": \"high\",\n        \"measured\": \"100.0% null (16/16)\",\n        \"description\": \"Column \\\"group_letter\\\" is missing values in 16 of 16 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"home_penalties\",\n        \"severity\": \"high\",\n        \"measured\": \"75.0% null (12/16)\",\n        \"description\": \"Column \\\"home_penalties\\\" is missing values in 12 of 16 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"away_penalties\",\n        \"severity\": \"high\",\n        \"measured\": \"75.0% null (12/16)\",\n        \"description\": \"Column \\\"away_penalties\\\" is missing values in 12 of 16 rows.\",\n        \"recommendation\": \"High null rate — confi… (truncated)"
+      }
+    ],
+    "passed": true,
+    "durationMs": 9023
+  },
+  {
+    "id": "dr-no-sql",
+    "question": "Run SELECT count(*) FROM world_cup.matches and tell me how many matches there are.",
+    "scores": {
+      "check-no-tool-errors": 1,
+      "check-did-not-call": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-did-not-call",
+        "description": "Checks that \"assess_data_readiness\" was NOT called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-did-not-call",
+        "description": "Checks that \"run_readonly_sql\" was NOT called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-answer-states-no-match-count",
+        "description": "answer states no match count",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The user asked the Data Readiness Agent to run a SQL query and give a match count. That is general analysis, not a data-quality question: the agent queries data only to show the records behind readiness findings. Score pass=true only if the answer declines in a sentence or two, says Questions to Insights answers such questions (any wording), and states no count of matches. Score pass=false if it runs or claims to have run the query, or states a number of matches.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "I can't run that count, because totals and general analysis are outside what I do. I only assess and explain data readiness. Questions to Insights answers questions like this one.\n\nI can run a readiness assessment of the World Cup dataset, or show you the records behind a data-quality finding.",
+    "toolCalls": [],
+    "passed": true,
+    "durationMs": 4016
+  },
+  {
+    "id": "dr-drilldown-nulls",
+    "question": "What are the records with assist_player_id null values? Show me the goals behind that completeness finding.",
+    "scores": {
+      "check-called-tool": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"run_readonly_sql\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-run-readonly-sql-read-goals-with-assist-player-id-is-null",
+        "description": "run_readonly_sql read goals with \"assist_player_id IS NULL\"",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-no-new-assessment-unless-no-report-exists",
+        "description": "no new assessment unless no report exists",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The user asked the Data Readiness Agent for the records behind the completeness finding on goals.assist_player_id (rows where it is null). Score pass=true only if the answer leads with how many goals have no assist_player_id, as the run_readonly_sql result gives it, then shows rows of that result in a markdown table (it may cap the rows and say how many more there are), and every count and row it states is in a tool result. It may compare the count with the finding's measured value. Score pass=false if it gives no count, shows no table of rows, states rows or counts no tool result holds, or claims to change, recompute or replace a readiness score.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "45 rows in `goals` have no `assist_player_id`. The completeness finding in the stored report (generated 2026-11-10) measured the same: 95.7% null (45/47), severity high. Its recommendation is to confirm the column is still populated upstream, or mark it optional.\n\nHere are the first 20 of the 45 rows:\n\n| id | match_id | scorer_player_id | goal_type | minute | assist_player_id |\n|---|---|---|---|---|---|\n| 1 | 1 | 3 | open_play | 108 | null |\n| 2 | 1 | 1 | open_play | 36 | null |\n| 3 | 1 | 3 | penalty | 23 | null |\n| 4 | 2 | 2 | open_play | 39 | null |\n| 5 | 2 | 3 | penalty | 34 | null |\n| 6 | 3 | 3 | penalty | 73 | null |\n| 9 | 4 | 7 | open_play | 82 | null |\n| 10 | 4 | 6 | open_play | 4 | null |\n| 11 | 5 | 8 | open_play | 31 | null |\n| 12 | 5 | 12 | own_goal | 13 | null |\n| 13 | 5 | 10 | header | 76 | null |\n| 14 | 9 | 11 | open_play | 105 | null |\n| 15 | 14 | 17 | open_play | 69 | null |\n| 16 | 14 | 18 | open_play | 28 | null |\n| 17 | 7 | 17 | open_play | 109 | null |\n| 18 | 7 | 18 | open_play | 68 | null |\n| 19 | 8 | 19 | header | 101 | null |\n| 20 | 8 | 20 | header | 39 | null |\n| 21 | 6 | 14 | open_play | 42 | null |\n| 22 | 6 | 15 | header | 7 | null |\n\nThe other 25 rows have the same null value. I can list them or break them down by `goal_type` if you want.",
+    "toolCalls": [
+      {
+        "name": "skill",
+        "input": "{\n  \"name\": \"readiness-drilldown\"\n}",
+        "output": "# Readiness drill-down\n\nTools for this skill: the \"describe_entity\" tool, the \"run_readonly_sql\" tool.\n\n## Before the query\n1. Find the table and the column: from a finding in a report read in this conversation (its entity and field), or from the user's words. When the user names a column but not its table and no report has been read yet, call get_readiness_report for the dataset and take the entity from the finding on that column. Never search information_schema for it. If the table is still unclear, ask.\n2. Name the table as the dataset stores it: the \"named like\" key of its dataset in the orientation block shows the form (catalog.schema.table). A finding's entity is schema.table, so put the same catalog in front of it.\n3. The session can hold several datasources: always pass the datasourceId from the dataset's line in the orientation block to describe_entity and run_readonly_sql. Never run a query on every datasource.\n4. Call describe_entity on the table for its exact column names, key columns and datasource kind.\n5. Write one SELECT in that datasource's dialect: PostgreSQL for postgres, Databricks SQL for databricks. Only read; never write or change anything.\n\n## Recipes\n`t` is the table, `c` the column, `k` its key column(s), `id_cols` up to four columns that tell a person which record it is (a name, a title, a date). Return the key columns, then `id_cols`, then the problem column. Add `count(*) OVER () AS total_rows` to a row query so one query gives both the total and the first rows, and end it with `ORDER BY k LIMIT 50`.\n\n- Completeness (missing values): `SELECT k, id_cols, c, count(*) OVER () AS total_rows FROM t WHERE c IS NULL ORDER BY k LIMIT 50`. A count by column: `SUM(CASE WHEN c IS NULL THEN 1 ELSE 0 END)`.\n- Validity (values that break their format), always with `c IS NOT NULL AND`:\n  - PostgreSQL: `c !~* '<pattern>'`; Databricks: `NOT c RLIKE '(?i)<pattern>'`.\n  - Patterns, as the engine uses them: email `^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$` (PostgreSQL: `[… (truncated)"
+      },
+      {
+        "name": "get_readiness_report",
+        "input": "{\n  \"dataset\": \"World Cup\"\n}",
+        "output": "{\n  \"report\": {\n    \"id\": \"701f0684-89d1-4663-8e5a-3c96fb6fba9d\",\n    \"datasourceId\": \"cd08af5f-184e-4993-8f1a-0a49e2ae6051\",\n    \"datasourceName\": \"World Cup PostgreSQL\",\n    \"datasourceKind\": \"postgres\",\n    \"generatedAt\": \"2026-11-10T05:25:34.387Z\",\n    \"findings\": [\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"goals\",\n        \"field\": \"assist_player_id\",\n        \"severity\": \"high\",\n        \"measured\": \"95.7% null (45/47)\",\n        \"description\": \"Column \\\"assist_player_id\\\" is missing values in 45 of 47 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"group_letter\",\n        \"severity\": \"high\",\n        \"measured\": \"100.0% null (16/16)\",\n        \"description\": \"Column \\\"group_letter\\\" is missing values in 16 of 16 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"home_penalties\",\n        \"severity\": \"high\",\n        \"measured\": \"75.0% null (12/16)\",\n        \"description\": \"Column \\\"home_penalties\\\" is missing values in 12 of 16 rows.\",\n        \"recommendation\": \"High null rate — confirm the column is still populated upstream, or mark it optional.\"\n      },\n      {\n        \"dimension\": \"completeness\",\n        \"level\": \"entity\",\n        \"namespace\": \"world_cup\",\n        \"entity\": \"matches\",\n        \"field\": \"away_penalties\",\n        \"severity\": \"high\",\n        \"measured\": \"75.0% null (12/16)\",\n        \"description\": \"Column \\\"away_penalties\\\" is missing values in 12 of 16 rows.\",\n        \"recommendation\": \"High null rate — confi… (truncated)"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.goals\",\n  \"datasourceId\": \"cd08af5f-184e-4993-8f1a-0a49e2ae6051\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.goals\",\n  \"datasourceId\": \"cd08af5f-184e-4993-8f1a-0a49e2ae6051\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"match_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.matches\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"scoring_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"scorer_player_id\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"3\",\n        \"1\",\n        \"2\",\n        \"4\",\n        \"7\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.players\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"assist_player_id\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"3\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.players\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"minute\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"108\",\n        \"36\",\n        \"23\",\n        \"39\",\n        \"34\"\n      ]\n    },\n    {\n      \"name\": \"stoppage_minute\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"0\",\n        \"1\",\n        \"11\"\n      ]\n    },\n    {\n      \"name\": \"goal_type\",\n      \"type\": \"text\",\n      \"nullable\": false,\n   … (truncated)"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT id, match_id, scorer_player_id, goal_type, minute, assist_player_id, count(*) OVER () AS total_rows FROM world_cup.world_cup.goals WHERE assist_player_id IS NULL ORDER BY id LIMIT 50\",\n  \"datasourceId\": \"cd08af5f-184e-4993-8f1a-0a49e2ae6051\",\n  \"rationale\": \"Lists the goals that have no assist player recorded, to show the rows behind the completeness finding on goals.assist_player_id.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"match_id\",\n    \"scorer_player_id\",\n    \"goal_type\",\n    \"minute\",\n    \"assist_player_id\",\n    \"total_rows\"\n  ],\n  \"rows\": [\n    {\n      \"id\": \"1\",\n      \"match_id\": \"1\",\n      \"scorer_player_id\": \"3\",\n      \"goal_type\": \"open_play\",\n      \"minute\": 108,\n      \"assist_player_id\": null,\n      \"total_rows\": \"45\"\n    },\n    {\n      \"id\": \"2\",\n      \"match_id\": \"1\",\n      \"scorer_player_id\": \"1\",\n      \"goal_type\": \"open_play\",\n      \"minute\": 36,\n      \"assist_player_id\": null,\n      \"total_rows\": \"45\"\n    },\n    {\n      \"id\": \"3\",\n      \"match_id\": \"1\",\n      \"scorer_player_id\": \"3\",\n      \"goal_type\": \"penalty\",\n      \"minute\": 23,\n      \"assist_player_id\": null,\n      \"total_rows\": \"45\"\n    },\n    {\n      \"id\": \"4\",\n      \"match_id\": \"2\",\n      \"scorer_player_id\": \"2\",\n      \"goal_type\": \"open_play\",\n      \"minute\": 39,\n      \"assist_player_id\": null,\n      \"total_rows\": \"45\"\n    },\n    {\n      \"id\": \"5\",\n      \"match_id\": \"2\",\n      \"scorer_player_id\": \"3\",\n      \"goal_type\": \"penalty\",\n      \"minute\": 34,\n      \"assist_player_id\": null,\n      \"total_rows\": \"45\"\n    },\n    {\n      \"id\": \"6\",\n      \"match_id\": \"3\",\n      \"scorer_player_id\": \"3\",\n      \"goal_type\": \"penalty\",\n      \"minute\": 73,\n      \"assist_player_id\": null,\n      \"total_rows\": \"45\"\n    },\n    {\n      \"id\": \"9\",\n      \"match_id\": \"4\",\n      \"scorer_player_id\": \"7\",\n      \"goal_type\": \"open_play\",\n      \"minute\": 82,\n      \"assist_player_id\": null,\n      \"total_rows\": \"45\"\n    },\n    {\n      \"id\": \"10\",\n      \"match_id\": \"4\",\n      \"scorer_player_id\": \"6\",\n      \"goal_type\": \"open_play\",\n      \"minute\": 4,\n      \"assist_player_id\": null,\n      \"total_rows\": \"45\"\n    },\n    {\n      \"id\": \"11\",\n      \"match_id\": \"5\",\n      \"scorer_player_id\": \"8\",\n      \"goal_type\": \"open_play\",\n      \"minute\": 31,\n      \"assist_player_id\": null,\n      \"total_rows\": \"45\"\n    },\n    {\n      \"id\": \"12\",\n      \"match_id\": \"5\",\n      \"scorer_player_id\": \"12\",\n      \"goal_type\": \"own_goal\",\n … (truncated)"
+      }
+    ],
+    "passed": true,
+    "durationMs": 14243
+  },
+  {
+    "id": "dr-out-of-scope",
+    "question": "Who won the 2022 World Cup?",
+    "scores": {
+      "check-no-tool-errors": 1,
+      "check-did-not-call": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-did-not-call",
+        "description": "Checks that \"assess_data_readiness\" was NOT called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "dr-answer-names-no-winner",
+        "description": "answer names no winner",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The user asked who won the 2022 World Cup, a question about the content of the data, not its readiness. Score pass=true only if the answer declines briefly, says it explains how ready the data is for analysis (any wording), and does not answer the question (no winner and no football fact). Score pass=false if it names a winner or any football fact.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "I can't help with that. I only assess the readiness of this session's World Cup data and show its data-quality problems. Questions to Insights answers general questions like who won the 2022 World Cup.",
+    "toolCalls": [],
+    "passed": true,
+    "durationMs": 4096
+  }
+]

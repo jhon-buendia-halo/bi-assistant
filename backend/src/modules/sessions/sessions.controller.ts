@@ -285,8 +285,9 @@ export class SessionsController {
     try {
       const agentId =
         typeof body?.agentId === 'string' && body.agentId ? body.agentId : '';
-      // With an agent, the agent decides the name and datasets (R52); a
-      // preview runs its draft (agents-evals R60).
+      // With an agent, the agent decides the name and datasets (R52), except
+      // one that runs on picked datasets (Questions to Insights v2), which
+      // takes both from the body; a preview runs its draft (agents-evals R60).
       const session = !agentId
         ? await this.sessionsService.create(
             body?.name ?? '',
@@ -294,7 +295,11 @@ export class SessionsController {
           )
         : body?.preview === true
           ? await this.sessionsService.createPreview(agentId)
-          : await this.sessionsService.createFromAgent(agentId, body?.name);
+          : await this.sessionsService.createFromAgent(
+              agentId,
+              body?.name,
+              body?.datasets,
+            );
       return {
         ok: true,
         message: session.preview
@@ -350,7 +355,7 @@ export class SessionsController {
     },
     @Res() res: Response,
   ): Promise<void> {
-    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();

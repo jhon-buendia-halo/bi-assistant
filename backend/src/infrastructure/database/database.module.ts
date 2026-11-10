@@ -1,4 +1,4 @@
-import { Global, Module, Provider } from '@nestjs/common';
+import { Global, Logger, Module, Provider } from '@nestjs/common';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { SUPER_ADMIN } from '../../common/super-admin';
@@ -10,7 +10,8 @@ import {
   DOC_STORE_TRANSACTIONS,
   METRICS_STORE,
   EVAL_RUNS_STORE,
-  KNOWLEDGE_STORE,
+  ONTOLOGY_STORE,
+  PERSONAS_STORE,
   SESSIONS_STORE,
   DATASETS_STORE,
   SETTINGS_STORE,
@@ -43,7 +44,8 @@ const COLLECTIONS = [
   { token: VERIFIED_QUERIES_STORE, table: 'verified_queries' },
   { token: METRICS_STORE, table: 'metrics' },
   { token: EVAL_RUNS_STORE, table: 'eval_runs' },
-  { token: KNOWLEDGE_STORE, table: 'knowledge_snippets' },
+  { token: ONTOLOGY_STORE, table: 'ontology_items' },
+  { token: PERSONAS_STORE, table: 'user_personas' },
   { token: AGENTS_STORE, table: 'agents' },
   { token: SKILLS_STORE, table: 'skills' },
   { token: SKILL_OVERRIDES_STORE, table: 'skill_overrides' },
@@ -62,6 +64,7 @@ const sqliteDbProvider: Provider = {
     renameLegacyTables(db);
     renameLegacyFields(db);
     consolidateOwners(db);
+    migrateKnowledgeToOntology(db);
     return db;
   },
 };
@@ -131,7 +134,10 @@ const PRIVATE_TABLES = [
   'verified_queries',
   'metrics',
   'eval_runs',
+  // Pre-M15 installs: M14 runs first, so the snippets M15 copies are owned.
   'knowledge_snippets',
+  'ontology_items',
+  'user_personas',
   'agents',
   'skills',
 ];
@@ -288,6 +294,138 @@ function renameClashingSkills(db: Db): void {
       );
     }
   }
+}
+
+const LEGACY_KNOWLEDGE_TABLE = 'knowledge_snippets';
+const RETIRED_KNOWLEDGE_TABLE = 'knowledge_snippets_legacy';
+const ONTOLOGY_TABLE = 'ontology_items';
+
+/** A legacy string list as stored: strings only, blanks dropped. */
+function legacyList(value: unknown): string[] {
+  return (Array.isArray(value) ? value : []).filter(
+    (v): v is string => typeof v === 'string' && v.trim() !== '',
+  );
+}
+
+/**
+ * M15's mapping of one legacy knowledge snippet to an ontology item
+ * (docs/plans/ba-320-dataset-ontology.md, "Storage"); `null` for a document
+ * that is not a snippet of a known kind. Kept free of the ontology module's
+ * types: infrastructure never depends on a feature module.
+ *
+ * - `term` → `concept` (title → name, body → description, synonyms kept,
+ *   each entity → a mapping `{ entity }` in the same order);
+ * - `default_filter` → `constraint` (body → predicate, description `''`);
+ * - `instruction` → `instruction` (body → description).
+ * - `scope.datasetId` → `dataset`; no scope → shared; a scope with only
+ *   `datasourceId` → shared **and** disabled.
+ * - `id`, `enabled`, `source`, `ownerId`, `createdAt`, `updatedAt` as they are.
+ */
+export function legacySnippetToOntologyItem(
+  snippet: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const kind =
+    snippet.kind === 'term'
+      ? 'concept'
+      : snippet.kind === 'default_filter'
+        ? 'constraint'
+        : snippet.kind === 'instruction'
+          ? 'instruction'
+          : null;
+  if (!kind || typeof snippet.id !== 'string') return null;
+  const scope =
+    snippet.scope && typeof snippet.scope === 'object'
+      ? (snippet.scope as Record<string, unknown>)
+      : null;
+  const datasetId =
+    typeof scope?.datasetId === 'string' && scope.datasetId
+      ? scope.datasetId
+      : null;
+  const datasourceOnly =
+    !datasetId &&
+    typeof scope?.datasourceId === 'string' &&
+    scope.datasourceId !== '';
+  const title = typeof snippet.title === 'string' ? snippet.title : '';
+  const body = typeof snippet.body === 'string' ? snippet.body : '';
+  const synonyms = legacyList(snippet.synonyms);
+  const entities = legacyList(snippet.entities);
+  const item: Record<string, unknown> = {
+    id: snippet.id,
+    dataset: datasetId,
+    kind,
+    name: title,
+    description: kind === 'constraint' ? '' : body,
+    enabled: datasourceOnly ? false : snippet.enabled,
+    source: snippet.source,
+  };
+  if (kind === 'concept') {
+    if (synonyms.length) item.synonyms = synonyms;
+    if (entities.length) item.mappings = entities.map((entity) => ({ entity }));
+  } else {
+    if (kind === 'constraint') item.predicate = body;
+    if (entities.length) item.entities = entities;
+  }
+  for (const key of ['ownerId', 'createdAt', 'updatedAt']) {
+    if (snippet[key] !== undefined) item[key] = snippet[key];
+  }
+  return item;
+}
+
+/**
+ * M15 (data-model 6; ADR-0036): knowledge snippets become ontology items.
+ * Runs after M14 and before any store is built. Raw SQL, so timestamps are
+ * not restamped; idempotent; one transaction. When `knowledge_snippets`
+ * exists: create `ontology_items` if missing, copy each snippet whose id is
+ * not there yet, then rename `knowledge_snippets` to
+ * `knowledge_snippets_legacy` (kept one release) when that name is free —
+ * otherwise both stay and a warning is logged.
+ */
+export function migrateKnowledgeToOntology(
+  db: Db,
+  logger: Pick<Logger, 'warn'> = new Logger('DatabaseModule'),
+): void {
+  if (!tableExists(db, LEGACY_KNOWLEDGE_TABLE)) return;
+  db.transaction(() => {
+    db.prepare(
+      `CREATE TABLE IF NOT EXISTS "${ONTOLOGY_TABLE}" (rid INTEGER PRIMARY KEY AUTOINCREMENT, doc TEXT NOT NULL)`,
+    ).run();
+    const present = new Set(
+      (
+        db
+          .prepare(
+            `SELECT json_extract(doc, '$.id') AS id FROM "${ONTOLOGY_TABLE}"`,
+          )
+          .all() as { id: unknown }[]
+      ).map((r) => r.id),
+    );
+    const rows = db
+      .prepare(`SELECT doc FROM "${LEGACY_KNOWLEDGE_TABLE}" ORDER BY rid`)
+      .all() as { doc: string }[];
+    const insert = db.prepare(
+      `INSERT INTO "${ONTOLOGY_TABLE}" (doc) VALUES (?)`,
+    );
+    for (const { doc } of rows) {
+      let snippet: Record<string, unknown>;
+      try {
+        snippet = JSON.parse(doc) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      const item = legacySnippetToOntologyItem(snippet);
+      if (!item || present.has(item.id)) continue;
+      insert.run(JSON.stringify(item));
+      present.add(item.id);
+    }
+    if (tableExists(db, RETIRED_KNOWLEDGE_TABLE)) {
+      logger.warn(
+        `M15: "${RETIRED_KNOWLEDGE_TABLE}" already exists, so "${LEGACY_KNOWLEDGE_TABLE}" was copied but not renamed`,
+      );
+      return;
+    }
+    db.prepare(
+      `ALTER TABLE "${LEGACY_KNOWLEDGE_TABLE}" RENAME TO "${RETIRED_KNOWLEDGE_TABLE}"`,
+    ).run();
+  })();
 }
 
 const storeProviders: Provider[] = COLLECTIONS.map((c) => ({

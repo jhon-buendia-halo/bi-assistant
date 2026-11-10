@@ -34,9 +34,17 @@ export default defineConfig<object, { target: Target }>({
     },
   },
   globalSetup: './e2e/global-setup.ts',
-  reporter: process.env['CI']
-    ? [['github'], ['html', { open: 'never' }]]
-    : [['list'], ['html', { open: 'never' }]],
+  // scripts/qa.mjs sets QA_REPORT_DIR to collect machine-readable results
+  // for the story's tests.md (delivery.md 13).
+  reporter: process.env['QA_REPORT_DIR']
+    ? [
+        ['list'],
+        ['json', { outputFile: path.join(process.env['QA_REPORT_DIR'], 'results.json') }],
+        ['html', { open: 'never', outputFolder: path.join(process.env['QA_REPORT_DIR'], 'html') }],
+      ]
+    : process.env['CI']
+      ? [['github'], ['html', { open: 'never' }]]
+      : [['list'], ['html', { open: 'never' }]],
   retries: process.env['CI'] ? 1 : 0,
   use: {
     trace: 'retain-on-failure',

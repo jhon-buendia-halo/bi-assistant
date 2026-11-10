@@ -3,15 +3,22 @@ jest.mock('../engine/infer-joins', () => ({
   inferJoinCandidates: jest.fn(),
 }));
 
-import type { ProfiledTable } from '../../datasources/connectors/profiling';
+import type {
+  ColumnStatsExtras,
+  ProfiledTable,
+} from '../../datasources/connectors/profiling';
+import { runAssessment } from '../engine/check-engine';
 import { inferJoinCandidates } from '../engine/infer-joins';
+import { DEFAULT_THRESHOLDS } from '../engine/types';
 import type { JoinCandidate } from '../engine/infer-joins';
 import type { AssessScope } from '../engine/types';
 import {
   buildSourceProfile,
   utcTemporal,
+  type BuildProfileOptions,
   type DialectRules,
 } from './build-profile';
+import type { ReadinessProgress } from '../progress';
 import { classifyType } from './classify';
 import { fakeProfiler, stats, type FakeSource } from './fake-profiler.stub';
 import { POSTGRES_FORMAT_PATTERNS } from './format-rules';
@@ -52,11 +59,16 @@ function source(overrides: Partial<FakeSource> = {}): FakeSource {
   };
 }
 
-const run = (src: FakeSource, scope?: AssessScope) => {
-  const profiler = fakeProfiler<object>('postgres', src);
+const run = (
+  src: FakeSource,
+  scope?: AssessScope,
+  options?: BuildProfileOptions,
+  rules: DialectRules = dialect,
+) => {
+  const profiler = fakeProfiler<object>(rules.sourceType, src);
   return {
     profiler,
-    result: buildSourceProfile(profiler, {}, 'ds', dialect, scope),
+    result: buildSourceProfile(profiler, {}, 'ds', rules, scope, options),
   };
 };
 
@@ -73,11 +85,21 @@ describe('buildSourceProfile', () => {
     expect(label('s', 'a')?.normalizedDistinctCount).toBe(1);
     expect(label('s', 'b')).not.toHaveProperty('normalizedDistinctCount');
     expect(label('t', 'a')?.normalizedDistinctCount).toBe(999);
+    // Folded into the statistics statement: no per-column probes.
     expect(
-      profiler.calls
-        .filter((c) => c.method === 'normalizedDistinctCount')
-        .map((c) => c.args.slice(0, 2).join('.')),
-    ).toEqual(['s.a', 't.a']);
+      profiler.calls.filter((c) => c.method === 'normalizedDistinctCount'),
+    ).toEqual([]);
+    // A second folded statement, for the in-window columns only.
+    const second = profiler.calls.find(
+      (c) =>
+        c.method === 'columnStats' &&
+        c.args[1] === 'a' &&
+        (c.args[5] as ColumnStatsExtras | undefined)?.normalizedDistinct,
+    );
+    expect(second?.args.slice(2, 5)).toEqual([[], [], []]);
+    expect((second?.args[5] as ColumnStatsExtras).normalizedDistinct).toEqual([
+      'label',
+    ]);
   });
 
   it('gives an unreadable table no statistics probes', async () => {
@@ -131,6 +153,7 @@ describe('buildSourceProfile', () => {
       'keys',
       'tablePrivileges',
       'tables',
+      'withSessions',
     ]);
     // An unreadable table is not an inference child.
     expect(infer.mock.calls[0][0]).toEqual([]);
@@ -277,7 +300,7 @@ describe('buildSourceProfile', () => {
       profiler.calls
         .filter((c) => c.method === 'columnStats')
         .map((c) => c.args.slice(0, 2).join('.')),
-    ).toEqual(['s.a']);
+    ).toEqual(['s.a', 's.a']); // statistics, then the normalized counts
     const [children, targets] = infer.mock.calls[0];
     expect(children.map((t) => `${t.namespace}.${t.name}`)).toEqual(['s.a']);
     expect(targets.map((t) => `${t.namespace}.${t.name}`)).toEqual([
@@ -480,6 +503,362 @@ describe('buildSourceProfile', () => {
     expect(field('on')).toMatchObject({ min: '2024-01-05', max: '2024-01-06' });
     // Only temporal columns are rewritten.
     expect(field('code')?.min).toBe('2024-01-05 10:00:00');
+  });
+});
+
+describe('buildSourceProfile (BA-323 speed and progress)', () => {
+  beforeEach(() => infer.mockReset().mockReturnValue([]));
+
+  const emailTable = (table: string): ProfiledTable => ({
+    schema: 's',
+    table,
+    columns: [
+      { name: 'id', type: 'integer', nullable: false },
+      { name: 'email', type: 'text', nullable: true },
+      { name: 'label', type: 'text', nullable: true },
+    ],
+  });
+
+  it('sets the folded invalid-format and in-window normalized counts', async () => {
+    const src: FakeSource = {
+      tables: [emailTable('u')],
+      stats: {
+        's.u': stats(10, {
+          id: { distinct: 10 },
+          email: { nulls: 0, distinct: 10 },
+          label: { nulls: 0, distinct: 1 },
+        }),
+      },
+      privileges: [{ schema: 's', table: 'u', selectable: true }],
+      invalid: { 's.u.email': 2 },
+      normalized: { 's.u.email': 9, 's.u.label': 1 },
+      keys: [{ schema: 's', table: 'u', kind: 'primary', columns: ['id'] }],
+      duplicates: { 's.u|id': 0 },
+    };
+    const { profiler, result } = run(src);
+    const [u] = (await result).entities;
+    const email = u.fields.find((f) => f.name === 'email');
+    expect(email?.invalidFormatCount).toBe(2);
+    expect(email?.normalizedDistinctCount).toBe(9);
+    // distinct 1 is outside the 2..1000 window even though the count is known.
+    expect(u.fields.find((f) => f.name === 'label')).not.toHaveProperty(
+      'normalizedDistinctCount',
+    );
+    expect(u.keys).toEqual([
+      { kind: 'primary', fields: ['id'], duplicateCount: 0 },
+    ]);
+    expect(u.notProfiled).toBeUndefined();
+    const stat = profiler.calls.filter((c) => c.method === 'columnStats');
+    expect(stat).toHaveLength(2);
+    const first = stat[0].args[5] as ColumnStatsExtras;
+    expect(first.normalizedDistinct).toBeUndefined();
+    expect(first.formats).toEqual([
+      { column: 'email', pattern: POSTGRES_FORMAT_PATTERNS.email },
+    ]);
+    // Only the in-window column (email: 10 distinct) rides the second statement.
+    expect(stat[1].args.slice(2, 5)).toEqual([[], [], []]);
+    expect(stat[1].args[5]).toEqual({ normalizedDistinct: ['email'] });
+    expect(
+      profiler.calls.filter((c) =>
+        ['invalidFormatCount', 'normalizedDistinctCount'].includes(c.method),
+      ),
+    ).toEqual([]);
+  });
+
+  it('does not profile a table above 100 million rows', async () => {
+    const src: FakeSource = {
+      tables: [emailTable('big')],
+      stats: {},
+      rowCounts: { 's.big': 100_000_001 },
+      privileges: [{ schema: 's', table: 'big', selectable: true }],
+      keys: [{ schema: 's', table: 'big', kind: 'primary', columns: ['id'] }],
+    };
+    const { profiler, result } = run(src);
+    const [big] = (await result).entities;
+    expect(big.notProfiled).toBe('too-large');
+    // No statistics: rowCount stays 0; the counted rows ride on the side.
+    expect(big.rowCount).toBe(0);
+    expect(big.profiledRowCount).toBe(100_000_001);
+    expect(big.fields[1]).toStrictEqual({
+      name: 'email',
+      type: 'text',
+      semanticType: 'text',
+      nullable: true,
+      formatRule: 'email',
+    });
+    expect(big.keys).toStrictEqual([{ kind: 'primary', fields: ['id'] }]);
+    expect(
+      profiler.calls.map((c) => c.method).filter((m) => m !== 'withSessions'),
+    ).toEqual(
+      expect.not.arrayContaining([
+        'columnStats',
+        'duplicateCount',
+        'invalidFormatCount',
+        'normalizedDistinctCount',
+      ]),
+    );
+  });
+
+  it('profiles a table of exactly 100 million rows', async () => {
+    const src: FakeSource = {
+      tables: [textTable('s', 'a')],
+      stats: { 's.a': stats(100_000_000, { id: { distinct: 5 } }) },
+      privileges: [{ schema: 's', table: 'a', selectable: true }],
+    };
+    const [a] = (await run(src).result).entities;
+    expect(a.notProfiled).toBeUndefined();
+    expect(a.rowCount).toBe(100_000_000);
+  });
+
+  it('gives a too-large or timed-out entity rowCount 0, so the engine runs no completeness check on it', async () => {
+    const src: FakeSource = {
+      tables: [emailTable('big'), emailTable('slow')],
+      stats: {},
+      rowCounts: { 's.big': 100_000_001, 's.slow': 50 },
+      timeouts: ['s.slow'],
+      privileges: [
+        { schema: 's', table: 'big', selectable: true },
+        { schema: 's', table: 'slow', selectable: true },
+      ],
+    };
+    const profile = await run(src).result;
+    expect(profile.entities.map((e) => e.rowCount)).toEqual([0, 0]);
+    const result = runAssessment(profile, {
+      thresholds: DEFAULT_THRESHOLDS,
+      now: new Date('2026-01-01T00:00:00Z'),
+    });
+    const completeness = result.dimensionScores.find(
+      (d) => d.dimension === 'completeness',
+    );
+    expect(completeness?.totalChecks ?? 0).toBe(0);
+    expect(
+      result.findings.filter((f) => f.dimension === 'completeness'),
+    ).toEqual([]);
+  });
+
+  it('marks a table whose statistics statement times out, with rowCount 0', async () => {
+    const src: FakeSource = {
+      tables: [emailTable('slow'), emailTable('slow2')],
+      stats: {
+        's.slow': stats(50, {}),
+      },
+      rowCounts: { 's.slow': 50 },
+      timeouts: ['s.slow', 's.slow2'],
+      privileges: [
+        { schema: 's', table: 'slow', selectable: true },
+        { schema: 's', table: 'slow2', selectable: true },
+      ],
+    };
+    const { profiler, result } = run(src);
+    const [slow, slow2] = (await result).entities;
+    expect(slow.notProfiled).toBe('timed-out');
+    expect(slow.rowCount).toBe(0);
+    expect(slow.profiledRowCount).toBeUndefined();
+    expect(slow2.notProfiled).toBe('timed-out');
+    // The count failed for slow2 too: 0.
+    expect(slow2.rowCount).toBe(0);
+    expect(
+      slow.fields.every((f) => f.nullCount === undefined || !f.nullable),
+    ).toBe(true);
+    // A timeout is not retried with the plain statement.
+    expect(
+      profiler.calls.filter((c) => c.method === 'columnStats'),
+    ).toHaveLength(2);
+  });
+
+  it('falls back to the plain statement and per-column probes on a non-timeout failure', async () => {
+    const src: FakeSource = {
+      tables: [emailTable('u')],
+      stats: {
+        's.u': stats(10, {
+          id: { distinct: 10 },
+          email: { nulls: 0, distinct: 10 },
+          label: { nulls: 0, distinct: 4 },
+        }),
+      },
+      failingFolded: ['s.u'],
+      privileges: [{ schema: 's', table: 'u', selectable: true }],
+      invalid: { 's.u.email': 3 },
+      normalized: { 's.u.email': 8, 's.u.label': 4 },
+    };
+    const { profiler, result } = run(src);
+    const [u] = (await result).entities;
+    expect(u.notProfiled).toBeUndefined();
+    expect(u.rowCount).toBe(10);
+    const email = u.fields.find((f) => f.name === 'email');
+    expect(email?.invalidFormatCount).toBe(3);
+    expect(email?.normalizedDistinctCount).toBe(8);
+    expect(
+      u.fields.find((f) => f.name === 'label')?.normalizedDistinctCount,
+    ).toBe(4);
+    const stat = profiler.calls.filter((c) => c.method === 'columnStats');
+    expect(stat).toHaveLength(2);
+    expect(stat[0].args).toHaveLength(6);
+    expect(stat[1].args).toHaveLength(5);
+  });
+
+  it('falls back to per-column normalized probes when only the second statement fails', async () => {
+    const src: FakeSource = {
+      tables: [emailTable('u')],
+      stats: {
+        's.u': stats(10, {
+          id: { distinct: 10 },
+          email: { nulls: 0, distinct: 10 },
+          label: { nulls: 0, distinct: 1 },
+        }),
+      },
+      failingNormalized: ['s.u'],
+      privileges: [{ schema: 's', table: 'u', selectable: true }],
+      invalid: { 's.u.email': 2 },
+      normalized: { 's.u.email': 7 },
+    };
+    const { profiler, result } = run(src);
+    const [u] = (await result).entities;
+    const email = u.fields.find((f) => f.name === 'email');
+    // The first statement's statistics and format counts survive.
+    expect(u.rowCount).toBe(10);
+    expect(email?.invalidFormatCount).toBe(2);
+    expect(email?.normalizedDistinctCount).toBe(7);
+    expect(u.fields.find((f) => f.name === 'label')).not.toHaveProperty(
+      'normalizedDistinctCount',
+    );
+    expect(
+      profiler.calls
+        .filter((c) => c.method === 'normalizedDistinctCount')
+        .map((c) => c.args[2]),
+    ).toEqual(['email']);
+    expect(
+      profiler.calls.filter((c) => c.method === 'invalidFormatCount'),
+    ).toEqual([]);
+  });
+
+  it('issues no second statement when no text column is in the window', async () => {
+    const src: FakeSource = {
+      tables: [emailTable('u')],
+      stats: {
+        's.u': stats(10, {
+          id: { distinct: 10 },
+          email: { nulls: 0, distinct: 1 },
+          label: { nulls: 0, distinct: 5000 },
+        }),
+      },
+      privileges: [{ schema: 's', table: 'u', selectable: true }],
+      invalid: { 's.u.email': 0 },
+    };
+    const { profiler, result } = run(src);
+    await result;
+    expect(
+      profiler.calls.filter((c) => c.method === 'columnStats'),
+    ).toHaveLength(1);
+  });
+
+  it('uses the dialect concurrency: 8 for Databricks, 4 for PostgreSQL', async () => {
+    const sessions = async (rules: DialectRules) => {
+      const { profiler, result } = run(source(), undefined, undefined, rules);
+      await result;
+      return profiler.calls.find((c) => c.method === 'withSessions')?.args;
+    };
+    expect(await sessions({ ...dialect, sourceType: 'databricks' })).toEqual([
+      8,
+    ]);
+    expect(await sessions(dialect)).toEqual([4]);
+  });
+
+  it('reports progress: listing, each finished table, then relationships', async () => {
+    const events: ReadinessProgress[] = [];
+    const src = source({
+      foreignKeys: [
+        {
+          schema: 's',
+          table: 'a',
+          column: 'id',
+          refSchema: 's',
+          refTable: 'b',
+          refColumn: 'id',
+        },
+      ],
+      orphans: { 's.a.id': 0 },
+    });
+    await run(src, undefined, { onProgress: (p) => events.push(p) }).result;
+
+    expect(events[0]).toEqual({
+      phase: 'inventory',
+      message: 'Listing tables…',
+    });
+    const profiling = events.filter((e) => e.phase === 'profiling');
+    expect(profiling.map((e) => e.done)).toEqual([1, 2, 3]);
+    expect(profiling.every((e) => e.total === 3)).toBe(true);
+    for (const e of profiling) {
+      expect(e.message).toBe(`Profiling ${e.entity} (${e.done}/3)…`);
+    }
+    expect(profiling.map((e) => e.entity).sort()).toEqual([
+      's.a',
+      's.b',
+      't.a',
+    ]);
+    const rel = events.filter((e) => e.phase === 'relationships');
+    expect(rel).toEqual([
+      {
+        phase: 'relationships',
+        message: 'Checking relationships…',
+        done: 0,
+        total: 1,
+      },
+    ]);
+    expect(events.indexOf(rel[0])).toBeGreaterThan(
+      events.indexOf(profiling[2]),
+    );
+  });
+
+  it('ignores a listener that throws', async () => {
+    const onProgress = jest.fn(() => {
+      throw new Error('listener broke');
+    });
+    const profile = await run(source(), undefined, { onProgress }).result;
+    expect(profile.entities).toHaveLength(3);
+    expect(onProgress).toHaveBeenCalled();
+  });
+
+  it('propagates an abort and stops scheduling further tables', async () => {
+    const names = Array.from({ length: 12 }, (_, i) => `t${i}`);
+    const src: FakeSource = {
+      tables: names.map((n) => textTable('s', n)),
+      stats: Object.fromEntries(
+        names.map((n) => [`s.${n}`, stats(1, { id: { distinct: 1 } })]),
+      ),
+      privileges: names.map((n) => ({
+        schema: 's',
+        table: n,
+        selectable: true,
+      })),
+    };
+    const ctrl = new AbortController();
+    const profiler = fakeProfiler<object>('postgres', src);
+    const original = profiler.columnStats.bind(
+      profiler,
+    ) as typeof profiler.columnStats;
+    profiler.columnStats = (...args) => {
+      ctrl.abort();
+      return original(...args);
+    };
+    await expect(
+      buildSourceProfile(profiler, {}, 'ds', dialect, undefined, {
+        signal: ctrl.signal,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(
+      profiler.calls.filter((c) => c.method === 'columnStats').length,
+    ).toBeLessThan(12);
+    expect(profiler.calls.some((c) => c.method === 'orphanCount')).toBe(false);
+  });
+
+  it('rethrows an AbortError raised by a probe instead of leaving it out', async () => {
+    const profiler = fakeProfiler<object>('postgres', source());
+    profiler.keys = () =>
+      Promise.reject(Object.assign(new Error('x'), { name: 'AbortError' }));
+    await expect(
+      buildSourceProfile(profiler, {}, 'ds', dialect),
+    ).rejects.toMatchObject({ name: 'AbortError' });
   });
 });
 

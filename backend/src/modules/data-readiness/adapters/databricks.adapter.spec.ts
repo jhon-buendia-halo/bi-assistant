@@ -124,11 +124,9 @@ describe('profileDatabricks', () => {
     };
     expect(profile).toStrictEqual(expected);
 
-    expect(
-      profiler.calls
-        .filter((c) => c.method === 'invalidFormatCount')
-        .map((c) => c.args[3]),
-    ).toEqual([
+    const extras = profiler.calls.find((c) => c.method === 'columnStats')
+      ?.args[5] as { formats: { pattern: string }[] };
+    expect(extras.formats.map((f) => f.pattern)).toEqual([
       DATABRICKS_FORMAT_PATTERNS.uuid,
       DATABRICKS_FORMAT_PATTERNS['date-string'],
     ]);

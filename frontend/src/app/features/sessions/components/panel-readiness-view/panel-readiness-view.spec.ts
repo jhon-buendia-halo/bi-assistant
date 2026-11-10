@@ -298,3 +298,60 @@ describe('readiness scorecard helpers', () => {
     );
   });
 });
+
+describe('PanelReadinessView not profiled', () => {
+  let http: HttpTestingController;
+  let fixture: ComponentFixture<PanelReadinessView>;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  function create(report: ReadinessReport): HTMLElement {
+    fixture = TestBed.createComponent(PanelReadinessView);
+    fixture.componentRef.setInput('item', sampleReadinessPanelItem(report.id));
+    fixture.detectChanges();
+    http.expectOne(url(report.id)).flush(report);
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  const q = (el: HTMLElement, id: string) =>
+    el.querySelector(`[data-testid="${id}"]`);
+
+  it('lists each entity with its reason and a thousands-separated count', () => {
+    const el = create(
+      sampleReadinessReport({
+        notProfiled: [
+          { entity: 'public.events', reason: 'too-large', rowCount: 12345678 },
+          { entity: 'public.logs', reason: 'timed-out' },
+        ],
+      }),
+    );
+    expect(q(el, 'readiness-not-profiled')!.textContent).toContain(
+      'Not profiled (2)',
+    );
+    expect(q(el, 'readiness-not-profiled-0')!.textContent).toContain(
+      'Too large — 12,345,678 rows, column checks skipped',
+    );
+    expect(q(el, 'readiness-not-profiled-1')!.textContent).toContain(
+      'Timed out — column checks skipped',
+    );
+  });
+
+  it('is hidden when absent or empty', () => {
+    expect(q(create(sampleReadinessReport()), 'readiness-not-profiled')).toBeNull();
+    fixture.destroy();
+    expect(
+      q(
+        create(sampleReadinessReport({ id: 'r2', notProfiled: [] })),
+        'readiness-not-profiled',
+      ),
+    ).toBeNull();
+  });
+});

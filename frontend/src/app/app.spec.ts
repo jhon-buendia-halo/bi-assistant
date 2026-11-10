@@ -21,6 +21,15 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
+  it('lets the user select text anywhere (BA-326)', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    const root = (fixture.nativeElement as HTMLElement)
+      .firstElementChild as HTMLElement;
+    expect(root.classList.contains('select-none')).toBeFalse();
+    expect(getComputedStyle(root).userSelect).not.toBe('none');
+  });
+
   it('should render the navigation rail', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
@@ -34,6 +43,98 @@ describe('App', () => {
       compiled.querySelector('[aria-label="Open system logs"]'),
     ).toBeTruthy();
     expect(compiled.querySelector('[title="Help"]')).toBeFalsy();
+  });
+
+  it('offers Context with Ontologies then User personas; Knowledge is gone (app-shell R3a, BA-320)', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const labels = Array.from(
+      compiled.querySelectorAll('nav[aria-label="Workspace navigation"] button'),
+    ).map((b) => b.getAttribute('aria-label'));
+    expect(labels).toEqual(['Datasets', 'Agents', 'Context', 'Sessions']);
+
+    // Context opens on one card per section, like the Agent Hub.
+    app.selectArea('context');
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('context');
+    expect(app.currentArea()).toBe('context');
+    expect(
+      compiled
+        .querySelector('button[aria-label="Context"]')
+        ?.getAttribute('aria-current'),
+    ).toBe('page');
+    const cards = Array.from(
+      compiled.querySelectorAll('[data-testid="context-sections"] button'),
+    );
+    expect(cards.map((c) => c.getAttribute('data-testid'))).toEqual([
+      'context-section-ontologies',
+      'context-section-personas',
+    ]);
+    expect(cards[0].textContent).toContain('Ontologies');
+    expect(cards[1].textContent).toContain('User personas');
+    expect(
+      compiled.querySelector('[data-testid="context-section-knowledge"]'),
+    ).toBeNull();
+    expect(app.contextSections.map((s) => s.view)).toEqual([
+      'ontologies',
+      'personas',
+    ]);
+  });
+
+  it('opens Ontologies from its Context card, with Context still current (roadmap 1.21.11)', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    app.selectArea('context');
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    (
+      compiled.querySelector(
+        '[data-testid="context-section-ontologies"]',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('ontologies');
+    expect(app.currentArea()).toBe('context');
+    expect(compiled.querySelector('app-ontology-overview')).toBeTruthy();
+
+    (
+      compiled.querySelector('[data-testid="context-back"]') as HTMLButtonElement
+    ).click();
+    expect(app.mainView()).toBe('context');
+  });
+
+  it('opens User personas from its Context card, with Context still current (roadmap 1.21.6)', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    app.selectArea('context');
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    (
+      compiled.querySelector(
+        '[data-testid="context-section-personas"]',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('personas');
+    expect(app.currentArea()).toBe('context');
+    expect(
+      compiled
+        .querySelector('button[aria-label="Context"]')
+        ?.getAttribute('aria-current'),
+    ).toBe('page');
+    expect(compiled.querySelector('app-persona-list')).toBeTruthy();
+
+    (
+      compiled.querySelector('[data-testid="context-back"]') as HTMLButtonElement
+    ).click();
+    expect(app.mainView()).toBe('context');
+    app.openContextSection('personas');
+    app.selectArea('context');
+    expect(app.mainView()).toBe('context');
   });
 
   it('should list sessions on the Sessions page, not in the drawer', async () => {
@@ -379,11 +480,26 @@ describe('New conversation Agent picker (BA-230)', () => {
     chatRequirement: 'Load the sample first',
   };
 
-  function open(agents: unknown[] = [rfp]) {
+  const v2 = {
+    key: 'assistant-v2',
+    id: 'questions-to-insights-v2',
+    name: 'Questions to Insights v2',
+    description: 'A slimmed-down data analyst under construction.',
+    tools: [],
+    kind: 'official',
+    status: 'builtin',
+    datasets: [],
+    missingDatasets: [],
+  };
+
+  function open(
+    agents: unknown[] = [rfp],
+    start: (app: App) => void = (app) => app.openComposer(),
+  ) {
     const fixture = TestBed.createComponent(App);
     const http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
-    fixture.componentInstance.openComposer();
+    start(fixture.componentInstance);
     http
       .match((r) => r.url.endsWith('/agents'))
       .forEach((r) => r.flush({ agents }));
@@ -510,5 +626,74 @@ describe('New conversation Agent picker (BA-230)', () => {
     expect(app.composerAgentKey()).toBe('rfp');
     app.openComposer();
     expect(app.composerAgentKey()).toBe('assistant');
+  });
+
+  it('lists Questions to Insights v2 right after Assistant (BA-321)', () => {
+    const { fixture } = open([rfp, v2]);
+    trigger(fixture).click();
+    fixture.detectChanges();
+    expect(
+      options(fixture).map((o) => o.children[0].textContent?.trim()),
+    ).toEqual(['Assistant', 'Questions to Insights v2', 'RFP Builder']);
+    expect(options(fixture)[1].children[1].textContent).toContain(
+      v2.description,
+    );
+  });
+
+  it('preselects v2 from its Start chat and keeps the dataset picker (BA-321)', () => {
+    const { fixture, app } = open([rfp, v2], (a) =>
+      a.startChatWithAgent(v2 as never),
+    );
+    const el = fixture.nativeElement as HTMLElement;
+    expect(app.composerAgentKey()).toBe('assistant-v2');
+    expect(trigger(fixture).textContent).toContain('Questions to Insights v2');
+    expect(
+      el.querySelector('[data-testid="new-session-agent-description"]')
+        ?.textContent,
+    ).toContain(v2.description);
+    expect(el.textContent).toContain(
+      'Select at least one dataset for this session',
+    );
+    expect(
+      el.querySelector('[data-testid="new-session-agent-datasets"]'),
+    ).toBeNull();
+    // The preselection is not remembered (R64).
+    app.openComposer();
+    expect(app.composerAgentKey()).toBe('assistant');
+  });
+
+  it('falls back to Assistant when v2 is not offered', () => {
+    const { app } = open([rfp], (a) => a.startChatWithAgent(v2 as never));
+    expect(app.composerAgentKey()).toBe('assistant');
+  });
+
+  it('requires a name and datasets for v2, then creates with its agentId (BA-321)', () => {
+    const { http, app } = open([rfp, v2], (a) =>
+      a.startChatWithAgent(v2 as never),
+    );
+    app.composerName.set('Q');
+    app.createSession();
+    http.expectNone((r) => r.method === 'POST' && r.url.endsWith('/sessions'));
+    app.selectedDatasets.set(new Set(['Core']));
+    app.createSession();
+    const req = http.expectOne(
+      (r) => r.method === 'POST' && r.url.endsWith('/sessions'),
+    );
+    expect(req.request.body).toEqual({
+      name: 'Q',
+      datasets: ['Core'],
+      agentId: 'assistant-v2',
+    });
+  });
+
+  it('creates an Assistant session without an agentId', () => {
+    const { http, app } = open([rfp, v2]);
+    app.composerName.set('Q');
+    app.selectedDatasets.set(new Set(['Core']));
+    app.createSession();
+    const req = http.expectOne(
+      (r) => r.method === 'POST' && r.url.endsWith('/sessions'),
+    );
+    expect(req.request.body).toEqual({ name: 'Q', datasets: ['Core'] });
   });
 });

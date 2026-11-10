@@ -30,6 +30,10 @@ const RFP_REQUIREMENT =
   'Load the "Intellify RFP API" sample in Settings → Testing Data first';
 const ASSISTANT_DESCRIPTION = 'Answers questions over the datasets you pick.';
 const EVIDENCE = path.resolve(__dirname, '../../evidence/1.14.17');
+/** Questions to Insights v2 (R61, R64; agents-evals R107, BA-320). */
+const V2 = 'Questions to Insights v2';
+const V2_DESCRIPTION =
+  'A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.';
 
 let datasourceId = '';
 
@@ -356,11 +360,12 @@ test('the Agent field lists the showcase agents disabled', async ({ page }) => {
   const names = (await agentList(page).getByRole('option').allInnerTexts()).map(
     (text) => text.split('\n')[0].trim(),
   );
-  // Assistant, the Official agents that bring their own datasets
-  // alphabetical (the Data Readiness Agent, BA-251, then the RFP Builder),
-  // then the showcase agents (R64).
-  expect(names.slice(0, 7)).toEqual([
+  // Assistant, Questions to Insights v2 (BA-320), the Official agents that
+  // bring their own datasets alphabetical (the Data Readiness Agent, BA-251,
+  // then the RFP Builder), then the showcase agents (R64).
+  expect(names.slice(0, 8)).toEqual([
     'Assistant',
+    V2,
     'Data Readiness Agent',
     'RFP Builder',
     'Benchmarking Agent',
@@ -389,4 +394,96 @@ test('the Agent field lists the showcase agents disabled', async ({ page }) => {
   // It cannot be chosen (clicked past Playwright's aria-disabled check).
   await agentOption(page, 'Survey Agent').click({ force: true });
   await expect(agentField(page)).toHaveText(/Assistant/);
+});
+
+test('I start a Questions to Insights v2 session from New conversation', async ({
+  page,
+}) => {
+  await openComposer(page);
+  await agentField(page).click();
+  await agentOption(page, V2).click();
+  await expect(agentList(page)).toHaveCount(0);
+  await expect(agentField(page)).toHaveText(new RegExp(V2));
+  await expect(page.getByTestId('new-session-agent-description')).toHaveText(
+    V2_DESCRIPTION,
+  );
+  // Like the assistant, v2 runs over the datasets the user picks (R64).
+  await expect(
+    page.getByText('Select at least one dataset for this session'),
+  ).toBeVisible();
+  await expect(page.getByTestId('new-session-agent-datasets')).toHaveCount(0);
+  await expect(createButton(page)).toBeDisabled();
+
+  await datasetCard(page, WORLD_CUP_DATASET).click();
+  await nameField(page).fill('V2 check');
+  await expect(createButton(page)).toBeEnabled();
+  const created = page.waitForResponse(
+    (r) => r.url().endsWith('/sessions') && r.request().method() === 'POST',
+  );
+  await createButton(page).click();
+  const body = (await (await created).json()) as {
+    session: { id: string };
+  };
+  await expect(page.getByText('Session "V2 check" created')).toBeVisible();
+  await expect(page.getByTestId('session-agent')).toHaveText(V2);
+
+  // The session is bound to v2 over the picked dataset (R61).
+  const session = await apiJson<{
+    agentKey?: string;
+    agentName?: string;
+    datasets: string[];
+  }>(page, 'GET', `/sessions/${body.session.id}`);
+  expect(session.agentKey).toBe('assistant-v2');
+  expect(session.agentName).toBe(V2);
+  expect(session.datasets).toEqual([WORLD_CUP_DATASET]);
+
+  await openSessions(page);
+  const row = sessionRow(page, 'V2 check');
+  await expect(row).toHaveCount(1);
+  await expect(row.getByTestId('row-session-agent')).toHaveText(V2);
+});
+
+test('Start chat on Questions to Insights v2 opens New conversation with v2 selected', async ({
+  page,
+}) => {
+  const before = await apiJson<{ sessions: unknown[] }>(
+    page,
+    'GET',
+    '/sessions',
+  );
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Agents', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: `Start chat with ${V2}`, exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'New conversation', exact: true }),
+  ).toBeVisible();
+  await expect(agentField(page)).toHaveText(new RegExp(V2));
+  await expect(nameField(page)).toBeVisible();
+  const after = await apiJson<{ sessions: unknown[] }>(
+    page,
+    'GET',
+    '/sessions',
+  );
+  expect(after.sessions).toHaveLength(before.sessions.length);
+});
+
+test('the Agent field lists Questions to Insights v2 right after Assistant', async ({
+  page,
+}) => {
+  await openComposer(page);
+  await agentField(page).click();
+  await expect(agentOption(page, 'RFP Builder')).toBeVisible();
+  const names = (await agentList(page).getByRole('option').allInnerTexts()).map(
+    (text) => text.split('\n')[0].trim(),
+  );
+  expect(names.slice(0, 4)).toEqual([
+    'Assistant',
+    V2,
+    'Data Readiness Agent',
+    'RFP Builder',
+  ]);
 });

@@ -139,3 +139,25 @@ describe('DatasourcesService.cachedInventory', () => {
     expect(inventoryCache.save).not.toHaveBeenCalled();
   });
 });
+
+describe('DatasourcesService.save Databricks host (BA-322)', () => {
+  it('stores the bare hostname when the form sends a workspace URL', async () => {
+    const { service, repository } = build(null);
+    const save = jest.fn((doc: Datasource) => Promise.resolve(doc));
+    Object.assign(repository, { save });
+    await service.save({
+      name: 'Databricks',
+      kind: 'databricks',
+      config: {
+        host: 'https://dbc-1.cloud.databricks.com/',
+        token: 't',
+        warehouseId: 'w',
+      },
+    });
+    expect(save.mock.calls[0][0].config).toEqual({
+      host: 'dbc-1.cloud.databricks.com',
+      token: 't',
+      warehouseId: 'w',
+    });
+  });
+});

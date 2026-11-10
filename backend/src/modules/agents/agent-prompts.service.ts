@@ -12,6 +12,11 @@ import {
 } from '../../mastra/app-skills';
 import { readinessTools } from '../../mastra/tools/readiness.tools';
 import { rfpTools } from '../../mastra/tools/rfp.tools';
+import {
+  ASSISTANT_V2_AGENT_KEY,
+  ASSISTANT_V2_IDENTITY_START,
+  ASSISTANT_V2_TOOL_NAMES,
+} from '../../mastra/agents/assistant-v2-catalog';
 import { MastraService } from '../../mastra/mastra.service';
 import {
   agentPromptHash,
@@ -57,8 +62,8 @@ const DATA_READINESS_KEY = 'data-readiness';
 
 /**
  * What the Data Readiness Agent's prompt may link (agents.md 2.10): its own
- * tools (the three readiness tools, `show_in_panel`, `ask_clarification`) and
- * its own skill. Links are mentions; it keeps every tool.
+ * tools (the three readiness tools, `describe_entity`, `run_readonly_sql`,
+ * `show_in_panel`, `ask_clarification`) and its own skills. Links are mentions; it keeps every tool.
  */
 function dataReadinessLinkTargets(): { tools: string[]; skills: string[] } {
   return {
@@ -153,7 +158,10 @@ export class AgentPromptsService implements OnModuleInit {
       builtInChanged:
         !!override && override.baseHash !== agentPromptHash(shipped),
       linksAllowed:
-        key === ASSISTANT_KEY || key === RFP_KEY || key === DATA_READINESS_KEY,
+        key === ASSISTANT_KEY ||
+        key === ASSISTANT_V2_AGENT_KEY ||
+        key === RFP_KEY ||
+        key === DATA_READINESS_KEY,
       updatedAt: override?.updatedAt ?? null,
     };
   }
@@ -210,6 +218,22 @@ function validatePrompt(key: string, value: unknown): string {
       );
     }
     const unknown = links.tools.find((name) => !allowed.tools.includes(name));
+    if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
+  } else if (key === ASSISTANT_V2_AGENT_KEY) {
+    if (!prompt.startsWith(ASSISTANT_V2_IDENTITY_START)) {
+      throw new BadRequestException(
+        `The Questions to Insights v2 prompt must start with "${ASSISTANT_V2_IDENTITY_START}"`,
+      );
+    }
+    const links = parseLinks(prompt);
+    if (links.skills.length) {
+      throw new BadRequestException(
+        "Skills can't be linked here: Questions to Insights v2 has no skills",
+      );
+    }
+    const unknown = links.tools.find(
+      (name) => !ASSISTANT_V2_TOOL_NAMES.includes(name),
+    );
     if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
   } else if (ANY_LINK.test(prompt)) {
     throw new BadRequestException("This agent's prompt can't contain links");

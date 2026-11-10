@@ -9,6 +9,12 @@ import {
 } from 'lucide-angular';
 import { DatasetSelectionService } from '../../services/dataset-selection.service';
 import { DatasetInclusionService } from '../../services/dataset-inclusion.service';
+import { DatasetSchemaNotesService } from '../../services/dataset-schema-notes.service';
+import {
+  SCHEMA_DESCRIPTION_MAX,
+  SCHEMA_LAYERS,
+  SchemaLayer,
+} from '../../services/datasets-api.service';
 import { ToastService } from '../../../../core/toast/toast.service';
 
 @Component({
@@ -27,8 +33,34 @@ export class EntityDetails {
   private readonly selectionService = inject(DatasetSelectionService);
   private readonly inclusionService = inject(DatasetInclusionService);
   private readonly toast = inject(ToastService);
+  private readonly schemaNotes = inject(DatasetSchemaNotesService);
+
+  readonly layers = SCHEMA_LAYERS;
+  readonly descriptionMax = SCHEMA_DESCRIPTION_MAX;
 
   readonly selection = this.selectionService.selection;
+
+  readonly schemaNoteKey = computed(() => {
+    const sel = this.selection();
+    return sel?.kind === 'schema'
+      ? this.schemaNotes.schemaKey(sel.catalogName, sel.schema.name)
+      : null;
+  });
+
+  readonly schemaNote = computed(() => {
+    const key = this.schemaNoteKey();
+    return key ? this.schemaNotes.get(key) : undefined;
+  });
+
+  setLayer(value: string): void {
+    const key = this.schemaNoteKey();
+    if (key) this.schemaNotes.setLayer(key, value as SchemaLayer | '');
+  }
+
+  setDescription(value: string): void {
+    const key = this.schemaNoteKey();
+    if (key) this.schemaNotes.setDescription(key, value);
+  }
 
   readonly totalEntities = computed(() => {
     const sel = this.selection();

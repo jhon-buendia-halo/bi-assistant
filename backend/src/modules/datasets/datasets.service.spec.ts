@@ -15,12 +15,15 @@ const claims: DatasetEntitySnapshot = {
 
 function build(sampleRows: jest.Mock) {
   const repository = {
+    list: jest.fn().mockResolvedValue([]),
     save: jest
       .fn()
       .mockImplementation((name: string) =>
         Promise.resolve({ name, tables: [] }),
       ),
+    delete: jest.fn().mockResolvedValue(1),
   };
+  const ontologyItems = { deleteMany: jest.fn().mockResolvedValue(2) };
   const datasources = {
     get: jest
       .fn()
@@ -46,11 +49,30 @@ function build(sampleRows: jest.Mock) {
     ),
   };
   return {
-    service: new DatasetsService(repository as never, datasources as never),
+    service: new DatasetsService(
+      repository as never,
+      datasources as never,
+      ontologyItems as never,
+    ),
     repository,
     datasources,
+    ontologyItems,
   };
 }
+
+describe('DatasetsService.delete', () => {
+  it('deletes the dataset and its own ontology items, never the shared ones', async () => {
+    const { service, repository, ontologyItems } = build(jest.fn());
+
+    await expect(service.delete('World Cup')).resolves.toBe(1);
+
+    expect(repository.delete).toHaveBeenCalledWith('World Cup');
+    // `dataset: null` (shared) never matches a dataset name.
+    expect(ontologyItems.deleteMany).toHaveBeenCalledWith({
+      dataset: 'World Cup',
+    });
+  });
+});
 
 /** The snapshots handed to `DatasetsRepository.save` on its first call. */
 function savedEntities(repository: {
@@ -152,5 +174,96 @@ describe('DatasetsService.save', () => {
         datasourceKind: 'postgres',
       }),
     ).rejects.toThrow('Datasource kind must be databricks');
+  });
+});
+
+describe('DatasetsService.save schema notes', () => {
+  const base = {
+    name: 'health',
+    tables: ['c.s1.t1', 'c.s2.t2'],
+    entities: [] as DatasetEntitySnapshot[],
+    datasourceId: 'ds-1',
+  };
+
+  /** The `schemas` argument handed to `DatasetsRepository.save`. */
+  function savedSchemas(repository: { save: jest.Mock }): unknown {
+    const calls = repository.save.mock.calls as unknown[][];
+    return calls[0][4];
+  }
+
+  it('saves a trimmed note for an included schema', async () => {
+    const { service, repository } = build(jest.fn());
+
+    await service.save({
+      ...base,
+      schemas: [{ key: 'c.s1', layer: 'consumption', description: '  Gold  ' }],
+    });
+
+    expect(savedSchemas(repository)).toEqual([
+      { key: 'c.s1', layer: 'consumption', description: 'Gold' },
+    ]);
+  });
+
+  it('rejects an unknown layer without saving', async () => {
+    const { service, repository } = build(jest.fn());
+
+    await expect(
+      service.save({
+        ...base,
+        schemas: [{ key: 'c.s1', layer: 'bronze' }],
+      }),
+    ).rejects.toThrow('layer must be one of: landing, normalized, consumption');
+    expect(repository.save).not.toHaveBeenCalled();
+  });
+
+  it('drops stray, empty and malformed notes, caps, dedupes and sorts', async () => {
+    const { service, repository } = build(jest.fn());
+
+    await service.save({
+      ...base,
+      schemas: [
+        { key: 'c.s9', layer: 'landing' },
+        { key: 'c.s1' },
+        { key: 'c', layer: 'landing' },
+        { key: 'a.b.c', layer: 'landing' },
+        { key: 'c.s2', description: 'x'.repeat(600) },
+        { key: 'c.s1', layer: 'landing' },
+        { key: 'c.s1', layer: 'normalized' },
+      ],
+    });
+
+    expect(savedSchemas(repository)).toEqual([
+      { key: 'c.s1', layer: 'normalized' },
+      { key: 'c.s2', description: 'x'.repeat(500) },
+    ]);
+  });
+
+  it('keeps existing notes for still-included schemas when schemas is omitted', async () => {
+    const { service, repository } = build(jest.fn());
+    const existing = {
+      name: 'health',
+      tables: ['c.s1.t1', 'c.s3.t3'],
+      schemas: [
+        { key: 'c.s1', layer: 'landing', description: 'Raw' },
+        { key: 'c.s3', layer: 'consumption' },
+      ],
+    };
+    const r = repository as unknown as Record<string, jest.Mock>;
+    r.list = jest.fn().mockResolvedValue([existing]);
+
+    await service.save({ ...base, tables: ['c.s1.t1'] });
+
+    expect(savedSchemas(repository)).toEqual([
+      { key: 'c.s1', layer: 'landing', description: 'Raw' },
+    ]);
+  });
+
+  it('saves no notes when schemas is empty', async () => {
+    const { service, repository } = build(jest.fn());
+
+    await service.save({ ...base, schemas: [] });
+
+    const arg = savedSchemas(repository);
+    expect(arg).toEqual([]);
   });
 });

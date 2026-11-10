@@ -27,6 +27,10 @@ import {
   toolSelectionFrom,
 } from '../agent-tools';
 import { runResultSetCheck } from './result-set-check';
+import {
+  usesConsumptionSchema,
+  withLandingCopy,
+} from './schema-notes-eval-checks';
 import type { ResultSetCheckOptions } from './result-set-check';
 import {
   assistantEvalDatasetError,
@@ -92,6 +96,11 @@ export interface AssistantEvalCase {
    * built-in checks share one id per kind, see above).
    */
   customChecks?: EvalCustomCheck[];
+  /**
+   * Reshapes the dataset snapshots the orientation block is built from (not
+   * the ones the tools see), for cases that stage what the model is told.
+   */
+  orientationSnapshots?: (snapshots: DatasetSnapshot[]) => DatasetSnapshot[];
 }
 
 /** One tool call as the agent made it, with its parsed input and output. */
@@ -714,6 +723,29 @@ const FORMULA_1_EVAL_CASES: AssistantEvalCase[] = [
 ];
 
 /**
+ * Epic BA-318 acceptance: the same World Cup tables are offered in a Landing
+ * schema that does not exist in the database and in the real Consumption
+ * schema, with the owner's schema notes. Passes only when the assistant reads
+ * the Consumption schema.
+ */
+const SCHEMA_NOTES_EVAL_CASES: AssistantEvalCase[] = [
+  {
+    id: 'schema-notes-consumption',
+    question: 'How many goals were scored in the 2022 World Cup?',
+    intent:
+      'Schema notes (BA-318): the data is listed in a Landing and a Consumption schema; the notes must steer the assistant to Consumption.',
+    orientationSnapshots: withLandingCopy,
+    scorers: [checks.calledTool('run_readonly_sql'), checks.matches(/\b24\b/)],
+    customChecks: [usesConsumptionSchema],
+    expectedSql:
+      'SELECT SUM(match.home_goals + match.away_goals) AS goals ' +
+      'FROM world_cup.matches match ' +
+      'JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id ' +
+      'WHERE tournament.tournament_year = 2022',
+  },
+];
+
+/**
  * Every question set the assistant suite offers. Adding another means
  * appending a set here, not touching the questions tab.
  */
@@ -749,6 +781,16 @@ export const ASSISTANT_EVAL_SETS: AssistantEvalSet[] = [
       'saved dataset containing the formula1 tables and views.',
     fixtureId: 'formula-1',
     cases: FORMULA_1_EVAL_CASES,
+  },
+  {
+    id: 'schema-notes',
+    name: 'Schema notes',
+    description:
+      'One question against the bundled World Cup sample, whose data the ' +
+      'prompt lists in a Landing and a Consumption schema with schema notes; ' +
+      'the assistant must use the Consumption schema (BA-318).',
+    fixtureId: 'world-cup',
+    cases: SCHEMA_NOTES_EVAL_CASES,
   },
 ];
 
@@ -1188,9 +1230,14 @@ export async function createEvalSession(
 ): Promise<EvalSession> {
   const name =
     `${agentKey ?? 'assistant'} eval ${new Date().toISOString()}`.slice(0, 64);
-  const session = agentKey
+  let session = agentKey
     ? await sessions.createFromAgent(agentKey, name)
     : await sessions.create(name, datasets);
+  // An agent that binds every qualifying dataset (Data Readiness) is narrowed
+  // to the run's datasets, matching the orientation the case is given.
+  if (agentKey && datasets.length > 0) {
+    session = (await sessions.narrowDatasets(session.id, datasets)) ?? session;
+  }
   await sessions.appendAssistantMessage(session.id, {
     content: EVAL_SESSION_PLACEHOLDER_ANSWER,
   });
@@ -1329,10 +1376,10 @@ export async function runAssistantEvalCase(
   datasets: string[],
   sessionId?: string,
   /**
-   * The curated-knowledge system block (`KnowledgeService.definitionBlock`)
+   * The curated-knowledge system block (`OntologyService.definitionBlock`)
    * for these datasets — same block a real chat turn gets from
    * `SessionsService.agentContext`. Both callers (`EvalRunsService`, the CLI
-   * in `run-assistant-evals.ts`) populate this from `KnowledgeService`;
+   * in `run-assistant-evals.ts`) populate this from `OntologyService`;
    * omitted (or empty) when neither wires one in.
    */
   knowledgeBlock?: string,
@@ -1379,7 +1426,8 @@ export async function runAssistantEvalCase(
     target.configureContext?.(requestContext);
     const orientation = await target.orientation({
       datasets,
-      snapshots: datasetSnapshots,
+      snapshots:
+        evalCase.orientationSnapshots?.(datasetSnapshots) ?? datasetSnapshots,
       requestContext,
       vars,
     });

@@ -1,0 +1,10 @@
+Impacted E2E, web target, branch feat/BA-318-datasource-metadata at 4a12b45, run together on 2026-11-09 (19 passed, 1 failed: the visual-baseline test has no win32 baseline on this Windows machine and fails the same way on main).
+  ok  7 [web] › e2e\dataset-schema-notes.spec.ts:13:5 › tags a schema with a layer and description and keeps them after saving (6.3s)
+  ok 13 [web] › e2e\testing-data.spec.ts:59:5 › lists the bundled samples and what is loaded (5.0s)
+  ok 14 [web] › e2e\testing-data.spec.ts:95:7 › loads the Intellify sample into a new database › seeds it, registers it and reports 49/49 (7.1s)
+  ok 15 [web] › e2e\testing-data.spec.ts:156:7 › loads the US Health sample into a new database › seeds it, registers it and reports 45/45 (18.3s)
+  ok 16 [web] › e2e\testing-data.spec.ts:209:5 › registers the Intellify RFP API (5.5s)
+  ok 17 [web] › e2e\world-cup-workflow.spec.ts:15:5 › creates a PostgreSQL datasource, dataset, and session using the real World Cup database (6.0s)
+  ok 18 [web] › e2e\world-cup-workflow.spec.ts:44:5 › preserves masked credentials when editing and supports datasource deletion (5.1s)
+  ok 19 [web] › e2e\world-cup-workflow.spec.ts:70:5 › surfaces a failed connection in both the form and system diagnostics (5.0s)
+  ok 20 [web] › e2e\world-cup-workflow.spec.ts:98:5 › shows the real catalog schema and column metadata before a dataset is saved (5.7s)

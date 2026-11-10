@@ -21,6 +21,7 @@ export class DatasetsController {
       entities?: unknown;
       datasourceId?: unknown;
       datasourceKind?: unknown;
+      schemas?: unknown;
     },
   ): Promise<{ ok: boolean; message: string }> {
     try {
@@ -39,6 +40,10 @@ export class DatasetsController {
             ? body.datasourceId.trim()
             : '',
         datasourceKind: body?.datasourceKind,
+        // Only an array replaces the notes; anything else keeps them.
+        schemas: Array.isArray(body?.schemas)
+          ? (body.schemas as unknown[])
+          : undefined,
       });
       return {
         ok: true,

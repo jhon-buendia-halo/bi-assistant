@@ -52,6 +52,7 @@ describe('BuiltInSkillsService', () => {
       'data-readiness',
       'deep-analysis',
       'interactive-visuals',
+      'readiness-drilldown',
       'rfp-carriers',
       'rfp-client-renewal',
       'rfp-current-program',

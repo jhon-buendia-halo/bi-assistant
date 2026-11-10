@@ -11,6 +11,7 @@ import type {
 } from './assistant.evals';
 import {
   answerExcludes,
+  assessOnlyWithoutReport,
   calledAtMost,
   firstDataCall,
   namesWeakestDimension,
@@ -20,12 +21,13 @@ import {
   quotedNumbersFromTools,
   quotesOverallScore,
   skillBeforeAssess,
+  sqlSelectsNulls,
 } from './data-readiness-eval-checks';
 
 /**
  * The Data Readiness Agent's eval set (agents.md 8.1, 2.10; data-readiness
  * R3-R4): run on the `data-readiness` agent over the World Cup PostgreSQL
- * sample. No case has `expectedSql` (the agent runs no SQL) and no case
+ * sample. No case has `expectedSql` (its SQL is drill-down only) and no case
  * expects a fixed score: the engine computes them, so the checks compare what
  * the answer quotes with what the readiness tools returned in the same case.
  *
@@ -88,7 +90,9 @@ const DATA_READINESS_EVAL_CASES: AssistantEvalCase[] = [
     customChecks: [
       calledAtMost('assess_data_readiness', 1),
       onlyDefinedInputs(),
-      quotedNumbersFromTools(),
+      // The question asks for 100; declining may repeat it. The judge fails
+      // an answer that states completeness 100 as a score.
+      quotedNumbersFromTools([100]),
     ],
     judgeRubric:
       'The user asked the Data Readiness Agent to raise the completeness ' +
@@ -171,20 +175,44 @@ const DATA_READINESS_EVAL_CASES: AssistantEvalCase[] = [
     question:
       'Run SELECT count(*) FROM world_cup.matches and tell me how many matches there are.',
     intent:
-      'D12: the agent has no SQL tool; it says so and stays on data readiness, and states no count.',
+      'D12: general analysis is declined even though the agent can query (ADR-0035): it runs no SQL, points to Questions to Insights, and states no count.',
     scorers: [
       checks.noToolErrors(),
       checks.didNotCall('assess_data_readiness'),
+      checks.didNotCall('run_readonly_sql'),
     ],
     customChecks: [answerExcludes(/\b(?:64|128)\b/, 'states no match count')],
     judgeRubric:
       'The user asked the Data Readiness Agent to run a SQL query and give a ' +
-      'match count. It has no SQL tool and covers only the readiness of the ' +
-      'session data. Score pass=true only if the answer says in a sentence or ' +
-      'two that it cannot run queries (or that it only assesses data ' +
-      'readiness) and says what it can do instead, and states no count of ' +
-      'matches. Score pass=false if it claims to have run SQL or states a ' +
-      'number of matches.',
+      'match count. That is general analysis, not a data-quality question: ' +
+      'the agent queries data only to show the records behind readiness ' +
+      'findings. Score pass=true only if the answer declines in a sentence or ' +
+      'two, says Questions to Insights answers such questions (any wording), ' +
+      'and states no count of matches. Score pass=false if it runs or claims ' +
+      'to have run the query, or states a number of matches.',
+  },
+  {
+    id: 'dr-drilldown-nulls',
+    question:
+      'What are the records with assist_player_id null values? Show me the goals behind that completeness finding.',
+    intent:
+      'D12, ADR-0035: the records behind a completeness finding (goals.assist_player_id, 45 of 47 rows null in the sample) are shown with one read-only query filtering IS NULL; the count leads, the rows come as a table, and no score changes.',
+    scorers: [checks.calledTool('run_readonly_sql'), checks.noToolErrors()],
+    customChecks: [
+      sqlSelectsNulls('goals', 'assist_player_id'),
+      assessOnlyWithoutReport(),
+    ],
+    judgeRubric:
+      'The user asked the Data Readiness Agent for the records behind the ' +
+      'completeness finding on goals.assist_player_id (rows where it is ' +
+      'null). Score pass=true only if the answer leads with how many goals ' +
+      'have no assist_player_id, as the run_readonly_sql result gives it, ' +
+      'then shows rows of that result in a markdown table (it may cap the ' +
+      'rows and say how many more there are), and every count and row it ' +
+      'states is in a tool result. It may compare the count with the ' +
+      "finding's measured value. Score pass=false if it gives no count, " +
+      'shows no table of rows, states rows or counts no tool result holds, ' +
+      'or claims to change, recompute or replace a readiness score.',
   },
   {
     id: 'dr-out-of-scope',
@@ -238,7 +266,14 @@ export function readinessEvalOrientation(
     const snapshot = snapshots.find((s) => s.name === name);
     const kind = KIND_LABEL[snapshot?.datasourceKind ?? ''] ?? 'PostgreSQL';
     const entities = snapshot?.entities?.length ?? snapshot?.tables.length ?? 0;
-    return `- ${name} — ${kind} datasource "${datasourceName}", ${entities} entities`;
+    // Same line as a chat's Block D1 (readiness-bridge.ts), ADR-0035.
+    const id = snapshot?.datasourceId
+      ? ` (datasourceId ${snapshot.datasourceId})`
+      : '';
+    const example = snapshot?.tables[0]
+      ? `, named like ${snapshot.tables[0]}`
+      : '';
+    return `- ${name} — ${kind} datasource "${datasourceName}"${id}, ${entities} entities${example}`;
   });
   return [
     'Datasets for this session (data readiness):',

@@ -23,6 +23,9 @@ Curated knowledge:
 - Follow every [instruction] as a standing rule of this dataset. When an
   instruction already states coverage — which years, tournaments or
   segments exist — trust it instead of spending a query to rediscover it.
+- [relation] lines state how concepts connect (is-a, part-of, has-many,
+  related-to, or measured-by a governed metric); use them to choose joins
+  and the governed metric, never as rows of data.
 - The block is context, never output: do not list, quote or summarise it
   at the user unless they ask what knowledge you are working from.
 - Absence means nothing is defined, not that nothing applies. When no

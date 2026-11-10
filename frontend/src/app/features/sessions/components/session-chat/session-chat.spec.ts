@@ -688,6 +688,80 @@ describe('SessionChat stream errors', () => {
     expect(el.textContent).not.toContain('Thinking');
   });
 
+  it('keeps the question and the error when a workflow-only refresh lands with the failure (1.21.3)', () => {
+    const el = mount();
+    const api = TestBed.inject(SessionsApiService);
+    spyOn(api, 'streamMessage').and.callFake((_id, _content, handlers) => {
+      handlers.onError?.('Cannot connect to API: other side closed');
+      return Promise.resolve();
+    });
+
+    fixture.componentInstance.draft.set('Which team scored most?');
+    fixture.componentInstance.send();
+    fixture.detectChanges();
+
+    // The shell patches only the status bar: same id, same messages array.
+    const current = fixture.componentInstance.session();
+    fixture.componentRef.setInput('session', {
+      ...current,
+      workflow: { steps: [], current: 3, failed: 3 },
+    } as unknown as Session);
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Which team scored most?');
+    expect(el.textContent).toContain('Cannot connect to API: other side closed');
+  });
+
+  it('still re-syncs a same-id refresh that brings a new transcript', () => {
+    const el = mount([]);
+    fixture.componentRef.setInput('session', {
+      id: 'session-1',
+      name: 'Session 1',
+      datasets: [],
+      messages: [
+        { role: 'assistant', content: 'A refreshed answer', createdAt: '2026-11-10T00:00:00Z' },
+      ],
+    } as unknown as Session);
+    fixture.detectChanges();
+    expect(el.textContent).toContain('A refreshed answer');
+  });
+
+  it('shows live tool progress on the running row and clears it on the result', () => {
+    const el = mount();
+    const api = TestBed.inject(SessionsApiService);
+    let handlers!: Parameters<SessionsApiService['streamMessage']>[2];
+    spyOn(api, 'streamMessage').and.callFake((_id, _content, h) => {
+      handlers = h;
+      return new Promise<void>(() => undefined);
+    });
+
+    fixture.componentInstance.draft.set('Assess readiness');
+    fixture.componentInstance.send();
+    handlers.onTool?.({ name: 'assess_data_readiness' });
+    handlers.onTool?.({ name: 'other_tool' });
+    handlers.onToolProgress?.({
+      tool: 'assess_data_readiness',
+      phase: 'profiling',
+      message: 'Profiling claims (2 of 5)',
+      done: 2,
+      total: 5,
+    });
+    fixture.detectChanges();
+
+    const progress = el.querySelectorAll('[data-testid="tool-progress"]');
+    expect(progress.length).toBe(1);
+    expect(progress[0].textContent).toContain('Profiling claims (2 of 5)');
+    expect(progress[0].getAttribute('title')).toBe('Profiling claims (2 of 5)');
+
+    handlers.onToolResult?.({
+      tool: 'assess_data_readiness',
+      rowCount: 3,
+    } as never);
+    fixture.detectChanges();
+
+    expect(el.querySelector('[data-testid="tool-progress"]')).toBeNull();
+  });
+
   it('keeps any text that had already streamed in before the error', () => {
     const el = mount();
     const api = TestBed.inject(SessionsApiService);

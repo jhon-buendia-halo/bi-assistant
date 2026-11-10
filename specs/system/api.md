@@ -1,10 +1,10 @@
 # API contract
 
-The complete contract between the renderer (or any HTTP client) and the backend, plus the desktop IPC bridge, the CLI and the environment. Persisted document shapes (session, dataset, datasource, metric, knowledge snippet, verified query, LLM settings, eval run) live in [data-model.md](data-model.md); this file links to them and only restates a shape where the wire format differs from the stored one.
+The complete contract between the renderer (or any HTTP client) and the backend, plus the desktop IPC bridge, the CLI and the environment. Persisted document shapes (session, dataset, datasource, metric, ontology item, verified query, LLM settings, eval run) live in [data-model.md](data-model.md); this file links to them and only restates a shape where the wire format differs from the stored one.
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **80 HTTP route handlers** across 12 app controllers (sessions 17, deep analysis 3, agents 17, skills 9, datasources 6, knowledge 6, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2), plus the 33 routes of the embedded Intellify RFP API (2.16). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **84 HTTP route handlers** across 13 app controllers (sessions 17, deep analysis 3, agents 17, skills 9, datasources 6, ontology 6, personas 4, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2), plus the 33 routes of the embedded Intellify RFP API (2.16). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
 
 ---
 
@@ -42,7 +42,7 @@ interface ActionResult { ok: boolean; message: string; /* + endpoint-specific pa
 - On success: `{ ok: true, message: "<human sentence>", ...payload }`.
 - `message` is user-displayable and clients show it verbatim in toasts or inline errors. Exact success sentences are listed per endpoint because UI tests assert some of them.
 
-**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the deep-analysis download, and the whole knowledge controller.
+**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the deep-analysis download, and the whole ontology and personas controllers.
 
 ```ts
 interface HttpErrorBody { statusCode: number; message: string | string[]; error: string }   // NestJS default
@@ -51,7 +51,7 @@ interface HttpErrorBody { statusCode: number; message: string | string[]; error:
 | Status | When |
 |---|---|
 | 400 Bad Request | Validation failure thrown by a service (`BadRequestException`): missing/empty field, bad enum value, unknown version. |
-| 404 Not Found | Unknown session/agent/snippet/visual/report, or an unmatched route (`Cannot GET /x`). |
+| 404 Not Found | Unknown session/agent/ontology item/visual/report, or an unmatched route (`Cannot GET /x`). |
 | 408 Request Timeout | A visual generation exceeded 120 s (`RequestTimeoutException`). Under Style A this surfaces as `ok:false`. |
 | 500 Internal Server Error | Any unhandled error (framework default body `{ statusCode: 500, message: "Internal server error" }`). |
 
@@ -59,14 +59,14 @@ Clients read the error text from `error.message` (Style B) or `body.message` wit
 
 ### 1.4 Success status codes
 
-POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56). GET/PUT/DELETE return **200**; `DELETE /knowledge/:id` returns **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
+POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56). GET/PUT/DELETE return **200**; `DELETE /ontology/:id` and `DELETE /personas/:id` return **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
 
 ### 1.5 Validation
 
 - There is **no global validation pipe** and no DTO validation library. DTO classes (`SaveDatasourceDto`, `SaveMetricDto`, ...) are plain TypeScript shapes; nothing rejects extra or mistyped fields at the edge.
 - Validation is done by services/controllers: fields are coerced defensively (`typeof x === 'string' ? x : ''`), trimmed, and checked with explicit `BadRequestException`s. Rules per endpoint are listed in section 2.
 - Unknown body fields are ignored. Missing body is treated as `{}`.
-- Query params are strings. Booleans are accepted only as the literal `"true"`. The knowledge list drops unrecognised filter values instead of rejecting them.
+- Query params are strings. Booleans are accepted only as the literal `"true"`. The ontology list drops unrecognised filter values instead of rejecting them.
 
 ### 1.6 CORS
 
@@ -103,7 +103,7 @@ The one exception is the Intellify RFP API (2.16), a separate NestJS application
 
 ## 2. Endpoints
 
-Legend for **FE**: whether the shipped frontend calls it. Document types referenced (`SessionDoc`, `ChatMessage`, `SessionVisualization`, `DatasetDoc`, `MetricDoc`, `KnowledgeSnippet`, `DatasourceView`, `CatalogInfo`, `LlmSettingsView`, `EvalRunView`) are defined in [data-model.md](data-model.md) and the shared ones in [section 2.10](#210-shared-wire-shapes).
+Legend for **FE**: whether the shipped frontend calls it. Document types referenced (`SessionDoc`, `ChatMessage`, `SessionVisualization`, `DatasetDoc`, `MetricDoc`, `OntologyItem`, `DatasourceView`, `CatalogInfo`, `LlmSettingsView`, `EvalRunView`) are defined in [data-model.md](data-model.md) and the shared ones in [section 2.10](#210-shared-wire-shapes).
 
 ### 2.1 Sessions
 
@@ -129,7 +129,7 @@ Controller prefix `/sessions`. Capability: sessions-chat, visuals, agent-panel, 
 | 106 | `GET /sessions/:id/panel-items/:itemId/file` | Read the text of a file panel item | yes |
 | 107 | `GET /sessions/:id/panel-items/:itemId/download` | Download a file, document or table panel item | yes |
 
-The session on the wire (endpoints 1-3, and the `done` event of 5) is the stored `SessionDoc` (data-model 3.4), or a preview session (endpoint 3), plus two derived fields of the right panel ([agent-panel](../capabilities/agent-panel/spec.md), never stored as such): `panelItems: PanelItem[]` (always present, newest shown last as stored; the stored items, without any of the retired kind `phases`, plus a synthesized `visual:<id>` item for every visual without one, [data-model.md](data-model.md) 3.4.4) and `workflow?: WorkflowView` (present when the session's agent's prompt has a `## Workflow` section or the agent has defined its own steps with `update_workflow`; the extended view of [data-model.md](data-model.md) 3.4.4: `source`, `skipped`, `waiting?`, `note?` besides the phases and the saved progress; the `done` event carries it too), plus, for a session with an `agentId`, a derived `agent: { id: string; name: string; deleted: boolean; description: string; starterQuestions: string[] }`. While the agent exists, `name`, `description` and `starterQuestions` come from its Live version and `deleted` is `false`. Once it is deleted, `name` is the stored `agentName`, `deleted` is `true`, and `description` and `starterQuestions` are empty (sessions-chat R57-R59). For a preview session, `name`, `description` and `starterQuestions` come from the agent's **draft**, read at each request. For a session with an `agentKey` (bound to a built-in agent, ADR-0028), `agent` is `{ id: <agentKey>, name: <the registered agent's name>, deleted: false, description: <its description>, starterQuestions: <its built-in starters> }`; for `rfp` the starters are `Start an RFP for a client`, `Which of my clients renew on 1 January 2027?` and `Resume my draft RFPs` ([rfp](../capabilities/rfp/spec.md)). It is computed on every read, never stored.
+The session on the wire (endpoints 1-3, and the `done` event of 5) is the stored `SessionDoc` (data-model 3.4), or a preview session (endpoint 3), plus two derived fields of the right panel ([agent-panel](../capabilities/agent-panel/spec.md), never stored as such): `panelItems: PanelItem[]` (always present, newest shown last as stored; the stored items, without any of the retired kind `phases`, plus a synthesized `visual:<id>` item for every visual without one, [data-model.md](data-model.md) 3.4.4) and `workflow?: WorkflowView` (present when the session's agent is workflow-backed (`assistant-v2`, [agents.md](agents.md) 5.11), its prompt has a `## Workflow` section or the agent has defined its own steps with `update_workflow`; the extended view of [data-model.md](data-model.md) 3.4.4: `source`, `skipped`, `waiting?`, `note?`, `failed?` besides the phases and the saved progress; the `done` event carries it too), plus, for a session with an `agentId`, a derived `agent: { id: string; name: string; deleted: boolean; description: string; starterQuestions: string[] }`. While the agent exists, `name`, `description` and `starterQuestions` come from its Live version and `deleted` is `false`. Once it is deleted, `name` is the stored `agentName`, `deleted` is `true`, and `description` and `starterQuestions` are empty (sessions-chat R57-R59). For a preview session, `name`, `description` and `starterQuestions` come from the agent's **draft**, read at each request. For a session with an `agentKey` (bound to a built-in agent, ADR-0028), `agent` is `{ id: <agentKey>, name: <the registered agent's name>, deleted: false, description: <its description>, starterQuestions: <its built-in starters> }`; for `rfp` the starters are `Start an RFP for a client`, `Which of my clients renew on 1 January 2027?` and `Resume my draft RFPs` ([rfp](../capabilities/rfp/spec.md)). It is computed on every read, never stored.
 
 Preview sessions answer endpoints 2 and 4 to 14 like any session (a turn runs with the draft, sessions-chat R54) but are never in endpoint 1's list. Endpoint 4 on a preview discards it (memory thread and workspace included) and answers `{ ok:true, message:"Preview discarded" }`.
 
@@ -145,7 +145,8 @@ Preview sessions answer endpoints 2 and 4 to 14 like any session (a turn runs wi
 #### 3. `POST /sessions`
 - Body: `{ name: string; datasets: string[] }` or `{ agentId: string }`. `name` required (trimmed, non-empty, **truncated to 64 chars**); `datasets` must be a non-empty array of dataset **names**.
 - With `agentId` (a user-agent id; sessions-chat R52): `datasets` in the body is ignored, and `name` is optional: a non-blank `name` (trimmed, truncated to 64 chars; sent by the New conversation screen's Agent picker) names the session, else it takes the agent's Live name. The session takes those of its Live datasets that exist, and stores `agentId` and `agentName` (data-model 3.4).
-- With `agentId` set to the registry key of a built-in agent that declares a dataset (today only `rfp`, whose dataset is `Intellify RFP API`; ADR-0028): `datasets` in the body is ignored and an optional non-blank `name` works as above. The session takes the typed name, else the agent's name (`RFP Builder`), and that dataset, and stores `agentKey` (the registry key) and `agentName` instead of `agentId` (data-model 3.4); every turn then runs that agent. When the dataset doesn't exist the call fails with the agent's requirement text, for `rfp` `"Load the \"Intellify RFP API\" sample in Settings → Testing Data first"`. A built-in key that declares no dataset (e.g. `assistant`) still fails with `"Agent \"<key>\" not found"`.
+- With `agentId` set to the registry key of a built-in agent that declares a dataset (today only `rfp`, whose dataset is `Intellify RFP API`; ADR-0028): `datasets` in the body is ignored and an optional non-blank `name` works as above. The session takes the typed name, else the agent's name (`RFP Builder`), and that dataset, and stores `agentKey` (the registry key) and `agentName` instead of `agentId` (data-model 3.4); every turn then runs that agent. When the dataset doesn't exist the call fails with the agent's requirement text, for `rfp` `"Load the \"Intellify RFP API\" sample in Settings → Testing Data first"`. A built-in key that declares no dataset and takes none from the user (e.g. `assistant`) still fails with `"Agent \"<key>\" not found"`.
+- With `agentId` set to `assistant-v2` (Questions to Insights v2; agents.md 2.11, ADR-0028 as amended by BA-320): like the assistant's composer, the agent has no dataset of its own, so `name` and `datasets` are **required and validated exactly as without `agentId`** (`"session name is required"`, `"select at least one dataset"`). The session takes the typed name (trimmed, truncated to 64 chars) and those datasets, and stores `agentKey: "assistant-v2"` and `agentName: "Questions to Insights v2"` instead of `agentId` (data-model 3.4); every turn then runs that agent. A preview (`preview: true`) of this key fails like any built-in key, with `"Agent \"assistant-v2\" not found"`.
 - With `agentId` set to `data-readiness` (agents.md 2.10): `datasets` in the body is ignored and an optional non-blank `name` works as above. The session takes the typed name, else `Data Readiness`, and every dataset bound to a `postgres` or `databricks` datasource, ordered by name, and stores `agentKey` and `agentName`. With no such dataset the call fails with `"Add a PostgreSQL or Databricks dataset first"`.
 - With `agentId` set to a showcase agent's key (`benchmarking`, `survey`, `lad-coe`, `strategy`; agents-evals R106): always refused with `{ ok:false, message:"Showcase agent: not available to chat yet." }` (Style A: the service's 400 is flattened into the envelope), creating nothing (no session, no workspace). A preview (`preview: true`) of a showcase key fails, like any built-in key, with `"Agent \"<key>\" not found"`.
 - With `{ agentId, preview: true }` (agents-evals R60, R61): starts a **preview session** of the agent's draft. It is held in memory only (data-model 3.12), never listed and never written to the `sessions` collection. Its `id` is `preview-<uuid>`, its `name` `Preview: <draft name>`, its `datasets` those of the draft that exist, and it carries `preview: true` and `agentId`. Its derived `agent` comes from the draft. Success message `Preview started`. Failures: `"Agent \"<id>\" not found"` (also for a built-in key), `"Select at least one dataset to preview"`.
@@ -297,21 +298,22 @@ Controller prefix `/datasets`. Capability: datasets. Datasets are keyed by `name
 | 23 | `DELETE /datasets/:name` | Delete a dataset | yes |
 
 #### 21. `GET /datasets`
-- Response `200`: `{ datasets: DatasetDoc[] }`, most recently updated first. Legacy single-selection documents in the same table are skipped.
+- Response `200`: `{ datasets: DatasetDoc[] }`, most recently updated first. Legacy single-selection documents in the same table are skipped. Each dataset carries `schemas` (the schema notes) when it has any.
 
 #### 22. `POST /datasets`
 - Body: `{ name: string; tables: string[]; entities: DatasetEntitySnapshot[]; datasourceId: string; datasourceKind?: string }`.
   - `tables`: fully-qualified `catalog.schema.table` keys of the included entities (non-empty).
   - `entities`: schema snapshots `{ key, columns: { name, type, nullable, sampleValues?, description?, references? }[] }` captured by the client from the inventory. Only those whose `key` is in `tables` are processed.
   - `datasourceKind` optional; when present it must equal the datasource's kind.
-- Validation (Style A messages): `"Dataset name is required"`, `"Include at least one entity"`, `"datasourceId is required"`, `"Datasource <id> not found"`, `"Datasource kind must be <kind>"`.
+  - `schemas` optional: `{ key: "catalog.schema"; layer?: "landing" | "normalized" | "consumption" | null; description?: string | null }[]`, the dataset's schema notes. **Omitted** (or anything that is not an array, `null` included) keeps the stored notes (Testing Data re-registers its samples this way); an **array** replaces them, `[]` clearing them all. Malformed keys are ignored, notes for a schema with no included entity are dropped, empty notes (no layer and no description) are dropped, and descriptions are trimmed and cut to 500 characters.
+- Validation (Style A messages): `"Dataset name is required"`, `"Include at least one entity"`, `"datasourceId is required"`, `"Datasource <id> not found"`, `"Datasource kind must be <kind>"`, `"layer must be one of: landing, normalized, consumption"`.
 - Success: `{ ok:true, message:"Dataset \"<name>\" saved — <n> entities" }`. The saved document is **not** returned; the client re-lists.
 - Side effects: enriches each entity snapshot with up to 5 distinct sample values per column (from a live sample of 50 rows per table, 4 tables concurrently; best effort, a failure leaves that snapshot as sent and never fails the save), then attaches the join graph (`references` per key column: declared foreign keys win, naming-based inference fills the rest), then upserts by `name`, binding `datasourceId` + `datasourceKind`. Re-saving an existing name replaces it and re-enriches.
 - Note the controller trims `name` and `datasourceId`; `tables` entries are stringified.
 
 #### 23. `DELETE /datasets/:name`
 - Success: `{ ok:true, message:"Dataset \"<name>\" deleted" }`; if no dataset matched: `{ ok:false, message:"Dataset \"<name>\" not found" }`.
-- Does not cascade to sessions or knowledge that reference the name (G6).
+- Also deletes the ontology items whose `dataset` is that name (shared items stay; [data-model.md](data-model.md) 3.13). Does not cascade to sessions that reference the name (G6).
 
 ### 2.4 Metrics
 
@@ -456,10 +458,10 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 #### 33. `GET /agents`
 - Response `200`: `{ agents: AgentSummary[] }` sorted by `name`, built-in and user agents together.
 - `AgentSummary = { key, id, name, description, tools: string[] /* sorted tool names; a user agent shows those its effective configuration selects (agents.md 2.1) */, kind: 'official'|'system'|'user', status: 'builtin'|'draft'|'live', pinned: boolean, owner: 'Official'|'System'|'You', hasUnpublishedChanges: boolean, missingDatasets: string[], datasets: string[], starterQuestions: string[], chatRequirement?: string, showcase?: boolean }`.
-- For a user agent `key` equals `id`, and `name`, `description`, `datasets`, `starterQuestions` and `tools` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty, except for a built-in agent that declares a dataset for its sessions (today `rfp`; ADR-0028): its `datasets` is `["Intellify RFP API"]`, `missingDatasets` lists it while no dataset of that name exists, and `chatRequirement` is then `Load the "Intellify RFP API" sample in Settings → Testing Data first` (the UI shows it as the reason Start chat is blocked). A **showcase agent** (`benchmarking`, `survey`, `lad-coe`, `strategy`; [agents.md](agents.md) 2.9, agents-evals R106) carries `showcase: true` and `chatRequirement` `"Showcase agent: not available to chat yet."` (the reason Start chat is always disabled), with empty `datasets`, `missingDatasets` and `starterQuestions` and `tools: []`; `showcase` is absent on every other agent. `chatRequirement` is absent otherwise. The **Data Readiness Agent** (`data-readiness`; [agents.md](agents.md) 2.10) declares a dataset *kind* instead of a name: its `datasets` lists the names of every dataset bound to a `postgres` or `databricks` datasource, its `missingDatasets` is empty, its `starterQuestions` are its three starters (data-readiness R2), and while no such dataset exists `chatRequirement` is `Add a PostgreSQL or Databricks dataset first`. `kind` is `official` for `assistant`, `rfp`, `data-readiness` and the showcase agents, and `system` for the other built-in agents.
+- For a user agent `key` equals `id`, and `name`, `description`, `datasets`, `starterQuestions` and `tools` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty, except for a built-in agent that declares a dataset for its sessions (today `rfp`; ADR-0028): its `datasets` is `["Intellify RFP API"]`, `missingDatasets` lists it while no dataset of that name exists, and `chatRequirement` is then `Load the "Intellify RFP API" sample in Settings → Testing Data first` (the UI shows it as the reason Start chat is blocked). A **showcase agent** (`benchmarking`, `survey`, `lad-coe`, `strategy`; [agents.md](agents.md) 2.9, agents-evals R106) carries `showcase: true` and `chatRequirement` `"Showcase agent: not available to chat yet."` (the reason Start chat is always disabled), with empty `datasets`, `missingDatasets` and `starterQuestions` and `tools: []`; `showcase` is absent on every other agent. `chatRequirement` is absent otherwise. The **Data Readiness Agent** (`data-readiness`; [agents.md](agents.md) 2.10) declares a dataset *kind* instead of a name: its `datasets` lists the names of every dataset bound to a `postgres` or `databricks` datasource, its `missingDatasets` is empty, its `starterQuestions` are its three starters (data-readiness R2), and while no such dataset exists `chatRequirement` is `Add a PostgreSQL or Databricks dataset first`. The **Questions to Insights v2** agent (`assistant-v2`; [agents.md](agents.md) 2.11) has no dataset of its own, like the `assistant`: no `chatRequirement`, empty `datasets`, `missingDatasets` and `starterQuestions`. `kind` is `official` for `assistant`, `assistant-v2`, `rfp`, `data-readiness` and the showcase agents, and `system` for the other built-in agents.
 
 #### 34. `GET /agents/:key`
-- Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */; toolLinks?: { name: string; status: 'always-on'|'linked'|'not-linked'; linkedVia: { instructions: boolean; skills: string[] /* skill names, sorted */ } }[] /* user agents only: every library tool sorted by name, from the Live version, else the draft */; llm: { provider: string | null; providerName: string | null; model: string | null; apiKeyConfigured: boolean; maxOutputTokens: number | null; reasoningEffort: string | null } /* the effective LLM settings the agent resolves to; never the key; every field null/false when no LLM is saved */; prompt?: { editable: string /* as served: the override, else the shipped text */; shipped: string; modified: boolean; builtInChanged: boolean /* modified and the shipped text's hash differs from baseHash */; linksAllowed: boolean /* true for assistant and rfp only; false for the System and showcase agents */; updatedAt: string | null /* the override's */ } /* built-in agents only */ }`.
+- Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */; toolLinks?: { name: string; status: 'always-on'|'linked'|'not-linked'; linkedVia: { instructions: boolean; skills: string[] /* skill names, sorted */ } }[] /* user agents only: every library tool sorted by name, from the Live version, else the draft */; llm: { provider: string | null; providerName: string | null; model: string | null; apiKeyConfigured: boolean; maxOutputTokens: number | null; reasoningEffort: string | null } /* the effective LLM settings the agent resolves to; never the key; every field null/false when no LLM is saved */; prompt?: { editable: string /* as served: the override, else the shipped text */; shipped: string; modified: boolean; builtInChanged: boolean /* modified and the shipped text's hash differs from baseHash */; linksAllowed: boolean /* true for assistant, assistant-v2, rfp and data-readiness only; false for the System and showcase agents */; updatedAt: string | null /* the override's */ } /* built-in agents only */ }`.
 - For a built-in agent, `instructions` is the prompt as served, so it reflects an override (ADR-0026), and `prompt` carries the editable text, the shipped text and the override state ([data-model.md](data-model.md) 3.10.3). For the `assistant`, `editable` and `shipped` exclude the generated `## Tools` section ([agents.md](agents.md) 2.1).
 - A user agent runs on the assistant, so its `instructions`, `toolDetails`, `memory` and `model` describe the assistant, with the prompt and tools that the agent's tool selection gives it (Live version, else draft; [agents.md](agents.md) 2.1). Its own instructions are in `draft` and `live`, with links as written (R81). `toolLinks` (user agents) says why each library tool is there: `always-on` for `list_entities`, `describe_entity` and `run_readonly_sql`, `linked` when the instructions or a linked skill's body link it, else `not-linked`; the tools of its skills come from the Live copies, else the current skills. `llm.model` is the agent's own `model` override when a user agent sets one, else the configured model; `llm.reasoningEffort` is the agent's override, else the configured one. `llm` never carries the API key, only whether one is saved ([../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R87-R89).
 - Errors (Style B): `404 "Agent \"<key>\" not found"`. `:key` is resolved as a registry key first, then as a user-agent id.
@@ -613,7 +615,7 @@ The `built-in` routes are declared before `/skills/:id`.
 #### 103. `PUT /agents/:key/prompt`
 - Body: `{ prompt: string }`, trimmed; the checks below run on the trimmed text. Saves the override (ADR-0026); it applies to the next call of every session, user agent, deep analysis, visual and eval run.
 - Success: `{ ok:true, message:"System prompt of \"<name>\" saved", agent: AgentDetail }`.
-- Failures (Style A), the first that applies: `"Agent \"<key>\" not found"`; `"Only built-in agents have a shared system prompt; edit a user agent's instructions instead"` (`:key` is a user-agent id); `"The prompt is empty"`; `"The prompt is at most 20,000 characters"`; for the `assistant` only: `"The assistant's prompt must start with \"You are the Questions to Insights assistant\""`, `"Only built-in skills can be linked here: this prompt is shared by every user"` (a `[[skill:<name>]]` whose name is not a built-in on-demand skill; a built-in one is accepted), `"Unknown tool \"<name>\""` (a `[[tool:…]]` not in the library, as in 41); for the `rfp` (RFP Builder) only (agents.md 2.8): `"The RFP Builder's prompt must start with \"You are the RFP Builder\""`, `"Only the RFP Builder's own skills can be linked here: this prompt is shared by every user"` (a `[[skill:<name>]]` that is not one of its own on-demand skills, its seven stage skills of agents.md 7.4), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its own tools: its RFP tools and `ask_clarification`); for the `data-readiness` agent only (agents.md 2.10): `"The Data Readiness Agent's prompt must start with \"You are the Data Readiness Agent\""`, `"Only the Data Readiness Agent's own skills can be linked here: this prompt is shared by every user"` (any `[[skill:…]]` other than `data-readiness`), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its tools: `assess_data_readiness`, `get_readiness_report`, `list_readiness_reports`, `show_in_panel`, `ask_clarification`); for a System or showcase agent only: `"This agent's prompt can't contain links"` (any `[[…]]`; a showcase agent's prompt has no required first line).
+- Failures (Style A), the first that applies: `"Agent \"<key>\" not found"`; `"Only built-in agents have a shared system prompt; edit a user agent's instructions instead"` (`:key` is a user-agent id); `"The prompt is empty"`; `"The prompt is at most 20,000 characters"`; for the `assistant` only: `"The assistant's prompt must start with \"You are the Questions to Insights assistant\""`, `"Only built-in skills can be linked here: this prompt is shared by every user"` (a `[[skill:<name>]]` whose name is not a built-in on-demand skill; a built-in one is accepted), `"Unknown tool \"<name>\""` (a `[[tool:…]]` not in the library, as in 41); for the `rfp` (RFP Builder) only (agents.md 2.8): `"The RFP Builder's prompt must start with \"You are the RFP Builder\""`, `"Only the RFP Builder's own skills can be linked here: this prompt is shared by every user"` (a `[[skill:<name>]]` that is not one of its own on-demand skills, its seven stage skills of agents.md 7.4), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its own tools: its RFP tools and `ask_clarification`); for the `data-readiness` agent only (agents.md 2.10): `"The Data Readiness Agent's prompt must start with \"You are the Data Readiness Agent\""`, `"Only the Data Readiness Agent's own skills can be linked here: this prompt is shared by every user"` (any `[[skill:…]]` other than `data-readiness`), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its tools: `assess_data_readiness`, `get_readiness_report`, `list_readiness_reports`, `show_in_panel`, `ask_clarification`); for the `assistant-v2` agent only (agents.md 2.11): `"The Questions to Insights v2 prompt must start with \"You are Questions to Insights v2\""`, `"Skills can't be linked here: Questions to Insights v2 has no skills"` (any `[[skill:…]]`), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its tools: `list_entities`, `describe_entity`, `run_readonly_sql`); for a System or showcase agent only: `"This agent's prompt can't contain links"` (any `[[…]]`; a showcase agent's prompt has no required first line).
 - Declared before the `GET /agents/:key` catch-alls.
 
 #### 104. `DELETE /agents/:key/prompt`
@@ -644,48 +646,78 @@ Controller prefix `/sessions` (same prefix as 2.1, separate controller). Capabil
 - Errors (Style B): `400 "invalid deep analysis id"` (jobId must match `^[a-zA-Z0-9-]+$`), `404 "No deep analysis report for <jobId>"`, session not found.
 - Reads the stored report from the workspace (`reports/` directory) by id, independent of in-memory state.
 
-### 2.8 Knowledge
+### 2.8 Ontology
 
-Controller prefix `/knowledge`. Capability: knowledge. **Style B throughout** (real status codes, bare bodies). Shape `KnowledgeSnippet` in data-model.
+No controller prefix: the routes sit under `/datasets/:name/ontology` and `/ontology/:id`. Capability: dataset-ontology. **Style B throughout** (real status codes, bare bodies). Shape `OntologyItem` in data-model (3.9). The routes replace the former `/knowledge` routes with the same numbers; no aliases remain (ADR-0036).
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
-| 49 | `GET /knowledge` | List snippets (filterable) | yes |
-| 50 | `POST /knowledge` | Create a user snippet | yes |
-| 51 | `PATCH /knowledge/:id` | Partial update | yes |
-| 52 | `DELETE /knowledge/:id` | Delete (204) | yes |
-| 53 | `POST /knowledge/bootstrap` | Draft snippets from a dataset (one shot) | **no** |
-| 54 | `POST /knowledge/bootstrap/stream` | Same run, streamed progress (SSE) | yes |
+| 49 | `GET /datasets/:name/ontology` | List a dataset's ontology (its items plus shared ones; filterable) | yes |
+| 50 | `POST /datasets/:name/ontology` | Create a user item in the dataset (or shared) | yes |
+| 51 | `PATCH /ontology/:id` | Partial update | yes |
+| 52 | `DELETE /ontology/:id` | Delete (204) | yes |
+| 53 | `POST /datasets/:name/ontology/bootstrap` | Draft ontology items from the dataset (one shot) | **no** |
+| 54 | `POST /datasets/:name/ontology/bootstrap/stream` | Same run, streamed progress (SSE) | yes |
 
-Route order: `bootstrap` and `bootstrap/stream` are POST-only literals and do not collide with `PATCH/DELETE :id`.
+Route order: `/datasets/:name/ontology...` and `/ontology/:id` do not collide with the datasets routes (2.3).
 
-#### 49. `GET /knowledge`
-- Query (all optional, lenient: an unrecognised value is dropped, not rejected): `datasetId` (that dataset's snippets **plus every global one**), `kind` (`instruction | term | default_filter`), `source` (`user | mined`), `enabled` (`true | false`).
-- Response `200`: **`KnowledgeSnippet[]`** (a bare array, unlike the other list endpoints), `updatedAt` descending.
+#### 49. `GET /datasets/:name/ontology`
+- Query (all optional, lenient: an unrecognised value is dropped, not rejected): `kind` (`concept | relation | constraint | instruction`), `source` (`user | mined`), `enabled` (`true | false`).
+- Response `200`: **`OntologyItem[]`** (a bare array, unlike the other list endpoints): the items with `dataset === name` **plus every shared item** (`dataset: null`), `updatedAt` descending.
+- Errors: `404 "Dataset \"<name>\" not found"`.
 
-#### 50. `POST /knowledge`
-- Body: `{ kind; title: string; body: string; scope?: { datasetId?: string; datasourceId?: string } | null; synonyms?: string[]; entities?: string[]; enabled?: boolean }`.
-- Validation: `400` `"kind must be one of: instruction, term, default_filter"`, `"title is required"`, `"body is required"` (title/body trimmed). `scope` is normalised: non-object, or an object with neither id, becomes `null` (global). `synonyms`/`entities` are trimmed and de-blanked. `enabled` defaults to `true`.
-- Response `201`: the created `KnowledgeSnippet` (`source:"user"`, `id` generated, timestamps set).
+#### 50. `POST /datasets/:name/ontology`
+- Body: `{ kind; name: string; description?: string; enabled?: boolean; shared?: boolean }` plus the kind's fields: concept `synonyms?: string[]`, `mappings?: { entity: string; column?: string; expression?: string }[]`; relation `from`, `type`, `to?`, `metricId?`; constraint `predicate`, `conceptId?`, `entities?`; instruction `entities?`. Fields that do not belong to the kind are dropped; strings are trimmed and list items trimmed and de-blanked. `enabled` defaults to `true`; `shared: true` stores `dataset: null`.
+- Validation (`400`, messages exact): `"kind must be one of: concept, relation, constraint, instruction"`; `"name is required"`; concept and instruction `"description is required"`; constraint `"predicate is required"`; concept mapping `"each mapping needs an entity"` and, for an item of a dataset, `"Entity \"<entity>\" is not in dataset \"<name>\""` (a shared item accepts any entity); relation `"from is required"`, `"type must be one of: is-a, part-of, has-many, related-to, measured-by"`, `"to is required"` (not for `measured-by`), `"metricId is required for measured-by"`, `"Concept \"<id>\" is not in this ontology"` (a `from`, `to` or constraint `conceptId` that is not a concept of the same dataset or a shared concept) and `"Metric \"<id>\" not found"`. `404 "Dataset \"<name>\" not found"`.
+- Response `201`: the created `OntologyItem` (`source:"user"`, `id` generated, timestamps set).
 
-#### 51. `PATCH /knowledge/:id`
-- Body: any subset of the create fields. **Only fields present on the body are applied**; absent fields are untouched. A present `scope: null` makes the snippet global; a present `synonyms: []` clears them.
-- Validation: `400` on invalid `kind`, `"title must not be empty"`, `"body must not be empty"`. `404 "Knowledge snippet <id> not found"`.
-- Response `200`: the updated `KnowledgeSnippet`.
+#### 51. `PATCH /ontology/:id`
+- Body: any subset of the create fields. **Only fields present on the body are validated and applied**; absent fields are untouched, `updatedAt` is restamped. `kind` cannot change (`400 "kind cannot be changed"` when it differs). A present `synonyms: []`, `mappings: []` or `entities: []` clears them.
+- Validation: `400` `"name must not be empty"`, `"description must not be empty"` (concept, instruction), `"predicate must not be empty"` (constraint) and the mapping and relation messages of 50. `404 "Ontology item <id> not found"`.
+- Response `200`: the updated `OntologyItem`.
 
-#### 52. `DELETE /knowledge/:id`
-- Response `204` (empty). `404 "Knowledge snippet <id> not found"`.
+#### 52. `DELETE /ontology/:id`
+- Response `204` (empty). `404 "Ontology item <id> not found"`.
+- Deleting a concept also deletes the relations whose `from` or `to` is that concept and clears `conceptId` on the constraints that name it.
 
-#### 53. `POST /knowledge/bootstrap`
-- Body: `{ datasetId: string }` (the dataset's **name**).
-- Response `201`: `{ created: KnowledgeSnippet[] }`.
-- Errors: `400 "datasetId is required"`, `400 "Dataset \"<id>\" not found"`, `400 "Knowledge bootstrap failed: <reason>"` (LLM error, malformed output, no usable drafts). Never a raw 500 by design.
+#### 53. `POST /datasets/:name/ontology/bootstrap`
+- No body.
+- Response `201`: `{ created: OntologyItem[] }`.
+- Errors: `400 "dataset is required"`, `400 "Dataset \"<name>\" not found"`, `400 "Ontology bootstrap failed: <reason>"` (LLM error, malformed output), `400 "Ontology bootstrap failed: the bootstrap agent returned no usable drafts"`. Never a raw 500 by design.
 - Not called by the frontend; the streamed variant (54) replaced it for UX (G3).
 
-#### 54. `POST /knowledge/bootstrap/stream`
-See [section 3.4](#34-knowledge-bootstrap-stream-post-knowledgebootstrapstream).
+#### 54. `POST /datasets/:name/ontology/bootstrap/stream`
+See [section 3.4](#34-ontology-bootstrap-stream-post-datasetsnameontologybootstrapstream).
 
-Bootstrap semantics shared by 53 and 54: the `knowledge-bootstrap` agent drafts kinds `instruction | term | default_filter` from the dataset's stored schema snapshot plus a sample of rows (see [agents.md](agents.md)); at most `MAX_BOOTSTRAP_DRAFTS` drafts are kept; a draft is skipped when its title (case-insensitive) already exists for that dataset or in the same batch; survivors are persisted with `scope: { datasetId }`, `source: "mined"`, **`enabled: false`** for human review.
+Bootstrap semantics shared by 53 and 54: the `knowledge-bootstrap` agent (shown as Ontology Bootstrap) drafts concepts, relations, constraints and instructions from the dataset's stored schema snapshot, sample rows, column references and governed metrics (see [agents.md](agents.md) 2.5); at most 15 drafts are kept; concepts are inserted first, relations resolve against concepts and metrics by name and are dropped when unresolved, mappings to entities outside the dataset are dropped, and a draft is skipped when its name (case-insensitive) already exists for the same kind in the dataset or earlier in the run; survivors are persisted with `dataset: <name>`, `source: "mined"`, **`enabled: false`** for human review.
+
+### 2.8a Personas
+
+Controller prefix `/personas`. Capability: [user-personas](../capabilities/user-personas/spec.md). **Style B throughout** (real status codes, bare bodies). Shape `Persona` in data-model (3.9a): `{ id, name, role, description, goals, typicalQuestions: string[], expertise: "novice"|"intermediate"|"expert", answerStyle, createdAt, updatedAt }`.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 49a | `GET /personas` | List personas sorted by name | yes |
+| 49b | `POST /personas` | Create a persona | yes |
+| 49c | `PATCH /personas/:id` | Partial update | yes |
+| 49d | `DELETE /personas/:id` | Delete (204) | yes |
+
+#### 49a. `GET /personas`
+- Response `200`: **`Persona[]`** (a bare array), sorted by `name` ignoring case.
+
+#### 49b. `POST /personas`
+- Body: `{ name: string; role?: string; description?: string; goals?: string; typicalQuestions?: string[]; expertise?: "novice"|"intermediate"|"expert"; answerStyle?: string }`. Every string is trimmed.
+- Validation `400` (messages exact): `"Name is required"`, `"Name is at most 80 characters"`, `"Role is at most 80 characters"`, `"Description is at most 2,000 characters"`, `"Goals are at most 2,000 characters"`, `"Typical questions must be an array"`, `"At most 10 typical questions"` (blank questions are dropped first), `"A typical question is at most 300 characters"`, `"Expertise must be novice, intermediate or expert"`, `"Answer style is at most 500 characters"`. `expertise` defaults to `intermediate`; omitted strings default to `""` and `typicalQuestions` to `[]`.
+- `409 "A persona named \"<name>\" already exists"` when another persona has the name, ignoring case.
+- Response `201`: the created `Persona` (`id` generated, timestamps set).
+
+#### 49c. `PATCH /personas/:id`
+- Body: any subset of the create fields. **Only fields present on the body are validated and applied**; omitted fields are kept and `updatedAt` is restamped. Same `400` and `409` messages as create (a persona renamed to its own name, in any case, is not a conflict).
+- `404 "Persona not found"`.
+- Response `200`: the updated `Persona`.
+
+#### 49d. `DELETE /personas/:id`
+- Response `204` (empty). `404 "Persona not found"`.
 
 ### 2.9 Testing data
 
@@ -952,7 +984,7 @@ Controller prefix `/data-readiness`. Capability: [data-readiness](../capabilitie
   - `entities` are entity keys (`catalog.schema.table` on Databricks, `database.schema.table` on PostgreSQL, as in the inventory, #20) and narrow the scope. Left out, the scope is every entity in the datasource's inventory. Keys that no longer exist are dropped.
   - `sessionId` is recorded on the report when the assessment comes from a chat.
 - Runs synchronously: profile (connector profiling queries, 15 s per statement), engine with `now` = the request time, store.
-- Response `201`: `ReadinessReport` ([data-model.md](data-model.md)).
+- Response `201`: `ReadinessReport` ([data-model.md](data-model.md)). It carries `notProfiled?: { entity, reason: "too-large"|"timed-out", rowCount? }[]` for entities whose column checks were skipped (ADR-0033); absent when none.
 - Errors:
   - 400 `"datasourceId is required"`;
   - 400 `"Data readiness supports PostgreSQL and Databricks datasources only"` (a `rest` datasource);
@@ -972,7 +1004,7 @@ Controller prefix `/data-readiness`. Capability: [data-readiness](../capabilitie
 
 ## 3. Streaming and long-running work
 
-Two Server-Sent-Events endpoints exist (chat, knowledge bootstrap). Both are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. Two background-job patterns use start + poll instead of SSE (deep analysis, eval runs).
+Two Server-Sent-Events endpoints exist (chat, ontology bootstrap). Both are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. Two background-job patterns use start + poll instead of SSE (deep analysis, eval runs).
 
 ### 3.1 Chat stream: `POST /sessions/:id/messages/stream`
 
@@ -986,11 +1018,11 @@ interface StreamMessageRequest {
 }
 ```
 
-**Response headers.** `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`; headers are flushed immediately, so the HTTP status is **always 200** once the handler runs. Consequently *every* failure, including an unknown session or an empty message, arrives as an in-stream `error` event, not as a 4xx.
+**Response headers.** `Content-Type: text/event-stream; charset=utf-8` (the charset is explicit so every client decodes `…` and other non-ASCII text as UTF-8; without it Chromium's network layer falls back to Windows-1252), `Cache-Control: no-cache`, `Connection: keep-alive`; headers are flushed immediately, so the HTTP status is **always 200** once the handler runs. Consequently *every* failure, including an unknown session or an empty message, arrives as an in-stream `error` event, not as a 4xx.
 
 **Framing.** Each event is a single `data: <JSON>\n\n` frame. No `event:` or `id:` fields, no `retry:`, no heartbeat/comment frames. Readers split on `\n\n`, take the line starting with `data: ` and `JSON.parse` it; malformed frames are skipped.
 
-**Event envelope.** `{ type, content?, session? }`. `content` is a string; for `tool`, `tool-result`, `visual-updated`, `panel-item`, `workflow`, `rfp-package` and `readiness-report` it is itself **a JSON-encoded string** (double encoding) that the client parses.
+**Event envelope.** `{ type, content?, session? }`. `content` is a string; for `tool`, `tool-result`, `visual-updated`, `panel-item`, `workflow`, `rfp-package`, `readiness-report` and `tool-progress` it is itself **a JSON-encoded string** (double encoding) that the client parses.
 
 | `type` | Payload | Meaning |
 |---|---|---|
@@ -998,9 +1030,10 @@ interface StreamMessageRequest {
 | `text` | `content: string` (delta) | Answer text delta. Concatenation of all `text` deltas is the streamed answer. One extra full-text `text` event may follow if a tool-only turn needed a synthesis pass. |
 | `tool` | `content: JSON string` `{ name: string; rationale?: string; input?: string }` | A tool call started. `rationale` is the assistant's plain-language reason (flattened, max 400 chars) and is sent **with the call**, before the result. `input` says what the call is about, flattened and clipped to 200 characters: for the framework's skill tools the skill it loads (`skill`: its `name`; `skill_read`: `<skillName>/<path>`; `skill_search`: the query), else the call's first text argument; omitted when there is none. Legacy clients may receive a bare tool name instead of JSON; readers must fall back to treating non-JSON content as the name. Not emitted for `ask_clarification`. |
 | `tool-result` | `content: JSON string` | A tool call finished. For data tools (`run_readonly_sql`, `sample_rows`): `{ tool, input?, rowCount?, error?, rationale? }`. For visual tools (`create_visual`, `update_visual`): `{ tool, input? /* the instruction */, error? }`. In a session bound to the RFP Builder (`agentKey: "rfp"`), every RFP tool ([agents.md](agents.md) 3.10) emits `{ tool, input? /* its first string argument */, rowCount?, error? }` (`rowCount` for a result that carries `columns` and `rows`, such as `get_client_financials`). **No `tool-result` is emitted for other tools** (`list_entities`, `describe_entity`). Row data is not streamed, only persisted in the final message. |
+| `tool-progress` | `content: JSON string` `{ tool: string, phase: "inventory"\|"profiling"\|"relationships"\|"scoring"\|"storing", message: string, done?: number, total?: number, entity?: string }` | Live progress of a running tool (ADR-0033). Zero or more between a tool's `tool` event and its `tool-result`. Only `assess_data_readiness` emits it today. Not persisted. It doubles as a keepalive while the tool runs. The client shows the latest `message` on the tool's row ([ui.md](ui.md) 4.12). |
 | `visual-updated` | `content: JSON string` `VisualEvent` `{ visualId, version, title, action: "created"\|"updated" }` | A visual tool produced a visual this turn; sent just before that tool's `tool-result`. The panel refreshes live. |
 | `panel-item` | `content: JSON string` `PanelItemEvent` `{ item: PanelItem }` ([data-model.md](data-model.md) 3.4.4) | An agent showed something in the right panel this turn (`show_in_panel` returned without an error); never sent for a workflow change (`update_workflow`, the RFP Builder's stage auto-drive); sent just before that tool's `tool-result` `{ tool: "show_in_panel", input? /* the item's title */, error? }`. The client refreshes the session without disturbing the turn, makes the item the active one and opens the panel; for a `visual` item it also loads the visual. Every agent ([agent-panel](../capabilities/agent-panel/spec.md) R12). `visual-updated` stays for visual tools. |
-| `workflow` | `content: JSON string` `WorkflowView` `{ phases: { number, title, skill? }[], source: "prompt"\|"agent", current: number\|null, done: number[], skipped: number[], waiting?: boolean, note?: string }` ([data-model.md](data-model.md) 3.4.4) | The session's workflow changed this turn: after an `update_workflow` result without an error and after an RFP Builder stage was saved. `show_in_panel` never sends it. It carries the whole view, not a delta. It never creates a panel item and does not open the right panel. The client patches the session's `workflow` live, so the workflow bar moves while the turn streams; the persisted view arrives with `done` ([agent-panel](../capabilities/agent-panel/spec.md) R19). Every agent. |
+| `workflow` | `content: JSON string` `WorkflowView` `{ phases: { number, title, skill? }[], source: "prompt"\|"agent"\|"workflow", current: number\|null, done: number[], skipped: number[], waiting?: boolean, note?: string, failed?: number }` ([data-model.md](data-model.md) 3.4.4) | The session's workflow changed this turn: after an `update_workflow` result without an error, after an RFP Builder stage was saved, and on a Questions to Insights v2 turn after each step of its workflow starts, ends or fails ([agents.md](agents.md) 5.11; these stand alone, between the turn's other events). `show_in_panel` never sends it. It carries the whole view, not a delta. It never creates a panel item and does not open the right panel. The client patches the session's `workflow` live, so the workflow bar moves while the turn streams; the persisted view arrives with `done` ([agent-panel](../capabilities/agent-panel/spec.md) R19). Every agent. |
 | `rfp-package` | `content: JSON string` `RfpPackageEvent` `{ rfpId, title, files: { name, bytes }[], exportedAt, draft?: boolean }` | `export_rfp_package` or `export_rfp_draft` stored an RFP package in the session workspace (`rfp/<rfpId>/`, or `rfp/<rfpId>/draft/` when `draft` is `true`, [data-model.md](data-model.md) 4.1) this turn; sent just before that tool's `tool-result`. The answer persisted at the end of the turn carries the same value as `rfpPackage` (data-model 3.4.1), and the chat shows the package card with its downloads (#105). RFP Builder sessions only ([rfp](../capabilities/rfp/spec.md)). |
 | `readiness-report` | `content: JSON string` `ReadinessReportEvent` `{ report: ReadinessReport, panelItem: PanelItem }` ([data-model.md](data-model.md)) | `assess_data_readiness` or `get_readiness_report` returned a report this turn; sent just before that tool's `tool-result`. The client shows the scorecard in the right panel (the `panelItem`, kind `readiness`, is also persisted on the session as `show_in_panel` items are). The answer persisted at the end of the turn carries `readinessReport` (data-model 3.4.1), and the chat shows the readiness card. Data Readiness Agent sessions only ([data-readiness](../capabilities/data-readiness/spec.md) R5). |
 | `done` | `session: SessionDoc` | **Terminal, success.** The persisted session with this turn's messages. |
@@ -1009,13 +1042,13 @@ interface StreamMessageRequest {
 **Ordering.**
 
 ```
-[reasoning* | text* | (tool → [visual-updated | panel-item | workflow] → tool-result)*]  interleaved in model order
+[reasoning* | text* | (tool → tool-progress* → [visual-updated | panel-item | workflow] → tool-result)*]  interleaved in model order
  → (optional silent post-processing)
  → done            or            error
 ```
 
-- `tool` always precedes its own `tool-result`; parallel/interleaved calls are possible. `visual-updated`, `panel-item` and `workflow` precede the matching `tool-result` (for an RFP stage auto-drive, which has no tool call of its own, they stand alone).
-- After the model stream ends there can be **silent server-side steps with no events**: a tool-disabled synthesis pass (only if the turn produced no text and no visual; emits one `text` event with the result, or falls back to the fixed message `"I completed the data analysis but could not produce a final response. Please retry your question."`), the **zero-SQL grounding guard** (one corrective pass when a non-empty answer called no tool at all), the verified-query match, and the **careful-mode cross-check** (`crossCheck` verdict). No keepalive is sent during them.
+- `tool` always precedes its own `tool-result`; parallel/interleaved calls are possible. `tool-progress` events fall between a tool's `tool` and its `tool-result`. `visual-updated`, `panel-item` and `workflow` precede the matching `tool-result` (for an RFP stage auto-drive, which has no tool call of its own, they stand alone).
+- After the model stream ends there can be **silent server-side steps with no events**: a tool-disabled synthesis pass (only if the turn produced no text and no visual; emits one `text` event with the result, or falls back to the fixed message `"I completed the data analysis but could not produce a final response. Please retry your question."`), the **zero-SQL grounding guard** (one corrective pass when a non-empty answer called no tool at all), the verified-query match, and the **careful-mode cross-check** (`crossCheck` verdict). No keepalive is sent during them. (While a tool runs, `tool-progress` events, where the tool emits them, act as a keepalive.)
 - **The streamed deltas are not authoritative.** The grounding guard may replace the answer text after it was already streamed. The client must replace its whole message list with `done.session` rather than keep the deltas.
 
 **Termination.**
@@ -1057,14 +1090,14 @@ Pattern: **start, poll, list, download, delete**. Endpoints 36-40.
 - On completion the run is compared with the most recent previous completed run for the same agent, datasource and datasets, and `comparison` (regressions, improvements, unchanged by case id) is attached; a comparison failure never fails the run.
 - Cannot delete a run while it is `running`.
 
-### 3.4 Knowledge bootstrap stream: `POST /knowledge/bootstrap/stream`
+### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
 
-**Request.** `{ datasetId: string }` (dataset name). Same headers and framing as 3.1 (`data: <JSON>\n\n`, HTTP 200 once started; even `datasetId is required` arrives as an `error` event).
+**Request.** No body; the dataset is the `:name` path segment. Same headers and framing as 3.1 (`data: <JSON>\n\n`, HTTP 200 once started; even `dataset is required` or `Dataset "<name>" not found` arrives as an `error` event).
 
 | `type` | Payload | Meaning |
 |---|---|---|
-| `progress` | `{ type:"progress", key: "dataset"\|"schema"\|"sample"\|"draft"\|"save", message: string }` | A stage started. Messages: `Opening dataset “<name>”`, `Reading schema — <n> table(s)`, `Sampling rows — <done> of <total> table(s)` (repeats as tables complete), `Drafting instructions, terms and default filters`, `Saving <n> draft(s) for review`. |
-| `done` | `{ type:"done", created: KnowledgeSnippet[] }` | **Terminal, success.** Persisted drafts (disabled, `source:"mined"`). May be empty. |
+| `progress` | `{ type:"progress", key: "dataset"\|"schema"\|"sample"\|"draft"\|"save", message: string }` | A stage started. Messages: `Opening dataset “<name>”`, `Reading schema — <n> table(s)`, `Sampling rows — <done> of <total> table(s)` (repeats as tables complete), `Drafting concepts, relations, constraints and instructions`, `Saving <n> draft(s) for review`. |
+| `done` | `{ type:"done", created: OntologyItem[] }` | **Terminal, success.** Persisted drafts (disabled, `source:"mined"`). May be empty. |
 | `error` | `{ type:"error", message: string }` | **Terminal, failure.** Reasons as in endpoint 53. |
 
 Note the error text is in **`message`** here but in **`content`** for the chat stream. Clients treat end-of-stream without a terminal event as failure. The shipped client's fallback texts: `"Backend unreachable"`, `"Could not generate suggestions (<status>)"`, `"Could not generate suggestions — try again shortly"`.
@@ -1255,12 +1288,12 @@ No environment variables. The only runtime switch is the page protocol (`file:` 
 
 - **G1. Desktop base URL is hardcoded.** The renderer uses `http://localhost:3000` under `file://`; the preload bridge does not expose the port, so a non-default `BACKEND_PORT` breaks the desktop app (roadmap 1.7.20, BA-109). A rebuild should expose the port via the bridge.
 - **G2. `POST /sessions/:id/messages` is unused** by the frontend and is a degraded duplicate of the streaming path (no tool-data capture, clarification, grounding guard or careful mode). Open question: keep as a public non-streaming API or remove.
-- **G3. `POST /knowledge/bootstrap` is unused** (superseded by the streamed variant); it shares the service call.
+- **G3. `POST /datasets/:name/ontology/bootstrap` is unused** (superseded by the streamed variant); it shares the service call.
 - **G4. Eval run recovery.** In-flight run state lives in memory with write-through persistence per question. Open question: what status a run left `running` by a crash shows after restart (no reconciliation code was found).
 - **G5. Frontend type drift.** The frontend `EvalRunView` omits `comparison` (present on the wire, only used in the Markdown report). The frontend `getEvalRun` result is a loose merge type.
-- **G6. No cascade.** Deleting a datasource leaves datasets pointing at it; deleting a dataset leaves sessions/knowledge that name it. Behaviour of such dangling references is not specified in the API.
+- **G6. No cascade.** Deleting a datasource leaves datasets pointing at it; deleting a dataset deletes its own ontology items but leaves sessions that name it. Behaviour of such dangling references is not specified in the API.
 - **G7. `POST /sessions` does not verify the named datasets exist.** Open question whether that is intended.
-- **G8. Error-style inconsistency.** Style A (`200 { ok:false }`) vs Style B (real 4xx) is endpoint-specific and also differs in list shapes (`{ sessions }`, `{ datasources }`, `{ metrics }`, `{ datasets }`, bare array for knowledge, bare `SessionDoc`). Several read endpoints (`GET /datasources`, eval-run listing) can still return a framework 500.
+- **G8. Error-style inconsistency.** Style A (`200 { ok:false }`) vs Style B (real 4xx) is endpoint-specific and also differs in list shapes (`{ sessions }`, `{ datasources }`, `{ metrics }`, `{ datasets }`, bare array for ontology, bare `SessionDoc`). Several read endpoints (`GET /datasources`, eval-run listing) can still return a framework 500.
 - **G9. Request body size.** No explicit JSON body limit is configured, so the framework default (about 100 kB) applies; large dataset snapshots in `POST /datasets` could exceed it. Not verified against a real large dataset.
 - **G10. Desktop backend bind address.** `main.ts` calls `createApp` without a host, so the Electron-spawned backend listens on **all interfaces** with CORS enabled and no authentication (G14); only the CLI binds `127.0.0.1` by default. Kept by the user's choice (ADR-0030).
 - **G11. `message` timing on feedback.** `POST …/messages/feedback` with `up` reports `"Answer saved as a verified query"` even when the answer had no SQL and nothing was saved.

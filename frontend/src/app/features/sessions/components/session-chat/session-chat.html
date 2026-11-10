@@ -629,6 +629,14 @@
                     [size]="11"
                     class="animate-spin text-fg-muted"
                   />
+                  @if (tool.progress) {
+                    <span
+                      data-testid="tool-progress"
+                      class="min-w-0 truncate text-[12px] text-fg-muted"
+                      [title]="tool.progress.message"
+                      >{{ tool.progress.message }}</span
+                    >
+                  }
                 }
               </div>
               @if (tool.rationale) {
@@ -901,7 +909,7 @@
       <summary
         class="cursor-pointer px-3 py-1.5 text-fg-muted select-none hover:text-fg"
       >
-        Knowledge in context ({{ message.knowledge.length }})
+        Ontology in context ({{ message.knowledge.length }})
       </summary>
       <ul class="flex flex-col gap-2 border-t border-border px-3 py-2">
         @for (item of message.knowledge; track item.id) {
@@ -915,7 +923,7 @@
               >
               <span class="text-fg">{{ item.title }}</span>
               <span class="text-[11px] text-fg-muted">{{
-                item.datasetId ?? "global"
+                item.datasetId ?? "all datasets"
               }}</span>
             </span>
             <span class="leading-5 text-fg-muted">{{ item.body }}</span>
@@ -923,8 +931,8 @@
         }
       </ul>
       <p class="border-t border-border px-3 py-1.5 text-[11px] text-fg-muted">
-        Curated knowledge the assistant was given before answering. Edit it
-        under Knowledge; disabled snippets are never included.
+        The dataset ontology the assistant was given before answering. Edit it
+        in the dataset's Ontology tab; disabled items are never included.
       </p>
     </details>
   }

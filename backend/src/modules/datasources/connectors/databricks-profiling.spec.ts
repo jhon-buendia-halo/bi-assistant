@@ -34,6 +34,31 @@ describe('DatabricksProfiler', () => {
     }));
   });
 
+  it('connects with the bare hostname when the stored host has https:// and a trailing slash (BA-322)', async () => {
+    const connect = jest.fn().mockResolvedValue(undefined);
+    (DBSQLClient as unknown as jest.Mock).mockImplementation(() => ({
+      connect,
+      openSession: jest.fn().mockResolvedValue({
+        executeStatement: jest.fn().mockResolvedValue({
+          fetchAll: () => Promise.resolve([{ total: '1' }]),
+        }),
+        close: jest.fn().mockResolvedValue(undefined),
+      }),
+      close: jest.fn().mockResolvedValue(undefined),
+    }));
+    await profiler.columnStats(
+      { ...config, host: '  https://dbc-1.cloud.databricks.com/  ' },
+      'cat.sch',
+      't',
+      [],
+      ['a'],
+      [],
+    );
+    expect(connect).toHaveBeenCalledWith(
+      expect.objectContaining({ host: 'dbc-1.cloud.databricks.com' }),
+    );
+  });
+
   it('columnStats flattens catalog.schema, backtick-quotes and maps results', async () => {
     responder = () => [
       { total: '10', n0: '2', d0: '5', d1: 3, mn0: '1', mx0: '9' },
@@ -296,5 +321,244 @@ describe('DatabricksProfiler', () => {
     } finally {
       global.fetch = orig;
     }
+  });
+
+  it('rowCount runs SELECT COUNT(*) on the qualified table', async () => {
+    responder = () => [{ n: '42' }];
+    expect(await profiler.rowCount(config, 'c.s', 't')).toBe(42);
+    expect(sqls[0]).toContain('SELECT COUNT(*) AS n FROM `c`.`s`.`t`');
+  });
+
+  it('columnStats folds normalized-distinct and format aggregates into one SELECT', async () => {
+    responder = () => [{ total: '10', d0: '5', nd0: '4', nd1: 2, f0: '3' }];
+    const out = await profiler.columnStats(config, 'c.s', 't', [], ['a'], [], {
+      normalizedDistinct: ['n', 'm'],
+      formats: [{ column: 'e', pattern: '^a\\d$' }],
+    });
+    expect(sqls).toHaveLength(1);
+    expect(sqls[0]).toContain(
+      'COUNT(DISTINCT lower(trim(CAST(`n` AS STRING)))) AS nd0',
+    );
+    expect(sqls[0]).toContain(
+      "COUNT_IF(`e` IS NOT NULL AND NOT regexp_like(CAST(`e` AS STRING), r'(?i)^a\\d$')) AS f0",
+    );
+    expect(out.normalizedDistinctCounts).toEqual({ n: 4, m: 2 });
+    expect(out.invalidFormatCounts).toEqual({ e: 3 });
+  });
+
+  it('columnStats with only a normalized-distinct extra is a valid SELECT', async () => {
+    responder = () => [{ total: '10', nd0: '4' }];
+    const out = await profiler.columnStats(config, 'c.s', 't', [], [], [], {
+      normalizedDistinct: ['n'],
+    });
+    expect(sqls[0]).toBe(
+      'SELECT COUNT(*) AS total, COUNT(DISTINCT lower(trim(CAST(`n` AS STRING)))) AS nd0 FROM `c`.`s`.`t`',
+    );
+    expect(out.normalizedDistinctCounts).toEqual({ n: 4 });
+  });
+
+  describe('withSessions', () => {
+    interface Op {
+      fetchAll: jest.Mock;
+      cancel: jest.Mock;
+      close: jest.Mock;
+    }
+    let clients: { connect: jest.Mock; close: jest.Mock }[];
+    let sessionCloses: jest.Mock[];
+    let ops: Op[];
+    let behaviour: (sql: string) => Promise<unknown[]>;
+    let active: number;
+    let maxActive: number;
+
+    beforeEach(() => {
+      clients = [];
+      sessionCloses = [];
+      ops = [];
+      active = 0;
+      maxActive = 0;
+      behaviour = () => Promise.resolve([]);
+      (DBSQLClient as unknown as jest.Mock).mockImplementation(() => {
+        const sessionClose = jest.fn().mockResolvedValue(undefined);
+        sessionCloses.push(sessionClose);
+        const session = {
+          executeStatement: jest.fn((sql: string) => {
+            const op: Op = {
+              fetchAll: jest.fn(async () => {
+                active++;
+                maxActive = Math.max(maxActive, active);
+                try {
+                  return await behaviour(sql);
+                } finally {
+                  active--;
+                }
+              }),
+              cancel: jest.fn().mockResolvedValue(undefined),
+              close: jest.fn().mockResolvedValue(undefined),
+            };
+            ops.push(op);
+            return Promise.resolve(op);
+          }),
+          close: sessionClose,
+        };
+        const client = {
+          connect: jest.fn().mockResolvedValue(undefined),
+          openSession: jest.fn().mockResolvedValue(session),
+          close: jest.fn().mockResolvedValue(undefined),
+        };
+        clients.push(client);
+        return client;
+      });
+    });
+
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+
+    it('reuses at most `size` sessions, queues the rest and closes all', async () => {
+      behaviour = async () => {
+        await tick();
+        return [{ n: '1' }];
+      };
+      const out = await profiler.withSessions(config, 2, undefined, async (p) =>
+        Promise.all(
+          Array.from({ length: 6 }, (_, i) =>
+            p.rowCount(config, 'c.s', `t${i}`),
+          ),
+        ),
+      );
+      expect(out).toEqual([1, 1, 1, 1, 1, 1]);
+      expect(clients).toHaveLength(2);
+      expect(maxActive).toBeLessThanOrEqual(2);
+      expect(ops).toHaveLength(6);
+      for (const c of clients) {
+        expect(c.connect).toHaveBeenCalledWith(
+          expect.objectContaining({ telemetryEnabled: false }),
+        );
+        expect(c.close).toHaveBeenCalledTimes(1);
+      }
+      for (const c of sessionCloses) expect(c).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens sessions lazily and closes them when fn throws', async () => {
+      await expect(
+        profiler.withSessions(config, 3, undefined, async (p) => {
+          await p.rowCount(config, 'c.s', 't');
+          throw new Error('boom dapiSECRET');
+        }),
+      ).rejects.toThrow('boom ***');
+      expect(clients).toHaveLength(1);
+      expect(clients[0].close).toHaveBeenCalledTimes(1);
+      expect(sessionCloses[0]).toHaveBeenCalledTimes(1);
+    });
+
+    it('abort cancels the in-flight operation and rejects with AbortError', async () => {
+      behaviour = () => new Promise(() => undefined);
+      const ctrl = new AbortController();
+      const result = profiler
+        .withSessions(config, 2, ctrl.signal, async (p) => {
+          const first = p.rowCount(config, 'c.s', 't');
+          const second = p.rowCount(config, 'c.s', 'u');
+          await tick();
+          await tick();
+          ctrl.abort();
+          const late = p.rowCount(config, 'c.s', 'v');
+          const settled = await Promise.allSettled([first, second, late]);
+          return settled.map((s) =>
+            s.status === 'rejected' ? (s.reason as Error).name : 'ok',
+          );
+        })
+        .catch((e: Error) => e);
+      const names = await result;
+      expect(names).toEqual(['AbortError', 'AbortError', 'AbortError']);
+      expect(ops.length).toBeGreaterThanOrEqual(2);
+      expect(ops[0].cancel).toHaveBeenCalled();
+      expect(ops[1].cancel).toHaveBeenCalled();
+      expect(clients.every((c) => c.close.mock.calls.length === 1)).toBe(true);
+    });
+
+    it('a straggler after fn rejected neither opens nor leaks a session', async () => {
+      behaviour = () => Promise.resolve([{ n: '1' }]);
+      let scoped!: {
+        rowCount: (c: typeof config, s: string, t: string) => Promise<number>;
+      };
+      let first!: Promise<number>;
+      await expect(
+        profiler.withSessions(config, 2, undefined, (p) => {
+          scoped = p;
+          first = p.rowCount(config, 'c.s', 't');
+          first.catch(() => undefined);
+          return Promise.reject(new Error('fn failed'));
+        }),
+      ).rejects.toThrow('fn failed');
+      await first.catch(() => undefined);
+      expect(clients).toHaveLength(1);
+      await expect(scoped.rowCount(config, 'c.s', 'u')).rejects.toThrow(
+        /closed/,
+      );
+      expect(clients).toHaveLength(1);
+      expect(clients[0].close).toHaveBeenCalledTimes(1);
+      expect(sessionCloses[0]).toHaveBeenCalledTimes(1);
+    });
+
+    it('a statement that times out is cancelled and reports a TimeoutError', async () => {
+      jest.useFakeTimers();
+      try {
+        behaviour = () => new Promise(() => undefined);
+        const p = profiler
+          .withSessions(config, 1, undefined, (s) =>
+            s.rowCount(config, 'c.s', 't'),
+          )
+          .catch((e: Error) => e);
+        await jest.advanceTimersByTimeAsync(16_000);
+        const err = (await p) as Error;
+        expect(err.name).toBe('TimeoutError');
+        expect(err.message).toContain('timed out');
+        expect(ops[0].cancel).toHaveBeenCalled();
+        expect(ops[0].close).toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('reads the whole inventory once per scope for tables and tablePrivileges', async () => {
+      const seen: string[] = [];
+      behaviour = () => Promise.resolve([]);
+      const origExec = (
+        DBSQLClient as unknown as jest.Mock
+      ).getMockImplementation()!;
+      (DBSQLClient as unknown as jest.Mock).mockImplementation(() => {
+        const client = origExec() as {
+          openSession: jest.Mock;
+        };
+        const open = client.openSession;
+        client.openSession = jest.fn(async () => {
+          const s = (await open()) as {
+            executeStatement: (sql: string) => Promise<unknown>;
+          };
+          const exec = s.executeStatement;
+          s.executeStatement = (sql: string) => {
+            seen.push(sql);
+            return exec(sql);
+          };
+          return s;
+        });
+        return client;
+      });
+      const fetchMock = jest.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ catalogs: [], schemas: [] }),
+        }),
+      );
+      const orig = global.fetch;
+      global.fetch = fetchMock as unknown as typeof fetch;
+      try {
+        await profiler.withSessions(config, 2, undefined, async (p) => {
+          await p.tables(config);
+          await p.tablePrivileges(config);
+        });
+      } finally {
+        global.fetch = orig;
+      }
+      expect(seen.filter((q) => q === 'SHOW CATALOGS')).toHaveLength(1);
+    });
   });
 });

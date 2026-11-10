@@ -1,0 +1,7 @@
+Impacted E2E, web target, branch feat/BA-318-datasource-metadata at 4a12b45, run together on 2026-11-09 (19 passed, 1 failed: the visual-baseline test has no win32 baseline on this Windows machine and fails the same way on main).
+  ok  1 [web] › e2e\data-readiness.spec.ts:434:5 › start chat is blocked without a PostgreSQL or Databricks dataset (5.1s)
+  ok  2 [web] › e2e\data-readiness.spec.ts:457:5 › assessing a dataset from the chat shows the scorecard (6.1s)
+  ok  3 [web] › e2e\data-readiness.spec.ts:636:5 › A table too large to profile is listed as not profiled (9.7s)
+  ok  4 [web] › e2e\data-readiness.spec.ts:675:5 › the scorecard shows the same numbers as the API (5.4s)
+  ok  5 [web] › e2e\data-readiness.spec.ts:701:5 › past assessments lists and reopens earlier reports (5.8s)
+  ok  6 [web] › e2e\data-readiness.spec.ts:752:5 › filtering findings by dimension and severity (5.6s)
