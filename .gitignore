@@ -9,5 +9,9 @@ dist
 .context
 .env
 
+# The improvement loop's working folder (docs/evals/loop/program.md):
+# its data dir, build snapshots, run files, exports and fixer worktrees.
+.eval-loop/
+
 # scripts/qa.mjs reports and logs (delivery.md 13)
 /.qa-reports/

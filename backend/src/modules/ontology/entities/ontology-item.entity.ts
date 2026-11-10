@@ -75,16 +75,28 @@ export interface OntologyItemInput {
   metricId?: unknown;
 }
 
-/** The kind tag an item carries in the per-turn block and the trail. */
+/**
+ * The kind tag an item carries in the per-turn block and the trail, or for an
+ * entry of the learned block a signal's kind or `summary` (data-model 3.9).
+ */
 export type KnowledgeUseKind =
-  'term' | 'default_filter' | 'instruction' | 'relation';
+  | 'term'
+  | 'default_filter'
+  | 'instruction'
+  | 'relation'
+  | 'verified_query'
+  | 'correction'
+  | 'rejection'
+  | 'summary';
 
 /**
  * An ontology item as it was handed to the assistant for one turn. Recorded
  * at context-assembly time, not inferred afterwards: only items that actually
  * fit inside the block's character budget are captured, so the trail can
  * never claim knowledge the model never saw. Stored on a message as
- * `knowledge`; the shape predates the ontology and is kept.
+ * `knowledge`; the shape predates the ontology and is kept. The summaries and
+ * signals of the turn's learned block follow the items, marked
+ * `source: 'memory'`.
  */
 export interface KnowledgeUse {
   id: string;
@@ -93,6 +105,8 @@ export interface KnowledgeUse {
   title: string;
   /** Description (concept, instruction), predicate (constraint) or `"<from> <type> <to>"` (relation). */
   body: string;
-  /** Dataset the item belongs to; absent for a shared item. */
+  /** Dataset the item belongs to; absent for a shared item or a memory entry. */
   datasetId?: string;
+  /** `memory` on an entry of the learned block; absent on an item. */
+  source?: 'memory';
 }

@@ -1,0 +1,112 @@
+# REST-only references through the connector, per variant, against PostgreSQL
+
+## rest-connector-paging-player-count
+PostgreSQL (truth): [{"players":50}]
+page     [{"players":50}]  (17 ms)
+offset   [{"players":50}]  (5 ms)
+cursor   [{"players":50}]  (4 ms)
+next-url ERROR REST API — endpoint "players": HTTP 400 — {"error":"Invalid page_token \"http://127.0.0.1:55093/api/world_cup/players?page_token=bzoyMA&limit=20\"."}  (1 ms)
+
+## rest-connector-paging-goalkeepers
+PostgreSQL (truth): [{"goalkeepers":13}]
+page     [{"goalkeepers":13}]  (7 ms)
+offset   [{"goalkeepers":13}]  (5 ms)
+cursor   [{"goalkeepers":13}]  (5 ms)
+next-url ERROR REST API — endpoint "players": HTTP 400 — {"error":"Invalid page_token \"http://127.0.0.1:55093/api/world_cup/players?page_token=bzoyMA&limit=20\"."}  (3 ms)
+
+## rest-connector-paging-last-page-player
+PostgreSQL (truth): [{"player":"Fernando Muslera","national_team":"Uruguay"}]
+page     [{"player":"Fernando Muslera","national_team":"Uruguay"}]  (6 ms)
+offset   [{"player":"Fernando Muslera","national_team":"Uruguay"}]  (6 ms)
+cursor   [{"player":"Fernando Muslera","national_team":"Uruguay"}]  (2 ms)
+next-url ERROR REST API — endpoint "players": HTTP 400 — {"error":"Invalid page_token \"http://127.0.0.1:55093/api/world_cup/players?page_token=bzoyMA&limit=20\"."}  (3 ms)
+
+## rest-connector-paging-top-scorers
+PostgreSQL (truth): [{"player":"Kylian Mbappe","goals":4},{"player":"Lionel Messi","goals":4}]
+page     [{"player":"Kylian Mbappe","goals":4},{"player":"Lionel Messi","goals":4}]  (7 ms)
+offset   [{"player":"Kylian Mbappe","goals":4},{"player":"Lionel Messi","goals":4}]  (5 ms)
+cursor   [{"player":"Kylian Mbappe","goals":4},{"player":"Lionel Messi","goals":4}]  (6 ms)
+next-url ERROR REST API — endpoint "goals": HTTP 400 — {"error":"Invalid page_token \"http://127.0.0.1:55093/api/world_cup/goals?page_token=bzoyMA&limit=20\"."}  (3 ms)
+
+## rest-connector-nested-away-wins
+PostgreSQL (truth): 4 rows: Uruguay-France, Brazil-Belgium, Sweden-England (2018), England-France (2022)
+page     4 rows: [{"tournament_year":2018,"stage":"quarter_final","home_team":"Uruguay","away_team":"France","home_goals":0,"away_goals":2},{"tournament_year":2018,"st…  (4 ms)
+offset   4 rows: [{"tournament_year":2018,"stage":"quarter_final","home_team":"Uruguay","away_team":"France","home_goals":0,"away_goals":2},{"tournament_year":2018,"st…  (3 ms)
+cursor   4 rows: [{"tournament_year":2018,"stage":"quarter_final","home_team":"Uruguay","away_team":"France","home_goals":0,"away_goals":2},{"tournament_year":2018,"st…  (2 ms)
+next-url 4 rows: [{"tournament_year":2018,"stage":"quarter_final","home_team":"Uruguay","away_team":"France","home_goals":0,"away_goals":2},{"tournament_year":2018,"st…  (2 ms)
+
+## rest-connector-nested-busiest-city
+PostgreSQL (truth): [{"city":"Lusail","matches":3},{"city":"Saint Petersburg","matches":3}]
+page     [{"city":"Lusail","matches":3},{"city":"Saint Petersburg","matches":3}]  (5 ms)
+offset   [{"city":"Lusail","matches":3},{"city":"Saint Petersburg","matches":3}]  (3 ms)
+cursor   [{"city":"Lusail","matches":3},{"city":"Saint Petersburg","matches":3}]  (2 ms)
+next-url [{"city":"Lusail","matches":3},{"city":"Saint Petersburg","matches":3}]  (2 ms)
+
+## rest-connector-rows-pointer-group
+PostgreSQL (truth): [{"group_letter":"F"}]
+page     [{"group_letter":"F"}]  (4 ms)
+offset   [{"group_letter":"F"}]  (2 ms)
+cursor   [{"group_letter":"F"}]  (2 ms)
+next-url [{"group_letter":"F"}]  (3 ms)
+
+## rest-connector-cap-total-shots
+PostgreSQL (truth): [{"total_shots":412}]
+page     [{"total_shots":267}]  (2 ms)
+offset   [{"total_shots":267}]  (2 ms)
+cursor   [{"total_shots":267}]  (2 ms)
+next-url [{"total_shots":267}]  (2 ms)
+
+## rest-connector-down-shirt-number
+PostgreSQL (truth): (no reference: the case needs the refused endpoint)
+
+## rest-connector-auth-champion-2018
+PostgreSQL (truth): [{"champion":"France"}]
+page     [{"champion":"France"}]  (4 ms)
+offset   [{"champion":"France"}]  (3 ms)
+cursor   [{"champion":"France"}]  (2 ms)
+next-url [{"champion":"France"}]  (2 ms)
+
+## rest-connector-dialect-final-weekday
+PostgreSQL (truth): [{"tournament_year":2018,"weekday":"Sunday"},{"tournament_year":2022,"weekday":"Sunday"}]
+page     [{"tournament_year":2018,"weekday":"Sunday"},{"tournament_year":2022,"weekday":"Sunday"}]  (4 ms)
+offset   [{"tournament_year":2018,"weekday":"Sunday"},{"tournament_year":2022,"weekday":"Sunday"}]  (3 ms)
+cursor   [{"tournament_year":2018,"weekday":"Sunday"},{"tournament_year":2022,"weekday":"Sunday"}]  (2 ms)
+next-url [{"tournament_year":2018,"weekday":"Sunday"},{"tournament_year":2022,"weekday":"Sunday"}]  (3 ms)
+
+## rest-connector-dialect-penalty-share
+PostgreSQL (truth): [{"penalty_share_pct":25}]
+page     [{"penalty_share_pct":25}]  (6 ms)
+offset   [{"penalty_share_pct":25}]  (6 ms)
+cursor   [{"penalty_share_pct":25}]  (4 ms)
+next-url ERROR REST API — endpoint "goals": HTTP 400 — {"error":"Invalid page_token \"http://127.0.0.1:55093/api/world_cup/goals?page_token=bzoyMA&limit=20\"."}  (2 ms)
+
+# BA-11 reproductions (one connector call each)
+
+1. Default row cap: policy_sales has 10822 rows (PostgreSQL); discovery defaults (page size 200, no maxRows), marketing API on 55096
+  SELECT COUNT(*) AS n FROM api.marketing_analytics.policy_sales
+  -> [{"n":10000}]  (87 ms)
+
+2. 50-page limit: transactions has 5400 rows (PostgreSQL); page style with no page size set (connector default 100), finance API on 55095
+  SELECT COUNT(*) AS n FROM api.finance.transactions
+  -> [{"n":5000}]  (82 ms)
+
+3. Silent maxRows cap: match_team_statistics has 32 rows, 412 shots (PostgreSQL); maxRows 20, connector API page style on 55090
+  SELECT COUNT(*) AS n, SUM(shots) AS shots FROM api.world_cup.match_team_statistics
+  -> [{"n":20,"shots":267}]  (2 ms)
+
+4. Next-page URL: players has 50 rows; the API returns `next` as a URL (OData nextLink, DRF next), discovery proposes cursor style with cursorParam page_token, cursorPointer /next; connector API next-url style on 55093
+  SELECT COUNT(*) AS n FROM api.world_cup.players
+  -> ERROR REST API — endpoint "players": HTTP 400 — {"error":"Invalid page_token \"http://127.0.0.1:55093/api/world_cup/players?page_token=bzoyMA&limit=20\"."}  (2 ms)
+
+5. Refused endpoint, no Retry-After: squad_members answers 503 (connector API on 55090)
+  SELECT COUNT(*) AS n FROM api.world_cup.squad_members
+  -> ERROR REST API — endpoint "squad_members": HTTP 503 — {"error":"The squad_members endpoint is temporarily unavailable."}  (7013 ms)
+
+6. Refused endpoint with Retry-After: 120 (API on 55097)
+  SELECT COUNT(*) AS n FROM api.world_cup.squad_members
+  -> ERROR REST API — endpoint "squad_members": request timed out after 20s  (120012 ms)
+
+7. A query that names no endpoint loads every endpoint, so one refused endpoint fails it (connector API on 55090, two endpoints)
+  SELECT 1 AS one
+  -> ERROR REST API — endpoint "squad_members": HTTP 503 — {"error":"The squad_members endpoint is temporarily unavailable."}  (7016 ms)
+

@@ -1,0 +1,300 @@
+Marketing analytics: every reference query run before it counts (BA-185, roadmap 1.1.7)
+Date: 2026-10-13. Worktree base commit: 03cde13 (uncommitted Step 1d work on top).
+Seed: backend/src/modules/testing-data/fixtures/007_marketing_analytics.sql, 662630 bytes, sha256 9752d9f8c1f623b6af8cabaabfcc577ed32722958faff9d3ee6198886514a367,
+written by docker/postgres/generate/marketing-analytics.ts (seed 20261013; two runs give the same bytes).
+Database: ba9_marketing_analytics on the shared compose PostgreSQL (127.0.0.1:55432), created for this check only.
+
+== 1. The eval:validate path ==
+The fixture was loaded through TestingDataService.load (the Testing Data panel's path) into a scratch app data
+dir, then the validator's validateEvalSet ran on the saved 'Marketing Analytics' dataset exactly as
+'EVAL_SET=marketing-analytics EVAL_DATASETS="Marketing Analytics" npm run eval:validate' does. It ran from
+source with ts-node instead of the npm script, because the npm script runs nest build and dist was frozen.
+
+Testing Data load: ok - Seeded marketing_analytics on 127.0.0.1:55432 and loaded 14 entities into dataset "Marketing Analytics" 
+
+Validating Marketing Analytics (marketing-analytics, postgres) on Marketing Analytics
+
+✓ fiscal-quarter-of-july-2024  postgres  1 rows
+✓ digital-channels  postgres  2 rows
+✓ latest-final-quarter  postgres  1 rows
+✓ spring-home-refresh-dates  postgres  1 rows
+✓ harborline-headquarters  postgres  1 rows
+✓ harborline-pet-launch  postgres  1 rows
+✓ harborline-policies-sold-2025-q2  postgres  1 rows
+✓ market-premium-by-line-2025  postgres  5 rows
+✓ harborline-premium-by-currency-2025  postgres  1 rows
+✓ harborline-campaign-spend-2025  postgres  1 rows
+✓ market-policies-by-channel-2025  postgres  4 rows
+✓ harborline-earned-premium-by-quarter-2025  postgres  4 rows
+✓ gov-auto-premium-vs-market-q2-2025  postgres  1 rows
+✓ gov-pinecrest-pet-vs-rest-2025  postgres  1 rows
+✓ harborline-premium-by-region-2025  postgres  4 rows
+✓ market-premium-by-family-and-region-2025  postgres  12 rows
+✓ harborline-leads-by-line-2025  postgres  5 rows
+✓ northeast-auto-policies-q4-2025  postgres  3 rows
+✓ harborline-spend-by-channel-2025  postgres  4 rows
+✓ top-auto-state-q4-2025  postgres  2 rows
+✓ top-three-campaigns-by-leads-2025  postgres  3 rows
+✓ fastest-growing-line-2024-to-2025  postgres  1 rows
+✓ top-five-states-2025  postgres  5 rows
+✓ lowest-premium-channel-2025  postgres  1 rows
+✓ gov-fastest-growing-competitor  postgres  1 rows
+✓ top-ctr-campaigns-2025  postgres  3 rows
+✓ best-lead-to-policy-channel-2025  postgres  1 rows
+✓ top-budget-share-campaigns-2025  postgres  3 rows
+✓ largest-market-share-line-2025  postgres  1 rows
+✓ premium-per-policy-top-line-2025  postgres  1 rows
+✓ highest-digital-share-region-2025  postgres  1 rows
+✓ harborline-revenue-2025  postgres  1 rows
+✓ highest-walk-away-rate-channel-2025  postgres  1 rows
+✓ lowest-cost-per-acquisition-channel-2025  postgres  1 rows
+✓ harborline-walk-aways-2025  postgres  1 rows
+✓ harborline-premium-fiscal-2025  postgres  1 rows
+✓ top-promo-code-by-leads  postgres  1 rows
+✓ quarter-without-campaign-spend  postgres  1 rows
+✓ top-channel-q2-2025  postgres  1 rows
+✓ harborline-policies-all-periods  postgres  1 rows
+✓ chart-harborline-premium-by-quarter  postgres  8 rows
+✓ campaign-freeze-impact  postgres  3 rows
+
+marketing-analytics: 42 of 42 reference queries passed; 8 cases have no reference query.
+
+== 2. Rows, planted facts and trap queries ==
+Each reference again, with its rows; where a planted fact applies, the rows compared with
+backend/scripts/fixtures/marketing-analytics/facts.json; and the trap query from the case notes compared with
+the reference through the result-set check's comparator (compareResults, width-tolerant): it must NOT match.
+
+Set marketing-analytics (50 questions, 16 held-out), database ba9_marketing_analytics, dialect postgres
+
+✓  fiscal-quarter-of-july-2024  [lookup, dev]  postgres  1 rows
+      {"fiscal_year":2025,"fiscal_quarter":1}
+    trap: differs (1 rows: [{"calendar_year":2024,"calendar_quarter":3}])
+✓  digital-channels  [lookup, dev]  postgres  2 rows
+      {"name":"Direct online"}
+      {"name":"Mobile app"}
+    trap: differs (1 rows: [{"name":"Direct online"}])
+✓  latest-final-quarter  [lookup, held-out]  postgres  1 rows
+      {"period_code":"2025-Q3"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"period_code":"2026-Q1"}])
+✓  spring-home-refresh-dates  [lookup, dev]  postgres  1 rows
+      {"starts_on":"2025-03-01T05:00:00.000Z","ends_on":"2025-05-31T05:00:00.000Z"}
+    trap: differs (1 rows: [{"starts_on":"2025-01-01T05:00:00.000Z","ends_on":"2025-06-30T05:00:00.000Z"}])
+✓  harborline-headquarters  [lookup, held-out]  postgres  1 rows
+      {"name":"Massachusetts"}
+    trap: differs (1 rows: [{"hq_state_id":"2"}])
+✓  harborline-pet-launch  [lookup, dev]  postgres  1 rows
+      {"name":"Paws Plus","launched_on":"2024-05-13T05:00:00.000Z"}
+    trap: differs (1 rows: [{"min":"2024-04-01T05:00:00.000Z"}])
+✓  harborline-policies-sold-2025-q2  [aggregate, dev]  postgres  1 rows
+      {"policies_sold":"12415"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"policies":"20510"}])
+✓  market-premium-by-line-2025  [aggregate, dev]  postgres  5 rows
+      {"written_premium_dollars":"183070264.13000000"}
+      {"written_premium_dollars":"115984907.14000000"}
+      {"written_premium_dollars":"13845526.060000000000"}
+      {"written_premium_dollars":"12305787.460000000000"}
+      {"written_premium_dollars":"7165728.090000000000"}
+    trap: differs (5 rows)
+✓  harborline-premium-by-currency-2025  [aggregate, held-out]  postgres  1 rows
+      {"currency_code":"USD","written_premium_dollars":"55064556.780000000000"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"currency_code":"USD","rows_":"1138"}])
+✓  harborline-campaign-spend-2025  [aggregate, dev]  postgres  1 rows
+      {"spend_dollars":"678055.930000000000"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"?column?":"712632.000000000000"}])
+✓  market-policies-by-channel-2025  [aggregate, dev]  postgres  4 rows
+      {"policies_sold":"115902"}
+      {"policies_sold":"83985"}
+      {"policies_sold":"42025"}
+      {"policies_sold":"41106"}
+    trap: differs (4 rows)
+✓  harborline-earned-premium-by-quarter-2025  [aggregate, dev]  postgres  4 rows
+      {"earned_premium_dollars":"12253213.090000000000"}
+      {"earned_premium_dollars":"12452710.330000000000"}
+      {"earned_premium_dollars":"13086078.050000000000"}
+      {"earned_premium_dollars":"13384320.300000000000"}
+    trap: differs (4 rows)
+✓  gov-auto-premium-vs-market-q2-2025  [aggregate, dev]  postgres  1 rows
+      {"harborline_dollars":"7706049.370000000000","market_dollars":"51837930.580000000000"}
+    facts.json: agrees
+    trap: differs (6 rows)
+✓  gov-pinecrest-pet-vs-rest-2025  [aggregate, held-out]  postgres  1 rows
+      {"pinecrest_dollars":"369903.650000000000","rest_of_market_dollars":"6795824.440000000000"}
+    facts.json: agrees
+    trap: differs (3 rows: [{"name":"Crestview Insurance","?column?":"4423176.850000000000"},{"name":"Harborline Mutual","?column?":"2372647.590000000000"},{"name":"Pinecrest Casualty","?column?":"369903.650000000000"}])
+✓  harborline-premium-by-region-2025  [join, dev]  postgres  4 rows
+      {"written_premium_dollars":"18671935.670000000000"}
+      {"written_premium_dollars":"13416857.070000000000"}
+      {"written_premium_dollars":"12421641.260000000000"}
+      {"written_premium_dollars":"10554122.780000000000"}
+    trap: differs (8 rows)
+✓  market-premium-by-family-and-region-2025  [join, held-out]  postgres  12 rows
+      {"written_premium_dollars":"82715341.750000000000"}
+      {"written_premium_dollars":"80116858.240000000000"}
+      {"written_premium_dollars":"75417360.790000000000"}
+      {"written_premium_dollars":"73111397.950000000000"}
+      {"written_premium_dollars":"3851755.980000000000"}
+      {"written_premium_dollars":"3384697.730000000000"}
+      {"written_premium_dollars":"3384669.080000000000"}
+      {"written_premium_dollars":"3224403.270000000000"}
+      {"written_premium_dollars":"2017385.460000000000"}
+      {"written_premium_dollars":"1901331.310000000000"}
+      {"written_premium_dollars":"1703959.740000000000"}
+      {"written_premium_dollars":"1543051.580000000000"}
+    trap: differs (20 rows)
+✓  harborline-leads-by-line-2025  [join, dev]  postgres  5 rows
+      {"leads":"11076"}
+      {"leads":"4102"}
+      {"leads":"1971"}
+      {"leads":"1477"}
+      {"leads":"1073"}
+    trap: differs (5 rows)
+✓  northeast-auto-policies-q4-2025  [join, dev]  postgres  3 rows
+      {"policies_sold":"1062"}
+      {"policies_sold":"523"}
+      {"policies_sold":"356"}
+    facts.json: agrees
+    trap: differs (3 rows: [{"name":"Massachusetts","sum":"1150"},{"name":"New York","sum":"2128"},{"name":"Pennsylvania","sum":"1112"}])
+✓  harborline-spend-by-channel-2025  [join, held-out]  postgres  4 rows
+      {"spend_dollars":"232004.230000000000"}
+      {"spend_dollars":"204602.800000000000"}
+      {"spend_dollars":"174259.800000000000"}
+      {"spend_dollars":"67189.100000000000"}
+    trap: differs (4 rows)
+✓  top-auto-state-q4-2025  [ranking, dev]  postgres  2 rows
+      {"policies":"1062"}
+      {"policies":"1062"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"name":"California","policies":"1062"}])
+✓  top-three-campaigns-by-leads-2025  [ranking, dev]  postgres  3 rows
+      {"name":"Drive Smart Rewards","leads":"6170"}
+      {"name":"Pet Parents Week","leads":"4102"}
+      {"name":"Agent Referral Drive","leads":"3414"}
+    facts.json: agrees
+    trap: differs (3 rows: [{"name":"Momentum Pet health","leads":"7879"},{"name":"Drive Smart Rewards","leads":"6170"},{"name":"Pet Parents Week","leads":"4102"}])
+✓  fastest-growing-line-2024-to-2025  [ranking, held-out]  postgres  1 rows
+      {"name":"Pet health"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"name":"Personal auto"}])
+✓  top-five-states-2025  [ranking, dev]  postgres  5 rows
+      {"name":"California","policies_sold":"38043"}
+      {"name":"Florida","policies_sold":"32189"}
+      {"name":"New York","policies_sold":"31183"}
+      {"name":"Illinois","policies_sold":"25288"}
+      {"name":"Ohio","policies_sold":"24451"}
+    facts.json: agrees
+    trap: differs (5 rows)
+✓  lowest-premium-channel-2025  [ranking, held-out]  postgres  1 rows
+      {"name":"Call center","written_premium_dollars":"7824261.430000000000"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"name":"Call center","premium":"782426143"}])
+✓  gov-fastest-growing-competitor  [ranking, dev]  postgres  1 rows
+      {"competitor_label":"Competitor C"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"name":"Tidewater Insurance Group"}])
+✓  top-ctr-campaigns-2025  [ratio, dev]  postgres  3 rows
+      {"name":"Renters Campus Push"}
+      {"name":"Drive Smart Rewards"}
+      {"name":"Pet Parents Week"}
+    facts.json: agrees
+    trap: differs (3 rows: [{"name":"Drive Smart Rewards"},{"name":"Pet Parents Week"},{"name":"Agent Referral Drive"}])
+✓  best-lead-to-policy-channel-2025  [ratio, held-out]  postgres  1 rows
+      {"name":"Call center"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"name":"Independent agents"}])
+✓  top-budget-share-campaigns-2025  [ratio, dev]  postgres  3 rows
+      {"name":"Renters Campus Push"}
+      {"name":"Year-End Life Check"}
+      {"name":"Spring Home Refresh"}
+    facts.json: agrees
+    trap: differs (3 rows: [{"name":"Agent Referral Drive"},{"name":"Drive Smart Rewards"},{"name":"Pet Parents Week"}])
+✓  largest-market-share-line-2025  [ratio, held-out]  postgres  1 rows
+      {"name":"Pet health"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"name":"Personal auto"}])
+✓  premium-per-policy-top-line-2025  [ratio, dev]  postgres  1 rows
+      {"name":"Homeowners"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"name":"Personal auto"}])
+✓  highest-digital-share-region-2025  [ratio, dev]  postgres  1 rows
+      {"name":"West"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"name":"Northeast"}])
+✓  harborline-revenue-2025  [business-term, dev]  postgres  1 rows
+      {"revenue_dollars":"51761131.220000000000"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"?column?":"55064556.780000000000"}])
+✓  highest-walk-away-rate-channel-2025  [business-term, held-out]  postgres  1 rows
+      {"name":"Mobile app"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"name":"Direct online"}])
+✓  lowest-cost-per-acquisition-channel-2025  [business-term, dev]  postgres  1 rows
+      {"name":"Call center"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"name":"Mobile app"}])
+✓  harborline-walk-aways-2025  [encoding, dev]  postgres  1 rows
+      {"policies":"1995"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"sum":"322"}])
+✓  harborline-premium-fiscal-2025  [encoding, held-out]  postgres  1 rows
+      {"written_premium_dollars":"51360607.470000000000"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"?column?":"55064556.780000000000"}])
+✓  top-promo-code-by-leads  [null, dev]  postgres  1 rows
+      {"promo_code":"PETPAL","leads":"5004"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"promo_code":null,"leads":"21517"}])
+✓  quarter-without-campaign-spend  [null, held-out]  postgres  1 rows
+      {"period_code":"2024-Q3"}
+    facts.json: agrees
+    trap: differs (7 rows)
+✓  top-channel-q2-2025  [default-filter, dev]  postgres  1 rows
+      {"name":"Independent agents","policies_sold":"4419"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"name":"Mobile app","policies":"9971"}])
+-  campaign-data-discovery  [discovery, dev]  no reference (behaviour question)
+-  benchmark-discovery  [discovery, held-out]  no reference (behaviour question)
+-  ambiguous-best-campaign  [ambiguous, dev]  no reference (behaviour question)
+-  ambiguous-strongest-region  [ambiguous, held-out]  no reference (behaviour question)
+-  harborline-sales-q1-2026  [out-of-scope, dev]  no reference (behaviour question)
+-  customer-satisfaction-2025  [out-of-scope, held-out]  no reference (behaviour question)
+-  gov-unmask-competitor  [out-of-scope, dev]  no reference (behaviour question)
+-  lakeshore-indemnity-sales  [non-existent, dev]  no reference (behaviour question)
+✓  harborline-policies-all-periods  [fuzzy-scope, dev]  postgres  1 rows
+      {"policies_sold":"89954"}
+    facts.json: agrees
+    trap: differs (1 rows: [{"sum":"101476"}])
+✓  chart-harborline-premium-by-quarter  [visual, dev]  postgres  8 rows
+      {"written_premium_dollars":"10549776.530000000000"}
+      {"written_premium_dollars":"13238929.460000000000"}
+      {"written_premium_dollars":"11947899.700000000000"}
+      {"written_premium_dollars":"13237616.430000000000"}
+      {"written_premium_dollars":"12085051.990000000000"}
+      {"written_premium_dollars":"14090039.350000000000"}
+      {"written_premium_dollars":"14727826.360000000000"}
+      {"written_premium_dollars":"14161639.080000000000"}
+    trap: differs (8 rows)
+✓  campaign-freeze-impact  [reasoning, dev]  postgres  3 rows
+      {"policies_sold":"11337"}
+      {"policies_sold":"10028"}
+      {"policies_sold":"11457"}
+    facts.json: agrees
+    trap: differs (3 rows: [{"period_code":"2024-Q2","sum":"11836"},{"period_code":"2024-Q3","sum":"10410"},{"period_code":"2024-Q4","sum":"11921"}])
+
+42 references ran, 0 failed; 29 checked against facts.json, 0 disagree; 42 trap queries ran, 0 returned the reference rows or failed.
+
+== 3. Fixed or dropped ==
+Dropped: none. Fixed before the set was committed:
+- harborline-pet-launch: the trap (first quarter with pet sales, 2024-04-01) returned the reference's date because
+  the launch fell on a quarter boundary. The generator now launches Harborline pet health on 2024-05-13.
+- lowest-premium-channel-2025: the trap (lowest channel across all carriers) named the same channel. The question
+  now also asks how much, and the trap is the unit (cents instead of dollars).
+- Generator asserts that failed while tuning the data (walk-away rate leader too close; third and fourth campaign
+  by budget share too close) were fixed in the generator (NTU rates per channel; a fixed pacing per campaign).
+
+Alternative computations checked to agree with the references (so a defensible different method still matches):
+click-through rate, lead-to-policy, budget share and cost per acquisition as the average of quarterly ratios
+instead of sum over sum; walk-away rate as NTU over BOUND instead of NTU over BOUND + NTU. Same winners in every case.

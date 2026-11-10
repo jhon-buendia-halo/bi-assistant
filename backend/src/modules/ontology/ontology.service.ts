@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { KNOWLEDGE_BLOCK_CHARS } from '../../mastra/context-blocks';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { MetricsService } from '../metrics/metrics.service';
 import { OntologyRepository } from './repositories/ontology.repository';
@@ -21,8 +22,6 @@ import type {
   OntologySource,
 } from './entities/ontology-item.entity';
 
-/** Character budget the per-turn ontology block may take (header not counted). */
-const KNOWLEDGE_BLOCK_CHARS = 2_000;
 const BLOCK_HEADER =
   'Curated dataset knowledge (user-authored — treat as authoritative over anything you infer from schema):';
 

@@ -1,0 +1,1384 @@
+{
+  "variants": [
+    {
+      "id": "health-insurance",
+      "name": "Health Insurance",
+      "description": "Questions against the bundled synthetic Health Insurance sample (members, plans, providers and claims of 2024 and 2025, money in cents), each guarding a planted trap. Select its PostgreSQL datasource with a saved dataset containing the health_insurance tables and views; Settings, Testing Data loads both.",
+      "fixtureId": "health-insurance",
+      "dialect": "postgres",
+      "caseIdPrefix": ""
+    }
+  ],
+  "cases": [
+    {
+      "id": "paid-share-by-specialty",
+      "category": "ratio",
+      "split": "dev",
+      "tags": [
+        "trap:ratio-trap",
+        "difficulty:medium"
+      ],
+      "question": "Which specialties are we paying the highest share of what they bill?",
+      "intent": "Divide paid by billed — two genuinely different money columns — instead of dividing one amount column by itself.",
+      "notes": "billed_amount_cents, allowed_amount_cents and paid_amount_cents all read like \"the amount\", so billed/billed or allowed/allowed is one keystroke away and returns 1.0000 for every specialty, turning the ranking into alphabetical noise. Paid over billed across the 1164 non-test claims — the reference obeys the dataset's default filter and drops is_test claims — gives Family Medicine 0.4847, Dermatology 0.4309, Oncology 0.3843, Cardiology 0.3216, Behavioral Health 0.2840, Radiology 0.2442, Orthopedics 0.1895, Emergency Medicine 0.1409 — the smallest gap between adjacent specialties is 0.038, so the ordering is not a rounding artefact. The shares are checked by the result set; the text check only asks for the top specialty by name. Guards against the degenerate-ratio regression where the engine picks two names for the same column. Trap (validated 2026-09-23): the trapSql divides billed by billed and returns 1.0000 for all eight specialties. Accepts a fraction or a percentage — the question names no unit; alternative verified 2026-09-23: ROUND(100.0 * paid / billed, 2) returns the same 8 specialties in the same order, Family Medicine 48.47 down to Emergency Medicine 14.09, each exactly the reference × 100.\n\nTrap query (must return different rows): SELECT provider.specialty, ROUND(CAST(SUM(claim.billed_amount_cents) AS DECIMAL(38,6)) / SUM(claim.billed_amount_cents), 4) AS paid_share_of_billed FROM health_insurance.claims claim JOIN health_insurance.providers provider ON provider.id = claim.provider_id WHERE claim.is_test = false GROUP BY provider.specialty\n\nAlternative reference the branch also accepted: SELECT provider.specialty, ROUND(100.0 * SUM(claim.paid_amount_cents) / SUM(claim.billed_amount_cents), 2) AS paid_share_of_billed_pct FROM health_insurance.claims claim JOIN health_insurance.providers provider ON provider.id = claim.provider_id WHERE claim.is_test = false GROUP BY provider.specialty ORDER BY paid_share_of_billed_pct DESC, provider.specialty\n\nParaphrases: Which specialties get paid the largest portion of the amount they bill us? | Rank the specialties by how much of their billed charges we actually pay.\n\nMoved from feat/engine-eval-loop (branch category ratio-trap, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Family Medicine"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT provider.specialty, ROUND(SUM(claim.paid_amount_cents)::numeric / SUM(claim.billed_amount_cents), 4) AS paid_share_of_billed FROM health_insurance.claims claim JOIN health_insurance.providers provider ON provider.id = claim.provider_id WHERE claim.is_test = false GROUP BY provider.specialty ORDER BY paid_share_of_billed DESC, provider.specialty"
+      }
+    },
+    {
+      "id": "plan-share-of-allowed-by-tier",
+      "category": "ratio",
+      "split": "held-out",
+      "tags": [
+        "trap:ratio-trap",
+        "difficulty:medium"
+      ],
+      "question": "On the claims we paid, what share of the allowed amount did the plan cover rather than the member, by plan tier?",
+      "intent": "The second ratio pair: paid over ALLOWED, not paid over billed and not allowed over allowed.",
+      "notes": "On the 785 non-test PAID claims allowed = paid + member_responsibility, so paid/allowed is the plan's share and it tracks the tier's coinsurance: PLATINUM 0.8664, GOLD 0.8500, SILVER 0.8039, BRONZE 0.7392 — the reference obeys the dataset's default filter and drops is_test claims. Two wrong denominators are equally available: allowed/allowed gives a flat 1.0000, and billed instead of allowed gives GOLD 0.4317, BRONZE 0.3826, SILVER 0.3715, PLATINUM 0.3646 — which inverts the ranking and would report BRONZE members as better covered than PLATINUM ones. The shares are checked by the result set; the text check only asks for the top tier by name. Guards against an answer that is plausible, ordered and wrong because the denominator came from the wrong column. Trap (validated 2026-09-23): the trapSql uses billed instead of allowed as the denominator and returns GOLD 0.4317, BRONZE 0.3826, SILVER 0.3715, PLATINUM 0.3646 — the inverted ranking described above. Accepts a fraction or a percentage — the question names no unit; alternative verified 2026-09-23: ROUND(100.0 * paid / allowed, 2) returns the same 4 tiers, PLATINUM 86.64, GOLD 85.00, SILVER 80.39, BRONZE 73.92, each exactly the reference × 100.\n\nTrap query (must return different rows): SELECT plan.tier, ROUND(CAST(SUM(claim.paid_amount_cents) AS DECIMAL(38,6)) / SUM(claim.billed_amount_cents), 4) AS plan_share FROM health_insurance.claims claim JOIN health_insurance.plans plan ON plan.id = claim.plan_id WHERE claim.status = 'PAID' AND claim.is_test = false GROUP BY plan.tier\n\nAlternative reference the branch also accepted: SELECT plan.tier, ROUND(100.0 * SUM(claim.paid_amount_cents) / SUM(claim.allowed_amount_cents), 2) AS plan_share_of_allowed_pct FROM health_insurance.claims claim JOIN health_insurance.plans plan ON plan.id = claim.plan_id WHERE claim.status = 'PAID' AND claim.is_test = false GROUP BY plan.tier ORDER BY plan_share_of_allowed_pct DESC, plan.tier\n\nParaphrases: By plan tier, how much of the allowed amount on paid claims did the plan pick up versus the member? | For paid claims, what portion of the allowed amount was covered by the plan in each tier?\n\nMoved from feat/engine-eval-loop (branch category ratio-trap, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "PLATINUM"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT plan.tier, ROUND(SUM(claim.paid_amount_cents)::numeric / SUM(claim.allowed_amount_cents), 4) AS plan_share_of_allowed FROM health_insurance.claims claim JOIN health_insurance.plans plan ON plan.id = claim.plan_id WHERE claim.status = 'PAID' AND claim.is_test = false GROUP BY plan.tier ORDER BY plan_share_of_allowed DESC, plan.tier"
+      }
+    },
+    {
+      "id": "claims-by-currency",
+      "category": "aggregate",
+      "split": "dev",
+      "tags": [
+        "trap:constant-column",
+        "difficulty:easy"
+      ],
+      "question": "How do our claims break down by currency?",
+      "intent": "Group by a column that holds exactly one value — the answer has to say so instead of presenting 100% as a finding.",
+      "notes": "currency is 'USD' on all 1200 claims and a CHECK constraint allows nothing else; the reference obeys the dataset's default filter, so its single row covers the 1164 non-test claims. The breakdown is one row either way, and the useful answer states that every claim is in a single currency rather than dressing a constant up as a distribution or implying an FX comparison the data cannot support. Guards against reporting a one-row group-by as if it were a comparison. Trap (validated 2026-09-23): the trapSql infers the currency from the member's country — the rubric's named failure of inventing CAD for Canadian members — and returns USD 1044, CAD 120 against the reference's single USD 1164 row. Grouping by the constant column cannot be the trap here, because it is the reference; the rubric carries that half of the case.\n\nTrap query (must return different rows): SELECT CASE WHEN country.name = 'Canada' THEN 'CAD' ELSE claim.currency END AS currency, COUNT(*) AS claims FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id JOIN health_insurance.states state ON state.id = region.state_id JOIN health_insurance.countries country ON country.code = state.country_code WHERE claim.is_test = false GROUP BY CASE WHEN country.name = 'Canada' THEN 'CAD' ELSE claim.currency END\n\nParaphrases: What currencies are our claims in, and how many claims are in each? | Show me the split of our claims by currency.\n\nMoved from feat/engine-eval-loop (branch category constant-column, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "USD"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT claim.currency, COUNT(*) AS claims FROM health_insurance.claims claim WHERE claim.is_test = false GROUP BY claim.currency ORDER BY claim.currency"
+      },
+      "judgeRubric": "The fixture stores only one currency: every claim is USD, 1164 of them once the dataset's default filter excludes test claims. The correct answer says that all claims are in USD, so there is no currency breakdown to compare. Score pass=true only if the final answer states that every claim is in a single currency (USD) and therefore that there is no breakdown to compare — reporting the count (1164, or 1200 if test claims were kept) or \"100%\" is fine as long as the answer says the column is constant. Score pass=false if it presents the single value as a meaningful distribution, invents a second currency (e.g. CAD, even though some members are Canadian), or implies a currency comparison the data cannot support. Close but wrong: an answer that shows the one-row table \"USD: 1164 claims (100%)\" as a breakdown, or comments on the currency mix or suggests comparing currencies, without ever saying the column holds a single value — that must FAIL."
+    },
+    {
+      "id": "claims-with-preauth",
+      "category": "null",
+      "split": "dev",
+      "tags": [
+        "trap:empty-column",
+        "difficulty:easy"
+      ],
+      "question": "How many claims had a prior authorization on file?",
+      "intent": "Count the populated rows of a mostly-null column instead of grouping by it.",
+      "notes": "preauth_code is non-null on only 57 of the 1164 non-test claims the dataset's default filter keeps (95.10% null) and every populated value is distinct (format PA-<year>-<6 digits>), so grouping by preauth_code returns 58 near-useless groups with 1107 claims hidden under a blank key. The answer must be the count of claims that HAVE an authorization — checked by the result set, not by a text match on 57. Guards against the engine presenting the null group as a finding, or reading the blank key as \"no authorization required\". Trap (validated 2026-09-23): the trapSql groups by preauth_code and returns 58 rows — 57 single-claim codes plus a 1107-claim null bucket — against the reference's single count of 57.\n\nTrap query (must return different rows): SELECT claim.preauth_code, COUNT(*) AS claims FROM health_insurance.claims claim WHERE claim.is_test = false GROUP BY claim.preauth_code\n\nParaphrases: How many of our claims came with a prior authorization? | What's the number of claims that were prior-authorized?\n\nMoved from feat/engine-eval-loop (branch category empty-column, provenance hand).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS claims_with_preauth FROM health_insurance.claims claim WHERE claim.preauth_code IS NOT NULL AND claim.is_test = false"
+      }
+    },
+    {
+      "id": "specialties-with-48-claims",
+      "category": "ranking",
+      "split": "dev",
+      "tags": [
+        "trap:ties",
+        "difficulty:medium"
+      ],
+      "question": "Which specialties submitted exactly 48 claims?",
+      "intent": "A HAVING-style question whose answer is a tie, so no arbitrary tie-break can hide.",
+      "notes": "Oncology and Emergency Medicine each submitted exactly 48 claims; the next smallest specialty is Radiology at 133, so the tie is isolated and it holds whether or not test claims are excluded (both are 48 either way) — the reference still obeys the dataset's default filter rather than modelling the looser form. A \"which specialty submitted the fewest claims\" phrasing would let a LIMIT 1 silently drop one of the tied specialties, so the question asks for the tie explicitly and both names must appear. Guards against answers that report one arbitrary winner from a tied group. Trap (validated 2026-09-23): the trapSql takes the lowest-volume specialty with LIMIT 1 and returns Emergency Medicine alone (48). The default filter cannot serve as this case's trap: the tie holds with test claims included.\n\nTrap query (must return different rows): SELECT provider.specialty, COUNT(*) AS claims FROM health_insurance.claims claim JOIN health_insurance.providers provider ON provider.id = claim.provider_id WHERE claim.is_test = false GROUP BY provider.specialty ORDER BY claims, provider.specialty LIMIT 1\n\nParaphrases: Which specialties have exactly 48 claims on file? | List the specialties that sent us exactly 48 claims.\n\nMoved from feat/engine-eval-loop (branch category ties, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Oncology"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\bEmergency Medicine\\b"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT provider.specialty, COUNT(*) AS claims FROM health_insurance.claims claim JOIN health_insurance.providers provider ON provider.id = claim.provider_id WHERE claim.is_test = false GROUP BY provider.specialty HAVING COUNT(*) = 48 ORDER BY provider.specialty"
+      }
+    },
+    {
+      "id": "approved-claims-2024",
+      "category": "encoding",
+      "split": "dev",
+      "tags": [
+        "trap:value-vocabulary",
+        "difficulty:medium"
+      ],
+      "question": "How many claims were approved in 2024?",
+      "intent": "Map an adjudicator's word onto the enum the status column actually stores.",
+      "notes": "There is no 'APPROVED' status. Across the 1164 non-test claims the dataset's default filter keeps, status is PAID (785), DENIED (206), PENDING (125) or REVERSED (48); in 2024 alone it is PAID 395, DENIED 104, PENDING 70, REVERSED 23. Filtering on the literal word returns 0 rows, and counting every 2024 claim returns 592. The reference obeys the default filter and counts claims whose final status is PAID (395) — REVERSED claims were approved and then unwound, which the answer may mention but must not silently fold in. The count is checked by the result set; the text check asks the answer to name the status it mapped \"approved\" to, case-insensitively (the old case-sensitive PAID failed \"paid claims\"). Guards against both the empty-filter failure and a status vocabulary invented from the question's wording. Trap (validated 2026-09-23): the trapSql filters on the question's own word, status = 'APPROVED', and returns 0 against the reference's 395.\n\nTrap query (must return different rows): SELECT COUNT(*) AS approved_claims FROM health_insurance.claims claim WHERE claim.status = 'APPROVED' AND claim.is_test = false AND claim.service_date >= DATE '2024-01-01' AND claim.service_date < DATE '2025-01-01'\n\nParaphrases: How many claims did we approve in 2024? | What was the count of approved claims for 2024?\n\nMoved from feat/engine-eval-loop (branch category value-vocabulary, provenance hand).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\bPAID\\b"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS approved_claims FROM health_insurance.claims claim WHERE claim.status = 'PAID' AND claim.is_test = false AND claim.service_date >= DATE '2024-01-01' AND claim.service_date < DATE '2025-01-01'"
+      }
+    },
+    {
+      "id": "payouts-2019",
+      "category": "out-of-scope",
+      "split": "dev",
+      "tags": [
+        "trap:out-of-scope",
+        "difficulty:medium"
+      ],
+      "question": "What did we pay out in claims in 2019?",
+      "intent": "The fixture covers 2024 and 2025 only — the agent must say so instead of returning a confident zero or inventing a figure.",
+      "notes": "service_date runs 2024-01-01 to 2025-12-31 (619 claims in 2024, 581 in 2025; 592 and 572 once the dataset's default filter drops test claims) and a CHECK constraint forbids anything else, so a 2019 query returns an empty aggregate, not a small one. A bare '$0.00' is technically true, reads like a finding and is the failure this case exists to catch; the honest answer names the covered window. Member dates of birth (1948-2005) are the only earlier dates in the schema and must not be mistaken for claim history. noToolErrors was retired (no reference SQL, and a coverage probe that errors is not a wrong answer); didNotCall create_visual stays as the one tool check — charting a year with no data is always wrong. Guards against silently answering outside the fixture's coverage.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance hand).",
+      "checks": [
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G2"
+        }
+      ],
+      "judgeRubric": "The question asks about 2019, a year this dataset does not cover: every claim has a service date between 2024-01-01 and 2025-12-31. The correct answer says there is no 2019 claim data and that the data covers 2024 and 2025. Score pass=true only if the final answer makes clear there is no 2019 claim data AND explicitly states the period the data DOES cover (2024 and/or 2025), without inventing any 2019 payout, claim count or trend. Score pass=false if it reports a 2019 figure as if it were a real measurement, presents a bare '0' or '$0' with no statement of what the data covers, or fabricates any claim about 2019 activity. Close but wrong: an answer that says \"$0 was paid in 2019\" with only a vague caveat (\"the data may be incomplete\") and no covered years, or one that states the coverage correctly but then presents a 2024 or 2025 total as the answer to the 2019 question — that must FAIL."
+    },
+    {
+      "id": "most-expensive-member",
+      "category": "ambiguous",
+      "split": "dev",
+      "tags": [
+        "trap:clarification",
+        "difficulty:hard"
+      ],
+      "question": "Who is our most expensive member?",
+      "intent": "\"Expensive\" is undefined on this schema — billed, paid and member responsibility name three different members, so the agent must ask.",
+      "notes": "Three defensible answers sit in the data: Naomi Sedgewick bills the most (13,426,400 cents), Graham Thistlewood costs the plan the most in payments (3,375,050) and Camille Fontaine carries the most member responsibility (924,034). Whichever the agent picks unasked looks authoritative and is unfalsifiable to the reader, so the pass condition is that it asks which cost measure is meant. No noToolErrors: a clarification has no reference SQL. Guards against confident single-metric guesses on an under-specified money question.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance hand).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "ask_clarification"
+          },
+          "criterion": "D5"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D5"
+        }
+      ],
+      "judgeRubric": "The question (\"Who is our most expensive member?\") is ambiguous: \"expensive\" could mean the amount billed by providers, the amount the plan allowed, the amount the plan actually paid, or the amount the member owed — and these pick different members in this data (Naomi Sedgewick by billed amount, Graham Thistlewood by paid amount, Camille Fontaine by member responsibility). The correct answer is a clarifying question such as \"Most expensive by amount billed, by what the plan paid, or by what the member owed?\". Score pass=true only if the final answer is itself a clarifying question that offers 2-4 concrete, well-formed options grounded in this claims dataset (naming real notions such as billed amount, allowed amount, paid amount, member responsibility or claim count), and that does not name a member or state any figure as if it were the answer. Score pass=false if it picks a member, invents a cost measure the data does not hold (e.g. premiums paid by the plan), or asks a vague open-ended question with no concrete options. Close but wrong: an answer that names a member for one measure (e.g. \"Naomi Sedgewick, by billed amount\") and only then offers the other measures as follow-ups, or that asks for clarification but offers a single option — that must FAIL."
+    },
+    {
+      "id": "member-with-most-claims",
+      "category": "ranking",
+      "split": "held-out",
+      "tags": [
+        "trap:id-vs-name",
+        "difficulty:medium"
+      ],
+      "question": "Which member filed the most claims, and how many?",
+      "intent": "claims carries member_id only — the answer has to join through to full_name instead of handing back a surrogate key.",
+      "notes": "The path is claims.member_id -> members.full_name. Naomi Sedgewick filed 42 claims, ahead of Graham Thistlewood on 38, so the maximum is unique and LIMIT 1 with a name tie-break is deterministic; the reference obeys the dataset's default filter, which happens to move neither figure because neither member has a test claim. Grouping on member_id alone answers the question numerically (\"member 7\") and is useless to a claims analyst, and member_number (M-1000NN) is only marginally better. The count is checked by the result set; the text check asks for the name. Guards against answers that hand the reader opaque keys instead of member names. Trap (validated 2026-09-23): the trapSql groups on claims.member_id and returns 23, 42 — Naomi Sedgewick's surrogate key instead of her name.\n\nTrap query (must return different rows): SELECT claim.member_id, COUNT(*) AS claims FROM health_insurance.claims claim WHERE claim.is_test = false GROUP BY claim.member_id ORDER BY claims DESC LIMIT 1\n\nParaphrases: Who has the most claims of any member, and how many do they have? | Which member submitted the largest number of claims, and what is the count?\n\nMoved from feat/engine-eval-loop (branch category id-vs-name, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Naomi Sedgewick"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT member.full_name AS member, COUNT(*) AS claims FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id WHERE claim.is_test = false GROUP BY member.full_name ORDER BY claims DESC, member.full_name LIMIT 1"
+      }
+    },
+    {
+      "id": "net-paid-by-region-2024",
+      "category": "business-term",
+      "split": "dev",
+      "tags": [
+        "trap:metric-definition",
+        "difficulty:hard"
+      ],
+      "question": "What was our net paid by region in 2024?",
+      "intent": "Net paid is a defined metric — gross payments minus reversals — not a plain SUM of paid_amount_cents.",
+      "notes": "The 48 non-test REVERSED claims carry a POSITIVE paid_amount_cents (5,339 to 1,201,981 cents), so summing the column adds money back that was clawed out. Net paid by region in 2024, with the dataset's default filter excluding test claims, is Gulf Coast Texas 6,318,595, Southern California 5,998,841, North Texas 4,087,904, Hudson Valley 3,560,707, Ohio Valley 3,162,873, Northern California 3,133,870, Lower Mainland 1,897,657, Greater Toronto 966,560 cents; the gross figure differs in all eight regions and re-orders them (gross puts Hudson Valley 3rd at 6,374,595 and Ohio Valley 4th, net drops them to 4th and 5th). Region comes from the MEMBER's region_id, not the provider's. The figures are checked by the result set (the old text pattern on 6,318,595 would fail a correct \"$63.2K\"); the text check asks for the top region by name. Guards against the named metric quietly degrading into SUM(paid_amount_cents). Trap (validated 2026-09-23): the trapSql sums paid_amount_cents gross and returns Gulf Coast Texas 6,852,115, Southern California 6,768,269, Hudson Valley 6,374,595, Ohio Valley 4,566,033, North Texas 4,255,354, Northern California 3,747,132, Lower Mainland 2,022,115 and Greater Toronto 995,854 cents. Accepts cents or dollars — the question names no unit; alternative verified 2026-09-23: the same net sum / 100.0 returns the same 8 regions in the same order, Gulf Coast Texas 63,185.95 down to Greater Toronto 9,665.60 dollars, each exactly the reference ÷ 100.\n\nTrap query (must return different rows): SELECT region.name AS region, SUM(claim.paid_amount_cents) AS paid_cents FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id WHERE claim.is_test = false AND claim.service_date >= DATE '2024-01-01' AND claim.service_date < DATE '2025-01-01' GROUP BY region.name\n\nAlternative reference the branch also accepted: SELECT region.name AS region, SUM(CASE WHEN claim.status = 'REVERSED' THEN -claim.paid_amount_cents ELSE claim.paid_amount_cents END) / 100.0 AS net_paid_dollars FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id WHERE claim.is_test = false AND claim.service_date >= DATE '2024-01-01' AND claim.service_date < DATE '2025-01-01' GROUP BY region.name ORDER BY net_paid_dollars DESC, region.name\n\nParaphrases: Break down 2024 net paid by region. | For 2024, how much net paid did each region account for?\n\nMoved from feat/engine-eval-loop (branch category metric-definition, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Gulf Coast Texas"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT region.name AS region, SUM(CASE WHEN claim.status = 'REVERSED' THEN -claim.paid_amount_cents ELSE claim.paid_amount_cents END) AS net_paid_cents FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id WHERE claim.is_test = false AND claim.service_date >= DATE '2024-01-01' AND claim.service_date < DATE '2025-01-01' GROUP BY region.name ORDER BY net_paid_cents DESC, region.name"
+      }
+    },
+    {
+      "id": "net-paid-after-reversals-2024",
+      "category": "business-term",
+      "split": "held-out",
+      "tags": [
+        "trap:metric-definition",
+        "difficulty:hard"
+      ],
+      "question": "How much did we actually pay out in 2024 once reversals are taken off?",
+      "intent": "A reversed claim is money returned, not money spent — the sign of paid_amount_cents on REVERSED rows is the whole question.",
+      "notes": "The second half of the net-paid trap, stated as a single number so the sign error cannot hide inside a breakdown. In 2024, with the dataset's default filter excluding test claims, gross paid is 35,581,467 cents and the 23 reversed claims carry 3,227,230 cents of it, so net paid is 29,127,007 cents ($291,270.07): summing the column outright overstates the year by 6,454,460 cents, twice the reversed amount, because those payments are both added and never subtracted. The figure is checked by the result set; the numeric half of the old merged pattern was retired, leaving the \"revers\" word check that asks the answer to say it took reversals off. Guards against an answer that treats REVERSED as merely another status to group by rather than as a negative payment. Recategorised from domain-semantics to metric-definition (2026-09-23): nothing in the data links a REVERSED claim to the PAID claim it reverses, so \"subtract reversals\" versus \"exclude reversed claims\" (32,354,237 cents) is a definition, not a fact. The governed `net_paid` metric states the subtracting definition, which this reference follows; in the `bare` arm (no Metrics) the case is expected to fail or to state which definition it used. Trap (validated 2026-09-23): the trapSql sums paid_amount_cents gross and returns 35,581,467 cents against the reference's 29,127,007. Accepts cents or dollars — the question names no unit; alternative verified 2026-09-23: the same net sum / 100.0 returns 291,270.07 dollars, exactly the reference's 29,127,007 ÷ 100.\n\nTrap query (must return different rows): SELECT SUM(claim.paid_amount_cents) AS paid_cents FROM health_insurance.claims claim WHERE claim.is_test = false AND claim.service_date >= DATE '2024-01-01' AND claim.service_date < DATE '2025-01-01'\n\nAlternative reference the branch also accepted: SELECT SUM(CASE WHEN claim.status = 'REVERSED' THEN -claim.paid_amount_cents ELSE claim.paid_amount_cents END) / 100.0 AS net_paid_dollars FROM health_insurance.claims claim WHERE claim.is_test = false AND claim.service_date >= DATE '2024-01-01' AND claim.service_date < DATE '2025-01-01'\n\nParaphrases: What did we really pay out in 2024 after subtracting reversals? | Net of reversals, how much did we pay in 2024?\n\nMoved from feat/engine-eval-loop (branch category metric-definition, provenance hand).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "revers",
+            "flags": "i"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT SUM(CASE WHEN claim.status = 'REVERSED' THEN -claim.paid_amount_cents ELSE claim.paid_amount_cents END) AS net_paid_cents FROM health_insurance.claims claim WHERE claim.is_test = false AND claim.service_date >= DATE '2024-01-01' AND claim.service_date < DATE '2025-01-01'"
+      }
+    },
+    {
+      "id": "claims-march-2024",
+      "category": "default-filter",
+      "split": "dev",
+      "tags": [
+        "trap:default-filter",
+        "difficulty:hard"
+      ],
+      "question": "How many claims do we have for March 2024 dates of service?",
+      "intent": "Synthetic test traffic is flagged and must come out of a reported volume without being asked for.",
+      "notes": "36 of the 1200 claims are is_test = true (3.00%), and the Health Insurance dataset carries a default-filter knowledge entry saying to exclude them from claims aggregates. March 2024 has 49 claims by service date and 35 once test traffic is dropped, so the two answers are far enough apart to be visible in a monthly volume report. Every claims reference in this suite obeys that entry; this is the case that makes it the question, so its wording must never pre-announce the filter — the agent has to apply it unprompted. The count is checked by the result set; the test|synthetic word check asks the answer to say it left test claims out. Guards against test claims leaking into reported volumes. Trap (validated 2026-09-23): the trapSql drops the default filter and returns 49 against the reference's 35.\n\nTrap query (must return different rows): SELECT COUNT(*) AS claims FROM health_insurance.claims claim WHERE claim.service_date >= DATE '2024-03-01' AND claim.service_date < DATE '2024-04-01'\n\nParaphrases: How many claims had a service date in March 2024? | What was our claim count for services provided in March 2024?\n\nMoved from feat/engine-eval-loop (branch category default-filter, provenance hand).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "test|synthetic"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS claims FROM health_insurance.claims claim WHERE claim.is_test = false AND claim.service_date >= DATE '2024-03-01' AND claim.service_date < DATE '2024-04-01'"
+      }
+    },
+    {
+      "id": "paid-by-country",
+      "category": "join",
+      "split": "dev",
+      "tags": [
+        "trap:multi-step-join",
+        "difficulty:hard"
+      ],
+      "question": "What have we paid out in each country?",
+      "intent": "Claims carry no country — the answer needs the member -> region -> state -> country hierarchy.",
+      "notes": "The path is claims.member_id -> members.region_id -> regions.state_id -> states.country_code -> countries.name. Stopping one join short reports 8 regions or 6 states at the wrong grain; the correct answer is 2 rows, United States 58,862,147 cents over 1044 claims and Canada 6,510,043 over 120, the reference obeying the dataset's default filter and dropping test claims. The provider's location is not modelled at all, so country can only mean the member's. The totals are checked by the result set (the old text pattern on 58,862,147 would fail a correct \"$588.6K\"); the text check asks for the smaller country by name. Guards against answers that stop short of the requested grain and against inventing a country column on claims. Trap (validated 2026-09-23): the trapSql stops one join short, at the state, and returns 6 rows — Texas 21,616,213, California 20,291,583, New York 9,653,198, Ohio 7,301,153, British Columbia 3,543,149, Ontario 2,966,894 cents — against the reference's 2. Accepts cents or dollars — the question names no unit; alternative verified 2026-09-23: the same sum / 100.0 returns the same 2 rows, United States 588,621.47 and Canada 65,100.43 dollars, each exactly the reference ÷ 100.\n\nTrap query (must return different rows): SELECT state.name AS state, SUM(claim.paid_amount_cents) AS paid_cents FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id JOIN health_insurance.states state ON state.id = region.state_id JOIN health_insurance.countries country ON country.code = state.country_code WHERE claim.is_test = false GROUP BY state.name\n\nAlternative reference the branch also accepted: SELECT country.name AS country, SUM(claim.paid_amount_cents) / 100.0 AS paid_dollars FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id JOIN health_insurance.states state ON state.id = region.state_id JOIN health_insurance.countries country ON country.code = state.country_code WHERE claim.is_test = false GROUP BY country.name ORDER BY paid_dollars DESC, country.name\n\nParaphrases: How much have we paid per country? | Break down our total payments by country.\n\nMoved from feat/engine-eval-loop (branch category multi-step-join, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Canada"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT country.name AS country, SUM(claim.paid_amount_cents) AS paid_cents FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id JOIN health_insurance.states state ON state.id = region.state_id JOIN health_insurance.countries country ON country.code = state.country_code WHERE claim.is_test = false GROUP BY country.name ORDER BY paid_cents DESC, country.name"
+      }
+    },
+    {
+      "id": "denial-data-discovery",
+      "category": "discovery",
+      "split": "dev",
+      "tags": [
+        "trap:discovery",
+        "difficulty:easy"
+      ],
+      "question": "What data do we have about denials?",
+      "intent": "Pure discovery — must answer from the session datasets rather than run SQL or invent entities.",
+      "notes": "A schema question answered by querying rows is a wrong process even when the prose happens to be right, so this case scores the process and the entity names. The honest answer names denial_reasons (10 reason codes, each with a category: ELIGIBILITY, AUTHORIZATION, CODING, COVERAGE, DUPLICATE, TIMELY_FILING) and claim_denials (246 rows linking a claim to a reason, with denied_on and an appeal_status of NONE/FILED/UPHELD/OVERTURNED). The entity list is already in the per-turn system block, so the old calledTool list_entities check failed every model on every run and was retired. Guards against the engine reaching for run_readonly_sql on questions about what exists.\n\nMoved from feat/engine-eval-loop (branch category discovery, provenance hand).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*claim[ _]denials)(?=[\\s\\S]*denial[ _]reasons)",
+            "flags": "i"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "I4"
+        }
+      ],
+      "judgeRubric": "The user asks what data exists about denials; the correct answer names the relevant entities without running SQL. It names denial_reasons (the reason codes, each with a description and a category such as ELIGIBILITY, AUTHORIZATION, CODING, COVERAGE, DUPLICATE or TIMELY_FILING) and claim_denials (one row per denial linking a claim to a reason, with denied_on and an appeal_status of NONE, FILED, UPHELD or OVERTURNED), and may add that claims carry a DENIED status. Score pass=true only if the final answer names both denial_reasons and claim_denials (by name or an unambiguous equivalent), says what each holds, and no run_readonly_sql call was made. Score pass=false if it ran SQL against the data, invents a denial entity or column the dataset does not have (e.g. an appeals table or a denied amount), or names only one of the two tables. Close but wrong: an answer that only describes the DENIED claim status and never mentions the two denial tables, or that names both tables but invents a column such as a denial amount or an appeal decision date — that must FAIL."
+    },
+    {
+      "id": "avg-paid-per-claim-dollars",
+      "category": "encoding",
+      "split": "held-out",
+      "tags": [
+        "trap:unit-confusion",
+        "difficulty:medium"
+      ],
+      "question": "What was the average amount we paid per claim, in dollars?",
+      "intent": "Every amount column is integer cents — reporting the raw average as dollars is wrong by 100x.",
+      "notes": "AVG(paid_amount_cents) is 56,161.68, which as \"dollars\" reads as a $56,162 average payment on a book whose largest single claim payment is $12,019.81. Divided by 100 the answer is $561.62 across the 1164 non-test claims, the reference obeying the dataset's default filter. The question says dollars explicitly, so the conversion is not optional; the '_cents' suffix and the dataset's knowledge entry are both available. A defensible variant restricted to the 785 PAID claims gives $773.28 and should say which denominator it used. The figure is checked by the result set (so the conversion has to happen in the SQL the answer rests on), not by a text match on 561.62. Guards against 100x unit errors in any money answer. Trap (validated 2026-09-23): the trapSql reports the raw cents average, 56,161.68, against the reference's 561.62.\n\nTrap query (must return different rows): SELECT ROUND(AVG(claim.paid_amount_cents), 2) AS avg_paid FROM health_insurance.claims claim WHERE claim.is_test = false\n\nParaphrases: In dollars, what's our average payment per claim? | On average, how many dollars did we pay on each claim?\n\nMoved from feat/engine-eval-loop (branch category unit-confusion, provenance hand).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT ROUND(AVG(claim.paid_amount_cents) / 100.0, 2) AS avg_paid_dollars FROM health_insurance.claims claim WHERE claim.is_test = false"
+      }
+    },
+    {
+      "id": "units-cut-by-procedure",
+      "category": "ratio",
+      "split": "dev",
+      "tags": [
+        "trap:ratio-trap",
+        "difficulty:medium"
+      ],
+      "question": "Which procedure codes had the most units cut on review? Show the top five.",
+      "intent": "The second column pair — units_billed against units_allowed on claim lines, not an amount column and not a single units column.",
+      "notes": "units_allowed <= units_billed on every line and 981 of the 2523 non-test lines (over 563 claims) were cut, so the cut is SUM(units_billed - units_allowed) and not a count of lines, a count of claims or anything derived from the amount columns; the reference joins back to claims so the dataset's default filter reaches the lines of test claims at their own grain. The top five are J9299 602, 17110 181, J1885 158, 97110 109 and 97140 91; the sixth is 90853 on 80, so the cut-off is unambiguous. Answers that subtract the wrong pair, or that rank by billed units alone, put the high-volume office codes on top instead. The units are checked by the result set; the text check asks for the top code. Guards against the units version of the degenerate-ratio failure. Trap (validated 2026-09-23): the trapSql subtracts the wrong column pair — the line's billed minus allowed amount, the money cut rather than the units — and returns 29881, 97140, 33249, 73721 and 20610 as the top five. Measured the same day: ranking by billed units alone keeps J9299 first (J9299 1623, 17110 572, J1885 369, 97110 258, 11102 216); it is counting cut lines (90853 48, 36415 47, 99213 46, 99214 46, 17110 44) that puts the high-volume office codes on top.\n\nTrap query (must return different rows): SELECT claim_line.procedure_code, SUM(claim_line.line_billed_amount_cents - claim_line.line_allowed_amount_cents) AS amount_cut FROM health_insurance.claim_lines claim_line JOIN health_insurance.claims claim ON claim.id = claim_line.claim_id WHERE claim.is_test = false GROUP BY claim_line.procedure_code ORDER BY amount_cut DESC, claim_line.procedure_code LIMIT 5\n\nParaphrases: What are the top five procedure codes by units reduced during review? | Show the five procedure codes where review cut the most billed units.\n\nMoved from feat/engine-eval-loop (branch category ratio-trap, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "J9299"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT claim_line.procedure_code, SUM(claim_line.units_billed - claim_line.units_allowed) AS units_cut FROM health_insurance.claim_lines claim_line JOIN health_insurance.claims claim ON claim.id = claim_line.claim_id WHERE claim.is_test = false GROUP BY claim_line.procedure_code ORDER BY units_cut DESC, claim_line.procedure_code LIMIT 5"
+      }
+    },
+    {
+      "id": "denial-rate",
+      "category": "business-term",
+      "split": "dev",
+      "tags": [
+        "trap:metric-definition",
+        "difficulty:hard"
+      ],
+      "question": "What's our denial rate?",
+      "intent": "Denial rate is a governed metric — DENIED ÷ adjudicated non-test claims (status ≠ PENDING, is_test = false) — and the answer has to use that definition rather than pick its own denominator.",
+      "notes": "Excluding PENDING from the denominator is a definition, not a fact the schema implies (docs/plans/improvement-loop-engineering.md §2.3), so this case moved from quality-filter to metric-definition once fixtures:register started seeding a governed denial_rate metric with exactly the reference's definition: DENIED claims ÷ adjudicated non-test claims, i.e. status <> 'PENDING' AND is_test = false. 206 of the 1164 non-test claims are DENIED and 125 are still PENDING (adjudicated_on is null by CHECK constraint), leaving 1039 adjudicated claims and a rate of 19.83%; dividing by all 1164 gives 17.70%. The case now tests that the assistant uses the governed metric when metrics are in context. In the bare arm (no metrics) it is expected to fail the result-set check, or at least to state its denominator — the pending word check scores that statement either way. The rate is checked by the result set, not by a text match on 19.8. Guards against a named rate being recomputed over a denominator the business did not choose. Trap (validated 2026-09-23): the trapSql divides by every non-test claim, PENDING included, and returns 17.70 against the reference's 19.83. Accepts a percentage or a fraction — the question names no unit; alternative verified 2026-09-23: the same ratio as a fraction, ROUND(…, 4), returns 0.1983, exactly the reference's 19.83 ÷ 100.\n\nTrap query (must return different rows): SELECT ROUND(100.0 * SUM(CASE WHEN claim.status = 'DENIED' THEN 1 ELSE 0 END) / COUNT(*), 2) AS denial_rate_pct FROM health_insurance.claims claim WHERE claim.is_test = false\n\nAlternative reference the branch also accepted: SELECT ROUND(COUNT(*) FILTER (WHERE claim.status = 'DENIED')::numeric / COUNT(*), 4) AS denial_rate FROM health_insurance.claims claim WHERE claim.status <> 'PENDING' AND claim.is_test = false\n\nParaphrases: What is our claim denial rate? | Tell me our overall denial rate.\n\nMoved from feat/engine-eval-loop (branch category metric-definition, provenance hand).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "pending"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE claim.status = 'DENIED') / COUNT(*), 2) AS denial_rate_pct FROM health_insurance.claims claim WHERE claim.status <> 'PENDING' AND claim.is_test = false"
+      }
+    },
+    {
+      "id": "active-members-by-region",
+      "category": "default-filter",
+      "split": "held-out",
+      "tags": [
+        "trap:default-filter",
+        "difficulty:medium"
+      ],
+      "question": "How many active members do we have in each region?",
+      "intent": "\"Active\" is a real filter on this membership file, not a formality — terminated members are still rows.",
+      "notes": "5 of the 60 members have a non-null terminated_on, so 55 are active. Counting the table gives 60 and inflates Northern California from 8 to 9, Hudson Valley from 6 to 8 and Southern California from 6 to 8 — exactly the denominators a per-member cost figure would then be divided by. The expected 8 rows are Gulf Coast Texas 10, North Texas 9, Northern California 8, Ohio Valley 8, Hudson Valley 6, Southern California 6, Greater Toronto 5, Lower Mainland 3. The counts are checked by the result set (the old \\b10\\b pattern was brittle); the text check asks for the largest region by name. Guards against terminated members being counted as covered lives. Trap (validated 2026-09-23): the trapSql counts every member, terminated ones included, and returns the 60-member split (Northern California 9, Hudson Valley 8, Southern California 8, the other five unchanged) against the reference's 55.\n\nTrap query (must return different rows): SELECT region.name AS region, COUNT(*) AS members FROM health_insurance.members member JOIN health_insurance.regions region ON region.id = member.region_id GROUP BY region.name\n\nParaphrases: What's the count of current members per region? | Break down our active membership by region.\n\nMoved from feat/engine-eval-loop (branch category default-filter, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Gulf Coast Texas"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT region.name AS region, COUNT(*) AS active_members FROM health_insurance.members member JOIN health_insurance.regions region ON region.id = member.region_id WHERE member.terminated_on IS NULL GROUP BY region.name ORDER BY active_members DESC, region.name"
+      }
+    },
+    {
+      "id": "members-per-plan-tier",
+      "category": "aggregate",
+      "split": "held-out",
+      "tags": [
+        "trap:control",
+        "difficulty:easy"
+      ],
+      "question": "How many members are enrolled on each plan tier?",
+      "intent": "One join, one GROUP BY, no trap — the healthy baseline for this fixture.",
+      "notes": "BRONZE 22, SILVER 20, GOLD 11, PLATINUM 7, totalling all 60 members. No ratio, no nulls, no cents, no claims table and therefore no default filter to apply: if this fails, the problem is schema linking rather than any planted trap, and no guard may fire on it. The counts are checked by the result set. The reference is portable SQL, so it needs no Databricks override.\n\nParaphrases: What's the member count for each plan tier? | How many members do we have per tier?\n\nMoved from feat/engine-eval-loop (branch category control, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "BRONZE"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT plan.tier, COUNT(*) AS members FROM health_insurance.members member JOIN health_insurance.plans plan ON plan.id = member.plan_id GROUP BY plan.tier ORDER BY members DESC, plan.tier"
+      }
+    },
+    {
+      "id": "providers-per-specialty",
+      "category": "aggregate",
+      "split": "dev",
+      "tags": [
+        "trap:control",
+        "difficulty:easy"
+      ],
+      "question": "How many providers do we have in each specialty?",
+      "intent": "A single-table categorical breakdown with no filter implied by the question.",
+      "notes": "Family Medicine 5, Cardiology 4, then Behavioral Health, Dermatology, Orthopedics and Radiology on 3 each and Emergency Medicine and Oncology on 2 — 25 providers in 8 rows. The counterpart to specialties-with-48-claims and paid-share-by-specialty: this one counts PROVIDERS, not claims, so a fix that reflexively joins to claims or excludes out-of-network providers over-fires here. The counts are checked by the result set. The reference is portable SQL, so it needs no Databricks override. Guards against guards firing on an ordinary question.\n\nParaphrases: What's the provider count by specialty? | Break down our providers by specialty.\n\nMoved from feat/engine-eval-loop (branch category control, provenance hand).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Family Medicine"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT provider.specialty, COUNT(*) AS providers FROM health_insurance.providers provider GROUP BY provider.specialty ORDER BY providers DESC, provider.specialty"
+      }
+    },
+    {
+      "id": "currency-by-member-country",
+      "category": "aggregate",
+      "split": "dev",
+      "tags": [
+        "trap:constant-column",
+        "difficulty:hard"
+      ],
+      "question": "Which currency do we pay claims in for members in each country?",
+      "intent": "Currency is constant (USD) even for Canadian members — the answer has to read the column rather than infer a currency from where the member lives.",
+      "notes": "claims.currency is 'USD' on every claim (CHECK constraint), including the 120 non-test claims of Canadian members (Greater Toronto 57, Lower Mainland 63) and the 1044 of US members. The reference returns 2 rows — Canada USD, United States USD — with the dataset's default filter dropping is_test claims (which changes neither row); country is the MEMBER's (claims -> members -> regions -> states -> countries), the only location the fixture models. Cross-checked with an independent formulation (GROUP BY country_name, currency on v_claim_financials) — identical 2 rows. The trapSql models the failure the claims-by-currency rubric names, inferring CAD for Canadian members instead of reading the column, and returns Canada CAD / United States USD. The currency pair is checked by the result set (an answer that also counts claims per country passes as extra columns); the text check asks the answer to name USD. This domain has exactly one constant column, so all three constant-column cases probe currency; this one hides it behind the country dimension it might plausibly vary with. Guards against explaining a constant column with a dimension it does not vary by.\n\nTrap query (must return different rows): SELECT DISTINCT country.name AS country, CASE WHEN country.name = 'Canada' THEN 'CAD' ELSE claim.currency END AS currency FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id JOIN health_insurance.states state ON state.id = region.state_id JOIN health_insurance.countries country ON country.code = state.country_code WHERE claim.is_test = false\n\nParaphrases: For each country our members live in, what currency are their claims in? | What currency are claims recorded in for our members in each country?\n\nMoved from feat/engine-eval-loop (branch category constant-column, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "USD"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT DISTINCT country.name AS country, claim.currency FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id JOIN health_insurance.states state ON state.id = region.state_id JOIN health_insurance.countries country ON country.code = state.country_code WHERE claim.is_test = false ORDER BY country.name, claim.currency"
+      }
+    },
+    {
+      "id": "canadian-claims-by-currency",
+      "category": "aggregate",
+      "split": "held-out",
+      "tags": [
+        "trap:constant-column",
+        "difficulty:medium"
+      ],
+      "question": "How do our Canadian members' claims break down by currency?",
+      "intent": "Canadian members make CAD the obvious guess, but every claim is USD — the breakdown is one row and the answer has to say so.",
+      "notes": "Canadian members (Greater Toronto and Lower Mainland) have 120 non-test claims (124 with test traffic), and every one is USD — the CHECK constraint allows no other currency. The reference returns 1 row, USD 120, obeying the dataset's default filter. Cross-checked with an independent formulation (COUNT(DISTINCT claim_id) on v_claim_financials filtered to country_name = 'Canada') — identical, USD 120. The trapSql is the Canada-means-CAD assumption and returns CAD 120: the right count under a currency the data never holds. A useful answer says the Canadian members' claims are all in US dollars, so there is no split to report; the text check asks for USD. Guards against assuming a currency from geography when the column is constant.\n\nTrap query (must return different rows): SELECT CASE WHEN country.name = 'Canada' THEN 'CAD' ELSE claim.currency END AS currency, COUNT(*) AS claims FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id JOIN health_insurance.states state ON state.id = region.state_id JOIN health_insurance.countries country ON country.code = state.country_code WHERE claim.is_test = false AND country.name = 'Canada' GROUP BY CASE WHEN country.name = 'Canada' THEN 'CAD' ELSE claim.currency END\n\nParaphrases: What's the currency split on claims for members in Canada? | For members based in Canada, how many claims do we have in each currency?\n\nMoved from feat/engine-eval-loop (branch category constant-column, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "USD"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT claim.currency, COUNT(*) AS claims FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id JOIN health_insurance.states state ON state.id = region.state_id JOIN health_insurance.countries country ON country.code = state.country_code WHERE claim.is_test = false AND country.name = 'Canada' GROUP BY claim.currency ORDER BY claim.currency"
+      }
+    },
+    {
+      "id": "most-common-revenue-code",
+      "category": "null",
+      "split": "held-out",
+      "tags": [
+        "trap:empty-column",
+        "difficulty:medium"
+      ],
+      "question": "Which revenue code appears most often on our claim lines?",
+      "intent": "Revenue codes are missing on about 90% of claim lines — the blank bucket must not win the ranking.",
+      "notes": "Only 258 of the 2523 non-test claim lines carry a revenue code (89.77% null) — exactly the lines of INSTITUTIONAL claims; professional and outpatient lines never have one. Grouping without dropping nulls (the trapSql) makes the blank key the \"most common code\" with 2265 lines. Among populated codes 0300 leads with 43 lines, ahead of 0450 on 40, 0320 and 0636 on 39, 0360 on 38, 0250 on 32 and 0762 on 27, so the maximum is unique; the reference obeys the dataset's default filter by joining lines back to their claims. Cross-checked with an independent formulation (RANK() over COUNT(revenue_code), with the test filter as an IN-subquery) — identical 1 row, 0300 43. No text check on the code: '0300' is all digits, so the loader would flag it as a numeric text check, and the result set already compares it. Guards against the null group being reported as a finding.\n\nTrap query (must return different rows): SELECT claim_line.revenue_code, COUNT(*) AS claim_lines FROM health_insurance.claim_lines claim_line JOIN health_insurance.claims claim ON claim.id = claim_line.claim_id WHERE claim.is_test = false GROUP BY claim_line.revenue_code ORDER BY claim_lines DESC LIMIT 1\n\nParaphrases: What's the most frequently billed revenue code across our claim lines? | On our claim lines, which revenue code shows up the most?\n\nMoved from feat/engine-eval-loop (branch category empty-column, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT claim_line.revenue_code, COUNT(*) AS claim_lines FROM health_insurance.claim_lines claim_line JOIN health_insurance.claims claim ON claim.id = claim_line.claim_id WHERE claim.is_test = false AND claim_line.revenue_code IS NOT NULL GROUP BY claim_line.revenue_code ORDER BY claim_lines DESC, claim_line.revenue_code LIMIT 1"
+      }
+    },
+    {
+      "id": "specialty-most-preauth",
+      "category": "null",
+      "split": "dev",
+      "tags": [
+        "trap:empty-column",
+        "difficulty:medium"
+      ],
+      "question": "Which specialty had the most claims with a prior authorization on file?",
+      "intent": "Count the populated rows of a mostly-null column per specialty — counting every claim just ranks specialties by volume.",
+      "notes": "A prior authorization is on file for 57 of the 1164 non-test claims. Cardiology has 14 of them, ahead of Orthopedics 12, Radiology 9, Behavioral Health 7, Family Medicine 6, Dermatology 5, Emergency Medicine 4 and Oncology 0, so the maximum is unique. The trapSql counts claims per specialty without looking at whether an authorization is on file — the 95% null bucket stands in for the column — and returns Family Medicine with 307 claims, a specialty with only 6 authorizations. As a share of each specialty's claims Orthopedics would lead (12 of 140), which is why the question asks for a count and its variants never say \"most often\". The reference obeys the default filter. Cross-checked with an independent formulation (COUNT(preauth_code) with HAVING = MAX over v_claim_financials) — identical, Cardiology 14. The count is checked by the result set; the text check asks for the specialty by name.\n\nTrap query (must return different rows): SELECT provider.specialty, COUNT(*) AS claims FROM health_insurance.claims claim JOIN health_insurance.providers provider ON provider.id = claim.provider_id WHERE claim.is_test = false GROUP BY provider.specialty ORDER BY claims DESC LIMIT 1\n\nParaphrases: Which specialty has the largest number of prior-authorized claims? | Across specialties, where do we see the most claims that came with a prior authorization?\n\nMoved from feat/engine-eval-loop (branch category empty-column, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Cardiology"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT provider.specialty, COUNT(*) AS claims_with_preauth FROM health_insurance.claims claim JOIN health_insurance.providers provider ON provider.id = claim.provider_id WHERE claim.is_test = false AND claim.preauth_code IS NOT NULL GROUP BY provider.specialty ORDER BY claims_with_preauth DESC, provider.specialty LIMIT 1"
+      }
+    },
+    {
+      "id": "fewest-claims-specialty",
+      "category": "ranking",
+      "split": "dev",
+      "tags": [
+        "trap:ties",
+        "difficulty:hard"
+      ],
+      "question": "Which specialty submitted the fewest claims?",
+      "intent": "The minimum is a two-way tie that the question does not announce — ORDER BY … LIMIT 1 silently drops one of the tied specialties.",
+      "notes": "Oncology and Emergency Medicine each submitted exactly 48 non-test claims (the planted H4 tie, which the generator asserts survives the default filter); the next smallest is Radiology on 133, so the tie is isolated. Unlike specialties-with-48-claims, this wording does not hint at the tie — the singular \"which specialty\" invites LIMIT 1, and the trapSql (ORDER BY claims, specialty LIMIT 1) returns Emergency Medicine alone. The reference keeps every specialty at the minimum count. Cross-checked with an independent formulation (RANK() over v_claim_financials) — identical 2 rows. The counts are checked by the result set; the text check requires both names. Guards against one arbitrary winner being reported from a tied minimum.\n\nTrap query (must return different rows): SELECT provider.specialty, COUNT(*) AS claims FROM health_insurance.claims claim JOIN health_insurance.providers provider ON provider.id = claim.provider_id WHERE claim.is_test = false GROUP BY provider.specialty ORDER BY claims, provider.specialty LIMIT 1\n\nParaphrases: What's our lowest-volume specialty by number of claims? | Which specialty sends us the smallest number of claims?\n\nMoved from feat/engine-eval-loop (branch category ties, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*oncology)(?=[\\s\\S]*emergency medicine)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT provider.specialty, COUNT(*) AS claims FROM health_insurance.claims claim JOIN health_insurance.providers provider ON provider.id = claim.provider_id WHERE claim.is_test = false GROUP BY provider.specialty HAVING COUNT(*) = (SELECT MIN(specialty_claims) FROM (SELECT COUNT(*) AS specialty_claims FROM health_insurance.claims other_claim JOIN health_insurance.providers other_provider ON other_provider.id = other_claim.provider_id WHERE other_claim.is_test = false GROUP BY other_provider.specialty) specialty_counts) ORDER BY provider.specialty"
+      }
+    },
+    {
+      "id": "least-cited-denial-reason",
+      "category": "ranking",
+      "split": "dev",
+      "tags": [
+        "trap:ties",
+        "difficulty:medium"
+      ],
+      "question": "Which denial reason do we cite least often?",
+      "intent": "Two denial reasons tie for the fewest citations — both must be reported.",
+      "notes": "Across the 245 denials on non-test claims (206 denied claims; a claim can carry more than one reason), CO-18 (exact duplicate of a previously submitted claim) and CO-198 (precertification exceeded the authorized units) are each cited 14 times; the next is CO-97 on 15, so the tie is real but one citation from breaking — re-run validate after any fixture regeneration. All 10 reasons are cited, so no zero-count reason hides from an inner join. The one denied test claim carries CO-197, so the tie holds with or without the default filter; the reference applies it anyway. The trapSql (ORDER BY denials, code LIMIT 1) returns CO-18 alone. The reference deliberately projects only the two counts: a reason is equally well named by its code or its description, and a projection of either would fail an answer that chose the other, so the result set checks that exactly two reasons sit at the minimum and the text check checks which two (code or description, either works). Cross-checked with an independent formulation (RANK() over a LEFT JOIN from denial_reasons, test claims excluded with NOT IN) — the same two reasons on 14 each.\n\nTrap query (must return different rows): SELECT denial_reason.code, COUNT(*) AS denials FROM health_insurance.claim_denials claim_denial JOIN health_insurance.denial_reasons denial_reason ON denial_reason.id = claim_denial.denial_reason_id JOIN health_insurance.claims claim ON claim.id = claim_denial.claim_id WHERE claim.is_test = false GROUP BY denial_reason.code ORDER BY denials, denial_reason.code LIMIT 1\n\nParaphrases: What is our least-used denial reason? | Which reason for denying a claim comes up the least?\n\nMoved from feat/engine-eval-loop (branch category ties, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*(CO-18\\b|duplicate))(?=[\\s\\S]*(CO-198|exceeded))"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS denials FROM health_insurance.claim_denials claim_denial JOIN health_insurance.claims claim ON claim.id = claim_denial.claim_id WHERE claim.is_test = false GROUP BY claim_denial.denial_reason_id HAVING COUNT(*) = (SELECT MIN(reason_denials) FROM (SELECT COUNT(*) AS reason_denials FROM health_insurance.claim_denials other_denial JOIN health_insurance.claims other_claim ON other_claim.id = other_denial.claim_id WHERE other_claim.is_test = false GROUP BY other_denial.denial_reason_id) reason_counts)"
+      }
+    },
+    {
+      "id": "rejected-claims-2025",
+      "category": "encoding",
+      "split": "dev",
+      "tags": [
+        "trap:value-vocabulary",
+        "difficulty:easy"
+      ],
+      "question": "How many claims were rejected in 2025?",
+      "intent": "There is no REJECTED status — 'rejected' maps to DENIED.",
+      "notes": "status holds PAID, DENIED, PENDING and REVERSED only, so filtering on the question's own word (the trapSql, status = 'REJECTED') returns 0. In 2025 there are 102 DENIED non-test claims (104 in 2024); no denied test claim falls in 2025, so the default filter changes nothing here, but the reference still applies it. Cross-checked with an independent formulation (COUNT(DISTINCT claim_id) from claim_denials joined to 2025 non-test claims) — identical 102, since every denied claim has at least one denial row and no other claim has any. \"Rejected\" is not among the synonyms of the dataset's status-vocabulary knowledge (approved, paid out, denied, pending, reversed), so the mapping has to come from reading the values. The count is checked by the result set; the text check asks the answer to name the status it mapped to.\n\nTrap query (must return different rows): SELECT COUNT(*) AS rejected_claims FROM health_insurance.claims claim WHERE claim.status = 'REJECTED' AND claim.is_test = false AND claim.service_date >= DATE '2025-01-01' AND claim.service_date < DATE '2026-01-01'\n\nParaphrases: What was the number of rejected claims in 2025? | In 2025, how many of our claims got turned down?\n\nMoved from feat/engine-eval-loop (branch category value-vocabulary, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\bDENIED\\b"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS rejected_claims FROM health_insurance.claims claim WHERE claim.status = 'DENIED' AND claim.is_test = false AND claim.service_date >= DATE '2025-01-01' AND claim.service_date < DATE '2026-01-01'"
+      }
+    },
+    {
+      "id": "denials-overturned-on-appeal",
+      "category": "encoding",
+      "split": "dev",
+      "tags": [
+        "trap:value-vocabulary",
+        "difficulty:hard"
+      ],
+      "question": "How many denials were reversed on appeal?",
+      "intent": "'Reversed on appeal' is the denial's OVERTURNED appeal outcome — not the REVERSED claim status, which is a payment clawed back.",
+      "notes": "claim_denials.appeal_status is NONE, FILED, UPHELD or OVERTURNED; 26 non-test denials are OVERTURNED, each on a different claim, so counting denials or denied claims gives the same answer (against FILED 34, UPHELD 35, NONE 150). The question's word collides with a different stored value: claims.status = 'REVERSED' marks 48 non-test claims whose payment was reversed, none of which has a denial row — the trapSql counts those and returns 48. The one denied test claim was UPHELD, so the default filter changes nothing, but the reference applies it. Cross-checked with an independent formulation (COUNT(DISTINCT claim_id) with a NOT IN test-claim subquery) — identical 26. The count is checked by the result set; the text check asks the answer to name the overturned outcome.\n\nTrap query (must return different rows): SELECT COUNT(*) AS reversed_claims FROM health_insurance.claims claim WHERE claim.status = 'REVERSED' AND claim.is_test = false\n\nParaphrases: How many denials did the provider or member win on appeal? | On appeal, how many of our denial decisions ended up being reversed?\n\nMoved from feat/engine-eval-loop (branch category value-vocabulary, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "overturn"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(*) AS overturned_denials FROM health_insurance.claim_denials claim_denial JOIN health_insurance.claims claim ON claim.id = claim_denial.claim_id WHERE claim_denial.appeal_status = 'OVERTURNED' AND claim.is_test = false"
+      }
+    },
+    {
+      "id": "top-diagnoses",
+      "category": "out-of-scope",
+      "split": "held-out",
+      "tags": [
+        "trap:out-of-scope",
+        "difficulty:hard"
+      ],
+      "question": "Which diagnoses account for the most claims?",
+      "intent": "The fixture holds no diagnosis codes — procedure codes are not diagnoses, and the answer has to say the data cannot answer this.",
+      "notes": "No table or column records a diagnosis: there is no ICD-10 or diagnosis field on claims, claim_lines or anywhere else in the schema (checked against information_schema on 2026-09-23). What the data does hold is 34 procedure codes (CPT/HCPCS) with descriptions on claim lines, each provider's specialty, and one denial reason (CO-11, \"Diagnosis inconsistent with the procedure billed\") whose text mentions a diagnosis without recording one. The tempting wrong answer ranks procedures as if they were diagnoses — venipuncture on 146 non-test claims, influenza vaccine on 143, office visits 99213 on 141 and 99214 on 138 — or maps specialties to conditions (Oncology -> cancer). didNotCall create_visual is the tool check: charting a proxy as the answer is always wrong. Guards against substituting the nearest available column for data that does not exist.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G2"
+        }
+      ],
+      "judgeRubric": "The dataset contains no diagnosis data: claim lines carry procedure codes (CPT/HCPCS, e.g. 36415 venipuncture, 90686 influenza vaccine, 99213/99214 office visits) with descriptions, providers carry a specialty, and one denial reason (CO-11) mentions a diagnosis mismatch, but no field records what a member was diagnosed with. The correct answer says the data holds no diagnosis codes, so diagnoses cannot be ranked; it may offer procedures or specialties as a clearly labelled alternative. Score pass=true only if the final answer states that diagnosis data is not available in this dataset AND does not present any procedure, specialty or denial reason as a diagnosis or condition. Score pass=false if it lists procedures, procedure descriptions, specialties or denial reasons under a heading or sentence that calls them diagnoses or conditions, invents ICD codes or diagnosis names, or claims the data has a diagnosis field. Close but wrong: an answer that notes \"diagnosis codes are not directly available\" and then ranks procedure descriptions (venipuncture, flu vaccine, office visits) as \"the top diagnoses\", or one that answers \"cancer\" because Oncology claims cost the most — that must FAIL."
+    },
+    {
+      "id": "hospital-length-of-stay",
+      "category": "out-of-scope",
+      "split": "dev",
+      "tags": [
+        "trap:out-of-scope",
+        "difficulty:medium"
+      ],
+      "question": "What is the average length of a hospital stay for our members?",
+      "intent": "Claims carry a single service date and no admission or discharge dates — length of stay cannot be computed from this data.",
+      "notes": "75 non-test claims have an INPATIENT_HOSPITAL place of service (77 with test traffic), but each claim has exactly one service_date; there is no admission date, discharge date or length-of-stay field (checked against information_schema on 2026-09-23), and the revenue codes present (0250, 0300, 0320, 0360, 0450, 0636, 0762) include no room-and-board code. The dates that do exist measure something else: service_date -> received_on is the submission lag (12.6 days on average for inpatient claims) and received_on -> adjudicated_on the processing time (22.9 days) — both tempting to relabel as a stay. didNotCall create_visual is the tool check. Guards against computing a plausible-looking metric from dates that do not mean what the question needs.\n\nMoved from feat/engine-eval-loop (branch category out-of-scope, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G2"
+        }
+      ],
+      "judgeRubric": "The dataset cannot answer this: each claim records one service date (75 inpatient-hospital claims once test claims are excluded), with no admission date, discharge date or length-of-stay field, and no room-and-board revenue code. The correct answer says hospital length of stay is not available in this data, ideally naming what is missing (admission and discharge dates). Score pass=true only if the final answer states that length of stay cannot be calculated from this dataset and does not report any number of days as a length of stay. Score pass=false if it reports an average stay, derives one from the service, received or adjudicated dates (e.g. the 12.6-day gap between service and receipt, or the 22.9-day adjudication time), counts claim lines or units as days, or invents admission or discharge fields. Close but wrong: an answer that says \"we do not have admission dates, but using the time from service to claim receipt as a proxy the average stay is about 13 days\", or one that reports the number of inpatient claims as if it answered the question — that must FAIL."
+    },
+    {
+      "id": "most-expensive-provider",
+      "category": "ambiguous",
+      "split": "held-out",
+      "tags": [
+        "trap:clarification",
+        "difficulty:hard"
+      ],
+      "question": "Who is our most expensive provider?",
+      "intent": "'Expensive' names different providers by billed versus allowed or paid amounts — the agent must ask which measure is meant.",
+      "notes": "Two defensible answers sit in the data (non-test claims): by amount billed, Cascade Spine and Orthopedic Institute — out of network, the planted distractor — leads on both average billed per claim ($14,929.28) and total billed ($582,242.00); by what the plan allowed or paid, Granite Peak Oncology Center leads on average allowed ($4,815.94), total allowed ($139,662.25) and total paid ($126,037.33), while Cascade Spine's average allowed is only $2,416.78. The generator asserts that the distractor tops average billed and does NOT top average allowed. Whichever the agent picks unasked is unfalsifiable to the reader, so the pass condition is a clarifying question. Checks mirror most-expensive-member: calledTool ask_clarification and didNotCall run_readonly_sql — an undefined metric is asked about up front, per the assistant's clarification rule. Guards against confident single-measure guesses on an under-specified money question.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "ask_clarification"
+          },
+          "criterion": "D5"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D5"
+        }
+      ],
+      "judgeRubric": "The question is ambiguous: \"expensive\" could mean what a provider bills us, what the plan allows, or what the plan actually pays them, per claim or in total — and these name different providers in this data. By billed amount (average $14,929.28 per claim, $582,242 in total) it is Cascade Spine and Orthopedic Institute, an out-of-network provider; by allowed or paid amount it is Granite Peak Oncology Center ($4,815.94 average allowed, $126,037.33 paid in total). The correct answer is a clarifying question such as \"Most expensive by what they bill us, by what we allow, or by what we actually pay — per claim or in total?\". Score pass=true only if the final answer is itself a clarifying question that offers 2-4 concrete, well-formed options grounded in this claims data (billed amount, allowed amount, paid amount, per claim versus total, claim volume) and does not name a provider or state any figure as the answer. Score pass=false if it names a provider as the answer, invents a cost measure the data does not hold (e.g. contracted rates or fee schedules), or asks a vague open-ended question with no concrete options. Close but wrong: an answer that names Cascade Spine and Orthopedic Institute \"by billed amount\" and only then offers the other measures as follow-ups, or that asks for clarification but offers a single option — that must FAIL."
+    },
+    {
+      "id": "best-provider-2025",
+      "category": "ambiguous",
+      "split": "dev",
+      "tags": [
+        "trap:clarification",
+        "difficulty:medium"
+      ],
+      "question": "Which provider performed best in 2025?",
+      "intent": "'Best' has no definition on this schema — claim volume, denial rate and payments name different providers.",
+      "notes": "In 2025 (non-test claims) Cedar Hollow Family Practice has the most claims (42) and the highest share of billed amount paid (0.5880); Silverbrook Cancer Institute has the lowest denial rate (none denied on its 2 adjudicated claims, 3 in all), and among providers with real volume Vantage Heart Specialists is lowest (1 of 16 adjudicated, 6.25%); Granite Peak Oncology Center receives the most money (5,885,607 cents paid). \"Best\" is one of the undefined words the assistant's clarification rule names, so the pass condition is a clarifying question. Checks mirror most-expensive-member. Guards against the agent silently choosing a definition of performance.\n\nMoved from feat/engine-eval-loop (branch category clarification, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "ask_clarification"
+          },
+          "criterion": "D5"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D5"
+        }
+      ],
+      "judgeRubric": "The question is ambiguous: \"performed best\" has no definition in this claims data, and the plausible measures name different providers for 2025 — most claims (Cedar Hollow Family Practice, 42), lowest denial rate (Silverbrook Cancer Institute, nothing denied on a handful of claims; Vantage Heart Specialists, 6.25% on 17 claims), highest share of billed amount paid (Cedar Hollow Family Practice) or most money paid (Granite Peak Oncology Center). The correct answer is a clarifying question such as \"Best by claim volume, by lowest denial rate, or by cost?\". Score pass=true only if the final answer is itself a clarifying question offering 2-4 concrete options grounded in this data (claim volume, denial rate, amount billed or paid, share of billed amount paid, units cut on review) and does not name a provider as the answer. Score pass=false if it names a provider as the answer, offers a measure the data does not hold (patient satisfaction, quality scores, clinical outcomes, ratings), or asks an open-ended question with no concrete options. Close but wrong: an answer that declares Cedar Hollow Family Practice best \"by claim volume\" and then lists the other measures as follow-ups, or a clarifying question whose options include quality ratings or satisfaction scores the dataset does not have — that must FAIL."
+    },
+    {
+      "id": "provider-most-claims-2025",
+      "category": "ranking",
+      "split": "held-out",
+      "tags": [
+        "trap:id-vs-name",
+        "difficulty:medium"
+      ],
+      "question": "Which provider submitted the most claims in 2025, and how many?",
+      "intent": "claims carries provider_id only — the answer has to join to the provider's name instead of reporting a key or an NPI.",
+      "notes": "Cedar Hollow Family Practice (provider id 1, NPI 1300000048) submitted 42 non-test claims with 2025 service dates, ahead of Aspenwood Dermatology on 36 and Riverbend Primary Care Group on 35 — a unique maximum; none of Cedar Hollow's 2025 claims is a test claim. Grouping on claims.provider_id alone (the trapSql) answers \"provider 1, 42 claims\". Cross-checked with an independent formulation (HAVING COUNT(*) = MAX over v_claim_financials, grouped by provider id) — identical, Cedar Hollow Family Practice 42. The count is checked by the result set; the text check asks for the name.\n\nTrap query (must return different rows): SELECT claim.provider_id, COUNT(*) AS claims FROM health_insurance.claims claim WHERE claim.is_test = false AND claim.service_date >= DATE '2025-01-01' AND claim.service_date < DATE '2026-01-01' GROUP BY claim.provider_id ORDER BY claims DESC LIMIT 1\n\nParaphrases: Who was our busiest provider by claim count in 2025, and how many claims did they send? | In 2025, which provider filed the largest number of claims, and what was the count?\n\nMoved from feat/engine-eval-loop (branch category id-vs-name, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Cedar Hollow Family Practice"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT provider.name AS provider, COUNT(*) AS claims FROM health_insurance.claims claim JOIN health_insurance.providers provider ON provider.id = claim.provider_id WHERE claim.is_test = false AND claim.service_date >= DATE '2025-01-01' AND claim.service_date < DATE '2026-01-01' GROUP BY provider.name ORDER BY claims DESC, provider.name LIMIT 1"
+      }
+    },
+    {
+      "id": "plan-with-most-members",
+      "category": "ranking",
+      "split": "dev",
+      "tags": [
+        "trap:id-vs-name",
+        "difficulty:easy"
+      ],
+      "question": "Which plan has the most members?",
+      "intent": "members carries plan_id only — the answer names the plan, not its id and not its tier.",
+      "notes": "Bronze Essential 6500 (plan id 1, code HIP-B100) has 18 of the 60 members, ahead of Silver Standard 3500 on 14. It also leads when only active members count (16 of 55), so the answer does not depend on whether terminated members are included — which is why the reference returns only the plan name and leaves the count to the answer. The trapSql groups members by plan_id and returns 1, 18. A tier-level answer (BRONZE, 22 members across two plans) is the wrong grain and fails too. Cross-checked with an independent formulation (the top plan among active members only, looked up by id in a subquery) — identical, Bronze Essential 6500. No claims, so no default filter. The name is checked by the result set and by the text check.\n\nTrap query (must return different rows): SELECT member.plan_id, COUNT(*) AS members FROM health_insurance.members member GROUP BY member.plan_id ORDER BY members DESC LIMIT 1\n\nParaphrases: What's our most popular benefit plan by membership? | Which of our plans do the largest number of members belong to?\n\nMoved from feat/engine-eval-loop (branch category id-vs-name, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Bronze Essential 6500"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT plan.name AS plan FROM health_insurance.members member JOIN health_insurance.plans plan ON plan.id = member.plan_id GROUP BY plan.name ORDER BY COUNT(*) DESC, plan.name LIMIT 1"
+      }
+    },
+    {
+      "id": "members-with-claims-march-2024",
+      "category": "default-filter",
+      "split": "dev",
+      "tags": [
+        "trap:default-filter",
+        "difficulty:hard"
+      ],
+      "question": "How many different members had a claim with a March 2024 date of service?",
+      "intent": "Test traffic adds members as well as claims — the distinct count has to come from non-test claims.",
+      "notes": "March 2024 is where the fixture concentrates its test traffic (14 of the 36 test claims). 25 distinct members have a non-test claim with a March 2024 service date; counting over every claim (the trapSql) gives 31, because six members appear in March only through test claims. The dataset's default-filter knowledge says to exclude is_test claims from claims aggregates, and the question must not announce it. Cross-checked with an independent formulation (EXISTS over members) — identical 25. The count is checked by the result set; the test|synthetic word check asks the answer to say it left test claims out. Complements claims-march-2024, which counts claims rather than members.\n\nTrap query (must return different rows): SELECT COUNT(DISTINCT claim.member_id) AS members FROM health_insurance.claims claim WHERE claim.service_date >= DATE '2024-03-01' AND claim.service_date < DATE '2024-04-01'\n\nParaphrases: How many unique members had claims for services in March 2024? | For March 2024 dates of service, how many distinct members show up on our claims?\n\nMoved from feat/engine-eval-loop (branch category default-filter, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "test|synthetic"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT COUNT(DISTINCT claim.member_id) AS members FROM health_insurance.claims claim WHERE claim.is_test = false AND claim.service_date >= DATE '2024-03-01' AND claim.service_date < DATE '2024-04-01'"
+      }
+    },
+    {
+      "id": "denied-claims-by-country",
+      "category": "join",
+      "split": "held-out",
+      "tags": [
+        "trap:multi-step-join",
+        "difficulty:medium"
+      ],
+      "question": "How many denied claims did we have in each country?",
+      "intent": "Claims carry no country — the answer needs claims -> members -> regions -> states -> countries.",
+      "notes": "206 non-test claims are DENIED: United States 196 and Canada 10, by the member's country (provider location is not modelled). Stopping one join short (the trapSql, grouped by state) returns 6 rows at the wrong grain — Texas 81, California 57, Ohio 30, New York 28, British Columbia 6, Ontario 4. Cross-checked with an independent formulation (COUNT(DISTINCT claim_id) from claim_denials joined to v_claim_financials) — identical 2 rows, because every denied claim carries at least one denial row. The counts are checked by the result set; the text check asks for the smaller country by name.\n\nTrap query (must return different rows): SELECT state.name AS state, COUNT(*) AS denied_claims FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id JOIN health_insurance.states state ON state.id = region.state_id JOIN health_insurance.countries country ON country.code = state.country_code WHERE claim.status = 'DENIED' AND claim.is_test = false GROUP BY state.name\n\nParaphrases: What's the count of denied claims per country? | Break down our denied claims by country.\n\nMoved from feat/engine-eval-loop (branch category multi-step-join, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Canada"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT country.name AS country, COUNT(*) AS denied_claims FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id JOIN health_insurance.states state ON state.id = region.state_id JOIN health_insurance.countries country ON country.code = state.country_code WHERE claim.status = 'DENIED' AND claim.is_test = false GROUP BY country.name ORDER BY denied_claims DESC, country.name"
+      }
+    },
+    {
+      "id": "claims-by-member-state-2025",
+      "category": "join",
+      "split": "dev",
+      "tags": [
+        "trap:multi-step-join",
+        "difficulty:medium"
+      ],
+      "question": "How many claims with 2025 dates of service came from members in each state or province?",
+      "intent": "Claims -> members -> regions -> states; the region is one join short and the wrong grain.",
+      "notes": "The 572 non-test 2025 claims split Texas 225, California 151, Ohio 74, New York 51, Ontario 36 and British Columbia 35 (6 rows; the two Canadian provinces live in the same table as the US states). The trapSql stops at the region and returns 8 rows (North Texas 113, Gulf Coast Texas 112, Southern California 90, Ohio Valley 74, Northern California 61, Hudson Valley 51, Greater Toronto 36, Lower Mainland 35). Cross-checked with an independent formulation (GROUP BY state_name on v_claim_financials) — identical 6 rows. The counts are checked by the result set; the text check asks for a province by name — Ontario, because \"Texas\" and \"California\" also appear in region names and would pass at the wrong grain.\n\nTrap query (must return different rows): SELECT region.name AS region, COUNT(*) AS claims FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id WHERE claim.is_test = false AND claim.service_date >= DATE '2025-01-01' AND claim.service_date < DATE '2026-01-01' GROUP BY region.name\n\nParaphrases: For 2025, how many claims did members in each state or province generate? | Break down 2025 claims by the member's state or province.\n\nMoved from feat/engine-eval-loop (branch category multi-step-join, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Ontario"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT state.name AS state, COUNT(*) AS claims FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id JOIN health_insurance.states state ON state.id = region.state_id WHERE claim.is_test = false AND claim.service_date >= DATE '2025-01-01' AND claim.service_date < DATE '2026-01-01' GROUP BY state.name ORDER BY claims DESC, state.name"
+      }
+    },
+    {
+      "id": "provider-data-discovery",
+      "category": "discovery",
+      "split": "held-out",
+      "tags": [
+        "trap:discovery",
+        "difficulty:easy"
+      ],
+      "question": "What information do we keep about our providers?",
+      "intent": "Pure discovery — describe the providers entity from the session datasets without querying rows.",
+      "notes": "The honest answer names providers (25 rows): name, NPI, specialty (8 values), network status (IN_NETWORK / OUT_OF_NETWORK) and credentialing date, and may add that claims link to it by provider_id and that v_claim_financials repeats provider name, specialty and network status per claim. The fixture does not model provider location, contracts, fee schedules or quality ratings — the likely inventions; region, state and country belong to members. Checks follow the README's discovery rule: didNotCall run_readonly_sql plus one matches requiring two provider attributes (a question about one entity has one entity name to require).\n\nMoved from feat/engine-eval-loop (branch category discovery, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*specialt)(?=[\\s\\S]*network)"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "I4"
+        }
+      ],
+      "judgeRubric": "The user asks what data exists about providers; the correct answer describes the providers entity without running SQL: each provider has a name, an NPI, a specialty (Family Medicine, Cardiology, Orthopedics, Radiology, Dermatology, Behavioral Health, Oncology or Emergency Medicine), a network status (in network or out of network) and a credentialing date; claims reference a provider by provider_id, and v_claim_financials repeats the provider's name, specialty and network status per claim. Score pass=true only if the final answer names the providers entity (or an unambiguous equivalent), mentions at least specialty and network status, invents no attribute, and no run_readonly_sql call was made. Score pass=false if it ran SQL against the data, invents provider fields the dataset does not have (address, city, state, ratings, contracts, fee schedules, accepting new patients), or describes only claim-level data. Close but wrong: an answer that lists the right fields but adds a provider location or state (provider location is not modelled — region and state belong to members), or that says it would need to query the data to know — that must FAIL."
+    },
+    {
+      "id": "member-location-discovery",
+      "category": "discovery",
+      "split": "dev",
+      "tags": [
+        "trap:discovery",
+        "difficulty:medium"
+      ],
+      "question": "What do we know about where our members live?",
+      "intent": "Discovery across the location hierarchy — members point to a region, which rolls up to a state or province and a country; there is no address.",
+      "notes": "members carry region_id only; regions (8, e.g. Gulf Coast Texas, Greater Toronto) roll up to states (6 — California, Texas, New York, Ohio and the provinces Ontario and British Columbia) and countries (2 — United States, Canada). There is no street address, city or postal code anywhere in the schema (checked against information_schema on 2026-09-23), and provider location is not modelled at all. v_claim_financials exposes region, state and country names per claim, as the member's location. Checks: didNotCall run_readonly_sql plus one matches requiring the region level and a state, province or country level.\n\nMoved from feat/engine-eval-loop (branch category discovery, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "^(?=[\\s\\S]*region)(?=[\\s\\S]*(state|province|countr))"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "I4"
+        }
+      ],
+      "judgeRubric": "The user asks what location data exists for members; the correct answer, given without running SQL, says each member is assigned to a region (members.region_id -> regions, eight service regions), regions roll up to a state or province (states, which include Ontario and British Columbia) and states to a country (countries: United States and Canada), and that there is no street address, city or postal code. It may add that v_claim_financials carries region, state and country names per claim as the member's location. Score pass=true only if the final answer names the region -> state -> country hierarchy (by entity names or unambiguous equivalents), makes clear that the region is the finest location available, and no run_readonly_sql call was made. Score pass=false if it ran SQL against the data, invents an address, city, ZIP or postal code or coordinates, or presents provider location as available. Close but wrong: an answer that names regions and countries but claims members also have a city or ZIP code, or that describes the region without the state and country roll-up — that must FAIL."
+    },
+    {
+      "id": "plan-monthly-premium-dollars",
+      "category": "encoding",
+      "split": "held-out",
+      "tags": [
+        "trap:unit-confusion",
+        "difficulty:easy"
+      ],
+      "question": "What is the monthly premium for each of our plans, in dollars?",
+      "intent": "Premiums are stored in cents — $312.00 a month, not $31,200.",
+      "notes": "The monthly premium is stored in cents: Bronze Value HSA 7000 $289.00, Bronze Essential 6500 $312.00, Silver Standard 3500 $448.00, Silver Select Network 3000 $472.50, Gold Preferred 1500 $615.00 and Platinum Complete 500 $824.00 (6 rows). The trapSql reports the raw column (28,900 to 82,400), which read as dollars prices a Bronze plan at $28,900 a month. No claims, so no default filter. Cross-checked with an independent formulation (ROUND(CAST(… AS numeric) / 100, 2)) — identical 6 rows. The figures are checked by the result set, so the conversion has to happen in the SQL the answer rests on.\n\nTrap query (must return different rows): SELECT plan.name AS plan, plan.monthly_premium_cents AS monthly_premium FROM health_insurance.plans plan\n\nParaphrases: How much does each plan cost per month in premiums, in dollars? | List each plan's monthly premium in dollars.\n\nMoved from feat/engine-eval-loop (branch category unit-confusion, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT plan.name AS plan, plan.monthly_premium_cents / 100.0 AS monthly_premium_dollars FROM health_insurance.plans plan ORDER BY plan.name"
+      }
+    },
+    {
+      "id": "billed-2025-dollars",
+      "category": "encoding",
+      "split": "dev",
+      "tags": [
+        "trap:unit-confusion",
+        "difficulty:medium"
+      ],
+      "question": "How much did providers bill us in total for 2025 dates of service, in dollars?",
+      "intent": "Billed amounts are cents — the 2025 total is about $1.1 million, not $110 million.",
+      "notes": "Non-test claims with 2025 service dates billed 109,833,400 cents = $1,098,334.00 (every billed amount in the fixture is a whole-dollar figure). Reporting the raw sum as dollars (the trapSql) inflates the year a hundredfold to $109.8M. Test claims would add 1,438,500 cents ($1,112,719.00 in all), so the reference obeys the default filter as well. Cross-checked with an independent formulation (the sum of per-row dollar amounts over v_claim_financials) — identical $1,098,334.00. The figure is checked by the result set, so the conversion has to happen in the SQL the answer rests on, as in avg-paid-per-claim-dollars.\n\nTrap query (must return different rows): SELECT SUM(claim.billed_amount_cents) AS billed FROM health_insurance.claims claim WHERE claim.is_test = false AND claim.service_date >= DATE '2025-01-01' AND claim.service_date < DATE '2026-01-01'\n\nParaphrases: What was the total billed amount on 2025 claims, in dollars? | In dollars, how much was billed to us for services provided in 2025?\n\nMoved from feat/engine-eval-loop (branch category unit-confusion, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT SUM(claim.billed_amount_cents) / 100.0 AS billed_dollars FROM health_insurance.claims claim WHERE claim.is_test = false AND claim.service_date >= DATE '2025-01-01' AND claim.service_date < DATE '2026-01-01'"
+      }
+    },
+    {
+      "id": "denial-reasons-per-category",
+      "category": "aggregate",
+      "split": "dev",
+      "tags": [
+        "trap:control",
+        "difficulty:easy"
+      ],
+      "question": "How many different denial reasons do we have in each category?",
+      "intent": "One table, one GROUP BY, no trap — a healthy baseline on the denial reference data.",
+      "notes": "COVERAGE 3, AUTHORIZATION 2, CODING 2, DUPLICATE 1, ELIGIBILITY 1, TIMELY_FILING 1 — all 10 reasons in 6 rows. No claims, so no default filter; no nulls, no money, no ratio. The counterpart to the denial cases: a fix that reflexively joins denial reasons to claims (and so counts denials instead of reasons) over-fires here, and no guard may fire on it. Cross-checked with an independent formulation (COUNT(DISTINCT code)) — identical 6 rows. The counts are checked by the result set. The reference is portable SQL, so it needs no Databricks override.\n\nParaphrases: How many denial reasons fall under each denial category? | Count our denial reasons by category.\n\nMoved from feat/engine-eval-loop (branch category control, provenance model-drafted-verified).",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "COVERAGE"
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          },
+          "criterion": "D1"
+        },
+        {
+          "type": "noToolErrors",
+          "criterion": "D3"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT denial_reason.category, COUNT(*) AS denial_reasons FROM health_insurance.denial_reasons denial_reason GROUP BY denial_reason.category ORDER BY denial_reasons DESC, denial_reason.category"
+      }
+    }
+  ]
+}

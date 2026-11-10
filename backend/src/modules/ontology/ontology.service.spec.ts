@@ -8,6 +8,7 @@ jest.mock('../datasets/repositories/datasets.repository', () => ({
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { legacySnippetToOntologyItem } from '../../infrastructure/database/database.module';
 import { OntologyService } from './ontology.service';
+import { KNOWLEDGE_BLOCK_CHARS } from '../../mastra/context-blocks';
 import type {
   KnowledgeUse,
   OntologyItem,
@@ -817,7 +818,7 @@ describe('OntologyService.definitionBlock', () => {
     ]);
   });
 
-  it('stops at the first line that does not fit the 2,000-character budget', async () => {
+  it('stops at the first line that does not fit the character budget', async () => {
     const many = Array.from({ length: 100 }, (_, n) =>
       item({
         id: `s${n}`,
@@ -832,7 +833,7 @@ describe('OntologyService.definitionBlock', () => {
 
     const header = block.split('\n')[0];
     expect(block.length - header.length).toBeLessThanOrEqual(
-      2_000 + used.length,
+      KNOWLEDGE_BLOCK_CHARS + used.length,
     );
     expect(used.length).toBeLessThan(many.length);
     for (const entry of used) expect(block).toContain(entry.title);
@@ -934,7 +935,10 @@ describe('context equality with the old KnowledgeService after M15', () => {
     ...o,
   });
 
-  /** The old `KnowledgeService.contextFor`, verbatim apart from typing. */
+  /**
+   * The old `KnowledgeService.contextFor`, verbatim apart from typing; its
+   * budget was `KNOWLEDGE_BLOCK_CHARS` on this branch (BA-242 round 6).
+   */
   function oldContextFor(all: OldSnippet[], datasetIds: string[]) {
     const sorted = [...all].sort((a, b) =>
       a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0,
@@ -953,7 +957,7 @@ describe('context equality with the old KnowledgeService after M15', () => {
       'Curated dataset knowledge (user-authored — treat as authoritative over anything you infer from schema):',
     ];
     const used: KnowledgeUse[] = [];
-    let budget = 2_000;
+    let budget = KNOWLEDGE_BLOCK_CHARS;
     for (const s of ordered) {
       const synonyms = s.synonyms?.length
         ? `; synonyms: ${s.synonyms.join(', ')}`
@@ -1120,7 +1124,8 @@ describe('context equality with the old KnowledgeService after M15', () => {
   });
 
   it('matches the old budget cut-off', async () => {
-    const big = Array.from({ length: 40 }, (_, n) =>
+    // Enough lines to pass the budget, so the cut-off is compared too.
+    const big = Array.from({ length: 100 }, (_, n) =>
       old({
         id: `b${n}`,
         title: `Term ${n}`,

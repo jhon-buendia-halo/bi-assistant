@@ -1,0 +1,18 @@
+merged	into	status after	parent after
+BA-183	BA-182	Done (duplicate)	none
+BA-184	BA-182	Done (duplicate)	none
+BA-185	BA-182	Done (duplicate)	none
+BA-187	BA-186	Done (duplicate)	none
+BA-189	BA-188	Done (duplicate)	none
+BA-191	BA-190	Done (duplicate)	none
+BA-192	BA-190	Done (duplicate)	none
+BA-194	BA-193	Done (duplicate)	none
+BA-195	BA-193	Done (duplicate)	none
+BA-196	BA-193	Done (duplicate)	none
+
+survivor	steps	roadmap features	status
+BA-182	1a-1d	1.1.4-1.1.7	Done
+BA-186	2-3	1.1.8-1.1.9	In Progress
+BA-188	4-5	1.1.10-1.1.11	To Do
+BA-190	6-8	1.1.12-1.1.14	To Do
+BA-193	9-12	1.1.15-1.1.18	To Do

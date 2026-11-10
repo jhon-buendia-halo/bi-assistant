@@ -1,0 +1,23 @@
+Backend checks on feat/BA-9-golden-dataset-evals at 3b9c107 (merge of origin/main eb95e17, v0.38.0), 2026-11-04.
+
+$ npx jest --silent   (backend/)
+Test Suites: 180 passed, 180 total
+Tests:       3083 passed, 3083 total
+Snapshots:   0 total
+Time:        1.829 s, estimated 2 s
+
+$ npx tsc -p tsconfig.build.json --noEmit --incremental --tsBuildInfoFile <scratchpad>   (backend/; dist/ untouched)
+exit 0, no output
+
+$ npx eslint <the 10 backend files the merge resolution touched>   (no --fix)
+exit 0, no output
+
+$ npx prettier --check <the same 10 files>
+All matched files use Prettier code style!
+
+Files: src/mastra/evals/{assistant.evals.ts, assistant.evals.spec.ts, rfp.evals.spec.ts, run-assistant-evals.ts, run-assistant-evals.spec.ts, eval-set-files.spec.ts, data-readiness.evals.spec.ts}, src/modules/agents/agents.service.ts, src/modules/sessions/{sessions.service.ts, sessions.service.spec.ts}
+
+First full run, before the three test adaptations (see README.md): 3 suites failed, 1 test failed, 3034 of 3035 passed.
+  - eval-set-files.spec.ts: the 1.1.4 snapshot predates BA-300's ambiguous-best-team rubric
+  - data-readiness.evals.spec.ts: its @mastra/core/evals mock had no createScorer, which the set files call at import
+  - run-assistant-evals.spec.ts: the registry now imports data-readiness.agent (ESM @mastra/core/agent), not mocked

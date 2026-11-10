@@ -1,0 +1,55 @@
+Before: c87d8b8e (63 questions, openai/gpt-5.6-luna, repeats 3, judge off); 8de2c6ad (68 questions, openai/gpt-5.6-luna, repeats 3, judge off); d34c3799 (50 questions, openai/gpt-5.6-luna, repeats 3, judge off)
+After:  3cd45a63 (63 questions, openai/gpt-5.6-luna, repeats 3, judge off); fdf98aa5 (68 questions, openai/gpt-5.6-luna, repeats 3, judge off); c3986034 (50 questions, openai/gpt-5.6-luna, repeats 3, judge off)
+
+Split     Category        Before            After             Change   95% interval of change  Flag
+dev       lookup          6/6 (61–100%)     6/6 (61–100%)     0 pts    −39 to +39 pts          within
+dev       aggregate       12/15 (55–93%)    13/15 (62–96%)    +7 pts   −21 to +34 pts          within
+dev       join            4/9 (19–73%)      6/9 (35–88%)      +22 pts  −20 to +55 pts          within
+dev       ranking         15/16 (72–99%)    15/16 (72–99%)    0 pts    −23 to +23 pts          within
+dev       ratio           14/14 (78–100%)   13/14 (69–99%)    −7 pts   −31 to +15 pts          within
+dev       null            5/6 (44–97%)      5/6 (44–97%)      0 pts    −42 to +42 pts          within
+dev       encoding        7/10 (40–89%)     9/10 (60–98%)     +20 pts  −16 to +51 pts          within
+dev       reasoning       0/2 (0–66%)       1/2 (9–91%)       +50 pts  −27 to +91 pts          within
+dev       discovery       3/4 (30–95%)      4/4 (51–100%)     +25 pts  −28 to +70 pts          within
+dev       ambiguous       4/5 (38–96%)      4/5 (38–96%)      0 pts    −45 to +45 pts          within
+dev       fuzzy-scope     3/3 (44–100%)     2/3 (21–94%)      −33 pts  −79 to +29 pts          within
+dev       out-of-scope    3/5 (23–88%)      4/5 (38–96%)      +20 pts  −31 to +60 pts          within
+dev       non-existent    2/2 (34–100%)     2/2 (34–100%)     0 pts    −66 to +66 pts          within
+dev       business-term   10/10 (72–100%)   8/10 (49–94%)     −20 pts  −51 to +11 pts          within
+dev       default-filter  4/6 (30–90%)      4/6 (30–90%)      0 pts    −44 to +44 pts          within
+dev       visual          2/4 (15–85%)      3/4 (30–95%)      +25 pts  −32 to +66 pts          within
+dev       paraphrase      8/13 (36–82%)     7/13 (29–77%)     −8 pts   −40 to +27 pts          within
+dev       all             102/130 (71–85%)  106/130 (74–87%)  +3 pts   −7 to +13 pts           within
+held-out  lookup          2/2 (34–100%)     2/2 (34–100%)     0 pts    −66 to +66 pts          within
+held-out  aggregate       2/4 (15–85%)      2/4 (15–85%)      0 pts    −49 to +49 pts          within
+held-out  join            3/5 (23–88%)      4/5 (38–96%)      +20 pts  −31 to +60 pts          within
+held-out  ranking         5/6 (44–97%)      5/6 (44–97%)      0 pts    −42 to +42 pts          within
+held-out  ratio           5/5 (57–100%)     3/5 (23–88%)      −40 pts  −77 to +12 pts          within
+held-out  null            1/2 (9–91%)       1/2 (9–91%)       0 pts    −57 to +57 pts          within
+held-out  encoding        2/4 (15–85%)      1/4 (5–70%)       −25 pts  −66 to +32 pts          within
+held-out  discovery       0/3 (0–56%)       1/3 (6–79%)       +33 pts  −29 to +79 pts          within
+held-out  ambiguous       2/3 (21–94%)      2/3 (21–94%)      0 pts    −53 to +53 pts          within
+held-out  out-of-scope    2/3 (21–94%)      2/3 (21–94%)      0 pts    −53 to +53 pts          within
+held-out  non-existent    1/1 (21–100%)     1/1 (21–100%)     0 pts    −79 to +79 pts          within
+held-out  business-term   2/4 (15–85%)      1/4 (5–70%)       −25 pts  −66 to +32 pts          within
+held-out  default-filter  2/2 (34–100%)     2/2 (34–100%)     0 pts    −66 to +66 pts          within
+held-out  paraphrase      4/7 (25–84%)      2/7 (8–64%)       −29 pts  −62 to +19 pts          within
+held-out  all             33/51 (51–76%)    29/51 (43–69%)    −8 pts   −26 to +11 pts          within
+
+Flips, dev:
+  Now passing: visual-request (visual), semi-final-goals-2022 (encoding), goals-by-defenders (encoding), south-american-goals (join), player-data-discovery (discovery), group-stage-goals-2022 (out-of-scope), goals-by-type (aggregate), attendance-by-tournament (aggregate), harborline-leads-by-line-2025 (join), top-channel-q2-2025 (default-filter), campaign-freeze-impact (reasoning)
+  Now failing: extra-time-goals-reworded (paraphrase), yellow-card-share (ratio), average-aum-per-client-fy2025-end (business-term), positions-held-2024-end (default-filter), fee-revenue-latest-quarter (fuzzy-scope), deposit-accounts-per-branch (business-term), gov-auto-premium-vs-market-q2-2025 (aggregate)
+Flips, held-out:
+  Now passing: harborline-spend-by-channel-2025 (join), benchmark-discovery (discovery)
+  Now failing: shot-conversion-2022-reworded (paraphrase), quickest-goal-scorer-reworded (paraphrase), advisory-fee-rate-by-mandate-fy2025 (ratio), largest-market-share-line-2025 (ratio), highest-walk-away-rate-channel-2025 (business-term), harborline-premium-fiscal-2025 (encoding)
+Only before: none
+Only after: none
+
+Cost before: $0.9580 · $0.0053 per question
+Cost after: $1.0025 · $0.0055 per question
+Cost per question: +4.6%
+
+Draft change log: Round 10: tools: a note on every grouped result of several rows, and a sentence in run_readonly_sql's description: a total, a difference or a count across the rows comes from the query, as a window column or one more query. After the prompt's rule, answers still state a total, a difference or a count across a breakdown's rows worked out in the text, because nothing in the tool result says where such a figure must come from. Dev 102/130 → 106/130, held-out 33/51 → 29/51; dev aggregate within; cost per question $0.0053 → $0.0055. Runs c87d8b8e, 8de2c6ad, d34c3799 → 3cd45a63, fdf98aa5, c3986034.
+Draft results.tsv row:
+10	2026-10-23	After the prompt's rule, answers still state a total, a difference or a count across a breakdown's rows worked out in the text, because nothing in the tool result says where such a figure must come from.	tools: a note on every grouped result of several rows, and a sentence in run_readonly_sql's description: a total, a difference or a count across the rows comes from the query, as a window column or one more query		aggregate	aggregate:12/15;all:102/130	aggregate:13/15;all:106/130	aggregate:2/4;all:33/51	aggregate:2/4;all:29/51		0.0053	0.0055	1.0025			c87d8b8e;8de2c6ad;d34c3799	3cd45a63;fdf98aa5;c3986034
+Accept rule: not met (dev aggregate is within, not up)

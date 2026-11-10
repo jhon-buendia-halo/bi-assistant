@@ -1,9 +1,33 @@
 import type { DatasetSnapshot } from '../tool-services';
 import {
+  databricksSource,
   findFixture,
   requiredEntities,
   type SampleFixture,
 } from '../../modules/testing-data/fixtures/registry';
+import { catalogOfEntities } from './databricks-catalog';
+
+/** How the preflight message names each datasource kind. */
+const KIND_LABELS: Readonly<
+  Record<NonNullable<SampleFixture['datasourceKind']>, string>
+> = {
+  postgres: 'PostgreSQL',
+  rest: 'REST API',
+  databricks: 'Databricks',
+};
+
+/**
+ * Where a Databricks sample's setup is described: the loader and the sample
+ * it loads (agents-evals R185). It names the loader's own argument, the
+ * PostgreSQL sample whose dump it reads.
+ */
+function databricksSetup(sample: SampleFixture): string {
+  const source = databricksSource(sample)?.id ?? sample.id;
+  return (
+    `scripts/setup-fixture-databricks.ts --fixture ${source} ` +
+    '(runbook: docs/evals/databricks-vdi.md)'
+  );
+}
 
 /**
  * Resolve the sample a question set is bound to. Throws rather than returning
@@ -36,11 +60,13 @@ export function assistantEvalDatasetError(
 ): string | undefined {
   const sample = typeof fixture === 'string' ? evalFixture(fixture) : fixture;
   const kind = sample.datasourceKind ?? 'postgres';
-  const kindLabel = kind === 'rest' ? 'REST API' : 'PostgreSQL';
+  const kindLabel = KIND_LABELS[kind];
   const setupDoc =
     kind === 'rest'
       ? 'scripts/setup-worldcup-rest.ts'
-      : 'docker/postgres/README.md';
+      : kind === 'databricks'
+        ? databricksSetup(sample)
+        : 'docker/postgres/README.md';
   const setup =
     `These evals require the bundled ${sample.name} sample: ${sample.description} ` +
     `Select its ${kindLabel} datasource and save a dataset containing the ` +
@@ -63,8 +89,9 @@ export function assistantEvalDatasetError(
   ) {
     return `${setup} The selected datasets must belong to one ${kindLabel} datasource.`;
   }
-  // Inventory keys are catalog.schema.table (`api.schema.table` for REST);
-  // older snapshots may have schema.table. Never accept a similarly named
+  // Inventory keys are catalog.schema.table (`api.schema.table` for REST,
+  // `<catalog>.schema.table` for the Databricks samples); older snapshots may
+  // have schema.table. Never accept a similarly named
   // table in another schema.
   const entities = new Set(
     selected.flatMap((dataset) =>
@@ -78,6 +105,15 @@ export function assistantEvalDatasetError(
   );
   if (missing.length > 0) {
     return `${setup} Selected datasets: ${names.join(', ')}. Missing entities: ${missing.join(', ')}.`;
+  }
+  if (kind === 'databricks') {
+    // The references run in the datasets' one catalog (R192), so it must be
+    // unambiguous before any model token is spent.
+    try {
+      catalogOfEntities(selected.flatMap((dataset) => dataset.tables));
+    } catch (err) {
+      return `${setup} ${(err as Error).message}`;
+    }
   }
   return undefined;
 }

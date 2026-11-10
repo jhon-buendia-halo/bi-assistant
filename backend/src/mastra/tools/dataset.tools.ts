@@ -6,6 +6,11 @@ import {
   DatasetColumnSnapshot,
   DatasetSnapshot,
 } from '../tool-services';
+import { usageSinkFrom } from '../usage-sink';
+import {
+  ineffectiveLeftJoinFilters,
+  IneffectiveJoinFilter,
+} from './left-join-filter';
 
 /** requestContext key carrying the session's dataset names. */
 export const DATASETS_CONTEXT_KEY = 'datasets';
@@ -116,6 +121,78 @@ const RATIONALE_DESCRIPTION = [
   'jargon, no restating the statement.',
 ].join(' ');
 
+/**
+ * A breakdown invites the answer to add its rows up, subtract one from
+ * another or count them — figures no tool result holds. The note rides on
+ * the result the answer is written from and says where such a figure has to
+ * come from: the query, not the answer text.
+ */
+const ACROSS_ROWS_NOTE = [
+  'grouped rows — a total across them, a difference between two of them, a',
+  'share of their whole or how many of them there are may be stated only',
+  'when a result column holds it; otherwise get it from SQL — a window column',
+  '(SUM(SUM(x)) OVER () for the total, SUM(x) - LAG(SUM(x)) OVER (ORDER BY g)',
+  'for the change from the row before, COUNT(*) OVER () for the number of',
+  'groups) or one more query — and never work it out in the answer',
+].join(' ');
+
+/** A grouped statement that returned more than one row. */
+function isBreakdown(sql: string, rows: unknown[]): boolean {
+  return rows.length > 1 && /\bgroup\s+by\b/i.test(sql);
+}
+
+/**
+ * The snapshot columns of the session entities a table name as written in SQL
+ * points at (`schema.table` matches the end of `catalog.schema.table`).
+ */
+function snapshotColumns(
+  datasets: DatasetSnapshot[],
+): (table: string) => string[] {
+  const entities = allowedEntities(datasets);
+  return (table) => {
+    const parts = table
+      .replace(/[\s"`]/g, '')
+      .toLowerCase()
+      .split('.');
+    return entities
+      .filter((access) => {
+        const key = access.entity.toLowerCase().split('.');
+        const tail = key.slice(Math.max(0, key.length - parts.length));
+        return tail.join('.') === parts.join('.');
+      })
+      .flatMap((access) => access.columns?.map((column) => column.name) ?? []);
+  };
+}
+
+/**
+ * A filter in the ON clause of a LEFT JOIN whose table nothing else reads
+ * removes no row, and the result gives no sign of it. The statement still
+ * runs (a refusal would be a tool error), and a warning on its result says
+ * where the filter has to go, leaving ON as the place for a filter on a table
+ * the query does read (it keeps groups with no matching rows).
+ */
+function ineffectiveFilterWarning(found: IneffectiveJoinFilter[]): string {
+  const places = found
+    .map(
+      ({ join, conditions }) =>
+        `\`${conditions.join(' AND ')}\` is in the ON clause of \`${join}\``,
+    )
+    .join('; ');
+  const names = found.map(({ alias }) => alias).join(', ');
+  const alias = found[0].alias;
+  return [
+    `${places}, and nothing else in the query reads ${names}.`,
+    'A LEFT JOIN keeps every row of the tables before it, so that condition',
+    'removed no row and rows outside it were counted. Put it where it',
+    'filters and run the query again: in WHERE (or make that join an INNER',
+    'JOIN) when only rows inside it count; to keep groups with no matching',
+    'rows, in the ON clause of the LEFT JOIN whose rows the measure reads',
+    '(<its key> IN (SELECT <key> FROM <that table> WHERE <condition>)), or read',
+    `the table in the measure (SUM(CASE WHEN ${alias}.<key> IS NOT NULL THEN …`,
+    'END)). A condition in ON filters only on a table the query reads.',
+  ].join(' ');
+}
+
 export const listEntitiesTool = createTool({
   id: 'list_entities',
   description:
@@ -200,8 +277,11 @@ export const runReadOnlySqlTool = createTool({
     'PostgreSQL for postgres, SQLite for rest. Reference entities with fully-qualified',
     'catalog.schema.table names (on Postgres, the catalog is the database',
     'name; you may write schema.table). Only query entities from this',
-    "session's datasets. Write/DDL statements are rejected. datasourceId is",
-    'optional when the session uses a single datasource.',
+    "session's datasets. A figure across the rows — a total, the difference",
+    'between two rows, how many groups there are — must come from the query',
+    'too: add it as a window column (e.g. SUM(SUM(x)) OVER ()) or run one more',
+    'query. Write/DDL statements are rejected. datasourceId is optional when',
+    'the session uses a single datasource.',
   ].join(' '),
   inputSchema: z.object({
     sql: z.string().describe('A single SELECT or WITH statement'),
@@ -226,6 +306,7 @@ export const runReadOnlySqlTool = createTool({
         sql,
         rowLimit,
         datasetNames(requestContext),
+        usageSinkFrom(requestContext),
       );
       // Inspect the statement that actually ran — the fixer may have repaired
       // the one the model wrote. Warnings ride back on the tool result so the
@@ -236,10 +317,26 @@ export const runReadOnlySqlTool = createTool({
           ? (result as { correctedSql: string }).correctedSql
           : sql;
       const rows = (result as { rows?: Record<string, unknown>[] }).rows ?? [];
-      const warnings = inspectResult(executed, rows, rowLimit).map(
-        (warning) => warning.message,
+      const deadFilters = ineffectiveLeftJoinFilters(
+        executed,
+        snapshotColumns(datasets),
       );
-      return warnings.length ? { ...result, warnings } : result;
+      const warnings = [
+        ...inspectResult(executed, rows, rowLimit).map(
+          (warning) => warning.message,
+        ),
+        ...(deadFilters.length ? [ineffectiveFilterWarning(deadFilters)] : []),
+      ];
+      // Joined like the service's own notes, so the agent reads one note.
+      const notes = [
+        ...(result.note ? [result.note] : []),
+        ...(isBreakdown(executed, rows) ? [ACROSS_ROWS_NOTE] : []),
+      ];
+      return {
+        ...result,
+        ...(notes.length ? { note: notes.join('; ') } : {}),
+        ...(warnings.length ? { warnings } : {}),
+      };
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }

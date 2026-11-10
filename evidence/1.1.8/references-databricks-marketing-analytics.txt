@@ -1,0 +1,54 @@
+Databricks references: marketing-analytics.json
+Checked 2026-10-13 by the BA-186 dialect work. Every case of the file with a PostgreSQL reference (42).
+The set that grades against them: marketing-analytics-databricks (fixture marketing-analytics-databricks).
+None was executed on a Databricks warehouse: that run is the VDI validation of BA-186 (agents-evals R164). Every line below is "not executed — VDI".
+
+How each reference was checked without a warehouse
+- Static: the Step 1b check modules (backend/src/mastra/evals/checks/): dialectProblem(sql, 'databricks') finds nothing (agents-evals R74); every table reference has 3 parts (R75), is `evals`.marketing_analytics.<table> and a required table of the sample; the reference reads the same tables as the PostgreSQL one. Also no '::' cast and no FILTER clause.
+- Parse: sqlglot 30.22.0 parses it with its Databricks dialect, raising on any error.
+- Proxy run: the parsed statement, transpiled by sqlglot to DuckDB 1.5.6, runs on DuckDB tables in catalog evals, schema marketing_analytics, created with the PostgreSQL column types and loaded from the same dump (backend/scripts/fixtures/marketing-analytics/data). DuckDB, like Databricks, divides whole numbers into a fraction. Its rows are compared with the PostgreSQL reference's rows as the result-set match compares them (any row order, 6 significant figures). This shows the translation keeps the meaning; it does not show the warehouse accepts the text.
+
+✓ fiscal-quarter-of-july-2024  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ digital-channels  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 2 rows equal to PostgreSQL; not executed — VDI
+✓ latest-final-quarter  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ spring-home-refresh-dates  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ harborline-headquarters  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ harborline-pet-launch  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ harborline-policies-sold-2025-q2  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ market-premium-by-line-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 5 rows equal to PostgreSQL; not executed — VDI
+✓ harborline-premium-by-currency-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ harborline-campaign-spend-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ market-policies-by-channel-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 4 rows equal to PostgreSQL; not executed — VDI
+✓ harborline-earned-premium-by-quarter-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 4 rows equal to PostgreSQL; not executed — VDI
+✓ gov-auto-premium-vs-market-q2-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ gov-pinecrest-pet-vs-rest-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ harborline-premium-by-region-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 4 rows equal to PostgreSQL; not executed — VDI
+✓ market-premium-by-family-and-region-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 12 rows equal to PostgreSQL; not executed — VDI
+✓ harborline-leads-by-line-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 5 rows equal to PostgreSQL; not executed — VDI
+✓ northeast-auto-policies-q4-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ harborline-spend-by-channel-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 4 rows equal to PostgreSQL; not executed — VDI
+✓ top-auto-state-q4-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 2 rows equal to PostgreSQL; not executed — VDI
+✓ top-three-campaigns-by-leads-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ fastest-growing-line-2024-to-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ top-five-states-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 5 rows equal to PostgreSQL; not executed — VDI
+✓ lowest-premium-channel-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ gov-fastest-growing-competitor  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ top-ctr-campaigns-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ best-lead-to-policy-channel-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ top-budget-share-campaigns-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+✓ largest-market-share-line-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ premium-per-policy-top-line-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ highest-digital-share-region-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ harborline-revenue-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ highest-walk-away-rate-channel-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ lowest-cost-per-acquisition-channel-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ harborline-walk-aways-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ harborline-premium-fiscal-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ top-promo-code-by-leads  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ quarter-without-campaign-spend  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ top-channel-q2-2025  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ harborline-policies-all-periods  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL; not executed — VDI
+✓ chart-harborline-premium-by-quarter  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 8 rows equal to PostgreSQL; not executed — VDI
+✓ campaign-freeze-impact  databricks  static checks pass; parses as Databricks SQL; DuckDB proxy 3 rows equal to PostgreSQL; not executed — VDI
+
+marketing-analytics: 42 of 42 Databricks references pass the static checks, parse as Databricks SQL and return the PostgreSQL rows on the DuckDB proxy; 0 of 42 executed on a warehouse (VDI).

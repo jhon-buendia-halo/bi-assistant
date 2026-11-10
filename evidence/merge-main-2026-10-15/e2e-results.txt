@@ -1,0 +1,40 @@
+# Impacted E2E, web target (E2E_SKIP_DOCKER=1; shared World Cup Postgres on 55432 reused)
+
+## Run 1: e2e/agents.spec.ts e2e/testing-data.spec.ts
+  ✓   1 [web] › e2e/agents.spec.ts:208:5 › opens an agent from the Agents list and switches between its tabs (4.6s)
+  ✓   2 [web] › e2e/agents.spec.ts:302:5 › shows the stateless, no-tool agents accurately (1.0s)
+  ✓   3 [web] › e2e/agents.spec.ts:326:5 › offers the configured datasources and starts a run from the evals tab (2.7s)
+  ✓   4 [web] › e2e/agents.spec.ts:355:5 › runs only the ticked questions (1.5s)
+  ✓   5 [web] › e2e/agents.spec.ts:387:5 › refuses to run against a datasource with no datasets (1.3s)
+  ✓   6 [web] › e2e/agents.spec.ts:404:5 › explains an incomplete eval dataset without starting a run (1.9s)
+  ✓   7 [web] › e2e/agents.spec.ts:424:5 › opens a question in the right panel with what it is scored on (1.1s)
+  ✓   8 [web] › e2e/agents.spec.ts:453:5 › separates the question suite from past executions (3.0s)
+  ✓   9 [web] › e2e/agents.spec.ts:485:5 › downloads an execution as a Markdown report (2.9s)
+  ✘  10 [web] › e2e/agents.spec.ts:556:5 › lists every question set, the golden set among them (768ms)
+  ✓  11 [web] › e2e/agents.spec.ts:596:5 › starts a run of the golden set on the World Cup datasource (2.8s)
+  ✓  12 [web] › e2e/agents.spec.ts:618:5 › runs with the judge off by default (3.0s)
+  ✘  13 [web] › e2e/agents.spec.ts:672:5 › reports pass rate by category (858ms)
+  ✓  14 [web] › e2e/testing-data.spec.ts:82:5 › lists the bundled samples and what is loaded (1.1s)
+  ✓  15 [web] › e2e/testing-data.spec.ts:115:7 › loads the Intellify sample into a new database › seeds it, registers it and reports 49/49 (1.9s)
+  ✘  16 [web] › e2e/testing-data.spec.ts:168:5 › registers the Intellify RFP API (1.0m)
+  3 failed
+    [web] › e2e/agents.spec.ts:556:5 › lists every question set, the golden set among them ─────────
+    [web] › e2e/agents.spec.ts:672:5 › reports pass rate by category ───────────────────────────────
+    [web] › e2e/testing-data.spec.ts:168:5 › registers the Intellify RFP API ───────────────────────
+  13 passed (1.5m)
+
+## Run 2 (after scoping our four 'Agents' clicks to the navigation rail): e2e/agents.spec.ts
+  ✓   1 [web] › e2e/agents.spec.ts:208:5 › opens an agent from the Agents list and switches between its tabs (1.6s)
+  ✓   2 [web] › e2e/agents.spec.ts:302:5 › shows the stateless, no-tool agents accurately (1.1s)
+  ✓   3 [web] › e2e/agents.spec.ts:326:5 › offers the configured datasources and starts a run from the evals tab (2.8s)
+  ✓   4 [web] › e2e/agents.spec.ts:355:5 › runs only the ticked questions (1.6s)
+  ✓   5 [web] › e2e/agents.spec.ts:387:5 › refuses to run against a datasource with no datasets (1.4s)
+  ✓   6 [web] › e2e/agents.spec.ts:404:5 › explains an incomplete eval dataset without starting a run (1.9s)
+  ✓   7 [web] › e2e/agents.spec.ts:424:5 › opens a question in the right panel with what it is scored on (1.1s)
+  ✓   8 [web] › e2e/agents.spec.ts:453:5 › separates the question suite from past executions (3.1s)
+  ✓   9 [web] › e2e/agents.spec.ts:485:5 › downloads an execution as a Markdown report (2.9s)
+  ✓  10 [web] › e2e/agents.spec.ts:556:5 › lists every question set, the golden set among them (1.0s)
+  ✓  11 [web] › e2e/agents.spec.ts:599:5 › starts a run of the golden set on the World Cup datasource (2.7s)
+  ✓  12 [web] › e2e/agents.spec.ts:624:5 › runs with the judge off by default (3.0s)
+  ✓  13 [web] › e2e/agents.spec.ts:681:5 › reports pass rate by category (4.1s)
+  13 passed (28.5s)

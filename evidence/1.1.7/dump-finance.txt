@@ -1,0 +1,32 @@
+# Finance dump (npm run fixture:dump -- --fixture finance --database ba9_finance), 2026-10-13
+
+Format: one `<relation>.json.gz` per table and view (a compact JSON array of row objects, gzipped) and a plain `_meta.json`. Row counts below are read by decompressing each file, not from `_meta.json`. A second dump of the same database was byte-identical in every `.json.gz` file.
+
+Relation | rows in the file | rows in PostgreSQL | gzipped | uncompressed
+---|---|---|---|---
+regions | 4 | 4 | 0.1 KB | 0 KB
+branches | 8 | 8 | 0.4 KB | 1 KB
+customers | 90 | 90 | 2.9 KB | 14 KB
+account_types | 5 | 5 | 0.2 KB | 0 KB
+accounts | 200 | 200 | 4.5 KB | 42 KB
+cards | 150 | 150 | 2.6 KB | 26 KB
+fx_rates | 48 | 48 | 0.5 KB | 4 KB
+transactions | 5400 | 5400 | 105.0 KB | 1588 KB
+loans | 110 | 110 | 2.9 KB | 27 KB
+loan_payments | 1538 | 1538 | 22.7 KB | 174 KB
+fiscal_periods | 36 | 36 | 0.6 KB | 5 KB
+securities | 28 | 28 | 0.8 KB | 3 KB
+portfolios | 46 | 46 | 1.2 KB | 11 KB
+holdings | 2165 | 2165 | 50.2 KB | 307 KB
+fees | 1536 | 1536 | 19.2 KB | 249 KB
+v_accounts | 200 | 200 | 6.9 KB | 80 KB
+v_transactions | 5400 | 5400 | 194.3 KB | 3203 KB
+
+Every relation matches its PostgreSQL row count: True.
+Total on disk: 0.44 MB (0.42 MB of `.json.gz` and a 16 KB `_meta.json`); the same rows as compact JSON are 5.87 MB.
+Before the change (2-space indented, uncompressed JSON) the same dump was 7.53 MB.
+
+Not committed (decided 2026-10-13: only finance and marketing analytics go to Databricks and REST); regenerable with `npm run fixture:dump -- --fixture <id>`. Sizes measured on the dumps taken earlier in the old format, compressed the new way:
+- health-insurance: 5425 rows, about 0.15 MB gzipped
+- genomics: 14728 rows, about 0.20 MB gzipped
+- supply-chain: 16753 rows, about 0.36 MB gzipped

@@ -1,0 +1,56 @@
+# cd backend && APP_DATA_DIR=<temp data dir> EVAL_SET=world-cup EVAL_DATASETS="World Cup" node dist/mastra/evals/validate-eval-sets.js
+# Dataset "World Cup" loaded through POST /testing-data/world-cup/load into this worktree's own compose Postgres (127.0.0.1:55433, database world_cup), by an isolated instance (port 3400, temp data dir), then stopped.
+Validating World Cup (world-cup, postgres) on World Cup
+
+✓ champion-2022  postgres  1 rows
+✓ final-score-2018  postgres  1 rows
+✓ top-scorer-2022  postgres  1 rows
+✓ shootouts  postgres  4 rows
+✓ biggest-venue  postgres  1 rows
+✓ shot-accuracy-by-team-2022  postgres  3 rows
+✓ shot-conversion-2022  postgres  1 rows
+✓ busiest-stadium  postgres  2 rows
+✓ highest-scoring-match  postgres  2 rows
+✓ top-scorer-both-tournaments  postgres  2 rows
+✓ semi-final-goals-2022  postgres  1 rows
+✓ goals-by-defenders  postgres  1 rows
+✓ third-place-2022  postgres  1 rows
+✓ most-fouls-team  postgres  1 rows
+✓ booked-in-2022-final  postgres  1 rows
+✓ quickest-goal-scorer  postgres  1 rows
+✓ top-assist-provider  postgres  1 rows
+✓ mandzukic-goals-2018  postgres  1 rows
+✓ extra-time-goals  postgres  1 rows
+✓ argentina-draws-2022  postgres  1 rows
+✓ south-american-goals  postgres  1 rows
+✓ third-placed-team-scorers-2018  postgres  3 rows
+✓ shot-accuracy-by-team-2022-reworded  postgres  3 rows
+✓ shot-conversion-2022-reworded  postgres  1 rows
+✓ busiest-stadium-reworded  postgres  2 rows
+✓ highest-scoring-match-reworded  postgres  2 rows
+✓ top-scorer-both-tournaments-reworded  postgres  2 rows
+✓ semi-final-goals-2022-reworded  postgres  1 rows
+✓ goals-by-defenders-reworded  postgres  1 rows
+✓ third-place-2022-reworded  postgres  1 rows
+✓ most-fouls-team-reworded  postgres  1 rows
+✓ booked-in-2022-final-reworded  postgres  1 rows
+✓ quickest-goal-scorer-reworded  postgres  1 rows
+✓ top-assist-provider-reworded  postgres  1 rows
+✓ mandzukic-goals-2018-reworded  postgres  1 rows
+✓ extra-time-goals-reworded  postgres  1 rows
+✓ argentina-draws-2022-reworded  postgres  1 rows
+✓ south-american-goals-reworded  postgres  1 rows
+✓ third-placed-team-scorers-2018-reworded  postgres  3 rows
+✓ pass-accuracy-by-team  postgres  3 rows
+✓ shot-accuracy-by-team  postgres  3 rows
+✓ top-scoring-team  postgres  1 rows
+✓ teams-tied-on-four-goals  postgres  2 rows
+✓ card-types-recorded  postgres  1 rows
+✓ goals-with-recorded-assist  postgres  1 rows
+✓ goals-by-type  postgres  5 rows
+✓ attendance-by-tournament  postgres  2 rows
+✓ matches-by-stage  postgres  4 rows
+✓ pass-completion-by-team  postgres  12 rows
+✓ yellow-card-share  postgres  1 rows
+
+world-cup: 50 of 50 reference queries passed; 13 cases have no reference query.

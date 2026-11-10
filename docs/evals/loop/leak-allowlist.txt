@@ -1,0 +1,113 @@
+# Allowlist of eval:leak-check (agents-evals R230; docs/evals/loop/program.md).
+#
+# One literal per line, then " | " and why it may stay in a lever file:
+#   <literal> | <reason>
+# The literal is the one the report prints between quotes, such as
+#   fiscal year | a rule about the data, stated in the finance knowledge seed
+# It is compared after normalisation (accents removed, lower case, quotes and
+# dashes straight), with the whole literal of a finding. Lines that start with
+# "#" are comments. A line without a reason is refused.
+#
+# The fixer never reads this file (start-fixer.sh deletes it from its tree):
+# a reason may name what a held-out question asks.
+july | month name of the Finance fiscal calendar (fiscal year July to June, finance-policy.md), stated in the finance knowledge seed (round 7, 2026-10-22)
+september | month name of the Finance fiscal calendar (fiscal quarter 1 is July to September), finance knowledge seed (round 7)
+october | month name of the Finance fiscal calendar (fiscal quarter 2 starts in October), finance knowledge seed (round 7)
+december | month name of the Finance fiscal calendar (fiscal quarter 2 ends in December), finance knowledge seed (round 7)
+custody | a stored value of fees.fee_type (finance-policy.md fee table), the column vocabulary in the finance knowledge seed (round 7)
+trading | a stored value of fees.fee_type (finance-policy.md fee table), the column vocabulary in the finance knowledge seed (round 7)
+premier | a stored value of customers.segment (finance-policy.md section 6: not a wealth segment), finance knowledge seed (round 7)
+week | a SQL date-part keyword in the word list of the LEFT JOIN filter check (left-join-filter.ts, round 12), not text of a question
+# BA-243 investigation checks (2026-10-26, the user's decision of that day): the generic words of their
+# matches/notMatches patterns. The story's words (seasonal, summer, slowdown, paus, freez, resum, rebound,
+# attrition, outflows, waivers, refunds, duplicated, overcharged ...) stay literals on purpose.
+along | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+although | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+appears | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+attributable | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+broader | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+caused | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+doubt | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+driven | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+eliminated | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+explained | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+lack | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+largely | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+mainly | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+mostly | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+nominally | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+normal | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+ought | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+paper | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+planned | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+reflected | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+reflecting | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+reflects | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+remained | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+roughly | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+ruled | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+safely | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+seems | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+simply | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+stayed | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+stems | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+thanks | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+underway | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+unlikely | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+wider | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+yeah | a causal-frame or hedging word of the BA-243 investigation checks' notMatches patterns (finance and marketing analytics sets), ordinary English, not a question's wording (2026-10-26)
+grew | an ordinary word of the BA-243 marketing analytics investigation checks' patterns (how a dip is described or ruled out), not the planted cause or explanation (2026-10-26)
+improved | an ordinary word of the BA-243 marketing analytics investigation checks' patterns (how a dip is described or ruled out), not the planted cause or explanation (2026-10-26)
+launch | an ordinary word of the BA-243 marketing analytics investigation checks' patterns (how a dip is described or ruled out), not the planted cause or explanation (2026-10-26)
+rose | an ordinary word of the BA-243 marketing analytics investigation checks' patterns (how a dip is described or ruled out), not the planted cause or explanation (2026-10-26)
+strengthened | an ordinary word of the BA-243 marketing analytics investigation checks' patterns (how a dip is described or ruled out), not the planted cause or explanation (2026-10-26)
+assets | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+bill | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+bundl | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+canceled | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+carr | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+caught | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+charg | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+charge | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+charges | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+collect | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+collections | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+combin | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+declining | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+deferr | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+delay | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+falling | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+fell | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+fund | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+gains | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+growing | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+higher | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+hike | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+includ | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+increased | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+invoic | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+land | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+losing | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+losses | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+mistake | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+mistaken | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+plunged | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+posting | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+postpon | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+processing | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+rally | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+rising | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+roll | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+rolled | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+sank | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+sept | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+shifted | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+shrinking | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+slipp | ordinary billing or asset vocabulary of the BA-243 finance investigation checks' patterns, not the planted cause or explanation (2026-10-26)
+# Widened on 2026-10-27 after round 17 (the matches patterns accept 'billing-timing gap', 'billed late', 'two monthly fees ... September', '$0 recorded campaign spend'):
+batch | ordinary billing vocabulary of the BA-243 investigation checks' patterns, widened on 2026-10-27 to the wording of right answers (evidence/1.1.21/checks.txt), not the planted cause or explanation
+earning | ordinary billing vocabulary of the BA-243 investigation checks' patterns, widened on 2026-10-27 to the wording of right answers (evidence/1.1.21/checks.txt), not the planted cause or explanation
+mismatch | ordinary billing vocabulary of the BA-243 investigation checks' patterns, widened on 2026-10-27 to the wording of right answers (evidence/1.1.21/checks.txt), not the planted cause or explanation
+processed | ordinary billing vocabulary of the BA-243 investigation checks' patterns, widened on 2026-10-27 to the wording of right answers (evidence/1.1.21/checks.txt), not the planted cause or explanation
+shift | ordinary billing vocabulary of the BA-243 investigation checks' patterns, widened on 2026-10-27 to the wording of right answers (evidence/1.1.21/checks.txt), not the planted cause or explanation
+unrecorded | ordinary billing vocabulary of the BA-243 investigation checks' patterns, widened on 2026-10-27 to the wording of right answers (evidence/1.1.21/checks.txt), not the planted cause or explanation

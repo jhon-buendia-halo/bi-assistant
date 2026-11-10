@@ -1,0 +1,47 @@
+Fixture API: http://127.0.0.1:55092
+Backend:     http://127.0.0.1:55099
+✔ API reachable: world-cup, switches {"profile":"connector","paging":"cursor","defaultPageSize":20,"maxPageSize":20,"nested":["matches_nested"],"wrapped":["tournament_teams"],"refused":["squad_members"],"retryAfter":null,"tokenRequired":true}
+✔ backend reachable and signed in
+✔ discovery: 15 endpoints
+    confederations               cursor size 20 cursor /next_cursor rows /data
+    countries                    cursor size 20 cursor /next_cursor rows /data
+    disciplinary_events          cursor size 20 cursor /next_cursor rows /data
+    goals                        cursor size 20 cursor /next_cursor rows /data
+    match_team_statistics        cursor size 20 cursor /next_cursor rows /data maxRows 20
+    matches                      cursor size 20 cursor /next_cursor rows /data
+    players                      cursor size 20 cursor /next_cursor rows /data
+    squad_members                cursor size 20 cursor /next_cursor rows /data
+    teams                        cursor size 20 cursor /next_cursor rows /data
+    tournament_teams             cursor size 20 cursor /result/next_cursor rows /result/items
+    tournaments                  cursor size 20 cursor /next_cursor rows /data
+    v_match_results              cursor size 20 cursor /next_cursor rows /data
+    v_player_goal_totals         cursor size 20 cursor /next_cursor rows /data
+    venues                       cursor size 20 cursor /next_cursor rows /data
+    matches_nested               cursor size 20 cursor /next_cursor rows /data
+  · match_team_statistics: capped at 20 rows on the datasource (the API serves 32)
+✔ datasource "World Cup REST API (cursor)" updated (0b1f3034-e820-49f2-ad7a-8ab5a87ebe06)
+
+  api.world_cup.confederations  2 columns
+  api.world_cup.countries  3 columns
+  api.world_cup.disciplinary_events  8 columns
+  api.world_cup.goals  10 columns
+  api.world_cup.match_team_statistics  11 columns
+  api.world_cup.matches  16 columns
+  api.world_cup.players  5 columns
+  api.world_cup.squad_members  refused by the API (expected)
+  api.world_cup.teams  4 columns
+  api.world_cup.tournament_teams  6 columns
+  api.world_cup.tournaments  8 columns
+  api.world_cup.v_match_results  14 columns
+  api.world_cup.v_player_goal_totals  7 columns
+  api.world_cup.venues  5 columns
+  api.world_cup.matches_nested  20 columns
+
+✔ Dataset "World Cup (REST cursor)" saved — 15 entities
+
+Done.
+  datasource: World Cup REST API (cursor) (0b1f3034-e820-49f2-ad7a-8ab5a87ebe06)
+  dataset:    World Cup (REST cursor)
+  entities:   15
+
+Run an eval set bound to the "world-cup-rest-connector" sample with the dataset "World Cup (REST cursor)" (Agents → assistant → Evals, or EVAL_DATASETS="World Cup (REST cursor)").

@@ -1,0 +1,52 @@
+Before: 97d932a5 (63 questions, openai/gpt-4o-mini, repeats 3, judge off); 3ebeaeb7 (68 questions, openai/gpt-4o-mini, repeats 3, judge off); 531236cd (50 questions, openai/gpt-4o-mini, repeats 3, judge off)
+After:  c34fc62f (7 questions, openai/gpt-4o-mini, repeats 3, judge off); 216df15f (5 questions, openai/gpt-4o-mini, repeats 3, judge off); 24953de4 (4 questions, openai/gpt-4o-mini, repeats 3, judge off)
+
+Split     Category        Before          After         Change  95% interval of change  Flag
+dev       lookup          1/6 (3–56%)     —             —       —                       —
+dev       aggregate       1/15 (1–30%)    —             —       —                       —
+dev       join            1/9 (2–43%)     —             —       —                       —
+dev       ranking         0/16 (0–19%)    1/16 (1–28%)  +6 pts  −14 to +28 pts          within
+dev       ratio           0/14 (0–22%)    —             —       —                       —
+dev       null            0/6 (0–39%)     —             —       —                       —
+dev       encoding        0/10 (0–28%)    —             —       —                       —
+dev       reasoning       0/2 (0–66%)     —             —       —                       —
+dev       discovery       2/4 (15–85%)    —             —       —                       —
+dev       ambiguous       1/5 (4–62%)     —             —       —                       —
+dev       fuzzy-scope     1/3 (6–79%)     —             —       —                       —
+dev       out-of-scope    2/5 (12–77%)    —             —       —                       —
+dev       non-existent    2/2 (34–100%)   —             —       —                       —
+dev       business-term   0/10 (0–28%)    —             —       —                       —
+dev       default-filter  0/6 (0–39%)     —             —       —                       —
+dev       visual          1/4 (5–70%)     —             —       —                       —
+dev       paraphrase      1/13 (1–33%)    —             —       —                       —
+dev       all             13/130 (6–16%)  1/16 (1–28%)  −4 pts  −12 to +19 pts          within
+held-out  lookup          1/2 (9–91%)     —             —       —                       —
+held-out  aggregate       0/4 (0–49%)     —             —       —                       —
+held-out  join            0/5 (0–43%)     —             —       —                       —
+held-out  ranking         1/6 (3–56%)     —             —       —                       —
+held-out  ratio           0/5 (0–43%)     —             —       —                       —
+held-out  null            0/2 (0–66%)     —             —       —                       —
+held-out  encoding        0/4 (0–49%)     —             —       —                       —
+held-out  discovery       2/3 (21–94%)    —             —       —                       —
+held-out  ambiguous       0/3 (0–56%)     —             —       —                       —
+held-out  out-of-scope    2/3 (21–94%)    —             —       —                       —
+held-out  non-existent    0/1 (0–79%)     —             —       —                       —
+held-out  business-term   0/4 (0–49%)     —             —       —                       —
+held-out  default-filter  1/2 (9–91%)     —             —       —                       —
+held-out  paraphrase      0/7 (0–35%)     —             —       —                       —
+held-out  all             7/51 (7–26%)    —             —       —                       —
+
+Flips, dev:
+  Now passing: most-fouls-team (ranking)
+  Now failing: none
+Flips, held-out:
+  Now passing: none
+  Now failing: none
+Only before: champion-2022 (lookup), final-score-2018 (join), top-scorer-2022 (aggregate), shootouts (encoding), schema-discovery (discovery), ambiguous-best-team (ambiguous), possession-vs-result (reasoning), out-of-scope (out-of-scope), visual-request (visual), no-clarification-best-team (fuzzy-scope), no-visuals-chart-request (visual), shot-accuracy-by-team-2022 (ratio), shot-conversion-2022 (ratio), top-scorer-both-tournaments (ranking), semi-final-goals-2022 (encoding), goals-by-defenders (encoding), third-place-2022 (encoding), quickest-goal-scorer (ranking), top-assist-provider (null), mandzukic-goals-2018 (business-term), extra-time-goals (business-term), argentina-draws-2022 (business-term), south-american-goals (join), third-placed-team-scorers-2018 (join), player-data-discovery (discovery), team-match-stats-discovery (discovery), argentina-penalties-2022 (ambiguous), best-defence (ambiguous), group-stage-goals-2022 (out-of-scope), referee-2022-final (out-of-scope), shot-accuracy-by-team-2022-reworded (paraphrase), shot-conversion-2022-reworded (paraphrase), busiest-stadium-reworded (paraphrase), highest-scoring-match-reworded (paraphrase), top-scorer-both-tournaments-reworded (paraphrase), semi-final-goals-2022-reworded (paraphrase), goals-by-defenders-reworded (paraphrase), third-place-2022-reworded (paraphrase), most-fouls-team-reworded (paraphrase), booked-in-2022-final-reworded (paraphrase), quickest-goal-scorer-reworded (paraphrase), top-assist-provider-reworded (paraphrase), mandzukic-goals-2018-reworded (paraphrase), extra-time-goals-reworded (paraphrase), argentina-draws-2022-reworded (paraphrase), south-american-goals-reworded (paraphrase), third-placed-team-scorers-2018-reworded (paraphrase), pass-accuracy-by-team (ratio), shot-accuracy-by-team (ratio), card-types-recorded (aggregate), goals-with-recorded-assist (null), goals-by-type (aggregate), attendance-by-tournament (aggregate), matches-by-stage (aggregate), pass-completion-by-team (ratio), yellow-card-share (ratio), wealth-client-count (business-term), aum-fy2025-end (business-term), fee-revenue-fy2025-by-type (business-term), fee-revenue-fy2026-q2 (business-term), average-aum-per-client-fy2025-end (business-term), completed-transactions-december-2025 (business-term), portfolios-opened-2024 (default-filter), largest-portfolio-2025-end (default-filter), discretionary-portfolios-open (default-filter), advisory-fees-billed-march-2025 (default-filter), positions-held-2024-end (default-filter), refunded-fees-2025 (encoding), unbilled-fees-2025-end (encoding), collected-fees-fy2026-q1 (encoding), advisory-fee-rates (encoding), bond-holdings-2025-end-millions (encoding), top-three-fee-clients-fy2025 (ranking), fee-revenue-by-region-fy2025 (join), aum-by-segment-fy2025-end (join), aum-by-asset-class-2025-end (join), open-portfolios-by-region (join), wealth-clients-with-mortgage (join), waived-share-advisory-fy2025 (ratio), advisory-fee-rate-by-mandate-fy2025 (ratio), unrealized-gain-percent-fy2025-end (ratio), equity-share-by-risk-profile-2025-end (ratio), performance-share-fee-revenue-fy2025 (ratio), quietest-fee-month-2025 (null), positions-without-cost-fy2025-end (null), unrealized-gain-fy2025-end (null), portfolios-by-base-currency (aggregate), open-portfolios-by-mandate (aggregate), fiscal-2026-q2-months (lookup), biggest-wealth-client (ambiguous), best-performing-portfolio (ambiguous), aum-2022 (out-of-scope), crypto-holdings (non-existent), relationship-manager-assets (non-existent), investment-data-discovery (discovery), fee-revenue-latest-quarter (fuzzy-scope), chart-aum-by-quarter-end (visual), wealth-client-count-casual (paraphrase), aum-fy2025-end-typo (paraphrase), largest-portfolio-2025-end-casual (paraphrase), interest-share-of-loan-payments-by-product (ratio), outstanding-share-of-principal-by-product (ratio), loans-by-currency (aggregate), transactions-with-merchant-category (null), branches-opened-12-accounts-2024 (ranking), non-performing-loans (encoding), transactions-2021 (out-of-scope), most-valuable-customer (ambiguous), net-customer-flow-by-branch-2025 (business-term), transactions-march-2025 (default-filter), accounts-opened-by-region-2024 (join), deposit-accounts-per-branch (business-term), customer-deposits-2025-usd (encoding), euro-deposits-2025 (encoding), card-spend-december-2025 (default-filter), card-data-discovery (discovery), customers-per-segment (aggregate), branches-per-region (aggregate), loans-per-product (aggregate), fiscal-quarter-of-july-2024 (lookup), digital-channels (lookup), latest-final-quarter (lookup), spring-home-refresh-dates (lookup), harborline-headquarters (lookup), harborline-pet-launch (lookup), harborline-policies-sold-2025-q2 (aggregate), market-premium-by-line-2025 (aggregate), harborline-premium-by-currency-2025 (aggregate), harborline-campaign-spend-2025 (aggregate), market-policies-by-channel-2025 (aggregate), harborline-earned-premium-by-quarter-2025 (aggregate), gov-auto-premium-vs-market-q2-2025 (aggregate), gov-pinecrest-pet-vs-rest-2025 (aggregate), harborline-premium-by-region-2025 (join), market-premium-by-family-and-region-2025 (join), harborline-leads-by-line-2025 (join), northeast-auto-policies-q4-2025 (join), harborline-spend-by-channel-2025 (join), fastest-growing-line-2024-to-2025 (ranking), lowest-premium-channel-2025 (ranking), top-ctr-campaigns-2025 (ratio), best-lead-to-policy-channel-2025 (ratio), top-budget-share-campaigns-2025 (ratio), largest-market-share-line-2025 (ratio), premium-per-policy-top-line-2025 (ratio), highest-digital-share-region-2025 (ratio), harborline-revenue-2025 (business-term), highest-walk-away-rate-channel-2025 (business-term), lowest-cost-per-acquisition-channel-2025 (business-term), harborline-walk-aways-2025 (encoding), harborline-premium-fiscal-2025 (encoding), top-promo-code-by-leads (null), quarter-without-campaign-spend (null), top-channel-q2-2025 (default-filter), campaign-data-discovery (discovery), benchmark-discovery (discovery), ambiguous-best-campaign (ambiguous), ambiguous-strongest-region (ambiguous), harborline-sales-q1-2026 (out-of-scope), customer-satisfaction-2025 (out-of-scope), gov-unmask-competitor (out-of-scope), lakeshore-indemnity-sales (non-existent), harborline-policies-all-periods (fuzzy-scope), chart-harborline-premium-by-quarter (visual), campaign-freeze-impact (reasoning)
+Only after: none
+
+Cost before: $1.4378 · $0.0079 per question
+Cost after: $0.1223 · $0.0076 per question
+Cost per question: −3.8%
+
+Draft change log: Round <…>: <…>. <…> Dev 13/130 → 1/16, held-out 7/51 → —; <…>; cost per question $0.0079 → $0.0076. Runs 97d932a5, 3ebeaeb7, 531236cd → c34fc62f, 216df15f, 24953de4.
