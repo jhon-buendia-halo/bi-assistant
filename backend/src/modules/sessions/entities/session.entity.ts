@@ -1,4 +1,4 @@
-import type { KnowledgeUse } from '../../knowledge/entities/knowledge-snippet.entity';
+import type { KnowledgeUse } from '../../ontology/entities/ontology-item.entity';
 import type { Maturity } from '../../data-readiness/engine/types';
 
 export type { KnowledgeUse };

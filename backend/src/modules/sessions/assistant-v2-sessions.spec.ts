@@ -78,8 +78,8 @@ jest.mock('../verified-queries/verified-queries.service', () => ({
   VerifiedQueriesService: class {},
 }));
 jest.mock('../metrics/metrics.service', () => ({ MetricsService: class {} }));
-jest.mock('../knowledge/knowledge.service', () => ({
-  KnowledgeService: class {},
+jest.mock('../ontology/ontology.service', () => ({
+  OntologyService: class {},
 }));
 jest.mock('../../mastra/agents/sql-fixer.agent', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports

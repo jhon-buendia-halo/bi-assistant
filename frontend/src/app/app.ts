@@ -13,7 +13,6 @@ import {
   LucideIconData,
   ArrowLeft,
   Bot,
-  BookOpen,
   Layers,
   ChevronDown,
   CircleCheck,
@@ -36,7 +35,9 @@ import {
   TestTube,
   Workflow,
   SunMoon,
+  Users,
   Wrench,
+  Network,
 } from 'lucide-angular';
 import { DatasourceConfig } from './features/datasources/components/datasource-config/datasource-config';
 import {
@@ -76,7 +77,8 @@ import {
   Agent as AgentEntry,
   AgentsApiService,
 } from './features/agents/services/agents-api.service';
-import { KnowledgeList } from './features/knowledge/components/knowledge-list/knowledge-list';
+import { PersonaList } from './features/personas/components/persona-list/persona-list';
+import { OntologyOverview } from './features/ontology/components/ontology-overview/ontology-overview';
 import { CatalogBrowser } from './features/datasets/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
 import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
@@ -129,7 +131,8 @@ type MainView =
   | 'skill-editor'
   | 'builtin-skill-editor'
   | 'context'
-  | 'knowledge'
+  | 'personas'
+  | 'ontologies'
   | 'sessions'
   | 'conversation-new'
   | 'session-chat';
@@ -155,7 +158,8 @@ const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   'skill-editor': 'agents',
   'builtin-skill-editor': 'agents',
   context: 'context',
-  knowledge: 'context',
+  personas: 'context',
+  ontologies: 'context',
   sessions: 'sessions',
   'conversation-new': 'sessions',
   'session-chat': 'sessions',
@@ -216,7 +220,8 @@ function urlHost(baseUrl: string): string {
     SkillEditor,
     BuiltInSkillEditor,
     AgentPreview,
-    KnowledgeList,
+    PersonaList,
+    OntologyOverview,
     CatalogBrowser,
     EntityDetails,
     ToastContainer,
@@ -236,7 +241,6 @@ export class App {
 
   readonly ArrowLeft = ArrowLeft;
   readonly Bot = Bot;
-  readonly BookOpen = BookOpen;
   readonly ChevronDown = ChevronDown;
   readonly CircleCheck = CircleCheck;
   readonly CornerDownLeft = CornerDownLeft;
@@ -1320,11 +1324,18 @@ export class App {
     icon: LucideIconData;
   }[] = [
     {
-      view: 'knowledge',
-      label: 'Knowledge',
+      view: 'ontologies',
+      label: 'Ontologies',
       description:
-        'Instructions, glossary terms and default filters the assistant uses when answering.',
-      icon: BookOpen,
+        "Each dataset's concepts, relations, constraints and instructions the assistant applies.",
+      icon: Network,
+    },
+    {
+      view: 'personas',
+      label: 'User personas',
+      description:
+        'Who asks the questions: their role, goals, typical questions and the answers they prefer.',
+      icon: Users,
     },
   ];
 

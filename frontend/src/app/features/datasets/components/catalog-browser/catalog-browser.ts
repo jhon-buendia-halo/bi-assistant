@@ -18,6 +18,8 @@ import {
   FolderTree,
   Loader2,
   Lock,
+  LucideIconData,
+  Network,
   Play,
   RefreshCw,
   Search,
@@ -46,10 +48,14 @@ import {
 import { DatasetSchemaNotesService } from '../../services/dataset-schema-notes.service';
 import { MetricsPanel } from '../metrics-panel/metrics-panel';
 import { ToastService } from '../../../../core/toast/toast.service';
+import { OntologyPanel } from '../../../ontology/components/ontology-panel/ontology-panel';
+
+/** The saved-dataset editor's tabs (BA-320). */
+export type DatasetTab = 'schema' | 'ontology';
 
 @Component({
   selector: 'app-catalog-browser',
-  imports: [LucideAngularModule, MetricsPanel],
+  imports: [LucideAngularModule, MetricsPanel, OntologyPanel],
   templateUrl: './catalog-browser.html',
   styleUrl: './catalog-browser.scss',
 })
@@ -128,6 +134,24 @@ export class CatalogBrowser implements OnInit, OnDestroy {
   readonly saved = output<void>();
   /** When set, the browser opens in edit mode with this dataset's data. */
   readonly initial = input<Dataset | null>(null);
+
+  /** Schema | Ontology, shown only when editing a saved dataset. */
+  readonly tabs: { id: DatasetTab; label: string; icon: LucideIconData }[] = [
+    { id: 'schema', label: 'Schema', icon: Database },
+    { id: 'ontology', label: 'Ontology', icon: Network },
+  ];
+  readonly activeTab = signal<DatasetTab>('schema');
+
+  selectTab(tab: DatasetTab, focus = false): void {
+    this.activeTab.set(tab);
+    if (focus) {
+      queueMicrotask(() => document.getElementById(`dataset-tab-${tab}`)?.focus());
+    }
+  }
+
+  otherTab(tab: DatasetTab): DatasetTab {
+    return tab === 'schema' ? 'ontology' : 'schema';
+  }
   readonly selectedDatasource = computed(
     () => this.datasources().find((d) => d.id === this.datasourceId()) ?? null,
   );

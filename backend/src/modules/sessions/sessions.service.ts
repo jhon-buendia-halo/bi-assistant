@@ -106,7 +106,7 @@ import {
   SESSION_WORKSPACE_CONTEXT_KEY,
   listSessionWorkspaceIds,
 } from '../../mastra/session-workspaces';
-import type { KnowledgeUse } from '../knowledge/entities/knowledge-snippet.entity';
+import type { KnowledgeUse } from '../ontology/entities/ontology-item.entity';
 import {
   entityOrientationLines,
   knowledgeContext,
@@ -118,7 +118,7 @@ import { LlmService } from '../llm/llm.service';
 import { chatTurnError } from './llm-error-message';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
 import { MetricsService } from '../metrics/metrics.service';
-import { KnowledgeService } from '../knowledge/knowledge.service';
+import { OntologyService } from '../ontology/ontology.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
 import { SUPER_ADMIN } from '../../common/super-admin';
@@ -326,7 +326,8 @@ export class SessionsService implements OnModuleInit {
     private readonly visuals: VisualizationService,
     private readonly verifiedQueries: VerifiedQueriesService,
     private readonly metrics: MetricsService,
-    private readonly knowledge: KnowledgeService,
+    // The dataset ontology, rendered as the curated-knowledge block.
+    private readonly knowledge: OntologyService,
     private readonly userAgents: UserAgentsService,
     // The RFP Builder's REST target and package export (agents.md 3.10).
     @Optional() private readonly rfpPackages?: RfpPackagesService,
@@ -738,7 +739,9 @@ export class SessionsService implements OnModuleInit {
           datasourceName: dataset.datasourceId
             ? await this.datasourceName(dataset.datasourceId)
             : 'none',
+          datasourceId: dataset.datasourceId,
           entityCount: dataset.tables.length,
+          exampleEntity: dataset.tables[0],
         })),
     );
     return readinessOrientationBlock(rows, isoToday());
@@ -1307,6 +1310,24 @@ export class SessionsService implements OnModuleInit {
       agentId,
       agentName: agent.live.name,
     });
+  }
+
+  /**
+   * Keeps only `datasets` among a session's datasets (agents.md 8.1): an eval
+   * run bound to a built-in agent that takes every qualifying dataset (the
+   * Data Readiness Agent) is narrowed to the datasets the run names, so a data
+   * dir holding more samples does not make the agent ask which one. Datasets
+   * the session does not have are ignored; an empty result keeps the session
+   * as it was.
+   */
+  async narrowDatasets(id: string, datasets: string[]): Promise<SessionDoc | null> {
+    const session = await this.repository.get(id);
+    if (!session) return null;
+    const keep = session.datasets.filter((name) => datasets.includes(name));
+    if (keep.length === 0 || keep.length === session.datasets.length) {
+      return session;
+    }
+    return this.repository.update(id, { datasets: keep });
   }
 
   /**

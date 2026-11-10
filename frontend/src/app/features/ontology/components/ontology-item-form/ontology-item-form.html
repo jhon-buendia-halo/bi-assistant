@@ -1,0 +1,528 @@
+<div
+  data-testid="ontology-item-form"
+  class="flex flex-col gap-3 rounded-xl border border-border bg-surface-muted p-4"
+>
+  <div class="flex items-center justify-between">
+    <p class="text-[13px] font-medium text-fg">
+      {{ isNew() ? "New ontology item" : "Edit ontology item" }}
+    </p>
+    <button
+      type="button"
+      title="Close"
+      aria-label="Close"
+      (click)="cancel()"
+      class="btn-icon"
+    >
+      <lucide-angular [img]="X" [size]="14" />
+    </button>
+  </div>
+
+  <label class="flex flex-col gap-1">
+    <span class="field-label">Kind</span>
+    <select
+      data-testid="ontology-kind"
+      [value]="kind()"
+      [disabled]="!isNew()"
+      (change)="setKind($any($event.target).value)"
+      class="field"
+    >
+      @for (option of kinds; track option.value) {
+        <option
+          [value]="option.value"
+          [selected]="option.value === kind()"
+          class="bg-surface"
+        >
+          {{ option.label }}
+        </option>
+      }
+    </select>
+    <span class="text-[11px] leading-snug text-fg-muted">{{
+      kindDescription(kind())
+    }}</span>
+  </label>
+
+  @switch (kind()) {
+    @case ("concept") {
+      <label class="flex flex-col gap-1">
+        <span class="field-label">Name</span>
+        <input
+          type="text"
+          data-testid="ontology-name"
+          placeholder="Active member"
+          [value]="name()"
+          (input)="name.set($any($event.target).value)"
+          class="field"
+        />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="field-label">Definition</span>
+        <textarea
+          rows="3"
+          data-testid="ontology-description"
+          placeholder="What the term means in this business."
+          [value]="description()"
+          (input)="description.set($any($event.target).value)"
+          class="field resize-y"
+        ></textarea>
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="field-label">Synonyms (comma separated)</span>
+        <input
+          type="text"
+          data-testid="ontology-synonyms"
+          placeholder="enrollee, subscriber"
+          [value]="synonyms()"
+          (input)="synonyms.set($any($event.target).value)"
+          class="field"
+        />
+      </label>
+
+      <div class="flex flex-col gap-2" data-testid="mapping-section">
+        <div>
+          <span class="field-label">Where it lives in the data</span>
+          <p class="mt-0.5 text-[11px] text-fg-muted">
+            The tables and columns this concept means, so the assistant knows
+            where to find it.
+          </p>
+        </div>
+
+        @if (mappings().length === 0 && !picker()) {
+          <p class="text-[12px] text-fg-muted" data-testid="mapping-empty">
+            Not mapped yet.
+          </p>
+        }
+
+        @for (row of mappings(); track $index; let i = $index) {
+          @if (picker() !== null && picker()!.index === i) {
+            <ng-container [ngTemplateOutlet]="mappingPicker" />
+          } @else {
+            <div
+              class="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2"
+              [attr.data-testid]="'ontology-mapping-' + i"
+            >
+              <span
+                class="min-w-0 flex-1 truncate text-[12px] text-fg"
+                data-testid="mapping-sentence"
+                [title]="mappingTitle(row)"
+              >
+                <span class="font-medium">{{ shortTable(row.entity) }}</span>
+                <span class="text-fg-muted"> &rarr; </span>
+                @switch (targetOf(row)) {
+                  @case ("column") {
+                    <span class="text-fg-muted">column </span>
+                    <span class="font-mono">{{ row.column }}</span>
+                  }
+                  @case ("expression") {
+                    <span class="font-mono">{{ row.expression }}</span>
+                  }
+                  @default {
+                    <span class="text-fg-muted">whole table</span>
+                  }
+                }
+              </span>
+              <button
+                type="button"
+                class="btn btn-ghost px-2 py-1 text-[12px]"
+                data-testid="edit-mapping"
+                [attr.aria-label]="'Edit mapping ' + mappingTitle(row)"
+                [disabled]="picker() !== null"
+                (click)="openEditMapping(i)"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                title="Remove mapping"
+                [attr.aria-label]="'Remove mapping ' + mappingTitle(row)"
+                data-testid="remove-mapping"
+                [disabled]="picker() !== null"
+                (click)="removeMapping(i)"
+                class="btn-icon hover:text-on-danger-soft"
+              >
+                <lucide-angular [img]="Trash2" [size]="14" />
+              </button>
+            </div>
+          }
+        }
+
+        @if (picker() !== null && picker()!.index === null) {
+          <ng-container [ngTemplateOutlet]="mappingPicker" />
+        } @else if (!picker()) {
+          <button
+            type="button"
+            data-testid="add-mapping"
+            (click)="openAddMapping()"
+            [disabled]="tables().length === 0"
+            class="btn btn-ghost w-fit px-2 py-1 text-[12px]"
+          >
+            <lucide-angular [img]="Plus" [size]="13" />
+            <span>Add mapping</span>
+          </button>
+        }
+      </div>
+
+      <ng-template #mappingPicker>
+        @if (picker(); as p) {
+          <div
+            class="flex flex-col gap-3 rounded-md border border-border-strong bg-surface px-3 py-3"
+            data-testid="mapping-picker"
+            role="group"
+            [attr.aria-label]="p.index === null ? 'Add mapping' : 'Edit mapping'"
+          >
+            <span class="text-[12px] font-medium text-fg">{{
+              p.index === null ? "Add mapping" : "Edit mapping"
+            }}</span>
+            <label class="flex flex-col gap-1">
+              <span class="field-label">Table</span>
+              <select
+                data-testid="mapping-entity"
+                class="field"
+                (change)="setPicker('entity', $any($event.target).value)"
+              >
+                @for (table of tables(); track table) {
+                  <option
+                    [value]="table"
+                    [selected]="table === p.entity"
+                    [title]="table"
+                    class="bg-surface"
+                  >
+                    {{ shortTable(table) }}
+                  </option>
+                }
+              </select>
+            </label>
+            <fieldset class="flex flex-col gap-1">
+              <legend class="field-label mb-1">Points at</legend>
+              @for (opt of targetOptions; track opt.value) {
+                <label class="flex items-center gap-2 text-[12px] text-fg">
+                  <input
+                    type="radio"
+                    name="mapping-target"
+                    class="accent-primary"
+                    [attr.data-testid]="'mapping-target-' + opt.value"
+                    [checked]="p.target === opt.value"
+                    (change)="setPicker('target', opt.value)"
+                  />
+                  <span>{{ opt.label }}</span>
+                  <span class="text-[11px] text-fg-muted">{{ opt.hint }}</span>
+                </label>
+              }
+            </fieldset>
+            @if (p.target === "column") {
+              <label class="flex flex-col gap-1">
+                <span class="field-label">Column</span>
+                <select
+                  data-testid="mapping-column"
+                  class="field"
+                  (change)="setPicker('column', $any($event.target).value)"
+                >
+                  <option value="" [selected]="p.column === ''" disabled class="bg-surface">
+                    Choose a column
+                  </option>
+                  @for (column of columnsOf(p.entity); track column) {
+                    <option [value]="column" [selected]="column === p.column" class="bg-surface">
+                      {{ column }}
+                    </option>
+                  }
+                </select>
+              </label>
+            }
+            @if (p.target === "expression") {
+              <label class="flex flex-col gap-1">
+                <span class="field-label">SQL expression</span>
+                <input
+                  type="text"
+                  data-testid="mapping-expression"
+                  class="field font-mono"
+                  placeholder="e.g. home_goals + away_goals"
+                  [value]="p.expression"
+                  (input)="setPicker('expression', $any($event.target).value)"
+                />
+                <span class="text-[11px] text-fg-muted">
+                  Written over the columns of {{ shortTable(p.entity) }}.
+                </span>
+              </label>
+            }
+            <div class="flex justify-end gap-2">
+              <button
+                type="button"
+                class="btn btn-outline"
+                data-testid="mapping-cancel"
+                (click)="cancelPicker()"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                data-testid="mapping-commit"
+                [disabled]="!pickerReady()"
+                (click)="commitPicker()"
+              >
+                {{ p.index === null ? "Add" : "Update" }}
+              </button>
+            </div>
+          </div>
+        }
+      </ng-template>
+    }
+
+    @case ("relation") {
+      <div class="grid grid-cols-3 gap-3">
+        <label class="flex flex-col gap-1">
+          <span class="field-label">From concept</span>
+          <select
+            data-testid="relation-from"
+            [value]="from()"
+            (change)="from.set($any($event.target).value)"
+            class="field"
+          >
+            <option value="" [selected]="from() === ''" class="bg-surface">
+              Choose a concept
+            </option>
+            @for (concept of conceptOptions(); track concept.id) {
+              <option
+                [value]="concept.id"
+                [selected]="concept.id === from()"
+                class="bg-surface"
+              >
+                {{ concept.name }}
+              </option>
+            }
+          </select>
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="field-label">Relation</span>
+          <select
+            data-testid="relation-type"
+            [value]="relationType()"
+            (change)="relationType.set($any($event.target).value)"
+            class="field"
+          >
+            @for (type of relationTypes; track type) {
+              <option
+                [value]="type"
+                [selected]="type === relationType()"
+                class="bg-surface"
+              >
+                {{ type }}
+              </option>
+            }
+          </select>
+        </label>
+        @if (relationType() === "measured-by") {
+          <label class="flex flex-col gap-1">
+            <span class="field-label">Metric</span>
+            <select
+              data-testid="relation-metric"
+              [value]="metricId()"
+              (change)="metricId.set($any($event.target).value)"
+              class="field"
+            >
+              <option value="" [selected]="metricId() === ''" class="bg-surface">
+                {{ metrics().length ? "Choose a metric" : "No metrics yet" }}
+              </option>
+              @for (metric of metrics(); track metric.id) {
+                <option
+                  [value]="metric.id"
+                  [selected]="metric.id === metricId()"
+                  class="bg-surface"
+                >
+                  {{ metric.label || metric.name }}
+                </option>
+              }
+            </select>
+          </label>
+        } @else {
+          <label class="flex flex-col gap-1">
+            <span class="field-label">To concept</span>
+            <select
+              data-testid="relation-to"
+              [value]="to()"
+              (change)="to.set($any($event.target).value)"
+              class="field"
+            >
+              <option value="" [selected]="to() === ''" class="bg-surface">
+                Choose a concept
+              </option>
+              @for (concept of conceptOptions(); track concept.id) {
+                <option
+                  [value]="concept.id"
+                  [selected]="concept.id === to()"
+                  class="bg-surface"
+                >
+                  {{ concept.name }}
+                </option>
+              }
+            </select>
+          </label>
+        }
+      </div>
+      @if (conceptOptions().length === 0) {
+        <p class="text-[11px] text-fg-muted">
+          Add a concept first — relations connect concepts.
+        </p>
+      }
+      <label class="flex flex-col gap-1">
+        <span class="field-label">Note (optional)</span>
+        <input
+          type="text"
+          data-testid="ontology-description"
+          [value]="description()"
+          (input)="description.set($any($event.target).value)"
+          class="field"
+        />
+      </label>
+    }
+
+    @case ("constraint") {
+      <label class="flex flex-col gap-1">
+        <span class="field-label">Name</span>
+        <input
+          type="text"
+          data-testid="ontology-name"
+          placeholder="Exclude test accounts"
+          [value]="name()"
+          (input)="name.set($any($event.target).value)"
+          class="field"
+        />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="field-label">Predicate</span>
+        <input
+          type="text"
+          data-testid="constraint-predicate"
+          placeholder="is_test = false"
+          [value]="predicate()"
+          (input)="predicate.set($any($event.target).value)"
+          class="field font-mono"
+        />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="field-label">When to apply (optional)</span>
+        <input
+          type="text"
+          data-testid="ontology-description"
+          placeholder="Every query over members"
+          [value]="description()"
+          (input)="description.set($any($event.target).value)"
+          class="field"
+        />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="field-label">Concept (optional)</span>
+        <select
+          data-testid="constraint-concept"
+          [value]="conceptId()"
+          (change)="conceptId.set($any($event.target).value)"
+          class="field"
+        >
+          <option value="" [selected]="conceptId() === ''" class="bg-surface">
+            None
+          </option>
+          @for (concept of conceptOptions(); track concept.id) {
+            <option
+              [value]="concept.id"
+              [selected]="concept.id === conceptId()"
+              class="bg-surface"
+            >
+              {{ concept.name }}
+            </option>
+          }
+        </select>
+      </label>
+      <ng-container *ngTemplateOutlet="entityPicker" />
+    }
+
+    @case ("instruction") {
+      <label class="flex flex-col gap-1">
+        <span class="field-label">Name</span>
+        <input
+          type="text"
+          data-testid="ontology-name"
+          placeholder="Coverage"
+          [value]="name()"
+          (input)="name.set($any($event.target).value)"
+          class="field"
+        />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="field-label">Text</span>
+        <textarea
+          rows="4"
+          data-testid="ontology-description"
+          placeholder="A rule the assistant follows when answering."
+          [value]="description()"
+          (input)="description.set($any($event.target).value)"
+          class="field resize-y"
+        ></textarea>
+      </label>
+      <ng-container *ngTemplateOutlet="entityPicker" />
+    }
+  }
+
+  <ng-template #entityPicker>
+    @if (tables().length) {
+      <fieldset class="flex flex-col gap-1">
+        <legend class="field-label">Entities (optional)</legend>
+        <div class="flex flex-wrap gap-x-4 gap-y-1">
+          @for (table of tables(); track table) {
+            <label class="flex items-center gap-1.5 text-[12px] text-fg">
+              <input
+                type="checkbox"
+                [attr.data-testid]="'ontology-entity-' + table"
+                [checked]="entities().includes(table)"
+                (change)="toggleEntity(table, $any($event.target).checked)"
+                class="h-3.5 w-3.5 accent-primary"
+              />
+              <span class="font-mono">{{ table }}</span>
+            </label>
+          }
+        </div>
+      </fieldset>
+    }
+  </ng-template>
+
+  @if (isNew()) {
+    <label class="flex items-center gap-2 text-[12px] text-fg">
+      <input
+        type="checkbox"
+        data-testid="ontology-shared"
+        [checked]="shared()"
+        (change)="shared.set($any($event.target).checked)"
+        class="h-3.5 w-3.5 accent-primary"
+      />
+      <span>Share with all datasets</span>
+    </label>
+  }
+
+  @if (error(); as message) {
+    <p
+      data-testid="ontology-form-error"
+      role="alert"
+      class="rounded-md bg-danger-soft px-3 py-2 text-[12px] text-on-danger-soft"
+    >
+      {{ message }}
+    </p>
+  }
+
+  <div class="mt-1 flex items-center gap-2 text-[13px]">
+    <button type="button" (click)="cancel()" class="btn btn-outline flex-1">
+      Cancel
+    </button>
+    <button
+      type="button"
+      data-testid="save-ontology-item"
+      (click)="save()"
+      [disabled]="!canSave()"
+      class="btn btn-primary flex-1"
+    >
+      @if (saving()) {
+        <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+        <span>Saving…</span>
+      } @else {
+        <span>{{ isNew() ? "Create item" : "Save changes" }}</span>
+      }
+    </button>
+  </div>
+</div>

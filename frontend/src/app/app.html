@@ -489,7 +489,7 @@
                     (back)="closeBuiltInSkillEditor()"
                   />
                 </div>
-              } @else if (mainView() === "knowledge") {
+              } @else if (mainView() === "personas") {
                 <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
                   <div class="flex w-full max-w-[960px] flex-col gap-3">
                     <!-- Back to the Context cards (app-shell R3a) -->
@@ -502,7 +502,23 @@
                       <lucide-angular [img]="ArrowLeft" [size]="14" />
                       <span>Context</span>
                     </button>
-                    <app-knowledge-list class="w-full" />
+                    <app-persona-list class="w-full" />
+                  </div>
+                </div>
+              } @else if (mainView() === "ontologies") {
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+                  <div class="flex w-full max-w-[960px] flex-col gap-3">
+                    <!-- Back to the Context cards (app-shell R3a) -->
+                    <button
+                      type="button"
+                      data-testid="context-back"
+                      (click)="selectArea('context')"
+                      class="btn btn-ghost w-fit px-2 py-1 text-[12px]"
+                    >
+                      <lucide-angular [img]="ArrowLeft" [size]="14" />
+                      <span>Context</span>
+                    </button>
+                    <app-ontology-overview class="w-full" />
                   </div>
                 </div>
               } @else if (mainView() === "context") {

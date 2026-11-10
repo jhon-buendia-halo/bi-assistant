@@ -44,7 +44,8 @@ export interface ReasoningStep {
  */
 export interface KnowledgeUse {
   id: string;
-  kind: 'instruction' | 'term' | 'default_filter';
+  /** Legacy line tag: term = concept, default_filter = constraint. */
+  kind: 'instruction' | 'term' | 'default_filter' | 'relation';
   title: string;
   body: string;
   /** Dataset the snippet is scoped to; absent for a global snippet. */

@@ -1,6 +1,6 @@
 // Pure, DI-free system-context builders shared by `SessionsService` (a real
 // chat turn), the assistant eval harness (no session, but the same
-// datasets), and `KnowledgeService` (mining drafts from a dataset's schema).
+// datasets), and `OntologyBootstrapService` (drafting from a dataset's schema).
 // No Nest DI here, same pattern as `tool-services.ts`.
 import type { DatasetColumnSnapshot, DatasetSnapshot } from './tool-services';
 import { type OptionalAgentTool, selects } from './agent-tools';
@@ -158,7 +158,7 @@ export function schemaNotesBlock(datasets: DatasetSnapshot[]): string {
  * richer than a bare schema listing because sample values let a model match
  * filter literals (or a knowledge-mining pass match enum-like values) to
  * real data. Shared by the SQL verifier (`SessionsService.verifierContext`)
- * and the knowledge-bootstrap agent (`KnowledgeService.bootstrap`) so
+ * and the knowledge-bootstrap agent (`OntologyBootstrapService.bootstrap`) so
  * neither duplicates this formatting.
  */
 export function schemaSnapshotBlock(

@@ -45,7 +45,7 @@ describe('App', () => {
     expect(compiled.querySelector('[title="Help"]')).toBeFalsy();
   });
 
-  it('offers Context in place of Knowledge, with Knowledge as its section (app-shell R3a)', () => {
+  it('offers Context with Ontologies then User personas; Knowledge is gone (app-shell R3a, BA-320)', () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
     fixture.detectChanges();
@@ -65,26 +65,74 @@ describe('App', () => {
         .querySelector('button[aria-label="Context"]')
         ?.getAttribute('aria-current'),
     ).toBe('page');
-    const cards = compiled.querySelectorAll(
-      '[data-testid="context-sections"] button',
+    const cards = Array.from(
+      compiled.querySelectorAll('[data-testid="context-sections"] button'),
     );
-    expect(cards.length).toBe(1);
-    expect(cards[0].textContent).toContain('Knowledge');
-    expect(cards[0].textContent).toContain('glossary terms');
+    expect(cards.map((c) => c.getAttribute('data-testid'))).toEqual([
+      'context-section-ontologies',
+      'context-section-personas',
+    ]);
+    expect(cards[0].textContent).toContain('Ontologies');
+    expect(cards[1].textContent).toContain('User personas');
+    expect(
+      compiled.querySelector('[data-testid="context-section-knowledge"]'),
+    ).toBeNull();
+    expect(app.contextSections.map((s) => s.view)).toEqual([
+      'ontologies',
+      'personas',
+    ]);
+  });
 
-    // A card opens its section; Context stays the current area.
-    (cards[0] as HTMLButtonElement).click();
+  it('opens Ontologies from its Context card, with Context still current (roadmap 1.21.11)', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    app.selectArea('context');
     fixture.detectChanges();
-    expect(app.mainView()).toBe('knowledge');
-    expect(app.currentArea()).toBe('context');
-    expect(compiled.querySelector('app-knowledge-list')).toBeTruthy();
+    const compiled = fixture.nativeElement as HTMLElement;
 
-    // Back, or the rail's Context, returns to the cards.
+    (
+      compiled.querySelector(
+        '[data-testid="context-section-ontologies"]',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('ontologies');
+    expect(app.currentArea()).toBe('context');
+    expect(compiled.querySelector('app-ontology-overview')).toBeTruthy();
+
     (
       compiled.querySelector('[data-testid="context-back"]') as HTMLButtonElement
     ).click();
     expect(app.mainView()).toBe('context');
-    app.openContextSection('knowledge');
+  });
+
+  it('opens User personas from its Context card, with Context still current (roadmap 1.21.6)', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    app.selectArea('context');
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    (
+      compiled.querySelector(
+        '[data-testid="context-section-personas"]',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('personas');
+    expect(app.currentArea()).toBe('context');
+    expect(
+      compiled
+        .querySelector('button[aria-label="Context"]')
+        ?.getAttribute('aria-current'),
+    ).toBe('page');
+    expect(compiled.querySelector('app-persona-list')).toBeTruthy();
+
+    (
+      compiled.querySelector('[data-testid="context-back"]') as HTMLButtonElement
+    ).click();
+    expect(app.mainView()).toBe('context');
+    app.openContextSection('personas');
     app.selectArea('context');
     expect(app.mainView()).toBe('context');
   });

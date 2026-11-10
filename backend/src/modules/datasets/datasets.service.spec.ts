@@ -21,7 +21,9 @@ function build(sampleRows: jest.Mock) {
       .mockImplementation((name: string) =>
         Promise.resolve({ name, tables: [] }),
       ),
+    delete: jest.fn().mockResolvedValue(1),
   };
+  const ontologyItems = { deleteMany: jest.fn().mockResolvedValue(2) };
   const datasources = {
     get: jest
       .fn()
@@ -47,11 +49,30 @@ function build(sampleRows: jest.Mock) {
     ),
   };
   return {
-    service: new DatasetsService(repository as never, datasources as never),
+    service: new DatasetsService(
+      repository as never,
+      datasources as never,
+      ontologyItems as never,
+    ),
     repository,
     datasources,
+    ontologyItems,
   };
 }
+
+describe('DatasetsService.delete', () => {
+  it('deletes the dataset and its own ontology items, never the shared ones', async () => {
+    const { service, repository, ontologyItems } = build(jest.fn());
+
+    await expect(service.delete('World Cup')).resolves.toBe(1);
+
+    expect(repository.delete).toHaveBeenCalledWith('World Cup');
+    // `dataset: null` (shared) never matches a dataset name.
+    expect(ontologyItems.deleteMany).toHaveBeenCalledWith({
+      dataset: 'World Cup',
+    });
+  });
+});
 
 /** The snapshots handed to `DatasetsRepository.save` on its first call. */
 function savedEntities(repository: {

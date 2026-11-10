@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
 import { SessionsService } from '../../modules/sessions/sessions.service';
-import { KnowledgeService } from '../../modules/knowledge/knowledge.service';
+import { OntologyService } from '../../modules/ontology/ontology.service';
 import { randomUUID } from 'crypto';
 import { writeFileSync } from 'fs';
 import { runAssistantEvals } from './assistant.evals';
@@ -95,7 +95,7 @@ async function runEvals(
   // Same curated-knowledge block a real chat turn gets from
   // SessionsService.agentContext.
   const knowledgeBlock = await app
-    .get(KnowledgeService)
+    .get(OntologyService)
     .definitionBlock(datasets);
   const results = await runAssistantEvals(
     datasets,
