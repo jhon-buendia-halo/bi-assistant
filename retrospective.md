@@ -14,6 +14,31 @@ Entry template:
 
 ---
 
+## 2026-11-10 — 0.4.5 Deterministic QA, demo videos and demo artifacts (BA-119)
+
+### What went well
+- Keeping the 0.4.3 dry-run prototype (the `DEMO=1` switch and the `scenarioStep` caption helper) paid off: the demo recording started from working code instead of from scratch.
+- The gate caught a real regression on `main`: 6 Prettier errors merged by BA-320 (`assistant.evals.spec.ts`, `narrowDatasets`) that nobody had run lint to find.
+- Running the new tool on the real showcase story (1.21.6) found its bugs before anyone depended on it; the `tests.md` counts were checked against the JSON reports.
+- Unit tests of the selection and rendering logic (`missingSpecs`, "Listed in step 6 but not run") made "removing an impacted spec fails the gate" provable without a live run.
+- The lane lock worked on its first real collision: a second run waited and ran after the first.
+
+### What went wrong
+- The first gate run lost its logs: the report folder sat under `frontend/test-results`, which Playwright empties at the start of every run. The waiting run crashed for the same reason, because it set up its folder before taking the lane.
+- `demo.txt` kept terminal colour codes, and Playwright's webm has no duration metadata, so seeking needs a player workaround.
+- A `sed` replacement with `\u` uppercased the next character and corrupted a regex.
+- A `--only-changed` selection exploded when a shared fixture changed, which would have run most of the suite for a small change.
+- 43 backend unit tests fail on this Windows checkout (CRLF fixtures, file mode) on `main` too, so the gate cannot be fully green here.
+
+### What to do differently
+- Never put your own files under `frontend/test-results`; Playwright empties it. Use a git-ignored folder of your own (`.qa-reports/`).
+- Set up shared folders only after taking the lock, never before.
+- Edit regexes with the Edit tool, not `sed`.
+- For the fast loop use `--base HEAD` (the story's own changes), not `--only-changed`, which explodes when a shared fixture changes.
+- Run a new tool on a real story before calling it done, and compare its counts with the raw reports.
+
+---
+
 ## 2026-11-10 — 1.21.1–1.21.11 Questions to Insights v2, Data Readiness drill-down, User personas and the dataset ontology (BA-320)
 
 ### What went well

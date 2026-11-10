@@ -117,6 +117,8 @@ It exits non-zero when any step fails. It writes to the sample Postgres the fixt
 | `frontend/` | `npm test`, `npm run build`, `npm run test:e2e` |
 | `backend/` | `npm test`, `npm run build`, lint on the files you touched, and `npm run test:e2e` |
 
+`node scripts/qa.mjs <roadmap-id> --gate` runs these for a story, with the story's step-6 Playwright list, and writes `evidence/<roadmap-id>/tests.md`; `--fast` runs the fast-loop subset and records the demo (section 13).
+
 `test:e2e` builds the backend with the web UI and drives the web app; its global setup starts the World Cup Postgres itself (see section 6). The desktop target (`test:e2e:desktop`) runs only when a desktop run is requested, and refuses to launch the app if port 3000 is taken. Which target to test, and how skipped desktop-only scenarios are reported, is the *Test target convention* in the [`workflow-e2e`](../../.claude/skills/workflow-e2e/SKILL.md) project skill (section 10).
 
 ## 3. Desktop packaging (electron-builder)
@@ -475,3 +477,35 @@ Rules every builder follows (from the retrospective):
 - Never start the app on the default ports.
 
 Unit worktrees that the harness creates for a builder are temporary. They are exempt from the epic worktree naming rule (`workflow-plan`) and removed once their branch is merged into the epic branch.
+
+## 13. Deterministic QA (`scripts/qa.mjs`)
+
+Developer tooling, epic [BA-119](../epics/BA-119/spec.md), roadmap 0.4.5. One script runs a story's checks, picks its tests, records its demo and writes its evidence, with no LLM. The `verify` and `workflow-ship` skills call it; 0.4.4's story pipeline will call it as its QA step. Node 22, no dependencies; its logic lives in `scripts/qa-lib.mjs`, tested with `node --test scripts/qa-lib.test.mjs`.
+
+```
+node scripts/qa.mjs <roadmap-id> --fast|--gate [--base <ref>]
+```
+
+- **Exit codes:** 0 passed, 1 a check failed, 2 bad usage.
+- **One QA lane.** Worktrees share the Postgres on 55432, the default ports and each checkout's `backend/dist`, so runs never overlap. A run takes the lock file `qa.lock` in git's common dir (`{ pid, story, mode, startedAt }`, created exclusively). A second run prints `Waiting for the QA lane (held by <story>, pid <pid>)` and polls every 2 s. A lock whose pid is no longer running is stale and is removed. The lock is released on exit, including on a failure or Ctrl+C.
+- **Epic base.** `--base`, else `git merge-base HEAD origin/main`. The changed files are `git diff --name-only <base>` (committed and uncommitted).
+- **Test selection (mechanical).**
+  - Backend unit: `npx jest --findRelatedTests <changed backend/src files>`; skipped when none changed.
+  - Frontend unit: `ng test --watch=false --browsers=ChromeHeadless` with `--include` for each changed `frontend/src/**/*.spec.ts` and the spec beside each changed source file; skipped when there are none.
+  - Playwright (`web` project): `--only-changed=<base>`, plus every spec in the story's step-6 list whose decision is not `delete`, plus the story's demo spec. `E2E_SKIP_DOCKER=1` is set when a Postgres already listens on 55432.
+- **Step-6 list.** `evidence/<roadmap-id>/e2e-impact.md`, written in step 6 (`workflow-e2e`). It holds a Markdown table whose first column is the Playwright spec path (``frontend/e2e/<name>.spec.ts``, in backticks) and whose second column is the decision: `add`, `update`, `delete` or `re-run`. Other rows and text are ignored.
+- **`--fast` (fast loop):** builds (`npm --prefix backend run build:all`), the selected backend and frontend unit tests, `check-specs.py`, the selected Playwright specs, then the **demo**:
+  - **UI story:** the Playwright test tagged `@story-<roadmap-id>` (and `@demo`) is run again with `DEMO=1`. That turns on `slowMo` (400 ms), a 1280×720 video of the app window and a caption overlay showing each Gherkin line the test passes to `scenarioStep` ([frontend/e2e/support/demo-captions.ts](../../frontend/e2e/support/demo-captions.ts)). The video is saved as `evidence/<roadmap-id>/demo.webm`. A demo over **5 MB** fails the run. Without `DEMO=1` the same test runs at normal speed with no captions and no video.
+  - **Story with no UI** (no test carries its tag): `evidence/<roadmap-id>/demo.txt`, a transcript of the commands the run executed, each with its exit status and the summary lines of its output.
+- **`--gate` (acceptance gate):** builds, the full backend unit suite (`jest --json`), the full frontend unit suite, backend lint (errors fail; warnings do not), `check-specs.py`, and every spec of the step-6 list (decision not `delete`) with Playwright's JSON and HTML reporters (`QA_REPORT_DIR` = `.qa-reports/<roadmap-id>/` at the repo root, git-ignored and outside Playwright's `test-results` folder, which Playwright empties at the start of every run). Video and trace are kept for failures. It writes `evidence/<roadmap-id>/tests.md`:
+  - one row per command: what ran, passed / failed / skipped, read from the reports (Jest JSON, Playwright JSON, the Karma `TOTAL` line) or the exit code;
+  - the specs run, compared with the step-6 list: a listed spec that did not run fails the gate and is named (`Listed in step 6 but not run: <spec>`); a missing step-6 list fails the gate;
+  - links to `demo.webm` or `demo.txt` when present, the reports, and the video of each failed test.
+- **Committed evidence:** `demo.webm`, `demo.txt`, `demo-page.html` and `tests.md`. The reports stay local.
+- **Shareable demo (`scripts/demo-page.mjs`).** So a teammate can watch the demo and read what was done from one link:
+  1. `node scripts/demo-page.mjs <roadmap-id>` (no LLM) writes `evidence/<roadmap-id>/demo-page.html` from `roadmap.md` (the story's title, Intent, Scope, Acceptance, status, milestone and epic), `changelog.md` (the story's entry, "What shipped"), `evidence/<roadmap-id>/tests.md` (gate results) and `demo.webm` (or `demo.txt` for a story with no UI). The page follows the Artifact page contract (theme tokens, phone width, no external resources) and references the video by the relative URL `demo.webm`. It is committed under `evidence/` with the video.
+  2. The Claude session publishes it with its Artifact tool: `file_path` = the generated `demo-page.html`, `files` = `{ "demo.webm": "evidence/<roadmap-id>/demo.webm" }` (omitted for `demo.txt`), an `icon` such as `video` on the first publish and a one-sentence `description`. Publishing the same story's page again (for example after the gate adds `tests.md`) updates the same artifact: pass its `url`.
+  3. The artifact link is recorded in `evidence/<roadmap-id>/README.md` and linked from the story's changelog entry (`Demo: <artifact url>`). Artifacts are private by default: sharing the link with teammates, from the page's Share menu, is the human's step.
+  4. When: in the fast loop, publish right after `qa.mjs --fast` so the user can review the demo by hand; at ship (step 10), regenerate and republish to the same URL once `tests.md` exists, and only then link it from the changelog.
+- **Playwright configuration** (`frontend/playwright.config.ts`): when `QA_REPORT_DIR` is set, the reporters are `list`, `json` (`<dir>/results.json`) and `html` (`<dir>/html`). `DEMO=1` is read by the app fixture (video, `slowMo`) and by `scenarioStep` (captions).
+- **`check-specs.py` on Windows:** paths are compared with forward slashes, so the Playwright-mirror check passes on Windows as it does on Linux.

@@ -46,11 +46,13 @@ Today CLAUDE.md is about 200 lines. It is loaded into every turn of every sessio
   | Mechanical checks before review | `tsc`, lint, Jest `--findRelatedTests`, `check-specs.py` | no |
   | Review, up to 3 rounds | `reviewer` agent, cheaper model, diff and story only | yes |
   | QA: test selection, quick checks, demo video, gate, `tests.md` | `scripts/qa.mjs --fast / --gate`, a single lane | no |
+  | Demo artifact: the video and the work description on one shareable link | `scripts/demo-page.mjs`, then the session publishes it with the Artifact tool | no |
   | Evidence, token totals | `pipeline.json`, `tests.md`, `scripts/tokens.mjs` | no |
   | Lessons | `lessons.md` digest tagged by area, kept in sync with `scripts/lessons.mjs --check` | no |
   | "Ship it" | `UserPromptSubmit` + `PreToolUse` hooks block `gh pr create/merge` until the human types it | no |
 
   - **Videos.** The demo is the story's main scenario run with `DEMO=1` (slow, 720p, step captions). It is committed under `evidence/<roadmap-id>/demo.webm`, at most 5 MB.
+  - **Demo artifact.** `scripts/demo-page.mjs <roadmap-id>` writes `evidence/<roadmap-id>/demo-page.html` (the story's description, changelog entry, `tests.md` and the video), which the session publishes as a Claude artifact. Its link is in the evidence README and the changelog entry. The human shares it.
   - **What stays the same:** the eleven steps, the fast loop then acceptance gate split, and one branch and PR per epic.
   - **What changes:** who runs each step. Also, the main scenario's Playwright file is written once in the fast loop, as the demo, and the gate extends it. The first action reads `lessons.md`, not the whole retrospective.
 - **Links stay checked.** `scripts/check-specs.py` also checks the relative links in `.claude/skills/*/SKILL.md`. Specs that cite "*X convention* in CLAUDE.md" point at the skill that now holds that convention.
@@ -110,6 +112,7 @@ All stories are built on one branch, `feat/BA-119-harness-adjustments`, and ship
   - `qa.mjs` runs run one at a time
   - each story has a captioned `demo.webm` (≤ 5 MB) and a `tests.md` whose counts match the reports
   - a skipped impacted spec fails the gate
+  - each story with a demo has a demo artifact (video and work description on one page), linked from its evidence README and changelog entry
   - `board.mjs --watch` notifies only on change
   - `gh pr create` is denied until `ship it <EPIC-ID>` is typed
   - token totals per story are reported

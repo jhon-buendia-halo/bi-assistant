@@ -8,3 +8,6 @@ dist
 .DS_Store
 .context
 .env
+
+# scripts/qa.mjs reports and logs (delivery.md 13)
+/.qa-reports/

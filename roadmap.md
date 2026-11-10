@@ -302,7 +302,7 @@ Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the wor
   - `brief.mjs` output for a sample story stays under a set size, checked in a unit test.
 - **Notes:** depends on 0.4.3. Uses `lessons.md` from 0.4.8 if it is there, otherwise only the brief's other parts.
 
-#### 0.4.5 — Deterministic QA: impacted tests, demo video, test-run evidence  `📋 Planned`
+#### 0.4.5 — Deterministic QA: impacted tests, demo video, test-run evidence  `✅ Done`
 - **Intent:** checks, test selection, the demo video and the evidence are produced by a script, with no LLM. Each story ends with a captioned demo video and a `tests.md` that proves which tests ran.
 - **Scope:**
   - `scripts/qa.mjs <roadmap-id> [--fast|--gate]` runs one story at a time (a lock file makes it the single QA lane), because worktrees share Postgres on 55432, the default ports and `backend/dist`. It selects tests mechanically:
@@ -321,6 +321,7 @@ Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the wor
   - `frontend/playwright.config.ts` gets the `DEMO` switch and the reporters. A `frontend/e2e/support/demo-captions.ts` fixture draws the captions.
   - **Videos are committed** under `evidence/<roadmap-id>/`. `qa.mjs` fails a demo over 5 MB.
   - `verify` and `workflow-ship` call `qa.mjs` instead of listing commands, and the changelog entry links `demo.webm` and `tests.md`.
+  - `scripts/demo-page.mjs <roadmap-id>` (no LLM) writes `evidence/<roadmap-id>/demo-page.html` from the story's roadmap entry, changelog entry, `tests.md` and demo. The Claude session publishes it as an artifact with the Artifact tool (`demo.webm` as a supporting file), so a teammate watches the demo and reads the work description from one link. The link goes in the evidence README and the changelog entry.
 - **Out of scope:** recording the desktop (Electron) app; narration; editing videos together.
 - **Acceptance:**
   - `qa.mjs --fast` on a sample UI story produces one captioned `demo.webm` under 5 MB. Without `DEMO=1`, the same spec runs at normal speed with no captions.
@@ -328,7 +329,11 @@ Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the wor
   - Removing one impacted spec from the run fails the gate, naming the spec.
   - Two `qa.mjs` runs started together run one after the other.
   - This epic's own evidence includes a demo and a `tests.md`.
+  - `demo-page.mjs 1.21.6` generates a page that, published as an artifact with `demo.webm`, plays the captioned demo beside the story's description, and the evidence README and changelog link it.
 - **Notes:** depends on 0.4.4. Touches test configuration and a test fixture under `frontend/`, not app code.
+  - Started 2026-11-10 on a second `feat/BA-119-harness-adjustments` branch (the first merged as PR #88). The user chose to build it **standalone**: `qa.mjs` runs on its own (by hand, `verify`, `workflow-ship`), and 0.4.4's pipeline calls it later. It starts from the `DEMO=1` switch and `scenarioStep` caption helper kept from the 0.4.3 dry run (`unit/BA-119-0.4.5-demo-captions`).
+  - Decisions (user, 2026-11-10): a story's main scenario is the Playwright test tagged `@demo` and `@story-<roadmap-id>`, written with `scenarioStep` so each Gherkin line is a caption; step 6's list is the spec-file column of `evidence/<roadmap-id>/e2e-impact.md`; the sample UI story is 1.21.6 User personas ("A new install starts with the demo persona"), whose `demo.webm` and `tests.md` are this story's showcase.
+  - Added 2026-11-10 (user): "As part of the workflow the video should be uploaded as a Claude artifact with the work description." Built as `scripts/demo-page.mjs` plus a publish step in `verify` and `workflow-ship`.
 
 #### 0.4.6 — "ship it": a human-typed gate on the epic PR  `📋 Planned`
 - **Intent:** only a human opens or merges the epic PR, by typing `ship it <EPIC-ID>`. Today that is a convention. This story makes it a hard gate that no agent can get past.

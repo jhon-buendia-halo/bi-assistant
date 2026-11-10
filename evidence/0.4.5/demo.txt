@@ -1,0 +1,27 @@
+Demo — 0.4.5 Deterministic QA: impacted tests, demo video, test-run evidence
+
+No UI scenario carries this story's tag, so the demo is this transcript of the checks scripts/qa.mjs ran.
+
+$ npm --prefix backend run build:all
+  exit 0 (passed)
+  ╵         ~~~~~~~~~~~~~~~~~
+  ▲ [WARNING] bundle initial exceeded maximum budget. Budget 500.00 kB was not met by 486.24 kB with a total of 986.24 kB.
+  
+
+$ npx jest --findRelatedTests src/mastra/evals/assistant.evals.spec.ts src/modules/sessions/sessions.service.ts --passWithNoTests
+  exit 0 (passed)
+  Snapshots:   0 total
+  Time:        2.771 s
+  Ran all test suites related to files matching src/mastra/evals/assistant.evals.spec.ts|src/modules/sessions/sessions.service.ts.
+
+$ py -3 scripts/check-specs.py
+  exit 0 (passed)
+  PASS 24 roadmap milestone epics have a spec in specs/epics/
+  PASS every epic spec has a Status of Draft or Confirmed
+  ALL CHECKS PASSED
+
+$ npx playwright test --project=web e2e/layout-accessibility.spec.ts e2e/navigation.spec.ts e2e/user-personas.spec.ts
+  exit 1 (failed)
+  1 failed
+  [web] › e2e\layout-accessibility.spec.ts:218:5 › matches the stable application-shell visual baseline
+  22 passed (1.8m)

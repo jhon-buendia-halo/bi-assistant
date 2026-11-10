@@ -1,0 +1,199 @@
+<title>0.4.5 Deterministic QA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --fg: #1d1f23;
+  --muted: #5b616b;
+  --border: #dcdde0;
+  --accent: #2f5bd3;
+  --code-bg: #eef0f3;
+  --focus: #2f5bd3;
+  --ok-bg: #e3f4e8;
+  --ok-fg: #17663a;
+  --warn-bg: #fdf0d8;
+  --warn-fg: #7a4d00;
+  --bad-bg: #fbe4e2;
+  --bad-fg: #a3261b;
+  --neutral-bg: #eceef1;
+  --neutral-fg: #444a53;
+  --video-bg: #e9eaed;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141518;
+    --surface: #1c1e22;
+    --fg: #e7e8ea;
+    --muted: #a0a6b0;
+    --border: #33363d;
+    --accent: #8aa8ff;
+    --code-bg: #262930;
+    --focus: #8aa8ff;
+    --ok-bg: #173523;
+    --ok-fg: #8fdcaa;
+    --warn-bg: #3a2c10;
+    --warn-fg: #f2c46b;
+    --bad-bg: #42201d;
+    --bad-fg: #ff9d92;
+    --neutral-bg: #2a2d33;
+    --neutral-fg: #c3c7ce;
+    --video-bg: #0e0f11;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141518;
+  --surface: #1c1e22;
+  --fg: #e7e8ea;
+  --muted: #a0a6b0;
+  --border: #33363d;
+  --accent: #8aa8ff;
+  --code-bg: #262930;
+  --focus: #8aa8ff;
+  --ok-bg: #173523;
+  --ok-fg: #8fdcaa;
+  --warn-bg: #3a2c10;
+  --warn-fg: #f2c46b;
+  --bad-bg: #42201d;
+  --bad-fg: #ff9d92;
+  --neutral-bg: #2a2d33;
+  --neutral-fg: #c3c7ce;
+  --video-bg: #0e0f11;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-wrap: anywhere;
+}
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 48px;
+}
+header { margin-bottom: 20px; }
+.eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 0.8125rem; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 1.2rem + 1.4vw, 2rem); line-height: 1.2; letter-spacing: -0.01em; }
+h2 { margin: 36px 0 10px; font-size: 1.125rem; line-height: 1.3; }
+p, li { max-width: 65ch; }
+p { margin: 0 0 10px; }
+.intent { color: var(--muted); font-size: 1.0625rem; margin-bottom: 12px; }
+ul, ol { margin: 0 0 10px; padding-left: 1.4em; }
+li { margin: 3px 0; }
+li > ul, li > ol { margin: 4px 0 0; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, video:focus-visible, .scroll:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+code, pre { font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace; font-size: 0.875em; }
+code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+.chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.8125rem; font-weight: 600; line-height: 1.6; }
+.chip.ok { background: var(--ok-bg); color: var(--ok-fg); }
+.chip.warn { background: var(--warn-bg); color: var(--warn-fg); }
+.chip.bad { background: var(--bad-bg); color: var(--bad-fg); }
+.chip.neutral { background: var(--neutral-bg); color: var(--neutral-fg); }
+.demo { margin: 0; }
+.demo video { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; height: auto; background: var(--video-bg); border: 1px solid var(--border); border-radius: 8px; }
+.demo pre { margin: 0; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; white-space: pre; line-height: 1.45; }
+.demo figcaption { margin-top: 8px; color: var(--muted); font-size: 0.8125rem; max-width: 65ch; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; }
+.card > :last-child { margin-bottom: 0; }
+.shipped { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.shipped > li { max-width: none; margin: 0; }
+.date { color: var(--muted); font-size: 0.8125rem; margin: 0 0 4px; }
+.aside { color: var(--muted); font-size: 0.9375rem; }
+.scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td code { font-size: 0.8125em; color: var(--muted); }
+td:first-child { min-width: 16ch; }
+.result-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.8125rem; }
+footer p { margin: 0 0 4px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+</style>
+<main>
+<header>
+<p class="eyebrow"><a href="https://halo-powered.atlassian.net/browse/BA-119">Harness Adjustments</a> · roadmap 0.4.5</p>
+<h1>Deterministic QA: impacted tests, demo video, test-run evidence</h1>
+<p class="intent">checks, test selection, the demo video and the evidence are produced by a script, with no LLM.</p>
+<span class="chip ok">Done</span>
+</header>
+<section aria-label="Demo">
+<figure class="demo">
+<pre class="scroll" tabindex="0">Demo — 0.4.5 Deterministic QA: impacted tests, demo video, test-run evidence
+
+No UI scenario carries this story&#39;s tag, so the demo is this transcript of the checks scripts/qa.mjs ran.
+
+$ npm --prefix backend run build:all
+  exit 0 (passed)
+  ╵         ~~~~~~~~~~~~~~~~~
+  ▲ [WARNING] bundle initial exceeded maximum budget. Budget 500.00 kB was not met by 486.24 kB with a total of 986.24 kB.
+  
+
+$ npx jest --findRelatedTests src/mastra/evals/assistant.evals.spec.ts src/modules/sessions/sessions.service.ts --passWithNoTests
+  exit 0 (passed)
+  Snapshots:   0 total
+  Time:        2.771 s
+  Ran all test suites related to files matching src/mastra/evals/assistant.evals.spec.ts|src/modules/sessions/sessions.service.ts.
+
+$ py -3 scripts/check-specs.py
+  exit 0 (passed)
+  PASS 24 roadmap milestone epics have a spec in specs/epics/
+  PASS every epic spec has a Status of Draft or Confirmed
+  ALL CHECKS PASSED
+
+$ npx playwright test --project=web e2e/layout-accessibility.spec.ts e2e/navigation.spec.ts e2e/user-personas.spec.ts
+  exit 1 (failed)
+  1 failed
+  [web] › e2e\layout-accessibility.spec.ts:218:5 › matches the stable application-shell visual baseline
+  22 passed (1.8m)</pre>
+<figcaption>Text demo written by <code>scripts/qa.mjs 0.4.5 --fast</code>: the story has no UI scenario, so this is the transcript of its checks.</figcaption>
+</figure>
+</section>
+<section aria-labelledby="h-shipped">
+<h2 id="h-shipped">What shipped</h2>
+<ul class="shipped">
+<li class="card"><p class="date">2026-11-10 · Fixed</p><strong>Lint errors merged by BA-320, and <code>check-specs</code> on Windows</strong> (roadmap 0.4.5). The new gate found 6 Prettier errors on <code>main</code> in <code>backend/src/mastra/evals/assistant.evals.spec.ts</code> and <code>narrowDatasets</code> in <code>backend/src/modules/sessions/sessions.service.ts</code>; fixed. <code>check-specs.py</code> now compares paths with forward slashes, so it passes on Windows. Evidence: evidence/0.4.5/.</li>
+</ul>
+</section>
+<section aria-labelledby="h-scope">
+<h2 id="h-scope">Scope</h2>
+<ul><li><code>scripts/qa.mjs &lt;roadmap-id&gt; [--fast|--gate]</code> runs one story at a time (a lock file makes it the single QA lane), because worktrees share Postgres on 55432, the default ports and <code>backend/dist</code>. It selects tests mechanically:<ul><li>Playwright <code>--only-changed=&lt;epic base&gt;</code> for the specs touched through imports, plus the specs of the Features the story names in its spec</li><li>Jest <code>--findRelatedTests</code> on the changed files</li></ul></li><li><strong><code>--fast</code> (fast loop):</strong><ul><li>Runs the related unit tests, the builds, <code>check-specs.py</code> and the selected Playwright specs.</li><li>Records the <strong>demo</strong>: for a UI story, it runs the story&#39;s main scenario with <code>DEMO=1</code>, which turns on <code>slowMo</code>, 1280×720 video and a caption overlay showing each <code>test.step</code> title. It saves <code>evidence/&lt;roadmap-id&gt;/demo.webm</code>.</li><li>For a story with no UI, the demo is a text transcript of its main scenario&#39;s commands and output (<code>demo.txt</code>).</li></ul></li><li><strong><code>--gate</code> (acceptance gate):</strong><ul><li>Runs the step-6 spec list, the unit tests, lint and the builds, with Playwright JSON and HTML reporters and Jest <code>--json</code>. Video and trace are kept for failures.</li><li>Writes <code>evidence/&lt;roadmap-id&gt;/tests.md</code>:<ul><li>each command with passed / failed / skipped counts, read from the reports</li><li>the specs run, compared with step 6&#39;s list: a listed spec that did not run fails the gate and is named</li><li>links to <code>demo.webm</code>, the reports and any failure videos</li></ul></li></ul></li><li><code>frontend/playwright.config.ts</code> gets the <code>DEMO</code> switch and the reporters. A <code>frontend/e2e/support/demo-captions.ts</code> fixture draws the captions.</li><li><strong>Videos are committed</strong> under <code>evidence/&lt;roadmap-id&gt;/</code>. <code>qa.mjs</code> fails a demo over 5 MB.</li><li><code>verify</code> and <code>workflow-ship</code> call <code>qa.mjs</code> instead of listing commands, and the changelog entry links <code>demo.webm</code> and <code>tests.md</code>.</li><li><code>scripts/demo-page.mjs &lt;roadmap-id&gt;</code> (no LLM) writes <code>evidence/&lt;roadmap-id&gt;/demo-page.html</code> from the story&#39;s roadmap entry, changelog entry, <code>tests.md</code> and demo. The Claude session publishes it as an artifact with the Artifact tool (<code>demo.webm</code> as a supporting file), so a teammate watches the demo and reads the work description from one link. The link goes in the evidence README and the changelog entry.</li></ul>
+<p class="aside"><strong>Out of scope:</strong> recording the desktop (Electron) app; narration; editing videos together.</p>
+</section>
+<section aria-labelledby="h-acceptance">
+<h2 id="h-acceptance">Acceptance</h2>
+<ul><li><code>qa.mjs --fast</code> on a sample UI story produces one captioned <code>demo.webm</code> under 5 MB. Without <code>DEMO=1</code>, the same spec runs at normal speed with no captions.</li><li><code>qa.mjs --gate</code> writes a <code>tests.md</code> whose counts match the JSON reports.</li><li>Removing one impacted spec from the run fails the gate, naming the spec.</li><li>Two <code>qa.mjs</code> runs started together run one after the other.</li><li>This epic&#39;s own evidence includes a demo and a <code>tests.md</code>.</li><li><code>demo-page.mjs 1.21.6</code> generates a page that, published as an artifact with <code>demo.webm</code>, plays the captioned demo beside the story&#39;s description, and the evidence README and changelog link it.</li></ul>
+</section>
+<section aria-labelledby="h-gate">
+<h2 id="h-gate">Gate results</h2>
+<div class="result-line"><span class="chip bad">Failed</span><span class="aside">From <code>evidence/0.4.5/tests.md</code>, written by <code>scripts/qa.mjs 0.4.5 --gate</code>.</span></div>
+<div class="scroll" tabindex="0" role="region" aria-label="Gate steps">
+<table>
+<thead><tr><th scope="col">Step</th><th scope="col">Result</th><th scope="col" class="num">Passed</th><th scope="col" class="num">Failed</th><th scope="col" class="num">Skipped</th></tr></thead>
+<tbody>
+<tr><td>build<br><code>npm --prefix backend run build:all</code></td><td><span class="chip ok">passed</span></td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+<tr><td>backend unit<br><code>npx jest --json --outputFile=&quot;C:\\Users\\jhonc\\Documents\\projects\\bi-assistant\\.claude\\worktrees\\BA-119-harness-adjustments\\.qa-reports\\0.4.5\\jest.json&quot;</code></td><td><span class="chip bad">failed</span></td><td class="num">2250</td><td class="num">43</td><td class="num">0</td></tr>
+<tr><td>frontend unit<br><code>npx ng test --watch=false --browsers=ChromeHeadless</code></td><td><span class="chip ok">passed</span></td><td class="num">490</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td>backend lint<br><code>npx eslint &quot;{src,apps,libs,test}/**/*.ts&quot; --rule &quot;{\&quot;prettier/prettier\&quot;: [\&quot;error\&quot;, {\&quot;endOfLine\&quot;: \&quot;auto\&quot;}]}&quot;</code></td><td><span class="chip ok">passed</span></td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+<tr><td>check-specs<br><code>py -3 scripts/check-specs.py</code></td><td><span class="chip ok">passed</span></td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+<tr><td>playwright (step 6)<br><code>npx playwright test --project=web e2e/user-personas.spec.ts e2e/navigation.spec.ts e2e/layout-accessibility.spec.ts</code></td><td><span class="chip ok">passed</span></td><td class="num">23</td><td class="num">0</td><td class="num">0</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<footer>
+<p>epic BA-119 · branch <code>feat/BA-119-harness-adjustments</code> · commit <code>89c6455</code> · generated 2026-11-10</p>
+<p>Generated by scripts/demo-page.mjs from roadmap.md, changelog.md and evidence/0.4.5/</p>
+</footer>
+</main>
