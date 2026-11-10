@@ -8,6 +8,8 @@ import {
   UsageError,
   acquireLock,
   backendRelated,
+  demoEvidenceProblems,
+  storiesWithoutDemo,
   frontendRelated,
   impactSpecs,
   jestCounts,
@@ -219,4 +221,30 @@ test('acquireLock makes runs wait their turn and clears a stale lock', async () 
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('demoEvidenceProblems fails a story without its demo or artifact link', () => {
+  const link = 'Demo artifact: https://claude.ai/artifact/SPwXiaHjCn6NQL92pzbN1d';
+  assert.deepEqual(demoEvidenceProblems('1.2.3', { hasWebm: true, hasTxt: false, uiDemo: true, readme: link }), []);
+  assert.deepEqual(demoEvidenceProblems('1.2.3', { hasWebm: false, hasTxt: true, uiDemo: false, readme: link }), []);
+  const noVideo = demoEvidenceProblems('1.2.3', { hasWebm: false, hasTxt: true, uiDemo: true, readme: link });
+  assert.equal(noVideo.length, 1);
+  assert.match(noVideo[0], /No demo video: a test is tagged @story-1\.2\.3/);
+  const nothing = demoEvidenceProblems('1.2.3', { hasWebm: false, hasTxt: false, uiDemo: false, readme: '' });
+  assert.equal(nothing.length, 2);
+  assert.match(nothing[0], /^No demo: /);
+  assert.match(nothing[1], /No demo artifact link in evidence\/1\.2\.3\/README\.md/);
+  assert.equal(demoEvidenceProblems('1.2.3', { hasWebm: true, hasTxt: false, uiDemo: true, readme: 'Demo artifact: <TBD>' }).length, 1);
+});
+
+test('storiesWithoutDemo lists in-progress stories that have no demo yet', () => {
+  const roadmap = [
+    '#### 1.21.11 — Ontologies on the Context page  `✅ Done`',
+    '#### 1.21.12 — Visuals library on the Context page  `🚧 In progress`',
+    '#### 1.21.13 — Something else  `🚧 In progress`',
+    '#### 0.4.6 — A tool story  `🚧 In progress`',
+  ].join('\n');
+  const files = new Set(['evidence/1.21.12/demo.webm', 'evidence/0.4.6/demo.txt']);
+  assert.deepEqual(storiesWithoutDemo(roadmap, (f) => files.has(f)), ['1.21.13']);
+  assert.deepEqual(storiesWithoutDemo(roadmap, () => false), ['1.21.12', '1.21.13', '0.4.6']);
 });

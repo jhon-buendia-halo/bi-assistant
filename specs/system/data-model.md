@@ -103,7 +103,7 @@ Summary:
 | Collection (table) | Purpose | Identity | Default order | Capability |
 |---|---|---|---|---|
 | `connections` | Saved datasources (data platform connections) | `id` | `updatedAt` desc | [datasources](../capabilities/datasources/spec.md) |
-| `settings` | Single-row app settings: the LLM settings, the built-in agent pins and the UI preferences | `key` (`"llm"`, `"builtin-agent-pins"`, `"ui-preferences"`, `"personas-seed"`) | n/a | [llm-settings](../capabilities/llm-settings/spec.md) |
+| `settings` | Single-row app settings: the LLM settings, the built-in agent pins and the UI preferences | `key` (`"llm"`, `"builtin-agent-pins"`, `"ui-preferences"`, `"personas-seed"`, `"visuals-seed"`) | n/a | [llm-settings](../capabilities/llm-settings/spec.md) |
 | `datasets` | Named selections of entities with a schema snapshot | `name` (unique, upsert key) | `updatedAt` desc | [datasets](../capabilities/datasets/spec.md) |
 | `sessions` | Chat sessions with full transcript and visual metadata | `id` | `updatedAt` desc | [sessions-chat](../capabilities/sessions-chat/spec.md), [visuals](../capabilities/visuals/spec.md) |
 | `datasource_inventories` | Cached catalog/schema/table walk per datasource | `id` = datasource id | n/a | [datasources](../capabilities/datasources/spec.md) |
@@ -112,6 +112,7 @@ Summary:
 | `eval_runs` | Past and in-flight eval runs | `jobId` | `startedAt` desc (per agent) | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `ontology_items` | Per-dataset ontology: concepts, relations, constraints and instructions, plus shared items | `id` | `updatedAt` desc | [dataset-ontology](../capabilities/dataset-ontology/spec.md) |
 | `user_personas` | User personas: who asks the questions | `id`; `name` unique ignoring case | `name` asc, ignoring case | [user-personas](../capabilities/user-personas/spec.md) |
+| `visual_charts` | The visuals library: chart types grouped by category, with a seeded default catalog | `id`; `name` unique ignoring case | category (shipped order, then alphabetical), then `name` asc, ignoring case | [visuals-library](../capabilities/visuals-library/spec.md) |
 | `agents` | User-built agents (a draft, an optional Live version, pin) | `id` | `updatedAt` desc | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `skills` | In-app skills a user writes and assigns to their agents | `id`; `name` unique | `updatedAt` desc | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `skill_overrides` | Org-wide overrides of built-in skills, edited in the app | `name` (a built-in skill's name) | n/a | [agents-evals](../capabilities/agents-evals/spec.md) |
@@ -485,6 +486,27 @@ Profiles of the people who ask the questions (capability [user-personas](../capa
 | `answerStyle` | string | yes | Trimmed, at most 500 characters; `""` when not given. |
 | `createdAt`, `updatedAt` | ISO | yes | Maintained by the store; `updatedAt` is restamped on every update. |
 | `ownerId` | string | no | Legacy and inert: `local` or absent (section 3.14). |
+
+### 3.9b `visual_charts`
+
+Chart types for data visualization, grouped by category (capability [visuals-library](../capabilities/visuals-library/spec.md)). Manage-only: nothing reads them yet. (The table name is `visual_charts`; the store token is `VISUALS_STORE`.) New collection: no migration. Unlike `user_personas` it is not a private table, so its documents carry no legacy `ownerId` (3.14).
+
+**Default catalog.** On backend start, `VisualsService.onModuleInit` seeds the 30 default charts ([visuals-library](../capabilities/visuals-library/spec.md) R14; text in `backend/src/modules/visuals/default-visuals.ts`) unless the `settings` document `{ key: "visuals-seed", seededAt }` exists. It adds each default whose name (ignoring case) is not taken, through the normal create path, marked `builtIn: true`, then upserts the marker, so the seed runs once per data dir and a deleted default stays deleted. A failed seed logs a warning and does not stop the backend. Not a migration: it adds documents and changes no existing one.
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | |
+| `name` | string | yes | Trimmed, 1 to 80 characters, unique ignoring case. |
+| `category` | string | yes | Trimmed, 1 to 60 characters, free text; the defaults use `Comparison`, `Change over time`, `Part-to-whole`, `Distribution`, `Relationship`, `Ranking`, `Flow`, `Spatial` and `Numbers and tables`. |
+| `previewKey` | string | yes | One of the 30 thumbnail keys (the Preview column of the catalog in [visuals-library](../capabilities/visuals-library/spec.md) R14) or `none`; default `none`. |
+| `rendererForm` | string \| null | yes | The chart form the app draws it with: `bar`, `line`, `scatter`, `heatmap`, `metric-cards`, `table` or `donut` (the visual spec forms, [visuals](../capabilities/visuals/spec.md)); `null` when the app does not draw it (default). |
+| `description` | string | yes | Trimmed, at most 1,000 characters; `""` when not given. |
+| `whenToUse` | string | yes | Trimmed, at most 1,000 characters; `""` when not given. |
+| `whenToAvoid` | string | yes | Trimmed, at most 1,000 characters; `""` when not given. |
+| `dataShape` | string | yes | Trimmed, at most 200 characters, e.g. `1 category + 1 measure`; `""` when not given. |
+| `enabled` | boolean | yes | Default `true`. A disabled chart is shown faded. |
+| `builtIn` | boolean | yes | `true` for a seeded default, `false` otherwise; set by the server only. |
+| `createdAt`, `updatedAt` | ISO | yes | Maintained by the store; `updatedAt` is restamped on every update. |
 
 ### 3.10 `agents` — user agents
 

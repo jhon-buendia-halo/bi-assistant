@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **84 HTTP route handlers** across 13 app controllers (sessions 17, deep analysis 3, agents 17, skills 9, datasources 6, ontology 6, personas 4, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2), plus the 33 routes of the embedded Intellify RFP API (2.16). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **88 HTTP route handlers** across 14 app controllers (sessions 17, deep analysis 3, agents 17, skills 9, datasources 6, ontology 6, personas 4, visuals 4, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2), plus the 33 routes of the embedded Intellify RFP API (2.16). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
 
 ---
 
@@ -59,7 +59,7 @@ Clients read the error text from `error.message` (Style B) or `body.message` wit
 
 ### 1.4 Success status codes
 
-POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56). GET/PUT/DELETE return **200**; `DELETE /ontology/:id` and `DELETE /personas/:id` return **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
+POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56). GET/PUT/DELETE return **200**; `DELETE /ontology/:id`, `DELETE /personas/:id` and `DELETE /visuals/:id` return **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
 
 ### 1.5 Validation
 
@@ -769,6 +769,34 @@ Controller prefix `/personas`. Capability: [user-personas](../capabilities/user-
 
 #### 49d. `DELETE /personas/:id`
 - Response `204` (empty). `404 "Persona not found"`.
+
+### 2.8b Visuals library
+
+Controller prefix `/visuals`. Capability: [visuals-library](../capabilities/visuals-library/spec.md). **Style B throughout** (real status codes, bare bodies). Shape `VisualChart` in data-model (3.9b): `{ id, name, category, previewKey, rendererForm: string|null, description, whenToUse, whenToAvoid, dataShape, enabled, builtIn, createdAt, updatedAt }`.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 49e | `GET /visuals` | List charts in display order | yes |
+| 49f | `POST /visuals` | Create a chart | yes |
+| 49g | `PATCH /visuals/:id` | Partial update | yes |
+| 49h | `DELETE /visuals/:id` | Delete (204) | yes |
+
+#### 49e. `GET /visuals`
+- Response `200`: **`VisualChart[]`** (a bare array): the nine default categories first in the shipped order (Comparison, Change over time, Part-to-whole, Distribution, Relationship, Ranking, Flow, Spatial, Numbers and tables), other categories after them alphabetically ignoring case, and within a category by `name` ignoring case.
+
+#### 49f. `POST /visuals`
+- Body: `{ name: string; category: string; previewKey?: string; rendererForm?: string|null; description?: string; whenToUse?: string; whenToAvoid?: string; dataShape?: string; enabled?: boolean }`. Every string is trimmed. `builtIn` is never read from the body: a created chart is `builtIn: false`.
+- Validation `400` (messages exact): `"Name is required"`, `"Name is at most 80 characters"`, `"Category is required"`, `"Category is at most 60 characters"`, `"Description is at most 1,000 characters"`, `"When to use is at most 1,000 characters"`, `"When to avoid is at most 1,000 characters"`, `"Data needed is at most 200 characters"`, `"Unknown preview"` (`previewKey` is none of the 30 preview keys or `none`), `"Unknown renderer form"` (not one of `bar`, `line`, `scatter`, `heatmap`, `metric-cards`, `table`, `donut` or null), `"Enabled must be true or false"`. `previewKey` defaults to `none`, `rendererForm` to `null`, omitted strings to `""` and `enabled` to `true`.
+- `409 "A chart named \"<name>\" already exists"` when another chart has the name, ignoring case.
+- Response `201`: the created `VisualChart` (`id` generated, timestamps set).
+
+#### 49g. `PATCH /visuals/:id`
+- Body: any subset of the create fields. **Only fields present on the body are validated and applied**; omitted fields are kept and `updatedAt` is restamped. Same `400` and `409` messages as create (a chart renamed to its own name, in any case, is not a conflict). `builtIn` cannot be changed.
+- `404 "Chart not found"`.
+- Response `200`: the updated `VisualChart`.
+
+#### 49h. `DELETE /visuals/:id`
+- Response `204` (empty). `404 "Chart not found"`.
 
 ### 2.9 Testing data
 

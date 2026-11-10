@@ -1701,6 +1701,13 @@ A second built-in data-analyst agent, Questions to Insights v2, built up next to
 - **Out of scope:** a separate editor for shared items; ontologies across datasets in one view.
 - **Acceptance:** the Context page shows Ontologies then User personas; World Cup shows its counts and pending chip; opening it shows its ontology and edits there show in the dataset's Ontology tab; unit tests and the build green.
 - **Notes:** requested on 2026-11-09 with a screenshot of the Context page showing only User personas; it partly reverses 1.21.8's removal of the Knowledge card, keeping a single editor. No Jira key (repo only).
+
+#### 1.21.12 — Visuals library on the Context page  `✅ Done`
+- **Intent:** keep a library of chart types for data visualization, grouped by what they show, next to the other things agents are given, so the team shares one vocabulary of visuals and knows which ones the app can draw.
+- **Scope:** a **Visuals** card third on the Context page; a `visual_charts` collection seeded once per data dir with a default catalog of 30 chart types in 9 categories (Comparison, Change over time, Part-to-whole, Distribution, Relationship, Ranking, Flow, Spatial, Numbers and tables); each chart has a name, category, sample preview thumbnail, description, when to use, when to avoid, the data it needs, the renderer form the app draws it with (or none) and an enabled flag; the library lists charts grouped by category with search and category filters, disabled charts faded; add, edit (in place, where the card was), disable and delete charts; `GET/POST /visuals`, `PATCH/DELETE /visuals/:id`. New capability spec visuals-library; app-shell R3a; api.md, data-model.md, ui.md.
+- **Out of scope:** agents or the visual designer using the library (a later story); drawing new chart types; importing charts; per-chart sample data.
+- **Acceptance:** a new data dir shows the Visuals card and the 30 default charts in 9 categories with previews; search and a category filter narrow the list; a chart can be added, edited, disabled and deleted and survives a restart; a deleted default stays deleted; a duplicate or blank name is refused; unit tests and the build green.
+- **Notes:** requested on 2026-11-10 with a screenshot of the Context page. The user chose a broad catalog marked with what the app draws, shipped + editable, rich entries with a preview, and manage-only for now. No Jira key (repo only).
 ---
 
 ## Release 2 — Multi-user  (no target date yet)

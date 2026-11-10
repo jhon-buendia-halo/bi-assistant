@@ -14,6 +14,26 @@ Entry template:
 
 ---
 
+## 2026-11-10 — 1.21.12 Visuals library on the Context page (BA-320)
+
+### What went well
+- One written contract (data shape, API, test ids, UX rules) let three parallel units build the backend, the frontend and the specs with no conflicts; the frontend matched the backend on the first run.
+- Looking at the running page before the hand-off caught a search icon over the placeholder text; the dark-theme check went through Settings → Appearance, since the saved preference wins over the browser's colour scheme.
+- The past lesson "the editor opens where you clicked" went into the contract and shipped right the first time.
+
+### What went wrong
+- The app was handed to the user without the demo video. CLAUDE.md's fast-loop list did not mention `qa.mjs --fast` or the demo artifact, the demo test was only due in step 7 (after acceptance), and nothing checked for it, so the user had to ask.
+- The first `check-specs` failed because the new spec's E2E reference was a Markdown link; the check needs `` E2E: `<path>` ``.
+- A scripted (Python) edit collapsed `[\\/]` into `[\/]` in the new hook's regexes, so it matched only `/` on Windows; found by pipe-testing with a Windows path. The same mistake as the 0.4.5 `sed` lesson.
+- The reminder hook first fired for old roadmap stories still marked In progress (1.14.x); it now reads only the branch's roadmap diff.
+
+### What to do differently
+- Record and publish the demo in the fast loop, before the hand-off, and give the user the link with the app (now in CLAUDE.md, enforced by the gate and reminded by a hook).
+- Write the story's demo scenario with the code, not after acceptance.
+- Never edit regexes through a script, in any language: use the Edit tool, then pipe-test with real Windows and POSIX inputs.
+
+---
+
 ## 2026-11-10 — 0.4.5 Deterministic QA, demo videos and demo artifacts (BA-119)
 
 ### What went well

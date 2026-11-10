@@ -68,6 +68,7 @@ export const METRICS_STORE = 'DOC_STORE_metrics';
 export const EVAL_RUNS_STORE = 'DOC_STORE_eval_runs';
 export const ONTOLOGY_STORE = 'DOC_STORE_ontology';
 export const PERSONAS_STORE = 'DOC_STORE_personas';
+export const VISUALS_STORE = 'DOC_STORE_visuals';
 export const AGENTS_STORE = 'DOC_STORE_agents';
 export const SKILLS_STORE = 'DOC_STORE_skills';
 export const SKILL_OVERRIDES_STORE = 'DOC_STORE_skill_overrides';
