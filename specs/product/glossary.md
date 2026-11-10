@@ -34,6 +34,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Constraint.** An *ontology item* of kind `constraint`: a SQL predicate (for example "exclude test accounts") with an optional note on when to apply it, an optional concept it is about and optional entities. The assistant applies it to every query unless the question asks for the excluded rows, and the answer names the filters applied. Rendered as a `[default_filter]` line. Replaces the former *default filter*.
 
+**Copilot runtime.** The local process that GitHub's official Copilot SDK starts and drives for the *LLM provider* `copilot`. It signs in with the GitHub login already on the machine (the GitHub CLI, the GitHub Copilot CLI or the GitHub Copilot app) and talks to GitHub Copilot; the app keeps its own tools and tool loop and never enables the runtime's built-in tools. See ADR-0037 in [../system/architecture.md](../system/architecture.md).
+
 **Cross-check.** The result of *careful mode* on one answer: status `agree` (same results), `disagree` (results differ) or `error` (the check could not finish), plus a short note.
 
 **Custom endpoint.** The *LLM provider* `custom`: a model server the user chooses, such as a self-hosted model (Ollama, LM Studio, vLLM), a gateway (LiteLLM) or a relay, that speaks the OpenAI or Anthropic API. It is set by an *API style*, a base URL, an optional API key and a model, which the user can pick from the server's own model list. See [../capabilities/llm-settings/spec.md](../capabilities/llm-settings/spec.md).
@@ -86,6 +88,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Built-in skill override.** An edit of a built-in *skill*, made in the skills library. It is stored in the database, and replaces the shipped skill on the next call until **Reset to built-in** deletes it. See [../system/data-model.md](../system/data-model.md) 3.10.2 and ADR-0023.
 
+**GitHub Copilot (provider).** The *LLM provider* `copilot`: every agent runs on the user's own GitHub Copilot seat through the *Copilot runtime*, with no API key or base URL; the model is `auto` (Copilot picks from the seat's plan) unless the user names one. Each prompt counts against the seat's Copilot allowance. See [../capabilities/llm-settings/spec.md](../capabilities/llm-settings/spec.md).
+
 **In-app skill.** A *skill* a user writes in the app (the skills library) instead of a folder: a name, a "Use when…" description, a body and reference files, stored in the database. It reaches a session only through a *user agent* whose instructions *link* it, and a *Live* agent runs on the copy taken when it was published. See [../system/data-model.md](../system/data-model.md) 3.10.1 and ADR-0022.
 
 **Instruction.** An *ontology item* of kind `instruction`: a standing rule, data quirk or coverage fact the assistant follows, with optional entities.
@@ -102,7 +106,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Live (agent).** The published version of a *user agent*. It is the version that starts sessions. Editing a Live agent changes only its *draft*, and the Live version keeps serving until the draft is published.
 
-**LLM provider.** The service the agents call. `openai`, `anthropic`, `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name) or `custom` (a *custom endpoint*, which needs an *API style* and a base URL, and whose API key is optional). One global setting: provider, model, API key (stored encrypted, shown masked), *reasoning effort* and, for `lenai` and `custom`, the base URL (and for `custom` the API style).
+**LLM provider.** The service the agents call. `openai`, `anthropic`, `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name) `custom` (a *custom endpoint*, which needs an *API style* and a base URL, and whose API key is optional) or `copilot` (*GitHub Copilot*, which needs no key or base URL and uses the machine's GitHub login). One global setting: provider, model, API key (stored encrypted, shown masked), *reasoning effort* and, for `lenai` and `custom`, the base URL (and for `custom` the API style).
 
 **Maturity band.** The DMBOK maturity level of an overall *data readiness* score: Optimised (95 and above), Managed (85 and above), Defined (70 and above), Repeatable (50 and above) or Initial.
 

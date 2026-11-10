@@ -6,12 +6,18 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { LucideAngularModule, Loader2, TriangleAlert } from 'lucide-angular';
+import {
+  LucideAngularModule,
+  CircleCheck,
+  Loader2,
+  TriangleAlert,
+} from 'lucide-angular';
 import { LlmApiService } from '../../services/llm-api.service';
 import { LlmModelPicker } from '../llm-model-picker/llm-model-picker';
 import {
   ApiStyle,
   LlmProvider,
+  CopilotStatusView,
   LlmSettings,
   ReasoningEffort,
 } from '../../models/llm.model';
@@ -48,6 +54,7 @@ export const MODEL_PLACEHOLDERS: Record<LlmProvider, string> = {
   anthropic: 'claude-sonnet-5-5',
   lenai: 'my-deployment',
   custom: 'llama3.1:8b',
+  copilot: 'auto',
 };
 
 /** Wait after the last keystroke before looking up a model's levels. */
@@ -62,6 +69,7 @@ const LEVELS_LOOKUP_DELAY_MS = 250;
 export class LlmConfig implements OnInit, OnDestroy {
   readonly Loader2 = Loader2;
   readonly TriangleAlert = TriangleAlert;
+  readonly CircleCheck = CircleCheck;
 
   private readonly api = inject(LlmApiService);
   private readonly toast = inject(ToastService);
@@ -108,6 +116,11 @@ export class LlmConfig implements OnInit, OnDestroy {
   private levelsTimer: ReturnType<typeof setTimeout> | undefined;
   private levelsRequest = 0;
 
+  // GitHub sign-in state shown under the provider when Copilot is selected.
+  readonly copilotStatus = signal<CopilotStatusView | null>(null);
+  readonly copilotStatusLoading = signal(false);
+  private copilotRequest = 0;
+
   readonly testing = signal(false);
   readonly saving = signal(false);
   // Only a configuration whose test passed can be saved.
@@ -128,6 +141,7 @@ export class LlmConfig implements OnInit, OnDestroy {
         // placeholder means "stored key is kept unless you type a new one".
         this.savedKeyMasked.set(saved.apiKeyMasked || null);
         this.reasoningEffort.set(saved.reasoningEffort);
+        if (this.provider() === 'copilot') this.loadCopilotStatus();
         this.lookUpEffortLevels(0);
       },
       error: () => {
@@ -139,7 +153,7 @@ export class LlmConfig implements OnInit, OnDestroy {
   get canTest(): boolean {
     return (
       !this.testing() &&
-      this.model().trim() !== '' &&
+      (this.model().trim() !== '' || this.provider() === 'copilot') &&
       (!this.usesBaseUrl || this.baseUrl().trim() !== '')
     );
   }
@@ -155,7 +169,7 @@ export class LlmConfig implements OnInit, OnDestroy {
 
   /** The select's single option while it is disabled (spec R37). */
   get effortPlaceholder(): string {
-    return this.model().trim()
+    return this.model().trim() || this.provider() === 'copilot'
       ? 'Default — not available for this model'
       : 'Default — enter a model first';
   }
@@ -165,7 +179,7 @@ export class LlmConfig implements OnInit, OnDestroy {
     if (this.effortLevels().length) {
       return 'Used for answers. Test connection always uses the lowest level.';
     }
-    return this.model().trim()
+    return this.model().trim() || this.provider() === 'copilot'
       ? "This model doesn't support a reasoning effort setting."
       : 'Enter a model to see the effort levels it supports.';
   }
@@ -190,6 +204,39 @@ export class LlmConfig implements OnInit, OnDestroy {
       provider === this.savedProvider() ? this.savedBaseUrl() : '',
     );
     this.onFieldChange();
+    if (provider === 'copilot') this.loadCopilotStatus();
+    // The levels depend on the provider as well as the model.
+    this.lookUpEffortLevels(0);
+  }
+
+  /** Reads the GitHub sign-in state; the newest request wins. */
+  private loadCopilotStatus(): void {
+    const request = ++this.copilotRequest;
+    this.copilotStatus.set(null);
+    this.copilotStatusLoading.set(true);
+    this.api.copilotStatus().subscribe({
+      next: (status) => {
+        if (request !== this.copilotRequest) return;
+        this.copilotStatus.set(status);
+        this.copilotStatusLoading.set(false);
+      },
+      error: () => {
+        if (request !== this.copilotRequest) return;
+        this.copilotStatusLoading.set(false);
+      },
+    });
+  }
+
+  /** The status line's text. */
+  get copilotStatusText(): string {
+    if (this.copilotStatusLoading()) return 'Checking GitHub sign-in…';
+    return (
+      this.copilotStatus()?.message ?? 'Could not check the GitHub sign-in'
+    );
+  }
+
+  get copilotSignedIn(): boolean {
+    return this.copilotStatus()?.signedIn === true;
   }
 
   /** Sets the model (typed, or picked from a loaded list), invalidates the last test and refetches the effort levels. */
@@ -211,6 +258,8 @@ export class LlmConfig implements OnInit, OnDestroy {
    */
   private lookUpEffortLevels(delayMs: number): void {
     clearTimeout(this.levelsTimer);
+    const provider = this.provider();
+    // A blank Copilot model means `auto`, which has no levels.
     const model = this.model().trim();
     if (!model) {
       this.effortLevels.set([]);
@@ -218,7 +267,7 @@ export class LlmConfig implements OnInit, OnDestroy {
     }
     const request = ++this.levelsRequest;
     this.levelsTimer = setTimeout(() => {
-      this.api.effortLevels(model).subscribe({
+      this.api.effortLevels(model, provider).subscribe({
         next: (view) => {
           if (request !== this.levelsRequest) return;
           this.effortLevels.set(view.levels);
