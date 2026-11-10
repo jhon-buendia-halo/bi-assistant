@@ -848,6 +848,77 @@
                   </div>
                   }
                 </div>
+              } @else if (mainView() === "monitoring") {
+                <!-- Monitoring: the LLM calls table (app-shell R3b, roadmap 1.21.14) -->
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+                  <div class="flex w-full max-w-[1120px] flex-col" data-testid="monitoring-page">
+                    <h2
+                      class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
+                    >
+                      Monitoring
+                    </h2>
+                    <!-- The tab's note, LLM calls | Sessions tabs and their tables (roadmap 1.21.16) -->
+                    <div>
+                      @defer (on immediate) {
+                        <app-monitoring-tabs
+                          (openCall)="openLlmCall($event)"
+                          (openSession)="openMonitoringSession($event)"
+                        />
+                      }
+                    </div>
+                  </div>
+                </div>
+              } @else if (mainView() === "monitoring-session") {
+                <!-- One session's execution flow (roadmap 1.21.16) -->
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+                  <div class="flex w-full max-w-[1120px] min-w-0 flex-col gap-3">
+                    <!-- Back to the Monitoring page's Sessions tab -->
+                    <button
+                      type="button"
+                      data-testid="monitoring-session-back"
+                      (click)="backFromMonitoringSession()"
+                      class="btn btn-ghost w-fit px-2 py-1 text-[12px]"
+                    >
+                      <lucide-angular [img]="ArrowLeft" [size]="14" />
+                      <span>Monitoring</span>
+                    </button>
+                    @if (activeMonitoringSessionId(); as sessionId) {
+                      @defer (on immediate) {
+                        <app-session-flow
+                          class="w-full min-w-0"
+                          [sessionId]="sessionId"
+                          (openCall)="openLlmCallFromSession($event)"
+                          (openChat)="openSessionById($event)"
+                        />
+                      }
+                    }
+                  </div>
+                </div>
+              } @else if (mainView() === "llm-call") {
+                <!-- One LLM call and its context window (roadmap 1.21.15) -->
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+                  <div class="flex w-full max-w-[1120px] flex-col gap-3">
+                    <!-- Back to where the call was opened: its session page, else the table -->
+                    <button
+                      type="button"
+                      data-testid="llm-call-back"
+                      (click)="backFromLlmCall()"
+                      class="btn btn-ghost w-fit px-2 py-1 text-[12px]"
+                    >
+                      <lucide-angular [img]="ArrowLeft" [size]="14" />
+                      <span>{{ llmCallFromSession() !== null ? "Session" : "Monitoring" }}</span>
+                    </button>
+                    @if (activeLlmCallId(); as callId) {
+                      @defer (on immediate) {
+                        <app-llm-call-detail
+                          class="w-full"
+                          [callId]="callId"
+                          (openSession)="openSessionById($event)"
+                        />
+                      }
+                    }
+                  </div>
+                </div>
               } @else if (mainView() === "sessions") {
                 <!-- The Sessions page's list (app-shell R3) -->
                 <div class="min-h-0 flex-1 overflow-y-auto px-8 py-6">

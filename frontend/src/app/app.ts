@@ -39,6 +39,7 @@ import {
   Wrench,
   Network,
   ChartColumn,
+  Activity,
 } from 'lucide-angular';
 import { DatasourceConfig } from './features/datasources/components/datasource-config/datasource-config';
 import {
@@ -81,6 +82,9 @@ import {
 import { PersonaList } from './features/personas/components/persona-list/persona-list';
 import { VisualLibrary } from './features/visuals/components/visual-library/visual-library';
 import { OntologyOverview } from './features/ontology/components/ontology-overview/ontology-overview';
+import { MonitoringTabs } from './features/monitoring/components/monitoring-tabs/monitoring-tabs';
+import { LlmCallDetailPage } from './features/monitoring/components/llm-call-detail/llm-call-detail';
+import { SessionFlowPage } from './features/monitoring/components/session-flow/session-flow';
 import { CatalogBrowser } from './features/datasets/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
 import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
@@ -138,10 +142,19 @@ type MainView =
   | 'ontologies'
   | 'sessions'
   | 'conversation-new'
-  | 'session-chat';
+  | 'session-chat'
+  | 'monitoring'
+  | 'monitoring-session'
+  | 'llm-call';
 
 /** What the navigation rail selects (app-shell R3–R5, R46). */
-type Area = 'datasets' | 'agents' | 'context' | 'sessions' | 'settings';
+type Area =
+  | 'datasets'
+  | 'agents'
+  | 'context'
+  | 'sessions'
+  | 'monitoring'
+  | 'settings';
 
 /** The view each workspace area opens on. */
 const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
@@ -149,6 +162,7 @@ const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
   agents: 'agents',
   context: 'context',
   sessions: 'sessions',
+  monitoring: 'monitoring',
 };
 
 const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
@@ -167,6 +181,9 @@ const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   sessions: 'sessions',
   'conversation-new': 'sessions',
   'session-chat': 'sessions',
+  monitoring: 'monitoring',
+  'monitoring-session': 'monitoring',
+  'llm-call': 'monitoring',
 };
 
 const DEFAULT_RIGHT_PANEL_WIDTH = 572;
@@ -228,6 +245,9 @@ function urlHost(baseUrl: string): string {
     PersonaList,
     VisualLibrary,
     OntologyOverview,
+    MonitoringTabs,
+    LlmCallDetailPage,
+    SessionFlowPage,
     CatalogBrowser,
     EntityDetails,
     ToastContainer,
@@ -1289,6 +1309,7 @@ export class App {
     { area: 'agents', label: 'Agents', icon: Bot },
     { area: 'context', label: 'Context', icon: Layers },
     { area: 'sessions', label: 'Sessions', icon: FolderKanban },
+    { area: 'monitoring', label: 'Monitoring', icon: Activity },
   ];
 
   readonly settingsSections: {
@@ -1357,6 +1378,70 @@ export class App {
     this.mainView.set(view);
   }
 
+  /** The LLM call shown on the `llm-call` view (roadmap 1.21.15). */
+  readonly activeLlmCallId = signal<string | null>(null);
+
+  /**
+   * The session page a call was opened from; null when it was opened from
+   * the LLM calls table (its back control then reads Monitoring).
+   */
+  readonly llmCallFromSession = signal<string | null>(null);
+
+  /** The session shown on the `monitoring-session` view (roadmap 1.21.16). */
+  readonly activeMonitoringSessionId = signal<string | null>(null);
+
+  /** Opens a call from the Monitoring table. */
+  openLlmCall(id: string): void {
+    this.llmCallFromSession.set(null);
+    this.activeLlmCallId.set(id);
+    this.mainView.set('llm-call');
+  }
+
+  /** Opens a call from the session page; its back control returns there. */
+  openLlmCallFromSession(id: string): void {
+    this.llmCallFromSession.set(this.activeMonitoringSessionId());
+    this.activeLlmCallId.set(id);
+    this.mainView.set('llm-call');
+  }
+
+  /** The call page's back control: to its session page, else the table. */
+  backFromLlmCall(): void {
+    const sessionId = this.llmCallFromSession();
+    if (sessionId !== null) {
+      this.activeMonitoringSessionId.set(sessionId);
+      this.mainView.set('monitoring-session');
+      return;
+    }
+    this.selectArea('monitoring');
+  }
+
+  /** Opens a session's execution flow from the Sessions tab. */
+  openMonitoringSession(id: string): void {
+    this.activeMonitoringSessionId.set(id);
+    this.mainView.set('monitoring-session');
+  }
+
+  /**
+   * The session page's back control: the Monitoring page, on the Sessions
+   * tab it was opened from (the tab is kept in MonitoringStateService).
+   */
+  backFromMonitoringSession(): void {
+    this.selectArea('monitoring');
+  }
+
+  /** The call page's Session link: opens that session's chat. */
+  openSessionById(id: string): void {
+    const known = this.sessions().find((session) => session.id === id);
+    if (known) {
+      this.openSession(known);
+      return;
+    }
+    this.sessionsApi.get(id).subscribe({
+      next: (session) => this.openSession(session),
+      error: () => this.toast.error('Could not open the session'),
+    });
+  }
+
   /** Every Settings section is always offered, in their fixed order. */
   readonly visibleSettingsSections = computed(() => this.settingsSections);
 
@@ -1409,12 +1494,14 @@ export class App {
     const leavingEditor = !this.settingsOpen() && this.inEditor();
     // Sessions is shown only on its list: from a chat or the composer the
     // rail returns to the list (app-shell R3). Context likewise returns from
-    // a section to its cards (R3a).
+    // a section to its cards (R3a), and Monitoring from a call to its table
+    // (roadmap 1.21.15).
     const alreadyShown =
       this.currentArea() === area &&
       !leavingEditor &&
       (area !== 'sessions' || this.mainView() === 'sessions') &&
-      (area !== 'context' || this.mainView() === 'context');
+      (area !== 'context' || this.mainView() === 'context') &&
+      (area !== 'monitoring' || this.mainView() === 'monitoring');
     if (!alreadyShown && !this.confirmLeaveAgentEditor()) return;
     if (area === 'settings') {
       // Settings covers the main view; the editor closes rather than wait

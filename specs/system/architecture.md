@@ -920,6 +920,31 @@ flowchart LR
   - The runtime is a native binary of about 180 MB per platform, which grows each installer.
   - Stack-neutral: a rebuild needs a model adapter over an agent runtime that can disable its own tools, hand tool calls back to the caller and accept a response schema.
 
+#### ADR-0038 — Monitoring reads Mastra's trace store in-process; the app records no LLM calls of its own
+- **Status:** Accepted
+- **Date:** 2026-11-10
+- **Context:**
+  - On 2026-11-10 the user asked for a Monitoring area that lists every LLM call the agents make, with its tokens, duration, cost and status, and shows what filled each call's context window (roadmap 1.21.13–1.21.15).
+  - Mastra already records this. `MastraStorageExporter` writes every span of every agent run to `<APP_DATA_DIR>/observability.duckdb`, table `span_events`, event-sourced: one `start` row and one `end` row per span. A `model_generation` span holds the model, the provider, the usage, the tool definitions and the exact messages sent; its `tool_call` spans hold the tool arguments and results (ADR-0006).
+  - The backend process keeps that file open, so another process cannot read it while the app runs.
+- **Decision:**
+  - **A `MonitoringModule` reads the trace store in-process**, through the same `DuckDBStore` the exporter writes to (`observabilityStorage` in `backend/src/mastra/storage.ts`), with parameterised SQL. Filters and paging run in SQL. A fresh data dir, where the table does not exist yet, gives an empty page.
+  - **One table row is one `model_generation` span**, the model call of one agent run. Its `model_step` children give the steps and the real input tokens of the largest request. Its `tool_call` spans give the tool results.
+  - **The context window is rebuilt from the recorded messages** into seven boxes, with token counts estimated from characters and scaled to the real input tokens ([monitoring](../capabilities/monitoring/spec.md) R17–R22).
+  - **Cost is computed on read** from a price table shipped as code (`model-prices.ts`, USD per million tokens, dated 2026-11-03). A model not in the table has no cost.
+  - **Read-only endpoints:** `GET /monitoring/llm-calls`, `GET /monitoring/llm-calls/:id`, and for the session flow (roadmap 1.21.16) `GET /monitoring/sessions`, `GET /monitoring/sessions/:id` and `GET /monitoring/traces/:traceId` ([api.md](api.md) 2.8c). No new collection and no migration.
+- **Rejected:**
+  - **A new `llm_calls` collection written by the app on every call:** it would duplicate what Mastra already stores, add a write on the hot path of every turn, and need hooks into every place a model is called (agents, sub-calls, evals). Calls from before the feature would be missing.
+  - **Reading Phoenix or the OTLP stack:** both are developer-only, run from an opt-in Docker profile and are off by default (ADR-0006). End-user installs must not need them.
+  - **Opening `observability.duckdb` from a second process or a script:** the running backend holds the file.
+- **Consequences:**
+  - Monitoring is coupled to Mastra's `span_events` shape (event-sourced rows, the JSON columns `attributes`, `input`, `output`, `error`). A unit test pins the reader to a fixture of that real shape, so a Mastra upgrade that changes it fails the test instead of the page.
+  - Only what Mastra traces is shown. Model calls that bypass it are not listed. The same reader also serves the session flow (sessions, a turn's trajectory and the waterfall, [monitoring](../capabilities/monitoring/spec.md) R26–R44) from the same table, with no new store.
+  - Calls recorded before this feature show too, because the data was already there.
+  - Prices are code, not settings: a change of price needs a release. The table says "as of 2026-11-03", and a model without a price shows a dash for cost and no context limit.
+  - Token counts per box are estimates ("≈" in the UI). Only the total is real.
+  - Stack-neutral: a rebuild needs a trace store that records, per model call, its usage, its tool definitions, its input messages and its tool calls, a read path inside the process that owns the store, and a price table.
+
 ## Level 4 — Code
 
 ```mermaid

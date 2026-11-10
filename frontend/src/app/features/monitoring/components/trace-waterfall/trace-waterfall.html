@@ -1,0 +1,228 @@
+<div
+  class="flex flex-col gap-3 rounded-lg border border-border bg-surface-muted p-3"
+  data-testid="trace-waterfall"
+>
+  <!-- Framework switch -->
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <div class="flex items-center gap-2 text-[12px] text-fg">
+      <button
+        type="button"
+        role="switch"
+        data-testid="trace-framework-toggle"
+        [attr.aria-checked]="framework()"
+        aria-label="Show framework spans"
+        (click)="toggleFramework()"
+        class="relative h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        [class.bg-primary]="framework()"
+        [class.bg-border-strong]="!framework()"
+      >
+        <span
+          class="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-surface transition-transform"
+          [class.translate-x-4]="framework()"
+        ></span>
+      </button>
+      <span>Show framework spans</span>
+      @if (!framework() && hiddenCount() > 0) {
+        <span
+          class="text-fg-muted tabular-nums"
+          data-testid="trace-framework-hidden"
+          >({{ hiddenCount() }} hidden)</span
+        >
+      }
+    </div>
+    @if (loading() && trace() !== null) {
+      <lucide-angular
+        [img]="Loader2"
+        [size]="14"
+        class="animate-spin text-fg-muted"
+      />
+    }
+  </div>
+
+  @if (error(); as err) {
+    <p
+      data-testid="trace-error"
+      role="alert"
+      class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  }
+
+  @if (trace() === null) {
+    @if (loading()) {
+      <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">
+        <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+        <span>Loading the timeline…</span>
+      </div>
+    }
+  } @else {
+    <div
+      class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_280px]"
+      [class.opacity-60]="loading()"
+      [attr.aria-busy]="loading()"
+    >
+      <!-- Rows: scroll sideways inside, never the page -->
+      <div class="min-w-0 overflow-x-auto">
+        <div
+          class="flex min-w-[560px] flex-col gap-0.5"
+          role="group"
+          aria-label="Spans of the turn"
+        >
+          <div
+            class="grid grid-cols-[220px_minmax(0,1fr)_64px] items-center gap-2 px-1 font-mono text-[11px] text-fg-muted"
+            data-testid="trace-axis"
+          >
+            <span></span>
+            <span class="flex justify-between tabular-nums">
+              @for (tick of ticks(); track $index) {
+                <span>{{ tick }}</span>
+              }
+            </span>
+            <span></span>
+          </div>
+          @for (span of spans(); track span.id) {
+            <button
+              type="button"
+              [attr.data-testid]="'trace-span-row-' + span.id"
+              [attr.aria-pressed]="selectedId() === span.id"
+              (click)="select(span)"
+              class="grid w-full grid-cols-[220px_minmax(0,1fr)_64px] items-center gap-2 rounded-md border px-1 py-[3px] text-left text-[12px] text-fg hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
+              [class.border-border-selected]="selectedId() === span.id"
+              [class.bg-surface-selected]="selectedId() === span.id"
+              [class.border-transparent]="selectedId() !== span.id"
+            >
+              <span
+                class="flex min-w-0 items-center gap-1.5"
+                data-testid="trace-span-label"
+                [style.padding-left.px]="span.depth * indent"
+              >
+                <i
+                  class="h-2 w-2 shrink-0 rounded-[2px]"
+                  [style.background-color]="colour(span.kind)"
+                  aria-hidden="true"
+                ></i>
+                <span class="truncate">{{ span.label }}</span>
+              </span>
+              <span
+                class="relative h-3.5 rounded-[3px] bg-surface"
+                aria-hidden="true"
+              >
+                <span
+                  data-testid="trace-span-bar"
+                  class="absolute top-0.5 bottom-0.5 min-w-[3px] rounded-[2px]"
+                  [class.opacity-50]="span.durationMs === null"
+                  [attr.data-running]="span.durationMs === null ? 'true' : null"
+                  [style.background-image]="
+                    span.durationMs === null ? runningStripes : null
+                  "
+                  [style.background-color]="colour(span.kind)"
+                  [style.left.%]="left(span)"
+                  [style.width.%]="width(span)"
+                ></span>
+              </span>
+              <span
+                class="text-right font-mono text-[11px] text-fg-muted tabular-nums"
+                >{{ duration(span) }}</span
+              >
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- The selected span -->
+      <aside
+        class="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface p-3 text-[12px]"
+        data-testid="trace-span-panel"
+        aria-live="polite"
+      >
+        @if (selected(); as span) {
+          <div class="flex items-center gap-1.5">
+            <i
+              class="h-2 w-2 shrink-0 rounded-[2px]"
+              [style.background-color]="colour(span.kind)"
+              aria-hidden="true"
+            ></i>
+            <h4
+              class="min-w-0 text-[13px] font-medium break-words text-fg-strong"
+              data-testid="trace-span-panel-label"
+            >
+              {{ span.label }}
+            </h4>
+          </div>
+          <dl
+            class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1"
+            data-testid="trace-span-details"
+          >
+            <dt class="text-fg-muted">Kind</dt>
+            <dd class="text-fg">{{ kindLabels[span.kind] }}</dd>
+            <dt class="text-fg-muted">Starts at</dt>
+            <dd class="font-mono text-fg tabular-nums">{{ offset(span) }}</dd>
+            <dt class="text-fg-muted">Duration</dt>
+            <dd class="font-mono text-fg tabular-nums">{{ duration(span) }}</dd>
+            <dt class="text-fg-muted">Status</dt>
+            <dd class="text-fg">{{ statusLabels[span.status] }}</dd>
+            @for (detail of span.details; track $index) {
+              <dt class="text-fg-muted">{{ detail.label }}</dt>
+              <dd class="font-mono break-words text-fg [overflow-wrap:anywhere]">
+                {{ detail.value }}
+              </dd>
+            }
+          </dl>
+          @if (span.input !== null) {
+            <details class="group" data-testid="trace-span-input">
+              <summary class="cursor-pointer text-fg-muted hover:text-fg">
+                Input
+              </summary>
+              <pre
+                class="mt-1 max-h-60 overflow-auto rounded-md bg-surface-muted p-2 font-mono text-[11px] whitespace-pre-wrap text-fg [overflow-wrap:anywhere]"
+                >{{ span.input }}</pre
+              >
+            </details>
+          }
+          @if (span.output !== null) {
+            <details class="group" data-testid="trace-span-output">
+              <summary class="cursor-pointer text-fg-muted hover:text-fg">
+                Output
+              </summary>
+              <pre
+                class="mt-1 max-h-60 overflow-auto rounded-md bg-surface-muted p-2 font-mono text-[11px] whitespace-pre-wrap text-fg [overflow-wrap:anywhere]"
+                >{{ span.output }}</pre
+              >
+            </details>
+          }
+          @if (canOpenCall(span)) {
+            <button
+              type="button"
+              data-testid="trace-span-open-call"
+              class="btn btn-outline w-fit px-2 py-1 text-[12px]"
+              (click)="open(span)"
+            >
+              <lucide-angular [img]="ExternalLink" [size]="13" />
+              <span>Open call</span>
+            </button>
+          }
+        } @else {
+          <p class="text-fg-muted">Select a span to see its details.</p>
+        }
+      </aside>
+    </div>
+
+    <!-- Legend -->
+    <div
+      class="flex flex-wrap gap-3 text-[11px] text-fg-muted"
+      data-testid="trace-legend"
+    >
+      @for (item of kinds; track item.kind) {
+        <span class="inline-flex items-center gap-1.5">
+          <i
+            class="h-2 w-2 rounded-[2px]"
+            [style.background-color]="colour(item.kind)"
+            aria-hidden="true"
+          ></i>
+          {{ item.label }}
+        </span>
+      }
+    </div>
+  }
+</div>

@@ -14,6 +14,27 @@ Entry template:
 
 ---
 
+## 2026-11-10 — 1.21.13–1.21.16 Monitoring: LLM calls, context window, session flow (BA-320)
+
+### What went well
+- Probing the real trace store first (an isolated instance, one real chat turn, the `span_events` rows exported to a fixture) pinned the reader to Mastra's actual shape; the context boxes summed to the real 18,040 input tokens on the first check.
+- Reading the store in-process through Mastra's own DuckDB connection avoided the file lock the running app holds.
+- The options page (waterfall, trajectory, graph) before building let the user pick the design in one answer.
+- The demo was recorded and published in the fast loop for every story, so each hand-over came with its video.
+
+### What went wrong
+- The session answer first showed the first request's commentary ("I'll start by checking…"): a model call's output joins the text of every request. A unit test had pinned the wrong value, so it passed; only reading the real session in the running app found it.
+- The user did not see the changes after the rebuild: the open browser tab still ran the old bundle. The hand-over did not say to reload.
+- The first E2E draft asserted the caption text where the "Context window" label is a separate heading.
+- Some Gherkin scenarios (a failed call, two agents, more than 25 calls) need data the LLM stub cannot produce, so they are covered only by component unit tests.
+
+### What to do differently
+- Check what a unit test pins against the real data before trusting it, especially derived text such as an answer.
+- When handing over a restarted instance, tell the user to hard-reload the open tab (Ctrl+Shift+R).
+- Give the LLM stub an error reply, so failed-call scenarios can run end to end.
+
+---
+
 ## 2026-11-10 — 1.10.3 GitHub Copilot as an LLM provider (BA-159)
 
 ### What went well

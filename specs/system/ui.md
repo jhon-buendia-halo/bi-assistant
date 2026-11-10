@@ -62,8 +62,8 @@ Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md
 1. A 20 px window-drag spacer that clears the macOS traffic lights.
 2. The **menu button** (menu icon, 18 px, `icon` colour, a 32 px square, radius 8): `aria-label` and title "Expand navigation" while collapsed, "Collapse navigation" while expanded, with `aria-expanded`. While collapsed it sits alone above the logo; while expanded it sits at the right end of the logo row, beside "Agentic Hub" (the drawer has no separate menu row).
 3. The logo row (36 px tall): a 24 px circle filled with `--logo-gradient` holding `brand/agentic-hub/logo-mark.svg`; when expanded, beside it the label "Agentic Hub" (13 px semibold `fg-strong`, filling the row) and the menu button (item 2).
-4. `nav aria-label="Workspace navigation"`: four 36 px tall buttons (radius 8, 4 px apart), each an 18 px `accent` icon and, when expanded, a 13 px medium `fg` label. Each has `title` and `aria-label` equal to its name:
-   - **Datasets** (flask icon), **Agents** (bot icon), **Context** (layers icon), **Sessions** (folder-kanban icon).
+4. `nav aria-label="Workspace navigation"`: five 36 px tall buttons (radius 8, 4 px apart), each an 18 px `accent` icon and, when expanded, a 13 px medium `fg` label. Each has `title` and `aria-label` equal to its name:
+   - **Datasets** (flask icon), **Agents** (bot icon), **Context** (layers icon), **Sessions** (folder-kanban icon), **Monitoring** (activity icon).
    - Hover: `surface-muted` fill. Current area: `surface-selected` fill and `aria-current="page"`.
 5. A flexible spacer.
 6. Bottom group, 4 px apart (centred while collapsed):
@@ -110,6 +110,9 @@ The main column renders exactly one of these views, held in a single "main view"
 | `sessions` | rail **Sessions** (also from a chat or the composer); deleting the open session | Sessions | page header ("Sessions") + the Sessions list (4.7.1) | Entity details |
 | `conversation-new` | **Start New Conversation** in the page header or on the empty Sessions list | Sessions | page header ("New conversation") + New-session composer (4.7) | Entity details |
 | `session-chat` | a session row on the Sessions page, or creating a session | Sessions | page header (session name + datasource context) + Session chat (4.12) | Session panel (4.13) |
+| `monitoring` | rail **Monitoring** (also from a call page or a session page) | Monitoring | Monitoring page: `h2` "Monitoring" (20 px light, like Context), the tabs (4.8d), the note that follows the tab (13 px `fg-muted`: "LLM calls made by the app's agents, newest first." or "Sessions with recorded agent runs, most recent first."), `data-testid="monitoring-page"`, then the LLM calls table (4.8d) or the Sessions table (4.8f) (app-shell R3b) | Entity details |
+| `llm-call` | a row of the LLM calls table, or **Open call** on the session page | Monitoring | back control (`llm-call-back`): **Monitoring** to the table, or **Session** to the session page it was opened from (monitoring R43) + the call page (4.8e) | Entity details |
+| `monitoring-session` | a row of the Sessions table | Monitoring | **Monitoring** back control (`monitoring-session-back`, to the Sessions tab) + the session page (4.8g) | Entity details |
 | Settings area, section `datasources` / `llm` / `testing-data` / `developer` / `appearance` | rail **Settings**, then a section | Settings | Settings list pane + the matching form (4.9-4.12, 4.16), centred column | Entity details |
 
 - Content views (everything except the chat) sit in a vertically scrolling, horizontally centred column with 24 px horizontal / 24 px vertical padding and a max width of 960 px (settings forms: 560 px for datasources, testing data, developer and appearance, 480 px for LLM, 24 px horizontal padding).
@@ -480,6 +483,63 @@ Capability: [visuals-library](../capabilities/visuals-library/spec.md).
 - States: loading; load error `Could not load charts`; empty "No charts yet." (dashed `border` box with **Add chart**); no match "No charts match your search."; populated.
 - Editor (`visual-chart-form`; a `surface-muted` box, 1 px `border`, radius 12): for **Add chart** it sits at the top of the list; for an existing chart it replaces that chart's card in place, spanning the full row of the grid, and is scrolled into view. Fields: **Name**, **Category** (an input with a datalist of the existing categories), **Preview** (a select of the preview keys with "No preview", and a live `app-visual-preview` beside it), **Drawn by the app as** (a select: "Not drawn by the app" then the renderer forms), **Description**, **When to use**, **When to avoid** (textareas), **Data needed** and **Enabled** (checkbox). Buttons: `btn btn-outline` **Cancel**, `btn btn-primary` **Save** (disabled while the name or category is blank), and for an existing chart a `btn btn-danger` **Delete**, which asks for confirmation. One form is open at a time. A backend message (for example a duplicate name) is shown inline (`role="alert"`).
 
+### 4.8d Monitoring: tabs and the LLM calls table
+
+Capability: [monitoring](../capabilities/monitoring/spec.md). Shown by the `monitoring` main view (`app-llm-calls-page`), under the heading and note of the main-view table.
+
+- Tabs under the heading: **LLM calls** (`monitoring-tab-calls`) and **Sessions** (`monitoring-tab-sessions`), a `role="tablist"` with `role="tab"` buttons and `aria-selected`; Left and Right arrows move between them. The chosen tab is kept in the root-scoped Monitoring state, with each tab's own filters, page and page size.
+
+- Filter bar (a wrapping row, 8 px gap): selects **Agent** ("All agents", `llm-filter-agent`), **Model** ("All models", `llm-filter-model`), **Provider** ("All providers", `llm-filter-provider`), **Status** ("Any status", Succeeded, Failed, Running, `llm-filter-status`), **Session** ("All sessions", `llm-filter-session`) and **Date** ("Any time", "Last hour", "Last 24 hours", "Last 7 days", "Custom", `llm-filter-range`); with Custom, two `datetime-local` inputs **From** (`llm-filter-from`) and **To** (`llm-filter-to`). Then a `btn btn-outline` **Clear filters** (`llm-filters-clear`), disabled when nothing is set. A session without a name is shown as the first 8 characters of its id.
+- Table (`llm-calls-table`), in a `card`: columns Started (local date and time), Agent, Model (the provider under it, 11 px `fg-muted`), Session, Tokens in / out (`61,185 / 2,445`), Duration (`17.3 s`), Cost (`$0.0213`, a dash when unknown) and Status (a `chip`: `chip-success` Succeeded, `chip-danger` Failed, `chip-neutral` Running). A row is a button (`llm-call-row-<id>`), focus outline, Enter opens it.
+- Footer: the range (`llm-page-summary`, `1–25 of 132`), a **Rows per page** select (`llm-page-size`, 25, 50, 100), **Previous** (`llm-page-prev`) and **Next** (`llm-page-next`), each disabled at its end.
+- States: loading; an inline error (`role="alert"`); empty "No LLM calls yet." or "No LLM calls match these filters." (`llm-calls-empty`).
+- The filters, page and page size live in a root-scoped state, so they are kept when a call is opened and the user comes back.
+
+### 4.8e Monitoring: LLM call page
+
+Capability: [monitoring](../capabilities/monitoring/spec.md). The `llm-call` main view, `app-llm-call-detail` (`llm-call-detail`), under a `btn btn-ghost` back control (`llm-call-back`, the look of the Context back control) that returns to where the call was opened: it reads **Monitoring** and returns to the table when opened from the table, and **Session** and returns to that session page when opened from a session page (**Open call** in 4.8g or 4.8h).
+
+- Heading: `h2` "<agent name or Model call> · <model>". Under it a facts grid: Started, Duration, Time to first token, Status, Session (a link that opens the session's chat when it has a name), Provider, Finish reason, Tokens in (with "cache read X · cache write Y"), Tokens out (with "reasoning Z") and Estimated cost. A failed call shows its error in a danger box.
+- **Context window** (`h3`): a caption `≈ 17,647 tokens of 1,000,000 (1.8 %)` (without a limit `≈ 17,647 tokens`); a stacked horizontal bar (`context-bar`), one part per non-empty box with a `title` tooltip `<Label>: ≈ <N> tokens (<P> %)`, and a legend. Each box has its own colour token `--qti-context-<box key>` (Light / Dark): system-prompt `#0b41ad` / `#5b95ff`, skills `#7c3aed` / `#b394ff`, tools `#0e7c86` / `#4fd1c5`, chat-history `#b45309` / `#f6ad55`, dataset `#15803d` / `#6ee7a0`, user-prompt `#be185d` / `#f78fbf`, tool-results `#64748b` / `#a0aec0`.
+- The seven boxes in order (`context-segment-<key>`, keys `system-prompt`, `skills`, `tools`, `chat-history`, `dataset`, `user-prompt`, `tool-results`), each a `card`: the label, an owner chip (`chip-info` "US Health" for the first three, `chip-neutral` "Custom" for the rest), `≈ N tokens · P %`, the item count, and a **Show text** / **Hide text** button (`context-segment-toggle-<key>`, `aria-expanded`). Expanded, each item shows its title and its text in a monospace block that wraps and scrolls (max height about 320 px). An empty box shows "Nothing in this call.".
+- **Steps** (`h3`): a table (`llm-call-steps`) with Step, Tokens in, Tokens out, Finish reason and Duration.
+- States: loading; the message `LLM call not found` or another load error inline (`role="alert"`).
+
+### 4.8f Monitoring: Sessions tab
+
+Capability: [monitoring](../capabilities/monitoring/spec.md) R26–R31. The **Sessions** tab of the `monitoring` main view (`app-sessions-page`).
+
+- Filter bar (a wrapping row, 8 px gap): **Agent** ("All agents", `session-filter-agent`) and **Date** ("Any time", "Last hour", "Last 24 hours", "Last 7 days", "Custom", `session-filter-range`); with Custom, two `datetime-local` inputs **From** (`session-filter-from`) and **To** (`session-filter-to`); a `btn btn-outline` **Clear filters** (`session-filters-clear`), disabled when nothing is set.
+- Table (`monitoring-sessions-table`), in a `card`: columns Session (the name, or "Unnamed session" with the first 8 characters of the id in muted monospace), Agent (names), Turns, Last activity (local date and time), Wall time, Model time, Tools, Tokens in / out, Cost, and Status (a `chip`: `chip-success` Succeeded, `chip-danger` Failed, `chip-neutral` Running). A row is a button (`monitoring-session-row-<id>`), focus outline, Enter opens it.
+- Footer: the range (`session-page-summary`), a **Rows per page** select (`session-page-size`, 25, 50, 100), **Previous** (`session-page-prev`) and **Next** (`session-page-next`).
+- States: loading; an inline error (`role="alert"`); empty "No sessions yet." or "No sessions match these filters." (`monitoring-sessions-empty`).
+
+### 4.8g Monitoring: session page
+
+Capability: [monitoring](../capabilities/monitoring/spec.md) R32–R36. The `monitoring-session` main view, `app-session-flow` (`monitoring-session-detail`), under a `btn btn-ghost` **Monitoring** back control (`monitoring-session-back`) that returns to the Sessions tab.
+
+- Heading: `h2` with the session name or "Unnamed session". Under it the totals strip (`session-totals`): Turns, Wall time, Model time, Tool calls, Tokens, Cost and Errors. A link **Open chat** when the session still exists, using the app's open-session path.
+- One block per turn (`session-turn-<n>`), in start order:
+  - The question as a right-aligned bubble (`turn-question-<n>`, `primary-soft` fill).
+  - A meta line (12 px `fg-muted`): `Turn n`, duration, model requests, tools, tokens, cost, and a status chip when the turn did not succeed. At its end the button **Open timeline** / **Hide timeline** (`turn-timeline-toggle-<n>`, `aria-expanded`).
+  - The waterfall (4.8h) inline under the meta line when the timeline is open.
+  - The path (`turn-steps-<n>`): an ordered list on a thin vertical line (`border`). A model step reads "Model", its time, "in / out" tokens, the finish reason in muted text and a link **Open call** (`step-open-call-<callId>-<stepIndex>`) that opens the `llm-call` view. A tools step lists each group as "<name> ×<count>" (no count for one call), its time, its summary, its rows, and a danger mark when a call failed.
+  - The answer as a left-aligned bubble (`turn-answer-<n>`, `surface-muted` fill) that keeps line breaks and clamps to 6 lines with **Show more** / **Show less**.
+  - The error in a danger box when the turn failed.
+- States: loading; the message `Session not found` or another load error inline (`role="alert"`).
+
+### 4.8h Monitoring: waterfall
+
+Capability: [monitoring](../capabilities/monitoring/spec.md) R37–R42. `app-trace-waterfall` (`trace-waterfall`), shown inline in a turn of the session page; it takes the turn's trace id and loads it when first shown.
+
+- Toolbar: a switch **Show framework spans** (`trace-framework-toggle`) with "(N hidden)" while off.
+- Axis row: five ticks, 0, a quarter, a half, three quarters and the total, in seconds.
+- Rows (`trace-span-row-<spanId>`, each a button with `aria-pressed`): the label indented 14 px per depth level with a small dot in the kind colour, a bar on a track (left and width from the span's start offset and duration against the total, minimum width 3 px; a running span's bar runs to the end, faded or striped), and the duration on the right. The rows area scrolls sideways inside itself, never the page.
+- Detail panel (`trace-span-panel`, about 280 px) for the selected span, the first model request by default: label, kind, start offset, duration, status, the details list, **Input** and **Output** in collapsible monospace blocks, and **Open call** for model and request spans. Rows and panel sit side by side on a wide window and stack on a narrow one.
+- Legend: Agent, Model, Request, Tool, Memory, Framework.
+- Kind colours are the tokens `--qti-span-agent`, `--qti-span-model`, `--qti-span-request`, `--qti-span-tool`, `--qti-span-memory`, `--qti-span-framework` and `--qti-span-other`, each with a Light and a Dark value in `frontend/src/styles/tokens.css` (see tokens.css for the values). By role: agent violet; model and request two shades of blue; tool teal; memory amber; framework and other slate. Both themes keep the bars readable against the track.
+- States: loading; `Trace not found` or another load error inline (`role="alert"`).
+
 ### 4.9 LLM configuration (settings)
 
 Capability: [llm-settings](../capabilities/llm-settings/spec.md).
@@ -749,7 +809,7 @@ Strings below are asserted by the Playwright suite or are user-facing contracts.
 |---|---|
 | Page heading (banner `h1`) | `US Health Agentic Hub` |
 | Window / document title | `Agentic Hub` (OS app name stays `Halo BI Assistant`) |
-| Rail buttons (title and aria-label) | `Expand navigation` / `Collapse navigation` (menu button), `Datasets`, `Agents`, `Context`, `Sessions`, `Settings`; `Open system logs` (title `System logs and diagnostics`) |
+| Rail buttons (title and aria-label) | `Expand navigation` / `Collapse navigation` (menu button), `Datasets`, `Agents`, `Context`, `Sessions`, `Monitoring`, `Settings`; `Open system logs` (title `System logs and diagnostics`) |
 | Drawer labels | `Agentic Hub`, `System logs`, `Settings`; LenAI mark `Powered by LenAI` |
 | Sessions area | `Sessions`, `New conversation` (page title of the composer), `Start New Conversation`, `Session options`, `Options for <session name>`, `Search sessions by name or ID…`, `Session ID copied`, `<first>–<last> of <total>`, `Previous page`, `Next page`, `Page <n> of <pages>`, `Loading sessions…`, `No sessions yet. Start a new conversation or open an agent.`, `No sessions match "<query>".` |
 | Shell aria-labels | `Navigation rail`, `Workspace navigation`, `Sessions`, `Settings navigation`, `Details panel` |
