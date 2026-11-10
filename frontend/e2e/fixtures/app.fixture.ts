@@ -246,7 +246,16 @@ async function launchWeb(
   const stdout: string[] = [];
   const stderr: string[] = [];
   let cli = await startCli(appDataDir, env, 0, stdout, stderr);
-  const context = await browser.newContext({ viewport: WINDOW_SIZE });
+  // DEMO=1 (agent org, 0.4.5): record the run as a demo video.
+  const demoVideoDir = process.env['DEMO'] === '1'
+    ? (process.env['DEMO_VIDEO_DIR'] ?? path.join(frontendRoot, 'test-results', 'demo'))
+    : undefined;
+  const context = await browser.newContext({
+    viewport: WINDOW_SIZE,
+    ...(demoVideoDir
+      ? { recordVideo: { dir: demoVideoDir, size: { width: 1280, height: 800 } } }
+      : {}),
+  });
   const page = await context.newPage();
   await page.goto(cli.url);
   await waitForShell(page);
@@ -296,7 +305,9 @@ export const test = base.extend<AppFixtures, WorkerFixtures>({
   webBrowser: [
     async ({ playwright }, use) => {
       let browser: Browser | undefined;
-      await use(async () => (browser ??= await playwright.chromium.launch()));
+      // DEMO=1 slows every action down so the demo video can be followed.
+      const slowMo = process.env['DEMO'] === '1' ? 400 : 0;
+      await use(async () => (browser ??= await playwright.chromium.launch({ slowMo })));
       await browser?.close();
     },
     { scope: 'worker' },
