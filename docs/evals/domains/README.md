@@ -12,7 +12,7 @@ Databases the model has never seen, shaped like a customer's, with traps planted
 
 Every domain above ships a knowledge seed, created when its sample is loaded ([testing-data](../../../specs/capabilities/testing-data/spec.md) R26, R27): `backend/src/modules/testing-data/fixtures/knowledge/<id>.ts`. The finance seed is the branch's banking rules plus the wealth rules of loop round 7; the marketing analytics seed is the rules of its policy (roadmap 1.1.25); the other three are copied from the branch.
 
-Where the fixture rules live: the catalogue and its loader in [testing-data](../../../specs/capabilities/testing-data/spec.md); the set format in [data-model 4.9](../../../specs/system/data-model.md#49-eval-question-bank-files-bundled-read-only); the set rules in [agents-evals](../../../specs/capabilities/agents-evals/spec.md) R107-R111 and R134; scripts in [delivery](../../../specs/system/delivery.md); folders in [tech-stack](../../../specs/system/tech-stack.md).
+Where the fixture rules live: the catalogue and its loader in [testing-data](../../../specs/capabilities/testing-data/spec.md); the set format in [data-model 4.9](../../../specs/system/data-model.md#49-eval-question-bank-files-bundled-read-only); the set rules in [agents-evals](../../../specs/capabilities/agents-evals/spec.md) R108-R111, R134 and R247; scripts in [delivery](../../../specs/system/delivery.md); folders in [tech-stack](../../../specs/system/tech-stack.md).
 
 ## How a domain is built
 

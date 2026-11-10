@@ -257,7 +257,7 @@ function sideWarnings(
 /**
  * The memory arm's warnings (R246): a side that mixes arms, or two sides of
  * one arm each that differ, written `the memory arm differs: <before> →
- * <after>`. Comparing two arms on the same questions is what ADR-0033's
+ * <after>`. Comparing two arms on the same questions is what ADR-0038's
  * decision rule does, so it is a warning, not a refusal.
  */
 function memoryArmWarnings(before: DiffSide, after: DiffSide): string[] {

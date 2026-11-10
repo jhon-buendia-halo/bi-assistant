@@ -67,7 +67,7 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-11-02
 
 ### Added
-- **Memory arms and the memory eval set** (roadmap 1.1.13 and 1.1.14, memory part; [BA-190](https://halo-powered.atlassian.net/browse/BA-190), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)). The eval can now measure a memory of past sessions, for BA-81's decision under ADR-0033.
+- **Memory arms and the memory eval set** (roadmap 1.1.13 and 1.1.14, memory part; [BA-190](https://halo-powered.atlassian.net/browse/BA-190), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)). The eval can now measure a memory of past sessions, for BA-81's decision under ADR-0038.
   - **The arm.** A run takes a memory arm: `none`, `mastra` or `hindsight-mastra` (`EVAL_MEMORY` on the command line, `arm` in the API). The Evals tab shows it as `Memory <arm>`, and a run is compared only with runs of the same arm.
     - `mastra` needs BA-81's store, so on this branch alone it is refused as not built. `hindsight-mastra` is not built.
   - **The set.** `memory.json` holds 36 two-step cases in six memory categories, 4 dev and 2 held out each, in three sets: World Cup 30, Finance 3, Marketing Analytics 3 (agents-evals R231 to R246).
@@ -75,7 +75,7 @@ Running log of every meaningful change, newest first. See *Logging convention* a
     - The checks are M1 (no row value kept), M2 (the rejected SQL is not reused) and M3 (nothing taught is recalled for an unrelated question). The validator also runs every trap and teach query.
   - **The report.** The memory's own embedding and summary calls are priced under `Memory`, and the recall time is shown per question and as p50/p90 per run.
   - **Case changes before the first run.** One dev case and two held-out cases read tables outside the World Cup dataset. The dev case was rewritten on `matches.winner_team_id`. The two held-out cases were replaced by two of four Fable 5.1 candidates, which the user chose.
-  - **First use.** BA-81's decision runs, on a local build that merges both branches: "Mastra only" 48/48 against no memory's 24/48 on the learning categories, and 0/12 against 12/12 on `memory-abstain` (ADR-0033 on the BA-4 branch).
+  - **First use.** BA-81's decision runs, on a local build that merges both branches: "Mastra only" 48/48 against no memory's 24/48 on the learning categories, and 0/12 against 12/12 on `memory-abstain` (ADR-0038 on the BA-4 branch).
   - **Acceptance gate.** It updated the set-list scenario (18 sets) and added "Shows a memory run's arm and a question's recall time". `agents.spec.ts` passes 20 of 20 on the web target.
   - Evidence: [evidence/1.1.13/](evidence/1.1.13/) (e2e-impact.md, e2e-results.txt, checks.txt, the validator and smoke outputs).
 
@@ -152,7 +152,7 @@ Running log of every meaningful change, newest first. See *Logging convention* a
   - The 11 questions of `world-cup-golden.json` now close `world-cup.json`, so `world-cup`, `world-cup-rest` and `world-cup-databricks` hold 63 questions (15 held out). They keep their ids, checks, three reference queries and `dev` split, gain no tag, and their note now starts by naming the set they came from.
   - The sets `world-cup-golden`, `world-cup-golden-rest` and `world-cup-golden-databricks` are gone, and the Evals tab lists 15 sets. A sample now has one question bank; a separate file remains only for questions that exist on one datasource kind (`world-cup-rest-connector`, `world-cup-databricks-only`).
   - Runs store question ids, not a set id, so earlier golden-set runs stay in the history.
-  - Specs: agents-evals R109 (rewritten in place), R11, R40, R107, R126, R134, R164, R169, R204 and R207, and the Agents Gherkin; agents.md (sets table), data-model.md 4.9, delivery.md, the glossary and testing-data R2. `frontend/e2e/agents.spec.ts` follows them: 12 scenarios; the golden run scenario is deleted, and the World Cup counts (stale at 12 since the 40-question slice) are now 63.
+  - Specs: agents-evals R109 (rewritten in place), R11, R40, R247, R126, R134, R164, R169, R204 and R207, and the Agents Gherkin; agents.md (sets table), data-model.md 4.9, delivery.md, the glossary and testing-data R2. `frontend/e2e/agents.spec.ts` follows them: 12 scenarios; the golden run scenario is deleted, and the World Cup counts (stale at 12 since the 40-question slice) are now 63.
   - Evidence: [evidence/1.1.10/golden-merge/](evidence/1.1.10/golden-merge/).
 
 ## 2026-10-16
@@ -187,7 +187,7 @@ Running log of every meaningful change, newest first. See *Logging convention* a
   - **Discovery questions** no longer require `list_entities` (BA-209); the criterion list of the deterministic checks follows.
   - **Eval command line** (agents-evals R110, agents.md 8.5, api.md 6.1, delivery.md): exactly one of `EVAL_SET` or `EVAL_CASES` (BA-204), plus the judge option `EVAL_JUDGE` (BA-184).
   - **Eval sets** (agents-evals R10 and R11, agents.md 8.1, api.md 35): the RFP Builder's `rfp` set, defined in code, sits beside the assistant's question bank files, and the `world-cup` bank has `main`'s two tool-selection questions (12 questions).
-  - **Set files** (data-model 4.9; agents-evals R106, R107, R125): `main`'s per-case tool selection is the optional case field `agentTools`, and the two tool-selection questions keep only their own checks, not their category's. `caseIdPrefix` is now documented as required, as the loader always enforced.
+  - **Set files** (data-model 4.9; agents-evals R106, R247, R125): `main`'s per-case tool selection is the optional case field `agentTools`, and the two tool-selection questions keep only their own checks, not their category's. `caseIdPrefix` is now documented as required, as the loader always enforced.
   - **The `rfp` set's cases** (agents-evals R12, R144 to R149; api.md 35; agents.md 8.1) have no category or split: they are served as `uncategorised` and `dev`, and with the judge off, the default, their rubric checks are not scored.
   - **Single user**: the BA-9 scripts that register the REST and Databricks samples call the backend directly, with no sign-in and no token (testing-data R25, delivery.md, api.md 6.4, docs/evals/databricks-vdi.md); leftover "hidden without …" permission wording is gone from ui.md.
   - Evidence: [evidence/merge-main-2026-10-15/](evidence/merge-main-2026-10-15/).

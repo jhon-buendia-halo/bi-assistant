@@ -18,7 +18,7 @@ export type ViewTables = ReadonlyMap<string, readonly string[]>;
 
 /** What a check knows besides the turn: bound when the set is built. */
 export interface CheckContext {
-  /** The set's dialect (R107), for `dialect` and `qualifiedNames`. */
+  /** The set's dialect (R247), for `dialect` and `qualifiedNames`. */
   dialect: EvalDialect;
   /** The case's reference query in that dialect, for `usesEntities`. */
   expectedSql?: string;

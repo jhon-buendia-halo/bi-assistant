@@ -1022,7 +1022,7 @@ test('downloads an execution as a Markdown report', async ({ page }) => {
 });
 
 /**
- * The sets the question bank files produce (agents-evals R11, R107): the World
+ * The sets the question bank files produce (agents-evals R11, R247): the World
  * Cup file gives three variants, PostgreSQL, REST and Databricks, and holds the
  * former golden set as its last 11 questions (R109). Test ids are
  * `eval-set-<set id>` and match exactly, so `eval-set-world-cup` never matches
