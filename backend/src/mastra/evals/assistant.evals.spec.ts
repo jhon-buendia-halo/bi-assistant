@@ -166,10 +166,13 @@ describe('tool selection in the eval cases (agents.md 8.1, ADR-0022)', () => {
 describe('createEvalSession (agents.md 8.1)', () => {
   function fakeSessions() {
     return {
-      create: jest.fn().mockResolvedValue({ id: 'plain', datasets: ['World Cup'] }),
-      createFromAgent: jest
+      create: jest
         .fn()
-        .mockResolvedValue({ id: 'bound', datasets: ['Formula 1', 'World Cup'] }),
+        .mockResolvedValue({ id: 'plain', datasets: ['World Cup'] }),
+      createFromAgent: jest.fn().mockResolvedValue({
+        id: 'bound',
+        datasets: ['Formula 1', 'World Cup'],
+      }),
       narrowDatasets: jest
         .fn()
         .mockResolvedValue({ id: 'bound', datasets: ['World Cup'] }),
@@ -188,14 +191,22 @@ describe('createEvalSession (agents.md 8.1)', () => {
       'data-readiness',
       expect.any(String),
     );
-    expect(sessions.narrowDatasets).toHaveBeenCalledWith('bound', ['World Cup']);
+    expect(sessions.narrowDatasets).toHaveBeenCalledWith('bound', [
+      'World Cup',
+    ]);
     expect(session).toEqual({ id: 'bound' });
   });
 
   it('leaves a plain session and an agent session with no named datasets alone', async () => {
     const sessions = fakeSessions();
-    await createEvalSession(sessions as unknown as SessionsService, ['World Cup']);
-    await createEvalSession(sessions as unknown as SessionsService, [], 'data-readiness');
+    await createEvalSession(sessions as unknown as SessionsService, [
+      'World Cup',
+    ]);
+    await createEvalSession(
+      sessions as unknown as SessionsService,
+      [],
+      'data-readiness',
+    );
     expect(sessions.narrowDatasets).not.toHaveBeenCalled();
   });
 });

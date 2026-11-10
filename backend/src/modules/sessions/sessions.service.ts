@@ -1320,7 +1320,10 @@ export class SessionsService implements OnModuleInit {
    * the session does not have are ignored; an empty result keeps the session
    * as it was.
    */
-  async narrowDatasets(id: string, datasets: string[]): Promise<SessionDoc | null> {
+  async narrowDatasets(
+    id: string,
+    datasets: string[],
+  ): Promise<SessionDoc | null> {
     const session = await this.repository.get(id);
     if (!session) return null;
     const keep = session.datasets.filter((name) => datasets.includes(name));
