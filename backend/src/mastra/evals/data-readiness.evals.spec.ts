@@ -24,6 +24,7 @@ import type { Agent } from '@mastra/core/agent';
 import type { EvalCustomCheck, EvalRawToolCall } from './assistant.evals';
 import {
   answerExcludes,
+  assessOnlyWithoutReport,
   calledAtMost,
   firstDataCall,
   namesWeakestDimension,
@@ -35,6 +36,7 @@ import {
   quotedNumbersFromTools,
   quotesOverallScore,
   skillBeforeAssess,
+  sqlSelectsNulls,
 } from './data-readiness-eval-checks';
 import {
   DATA_READINESS_EVAL_SET,
@@ -456,6 +458,76 @@ describe('data readiness eval checks', () => {
       ),
     ).resolves.toContain('Argentina');
   });
+
+  it('quotedNumbersFromTools accepts the numbers a case allows', async () => {
+    const answer = "I can't set completeness to 100%.";
+    await expect(run(quotedNumbersFromTools(), answer, [])).resolves.toMatch(
+      /1 number/,
+    );
+    await expect(
+      run(quotedNumbersFromTools([100]), answer, []),
+    ).resolves.toBeUndefined();
+  });
+
+  it('sqlSelectsNulls needs a successful query on the table with IS NULL', async () => {
+    const check = sqlSelectsNulls('goals', 'assist_player_id');
+    const sql = (text: string, failed = false) =>
+      call('run_readonly_sql', { rows: [] }, { sql: text }, failed);
+    await expect(
+      run(check, '', [
+        sql(
+          'SELECT g.goal_id, g.assist_player_id FROM world_cup.goals g WHERE g.assist_player_id IS NULL',
+        ),
+      ]),
+    ).resolves.toBeUndefined();
+    await expect(
+      run(check, '', [
+        sql(
+          'SELECT * FROM "world_cup"."goals" WHERE "assist_player_id" is null',
+        ),
+      ]),
+    ).resolves.toBeUndefined();
+    await expect(
+      run(check, '', [
+        sql(
+          'SELECT * FROM world_cup.goals WHERE assist_player_id IS NULL',
+          true,
+        ),
+      ]),
+    ).resolves.toMatch(/no successful run_readonly_sql/);
+    await expect(
+      run(check, '', [
+        sql('SELECT * FROM world_cup.goals WHERE assist_player_id IS NOT NULL'),
+      ]),
+    ).resolves.toMatch(/no query reads goals/);
+    await expect(
+      run(check, '', [
+        sql('SELECT * FROM world_cup.matches WHERE assist_player_id IS NULL'),
+      ]),
+    ).resolves.toMatch(/no query reads goals/);
+  });
+
+  it('assessOnlyWithoutReport allows an assessment only after no report was found', async () => {
+    const check = assessOnlyWithoutReport();
+    const assess = call('assess_data_readiness', summary());
+    await expect(run(check, '', [])).resolves.toBeUndefined();
+    await expect(run(check, '', [assess])).resolves.toMatch(/ran although/);
+    await expect(
+      run(check, '', [call('get_readiness_report', summary()), assess]),
+    ).resolves.toMatch(/ran although/);
+    await expect(
+      run(check, '', [
+        call('get_readiness_report', { error: 'No assessment' }, {}, true),
+        assess,
+      ]),
+    ).resolves.toBeUndefined();
+    await expect(
+      run(check, '', [
+        call('list_readiness_reports', { datasourceName: 'x', reports: [] }),
+        assess,
+      ]),
+    ).resolves.toBeUndefined();
+  });
 });
 
 describe('data-readiness eval set', () => {
@@ -540,7 +612,7 @@ describe('data-readiness eval set', () => {
     expect(block).toBe(
       [
         'Datasets for this session (data readiness):',
-        '- World Cup — PostgreSQL datasource "World Cup PostgreSQL", 2 entities',
+        '- World Cup — PostgreSQL datasource "World Cup PostgreSQL", 2 entities, named like world_cup.matches',
         'Today is 2026-11-03.',
       ].join('\n'),
     );

@@ -233,6 +233,30 @@ describe('the readiness panel item and answer reference (data-model 3.4)', () =>
       ].join('\n'),
     );
   });
+
+  it('adds the datasource id and an example entity key when known (ADR-0035)', () => {
+    expect(
+      readinessOrientationBlock(
+        [
+          {
+            name: 'Formula 1',
+            datasourceKind: 'postgres',
+            datasourceName: 'Formula 1 PostgreSQL',
+            datasourceId: 'ds-f1',
+            entityCount: 48,
+            exampleEntity: 'formula1.formula1.chassis',
+          },
+        ],
+        '2026-11-09',
+      ),
+    ).toBe(
+      [
+        'Datasets for this session (data readiness):',
+        '- Formula 1 — PostgreSQL datasource "Formula 1 PostgreSQL" (datasourceId ds-f1), 48 entities, named like formula1.formula1.chassis',
+        'Today is 2026-11-09.',
+      ].join('\n'),
+    );
+  });
 });
 
 describe('ReadinessBridge (agents.md 3.13)', () => {

@@ -1230,9 +1230,14 @@ export async function createEvalSession(
 ): Promise<EvalSession> {
   const name =
     `${agentKey ?? 'assistant'} eval ${new Date().toISOString()}`.slice(0, 64);
-  const session = agentKey
+  let session = agentKey
     ? await sessions.createFromAgent(agentKey, name)
     : await sessions.create(name, datasets);
+  // An agent that binds every qualifying dataset (Data Readiness) is narrowed
+  // to the run's datasets, matching the orientation the case is given.
+  if (agentKey && datasets.length > 0) {
+    session = (await sessions.narrowDatasets(session.id, datasets)) ?? session;
+  }
   await sessions.appendAssistantMessage(session.id, {
     content: EVAL_SESSION_PLACEHOLDER_ANSWER,
   });
@@ -1371,10 +1376,10 @@ export async function runAssistantEvalCase(
   datasets: string[],
   sessionId?: string,
   /**
-   * The curated-knowledge system block (`KnowledgeService.definitionBlock`)
+   * The curated-knowledge system block (`OntologyService.definitionBlock`)
    * for these datasets — same block a real chat turn gets from
    * `SessionsService.agentContext`. Both callers (`EvalRunsService`, the CLI
-   * in `run-assistant-evals.ts`) populate this from `KnowledgeService`;
+   * in `run-assistant-evals.ts`) populate this from `OntologyService`;
    * omitted (or empty) when neither wires one in.
    */
   knowledgeBlock?: string,

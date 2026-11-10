@@ -44,15 +44,16 @@ export function dataReadinessInstructions(): string {
   return served.text;
 }
 
-/** Its on-demand skill, built per call (agents.md 7.3, 7.4). */
+/** Its on-demand skills, built per call (agents.md 7.3, 7.4). */
 export function dataReadinessSkills() {
   return catalogFrameworkSkills(DATA_READINESS_AGENT_KEY);
 }
 
 // Explains how ready a session's PostgreSQL or Databricks data is, on the
 // DMBOK dimensions (agents.md 2.10, ADR-0031). A deterministic engine behind
-// its tools computes every score; it has no SQL, dataset or visual tools and
-// no workspace.
+// its tools computes every score. It may run read-only SQL only to show the
+// records behind a finding (ADR-0035); it has no visual tools and no
+// workspace.
 export const dataReadinessAgent = new Agent({
   id: 'data-readiness-agent',
   name: 'Data Readiness Agent',

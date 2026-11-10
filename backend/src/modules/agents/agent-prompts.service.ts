@@ -62,8 +62,8 @@ const DATA_READINESS_KEY = 'data-readiness';
 
 /**
  * What the Data Readiness Agent's prompt may link (agents.md 2.10): its own
- * tools (the three readiness tools, `show_in_panel`, `ask_clarification`) and
- * its own skill. Links are mentions; it keeps every tool.
+ * tools (the three readiness tools, `describe_entity`, `run_readonly_sql`,
+ * `show_in_panel`, `ask_clarification`) and its own skills. Links are mentions; it keeps every tool.
  */
 function dataReadinessLinkTargets(): { tools: string[]; skills: string[] } {
   return {

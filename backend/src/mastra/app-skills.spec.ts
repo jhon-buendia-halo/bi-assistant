@@ -263,9 +263,15 @@ describe('the bundled skills', () => {
   });
 
   it('serve the data-readiness skill on demand to the Data Readiness Agent only (agents.md 7.4)', () => {
-    expect(AGENT_SKILLS['data-readiness']).toEqual(['data-readiness']);
+    expect(AGENT_SKILLS['data-readiness']).toEqual([
+      'data-readiness',
+      'readiness-drilldown',
+    ]);
     const skills = catalogSkills('data-readiness');
-    expect(skills.map((skill) => skill.name)).toEqual(['data-readiness']);
+    expect(skills.map((skill) => skill.name)).toEqual([
+      'data-readiness',
+      'readiness-drilldown',
+    ]);
     expect(skills[0].loading).toBe('on-demand');
     expect(skills[0].agents).toEqual(['data-readiness']);
     expect(skills[0].description).toMatch(
@@ -287,6 +293,42 @@ describe('the bundled skills', () => {
     expect(builtInOnDemandSkillNames()).not.toContain('data-readiness');
   });
 
+  it('serve the readiness-drilldown skill on demand to the Data Readiness Agent only (ADR-0035)', () => {
+    const skill = catalogSkills('data-readiness').find(
+      (s) => s.name === 'readiness-drilldown',
+    );
+    expect(skill?.loading).toBe('on-demand');
+    expect(skill?.agents).toEqual(['data-readiness']);
+    expect(skill?.description).toMatch(
+      /^Use when the user asks to see the records behind a readiness finding/,
+    );
+    const body = appSkillBody('readiness-drilldown').replace(/\r\n/g, '\n');
+    expect(body.startsWith('# Readiness drill-down\n')).toBe(true);
+    expect(body).toContain(
+      'Tools for this skill: [[tool:describe_entity]], [[tool:run_readonly_sql]].',
+    );
+    // One recipe per assessed dimension, and scores stay engine-only.
+    for (const dimension of [
+      'Completeness',
+      'Validity',
+      'Consistency',
+      'Uniqueness',
+      'Integrity',
+      'Timeliness',
+      'Reasonability',
+    ]) {
+      expect(body).toContain(`- ${dimension} (`);
+    }
+    expect(body).toContain('Never recompute, change or replace a score.');
+    expect(skillFiles(skill!.dir).map((file) => file.path)).toEqual([
+      'SKILL.md',
+    ]);
+    expect(catalogSkills('assistant').map((s) => s.name)).not.toContain(
+      'readiness-drilldown',
+    );
+    expect(builtInOnDemandSkillNames()).not.toContain('readiness-drilldown');
+  });
+
   it('serve the curated-knowledge rules as an on-demand skill of the assistant', () => {
     const skill = loadAppSkills(skillsRoot()).get('curated-knowledge');
     expect(skill?.description).toMatch(/^Use when the turn carries a curated/);
@@ -296,6 +338,10 @@ describe('the bundled skills', () => {
       body.endsWith('never assume a snippet exists that you cannot see.'),
     ).toBe(true);
     expect(body).not.toContain('---');
+    // The dataset ontology's relation lines (ADR-0036).
+    expect(body.replace(/\s+/g, ' ')).toContain(
+      '- [relation] lines state how concepts connect (is-a, part-of, has-many, related-to, or measured-by a governed metric); use them to choose joins and the governed metric, never as rows of data.',
+    );
     // On demand: the assistant's catalog lists it, and no code sends it.
     expect(AGENT_SKILLS.assistant).toContain('curated-knowledge');
     for (const names of Object.values(HARNESS_SKILLS)) {
@@ -401,6 +447,7 @@ describe('skill folders', () => {
           'data-readiness',
           'deep-analysis',
           'interactive-visuals',
+          'readiness-drilldown',
           'rfp-carriers',
           'rfp-client-renewal',
           'rfp-current-program',

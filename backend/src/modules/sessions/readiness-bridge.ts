@@ -214,7 +214,29 @@ export interface ReadinessOrientationRow {
   name: string;
   datasourceKind?: DatasourceKind;
   datasourceName: string;
+  /** Passed as `datasourceId` to the drill-down tools (ADR-0035). */
+  datasourceId?: string;
   entityCount: number;
+  /** One entity key as the dataset stores it, e.g. `db.schema.table`. */
+  exampleEntity?: string;
+}
+
+/**
+ * One Block D1 dataset line (agents.md 4.1). The datasource id and an example
+ * entity key let the drill-down tools address the right datasource with the
+ * names the dataset stores (ADR-0035).
+ */
+export function readinessOrientationLine(row: {
+  name: string;
+  kindLabel: string;
+  datasourceName: string;
+  datasourceId?: string;
+  entityCount: number;
+  exampleEntity?: string;
+}): string {
+  const id = row.datasourceId ? ` (datasourceId ${row.datasourceId})` : '';
+  const example = row.exampleEntity ? `, named like ${row.exampleEntity}` : '';
+  return `- ${row.name} — ${row.kindLabel} datasource "${row.datasourceName}"${id}, ${row.entityCount} entities${example}`;
 }
 
 /** Block D1 (agents.md 4.1): the session's datasets and today; no score. */
@@ -224,9 +246,11 @@ export function readinessOrientationBlock(
 ): string {
   return [
     'Datasets for this session (data readiness):',
-    ...rows.map(
-      (row) =>
-        `- ${row.name} — ${kindLabel(row.datasourceKind)} datasource "${row.datasourceName}", ${row.entityCount} entities`,
+    ...rows.map((row) =>
+      readinessOrientationLine({
+        ...row,
+        kindLabel: kindLabel(row.datasourceKind),
+      }),
     ),
     `Today is ${today}.`,
   ].join('\n');
