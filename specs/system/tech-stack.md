@@ -36,7 +36,7 @@ Versions are taken from `frontend/package.json` and `backend/package.json`. A ba
 
 Electron security posture (load-bearing, see [product/non-functional.md](../product/non-functional.md)): `contextIsolation: true`, `nodeIntegration: false`, `titleBarStyle: 'hiddenInset'`, a preload script that exposes two objects through `contextBridge` (`systemDiagnostics`, `desktop`). The IPC contract is specified in [api.md](api.md).
 
-Build facts: the Angular production build has budgets (initial 500 kB warn / 1 MB error; component style 4 kB warn / 8 kB error) and hashed output; output goes to `frontend/dist/frontend/browser`. `API_BASE_URL` (`core/config/api.config.ts`) is `http://localhost:3000` under `file://` (Electron) and `''` (same origin) otherwise. `APP_VERSION` (`core/config/app-version.ts`) is read from `package.json` at build time.
+Build facts: the Angular production build has budgets (initial 500 kB warn / 1.1 MB error, 1 MB until 2026-11-10, when `main` v0.44.0 at 986 kB and the BA-9 eval screens together made 1,003 kB; component style 4 kB warn / 8 kB error) and hashed output; output goes to `frontend/dist/frontend/browser`. `API_BASE_URL` (`core/config/api.config.ts`) is `http://localhost:3000` under `file://` (Electron) and `''` (same origin) otherwise. `APP_VERSION` (`core/config/app-version.ts`) is read from `package.json` at build time.
 
 ## Backend (`backend/`)
 
