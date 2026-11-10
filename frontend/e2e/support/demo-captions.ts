@@ -8,9 +8,11 @@ const CAPTION_ID = 'qti-demo-caption';
  * Runs one Gherkin line of a scenario as a Playwright step:
  * `await scenarioStep(page, 'When I choose "Dark"', async () => { … })`.
  *
- * With DEMO=1 (agent org, 0.4.5), the line is also shown as a caption at the
- * bottom of the page while the step runs, so the recorded video reads like
- * the scenario. Without it, this is just `test.step`.
+ * With DEMO=1 (`scripts/qa.mjs --fast`, roadmap 0.4.5), the line is also shown
+ * as a caption at the bottom of the page while the step runs, so the recorded
+ * demo video reads like the scenario. Without it, this is just `test.step`:
+ * no caption, no pause. Tag the test `@demo` and `@story-<roadmap-id>` so
+ * qa.mjs finds it (delivery.md 13).
  */
 export async function scenarioStep(
   page: Page,

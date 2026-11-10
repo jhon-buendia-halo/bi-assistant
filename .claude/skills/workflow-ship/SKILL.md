@@ -11,6 +11,8 @@ Part of the workflow in [CLAUDE.md](../../../CLAUDE.md), which keeps the always-
 
 10. **Update changelog with evidence** — only after step 9 is green, add a dated entry to [changelog.md](../../../changelog.md) and capture the evidence under [evidence/](../../../evidence/) (E2E summary, screenshots of the running app, exports). Mark the roadmap entry `✅ Done`. Confirm the specs touched in step 5 describe what actually shipped, and fix them in the same PR if not. See **Logging convention** and **Evidence convention**.
 
+    The changelog entry links the story's `evidence/<roadmap-id>/demo.webm` (or `demo.txt`) and `tests.md`, both written by `scripts/qa.mjs` ([delivery.md](../../../specs/system/delivery.md) 13).
+
 ## Logging convention — record every change
 
 **Every meaningful change must be logged in [changelog.md](../../../changelog.md), as the *final* implementation step (step 10).** Reverse-chronological dated sections (`## YYYY-MM-DD`) with categorized subsections (`### Added`, `### Changed`, `### Removed`, `### Cut`, `### Fixed`). Bundle related edits from one session into one bullet; reference the affected file or roadmap feature ID. Never rewrite past entries — fix forward with a new dated entry. Roadmap status transitions get a matching changelog entry at the same time. **Every entry links to its evidence.**

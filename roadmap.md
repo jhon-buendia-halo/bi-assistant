@@ -302,7 +302,7 @@ Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the wor
   - `brief.mjs` output for a sample story stays under a set size, checked in a unit test.
 - **Notes:** depends on 0.4.3. Uses `lessons.md` from 0.4.8 if it is there, otherwise only the brief's other parts.
 
-#### 0.4.5 — Deterministic QA: impacted tests, demo video, test-run evidence  `📋 Planned`
+#### 0.4.5 — Deterministic QA: impacted tests, demo video, test-run evidence  `🚧 In progress`
 - **Intent:** checks, test selection, the demo video and the evidence are produced by a script, with no LLM. Each story ends with a captioned demo video and a `tests.md` that proves which tests ran.
 - **Scope:**
   - `scripts/qa.mjs <roadmap-id> [--fast|--gate]` runs one story at a time (a lock file makes it the single QA lane), because worktrees share Postgres on 55432, the default ports and `backend/dist`. It selects tests mechanically:
@@ -329,6 +329,8 @@ Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the wor
   - Two `qa.mjs` runs started together run one after the other.
   - This epic's own evidence includes a demo and a `tests.md`.
 - **Notes:** depends on 0.4.4. Touches test configuration and a test fixture under `frontend/`, not app code.
+  - Started 2026-11-10 on a second `feat/BA-119-harness-adjustments` branch (the first merged as PR #88). The user chose to build it **standalone**: `qa.mjs` runs on its own (by hand, `verify`, `workflow-ship`), and 0.4.4's pipeline calls it later. It starts from the `DEMO=1` switch and `scenarioStep` caption helper kept from the 0.4.3 dry run (`unit/BA-119-0.4.5-demo-captions`).
+  - Decisions (user, 2026-11-10): a story's main scenario is the Playwright test tagged `@demo` and `@story-<roadmap-id>`, written with `scenarioStep` so each Gherkin line is a caption; step 6's list is the spec-file column of `evidence/<roadmap-id>/e2e-impact.md`; the sample UI story is 1.21.6 User personas ("A new install starts with the demo persona"), whose `demo.webm` and `tests.md` are this story's showcase.
 
 #### 0.4.6 — "ship it": a human-typed gate on the epic PR  `📋 Planned`
 - **Intent:** only a human opens or merges the epic PR, by typing `ship it <EPIC-ID>`. Today that is a convention. This story makes it a hard gate that no agent can get past.

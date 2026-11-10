@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.fixture';
+import { scenarioStep } from './support/demo-captions';
 
 const DEMO = 'Demo Finance Analyst';
 const ANA = 'Ana, finance analyst';
@@ -80,11 +81,16 @@ test.describe('Feature: User personas', () => {
     });
   });
 
-  test('A new install starts with the demo persona', async ({ page }) => {
-    await test.step('When I open the "User personas" section', async () => {
+  // The story's main scenario: `scripts/qa.mjs 1.21.6 --fast` records it as
+  // evidence/1.21.6/demo.webm, captioned with these Gherkin lines.
+  test(
+    'A new install starts with the demo persona',
+    { tag: ['@demo', '@story-1.21.6'] },
+    async ({ page }) => {
+    await scenarioStep(page, 'When I open the "User personas" section', async () => {
       await openSection(page);
     });
-    await test.step('Then I see the demo persona, role and chip', async () => {
+    await scenarioStep(page, 'Then I see "Demo Finance Analyst" with role "FP&A analyst" and the chip "Intermediate"', async () => {
       await expect(rows(page)).toHaveCount(1);
       const row = rowOf(page, DEMO);
       await expect(row).toBeVisible();
@@ -93,7 +99,7 @@ test.describe('Feature: User personas', () => {
         'Intermediate',
       );
     });
-    await test.step('And editing it shows every field filled in', async () => {
+    await scenarioStep(page, 'And editing it shows every field filled in', async () => {
       await editOf(page, DEMO).click();
       await expect(page.getByTestId('persona-name')).toHaveValue(DEMO);
       await expect(page.getByTestId('persona-role')).toHaveValue('FP&A analyst');
@@ -110,7 +116,8 @@ test.describe('Feature: User personas', () => {
       }
       await expect(page.getByTestId('persona-question-5')).toHaveCount(0);
     });
-  });
+    },
+  );
 
   test('A deleted demo persona does not come back', async ({ app, page }) => {
     await test.step('Given I deleted the demo persona', async () => {
