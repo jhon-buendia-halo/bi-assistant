@@ -1,0 +1,176 @@
+<title>1.21.12 Visuals library</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --fg: #1d1f23;
+  --muted: #5b616b;
+  --border: #dcdde0;
+  --accent: #2f5bd3;
+  --code-bg: #eef0f3;
+  --focus: #2f5bd3;
+  --ok-bg: #e3f4e8;
+  --ok-fg: #17663a;
+  --warn-bg: #fdf0d8;
+  --warn-fg: #7a4d00;
+  --bad-bg: #fbe4e2;
+  --bad-fg: #a3261b;
+  --neutral-bg: #eceef1;
+  --neutral-fg: #444a53;
+  --video-bg: #e9eaed;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141518;
+    --surface: #1c1e22;
+    --fg: #e7e8ea;
+    --muted: #a0a6b0;
+    --border: #33363d;
+    --accent: #8aa8ff;
+    --code-bg: #262930;
+    --focus: #8aa8ff;
+    --ok-bg: #173523;
+    --ok-fg: #8fdcaa;
+    --warn-bg: #3a2c10;
+    --warn-fg: #f2c46b;
+    --bad-bg: #42201d;
+    --bad-fg: #ff9d92;
+    --neutral-bg: #2a2d33;
+    --neutral-fg: #c3c7ce;
+    --video-bg: #0e0f11;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141518;
+  --surface: #1c1e22;
+  --fg: #e7e8ea;
+  --muted: #a0a6b0;
+  --border: #33363d;
+  --accent: #8aa8ff;
+  --code-bg: #262930;
+  --focus: #8aa8ff;
+  --ok-bg: #173523;
+  --ok-fg: #8fdcaa;
+  --warn-bg: #3a2c10;
+  --warn-fg: #f2c46b;
+  --bad-bg: #42201d;
+  --bad-fg: #ff9d92;
+  --neutral-bg: #2a2d33;
+  --neutral-fg: #c3c7ce;
+  --video-bg: #0e0f11;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-wrap: anywhere;
+}
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 48px;
+}
+header { margin-bottom: 20px; }
+.eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 0.8125rem; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 1.2rem + 1.4vw, 2rem); line-height: 1.2; letter-spacing: -0.01em; }
+h2 { margin: 36px 0 10px; font-size: 1.125rem; line-height: 1.3; }
+p, li { max-width: 65ch; }
+p { margin: 0 0 10px; }
+.intent { color: var(--muted); font-size: 1.0625rem; margin-bottom: 12px; }
+ul, ol { margin: 0 0 10px; padding-left: 1.4em; }
+li { margin: 3px 0; }
+li > ul, li > ol { margin: 4px 0 0; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, video:focus-visible, .scroll:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+code, pre { font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace; font-size: 0.875em; }
+code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+.chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.8125rem; font-weight: 600; line-height: 1.6; }
+.chip.ok { background: var(--ok-bg); color: var(--ok-fg); }
+.chip.warn { background: var(--warn-bg); color: var(--warn-fg); }
+.chip.bad { background: var(--bad-bg); color: var(--bad-fg); }
+.chip.neutral { background: var(--neutral-bg); color: var(--neutral-fg); }
+.demo { margin: 0; }
+.demo video { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; height: auto; background: var(--video-bg); border: 1px solid var(--border); border-radius: 8px; }
+.demo pre { margin: 0; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; white-space: pre; line-height: 1.45; }
+.demo figcaption { margin-top: 8px; color: var(--muted); font-size: 0.8125rem; max-width: 65ch; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; }
+.card > :last-child { margin-bottom: 0; }
+.shipped { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.shipped > li { max-width: none; margin: 0; }
+.date { color: var(--muted); font-size: 0.8125rem; margin: 0 0 4px; }
+.aside { color: var(--muted); font-size: 0.9375rem; }
+.scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td code { font-size: 0.8125em; color: var(--muted); }
+td:first-child { min-width: 16ch; }
+.result-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.8125rem; }
+footer p { margin: 0 0 4px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+</style>
+<main>
+<header>
+<p class="eyebrow"><a href="https://halo-powered.atlassian.net/browse/BA-320">Questions to Insights v2</a> · roadmap 1.21.12</p>
+<h1>Visuals library on the Context page</h1>
+<p class="intent">keep a library of chart types for data visualization, grouped by what they show, next to the other things agents are given, so the team shares one vocabulary of visuals and knows which ones the app can draw.</p>
+<span class="chip ok">Done</span>
+</header>
+<section aria-label="Demo">
+<figure class="demo">
+<video src="demo.webm" controls playsinline muted preload="metadata" aria-label="Demo of 1.21.12 Visuals library on the Context page"></video>
+<figcaption>Recorded by <code>scripts/qa.mjs 1.21.12 --fast</code> with <code>DEMO=1</code>; captions are the scenario's Gherkin lines.</figcaption>
+</figure>
+</section>
+<section aria-labelledby="h-shipped">
+<h2 id="h-shipped">What shipped</h2>
+<ul class="shipped">
+<li class="card"><p class="date">2026-11-10 · Added</p><strong>Visuals library on the Context page</strong> (epic <a href="https://halo-powered.atlassian.net/browse/BA-320">BA-320</a>, roadmap 1.21.12, visuals-library, app-shell R3a, api.md 2.8b, data-model.md 3.9b, ui.md 4.8c).<ul><li>A <strong>Visuals</strong> card, third on Context, opens a library of chart types grouped by what they show: 30 defaults in 9 categories (Comparison, Change over time, Part-to-whole, Distribution, Relationship, Ranking, Flow, Spatial, Numbers and tables), each with a drawn preview thumbnail, description, when to use, when to avoid, the data it needs and a &quot;Drawn by the app&quot; badge for the 10 charts the visual runtime draws.</li><li>Search and category chips narrow the list; a card opens its editor in place; charts can be added, disabled (faded) and deleted. Backend module <code>visuals</code>, collection <code>visual_charts</code> seeded once (<code>visuals-seed</code>; a deleted default stays deleted), <code>GET/POST /visuals</code>, <code>PATCH/DELETE /visuals/:id</code>. Agents do not use the library yet.</li><li>Evidence: evidence/1.21.12/: demo.webm, tests.md. Demo: https://claude.ai/artifact/SPwXiaHjCn6NQL92pzbN1d.</li></ul></li>
+<li class="card"><p class="date">2026-11-10 · Added</p><strong>The demo is part of the fast loop</strong> (roadmap 1.21.12, CLAUDE.md, delivery.md 13). Dev tooling. Requested on 2026-11-10 after the 1.21.12 hand-off came without a video.<ul><li>CLAUDE.md&#39;s fast loop now writes the story&#39;s main scenario as the <code>@demo</code> test, runs <code>qa.mjs &lt;id&gt; --fast</code> and publishes the demo page before the app is handed over with its link.</li><li><code>qa.mjs --gate</code> adds a <strong>demo evidence</strong> step that fails a story without <code>demo.webm</code> (when a test carries its tag), without any demo, or without the artifact link in its evidence README.</li><li>A <code>PreToolUse</code> hook (<code>scripts/hooks/demo-reminder.mjs</code>) reminds the session when it starts the app from a worktree while a story the branch marked in progress has no demo. It never blocks.</li><li>Evidence: <code>node --test scripts/qa-lib.test.mjs scripts/demo-page-lib.test.mjs</code> 24/24; the hook pipe-tested with and without a demo, Git Bash and Windows paths, and from the main checkout.</li></ul></li>
+</ul>
+</section>
+<section aria-labelledby="h-scope">
+<h2 id="h-scope">Scope</h2>
+<ul><li>a <strong>Visuals</strong> card third on the Context page</li><li>a <code>visual_charts</code> collection seeded once per data dir with a default catalog of 30 chart types in 9 categories (Comparison, Change over time, Part-to-whole, Distribution, Relationship, Ranking, Flow, Spatial, Numbers and tables)</li><li>each chart has a name, category, sample preview thumbnail, description, when to use, when to avoid, the data it needs, the renderer form the app draws it with (or none) and an enabled flag</li><li>the library lists charts grouped by category with search and category filters, disabled charts faded</li><li>add, edit (in place, where the card was), disable and delete charts</li><li><code>GET/POST /visuals</code>, <code>PATCH/DELETE /visuals/:id</code>. New capability spec visuals-library</li><li>app-shell R3a</li><li>api.md, data-model.md, ui.md.</li></ul>
+<p class="aside"><strong>Out of scope:</strong> agents or the visual designer using the library (a later story); drawing new chart types; importing charts; per-chart sample data.</p>
+</section>
+<section aria-labelledby="h-acceptance">
+<h2 id="h-acceptance">Acceptance</h2>
+<ul><li>a new data dir shows the Visuals card and the 30 default charts in 9 categories with previews</li><li>search and a category filter narrow the list</li><li>a chart can be added, edited, disabled and deleted and survives a restart</li><li>a deleted default stays deleted</li><li>a duplicate or blank name is refused</li><li>unit tests and the build green.</li></ul>
+</section>
+<section aria-labelledby="h-gate">
+<h2 id="h-gate">Gate results</h2>
+<div class="result-line"><span class="chip bad">Failed</span><span class="aside">From <code>evidence/1.21.12/tests.md</code>, written by <code>scripts/qa.mjs 1.21.12 --gate</code>.</span></div>
+<p class="aside">The only failing step is backend unit: 43 tests in 10 suites that fail the same way on <code>main</code> on this Windows checkout (CRLF fixtures); none is in the new <code>visuals</code> module. Every story check passed: 42/42 Playwright, 516/516 frontend unit, lint, check-specs and the demo evidence.</p>
+<div class="scroll" tabindex="0" role="region" aria-label="Gate steps">
+<table>
+<thead><tr><th scope="col">Step</th><th scope="col">Result</th><th scope="col" class="num">Passed</th><th scope="col" class="num">Failed</th><th scope="col" class="num">Skipped</th></tr></thead>
+<tbody>
+<tr><td>build<br><code>npm --prefix backend run build:all</code></td><td><span class="chip ok">passed</span></td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+<tr><td>backend unit<br><code>npx jest --json --outputFile=&quot;C:\\Users\\jhonc\\Documents\\projects\\bi-assistant\\.claude\\worktrees\\BA-320-visuals-library\\.qa-reports\\1.21.12\\jest.json&quot;</code></td><td><span class="chip bad">failed</span></td><td class="num">2279</td><td class="num">43</td><td class="num">0</td></tr>
+<tr><td>frontend unit<br><code>npx ng test --watch=false --browsers=ChromeHeadless</code></td><td><span class="chip ok">passed</span></td><td class="num">516</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td>backend lint<br><code>npx eslint &quot;{src,apps,libs,test}/**/*.ts&quot; --rule &quot;{\&quot;prettier/prettier\&quot;: [\&quot;error\&quot;, {\&quot;endOfLine\&quot;: \&quot;auto\&quot;}]}&quot;</code></td><td><span class="chip ok">passed</span></td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+<tr><td>check-specs<br><code>py -3 scripts/check-specs.py</code></td><td><span class="chip ok">passed</span></td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+<tr><td>playwright (step 6)<br><code>npx playwright test --project=web e2e/visuals-library.spec.ts e2e/navigation.spec.ts e2e/user-personas.spec.ts e2e/dataset-ontology.spec.ts</code></td><td><span class="chip ok">passed</span></td><td class="num">42</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td>demo evidence<br><code>demo.webm / demo.txt and the demo artifact link</code></td><td><span class="chip ok">passed</span></td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<footer>
+<p>epic BA-320 · branch <code>feat/BA-320-visuals-library</code> · commit <code>1a11fc9</code> · generated 2026-11-10</p>
+<p>Generated by scripts/demo-page.mjs from roadmap.md, changelog.md and evidence/1.21.12/</p>
+</footer>
+</main>

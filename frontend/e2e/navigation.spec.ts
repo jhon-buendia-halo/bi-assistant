@@ -39,6 +39,15 @@ test('moves between areas from the rail', async ({ page }) => {
   await expectCurrent(page, 'Context');
   await expect(page.getByRole('heading', { name: 'Context' })).toBeVisible();
   await expect(page.getByTestId('context-section-knowledge')).toHaveCount(0);
+  await expect(page.getByTestId('context-section-ontologies')).toBeVisible();
+  await expect(page.getByTestId('context-section-personas')).toBeVisible();
+  await page.getByTestId('context-section-visuals').click();
+  await expect(
+    page.getByRole('heading', { name: 'Visuals', exact: true }),
+  ).toBeVisible();
+  await expectCurrent(page, 'Context');
+  await page.getByTestId('context-back').click();
+  await expect(page.getByRole('heading', { name: 'Context' })).toBeVisible();
   await page.getByTestId('context-section-personas').click();
   await expect(
     page.getByRole('heading', { name: 'User personas' }),

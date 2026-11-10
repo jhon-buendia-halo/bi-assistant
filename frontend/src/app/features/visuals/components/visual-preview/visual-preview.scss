@@ -1,0 +1,78 @@
+// Thumbnail palette from the theme tokens (tokens.css), so light and dark
+// both read: the brand blue, a soft tint of it, and an orange highlight.
+:host {
+  --v1: var(--qti-primary);
+  --v2: color-mix(in srgb, var(--qti-primary) 38%, var(--qti-surface));
+  --v3: var(--qti-on-warning-soft);
+  --v-axis: color-mix(in srgb, var(--qti-fg-muted) 55%, transparent);
+  --v-card: var(--qti-surface);
+  --v-gap: var(--qti-surface-muted);
+
+  display: block;
+  line-height: 0;
+}
+
+svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.s1 {
+  fill: var(--v1);
+}
+.s2 {
+  fill: var(--v2);
+}
+.s3 {
+  fill: var(--v3);
+}
+
+.l1,
+.l2,
+.l3 {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.l1 {
+  stroke: var(--v1);
+}
+.l2 {
+  stroke: var(--v2);
+}
+.l3 {
+  stroke: var(--v3);
+}
+// A filled shape with an outline keeps its fill.
+.s1.l1 {
+  fill: var(--v1);
+}
+.s3.l3 {
+  fill: var(--v3);
+}
+
+.ax {
+  fill: none;
+  stroke: var(--v-axis);
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+// Separators between touching shapes (pie slices, map regions).
+.sep {
+  stroke: var(--v-gap);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.card {
+  fill: var(--v-card);
+  stroke: var(--v-axis);
+  stroke-width: 1;
+}
+
+.muted {
+  fill: var(--v-axis);
+}
