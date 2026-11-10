@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { KNOWLEDGE_SNIPPET_KINDS } from '../../../knowledge/entities/knowledge-snippet.entity';
+import { SEED_KNOWLEDGE_KINDS } from './types';
 import type { MetricDoc } from '../../../metrics/entities/metric.entity';
 import { MetricsService } from '../../../metrics/metrics.service';
 import { SAMPLE_FIXTURES, type SampleFixture } from '../registry';
@@ -165,7 +165,7 @@ describe('sample knowledge seeds', () => {
       it.each(seed.knowledge.map((entry) => [entry.title, entry] as const))(
         'entry "%s" is one the knowledge service accepts, on the sample\'s own tables',
         (_title, entry) => {
-          expect(KNOWLEDGE_SNIPPET_KINDS).toContain(entry.kind);
+          expect(SEED_KNOWLEDGE_KINDS).toContain(entry.kind);
           expect(entry.title.trim()).toBe(entry.title);
           expect(entry.title).not.toBe('');
           expect(entry.body.trim()).toBe(entry.body);

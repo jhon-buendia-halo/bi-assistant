@@ -1048,6 +1048,8 @@ const EVAL_SETS: ReadonlyArray<[id: string, name: string, questions: number]> =
     ['memory-world-cup', 'Memory (World Cup)', 30],
     ['memory-finance', 'Memory (Finance)', 3],
     ['memory-marketing-analytics', 'Memory (Marketing Analytics)', 3],
+    // Defined in code after the file sets (agents-evals R11, BA-318).
+    ['schema-notes', 'Schema notes', 1],
   ];
 
 test('lists every question set, the former golden set inside the World Cup sets', async ({

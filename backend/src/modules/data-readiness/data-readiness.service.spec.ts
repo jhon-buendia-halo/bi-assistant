@@ -161,6 +161,7 @@ describe('DataReadinessService', () => {
         datasources['ds-pg'].config,
         'ds-pg',
         undefined,
+        expect.anything(),
       );
       expect(mockEngine).toHaveBeenCalledWith(
         expect.objectContaining({ sourceId: 'ds-pg' }),
@@ -188,6 +189,7 @@ describe('DataReadinessService', () => {
         datasources['ds-dbx'].config,
         'ds-dbx',
         undefined,
+        expect.anything(),
       );
       expect(mockPostgres).not.toHaveBeenCalled();
       expect(report.datasourceKind).toBe('databricks');
@@ -531,6 +533,97 @@ describe('DataReadinessService', () => {
       const err = await service.get('nope').catch((e: unknown) => e);
       expect(err).toBeInstanceOf(NotFoundException);
       expect((err as Error).message).toBe('Readiness report "nope" not found');
+    });
+  });
+
+  describe('progress, abort and not-profiled entities (BA-323, BA-324)', () => {
+    it('passes signal and onProgress to the adapter and emits scoring then storing', async () => {
+      const { service, postgres } = build();
+      const onProgress = jest.fn<void, [unknown]>();
+      const signal = new AbortController().signal;
+
+      await service.assess({ datasourceId: 'ds-pg' }, NOW, {
+        signal,
+        onProgress,
+      });
+
+      expect(mockPostgres).toHaveBeenCalledWith(
+        postgres,
+        datasources['ds-pg'].config,
+        'ds-pg',
+        undefined,
+        { signal, onProgress },
+      );
+      expect(onProgress.mock.calls.map(([p]) => p)).toEqual([
+        { phase: 'scoring', message: 'Running checks…' },
+        { phase: 'storing', message: 'Writing the report…' },
+      ]);
+    });
+
+    it('stores nothing and rejects with an AbortError when aborted before the insert', async () => {
+      const { service, repository } = build();
+      const controller = new AbortController();
+      mockEngine.mockImplementation((p) => {
+        controller.abort();
+        return engineResult(p.entities.length);
+      });
+
+      const err = await service
+        .assess({ datasourceId: 'ds-pg' }, NOW, { signal: controller.signal })
+        .catch((e: unknown) => e);
+
+      expect((err as Error).name).toBe('AbortError');
+      expect(repository.insert).not.toHaveBeenCalled();
+    });
+
+    it('rethrows an abort during profiling as AbortError, not 502, and stores nothing', async () => {
+      const { service, repository } = build();
+      const controller = new AbortController();
+      mockPostgres.mockImplementation(() => {
+        controller.abort();
+        return Promise.reject(
+          Object.assign(new Error('Postgres profiling aborted'), {
+            name: 'AbortError',
+          }),
+        );
+      });
+
+      const err = await service
+        .assess({ datasourceId: 'ds-pg' }, NOW, { signal: controller.signal })
+        .catch((e: unknown) => e);
+
+      expect(err).not.toBeInstanceOf(BadGatewayException);
+      expect((err as Error).name).toBe('AbortError');
+      expect(repository.insert).not.toHaveBeenCalled();
+    });
+
+    it('builds notProfiled from the profile, with the row count only for too-large', async () => {
+      const { service } = build();
+      mockPostgres.mockResolvedValue(
+        profile([
+          {
+            ...entity('public', 'big'),
+            rowCount: 0,
+            profiledRowCount: 5e9,
+            notProfiled: 'too-large',
+          },
+          { ...entity('public', 'slow'), notProfiled: 'timed-out' },
+          entity('public', 'ok'),
+        ]),
+      );
+
+      const report = await service.assess({ datasourceId: 'ds-pg' }, NOW);
+
+      expect(report.notProfiled).toEqual([
+        { entity: 'public.big', reason: 'too-large', rowCount: 5e9 },
+        { entity: 'public.slow', reason: 'timed-out' },
+      ]);
+    });
+
+    it('omits notProfiled when every entity was profiled', async () => {
+      const { service } = build();
+      const report = await service.assess({ datasourceId: 'ds-pg' }, NOW);
+      expect(report).not.toHaveProperty('notProfiled');
     });
   });
 });

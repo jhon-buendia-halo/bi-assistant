@@ -62,6 +62,8 @@ const backendRoot = path.resolve(frontendRoot, '../backend');
 const cliPath = path.join(backendRoot, 'dist', 'cli.js');
 /** The Electron window's default size, so both targets lay out the same. */
 export const WINDOW_SIZE = { width: 1440, height: 900 };
+/** The demo video's frame and window under DEMO=1 (delivery.md 13). */
+export const DEMO_VIDEO_SIZE = { width: 1280, height: 720 };
 
 /** Test defaults layered with `env`; a value of `undefined` removes a variable. */
 function mergedEnv(env: Env): Record<string, string> {
@@ -246,7 +248,18 @@ async function launchWeb(
   const stdout: string[] = [];
   const stderr: string[] = [];
   let cli = await startCli(appDataDir, env, 0, stdout, stderr);
-  const context = await browser.newContext({ viewport: WINDOW_SIZE });
+  // DEMO=1 (scripts/qa.mjs --fast, roadmap 0.4.5): record the run as the
+  // story's demo video, 1280x720 (delivery.md 13). The window matches the
+  // video so the frame is not letterboxed.
+  const demoVideoDir = process.env['DEMO'] === '1'
+    ? (process.env['DEMO_VIDEO_DIR'] ?? path.join(frontendRoot, 'test-results', 'demo'))
+    : undefined;
+  const context = await browser.newContext({
+    viewport: demoVideoDir ? DEMO_VIDEO_SIZE : WINDOW_SIZE,
+    ...(demoVideoDir
+      ? { recordVideo: { dir: demoVideoDir, size: DEMO_VIDEO_SIZE } }
+      : {}),
+  });
   const page = await context.newPage();
   await page.goto(cli.url);
   await waitForShell(page);
@@ -296,7 +309,9 @@ export const test = base.extend<AppFixtures, WorkerFixtures>({
   webBrowser: [
     async ({ playwright }, use) => {
       let browser: Browser | undefined;
-      await use(async () => (browser ??= await playwright.chromium.launch()));
+      // DEMO=1 slows every action down so the demo video can be followed.
+      const slowMo = process.env['DEMO'] === '1' ? 400 : 0;
+      await use(async () => (browser ??= await playwright.chromium.launch({ slowMo })));
       await browser?.close();
     },
     { scope: 'worker' },

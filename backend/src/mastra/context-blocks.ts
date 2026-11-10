@@ -1,6 +1,6 @@
 // Pure, DI-free system-context builders shared by `SessionsService` (a real
 // chat turn), the assistant eval harness (no session, but the same
-// datasets), and `KnowledgeService` (mining drafts from a dataset's schema).
+// datasets), and `OntologyBootstrapService` (drafting from a dataset's schema).
 // No Nest DI here, same pattern as `tool-services.ts`.
 import type { DatasetColumnSnapshot, DatasetSnapshot } from './tool-services';
 import { type OptionalAgentTool, selects } from './agent-tools';
@@ -25,7 +25,7 @@ export function knowledgeContext(block: string | undefined): SystemBlock[] {
 /**
  * Character budget the curated-knowledge system block (Block 3) may take per
  * turn: entries go in newest first and the first that does not fit ends the
- * list (`KnowledgeService.contextFor`). Sized so a sample's whole seed (about
+ * list (`OntologyService.contextFor`). Sized so a sample's whole seed (about
  * a dozen entries, some 6,000 characters) goes in with room to grow: cut
  * short, the oldest entries, often the encoding rules, never reach the model.
  * Kept beside the other context budgets so the improvement loop's context
@@ -161,6 +161,7 @@ export function entityOrientationLines(
     columns.length ? `${line}: ${fitColumns(columns, share)}` : line,
   );
   const joinHints = joinHintBlock(datasets);
+  const schemaNotes = schemaNotesBlock(datasets);
   return [
     `Datasets for this session: ${datasetNames.join(', ')}.`,
     'Entities available (fully-qualified catalog.schema.table):',
@@ -169,7 +170,50 @@ export function entityOrientationLines(
       ? 'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.'
       : 'Use describe_entity / run_readonly_sql to inspect and query them.',
     ...(joinHints ? ['', joinHints] : []),
+    ...(schemaNotes ? ['', schemaNotes] : []),
   ];
+}
+
+const LAYER_LABELS = {
+  landing: 'Landing',
+  normalized: 'Normalized',
+  consumption: 'Consumption',
+} as const;
+
+/**
+ * The dataset owner's per-schema notes (layer + description), stated up front
+ * so the assistant picks the right layer when the same data exists in several.
+ * '' when no dataset carries a note, so a turn without notes is unchanged.
+ */
+export function schemaNotesBlock(datasets: DatasetSnapshot[]): string {
+  const lines: string[] = [];
+  let anyLayer = false;
+  for (const dataset of datasets) {
+    const notes = [...(dataset.schemas ?? [])].sort((a, b) =>
+      a.key < b.key ? -1 : a.key > b.key ? 1 : 0,
+    );
+    for (const note of notes) {
+      const description = note.description?.replace(/\s+/g, ' ').trim();
+      const parts: string[] = [];
+      if (note.layer) {
+        anyLayer = true;
+        parts.push(`layer: ${LAYER_LABELS[note.layer]}`);
+      }
+      if (description) parts.push(description);
+      const suffix = parts.length ? ` — ${parts.join('; ')}` : '';
+      lines.push(`- ${note.key} (dataset: ${dataset.name})${suffix}`);
+    }
+  }
+  if (!lines.length) return '';
+  return [
+    'Schema notes (set by the dataset owner):',
+    ...lines,
+    ...(anyLayer
+      ? [
+          'When the same data exists in several layers, prefer the Consumption schema for analysis unless the user asks for another layer.',
+        ]
+      : []),
+  ].join('\n');
 }
 
 /**
@@ -177,7 +221,7 @@ export function entityOrientationLines(
  * richer than a bare schema listing because sample values let a model match
  * filter literals (or a knowledge-mining pass match enum-like values) to
  * real data. Shared by the SQL verifier (`SessionsService.verifierContext`)
- * and the knowledge-bootstrap agent (`KnowledgeService.bootstrap`) so
+ * and the knowledge-bootstrap agent (`OntologyBootstrapService.bootstrap`) so
  * neither duplicates this formatting.
  */
 export function schemaSnapshotBlock(

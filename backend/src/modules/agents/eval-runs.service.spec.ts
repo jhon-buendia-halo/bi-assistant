@@ -4,8 +4,8 @@ jest.mock('../datasources/datasources.service', () => ({
 jest.mock('../sessions/sessions.service', () => ({
   SessionsService: class {},
 }));
-jest.mock('../knowledge/knowledge.service', () => ({
-  KnowledgeService: class {},
+jest.mock('../ontology/ontology.service', () => ({
+  OntologyService: class {},
 }));
 // One set per agent: a set's agent is its `agentKey`, `assistant` by default.
 jest.mock('../../mastra/evals/eval-sets', () => {

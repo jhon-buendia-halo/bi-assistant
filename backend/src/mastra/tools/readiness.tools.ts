@@ -1,5 +1,6 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
+import type { ReadinessProgressListener } from '../../modules/data-readiness/progress';
 import type { ReadinessReport } from '../../modules/data-readiness/engine/types';
 import {
   getReadinessToolServices,
@@ -7,6 +8,7 @@ import {
   type ReadinessToolReport,
 } from '../readiness-tool-services';
 import { askClarificationTool } from './clarification.tool';
+import { describeEntityTool, runReadOnlySqlTool } from './dataset.tools';
 import { showInPanelTool } from './panel.tool';
 import { SESSION_ID_CONTEXT_KEY } from './visual.tools';
 
@@ -76,6 +78,8 @@ async function withSession<T>(
   try {
     return await call(sessionId);
   } catch (err) {
+    // An aborted turn is not a tool failure: let the abort propagate.
+    if (err instanceof Error && err.name === 'AbortError') throw err;
     return { error: message(err) };
   }
 }
@@ -116,6 +120,41 @@ function toModelJson(result: unknown): { type: 'json'; value: unknown } {
   return { type: 'json', value: readinessModelOutput(result) };
 }
 
+/** The stream chunk type of an assessment's live progress (BA-324). */
+export const READINESS_PROGRESS_CHUNK = 'data-readiness-progress';
+
+type ProgressWriter = {
+  custom?: (chunk: {
+    type: string;
+    data: unknown;
+    transient?: boolean;
+  }) => Promise<void> | void;
+};
+
+/**
+ * A progress listener that writes to the tool's stream writer as a transient
+ * data chunk (streamed, not stored with the message). A failing writer never
+ * fails the assessment.
+ */
+function progressListener(
+  writer: ProgressWriter | undefined,
+): ReadinessProgressListener | undefined {
+  if (!writer || typeof writer.custom !== 'function') return undefined;
+  return (progress) => {
+    try {
+      void Promise.resolve(
+        writer.custom?.({
+          type: READINESS_PROGRESS_CHUNK,
+          data: progress,
+          transient: true,
+        }),
+      ).catch(() => undefined);
+    } catch {
+      // Progress is best effort.
+    }
+  };
+}
+
 const datasetInput = () =>
   z
     .string()
@@ -129,11 +168,13 @@ export const assessDataReadinessTool = createTool({
   description:
     "Run a new data-readiness assessment of one of this session's datasets and store the report. It profiles the dataset's tables and scores them on the DMBOK dimensions with the deterministic engine; it returns the overall score and band, every dimension's score and the most severe findings.",
   inputSchema: z.object({ dataset: datasetInput() }),
-  execute: ({ dataset }, { requestContext }) =>
-    withSession<ReadinessToolReport>(requestContext, (sessionId) =>
+  execute: ({ dataset }, ctx) =>
+    withSession<ReadinessToolReport>(ctx.requestContext, (sessionId) =>
       getReadinessToolServices().assessReadiness({
         sessionId,
         datasetName: optional(dataset),
+        signal: ctx.abortSignal,
+        onProgress: progressListener(ctx.writer),
       }),
     ),
   toModelOutput: toModelJson,
@@ -186,6 +227,10 @@ export const readinessTools = {
   assess_data_readiness: assessDataReadinessTool,
   get_readiness_report: getReadinessReportTool,
   list_readiness_reports: listReadinessReportsTool,
+  // Drill-down into findings (ADR-0035): the shared, session-scoped,
+  // read-only dataset tools. They never touch a score.
+  describe_entity: describeEntityTool,
+  run_readonly_sql: runReadOnlySqlTool,
   show_in_panel: showInPanelTool,
   ask_clarification: askClarificationTool,
 };

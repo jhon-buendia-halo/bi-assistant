@@ -459,3 +459,89 @@ describe('WorkflowBar', () => {
     ).not.toContain('Done action');
   });
 });
+
+describe('WorkflowBar with a workflow-backed agent (agent-panel R8a)', () => {
+  const v2: WorkflowView = {
+    phases: [
+      { number: 1, title: 'Receive question' },
+      { number: 2, title: 'Load catalog' },
+      { number: 3, title: 'Analyse' },
+      { number: 4, title: 'Wrap up' },
+    ],
+    source: 'workflow',
+    current: null,
+    done: [],
+    skipped: [],
+  };
+
+  function render(workflow: WorkflowView) {
+    const fixture = TestBed.createComponent(WorkflowBar);
+    fixture.componentRef.setInput('workflow', workflow);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  beforeEach(() => localStorage.removeItem(WORKFLOW_BAR_COLLAPSED_KEY));
+
+  it('shows the four steps as upcoming before any turn', () => {
+    const el: HTMLElement = render(v2).nativeElement;
+    expect(steps(el).map((s) => s.textContent?.trim())).toEqual([
+      'Receive question',
+      'Load catalog',
+      'Analyse',
+      'Wrap up',
+    ]);
+    expect(steps(el).map((s) => s.getAttribute('data-status'))).toEqual([
+      'upcoming',
+      'upcoming',
+      'upcoming',
+      'upcoming',
+    ]);
+    expect(el.textContent).toContain('0/4 done');
+  });
+
+  it('shows a failed step as Failed, current, with its tooltip, chip and popover label', () => {
+    const fixture = render({ ...v2, current: 3, done: [1, 2], failed: 3 });
+    const el: HTMLElement = fixture.nativeElement;
+    expect(steps(el).map((s) => s.getAttribute('data-status'))).toEqual([
+      'done',
+      'done',
+      'failed',
+      'upcoming',
+    ]);
+    expect(steps(el)[2].getAttribute('aria-current')).toBe('step');
+    const button = steps(el)[2].querySelector('button')!;
+    expect(button.getAttribute('title')).toBe('Failed');
+    expect(button.getAttribute('aria-label')).toBe('Step 3: Analyse, Failed');
+    expect(el.textContent).toContain('2/4 done');
+    expect(el.querySelector('[data-testid="workflow-bar-done"]')).toBeNull();
+
+    el.querySelector<HTMLButtonElement>(
+      '[data-testid="workflow-details-toggle"]',
+    )!.click();
+    fixture.detectChanges();
+    expect(el.querySelector('.chip-danger')?.textContent).toBe('Failed');
+    el.querySelector<HTMLButtonElement>(
+      '[data-testid="workflow-details-toggle"]',
+    )!.click();
+    fixture.detectChanges();
+
+    button.click();
+    fixture.detectChanges();
+    expect(
+      el.querySelector('[aria-label="Step details"] .chip-danger')?.textContent,
+    ).toBe('Failed');
+  });
+
+  it('reads "All steps done" once the turn finished', () => {
+    const el: HTMLElement = render({
+      ...v2,
+      current: 4,
+      done: [1, 2, 3, 4],
+    }).nativeElement;
+    expect(
+      el.querySelector('[data-testid="workflow-bar-done"]'),
+    ).not.toBeNull();
+    expect(el.textContent).toContain('4/4 done');
+  });
+});

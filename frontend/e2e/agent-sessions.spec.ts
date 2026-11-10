@@ -385,3 +385,36 @@ test("the agent's tool selection and skills apply to every turn", async ({
     expect(catalogSkills(request)).toContain('fiscal-calendar');
   }
 });
+
+test('a Questions to Insights v2 session runs v2 on every turn', async ({
+  page,
+}) => {
+  const V2 = 'Questions to Insights v2';
+  const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
+  // Start chat on v2 opens New conversation with v2 selected (R52, R64).
+  await openHub(page);
+  await startChatButton(page, V2).click();
+  await expect(page.getByTestId('new-session-agent')).toHaveText(
+    new RegExp(V2),
+  );
+  await page.getByPlaceholder('My new session').fill('V2 turn');
+  await page
+    .getByRole('button', { name: new RegExp(`^${WORLD_CUP_DATASET}`) })
+    .click();
+  await page.getByRole('button', { name: /^Create$/ }).click();
+  await expect(page.getByText('Session "V2 turn" created')).toBeVisible();
+  await expect(page.getByTestId('session-agent')).toHaveText(V2);
+
+  for (const [index, question] of [
+    'How many matches are there?',
+    'And in 2014?',
+  ].entries()) {
+    await send(page, question);
+    await expectAnswered(page, index + 1);
+    // The turn ran v2 (R61): its prompt and only its three data tools.
+    const request = firstTurnRequest(question);
+    expect(systemTexts(request)[0]).toContain('You are Questions to Insights v2');
+    expect(systemTexts(request).join('\n')).not.toContain(BASE_PROMPT_START);
+    expect([...request.tools].sort()).toEqual([...V2_TOOLS].sort());
+  }
+});

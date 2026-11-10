@@ -106,6 +106,27 @@ function build(sessionDatasets: string[]) {
 }
 
 describe('readiness summary (agents.md 3.13)', () => {
+  it('includes notProfiled only when the report has some', () => {
+    const base = report('r-np', []);
+    expect(readinessSummary(base)).not.toHaveProperty('notProfiled');
+    const np = [{ entity: 'a.b', reason: 'too-large' as const, rowCount: 9 }];
+    expect(readinessSummary({ ...base, notProfiled: np }).notProfiled).toEqual(
+      np,
+    );
+  });
+
+  it('passes signal and onProgress to the data-readiness service only when given', async () => {
+    const ctx = build(['World Cup']);
+    const signal = new AbortController().signal;
+    const onProgress = jest.fn();
+    await ctx.bridge.assessReadiness({ sessionId: 's-1', signal, onProgress });
+    expect(ctx.readiness.assess).toHaveBeenCalledWith(
+      expect.objectContaining({ datasourceId: 'ds-pg' }),
+      undefined,
+      { signal, onProgress },
+    );
+  });
+
   it('keeps at most 20 findings, most severe first, then in report order', () => {
     const findings = [
       finding('low', 'a'),
@@ -209,6 +230,30 @@ describe('the readiness panel item and answer reference (data-model 3.4)', () =>
         '- World Cup — PostgreSQL datasource "World Cup DB", 2 entities',
         '- Sales — Databricks datasource "Lakehouse", 1 entities',
         'Today is 2026-11-03.',
+      ].join('\n'),
+    );
+  });
+
+  it('adds the datasource id and an example entity key when known (ADR-0035)', () => {
+    expect(
+      readinessOrientationBlock(
+        [
+          {
+            name: 'Formula 1',
+            datasourceKind: 'postgres',
+            datasourceName: 'Formula 1 PostgreSQL',
+            datasourceId: 'ds-f1',
+            entityCount: 48,
+            exampleEntity: 'formula1.formula1.chassis',
+          },
+        ],
+        '2026-11-09',
+      ),
+    ).toBe(
+      [
+        'Datasets for this session (data readiness):',
+        '- Formula 1 — PostgreSQL datasource "Formula 1 PostgreSQL" (datasourceId ds-f1), 48 entities, named like formula1.formula1.chassis',
+        'Today is 2026-11-09.',
       ].join('\n'),
     );
   });

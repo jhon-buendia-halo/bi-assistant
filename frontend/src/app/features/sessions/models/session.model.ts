@@ -44,7 +44,8 @@ export interface ReasoningStep {
  */
 export interface KnowledgeUse {
   id: string;
-  kind: 'instruction' | 'term' | 'default_filter';
+  /** Legacy line tag: term = concept, default_filter = constraint. */
+  kind: 'instruction' | 'term' | 'default_filter' | 'relation';
   title: string;
   body: string;
   /** Dataset the snippet is scoped to; absent for a global snippet. */
@@ -229,14 +230,19 @@ export interface WorkflowView {
   phases: WorkflowPhase[];
   current: number | null;
   done: number[];
-  /** `prompt`: the steps come from the agent's `## Workflow` section; `agent`: it defined them. */
-  source: 'prompt' | 'agent';
+  /**
+   * `prompt`: the steps come from the agent's `## Workflow` section; `agent`:
+   * it defined them; `workflow`: its code-defined turn workflow (agent-panel R8a).
+   */
+  source: 'prompt' | 'agent' | 'workflow';
   /** Step numbers that do not apply. */
   skipped: number[];
   /** The current step waits for the user's answer or decision. */
   waiting?: boolean;
   /** Markdown, ≤ 2,000 chars: what the agent needs from the user in the current phase. */
   note?: string;
+  /** The step of a workflow-backed agent's turn that failed (agent-panel R8a). */
+  failed?: number;
 }
 
 /** `panel-item` stream payload. */

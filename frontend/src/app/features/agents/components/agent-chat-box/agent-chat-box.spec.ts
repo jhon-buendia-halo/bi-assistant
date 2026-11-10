@@ -122,4 +122,23 @@ describe('AgentChatBox', () => {
     byId('agent-chat-start')!.click();
     expect(start).toHaveBeenCalled();
   });
+
+  it('names Questions to Insights v2 and offers Start chat (R90, R107)', () => {
+    const v2 = {
+      key: 'assistant-v2',
+      id: 'questions-to-insights-v2',
+      name: 'Questions to Insights v2',
+      kind: 'official',
+      datasets: [],
+    } as unknown as AgentDetail;
+    render(v2);
+    const start = jasmine.createSpy('start');
+    fixture.componentInstance.startChat.subscribe(start);
+    expect(el().textContent).toContain(
+      'Chats with Questions to Insights v2 run over datasets you choose.',
+    );
+    expect(byId('agent-chat-start')!.hasAttribute('disabled')).toBeFalse();
+    byId('agent-chat-start')!.click();
+    expect(start).toHaveBeenCalledWith(v2);
+  });
 });

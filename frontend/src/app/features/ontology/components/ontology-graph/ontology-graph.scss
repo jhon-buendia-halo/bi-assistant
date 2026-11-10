@@ -1,0 +1,73 @@
+.graph-canvas {
+  font-family: inherit;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  &:active { cursor: grabbing; }
+  &:focus-visible { outline: 2px solid var(--qti-focus); outline-offset: -2px; }
+}
+
+.type-is-a { --edge: var(--qti-fg-muted); }
+.type-part-of { --edge: var(--qti-on-info-soft); }
+.type-has-many { --edge: var(--qti-on-warning-soft); }
+.type-related-to { --edge: var(--qti-border-strong); }
+.type-measured-by { --edge: var(--qti-on-success-soft); }
+
+.arrow { fill: var(--edge); }
+
+.edge {
+  cursor: pointer;
+  outline: none;
+  .edge-hit { fill: none; stroke: transparent; stroke-width: 12; }
+  .edge-line { fill: none; stroke: var(--edge); stroke-width: 1.5; }
+  .edge-label {
+    fill: var(--qti-fg-muted);
+    font-size: 10px;
+    paint-order: stroke;
+    stroke: var(--qti-surface);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+  }
+  &.active .edge-line, &:focus-visible .edge-line { stroke-width: 2.5; }
+  &.active .edge-label { fill: var(--qti-fg); }
+}
+
+.node {
+  cursor: pointer;
+  outline: none;
+  rect { stroke-width: 1.5; }
+  .label { fill: var(--qti-fg-strong); font-size: 12px; }
+  .glyph { font-size: 13px; font-weight: 600; }
+  .shared {
+    circle, ellipse, line { fill: none; stroke: var(--qti-fg-muted); stroke-width: 1; }
+  }
+  &.concept {
+    rect { fill: var(--qti-warning-soft); stroke: var(--qti-on-warning-soft); }
+    .glyph { fill: var(--qti-on-warning-soft); }
+  }
+  &.metric {
+    rect { fill: var(--qti-success-soft); stroke: var(--qti-on-success-soft); }
+    .glyph { fill: var(--qti-on-success-soft); }
+  }
+  &.selected rect, &:focus-visible rect { stroke-width: 3; }
+  &:focus-visible rect { stroke: var(--qti-focus); }
+}
+
+.faded {
+  opacity: 0.5;
+  rect, .edge-line { stroke-dasharray: 5 4; }
+}
+
+.dim { opacity: 0.18; }
+.faded.dim { opacity: 0.12; }
+
+.legend-swatch {
+  .concept { fill: var(--qti-warning-soft); stroke: var(--qti-on-warning-soft); }
+  .metric { fill: var(--qti-success-soft); stroke: var(--qti-on-success-soft); }
+  line { stroke-width: 2; stroke: var(--edge, var(--qti-fg-muted)); }
+  .faded { opacity: 0.6; stroke-dasharray: 4 3; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .node, .edge { transition: opacity 0.15s; }
+}

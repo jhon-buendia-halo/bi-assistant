@@ -24,6 +24,14 @@ export interface FakeSource {
   normalized?: Record<string, number>;
   /** Probe names (e.g. `columnStats:s.t`, `keys`) that reject. */
   failing?: string[];
+  /** `schema.table` → `rowCount` result (default: that table's stats total). */
+  rowCounts?: Record<string, number>;
+  /** `schema.table`s whose `columnStats` rejects with a statement timeout. */
+  timeouts?: string[];
+  /** `schema.table`s whose `columnStats` rejects only when extras are asked. */
+  failingFolded?: string[];
+  /** `schema.table`s whose second (normalized-distinct) statement rejects. */
+  failingNormalized?: string[];
 }
 
 export type FakeProfiler<C> = ProfilingConnector<C> & {
@@ -47,20 +55,61 @@ export function fakeProfiler<C>(
     if (v === undefined) throw new Error(`fake has no ${what}`);
     return v;
   };
-  return {
+  const fake: FakeProfiler<C> = {
     kind,
     calls,
+    withSessions: (_c, size, _signal, fn) => {
+      calls.push({ method: 'withSessions', args: [size] });
+      return fn(fake);
+    },
+    rowCount: (_c, schema, table) => {
+      const id = `${schema}.${table}`;
+      return run('rowCount', id, [schema, table], 0).then(() =>
+        need(src.rowCounts?.[id] ?? src.stats?.[id]?.totalRows, `rows ${id}`),
+      );
+    },
     tables: (_c, schema) =>
       run('tables', '', [schema], src.tables).then((t) =>
         schema ? t.filter((x) => x.schema === schema) : t,
       ),
-    columnStats: (_c, schema, table, nullable, all, comparable) =>
-      run(
-        'columnStats',
-        `${schema}.${table}`,
-        [schema, table, nullable, all, comparable],
-        src.stats?.[`${schema}.${table}`],
-      ).then((s) => need(s, `stats ${schema}.${table}`)),
+    columnStats: (_c, schema, table, nullable, all, comparable, extras) => {
+      const id = `${schema}.${table}`;
+      const args: unknown[] = [schema, table, nullable, all, comparable];
+      if (extras) args.push(extras);
+      if (src.timeouts?.includes(id)) {
+        calls.push({ method: 'columnStats', args });
+        return Promise.reject(
+          new Error('canceling statement due to statement timeout'),
+        );
+      }
+      if (extras?.normalizedDistinct && src.failingNormalized?.includes(id)) {
+        calls.push({ method: 'columnStats', args });
+        return Promise.reject(new Error('columnStats failed (normalized)'));
+      }
+      if (extras && src.failingFolded?.includes(id)) {
+        calls.push({ method: 'columnStats', args });
+        return Promise.reject(new Error('columnStats failed (folded)'));
+      }
+      return run('columnStats', id, args, src.stats?.[id]).then((base) => {
+        const s = need(base, `stats ${id}`);
+        if (!extras) return s;
+        const normalized: Record<string, number> = {};
+        for (const c of extras.normalizedDistinct ?? []) {
+          const v = src.normalized?.[`${id}.${c}`];
+          if (v !== undefined) normalized[c] = v;
+        }
+        const invalid: Record<string, number> = {};
+        for (const f of extras.formats ?? []) {
+          const v = src.invalid?.[`${id}.${f.column}`];
+          if (v !== undefined) invalid[f.column] = v;
+        }
+        return {
+          ...s,
+          normalizedDistinctCounts: normalized,
+          invalidFormatCounts: invalid,
+        };
+      });
+    },
     keys: () => run('keys', '', [], src.keys ?? []),
     foreignKeys: () => run('foreignKeys', '', [], src.foreignKeys ?? []),
     tablePrivileges: () => run('tablePrivileges', '', [], src.privileges ?? []),
@@ -95,6 +144,7 @@ export function fakeProfiler<C>(
       ).then(() => need(src.normalized?.[id], `normalized ${id}`));
     },
   };
+  return fake;
 }
 
 export function stats(

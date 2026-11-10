@@ -18,6 +18,8 @@ import {
   FolderTree,
   Loader2,
   Lock,
+  LucideIconData,
+  Network,
   Play,
   RefreshCw,
   Search,
@@ -37,13 +39,23 @@ import {
   InclusionState,
   DatasetInclusionService,
 } from '../../services/dataset-inclusion.service';
-import { Dataset, DatasetsApiService } from '../../services/datasets-api.service';
+import {
+  Dataset,
+  DatasetSchemaNote,
+  DatasetsApiService,
+  schemaLayerLabel,
+} from '../../services/datasets-api.service';
+import { DatasetSchemaNotesService } from '../../services/dataset-schema-notes.service';
 import { MetricsPanel } from '../metrics-panel/metrics-panel';
 import { ToastService } from '../../../../core/toast/toast.service';
+import { OntologyPanel } from '../../../ontology/components/ontology-panel/ontology-panel';
+
+/** The saved-dataset editor's tabs (BA-320). */
+export type DatasetTab = 'schema' | 'ontology';
 
 @Component({
   selector: 'app-catalog-browser',
-  imports: [LucideAngularModule, MetricsPanel],
+  imports: [LucideAngularModule, MetricsPanel, OntologyPanel],
   templateUrl: './catalog-browser.html',
   styleUrl: './catalog-browser.scss',
 })
@@ -66,6 +78,8 @@ export class CatalogBrowser implements OnInit, OnDestroy {
   private readonly inclusionService = inject(DatasetInclusionService);
   private readonly datasetApi = inject(DatasetsApiService);
   private readonly toast = inject(ToastService);
+  readonly schemaNotes = inject(DatasetSchemaNotesService);
+  readonly schemaLayerLabel = schemaLayerLabel;
   readonly loading = signal(true);
   /**
    * A datasource is picked but its inventory has not been requested yet. The
@@ -120,6 +134,24 @@ export class CatalogBrowser implements OnInit, OnDestroy {
   readonly saved = output<void>();
   /** When set, the browser opens in edit mode with this dataset's data. */
   readonly initial = input<Dataset | null>(null);
+
+  /** Schema | Ontology, shown only when editing a saved dataset. */
+  readonly tabs: { id: DatasetTab; label: string; icon: LucideIconData }[] = [
+    { id: 'schema', label: 'Schema', icon: Database },
+    { id: 'ontology', label: 'Ontology', icon: Network },
+  ];
+  readonly activeTab = signal<DatasetTab>('schema');
+
+  selectTab(tab: DatasetTab, focus = false): void {
+    this.activeTab.set(tab);
+    if (focus) {
+      queueMicrotask(() => document.getElementById(`dataset-tab-${tab}`)?.focus());
+    }
+  }
+
+  otherTab(tab: DatasetTab): DatasetTab {
+    return tab === 'schema' ? 'ontology' : 'schema';
+  }
   readonly selectedDatasource = computed(
     () => this.datasources().find((d) => d.id === this.datasourceId()) ?? null,
   );
@@ -151,9 +183,11 @@ export class CatalogBrowser implements OnInit, OnDestroy {
       // Edit mode — prefill the name and the included entities.
       this.datasetName.set(editing.name);
       this.inclusionService.included.set(new Set(editing.tables));
+      this.schemaNotes.load(editing.schemas);
     } else {
       // A new dataset starts with a clean selection.
       this.inclusionService.included.set(new Set());
+      this.schemaNotes.clear();
     }
     this.api.list().subscribe({
       next: (res) => {
@@ -173,6 +207,7 @@ export class CatalogBrowser implements OnInit, OnDestroy {
           datasources[0];
         if (editingId && selected.id !== editingId) {
           this.inclusionService.included.set(new Set());
+          this.schemaNotes.clear();
           this.selectionService.clear();
           this.toast.error(
             'The dataset datasource is no longer available. Choose entities from another datasource.',
@@ -209,6 +244,7 @@ export class CatalogBrowser implements OnInit, OnDestroy {
     this.search.set('');
     this.expanded.set(new Set());
     this.inclusionService.included.set(new Set());
+    this.schemaNotes.clear();
     this.selectionService.clear();
     this.error.set(null);
     this.awaitingChoice.set(false);
@@ -369,6 +405,16 @@ export class CatalogBrowser implements OnInit, OnDestroy {
     );
   }
 
+  /** The note (layer + description) kept for a schema, if any. */
+  schemaNote(
+    catalogName: string,
+    schemaName: string,
+  ): DatasetSchemaNote | undefined {
+    return this.schemaNotes.get(
+      this.schemaNotes.schemaKey(catalogName, schemaName),
+    );
+  }
+
   saveDataset(): void {
     if (this.saving()) return;
     const name = this.datasetName().trim();
@@ -399,10 +445,13 @@ export class CatalogBrowser implements OnInit, OnDestroy {
       return;
     }
     this.datasetApi
-      .createDataset(name, Array.from(included), entities, {
-        id: datasource.id,
-        kind: datasource.kind,
-      })
+      .createDataset(
+        name,
+        Array.from(included),
+        entities,
+        { id: datasource.id, kind: datasource.kind },
+        this.schemaNotes.toSave(included),
+      )
       .subscribe({
         next: (res) => {
           this.saving.set(false);

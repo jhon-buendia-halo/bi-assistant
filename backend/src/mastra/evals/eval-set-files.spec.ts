@@ -122,17 +122,18 @@ const BA_300_SENTENCE =
   'each name a concrete metric (scoped, for example, "across all ' +
   'tournaments") pass even when no year is named, and options that each ' +
   'name a tournament year pass even when no metric is named. ';
-const REWORDED_ON_MAIN: Readonly<Record<string, (rubric: string) => string>> =
-  Object.fromEntries(
-    ['ambiguous-best-team', 'rest-ambiguous-best-team'].map((id) => [
-      id,
-      (rubric: string) =>
-        rubric.replace(
-          'the answer. Score pass=false',
-          `the answer. ${BA_300_SENTENCE}Score pass=false`,
-        ),
-    ]),
-  );
+const REWORDED_ON_MAIN: Readonly<
+  Partial<Record<string, (rubric: string) => string>>
+> = Object.fromEntries(
+  ['ambiguous-best-team', 'rest-ambiguous-best-team'].map((id) => [
+    id,
+    (rubric: string) =>
+      rubric.replace(
+        'the answer. Score pass=false',
+        `the answer. ${BA_300_SENTENCE}Score pass=false`,
+      ),
+  ]),
+);
 /**
  * The 40 questions roadmap 1.1.10 (BA-188) appended to the World Cup bank
  * after its twelve: 23 from `feat/engine-eval-loop`, then 17 paraphrases.

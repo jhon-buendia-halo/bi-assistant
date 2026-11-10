@@ -5,7 +5,7 @@ import { DatasourcesModule } from '../datasources/datasources.module';
 import { LlmModule } from '../llm/llm.module';
 import { VerifiedQueriesModule } from '../verified-queries/verified-queries.module';
 import { MetricsModule } from '../metrics/metrics.module';
-import { KnowledgeModule } from '../knowledge/knowledge.module';
+import { OntologyModule } from '../ontology/ontology.module';
 import { UserAgentsModule } from '../user-agents/user-agents.module';
 import { RfpPackagesModule } from '../rfp-packages/rfp-packages.module';
 import { DataReadinessModule } from '../data-readiness/data-readiness.module';
@@ -22,7 +22,7 @@ import { VisualizationService } from './visualization.service';
     LlmModule,
     VerifiedQueriesModule,
     MetricsModule,
-    KnowledgeModule,
+    OntologyModule,
     UserAgentsModule,
     RfpPackagesModule,
     DataReadinessModule,

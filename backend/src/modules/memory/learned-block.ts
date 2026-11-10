@@ -1,4 +1,4 @@
-import type { KnowledgeUse } from '../knowledge/entities/knowledge-snippet.entity';
+import type { KnowledgeUse } from '../ontology/entities/ontology-item.entity';
 import type { RecalledSignal } from './learning-store.port';
 import { utcDay } from './signal-text';
 

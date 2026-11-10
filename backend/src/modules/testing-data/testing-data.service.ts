@@ -6,8 +6,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Client } from 'pg';
 import { DatasetsService } from '../datasets/datasets.service';
 import { DatasourcesService } from '../datasources/datasources.service';
-import { KnowledgeService } from '../knowledge/knowledge.service';
 import { MetricsService } from '../metrics/metrics.service';
+import { OntologyService } from '../ontology/ontology.service';
 import { getIntellifyApiInfo } from '../../intellify-api/api-info';
 import type {
   CatalogInfo,
@@ -17,8 +17,14 @@ import type {
 } from '../datasources/entities/datasource.entity';
 import type { DatasetEntitySnapshot } from '../datasets/repositories/datasets.repository';
 import type { LoadTestingDataDto } from './dto/testing-data.dto';
-import type { KnowledgeSnippetKind } from '../knowledge/entities/knowledge-snippet.entity';
-import type { SeedKnowledgeEntry } from './fixtures/knowledge/types';
+import type {
+  OntologyItemInput,
+  OntologyKind,
+} from '../ontology/entities/ontology-item.entity';
+import type {
+  SeedKnowledgeEntry,
+  SeedKnowledgeKind,
+} from './fixtures/knowledge/types';
 import {
   SAMPLE_FIXTURES,
   databricksSource,
@@ -129,7 +135,7 @@ export class TestingDataService {
   constructor(
     private readonly datasources: DatasourcesService,
     private readonly datasets: DatasetsService,
-    private readonly knowledge: KnowledgeService,
+    private readonly ontology: OntologyService,
     private readonly metrics: MetricsService,
   ) {}
 
@@ -558,17 +564,17 @@ export class TestingDataService {
   }
 
   /**
-   * Create the sample's knowledge seed (R26) through the normal knowledge and
-   * metrics create: each knowledge entry scoped to the sample's dataset and
-   * enabled, each metric on the loaded datasource, every entity named
-   * `<database>.<schema>.<table>` on the database just loaded. An entry the
-   * app already holds is left as it is: a knowledge entry of the same kind
-   * and title scoped to that dataset, or a metric of the same name. Never
+   * Create the sample's knowledge seed (R26) through the normal ontology and
+   * metrics create: each seed entry an enabled ontology item of the sample's
+   * dataset (`seedOntologyItem`), each metric on the loaded datasource, every
+   * entity named `<database>.<schema>.<table>` on the database just loaded.
+   * An entry the app already holds is left as it is: an item of the same
+   * kind and name in that dataset, or a metric of the same name. Never
    * throws: a save that fails stops the seed and is reported in the outcome,
    * so the load it follows still succeeds.
    *
-   * The knowledge block keeps only what fits its budget, newest-updated first
-   * (knowledge R16, R17), so the entries are created in the reverse of the
+   * The block keeps only what fits its budget, newest-updated first
+   * (dataset-ontology R22, R24), so the entries are created in the reverse of the
    * order they should be sent in (`seedCreationOrder`), each one stamped
    * strictly later than the one before: the store breaks a tie by insertion
    * order, oldest first, which would put the terms ahead of the filters.
@@ -584,24 +590,17 @@ export class TestingDataService {
     const qualify = (entity: string) => `${database}.${entity}`;
     try {
       const heldEntries = new Set(
-        (await this.knowledge.list({ datasetId: fixture.datasetName }))
-          .filter((entry) => entry.scope?.datasetId === fixture.datasetName)
-          .map((entry) => heldEntryKey(entry.kind, entry.title)),
+        (await this.ontology.list(fixture.datasetName))
+          .filter((item) => item.dataset === fixture.datasetName)
+          .map((item) => heldEntryKey(item.kind, item.name)),
       );
       let lastStamp: number | undefined;
       for (const entry of seedCreationOrder(seed.knowledge)) {
-        const key = heldEntryKey(entry.kind, entry.title);
+        const item = seedOntologyItem(entry, qualify);
+        const key = heldEntryKey(item.kind, entry.title);
         if (heldEntries.has(key)) continue;
         if (lastStamp !== undefined) await waitPast(lastStamp);
-        const saved = await this.knowledge.create({
-          kind: entry.kind,
-          scope: { datasetId: fixture.datasetName },
-          title: entry.title,
-          body: entry.body,
-          ...(entry.synonyms?.length ? { synonyms: entry.synonyms } : {}),
-          entities: entry.entities.map(qualify),
-          enabled: true,
-        });
+        const saved = await this.ontology.create(fixture.datasetName, item);
         lastStamp = savedAt(saved?.updatedAt);
         heldEntries.add(key);
         outcome.knowledge += 1;
@@ -646,11 +645,54 @@ export class TestingDataService {
 }
 
 /**
+ * A seed entry as the ontology item it is created as: migration M15's mapping
+ * of a knowledge snippet (data-model 6), so the block renders it as the
+ * snippet rendered (dataset-ontology R23). A term becomes a concept whose
+ * entities are its mappings, a default filter a constraint whose predicate is
+ * its body, an instruction an instruction.
+ */
+export function seedOntologyItem(
+  entry: SeedKnowledgeEntry,
+  qualify: (entity: string) => string,
+): OntologyItemInput & { kind: OntologyKind } {
+  const entities = entry.entities.map(qualify);
+  switch (entry.kind) {
+    case 'term':
+      return {
+        kind: 'concept',
+        name: entry.title,
+        description: entry.body,
+        ...(entry.synonyms?.length ? { synonyms: entry.synonyms } : {}),
+        ...(entities.length
+          ? { mappings: entities.map((entity) => ({ entity })) }
+          : {}),
+        enabled: true,
+      };
+    case 'default_filter':
+      return {
+        kind: 'constraint',
+        name: entry.title,
+        predicate: entry.body,
+        ...(entities.length ? { entities } : {}),
+        enabled: true,
+      };
+    case 'instruction':
+      return {
+        kind: 'instruction',
+        name: entry.title,
+        description: entry.body,
+        ...(entities.length ? { entities } : {}),
+        enabled: true,
+      };
+  }
+}
+
+/**
  * The order a seed's entries should reach the assistant in when the
  * knowledge block cannot hold them all: the default filters, then the
  * instructions, then the terms, each group in the seed's own order.
  */
-const SEND_ORDER: readonly KnowledgeSnippetKind[] = [
+const SEND_ORDER: readonly SeedKnowledgeKind[] = [
   'default_filter',
   'instruction',
   'term',
@@ -659,7 +701,7 @@ const SEND_ORDER: readonly KnowledgeSnippetKind[] = [
 /**
  * The order the loader creates a seed's entries in: the reverse of the send
  * order (terms in reverse seed order first, default filters last), because
- * the block lists the newest-updated entry first (knowledge R16).
+ * the block lists the newest-updated entry first (dataset-ontology R22).
  */
 export function seedCreationOrder(
   entries: readonly SeedKnowledgeEntry[],
@@ -687,10 +729,10 @@ async function waitPast(ms: number): Promise<void> {
 }
 
 /**
- * A knowledge entry is held (R26) when one of the same kind and title is
- * scoped to the sample's dataset. Titles compare trimmed and case-blind, as
- * the knowledge bootstrap compares them, so a title re-cased by hand is still
- * the same entry and is never duplicated.
+ * A seed entry is held (R26) when an item of the same ontology kind and name
+ * belongs to the sample's dataset. Names compare trimmed and case-blind, as
+ * the bootstrap compares them, so a name re-cased by hand is still the same
+ * item and is never duplicated.
  */
 function heldEntryKey(kind: string, title: string): string {
   return `${kind}:${title.trim().toLowerCase()}`;

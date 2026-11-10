@@ -53,9 +53,11 @@ import { USAGE_SINK_CONTEXT_KEY, usageSinkFrom } from '../usage-sink';
 import {
   ASSISTANT_EVAL_SETS,
   ASSISTANT_EVAL_TARGET,
+  createEvalSession,
   evalRunModel,
   runAssistantEvalCase,
 } from './assistant.evals';
+import type { SessionsService } from '../../modules/sessions/sessions.service';
 import type { AssistantEvalCase } from './assistant.evals';
 import { LEARNED_BLOCK_HEADING } from '../../modules/memory/learned-block';
 import { StubLearningStore } from './learning-store.stub';
@@ -936,5 +938,53 @@ describe('runAssistantEvalCase under a memory arm (agents.md 8.3, R238 to R245)'
       ['custom-last', 'passed'],
     ]);
     expect(result.usage?.some((entry) => entry.agent === 'memory')).toBe(false);
+  });
+});
+
+describe('createEvalSession (agents.md 8.1)', () => {
+  function fakeSessions() {
+    return {
+      create: jest
+        .fn()
+        .mockResolvedValue({ id: 'plain', datasets: ['World Cup'] }),
+      createFromAgent: jest.fn().mockResolvedValue({
+        id: 'bound',
+        datasets: ['Formula 1', 'World Cup'],
+      }),
+      narrowDatasets: jest
+        .fn()
+        .mockResolvedValue({ id: 'bound', datasets: ['World Cup'] }),
+      appendAssistantMessage: jest.fn().mockResolvedValue(undefined),
+    };
+  }
+
+  it("narrows an agent-bound session to the run's datasets", async () => {
+    const sessions = fakeSessions();
+    const session = await createEvalSession(
+      sessions as unknown as SessionsService,
+      ['World Cup'],
+      'data-readiness',
+    );
+    expect(sessions.createFromAgent).toHaveBeenCalledWith(
+      'data-readiness',
+      expect.any(String),
+    );
+    expect(sessions.narrowDatasets).toHaveBeenCalledWith('bound', [
+      'World Cup',
+    ]);
+    expect(session).toEqual({ id: 'bound' });
+  });
+
+  it('leaves a plain session and an agent session with no named datasets alone', async () => {
+    const sessions = fakeSessions();
+    await createEvalSession(sessions as unknown as SessionsService, [
+      'World Cup',
+    ]);
+    await createEvalSession(
+      sessions as unknown as SessionsService,
+      [],
+      'data-readiness',
+    );
+    expect(sessions.narrowDatasets).not.toHaveBeenCalled();
   });
 });

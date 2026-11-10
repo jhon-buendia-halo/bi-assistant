@@ -98,11 +98,11 @@ Added 2026-10-13 (BA-186). Validated on a warehouse in the VDI, from a copy of t
 
 Added 2026-10-16 (roadmap 1.1.10, BA-188): the rules about each synthetic domain's data that `feat/engine-eval-loop` seeded with a script, now created by the loader, so a chat or an eval run on a loaded domain sample gets the same knowledge block.
 
-- R26. The Finance, Health Insurance, Genomics, Supply Chain and Marketing Analytics samples SHALL each ship a **knowledge seed**: knowledge entries (terms, instructions and default filters, [knowledge](../knowledge/spec.md)) and metrics ([metrics](../metrics/spec.md)) that state rules about the sample's data, such as a column's vocabulary, a join path, a coverage boundary, a unit or a standing filter (the banking rules of the branch moved onto the finance schema and checked against it; for Marketing Analytics, added 2026-10-24 by roadmap 1.1.25, the rules of its business policy, `docs/evals/domains/marketing-analytics-policy.md`, each checked by SQL against the sample: what a sale is, the test-row filter, money, quarters and the fiscal year, reporting status, the market, the campaign rates, and the governance rules on masked competitors and campaign data). After a successful load from the panel (R16), the loader SHALL create each seed entry the app does not hold yet, through the normal knowledge and metrics create:
-  - a knowledge entry scoped to the sample's dataset (by name), enabled, so with source `user` (knowledge R6), its entities named `<database>.<schema>.<table>` on the loaded database; an entry about one column names the column in its body;
+- R26. The Finance, Health Insurance, Genomics, Supply Chain and Marketing Analytics samples SHALL each ship a **knowledge seed**: entries (terms, instructions and default filters) created as items of the sample's dataset ontology ([dataset-ontology](../dataset-ontology/spec.md)) and metrics ([metrics](../metrics/spec.md)) that state rules about the sample's data, such as a column's vocabulary, a join path, a coverage boundary, a unit or a standing filter (the banking rules of the branch moved onto the finance schema and checked against it; for Marketing Analytics, added 2026-10-24 by roadmap 1.1.25, the rules of its business policy, `docs/evals/domains/marketing-analytics-policy.md`, each checked by SQL against the sample: what a sale is, the test-row filter, money, quarters and the fiscal year, reporting status, the market, the campaign rates, and the governance rules on masked competitors and campaign data). After a successful load from the panel (R16), the loader SHALL create each seed entry the app does not hold yet, through the normal ontology and metrics create:
+  - an ontology item of the sample's dataset (by name), enabled, so with source `user` (dataset-ontology R11), mapped as migration M15 maps a snippet ([data-model.md](../../system/data-model.md) section 6): a term becomes a concept with its synonyms and one mapping per entity, a default filter a constraint whose predicate is the entry's body, an instruction an instruction; its entities named `<database>.<schema>.<table>` on the loaded database; an entry about one column names the column in its body;
   - a metric on the loaded datasource, its entity named the same way.
 
-  The loader SHALL create the entries so that the block, built newest first (knowledge R16) within its 7,000 characters (knowledge R17), sends the seed's default filters first, then its instructions, then its terms, each group in the seed's order: it creates them in the reverse of that order, each with a later update time than the one before. A knowledge entry is held when one of the same kind and title (trimmed, ignoring case) is scoped to that dataset; a metric when one of the same name exists. Held entries SHALL be left as they are, so loading again never duplicates an entry or overwrites an edit, and an entry the user deleted comes back on the next load. When the loader created any, the success message SHALL end with ` — added <k> knowledge entries and <m> metrics` (after ` — created the database` when both apply; `entry` and `metric` in the singular for 1; a part with 0 left out). Creating the seed SHALL NOT fail a load that succeeded: if an entry cannot be saved, the message SHALL end with ` — could not add its knowledge seed: <detail>` instead, and the entries already created stay. The other samples ship no seed, so loading them creates no knowledge entry or metric; World Cup ships none, so its chats and eval runs see the same context as before. Removing a sample (R18) SHALL leave its knowledge entries and metrics.
+  The loader SHALL create the entries so that the block, built newest first (dataset-ontology R22) within its 7,000 characters (dataset-ontology R24), sends the seed's default filters first, then its instructions, then its terms, each group in the seed's order: it creates them in the reverse of that order, each with a later update time than the one before. An entry is held when an item of the same kind and name (trimmed, ignoring case) belongs to that dataset; a metric when one of the same name exists. Held entries SHALL be left as they are, so loading again never duplicates an entry or overwrites an edit, and an entry the user deleted comes back on the next load. When the loader created any, the success message SHALL end with ` — added <k> knowledge entries and <m> metrics` (after ` — created the database` when both apply; `entry` and `metric` in the singular for 1; a part with 0 left out). Creating the seed SHALL NOT fail a load that succeeded: if an entry cannot be saved, the message SHALL end with ` — could not add its knowledge seed: <detail>` instead, and the entries already created stay. The other samples ship no seed, so loading them creates no ontology item or metric; World Cup ships none, so its chats and eval runs see the same context as before. Removing a sample (R18) SHALL leave its ontology items and metrics.
 - R27. A knowledge seed SHALL state rules about the data, never a hint about one eval question: no entry names the id of a question of its sample's eval sets ([agents-evals](../agents-evals/spec.md) R11) or repeats a question's wording, and none settles an ambiguity that an `ambiguous` question asks the assistant to notice. A coverage boundary (the years or values the data holds) is a rule about the data and is allowed, even where an `out-of-scope` question relies on it. A unit test SHALL check the first two against the bundled question bank files; the third is checked by review when an entry is written.
 
 ## Edge cases and errors
@@ -120,7 +120,7 @@ Added 2026-10-16 (roadmap 1.1.10, BA-188): the rules about each synthetic domain
 ## Contracts
 
 - Endpoints: list fixtures with status, load a fixture with a connection, remove a fixture: [api.md](../../system/api.md), section Testing data. Results are `{ ok, message, … }`; failures are not HTTP errors.
-- Reads and writes the `connections` and `datasets` collections (and the datasource inventory snapshot) only through the datasources and datasets capabilities, and creates a sample's knowledge seed (R26) only through the [knowledge](../knowledge/spec.md) and [metrics](../metrics/spec.md) capabilities: [data-model.md](../../system/data-model.md).
+- Reads and writes the `connections` and `datasets` collections (and the datasource inventory snapshot) only through the datasources and datasets capabilities, and creates a sample's knowledge seed (R26) only through the [dataset-ontology](../dataset-ontology/spec.md) and [metrics](../metrics/spec.md) capabilities: [data-model.md](../../system/data-model.md).
 - No agent. The eval suite reads the catalogue to check that a case set's sample data is present before a run: [agents.md](../../system/agents.md) and [agents-evals](../agents-evals/spec.md).
 - Related scripts: `npm run fixtures:<domain>` (regenerates a synthetic domain's seed and facts), `npm run fixture:dump -- --fixture <id>` (exports a loaded sample to gzipped JSON), `npm run worldcup:api`, `npm run finance:api` and `npm run marketing-analytics:api` (serve a sample's REST API, with the switches of BA-187), `npm run worldcup:api:dump`, `npm run worldcup:rest:setup` and `npm run fixture:rest:setup` (create a REST sample's datasource and dataset, one per server variant), `npm run fixture:databricks -- --fixture <source>` (loads a sample into Databricks and registers it, R24, R25), `docker compose up -d postgres` (the seeded World Cup server), all from the repository: [delivery.md](../../system/delivery.md).
 - Terms: [glossary](../../product/glossary.md).
@@ -182,28 +182,28 @@ Feature: Testing data
     And the sample shows "17/17 entities" with a check mark
 
   Scenario: Loads a domain sample with its knowledge seed
-    Given no knowledge entry is scoped to the "Health Insurance" dataset
+    Given the "Health Insurance" dataset has no ontology items
     When I click the "Health Insurance" sample
     And I click "Load testing data"
     And I click "Confirm"
     Then I see a message that starts with "Seeded health_insurance on 127.0.0.1:55432 and loaded 12 entities into dataset "Health Insurance""
     And the message ends with "knowledge entries and" followed by the number of metrics
-    When I open Knowledge and filter by the dataset "Health Insurance"
-    Then I see the sample's knowledge entries, each enabled
+    When I open the Ontology tab of the "Health Insurance" dataset
+    Then I see the sample's seed entries as ontology items, each enabled
 
-  Scenario: Loading a sample again keeps its knowledge entries as edited
+  Scenario: Loading a sample again keeps its seed items as edited
     Given the "Health Insurance" sample is loaded with its knowledge seed
-    And I changed the body of one of its knowledge entries
+    And I changed the description of one of its ontology items
     When I load the "Health Insurance" sample again
     Then the message does not mention knowledge entries
-    And that entry keeps the body I wrote
-    And no knowledge entry is listed twice
+    And that item keeps the description I wrote
+    And no item is listed twice
 
-  Scenario: Loading the World Cup sample creates no knowledge
-    Given no knowledge entry exists
+  Scenario: Loading the World Cup sample creates no ontology items
+    Given no ontology item exists
     When I load the "World Cup" sample
     Then the message does not mention knowledge entries
-    And Knowledge shows no entries
+    And the Ontology tab of the "World Cup" dataset shows no items
 
   Scenario: Refuses to load a Databricks sample
     Given I am in "Testing Data"

@@ -7,8 +7,8 @@ jest.mock('../datasets/datasets.service', () => ({
 }));
 // The real services pull in Mastra and the doc store; the loader only calls
 // their list/create, which the in-memory doubles below provide.
-jest.mock('../knowledge/knowledge.service', () => ({
-  KnowledgeService: class {},
+jest.mock('../ontology/ontology.service', () => ({
+  OntologyService: class {},
 }));
 jest.mock('../metrics/metrics.service', () => ({
   MetricsService: class {},
@@ -32,13 +32,17 @@ import {
   setIntellifyApiInfo,
   type IntellifyApiInfo,
 } from '../../intellify-api/api-info';
-import type { KnowledgeSeed } from './fixtures/knowledge/types';
+import type {
+  KnowledgeSeed,
+  SeedKnowledgeEntry,
+} from './fixtures/knowledge/types';
 import type { CatalogInfo } from '../datasources/entities/datasource.entity';
 import type { DatasetDoc } from '../datasets/repositories/datasets.repository';
 import type {
-  KnowledgeSnippet,
-  KnowledgeSnippetInput,
-} from '../knowledge/entities/knowledge-snippet.entity';
+  OntologyItem,
+  OntologyItemInput,
+  OntologyKind,
+} from '../ontology/entities/ontology-item.entity';
 import type { MetricDoc, MetricInput } from '../metrics/entities/metric.entity';
 
 /** Everything below is driven by the registry entry, never by a local copy. */
@@ -167,37 +171,34 @@ function inventory(
 }
 
 /**
- * The knowledge store as the loader sees it: `list` answers like the real
- * service (entries scoped to the dataset plus every global one) and `create`
- * stores the entry with source `user`, as the real create does.
+ * The ontology as the loader sees it: `list` answers like the real service
+ * (the dataset's items plus every shared one) and `create` stores the item on
+ * that dataset with source `user`, as the real create does.
  */
-function knowledgeDouble(initial: KnowledgeSnippet[] = []) {
+function ontologyDouble(initial: OntologyItem[] = []) {
   const entries = [...initial];
   let next = entries.length;
   return {
     entries,
-    list: jest.fn((query: { datasetId?: string } = {}) =>
+    list: jest.fn((datasetName: string) =>
       Promise.resolve(
         entries.filter(
-          (entry) =>
-            !query.datasetId ||
-            entry.scope == null ||
-            entry.scope.datasetId === query.datasetId,
+          (item) => item.dataset === null || item.dataset === datasetName,
         ),
       ),
     ),
-    create: jest.fn((input: KnowledgeSnippetInput) => {
+    create: jest.fn((datasetName: string, input: OntologyItemInput) => {
       // Stamped like the real store: the current millisecond.
       const now = new Date().toISOString();
-      const saved: KnowledgeSnippet = {
+      const saved = {
         ...input,
         id: `k-${++next}`,
-        scope: input.scope ?? null,
+        dataset: input.shared === true ? null : datasetName,
         enabled: input.enabled ?? true,
         source: 'user',
         createdAt: now,
         updatedAt: now,
-      };
+      } as OntologyItem;
       entries.push(saved);
       return Promise.resolve(saved);
     }),
@@ -224,7 +225,7 @@ function build(overrides: {
   catalogs?: CatalogInfo[];
   datasets?: DatasetDoc[];
   deletedDatasets?: number;
-  knowledge?: KnowledgeSnippet[];
+  knowledge?: OntologyItem[];
   metrics?: MetricDoc[];
 }) {
   const datasources = {
@@ -242,7 +243,7 @@ function build(overrides: {
     save: jest.fn().mockResolvedValue({ name: TESTING_DATASET_NAME }),
     delete: jest.fn().mockResolvedValue(overrides.deletedDatasets ?? 0),
   };
-  const knowledge = knowledgeDouble(overrides.knowledge);
+  const knowledge = ontologyDouble(overrides.knowledge);
   const metrics = metricsDouble(overrides.metrics);
   const service = new TestingDataService(
     datasources as never,
@@ -491,6 +492,16 @@ describe('TestingDataService.load', () => {
     });
   });
 
+  it('saves the postgres dataset without a schemas key, so reloading keeps the notes (BA-319)', async () => {
+    const { service, datasets } = build({});
+
+    const result = await service.load('world-cup', DEFAULT_INPUT);
+
+    expect(result.ok).toBe(true);
+    const [saved] = datasets.save.mock.calls[0] as [object];
+    expect(saved).not.toHaveProperty('schemas');
+  });
+
   it('reuses the existing datasource instead of creating a duplicate', async () => {
     const { service, datasources, datasets } = build({
       existing: [
@@ -554,7 +565,7 @@ describe('TestingDataService.load — knowledge seeds (R26)', () => {
   const METRICS = SEED.metrics.length;
   const ofKind = (kind: string) =>
     SEED.knowledge.filter((entry) => entry.kind === kind);
-  /** Spec order: the entry sent first is created last (knowledge R16). */
+  /** Spec order: the entry sent first is created last (dataset-ontology R22). */
   const SEND_ORDER = [
     ...ofKind('default_filter'),
     ...ofKind('instruction'),
@@ -569,8 +580,37 @@ describe('TestingDataService.load — knowledge seeds (R26)', () => {
 
   const catalogs = () =>
     inventory(HEALTH.requiredTables, DATABASE, 'health_insurance');
-  const titles = (entries: KnowledgeSnippet[]) =>
-    entries.map((entry) => `${entry.kind}:${entry.title}`);
+  const titles = (entries: OntologyItem[]) =>
+    entries.map((entry) => `${entry.kind}:${entry.name}`);
+  /**
+   * The item a seed entry is created as: M15's mapping of a snippet
+   * (data-model 6), its entities `<database>.<schema>.<table>` on the
+   * database this load used.
+   */
+  const asItem = (entry: SeedKnowledgeEntry) => {
+    const entities = entry.entities.map((entity) => `${DATABASE}.${entity}`);
+    if (entry.kind === 'term') {
+      return {
+        kind: 'concept' as OntologyKind,
+        name: entry.title,
+        description: entry.body,
+        ...(entry.synonyms ? { synonyms: entry.synonyms } : {}),
+        mappings: entities.map((entity) => ({ entity })),
+        enabled: true,
+      };
+    }
+    return {
+      kind: (entry.kind === 'default_filter'
+        ? 'constraint'
+        : 'instruction') as OntologyKind,
+      name: entry.title,
+      ...(entry.kind === 'default_filter'
+        ? { predicate: entry.body }
+        : { description: entry.body }),
+      entities,
+      enabled: true,
+    };
+  };
 
   it('ships a seed with several entries and metrics, so the message is plural', () => {
     expect(ENTRIES).toBeGreaterThan(1);
@@ -595,16 +635,10 @@ describe('TestingDataService.load — knowledge seeds (R26)', () => {
     });
     expect(knowledge.create).toHaveBeenCalledTimes(ENTRIES);
     CREATION_ORDER.forEach((entry, at) => {
-      expect(knowledge.create.mock.calls[at][0]).toEqual({
-        kind: entry.kind,
-        scope: { datasetId: 'Health Insurance' },
-        title: entry.title,
-        body: entry.body,
-        ...(entry.synonyms ? { synonyms: entry.synonyms } : {}),
-        // `<database>.<schema>.<table>` on the database this load used.
-        entities: entry.entities.map((entity) => `${DATABASE}.${entity}`),
-        enabled: true,
-      });
+      expect(knowledge.create.mock.calls[at]).toEqual([
+        'Health Insurance',
+        asItem(entry),
+      ]);
     });
     expect(knowledge.entries.every((entry) => entry.source === 'user')).toBe(
       true,
@@ -631,16 +665,16 @@ describe('TestingDataService.load — knowledge seeds (R26)', () => {
 
     await service.load('health-insurance', INPUT);
 
-    const created = knowledge.create.mock.calls.map(([input]) => input);
+    const created = knowledge.create.mock.calls.map(([, input]) => input);
     const kinds = created.map((input) => input.kind);
     const terms = ofKind('term').length;
     const instructions = ofKind('instruction').length;
     expect(kinds).toEqual([
-      ...Array<string>(terms).fill('term'),
+      ...Array<string>(terms).fill('concept'),
       ...Array<string>(instructions).fill('instruction'),
-      ...Array<string>(ofKind('default_filter').length).fill('default_filter'),
+      ...Array<string>(ofKind('default_filter').length).fill('constraint'),
     ]);
-    expect(created.map((input) => input.title)).toEqual([
+    expect(created.map((input) => input.name)).toEqual([
       ...ofKind('term')
         .map((entry) => entry.title)
         .reverse(),
@@ -662,7 +696,7 @@ describe('TestingDataService.load — knowledge seeds (R26)', () => {
     const newestFirst = [...knowledge.entries].sort((a, b) =>
       b.updatedAt.localeCompare(a.updatedAt),
     );
-    expect(newestFirst.map((entry) => entry.title)).toEqual(
+    expect(newestFirst.map((entry) => entry.name)).toEqual(
       SEND_ORDER.map((entry) => entry.title),
     );
   });
@@ -685,7 +719,7 @@ describe('TestingDataService.load — knowledge seeds (R26)', () => {
     const { service, knowledge, metrics } = build({ catalogs: catalogs() });
     await service.load('health-insurance', INPUT);
     const edited = knowledge.entries[0];
-    edited.body = 'Our own wording of the status rule.';
+    edited.description = 'Our own wording of the status rule.';
     edited.enabled = false;
     const deleted = knowledge.entries.splice(1, 1)[0];
     const deletedMetric = metrics.docs.splice(0, 1)[0];
@@ -695,10 +729,11 @@ describe('TestingDataService.load — knowledge seeds (R26)', () => {
     expect(again.message).toBe(
       `${LOADED} — added 1 knowledge entry and 1 metric`,
     );
-    expect(edited.body).toBe('Our own wording of the status rule.');
+    expect(edited.description).toBe('Our own wording of the status rule.');
     expect(edited.enabled).toBe(false);
     expect(knowledge.create).toHaveBeenLastCalledWith(
-      expect.objectContaining({ kind: deleted.kind, title: deleted.title }),
+      'Health Insurance',
+      expect.objectContaining({ kind: deleted.kind, name: deleted.name }),
     );
     expect(metrics.create).toHaveBeenLastCalledWith(
       expect.objectContaining({ name: deletedMetric.name }),
@@ -710,12 +745,12 @@ describe('TestingDataService.load — knowledge seeds (R26)', () => {
 
   it('holds an entry only by kind and title on that dataset, and a metric by name', async () => {
     const [first, second] = SEED.knowledge;
-    const other = (overrides: Partial<KnowledgeSnippet>): KnowledgeSnippet => ({
-      id: `held-${overrides.title}-${String(overrides.scope?.datasetId)}`,
-      kind: first.kind,
-      scope: { datasetId: 'Health Insurance' },
-      title: first.title,
-      body: 'Written by hand.',
+    const other = (overrides: Partial<OntologyItem>): OntologyItem => ({
+      id: `held-${overrides.name}-${String(overrides.dataset)}`,
+      kind: asItem(first).kind,
+      dataset: 'Health Insurance',
+      name: first.title,
+      description: 'Written by hand.',
       enabled: true,
       source: 'user',
       createdAt: '2026-10-01T00:00:00.000Z',
@@ -732,16 +767,17 @@ describe('TestingDataService.load — knowledge seeds (R26)', () => {
     const { service, knowledge, metrics } = build({
       catalogs: catalogs(),
       knowledge: [
-        // Not held: global, another dataset, another kind.
-        other({ scope: null }),
-        other({ scope: { datasetId: 'Genomics' } }),
+        // Not held: shared, another dataset, another kind.
+        other({ dataset: null }),
+        other({ dataset: 'Genomics' }),
         other({
-          kind: first.kind === 'instruction' ? 'term' : 'instruction',
+          kind:
+            asItem(first).kind === 'instruction' ? 'concept' : 'instruction',
         }),
-        // Held: same kind, the title re-cased by hand, on this dataset.
+        // Held: same kind, the name re-cased by hand, on this dataset.
         other({
-          kind: second.kind,
-          title: `  ${second.title.toUpperCase()} `,
+          kind: asItem(second).kind,
+          name: `  ${second.title.toUpperCase()} `,
         }),
       ],
       metrics: [userMetric],
@@ -753,10 +789,12 @@ describe('TestingDataService.load — knowledge seeds (R26)', () => {
       `${LOADED} — added ${ENTRIES - 1} knowledge entries and ${METRICS - 1} metrics`,
     );
     expect(knowledge.create).not.toHaveBeenCalledWith(
-      expect.objectContaining({ title: second.title }),
+      'Health Insurance',
+      expect.objectContaining({ name: second.title }),
     );
     expect(knowledge.create).toHaveBeenCalledWith(
-      expect.objectContaining({ title: first.title }),
+      'Health Insurance',
+      expect.objectContaining({ name: first.title }),
     );
     expect(metrics.create).not.toHaveBeenCalledWith(
       expect.objectContaining({ name: userMetric.name }),
@@ -818,12 +856,13 @@ describe('TestingDataService.load — knowledge seeds (R26)', () => {
   it('still succeeds when an entry cannot be saved, says why, and keeps what it created', async () => {
     const { service, knowledge, metrics } = build({ catalogs: catalogs() });
     const create = knowledge.create.getMockImplementation() as (
-      input: KnowledgeSnippetInput,
-    ) => Promise<KnowledgeSnippet>;
-    knowledge.create.mockImplementation((input) =>
+      datasetName: string,
+      input: OntologyItemInput,
+    ) => Promise<OntologyItem>;
+    knowledge.create.mockImplementation((datasetName, input) =>
       knowledge.create.mock.calls.length === 3
-        ? Promise.reject(new BadRequestException('body is required'))
-        : create(input),
+        ? Promise.reject(new BadRequestException('description is required'))
+        : create(datasetName, input),
     );
 
     const result = await service.load('health-insurance', INPUT);
@@ -831,7 +870,7 @@ describe('TestingDataService.load — knowledge seeds (R26)', () => {
     expect(result.ok).toBe(true);
     expect(result.datasetName).toBe('Health Insurance');
     expect(result.message).toBe(
-      `${LOADED} — could not add its knowledge seed: body is required`,
+      `${LOADED} — could not add its knowledge seed: description is required`,
     );
     expect(knowledge.entries).toHaveLength(2);
     expect(metrics.create).not.toHaveBeenCalled();
@@ -904,8 +943,11 @@ describe('TestingDataService.load — knowledge seeds (R26)', () => {
       );
       expect(knowledge.entries).toHaveLength(seed.knowledge.length);
       for (const entry of knowledge.entries) {
-        expect(entry.scope).toEqual({ datasetId: fixture.datasetName });
-        for (const entity of entry.entities ?? []) {
+        expect(entry.dataset).toBe(fixture.datasetName);
+        for (const entity of [
+          ...(entry.entities ?? []),
+          ...(entry.mappings ?? []).map((mapping) => mapping.entity),
+        ]) {
           expect(entity.startsWith(`demo.${fixture.schema}.`)).toBe(true);
         }
       }
@@ -1401,6 +1443,17 @@ describe('TestingDataService.load — self-registering intellify-api (R21)', () 
     };
     expect(dataset.tables).toContain('api.intellify.funding_types');
     expect(dataset.tables).toHaveLength(10);
+  });
+
+  it('saves the REST dataset without a schemas key, so reloading keeps the notes (BA-319)', async () => {
+    health({ ok: true, database: 'up' });
+    const { service, datasets } = buildApi(PATHS);
+
+    const result = await service.load('intellify-api', {});
+
+    expect(result.ok).toBe(true);
+    const dataset = (datasets.save.mock.calls as unknown[][])[0][0] as object;
+    expect(dataset).not.toHaveProperty('schemas');
   });
 
   it('falls back to explicit endpoint definitions and reuses the record', async () => {

@@ -149,9 +149,11 @@ describe('the rfp eval set (agents.md 8.1)', () => {
   });
 
   it('keeps the assistant sets, one per set file variant, and lists sets per agent', () => {
-    expect(ASSISTANT_EVAL_SETS.map((set) => set.id)).toEqual(
-      loadEvalSets().map((set) => set.id),
-    );
+    // The sets of the files, then `schema-notes`, defined in code (BA-318).
+    expect(ASSISTANT_EVAL_SETS.map((set) => set.id)).toEqual([
+      ...loadEvalSets().map((set) => set.id),
+      'schema-notes',
+    ]);
     expect(ASSISTANT_EVAL_SETS.slice(0, 4).map((set) => set.id)).toEqual([
       'world-cup',
       'world-cup-rest',

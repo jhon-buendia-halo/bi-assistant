@@ -1,3 +1,4 @@
+import { checks } from '@mastra/evals/checks';
 import { runEvals } from '@mastra/core/evals';
 import { RequestContext } from '@mastra/core/request-context';
 import type { MastraScorer } from '@mastra/core/evals';
@@ -28,6 +29,10 @@ import {
   toolSelectionFrom,
 } from '../agent-tools';
 import { caseReferenceRunner, runResultSetCheck } from './result-set-check';
+import {
+  usesConsumptionSchema,
+  withLandingCopy,
+} from './schema-notes-eval-checks';
 import type { ResultSetCheckOptions } from './result-set-check';
 import { loadEvalSets } from './eval-set-files';
 import type { EvalCategory, EvalCriterion, EvalSplit } from './eval-set-files';
@@ -149,6 +154,11 @@ export interface AssistantEvalCase {
    * result-set check from the attempt's memory record, in file order.
    */
   memoryChecks?: MemoryCheckSpec[];
+  /**
+   * Reshapes the dataset snapshots the orientation block is built from (not
+   * the ones the tools see), for cases that stage what the model is told.
+   */
+  orientationSnapshots?: (snapshots: DatasetSnapshot[]) => DatasetSnapshot[];
 }
 
 /** One tool call as the agent made it, with its parsed input and output. */
@@ -225,17 +235,59 @@ export interface AssistantEvalSet {
 }
 
 /**
- * Every question set the assistant suite offers, in the order of
- * `EVAL_SET_FILES`: World Cup, then its REST API and Databricks variants,
- * Formula 1, the REST- and Databricks-only sets and the
- * synthetic domains. The questions are data under `./sets/` (ADR-0015), read
- * and checked by `loadEvalSets` when this module loads, so a set file the
- * loader refuses stops the backend instead of running a broken case. Adding
- * a question is an edit to a set file, not to this module or the questions
- * tab.
+ * Epic BA-318 acceptance: the same World Cup tables are offered in a Landing
+ * schema that does not exist in the database and in the real Consumption
+ * schema, with the owner's schema notes. Passes only when the assistant reads
+ * the Consumption schema.
  */
-export const ASSISTANT_EVAL_SETS: AssistantEvalSet[] =
-  toAssistantEvalSets(loadEvalSets());
+const SCHEMA_NOTES_EVAL_CASES: AssistantEvalCase[] = [
+  {
+    id: 'schema-notes-consumption',
+    question: 'How many goals were scored in the 2022 World Cup?',
+    intent:
+      'Schema notes (BA-318): the data is listed in a Landing and a Consumption schema; the notes must steer the assistant to Consumption.',
+    orientationSnapshots: withLandingCopy,
+    scorers: [checks.calledTool('run_readonly_sql'), checks.matches(/\b24\b/)],
+    customChecks: [usesConsumptionSchema],
+    expectedSql:
+      'SELECT SUM(match.home_goals + match.away_goals) AS goals ' +
+      'FROM world_cup.matches match ' +
+      'JOIN world_cup.tournaments tournament ON tournament.id = match.tournament_id ' +
+      'WHERE tournament.tournament_year = 2022',
+  },
+];
+
+/**
+ * The `schema-notes` set (BA-318) is defined in code, like the RFP Builder's
+ * `rfp` set: its case reshapes the orientation block and carries a custom
+ * check, which a question bank file cannot express. It follows the sets of
+ * the files.
+ */
+const SCHEMA_NOTES_EVAL_SET: AssistantEvalSet = {
+  id: 'schema-notes',
+  name: 'Schema notes',
+  description:
+    'One question against the bundled World Cup sample, whose data the ' +
+    'prompt lists in a Landing and a Consumption schema with schema notes; ' +
+    'the assistant must use the Consumption schema (BA-318).',
+  fixtureId: 'world-cup',
+  cases: SCHEMA_NOTES_EVAL_CASES,
+};
+
+/**
+ * Every question set the assistant suite offers: the sets of the files, in
+ * the order of `EVAL_SET_FILES` (World Cup, then its REST API and Databricks
+ * variants, Formula 1, the REST- and Databricks-only sets and the synthetic
+ * domains), then `schema-notes`, defined in code above. The files' questions
+ * are data under `./sets/` (ADR-0015), read and checked by `loadEvalSets`
+ * when this module loads, so a set file the loader refuses stops the backend
+ * instead of running a broken case. Adding a question is an edit to a set
+ * file, not to this module or the questions tab.
+ */
+export const ASSISTANT_EVAL_SETS: AssistantEvalSet[] = [
+  ...toAssistantEvalSets(loadEvalSets()),
+  SCHEMA_NOTES_EVAL_SET,
+];
 
 /**
  * Every case across every set, flattened. Case ids are unique suite-wide, so
@@ -731,9 +783,14 @@ export async function createEvalSession(
 ): Promise<EvalSession> {
   const name =
     `${agentKey ?? 'assistant'} eval ${new Date().toISOString()}`.slice(0, 64);
-  const session = agentKey
+  let session = agentKey
     ? await sessions.createFromAgent(agentKey, name)
     : await sessions.create(name, datasets);
+  // An agent that binds every qualifying dataset (Data Readiness) is narrowed
+  // to the run's datasets, matching the orientation the case is given.
+  if (agentKey && datasets.length > 0) {
+    session = (await sessions.narrowDatasets(session.id, datasets)) ?? session;
+  }
   await sessions.appendAssistantMessage(session.id, {
     content: EVAL_SESSION_PLACEHOLDER_ANSWER,
   });
@@ -969,10 +1026,10 @@ export async function runAssistantEvalCase(
   datasets: string[],
   sessionId?: string,
   /**
-   * The curated-knowledge system block (`KnowledgeService.definitionBlock`)
+   * The curated-knowledge system block (`OntologyService.definitionBlock`)
    * for these datasets — same block a real chat turn gets from
    * `SessionsService.agentContext`. `EvalRunsService`, which runs the suite
-   * for the app and the CLI, populates this from `KnowledgeService`; omitted
+   * for the app and the CLI, populates this from `OntologyService`; omitted
    * (or empty) when no caller wires one in.
    */
   knowledgeBlock?: string,
@@ -1067,7 +1124,8 @@ export async function runAssistantEvalCase(
       : undefined;
     const orientation = await target.orientation({
       datasets,
-      snapshots: datasetSnapshots,
+      snapshots:
+        evalCase.orientationSnapshots?.(datasetSnapshots) ?? datasetSnapshots,
       requestContext,
       vars,
     });

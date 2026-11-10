@@ -31,7 +31,7 @@ Capability-local vocabulary:
   - While no dataset bound to a PostgreSQL or Databricks datasource exists, Start chat SHALL be disabled, and its title SHALL read `Add a PostgreSQL or Databricks dataset first`.
   - Its detail view SHALL have the Official agent's tabs ([agents-evals](../agents-evals/spec.md) R5):
     - the System Prompt tab shows the prompt as served and allows the built-in prompt edit; an edited prompt SHALL still start with `You are the Data Readiness Agent`;
-    - the Skills tab lists the skill `data-readiness` as Built-in and On demand;
+    - the Skills tab lists the skills `data-readiness` and `readiness-drilldown` as Built-in and On demand;
     - the Tools tab lists its own tools.
 - R2. **Start chat** on the Data Readiness Agent SHALL create a session at once, with no form.
   - The session is named "Data Readiness" and bound to the agent. It covers every dataset bound to a PostgreSQL or Databricks datasource, ordered by dataset name.
@@ -50,19 +50,24 @@ Capability-local vocabulary:
   - `assess_data_readiness` runs an assessment of one session dataset and stores the report.
   - `get_readiness_report` reads a stored report.
   - `list_readiness_reports` lists the stored reports of a session dataset's datasource, newest first.
+  - `describe_entity` and `run_readonly_sql`, the assistant's shared dataset tools, to show the records behind a finding (R4, ADR-0035). They are session-scoped, read-only and guarded as in [agents.md](../../system/agents.md) 3.2 and 3.4.
 
-  It SHALL have no SQL tool, no dataset-browsing tool and no workspace tool. A tool SHALL never fail the turn: errors reach the model as `{ error }` text ([agents.md](../../system/agents.md) 3.13).
-- R4. The agent SHALL quote a score, a band or a finding only from a tool result in the conversation. It SHALL never estimate, round differently, re-weight or "adjust" a score. Asked to change one, it SHALL say in one sentence that scores come from the deterministic engine and cannot be changed in chat. With more than one dataset in the session and none named, it SHALL ask which one with `ask_clarification`. It SHALL decline, in one sentence, anything that is not about the readiness of the session's data. The prompt and its rules are in [agents.md](../../system/agents.md) 2.10.
+  It SHALL have no workspace tool and no other dataset-browsing tool. A tool SHALL never fail the turn: errors reach the model as `{ error }` text ([agents.md](../../system/agents.md) 3.13).
+- R4. The agent SHALL quote a score, a band or a finding only from a tool result in the conversation. It SHALL never estimate, round differently, re-weight or "adjust" a score. Asked to change one, it SHALL say in one sentence that scores come from the deterministic engine and cannot be changed in chat. With more than one dataset in the session and none named, it SHALL ask which one with `ask_clarification`. The prompt and its rules are in [agents.md](../../system/agents.md) 2.10.
+  - **Scope.** It SHALL run SQL only to show the records behind a finding, and to answer data-quality questions about the session's data (which rows are null, invalid, inconsistent, duplicated, orphaned, stale or unreasonable). It SHALL decline anything else in one sentence. General analysis (totals, trends, rankings) is declined with a pointer to Questions to Insights.
+  - **Drill-down.** To show records it SHALL load the `readiness-drilldown` skill, call `describe_entity`, then `run_readonly_sql`. The answer SHALL lead with the count and show up to 20 rows in a table.
+  - A query result SHALL never change, recompute or replace a score or a finding. When a query's count differs from a finding's, the agent SHALL give both and say the data may have changed since the report was generated.
+  - R6 is about the assessment's profiler only. It does not limit the chat's drill-down queries.
 - R5. After a successful `assess_data_readiness` or `get_readiness_report`, the app SHALL:
   - show that report's **scorecard** in the right panel and open the panel (R25);
   - attach a readiness card to the answer that carries the report (R25).
 
-  The model sees only a compact summary (overall score, band, the ten dimension scores, the finding count and up to 20 findings, most severe first), never the full finding list.
+  The model sees only a compact summary (overall score, band, the ten dimension scores, the finding count and up to 20 findings, most severe first, and the not-profiled entities, R31), never the full finding list.
 
 ### Profiling
 
 - R6. An assessment SHALL build a source profile from aggregate, read-only queries against the datasource only: counts, distinct counts, minimum and maximum, grouped duplicate counts, orphan counts through a left join, pattern-mismatch counts, and privilege lookups.
-  - It SHALL read no row values, and every statement SHALL pass the read-only guard ([datasources](../datasources/spec.md)).
+  - It SHALL read no row values, and every statement SHALL pass the read-only guard ([datasources](../datasources/spec.md)). This is the profiler's rule; the chat's drill-down queries (R4) read rows through the user SQL path.
   - Each statement SHALL time out after 15 s.
   - A statement that fails or times out SHALL leave the statistic it measures absent. The checks that need that statistic then skip it, and the assessment carries on.
 - R7. Per entity in scope, the profile SHALL hold:
@@ -188,6 +193,26 @@ Thresholds are fixed at these defaults, with no setting to change them:
   - A finding matches a label when dimension, namespace, entity and field are equal and the severity is within one level.
   - Precision and recall SHALL meet the reference project's floors for those dialects.
 
+### Speed, not-profiled entities and progress (ADR-0033)
+
+These rules refine R6 to R11 without changing any statistic, check or score formula.
+
+- R28. **One pooled session per assessment.** An assessment SHALL profile through one connection and session per worker, reused for every statement of that assessment, and SHALL read the inventory once.
+  - It profiles 8 tables at a time on Databricks and 4 on PostgreSQL.
+  - Each statement keeps the 15 s timeout (R6) and the read-only guard.
+- R29. **Per-table statistics.** A readable entity's statistics statement SHALL also hold the normalized distinct counts (R10) and the invalid-format counts (R9) of its text columns.
+  - When that statement fails, the profiler SHALL fall back to separate per-column statements for the same statistics.
+  - Statistics SHALL be exact aggregates. No approximate count and no sampling is used.
+- R30. **Row-count gate.** The profiler SHALL count an entity's rows first. An entity above 100,000,000 rows SHALL NOT be column-profiled and is recorded as not profiled with the reason `too-large` and its row count.
+  - An entity whose statistics statement times out SHALL be recorded as not profiled with the reason `timed-out`.
+  - The checks that need the missing statistics are skipped for both, as R6 says, so no score formula changes. The entity still counts as assessed for accessibility. Its profiled row count is `0`, so no completeness or uniqueness check runs on it; the counted rows are kept for the report list only (R31).
+- R31. **Not-profiled entities in the report.** A stored report SHALL list its not-profiled entities, each with its entity (`namespace.name`), reason (`too-large` or `timed-out`) and, for `too-large`, its row count. The scorecard SHALL show the list.
+  - The summary the model receives (R5) SHALL carry `notProfiled`, so the agent can say which entities were not profiled.
+  - A report with none lists none, and an older stored report reads as having none.
+- R32. **Live progress.** While `assess_data_readiness` runs, the app SHALL show its phase on the running tool row: `Listing tables…`, `Profiling <entity> (<done>/<total>)…`, `Checking relationships…`, `Running checks…` and `Writing the report…`, in that order.
+  - Progress is sent to the browser only. The model never sees it, and it is not stored: after a reload the tool row shows its final state.
+- R33. **Stop and reload cancel the assessment.** Stopping the turn or reloading SHALL cancel every in-flight statement and stop scheduling tables. No report is stored for an assessment that did not finish.
+
 ## Edge cases and errors
 
 - A datasource that is neither PostgreSQL nor Databricks: the API answers 400 `Data readiness supports PostgreSQL and Databricks datasources only`, and the tool returns the same text as `{ error }`.
@@ -198,14 +223,17 @@ Thresholds are fixed at these defaults, with no setting to change them:
 - An unreachable datasource: the API answers 502 with the connector's message. The tool returns `{ error: 'Could not reach "<datasource>": <message>' }`, and the agent tells the user to test the connection in Datasources.
 - `assess_data_readiness` with no session dataset name when the session has several: `{ error: 'This session has several datasets: <names>. Name the one to assess.' }`. With a name that is not a session dataset: `{ error: 'Dataset "<name>" is not in this session. Choose one of: <names>.' }`.
 - `get_readiness_report` with no id returns the newest report of the session dataset's datasource. With none stored it returns `{ error: 'No assessment has been run for "<datasource>" yet.' }`.
-- Long assessments: the chat shows the tool step as running until it ends. Stopping the turn abandons the result, and nothing is stored for an assessment that did not finish.
+- Long assessments: the chat shows the tool step as running, with the current phase and table count (R32), until it ends. Stopping the turn or reloading cancels the in-flight statements and nothing is stored for an assessment that did not finish (R33).
+- A table above 100,000,000 rows, or whose statistics statement times out: it is listed as not profiled with its reason (R30, R31) and adds no statistics-based checks. A catalog full of such tables yields a report with many not-profiled entities rather than a long wait.
+- A folded statistics statement that fails: the profiler falls back to per-column statements for that table (R29). If those fail too, the statistics stay absent (R6).
 
 ## Contracts
 
 - Routes `POST /data-readiness/assessments`, `GET /data-readiness/assessments` and `GET /data-readiness/assessments/:id`, plus the `readiness-report` stream event: [api.md](../../system/api.md), sections 2.17 and 3.1. The agent summary (Official kind, chat requirement): section 2.6.
 - The `readiness_reports` collection, the answer's `readinessReport` reference and the `readiness` panel item: [data-model.md](../../system/data-model.md).
 - The agent, its prompt, tools and skill: [agents.md](../../system/agents.md), sections 2.10, 3.13, 7.4 and Appendix D; its eval set: section 8.
-- Decision: ADR-0031 in [architecture.md](../../system/architecture.md).
+- The `tool-progress` stream event: [api.md](../../system/api.md) 3.1. The not-profiled field: [data-model.md](../../system/data-model.md).
+- Decisions: ADR-0033 and ADR-0031 in [architecture.md](../../system/architecture.md).
 
 ## UI
 
@@ -244,7 +272,14 @@ Feature: Data readiness
     Then the right panel shows the readiness scorecard for the World Cup datasource
     And the scorecard shows an overall score out of 100 and a maturity band
     And it shows ten dimension bars, with "Accuracy" and "Currency" marked "Not assessed"
+    And while it runs the tool row shows the assessment progress
     And the answer carries a readiness card with "Open scorecard"
+
+  Scenario: A table too large to profile is listed as not profiled
+    Given a table in the dataset has more than 100,000,000 rows
+    When I assess the dataset from the chat
+    Then the scorecard lists that table as not profiled, with the reason "too-large" and its row count
+    And the assessment finishes without waiting on that table's statistics
 
   Scenario: The scorecard shows the same numbers as the API
     Given an assessment of the World Cup datasource was run from the chat
@@ -266,6 +301,20 @@ Feature: Data readiness
     Then the findings table shows only high completeness findings
     When a filter combination matches nothing
     Then the table reads "No findings match these filters."
+
+  Scenario: The agent shows the records behind a finding
+    Given a Data Readiness session on the "Formula 1" dataset
+    When I ask "what are the records with second_nationality_country_id null values"
+    Then the agent runs a read-only query on "driver" for rows where "second_nationality_country_id" is null
+    And the answer leads with the number of such rows and shows them in a table
+    And no score changes
+
+  Scenario: A general analysis question is declined
+    Given a Data Readiness session on the "Formula 1" dataset
+    When I ask "how many races were there in 2010?"
+    Then the agent declines in one sentence
+    And it says Questions to Insights answers that
+    And it runs no query
 ```
 
 ## Acceptance
@@ -278,5 +327,6 @@ Feature: Data readiness
    - completeness at 0 with the other assessed dimensions at 100 gives overall 88, Managed.
 2. The golden suite (R27) meets the reference floors, and a determinism test gives identical reports for the same profile and `now`.
 3. `POST /data-readiness/assessments` on the World Cup PostgreSQL sample stores a report whose overall score is the mean of its eight assessed dimension scores. `GET` lists it and reads it back.
-4. The hub shows the Data Readiness Agent under Official. A session started from it runs the agent: its first request offers no `run_readonly_sql`. An assessment shows the scorecard, and Past assessments reopens an earlier one.
-5. The Data readiness Feature passes on the web target at the acceptance gate. The `data-readiness` eval set passes at 100 % over 3 runs, and the assistant's and RFP Builder's eval sets are unchanged.
+4. The hub shows the Data Readiness Agent under Official. A session started from it runs the agent: its first request offers `describe_entity` and `run_readonly_sql` besides the readiness tools. An assessment shows the scorecard, and Past assessments reopens an earlier one.
+5. An assessment profiles through one pooled session per worker, folds the text-column probes into the per-table statement, lists tables above 100,000,000 rows as not profiled, shows its phases on the running tool row, and is cancelled by Stop without storing a report (R28 to R33). Its scores equal those of the unpooled profiler for the same profile.
+6. The Data readiness Feature passes on the web target at the acceptance gate. The `data-readiness` eval set passes at 100 % over 3 runs, and the assistant's and RFP Builder's eval sets are unchanged.

@@ -14,6 +14,109 @@ Entry template:
 
 ---
 
+## 2026-11-10 — 0.4.5 Deterministic QA, demo videos and demo artifacts (BA-119)
+
+### What went well
+- Keeping the 0.4.3 dry-run prototype (the `DEMO=1` switch and the `scenarioStep` caption helper) paid off: the demo recording started from working code instead of from scratch.
+- The gate caught a real regression on `main`: 6 Prettier errors merged by BA-320 (`assistant.evals.spec.ts`, `narrowDatasets`) that nobody had run lint to find.
+- Running the new tool on the real showcase story (1.21.6) found its bugs before anyone depended on it; the `tests.md` counts were checked against the JSON reports.
+- Unit tests of the selection and rendering logic (`missingSpecs`, "Listed in step 6 but not run") made "removing an impacted spec fails the gate" provable without a live run.
+- The lane lock worked on its first real collision: a second run waited and ran after the first.
+
+### What went wrong
+- The first gate run lost its logs: the report folder sat under `frontend/test-results`, which Playwright empties at the start of every run. The waiting run crashed for the same reason, because it set up its folder before taking the lane.
+- `demo.txt` kept terminal colour codes, and Playwright's webm has no duration metadata, so seeking needs a player workaround.
+- A `sed` replacement with `\u` uppercased the next character and corrupted a regex.
+- A `--only-changed` selection exploded when a shared fixture changed, which would have run most of the suite for a small change.
+- 43 backend unit tests fail on this Windows checkout (CRLF fixtures, file mode) on `main` too, so the gate cannot be fully green here.
+
+### What to do differently
+- Never put your own files under `frontend/test-results`; Playwright empties it. Use a git-ignored folder of your own (`.qa-reports/`).
+- Set up shared folders only after taking the lock, never before.
+- Edit regexes with the Edit tool, not `sed`.
+- For the fast loop use `--base HEAD` (the story's own changes), not `--only-changed`, which explodes when a shared fixture changes.
+- Run a new tool on a real story before calling it done, and compare its counts with the raw reports.
+
+---
+
+## 2026-11-10 — 1.21.1–1.21.11 Questions to Insights v2, Data Readiness drill-down, User personas and the dataset ontology (BA-320)
+
+### What went well
+- The ontology design was approved from a review page before any code, and its contract was written in [docs/plans/ba-320-dataset-ontology.md](docs/plans/ba-320-dataset-ontology.md). Four parallel units then built the backend core, the bootstrap, the frontend and the specs against that one contract, with few conflicts.
+- A context-equality unit test proved the assistant's context block byte-identical for migrated data, so replacing Knowledge with the ontology changed nothing the assistant is told.
+- Live smoke runs caught real issues the unit tests missed: Data Readiness fanning queries across all datasources of a session and the SQL fixer rewriting the strays into unrelated queries (Block D1 now carries `datasourceId`); the bootstrap failing with the structured-output "Too big" error because the schema capped drafts at 15; the graph layout piling unconnected nodes into the corners.
+- The per-story fast loop, with the user testing each story by hand before the slow steps, kept the later requests (graph, Ontologies card, default persona) small and fast.
+
+### What went wrong
+- The first "run the app" used plain `ng serve`. Its relative API base URL cannot reach the backend in a browser (there is no dev proxy), so the app showed "Could not load configured datasources".
+- The CRLF working copies on Windows make about 10 backend suites and `check-specs`' Playwright-mirror check fail on `main` too. That hid one real regression (the built-in skills list missing `readiness-drilldown`) until a full-suite baseline comparison.
+- An Angular template used `picker()?.index === null`, which is true when the signal itself is null (safe navigation yields null), and that hid the Add mapping button.
+- Edit forms opened at the top of a long list, and the three unlabeled mapping boxes confused the user. That UX was inherited from the old Knowledge form and should have been designed.
+- The dataset editor header is hidden on the Ontology tab, which broke heading order (axe) and left the tab without context.
+- A subagent edited a template with `sed` despite the brief.
+- The stale `backend/public` bundle made Playwright fail until it was rebuilt: the web target serves the built bundle.
+
+- The 1.21.3 workflow bar shipped through the fast loop with a chat bug the user never hit by hand: a failed step's `workflow` event re-synced the transcript over the question and the error. Only the acceptance-gate E2E (stub dropping the connection) found it.
+- The Data Readiness eval harness bound every PostgreSQL dataset to agent sessions and ignored `EVAL_DATASETS`; 1.21.2's setup script loads all four samples, so the agent rightly asked which dataset and cases failed. The harness now narrows agent sessions to the run's datasets.
+- The new drill-down eval caught the agent describing rows its query never returned; the skill now forbids conclusions about unreturned records.
+### What to do differently
+- For browser checks, run web mode (`build:all` plus `cli.js`), never bare `ng serve`.
+- Compare the full unit suites against `main` before calling a failure "pre-existing".
+- In Angular templates compare a signal's value against null explicitly, not through `?.`.
+- Review list and editor UX at design time: where the editor opens, and labelled controls.
+- Rebuild `backend/public` before running Playwright.
+- Structured-output schemas must not cap array lengths the service already caps; cap after post-processing.
+- Merge `origin/main` into the epic branch at the start of the acceptance gate, not at the end: `main` gained the BA-119 agent org (and its planned demo-video evidence) while this epic was in its fast loop.
+- Give the eval harness the datasets a run names for agent-bound sessions, and run new eval cases several times before calling a prompt done: one rule ("state only facts a tool result shows") took the drill-down case from 2 failures in 9 runs to none.
+
+---
+
+## 2026-11-09 — 0.4.3 Agent roles for the token-minimal agent org (BA-119)
+
+### What went well
+- The design was settled on the roadmap before any code. The user's three decisions, the token-minimal rework and the video placement were all written into the stories and the epic spec, so the build itself had no rework.
+- A docs check before writing the agents found that `isolation: worktree` starts from `main`, not the epic branch, and that subagents cannot call `Workflow`. Both shaped the definitions: the builder cuts its unit branch first, and nothing depends on an agent starting the pipeline.
+- Each headless session's `init` message lists the tools and agents it actually has. That proved the manager cannot edit, which a permission denial alone would not.
+- The dry run surfaced facts that no plan would have: the fixture's own browser context ignores Playwright's `video` setting, the frontend has no lint config, the builder's allowed commands lacked Python, and linking `node_modules` from the main checkout makes a unit worktree ready instantly.
+
+### What went wrong
+- A stray `git checkout origin/main -- .`, tacked onto a spec-check command, reset my uncommitted roadmap and epic-spec edits. They had to be re-applied.
+- The first demo story was backend-only, so it produced no video, the very thing the user wanted to see. I didn't say so before running it.
+- A `sed` that set the epic spec's status dropped the "Confirmed (0.4.1–0.4.2)" part, and a follow-up commit had to restore it.
+- Every agent still loads the full CLAUDE.md, although its brief replaces it. The UI builder took 28 turns and $0.68.
+- Heredoc-written helper scripts were mangled twice (a regex lost its backslash, `python3` is missing on Windows). Writing them with the Write tool worked first time.
+
+### What to do differently
+- Never append a `git checkout … -- .` or another destructive command to a check command. Run destructive git commands alone, after `git status`.
+- When a demo or dry run is meant to show a specific artifact (a video, a screenshot), pick a story that produces it, and say up front what the run will and won't show.
+- Edit a status line with the Edit tool and show the result, not a `sed` that rewrites the whole value.
+- Add `omitClaudeMd: true` to agents that work from a brief, and measure the builder's turns and cost before and after.
+- On Windows, use `py -3` for Python, and write any script longer than a line with the Write tool, not a heredoc.
+
+## 2026-11-09 — 1.20.1–1.20.5 Schema notes, readiness speed and progress, text selection (BA-318)
+
+### What went well
+- Measuring before designing. The Fable analysis read the user's stored run (296 s, model only 13 s) and timed variants live (new session per statement 0.8 s vs 0.19 s reused; approximate counts slower), so the speed work targeted transport, not the engine, and rejected sampling with numbers.
+- A score-equality harness built from `main`'s dist before any change (fixed `now`, sorted findings) proved the World Cup and US Health results byte-identical after every round of changes.
+- Live runs against the user's real warehouse caught what unit tests and the small PostgreSQL samples could not: the BA-322 `https://https//` host, and a folded statement that made `tpch.lineitem` 12× slower and pushed 15 small tables into `timed-out`.
+- An independent review after integration found a silent score inflation (not-profiled tables kept their row count, so completeness counted missing nulls as zero) and an abort turned into a 502, before the user saw either.
+- Shared contracts written by the lead before fan-out (types, member names, chunk shapes) let 10 parallel units land with few conflicts.
+
+### What went wrong
+- I misread the first request: "layer and description" were meant for the schemas in the dataset tree (the user was on Edit dataset), and I built them on datasources. The clarifying questions never named the screen. A whole 12-unit round was reverted.
+- The unit tests for the folded statement used a fake profiler with no cost model, so "fold everything into one statement" looked free; only the live Databricks run showed the cost.
+- Subagents' shared `/tmp` scripts clobbered each other twice; one unit's edits silently failed to apply until it switched to the Edit tool.
+- A diagnosis unit force-closed Playwright Chromium processes that may have belonged to another session.
+- The progress line the user reported missing could not be reproduced; the root cause stayed open until the gate's E2E surfaced the missing SSE charset (a different symptom), so the user's report may have had another cause.
+- Checks were run against the user's live data dir early on (the Databricks datasource) before scratch copies became the rule for evals.
+
+### What to do differently
+- When a request names a UI concept ("layer for …"), ask which screen and which object it attaches to, quoting the user's screenshot, before planning; put the object in the first clarifying question.
+- For any change to profiling or SQL shape, time it live on one small and one large real table before integration, not only through fakes.
+- Brief every subagent: Edit/Write tools or a private scratch subfolder, never shared `/tmp` names; never kill processes it did not start (record PIDs).
+- Send `charset=utf-8` with every text response (SSE included) and assert non-ASCII text in an E2E that reads the raw body.
+- Run evals only on a fresh copy of the data dir per run; never on `~/.questions-to-insights`.
+
 ## 2026-11-09 — Merge of `main` (v0.40.0) into the BA-9, BA-123 and BA-124 branches (PRs #81, #61, #60)
 
 ### What went well

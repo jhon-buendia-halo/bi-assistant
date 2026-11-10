@@ -1,7 +1,8 @@
-// Same module doubles as `knowledge.service.spec.ts`: the real
-// `KnowledgeService` and store run below, but Mastra, the Databricks
+// Same module doubles as `ontology.service.spec.ts`: the real
+// `OntologyService` and store run below, but Mastra, the Databricks
 // connector behind `DatasourcesService` and the datasets repository are
-// never touched by `create` or `contextFor`, and pull in ESM-only deps.
+// never touched by `create` or `contextFor` (a fake hands the ontology the
+// dataset the loader saved), and pull in ESM-only deps.
 jest.mock('pg', () => ({ Client: jest.fn() }));
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
 jest.mock('../../mastra/agents/knowledge-bootstrap.agent', () => ({
@@ -25,15 +26,15 @@ import BetterSqlite3 from 'better-sqlite3';
 import { Client } from 'pg';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { CatalogInfo } from '../datasources/entities/datasource.entity';
-import type { KnowledgeSnippet } from '../knowledge/entities/knowledge-snippet.entity';
-import { KnowledgeService } from '../knowledge/knowledge.service';
-import { KnowledgeRepository } from '../knowledge/repositories/knowledge.repository';
+import type { OntologyItem } from '../ontology/entities/ontology-item.entity';
+import { OntologyService } from '../ontology/ontology.service';
+import { OntologyRepository } from '../ontology/repositories/ontology.repository';
 import { SAMPLE_FIXTURES, type SampleFixture } from './fixtures/registry';
 import type { KnowledgeSeed } from './fixtures/knowledge/types';
 import { TestingDataService } from './testing-data.service';
 import { KNOWLEDGE_BLOCK_CHARS } from '../../mastra/context-blocks';
 
-/** Knowledge R17: the characters of snippet lines the block may take. */
+/** Dataset-ontology R24: the characters of item lines the block may take. */
 const BLOCK_BUDGET = KNOWLEDGE_BLOCK_CHARS;
 
 const SEEDED = SAMPLE_FIXTURES.filter((fixture) => fixture.knowledge);
@@ -66,18 +67,34 @@ function inventory(fixture: SampleFixture): CatalogInfo[] {
 }
 
 /**
- * The loader over the real knowledge service and the real SQLite document
+ * The loader over the real ontology service and the real SQLite document
  * store (in memory), which stamps `updatedAt` itself and, on a tie, keeps
  * insertion order — oldest first, the opposite of what the seed needs.
  */
 function build(fixture: SampleFixture) {
   const db = new BetterSqlite3(':memory:');
-  const store = new SqliteDocStore<KnowledgeSnippet>(db, 'knowledge_snippets');
-  const knowledge = new KnowledgeService(
-    new KnowledgeRepository(store),
-    {} as never,
-    {} as never,
-    {} as never,
+  const store = new SqliteDocStore<OntologyItem>(db, 'ontology_items');
+  // The dataset the loader saves is the one the ontology checks a concept's
+  // mappings against.
+  const saved: { name: string; tables: string[] }[] = [];
+  const datasets = {
+    save: (dataset: { name: string; tables: string[] }) => {
+      saved.push(dataset);
+      return Promise.resolve(dataset);
+    },
+  };
+  const datasetsRepository = {
+    getByNames: (names: string[]) =>
+      Promise.resolve(saved.filter((dataset) => names.includes(dataset.name))),
+  };
+  const metrics = {
+    list: () => Promise.resolve([]),
+    create: (input: object) => Promise.resolve(input),
+  };
+  const ontology = new OntologyService(
+    new OntologyRepository(store),
+    datasetsRepository as never,
+    metrics as never,
   );
   const datasources = {
     list: () => Promise.resolve([]),
@@ -85,21 +102,16 @@ function build(fixture: SampleFixture) {
     inventory: () =>
       Promise.resolve({ catalogs: inventory(fixture), cached: false }),
   };
-  const datasets = { save: () => Promise.resolve({}) };
-  const metrics = {
-    list: () => Promise.resolve([]),
-    create: (input: object) => Promise.resolve(input),
-  };
   const service = new TestingDataService(
     datasources as never,
     datasets as never,
-    knowledge,
+    ontology,
     metrics as never,
   );
-  return { service, knowledge, store, db };
+  return { service, ontology, store, db };
 }
 
-describe('the knowledge block of a freshly loaded domain sample (R26, knowledge R16, R17)', () => {
+describe('the knowledge block of a freshly loaded domain sample (R26, dataset-ontology R22, R24)', () => {
   it.each(SEEDED.map((fixture) => [fixture.name, fixture] as const))(
     '%s: sends its default filters, then its instructions, then its terms, as far as the budget goes',
     async (_name, fixture) => {
@@ -110,10 +122,10 @@ describe('the knowledge block of a freshly loaded domain sample (R26, knowledge 
           .map((entry) => entry.title);
       const firsts = [...ofKind('default_filter'), ...ofKind('instruction')];
       const sendOrder = [...firsts, ...ofKind('term')];
-      const { service, knowledge, store, db } = build(fixture);
+      const { service, ontology, store, db } = build(fixture);
 
       const result = await service.load(fixture.id, fixture.defaults);
-      const { block, used } = await knowledge.contextFor([fixture.datasetName]);
+      const { block, used } = await ontology.contextFor([fixture.datasetName]);
       const stored = await store.find({});
       db.close();
 

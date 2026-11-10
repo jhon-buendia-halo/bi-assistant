@@ -45,6 +45,13 @@ export interface ReadinessDimensionScore {
   totalChecks: number;
 }
 
+/** An entity whose column checks were skipped (BA-323, ADR-0033). */
+export interface ReadinessNotProfiled {
+  entity: string;
+  reason: 'too-large' | 'timed-out';
+  rowCount?: number;
+}
+
 export interface ReadinessReport {
   id: string;
   datasourceId: string;
@@ -56,6 +63,7 @@ export interface ReadinessReport {
   dimensionScores: ReadinessDimensionScore[];
   findings: ReadinessFinding[];
   entityCount: number;
+  notProfiled?: ReadinessNotProfiled[];
   sessionId?: string;
 }
 

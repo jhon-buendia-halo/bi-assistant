@@ -115,4 +115,20 @@ describe('official-links (agents-evals R99, R105)', () => {
         .generatedToolsNote,
     ).toBe('## Tools — generated from the tools the RFP Builder gets');
   });
+
+  it('names Questions to Insights v2 without an article and offers tools only (R107)', () => {
+    expect(
+      officialPromptCopy({
+        key: 'assistant-v2',
+        name: 'Questions to Insights v2',
+      }),
+    ).toEqual({
+      toolbarHint:
+        'Type / to link a tool. Links here are mentions; Questions to Insights v2 keeps all its tools.',
+      toolsNote:
+        'The ## Tools list is generated from the tools Questions to Insights v2 gets and is inserted before ## Working rules.',
+      generatedToolsNote:
+        '## Tools — generated from the tools Questions to Insights v2 gets',
+    });
+  });
 });
