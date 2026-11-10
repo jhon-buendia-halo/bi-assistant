@@ -794,9 +794,9 @@ flowchart LR
   - The eval runner can target a custom endpoint from environment variables, so a prompt change can be gated on a self-hosted model as on the public ones ([agents-evals](../capabilities/agents-evals/spec.md)).
   - Stack-neutral: any rebuild needs a resolver that yields plain data for tuning, plus a way to build an Anthropic-protocol model at an arbitrary base URL.
 
-#### ADR-0033 — Cross-session memory: Mastra's own memory first, behind a `LearningStore` port; Hindsight only if a three-arm eval shows it is better
+#### ADR-0038 — Cross-session memory: Mastra's own memory first, behind a `LearningStore` port; Hindsight only if a three-arm eval shows it is better
 - **Status:** Proposed
-- **Date:** 2026-10-29 (numbered ADR-0031 until 2026-11-04, when `main` took ADR-0031 for BA-251 and ADR-0032 for BA-281)
+- **Date:** 2026-10-29 (numbered ADR-0031 until 2026-11-04, when `main` took ADR-0031 for BA-251 and ADR-0032 for BA-281, and ADR-0033 until 2026-11-10, when `main` took ADR-0033 for BA-323 and ADR-0034 to ADR-0036 for BA-320 and PR #91 claimed ADR-0037 for BA-159)
 - **Context:**
   - The assistant's only memory today is Mastra's message history: the last 40 messages of a thread, with `thread = resource = session id` on every call, stored in `mastra.sqlite` ([agents.md](agents.md) 2.1). Nothing crosses sessions. An approval or a correction made in one session is lost in the next, and verified queries are matched by word overlap, so a paraphrase or a question in another language finds nothing.
   - The research ([docs/research/BA-4.md](../../docs/research/BA-4.md) section 3.5) and the branch `feat/hindsight-memory` (its ADR-0013, never merged) chose Hindsight behind a `LearningStore` port. Its smoke test of 2026-10-05 reused an English approval for a Spanish question in a new session and applied a reviewer's correction. It also stored the corrected SQL as a plain fact, and later consolidated an observation that mixed it with the correction.

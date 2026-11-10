@@ -539,9 +539,9 @@ The epic spec's open question, "which of BA-79 to BA-81 is genuinely new versus 
 
 Sections 1 to 8 are kept as written. Where this section differs from them, this section holds. Baseline now: `main` at ea78278 (v0.36.0, 2026-10-16), plus the open evals branch `feat/BA-9-golden-dataset-evals` (PR #81).
 
-- **Step 0 is done** with this merge: the research (BA-123) and this plan (BA-124) are on `main`, the epic spec is `Status: Confirmed`, BA-78 is closed as covered, and [ADR-0033](../../specs/system/architecture.md) is Proposed.
+- **Step 0 is done** with this merge: the research (BA-123) and this plan (BA-124) are on `main`, the epic spec is `Status: Confirmed`, BA-78 is closed as covered, and [ADR-0038](../../specs/system/architecture.md) is Proposed.
 - **The ADR "knowledge as code in packs"** moves to Step 1 (BA-79, roadmap 1.3.2). It is written before Step 1's code.
-- **Memory.** Everything sections 2 to 8 say about Hindsight is replaced by ADR-0033. The memory proposes and never writes, as before; what changes is how it is built:
+- **Memory.** Everything sections 2 to 8 say about Hindsight is replaced by ADR-0038. The memory proposes and never writes, as before; what changes is how it is built:
   - Cross-session memory is built first with Mastra's own memory behind the `LearningStore` port. This is "Mastra only".
   - Hindsight is added beside it ("Hindsight + Mastra") only if a three-arm eval (no memory, Mastra only, Hindsight + Mastra) shows it is better, under the rule written in the ADR before the first run.
   - The pack's `memory.yaml` Hindsight seed and the "Hindsight team server" in the Later table wait for that result.
@@ -550,6 +550,6 @@ Sections 1 to 8 are kept as written. Where this section differs from them, this 
 - **The Data Model DSL** is still not on `main` (`origin/feat/BA-2-data-model-dsl`, last commit 2026-10-11). Open, to decide when BA-79 starts: whether Step 1 waits for it, or binds concepts to physical columns first (as the knowledge seeds' `entities` do) and moves to logical references when the DSL merges.
 - **What the evals showed.** The knowledge seeds, written by hand and checked by SQL, raised the eval scores (research section 8). So the epic's open question is no longer whether knowledge helps. It is how a customer without a seed gets it, how it is chosen per question, how it is checked, and how it is kept.
 - **Open questions in section 8 that are now closed:**
-  - The ADR number: ADR-0033, the next number free on every open branch (it was ADR-0031 until 2026-11-04, when `main` took ADR-0031 for BA-251 and ADR-0032 for BA-281).
+  - The ADR number: ADR-0038, the next number free on every open branch (it was ADR-0031 until 2026-11-04, when `main` took ADR-0031 for BA-251 and ADR-0032 for BA-281, and ADR-0033 until 2026-11-10, when `main` took ADR-0033 for BA-323 and ADR-0034 to ADR-0036 for BA-320 and PR #91 claimed ADR-0037 for BA-159).
   - Feature 1.3.6 is BA-124. The memory branch's own 1.3.6 is renumbered if that branch is ever merged; it is not merged as it is.
   - Hindsight hosting: decided only if Hindsight + Mastra wins the eval.
