@@ -703,6 +703,13 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
   - The Windows installer built by `build-desktop.yml` compiles with the custom check.
 - **Notes:** reported 2026-11-11 after the v0.48.1 build; specs in [api.md](specs/system/api.md) 4.3, [delivery.md](specs/system/delivery.md) sections 1 and 2, [data-model.md](specs/system/data-model.md) 1.2 and app-shell R54–R55.
 
+#### 1.7.22 — Windows install takes over 5 minutes  `🚧 In progress`
+- **Intent:** the installer writes about 47,000 files, 98% of them the backend's `node_modules`, and more than half are build-time leftovers (type declarations, source maps, TypeScript sources, docs, lint configs). Per-file cost on Windows (NTFS plus Defender scanning each new file) dominates install and uninstall time.
+- **Scope:** `frontend/scripts/prune-node-modules.mjs`, run by `stage-backend.sh` after `npm ci`, deletes those files from the staged backend's `node_modules`, keeping licence files and leaving `@github/copilot-sdk*` untouched (its bundled runtime reads its own `.md` and `.ts` files).
+- **Out of scope:** bundling the backend into one file; de-duplicating the nested `@opentelemetry` copies under `@mastra/*`; code signing.
+- **Acceptance:** the staged backend has at least 40% fewer files; every production dependency still loads and the staged backend answers its API under Electron-as-Node; unit tests cover what is pruned and what is kept.
+- **Notes:** measured 2026-11-11 on a local `--win nsis` build of 0.48.1: 46,955 files, 45,804 of them in `resources/backend/node_modules`. The first upgrade still runs the old uninstaller over the old file set.
+
 ### Milestone 1.8 — Agentic Hub Look and Feel ([BA-141](https://halo-powered.atlassian.net/browse/BA-141))
 
 The app gets the Agentic Hub visual design: a gradient frame, an "Agentic Hub" banner, white rounded cards, an icon rail, pill buttons and status chips. There is a light theme and a navy dark theme derived from it, and the app follows the OS by default. Only the look changes. All stories are built on the branch `feat/BA-141-agentic-hub-look-and-feel` and ship as one PR. Epic spec: [specs/epics/BA-141/spec.md](specs/epics/BA-141/spec.md). Decision: ADR-0007 in [specs/system/architecture.md](specs/system/architecture.md).
