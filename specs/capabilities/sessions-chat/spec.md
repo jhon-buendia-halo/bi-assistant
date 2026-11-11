@@ -185,7 +185,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decision ADR-0008 in [architecture.md](../../system/architecture.md).
 
-- R52. **Start chat** on a Live user agent SHALL create a session at once, with no form: named after the agent's Live name, over the agent's Live datasets that still exist (missing ones are dropped), and bound to the agent. It SHALL show the toast `Session "<name>" created` and open the session on its welcome block. Several sessions may share a name. The system SHALL refuse, creating nothing: an unknown agent with `Agent "<id>" not found`; an agent with no Live version with `Publish "<name>" before starting a chat`; an agent none of whose Live datasets exist with `None of this agent's datasets exist`. **Start chat** on the Official agent (the assistant) SHALL open the new-session screen instead, since the assistant has no datasets of its own. **Start chat** on **Questions to Insights v2** (R61, [agents-evals](../agents-evals/spec.md) R107), which has no datasets of its own either, SHALL open the same screen with the **Agent** field preselected to `Questions to Insights v2` (R64) instead of Assistant, and creates no session by itself. **Start chat** on the RFP Builder (an Official agent that declares the dataset `Intellify RFP API`) SHALL create a session at once, named `RFP Builder`, over that dataset and bound to the agent (R61), with the same toast; while the dataset does not exist it SHALL refuse, creating nothing, with `Load the "Intellify RFP API" sample in Settings → Testing Data first`. **Start chat** on the Data Readiness Agent SHALL create a session at once, named `Data Readiness`, over every dataset bound to a PostgreSQL or Databricks datasource and bound to the agent (R61), with the same toast; while there is none it SHALL refuse, creating nothing, with `Add a PostgreSQL or Databricks dataset first` ([../data-readiness/spec.md](../data-readiness/spec.md) R2).
+- R52. **Start chat** lives on a workflow, never on an agent ([workflows](../workflows/spec.md) R6, [agents-evals](../agents-evals/spec.md) R53): below, "Start chat on <agent>" means Start chat on that agent's workflow (`agent:<key or id>`, or `qti-v2-turn` for Questions to Insights v2), which creates the session exactly as described. **Start chat** on a Live user agent SHALL create a session at once, with no form: named after the agent's Live name, over the agent's Live datasets that still exist (missing ones are dropped), and bound to the agent. It SHALL show the toast `Session "<name>" created` and open the session on its welcome block. Several sessions may share a name. The system SHALL refuse, creating nothing: an unknown agent with `Agent "<id>" not found`; an agent with no Live version with `Publish "<name>" before starting a chat`; an agent none of whose Live datasets exist with `None of this agent's datasets exist`. **Start chat** on the Official agent (the assistant) SHALL open the new-session screen instead, since the assistant has no datasets of its own. **Start chat** on **Questions to Insights v2** (R61, [agents-evals](../agents-evals/spec.md) R107), which has no datasets of its own either, SHALL open the same screen with the **Agent** field preselected to `Questions to Insights v2` (R64) instead of Assistant, and creates no session by itself. **Start chat** on the RFP Builder (an Official agent that declares the dataset `Intellify RFP API`) SHALL create a session at once, named `RFP Builder`, over that dataset and bound to the agent (R61), with the same toast; while the dataset does not exist it SHALL refuse, creating nothing, with `Load the "Intellify RFP API" sample in Settings → Testing Data first`. **Start chat** on the Data Readiness Agent SHALL create a session at once, named `Data Readiness`, over every dataset bound to a PostgreSQL or Databricks datasource and bound to the agent (R61), with the same toast; while there is none it SHALL refuse, creating nothing, with `Add a PostgreSQL or Databricks dataset first` ([../data-readiness/spec.md](../data-readiness/spec.md) R2).
 - R53. A session started from an agent SHALL keep the datasets it was created with (R5). Republishing the agent with other datasets SHALL NOT change them.
 - R54. Every assistant call made for a session bound to a user agent that still exists (chat turns, the grounding pass and deep-analysis calls) SHALL apply the agent's **current Live version**:
   - its instructions, when not empty, as a system context block labelled as user-supplied, after every other context block (R24; the block is in [agents.md](../../system/agents.md) section 4.1, and only the grounding pass's own nudge follows it);
@@ -235,9 +235,9 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 | Invalid rating | 400 "rating must be 'up' or 'down'". |
 | Copy to clipboard | "Copied to clipboard" / "SQL copied to clipboard" / "Copy failed". |
 | Session created | Toast `Session "<name>" created`. The session opens immediately and the list reloads. |
-| Start chat on an agent with some datasets missing | The session is created over the remaining datasets (R52). The hub card already shows `Missing dataset: <names>`. |
-| Start chat on an agent with none of its datasets left | **Start chat** is disabled, titled `None of this agent's datasets exist`; a direct request is refused with the same message. |
-| Start chat on an agent deleted meanwhile | Toast `Agent "<id>" not found`; nothing is created. |
+| Start chat on the workflow of an agent with some datasets missing | The session is created over the remaining datasets (R52). The workflow card and the agent's hub card already show `Missing dataset: <names>`. |
+| Start chat on the workflow of an agent with none of its datasets left | **Start chat** is disabled, titled `None of this agent's datasets exist`; a direct request is refused with the same message. |
+| Start chat on the workflow of an agent deleted meanwhile | Toast `Workflow "agent:<id>" not found` ([workflows](../workflows/spec.md)); nothing is created. |
 | Agent renamed and republished | Its sessions show the new name from their next load. The session names don't change. |
 | Agent's model override rejected by the provider | The turn fails with the provider's error bubble and **Retry** (R45). |
 
@@ -249,7 +249,7 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 - Data in [data-model.md](../../system/data-model.md): the `sessions` collection (session document, chat message, data record, reasoning step, cross-check, clarification, visual event), the `verified_queries` collection, the agent memory store, and the per-session workspace directory and its legacy migrations.
 - Agents in [agents.md](../../system/agents.md): `assistant` (prompt, tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`, `create_visual`, `update_visual`, and memory), `sql-fixer`, `sql-verifier`. Model resolution is in [llm-settings](../llm-settings/spec.md).
 - Agent sessions: `POST /sessions` with an `agentId`, and the session's derived `agent` field, in [api.md](../../system/api.md); the session's `agentId` and `agentName` in [data-model.md](../../system/data-model.md) section 3.4; the agent instructions block, the `agent-overrides` requestContext key and the model override in [agents.md](../../system/agents.md) sections 1.3, 4.1 and 4.2.
-- Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents, the Agent Hub and its **Start chat**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [dataset-ontology](../dataset-ontology/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
+- Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents and the Agent Hub), [workflows](../workflows/spec.md) (the Workflows pages and their **Start chat**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [dataset-ontology](../dataset-ontology/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
 
 ## UI
 
@@ -397,7 +397,7 @@ Feature: Session management
     And the "Sessions" list shows it with the agent chip "Questions to Insights v2"
 
   Scenario: Start chat on Questions to Insights v2 opens New conversation with v2 selected
-    When I click "Agents"
+    When I click "Workflows"
     And I click "Start chat with Questions to Insights v2"
     Then I see the New conversation screen
     And the "Agent" field shows "Questions to Insights v2"
@@ -583,8 +583,8 @@ Feature: Sessions started from an agent
     And a Live user agent "Cup historian" over "World Cup Core", described as "Answers questions about World Cup history", with the instructions "Answer as a football historian and always name the tournament year." and the starter questions "Who won in 2014?" and "Which country hosted in 2002?"
     And the model is the recording stub
 
-  Scenario: Start chat on an agent card opens a session bound to the agent
-    When I click "Agents"
+  Scenario: Start chat on an agent's workflow opens a session bound to the agent
+    When I click "Workflows"
     And I click "Start chat with Cup historian"
     Then I see the toast 'Session "Cup historian" created'
     And the "Cup historian" chat is open, and the "Sessions" list shows it with "World Cup Core" under its name and the agent chip "Cup historian"
@@ -595,22 +595,23 @@ Feature: Sessions started from an agent
     Then the "Ask a follow-up question…" box contains "Who won in 2014?"
     And no message has been sent
 
-  Scenario: Only Live agents and the Official agent offer Start chat
+  Scenario: Only the workflows of Live agents and the Assistant offer Start chat, and no agent does
     Given a draft user agent "Claims triage" over "World Cup Core"
-    When I click "Agents"
-    Then I see "Start chat with Questions to Insights Assistant" and "Start chat with Cup historian"
+    When I click "Workflows"
+    Then I see "Start chat with Assistant" and "Start chat with Cup historian"
     And I see no "Start chat with Claims triage"
-    And no card in the System section offers Start chat
-    When I click "Start chat with Questions to Insights Assistant"
+    When I click "Agents" and show every System agent
+    Then no agent card offers Start chat
+    When I click "Workflows" and "Start chat with Assistant"
     Then I see the "New conversation" screen
-    When I click "Agents"
-    And I open "Cup historian"
+    When I click "Workflows"
+    And I open the "Cup historian" workflow
     And I click "Start chat"
     Then I see the toast 'Session "Cup historian" created'
 
   Scenario: Start chat is unavailable when none of the agent's datasets exist
     Given a Live user agent "Scratch analyst" whose only dataset "Scratch" was deleted
-    When I click "Agents"
+    When I click "Workflows"
     Then "Start chat with Scratch analyst" is disabled, titled "None of this agent's datasets exist"
 
   Scenario: The agent's Live instructions and model shape every turn
@@ -654,7 +655,7 @@ Feature: Sessions started from an agent
     And the model's skill catalog lists "fiscal-calendar"
 
   Scenario: A Questions to Insights v2 session runs v2 on every turn
-    When I click "Agents"
+    When I click "Workflows"
     And I click "Start chat with Questions to Insights v2"
     And I select "World Cup Core", type "V2 turn" as the session name and click "Create"
     Then I see the toast 'Session "V2 turn" created'

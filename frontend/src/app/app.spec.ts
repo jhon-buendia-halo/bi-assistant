@@ -917,9 +917,9 @@ describe('New conversation Agent picker (BA-230)', () => {
     );
   });
 
-  it('preselects v2 from its Start chat and keeps the dataset picker (BA-321)', () => {
+  it('preselects v2 when opened for it and keeps the dataset picker (BA-321)', () => {
     const { fixture, app } = open([rfp, v2], (a) =>
-      a.startChatWithAgent(v2 as never),
+      a.openComposer('assistant-v2'),
     );
     const el = fixture.nativeElement as HTMLElement;
     expect(app.composerAgentKey()).toBe('assistant-v2');
@@ -940,13 +940,13 @@ describe('New conversation Agent picker (BA-230)', () => {
   });
 
   it('falls back to Assistant when v2 is not offered', () => {
-    const { app } = open([rfp], (a) => a.startChatWithAgent(v2 as never));
+    const { app } = open([rfp], (a) => a.openComposer('assistant-v2'));
     expect(app.composerAgentKey()).toBe('assistant');
   });
 
   it('requires a name and datasets for v2, then creates with its agentId (BA-321)', () => {
     const { http, app } = open([rfp, v2], (a) =>
-      a.startChatWithAgent(v2 as never),
+      a.openComposer('assistant-v2'),
     );
     app.composerName.set('Q');
     app.createSession();

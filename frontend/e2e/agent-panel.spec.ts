@@ -308,11 +308,11 @@ async function liveAgent(
   return id;
 }
 
-/** Starts a chat from the agent's hub card and waits for its session. */
+/** Starts a chat from the agent's workflow card and waits for its session. */
 async function startChatWith(page: Page, name: string): Promise<string> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents', exact: true })
+    .getByRole('button', { name: 'Workflows', exact: true })
     .click();
   await page.getByRole('button', { name: `Start chat with ${name}` }).click();
   await expect(page.getByText(`Session "${name}" created`)).toBeVisible();

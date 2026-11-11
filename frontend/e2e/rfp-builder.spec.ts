@@ -207,13 +207,24 @@ async function openHub(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
+async function openWorkflows(page: Page): Promise<void> {
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Workflows', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
+  ).toBeVisible();
+}
+
+/** Start chat on the RFP Builder's workflow card (workflows R6). */
 function startChatButton(page: Page): Locator {
   return page.getByRole('button', { name: `Start chat with ${AGENT}` });
 }
 
-/** Starts a chat from the RFP Builder's hub card and waits for its session. */
+/** Starts a chat from the RFP Builder's workflow card and waits for its session. */
 async function startRfpChat(page: Page): Promise<void> {
-  await openHub(page);
+  await openWorkflows(page);
   await startChatButton(page).click();
   await expect(page.getByText(`Session "${AGENT}" created`)).toBeVisible();
   await expect(page.getByTestId('session-welcome')).toBeVisible();
@@ -282,7 +293,7 @@ test.describe('without the API sample', () => {
   test('start chat is blocked until the API sample is registered', async ({
     page,
   }) => {
-    await openHub(page);
+    await openWorkflows(page);
     const button = startChatButton(page);
     await expect(button).toBeVisible();
     await expect(button).toBeDisabled();
@@ -310,7 +321,12 @@ test.describe('with the API sample registered', () => {
     const card = official.getByTestId('agent-rfp');
     await expect(card).toContainText(AGENT);
     await expect(card).toContainText('Owner: Official');
-    await expect(startChatButton(page)).toBeEnabled();
+    // A chat starts from the RFP Builder's workflow, never its agent card.
+    await expect(
+      page.getByTestId('agent-card-rfp').getByRole('button', {
+        name: /Start chat/,
+      }),
+    ).toHaveCount(0);
   });
 
   test('start chat opens a session bound to the RFP Builder', async ({

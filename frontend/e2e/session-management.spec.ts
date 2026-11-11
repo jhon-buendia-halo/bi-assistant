@@ -442,7 +442,7 @@ test('Start chat on Questions to Insights v2 opens New conversation with v2 sele
   );
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents', exact: true })
+    .getByRole('button', { name: 'Workflows', exact: true })
     .click();
   await page
     .getByRole('button', { name: `Start chat with ${V2}`, exact: true })

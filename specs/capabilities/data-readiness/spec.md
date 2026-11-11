@@ -28,13 +28,13 @@ Capability-local vocabulary:
 - R1. The Data Readiness Agent SHALL be a built-in agent shown on the Agent Hub in the **Official** section.
   - Registry key `data-readiness`, `Owner: Official`.
   - Description: "Assesses how ready a PostgreSQL or Databricks dataset is for analysis, scoring it on the DMBOK data-quality dimensions with a deterministic engine and explaining the findings."
-  - Its card and detail view SHALL offer **Start chat**, with the accessible name `Start chat with Data Readiness Agent`.
-  - While no dataset bound to a PostgreSQL or Databricks datasource exists, Start chat SHALL be disabled, and its title SHALL read `Add a PostgreSQL or Databricks dataset first`.
-  - Its detail view SHALL have the Official agent's tabs ([agents-evals](../agents-evals/spec.md) R5):
+  - Its card and detail view SHALL NOT offer **Start chat** ([agents-evals](../agents-evals/spec.md) R53). Its one-step **workflow** `Data Readiness Agent` (`agent:data-readiness`) offers it, on its Workflows card (accessible name `Start chat with Data Readiness Agent`) and on its workflow page ([workflows](../workflows/spec.md) R6); the agent's detail says **Used in** `Data Readiness Agent` (agents-evals R109).
+  - While no dataset bound to a PostgreSQL or Databricks datasource exists, that Start chat SHALL be disabled, and its title SHALL read `Add a PostgreSQL or Databricks dataset first`.
+  - Its detail view SHALL have the Official agent's tabs ([agents-evals](../agents-evals/spec.md) R5), with no Chat Box, opening on System Prompt:
     - the System Prompt tab shows the prompt as served and allows the built-in prompt edit; an edited prompt SHALL still start with `You are the Data Readiness Agent`;
     - the Skills tab lists the skills `data-readiness` and `readiness-drilldown` as Built-in and On demand;
     - the Tools tab lists its own tools.
-- R2. **Start chat** on the Data Readiness Agent SHALL create a session at once, with no form.
+- R2. **Start chat** on the Data Readiness Agent's workflow (R1) SHALL create a session at once, with no form.
   - The session is named "Data Readiness" and bound to the agent. It covers every dataset bound to a PostgreSQL or Databricks datasource, ordered by dataset name.
   - The app SHALL show the toast `Session "Data Readiness" created` and open the session on its welcome block.
   - The welcome block uses the agent's description and offers the starter questions:
@@ -241,8 +241,9 @@ These rules refine R6 to R11 without changing any statistic, check or score form
 
 See [ui.md](../../system/ui.md).
 
-- **Agent Hub** (section 4.4): the Data Readiness Agent card in the Official section, with Start chat disabled, titled with the requirement, while no PostgreSQL or Databricks dataset exists.
-- **Agent detail** (section 4.5): the Official agent's tabs; the System Prompt tab is editable.
+- **Agent Hub** (section 4.4): the Data Readiness Agent card in the Official section, with no Start chat.
+- **Workflows** (sections 4.4a and 4.4b): the `Data Readiness Agent` workflow card and page, whose Start chat is disabled, titled with the requirement, while no PostgreSQL or Databricks dataset exists.
+- **Agent detail** (section 4.5): the Official agent's tabs (no Chat Box) and **Used in** `Data Readiness Agent`; the System Prompt tab is editable.
 - **Session chat** (section 4.12): the agent chip; each tool call shown as a step; the readiness card on the answer.
 - **Right panel**: the readiness scorecard, its filters and Past assessments (section 4.13).
 
@@ -261,12 +262,13 @@ Feature: Data readiness
   Scenario: Start chat is blocked without a PostgreSQL or Databricks dataset
     Given no dataset is bound to a PostgreSQL or Databricks datasource
     When I open "Agents"
-    Then the "Official" section shows "Data Readiness Agent" with "Owner: Official"
-    And "Start chat with Data Readiness Agent" is disabled with the title "Add a PostgreSQL or Databricks dataset first"
+    Then the "Official" section shows "Data Readiness Agent" with "Owner: Official" and no "Start chat"
+    When I open "Workflows"
+    Then "Start chat with Data Readiness Agent" is disabled with the title "Add a PostgreSQL or Databricks dataset first"
 
   Scenario: Assessing a dataset from the chat shows the scorecard
     Given the World Cup sample datasource and a dataset "World Cup" over it exist
-    When I click "Start chat with Data Readiness Agent"
+    When I open "Workflows" and click "Start chat with Data Readiness Agent"
     Then I see the toast "Session \"Data Readiness\" created"
     And the session header shows the agent chip "Data Readiness Agent"
     When I ask "Assess the readiness of this dataset"

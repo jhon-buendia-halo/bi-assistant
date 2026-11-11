@@ -77,7 +77,6 @@ import {
   NewSessionAgentOption,
   newSessionAgentOptions,
   picksDatasets,
-  startsInComposer,
 } from './features/agents/services/agent-hub.util';
 import {
   Agent as AgentEntry,
@@ -445,48 +444,15 @@ export class App {
     this.loadSessions();
   }
 
-  /** Key of the agent a session is being created from, while in flight. */
-  readonly startingAgentKey = signal<string | null>(null);
-
-  /**
-   * Start chat on a hub card or an agent's detail (agents-evals R53). An
-   * Official agent with no datasets of its own opens the New-session
-   * composer, preselected to it when it picks datasets like the assistant
-   * (Questions to Insights v2, sessions-chat R64); a Live user agent gets its
-   * session created and opened at once (sessions-chat R52). A refusal keeps
-   * the user where they are.
-   */
-  startChatWithAgent(agent: Agent): void {
-    if (startsInComposer(agent)) {
-      this.openComposer(picksDatasets(agent) ? agent.key : undefined);
-      return;
-    }
-    if (this.startingAgentKey()) return;
-    this.startingAgentKey.set(agent.key);
-    this.sessionsApi.createFromAgent(agent.key).subscribe({
-      next: (res) => {
-        this.startingAgentKey.set(null);
-        if (res.ok && res.session) {
-          this.toast.success(res.message);
-          this.loadSessions();
-          this.openSession(res.session);
-        } else {
-          this.toast.error(res.message);
-        }
-      },
-      error: (err) => {
-        this.startingAgentKey.set(null);
-        this.toast.error(err?.error?.message ?? 'Backend unreachable');
-      },
-    });
-  }
-
   /** Id of the workflow open on its page (workflows R7). */
   readonly activeWorkflowId = signal<string | null>(null);
   /** Id of the workflow a session is being created from, while in flight. */
   readonly startingWorkflowId = signal<string | null>(null);
 
-  /** A workflow card on the Workflows page opens the workflow's page (R7). */
+  /**
+   * A workflow card on the Workflows page, or a Used in chip on an agent's
+   * page (agents-evals R109), opens the workflow's page (R7).
+   */
   openWorkflow(id: string): void {
     if (!this.confirmLeaveAgentEditor()) return;
     this.settingsOpen.set(false);

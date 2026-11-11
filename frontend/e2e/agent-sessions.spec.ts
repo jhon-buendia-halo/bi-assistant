@@ -28,7 +28,6 @@ import { worldCupScalar } from './helpers/world-cup-db';
  * OpenAI-compatible stub that records what the backend sends it.
  */
 
-const ASSISTANT = 'Questions to Insights Assistant';
 const HISTORIAN = 'Cup historian';
 const HISTORIAN_DESCRIPTION = 'Answers questions about World Cup history';
 const HISTORIAN_INSTRUCTIONS =
@@ -79,13 +78,24 @@ async function openHub(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
+async function openWorkflows(page: Page): Promise<void> {
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Workflows', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
+  ).toBeVisible();
+}
+
+/** Start chat on a workflow card (workflows R6); agents offer none (R53). */
 function startChatButton(page: Page, name: string): Locator {
   return page.getByRole('button', { name: `Start chat with ${name}` });
 }
 
-/** Starts a chat from the agent's hub card and waits for its session. */
+/** Starts a chat from the agent's workflow card and waits for its session. */
 async function startChatFromCard(page: Page, name: string): Promise<void> {
-  await openHub(page);
+  await openWorkflows(page);
   await startChatButton(page, name).click();
   await expect(page.getByText(`Session "${name}" created`)).toBeVisible();
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
@@ -129,7 +139,7 @@ async function matchRowCount(): Promise<number> {
   return Number(await worldCupScalar('select count(*) from world_cup.matches'));
 }
 
-test('start chat on an agent card opens a session bound to the agent', async ({
+test("start chat on an agent's workflow opens a session bound to the agent", async ({
   page,
 }) => {
   await startChatFromCard(page, HISTORIAN);
@@ -156,7 +166,7 @@ test('start chat on an agent card opens a session bound to the agent', async ({
   await expect(row).toHaveClass(/list-row-selected/);
 });
 
-test('only Live agents and the Official agent offer Start chat', async ({
+test('only the workflows of Live agents and the Assistant offer Start chat, and no agent does', async ({
   page,
 }) => {
   await createUserAgent(page, {
@@ -164,28 +174,30 @@ test('only Live agents and the Official agent offer Start chat', async ({
     datasets: [WORLD_CUP_DATASET],
   });
 
-  await openHub(page);
-  await expect(startChatButton(page, ASSISTANT)).toBeVisible();
+  await openWorkflows(page);
+  await expect(startChatButton(page, 'Assistant')).toBeVisible();
   await expect(startChatButton(page, HISTORIAN)).toBeVisible();
   await expect(startChatButton(page, 'Claims triage')).toHaveCount(0);
+
+  await openHub(page);
+  await expect(page.getByTestId(`agent-card-${historianId}`)).toBeVisible();
   const system = page.getByTestId('agent-section-system');
   await system.getByTestId('agent-show-more-system').click();
   await expect(
-    system.getByRole('button', { name: /^Start chat with / }),
+    page.getByRole('button', { name: /^Start chat with / }),
   ).toHaveCount(0);
 
-  await startChatButton(page, ASSISTANT).click();
+  await openWorkflows(page);
+  await startChatButton(page, 'Assistant').click();
   await expect(page.getByPlaceholder('My new session')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'New conversation', exact: true }),
   ).toBeVisible();
 
-  await openHub(page);
-  await page.getByTestId(`agent-${historianId}`).click();
-  await expect(
-    page.getByRole('heading', { name: HISTORIAN, exact: true }),
-  ).toBeVisible();
-  await page.getByTestId('agent-start-chat').click();
+  await openWorkflows(page);
+  await page.getByTestId(`workflow-agent:${historianId}`).click();
+  await expect(page.getByTestId('workflow-detail-name')).toHaveText(HISTORIAN);
+  await page.getByTestId('workflow-start-chat').click();
   await expect(page.getByText(`Session "${HISTORIAN}" created`)).toBeVisible();
   await expect(page.getByTestId('session-agent')).toHaveText(HISTORIAN);
 });
@@ -201,7 +213,7 @@ test("start chat is unavailable when none of the agent's datasets exist", async 
   await publishAgent(page, scratchId);
   await deleteDataset(page, 'Scratch');
 
-  await openHub(page);
+  await openWorkflows(page);
   const button = startChatButton(page, 'Scratch analyst');
   await expect(button).toBeDisabled();
   await expect(button).toHaveAttribute(
@@ -391,8 +403,9 @@ test('a Questions to Insights v2 session runs v2 on every turn', async ({
 }) => {
   const V2 = 'Questions to Insights v2';
   const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
-  // Start chat on v2 opens New conversation with v2 selected (R52, R64).
-  await openHub(page);
+  // Start chat on v2's workflow opens New conversation with v2 selected
+  // (R52, R64).
+  await openWorkflows(page);
   await startChatButton(page, V2).click();
   await expect(page.getByTestId('new-session-agent')).toHaveText(
     new RegExp(V2),

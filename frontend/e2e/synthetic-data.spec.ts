@@ -629,7 +629,7 @@ test.describe('Feature: Synthetic data', () => {
           page,
           `Given I started a chat with the Data Readiness Agent on the "${WORLD_CUP_DATASET}" dataset`,
           async () => {
-            await rail(page, 'Agents').click();
+            await rail(page, 'Workflows').click();
             const start = page.getByRole('button', {
               name: 'Start chat with Data Readiness Agent',
             });

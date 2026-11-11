@@ -23,13 +23,13 @@ import {
   Loader2,
   ListChecks,
   MessageSquare,
-  MessageSquarePlus,
   Pencil,
   ChevronRight,
   Download,
   Play,
   ScrollText,
   Upload,
+  Workflow,
   Wrench,
 } from 'lucide-angular';
 import {
@@ -42,10 +42,6 @@ import {
   EvalRunView,
 } from '../../services/agents-api.service';
 import { EvalSelectionService } from '../../services/eval-selection.service';
-import {
-  canStartChat,
-  startChatBlockedReason,
-} from '../../services/agent-hub.util';
 import { ToastService } from '../../../../core/toast/toast.service';
 import {
   Datasource,
@@ -68,6 +64,7 @@ import {
   hasChatTab,
   includedInEveryAgent,
   skillsCount,
+  usedInEmptyText,
 } from '../../services/agent-page.util';
 import { agentKind } from '../../services/agent-hub.util';
 import { officialGraphInput } from '../../services/official-links';
@@ -111,7 +108,6 @@ export class AgentDetail implements OnDestroy {
   readonly Loader2 = Loader2;
   readonly ListChecks = ListChecks;
   readonly MessageSquare = MessageSquare;
-  readonly MessageSquarePlus = MessageSquarePlus;
   readonly Pencil = Pencil;
   readonly ChevronRight = ChevronRight;
   readonly Download = Download;
@@ -119,6 +115,7 @@ export class AgentDetail implements OnDestroy {
   readonly Trash2 = Trash2;
   readonly ScrollText = ScrollText;
   readonly Upload = Upload;
+  readonly WorkflowIcon = Workflow;
   readonly Wrench = Wrench;
 
   private readonly api = inject(AgentsApiService);
@@ -147,14 +144,12 @@ export class AgentDetail implements OnDestroy {
   readonly back = output<void>();
   /** Emitted after a user agent is deleted; the app returns to the hub. */
   readonly deleted = output<void>();
-  /** Start chat; the shell creates or composes the session (R53). */
-  readonly startChat = output<AgentDetailModel>();
+  /** A Used in chip; the shell opens the workflow's page (R109). */
+  readonly openWorkflow = output<string>();
   /** Edit a user agent; the shell opens the agent editor on its draft (R54). */
   readonly edit = output<AgentDetailModel>();
   /** An admin's Edit on a built-in skill; the shell opens its editor. */
   readonly openBuiltInSkill = output<string>();
-  /** True while a session is being created from this agent. */
-  readonly starting = input(false);
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
@@ -382,15 +377,14 @@ export class AgentDetail implements OnDestroy {
     () => this.isUserAgent() && this.canCreateAgents(),
   );
 
-  /** The Official agent and Live user agents offer Start chat (R53). */
-  readonly showStartChat = computed(() => {
+  /** The workflows that use the agent, for the Used in line (R109). */
+  readonly usedInWorkflows = computed(
+    () => this.agent()?.usedInWorkflows ?? [],
+  );
+  /** The Used in line's text when no workflow uses the agent (R109). */
+  readonly usedInEmpty = computed(() => {
     const agent = this.agent();
-    return !!agent && canStartChat(agent);
-  });
-  /** Set when none of the agent's datasets exist; disables Start chat. */
-  readonly startChatBlockedReason = computed(() => {
-    const agent = this.agent();
-    return agent ? startChatBlockedReason(agent) : null;
+    return usedInEmptyText(agent ? agentKind(agent) : 'system');
   });
 
   /** Publish shows when there is no Live version or it has unpublished changes. */

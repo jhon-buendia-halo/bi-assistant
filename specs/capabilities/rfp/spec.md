@@ -16,8 +16,8 @@ Capability-local vocabulary:
 
 ### The agent on the hub
 
-- R1. The RFP Builder SHALL be a built-in agent shown on the Agent Hub in the **Official** section beside the assistant, with `Owner: Official` and the description "Walks a Mercer benefits consultant through building a carrier RFP for one client over the Intellify data, stage by stage, and assembles the RFP package." Its card and its detail view SHALL offer **Start chat** (accessible name `Start chat with RFP Builder`). While no dataset named "Intellify RFP API" exists, Start chat SHALL be disabled and its title SHALL read `Load the "Intellify RFP API" sample in Settings → Testing Data first`. Its detail view SHALL have the Official agent's tabs ([agents-evals](../agents-evals/spec.md) R5): its System Prompt tab SHALL show the prompt as served and allow the built-in prompt edit (R97-R105 there), an edited prompt SHALL still start with `You are the RFP Builder`, and the `## Tools` section SHALL be generated, not edited; its Skills tab SHALL list its seven stage skills (`rfp-client-renewal`, `rfp-current-program`, `rfp-market-scope`, `rfp-carriers`, `rfp-requirements`, `rfp-timeline` and `rfp-package`) as Built-in and On demand; its Tools tab SHALL list its own tools.
-- R2. **Start chat** on the RFP Builder SHALL create a session at once, with no form: named "RFP Builder", over the "Intellify RFP API" dataset and bound to the agent, then show the toast `Session "RFP Builder" created` and open the session on its welcome block. The welcome block SHALL use the agent's description and offer its starter questions: "Start an RFP for a client", "Which of my clients renew on 1 January 2027?" and "Resume my draft RFPs". The session header and its session-list row SHALL show the agent chip "RFP Builder". Without the dataset the system SHALL refuse, creating nothing, with `Load the "Intellify RFP API" sample in Settings → Testing Data first`. Every turn of a session bound to the RFP Builder SHALL run the RFP Builder, not the assistant; the assistant-only passes (the grounding pass, careful mode, SQL repair and the result-quality warnings of [sessions-chat](../sessions-chat/spec.md)) SHALL NOT apply to it, while streaming, stopping, clarifications and the agent memory of a session work as for any session.
+- R1. The RFP Builder SHALL be a built-in agent shown on the Agent Hub in the **Official** section beside the assistant, with `Owner: Official` and the description "Walks a Mercer benefits consultant through building a carrier RFP for one client over the Intellify data, stage by stage, and assembles the RFP package." Its card and its detail view SHALL NOT offer **Start chat** ([agents-evals](../agents-evals/spec.md) R53): the RFP Builder's one-step **workflow** `RFP Builder` (`agent:rfp`) offers it, on its Workflows card (accessible name `Start chat with RFP Builder`) and on its workflow page ([workflows](../workflows/spec.md) R6), and the agent's detail says **Used in** `RFP Builder` (agents-evals R109). While no dataset named "Intellify RFP API" exists, that Start chat SHALL be disabled and its title SHALL read `Load the "Intellify RFP API" sample in Settings → Testing Data first`. Its detail view SHALL have the Official agent's tabs ([agents-evals](../agents-evals/spec.md) R5): its System Prompt tab SHALL show the prompt as served and allow the built-in prompt edit (R97-R105 there), an edited prompt SHALL still start with `You are the RFP Builder`, and the `## Tools` section SHALL be generated, not edited; its Skills tab SHALL list its seven stage skills (`rfp-client-renewal`, `rfp-current-program`, `rfp-market-scope`, `rfp-carriers`, `rfp-requirements`, `rfp-timeline` and `rfp-package`) as Built-in and On demand; its Tools tab SHALL list its own tools.
+- R2. **Start chat** on the RFP Builder's workflow (R1) SHALL create a session at once, with no form: named "RFP Builder", over the "Intellify RFP API" dataset and bound to the agent, then show the toast `Session "RFP Builder" created` and open the session on its welcome block. The welcome block SHALL use the agent's description and offer its starter questions: "Start an RFP for a client", "Which of my clients renew on 1 January 2027?" and "Resume my draft RFPs". The session header and its session-list row SHALL show the agent chip "RFP Builder". Without the dataset the system SHALL refuse, creating nothing, with `Load the "Intellify RFP API" sample in Settings → Testing Data first`. Every turn of a session bound to the RFP Builder SHALL run the RFP Builder, not the assistant; the assistant-only passes (the grounding pass, careful mode, SQL repair and the result-quality warnings of [sessions-chat](../sessions-chat/spec.md)) SHALL NOT apply to it, while streaming, stopping, clarifications and the agent memory of a session work as for any session.
 
 ### How the agent works
 
@@ -47,7 +47,7 @@ Capability-local vocabulary:
 
 ## Edge cases and errors
 
-- **Sample not registered:** Start chat is disabled with R1's title; starting a session through the API is refused with `Load the "Intellify RFP API" sample in Settings → Testing Data first`; a session whose dataset was later removed gets R3's tool error, and the agent tells the consultant to load the sample.
+- **Sample not registered:** the workflow's Start chat is disabled with R1's title; starting a session through the API is refused with `Load the "Intellify RFP API" sample in Settings → Testing Data first`; a session whose dataset was later removed gets R3's tool error, and the agent tells the consultant to load the sample.
 - **API not running** (turned off, or failed to start): registering the sample answers `The Intellify API is not running in this app (INTELLIFY_API=off or it failed to start) — see the system logs.`; tools answer `Intellify API unreachable at <address>: <cause>`.
 - **Database down or the Intellify sample not loaded:** the health check reports the database down; data routes answer 503 `database unavailable`; registering the sample answers `The Intellify API cannot reach its database at <host:port/db>. Load the "Intellify" sample into that database first.`
 - **Unknown client:** reading it answers 404 `Client "<code>" not found`; creating an RFP for it is refused (400).
@@ -74,8 +74,9 @@ Capability-local vocabulary:
 
 See [ui.md](../../system/ui.md).
 
-- **Agent Hub** (section 4.4): the RFP Builder card in the Official section, with Start chat, disabled with the requirement as its title while the sample is not registered.
-- **Agent detail** (section 4.5): the Official agent's tabs and header actions; the System Prompt tab is editable.
+- **Agent Hub** (section 4.4): the RFP Builder card in the Official section, with no Start chat.
+- **Workflows** (sections 4.4a and 4.4b): the `RFP Builder` workflow card and page, whose Start chat is disabled with the requirement as its title while the sample is not registered.
+- **Agent detail** (section 4.5): the Official agent's tabs (no Chat Box; it opens on System Prompt), no header actions, and **Used in** `RFP Builder`; the System Prompt tab is editable.
 - **Testing Data** (section 4.11): the "Intellify RFP API" card shows the API's URL instead of the connection form, and the primary action **Register testing data** asks for confirmation with `This registers the Intellify RFP API at <url> as a datasource and dataset. No database changes are made.`
 - **Session chat** (section 4.12): the agent chip "RFP Builder" in the header and the session list; each RFP tool call shown as a step; the financial rows the agent reads shown as a data record; the package card on the answer that exported it.
 
@@ -96,16 +97,16 @@ Feature: RFP builder
   Scenario: The hub offers the RFP Builder as an Official agent
     When I open "Agents"
     Then the "Official" section shows "RFP Builder" with "Owner: Official"
-    And its card offers "Start chat with RFP Builder"
+    And its card offers no "Start chat"
 
   Scenario: Start chat is blocked until the API sample is registered
     Given the "Intellify RFP API" sample is not registered
-    When I open "Agents"
+    When I open "Workflows"
     Then "Start chat with RFP Builder" is disabled
     And its title reads "Load the \"Intellify RFP API\" sample in Settings → Testing Data first"
 
   Scenario: Start chat opens a session bound to the RFP Builder
-    When I click "Start chat with RFP Builder"
+    When I open "Workflows" and click "Start chat with RFP Builder"
     Then I see the toast "Session \"RFP Builder\" created"
     And the session header shows the agent chip "RFP Builder"
     And the welcome block offers the starter question "Start an RFP for a client"
@@ -151,7 +152,7 @@ Feature: RFP builder
     Then the file starts with "# DRAFT — Orchard Manufacturing — 2027 benefits RFP"
 
   Scenario: An RFP Builder chat hides the assistant's controls
-    When I click "Start chat with RFP Builder"
+    When I open "Workflows" and click "Start chat with RFP Builder"
     Then the composer offers no "Careful" and no "Deep analysis" toggle
     When I send "Which of my clients renew on 1 January 2027?" and the stub answers with text
     Then the answer offers no "Generate interactive visuals"
@@ -220,6 +221,6 @@ Feature: Intellify RFP API
 
 1. With the Intellify sample loaded, the API answers the client's program for `IC100100` with its plans, carriers and 2026 premiums; Discover on a REST datasource at the API's URL proposes the ten collection endpoints; registering the "Intellify RFP API" sample yields the datasource and the dataset with 10/10 entities, and the plain assistant can answer "How many clients are there?" over that dataset.
 2. The API Feature's scenarios pass at API level: the key is required, collections page and describe themselves, records are built and exported, status moves forward only, and a write attempted through a read route fails. Reloading the Intellify sample leaves the RFP drafts intact, and the PDF carries every section of the Markdown.
-3. The hub shows the RFP Builder under Official with Start chat; a session started from it runs the RFP Builder (its first request offers no `run_readonly_sql`), the skill catalog carries its seven stage skills and the system message names the active RFP.
+3. The hub shows the RFP Builder under Official, and its workflow `RFP Builder` offers Start chat on the Workflows page; a session started from it runs the RFP Builder (its first request offers no `run_readonly_sql`), the skill catalog carries its seven stage skills and the system message names the active RFP.
 4. The `rfp` eval set passes at 100% over 3 runs, the assistant's eval sets stay at 100% and the assistant's prompt is unchanged.
 5. The RFP builder Feature's scenarios pass on the web target with the LLM stub against the embedded API, and the downloaded zip holds `rfp.md`, `rfp.pdf`, four CSV exhibits and `manifest.json`.
