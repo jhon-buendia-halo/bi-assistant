@@ -56,40 +56,67 @@ describe('SessionChat trust UX', () => {
     ],
   };
 
-  it('renders the server-built interpretation caption verbatim', async () => {
-    const line =
-      'Computed from 1 query over main.health.claims — 500 rows analyzed.';
-    const el = await render({ ...answer, interpretation: line });
-    const caption = el.querySelector(`[title="${line}"]`);
-    expect(caption?.textContent?.trim()).toBe(line);
-  });
+  // How one answer renders (badges, provenance, reasoning, clarification
+  // card) is covered by answer-view.spec.ts; these specs cover the chat.
 
-  it('shows the Verified chip only on verified answers', async () => {
-    const plain = await render(answer);
+  it('renders each assistant answer through the answer view, with its rating', async () => {
+    const el = await render({ ...answer, verified: true });
+    expect(el.querySelectorAll('app-answer-view').length).toBe(1);
     expect(
-      plain.querySelector('[title="Matches an approved query"]'),
-    ).toBeNull();
-
-    TestBed.resetTestingModule();
-    const verified = await render({ ...answer, verified: true });
-    expect(
-      verified
-        .querySelector('[title="Matches an approved query"]')
-        ?.textContent?.trim(),
+      el.querySelector('[title="Matches an approved query"]')?.textContent?.trim(),
     ).toBe('Verified');
+    expect(el.querySelector('[aria-label="Save as verified query"]')).toBeTruthy();
+    expect(el.textContent).toContain('Generate interactive visuals');
   });
 
-  it('marks truncated records and offers a copy-SQL button', async () => {
-    const el = await render({
-      ...answer,
-      data: [{ ...answer.data![0], truncated: true }],
-    });
+  it('persists a rating picked on an answer', async () => {
+    const el = await render(answer);
+    const api = TestBed.inject(SessionsApiService);
+    const feedback = spyOn(api, 'sendMessageFeedback').and.returnValue(
+      of({ ok: true, message: 'Saved as a verified query' }),
+    );
+    el.querySelector<HTMLButtonElement>(
+      '[aria-label="Save as verified query"]',
+    )!.click();
+    fixture.detectChanges();
+    expect(feedback).toHaveBeenCalledWith('session-1', answer.at, 'up');
     expect(
       el
-        .querySelector('[title="Row cap reached — counts may be incomplete"]')
-        ?.textContent?.trim(),
-    ).toBe('(truncated)');
-    expect(el.querySelector('[aria-label="Copy SQL"]')).toBeTruthy();
+        .querySelector('[aria-label="Save as verified query"]')!
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+  });
+
+  it('asks the host for visuals and for a visual to view', async () => {
+    const el = await render(answer);
+    const generated: ChatMessage[] = [];
+    fixture.componentInstance.generateVisual.subscribe((m) =>
+      generated.push(m),
+    );
+    Array.from(el.querySelectorAll('button'))
+      .find((b) => b.textContent?.trim() === 'Generate interactive visuals')!
+      .click();
+    expect(generated).toEqual([answer]);
+
+    TestBed.resetTestingModule();
+    const visual = {
+      visualId: 'v1',
+      version: 1,
+      title: 'Claims',
+      action: 'created' as const,
+    };
+    const card = await render({
+      role: 'assistant',
+      content: 'Created interactive visual "Claims".',
+      at: '2026-01-01T00:00:01.000Z',
+      visual,
+    });
+    const viewed: unknown[] = [];
+    fixture.componentInstance.viewVisual.subscribe((v) => viewed.push(v));
+    Array.from(card.querySelectorAll('button'))
+      .find((b) => b.textContent?.trim() === 'View')!
+      .click();
+    expect(viewed).toEqual([visual]);
   });
 
   it('offers follow-up chips for a clicked data mark without sending', async () => {
@@ -151,50 +178,6 @@ describe('SessionChat trust UX', () => {
     ).toBeNull();
   });
 
-  it('renders the cross-check verdict next to the Verified badge', async () => {
-    const agreed = await render({
-      ...answer,
-      verified: true,
-      crossCheck: {
-        status: 'agree',
-        note: 'independent re-derivation returned the same results',
-      },
-    });
-    const chip = agreed.querySelector(
-      '[title="independent re-derivation returned the same results"]',
-    );
-    expect(chip?.textContent?.trim()).toBe('Cross-checked');
-    expect(chip?.className).toContain('text-on-success-soft');
-    expect(
-      agreed.querySelector('[title="Matches an approved query"]'),
-    ).toBeTruthy();
-
-    TestBed.resetTestingModule();
-    const differs = await render({
-      ...answer,
-      crossCheck: {
-        status: 'disagree',
-        note: 'results differ — treat with care',
-      },
-    });
-    const amber = differs.querySelector(
-      '[title="results differ — treat with care"]',
-    );
-    expect(amber?.textContent?.trim()).toBe('Cross-check differs');
-    expect(amber?.className).toContain('text-on-warning-soft');
-
-    TestBed.resetTestingModule();
-    const failed = await render({ ...answer, crossCheck: { status: 'error' } });
-    const muted = failed.querySelector('[title="Cross-check failed"]');
-    expect(muted?.textContent?.trim()).toBe('Cross-check failed');
-    expect(muted?.className).toContain('text-fg-muted');
-  });
-
-  it('shows no cross-check chip on an ordinary answer', async () => {
-    const el = await render(answer);
-    expect(el.textContent).not.toContain('Cross-check');
-  });
-
   it('sends careful mode only while the Careful chip is on', async () => {
     const el = await render(answer);
     const api = TestBed.inject(SessionsApiService);
@@ -217,62 +200,6 @@ describe('SessionChat trust UX', () => {
     fixture.componentInstance.draft.set('And denied ones?');
     fixture.componentInstance.send();
     expect(stream.calls.mostRecent().args[5]).toBeTrue();
-  });
-
-  it('narrates how the answer was worked out, step by step', async () => {
-    const el = await render({
-      ...answer,
-      reasoning: [
-        {
-          step: 1,
-          rationale:
-            'There is no direct cost-per-member column, so I first checked how claims are keyed to members.',
-          tool: 'describe_table',
-          rowCount: 12,
-        },
-        {
-          step: 2,
-          rationale: 'Then I summed paid amounts per member for the plan year.',
-          tool: 'run_readonly_sql',
-          rowCount: 1240,
-        },
-        {
-          step: 3,
-          rationale:
-            'I tried splitting by plan tier, but that column is absent.',
-          tool: 'run_readonly_sql',
-          error: 'column plan_tier not found',
-        },
-      ],
-    });
-
-    expect(el.textContent).toContain('How I worked this out (3 steps)');
-    expect(el.textContent).toContain(
-      'There is no direct cost-per-member column, so I first checked how claims are keyed to members.',
-    );
-    expect(el.textContent).toContain('12 rows');
-    expect(el.textContent).toContain('1,240 rows');
-    expect(el.textContent).toContain('failed — column plan_tier not found');
-  });
-
-  it('shows no reasoning block when the answer carries none', async () => {
-    const el = await render(answer);
-    expect(el.textContent).not.toContain('How I worked this out');
-  });
-
-  it('explains each query in the data provenance list', async () => {
-    const el = await render({
-      ...answer,
-      data: [
-        {
-          ...answer.data![0],
-          rationale: 'Counting the claims keyed to a member first.',
-        },
-      ],
-    });
-    expect(el.textContent).toContain(
-      'Counting the claims keyed to a member first.',
-    );
   });
 
   it('shows the rationale under the tool while the turn streams', async () => {
@@ -298,7 +225,7 @@ describe('SessionChat trust UX', () => {
     fixture.componentInstance.stop();
   });
 
-  it('shows the work collected before a clarification', async () => {
+  it('sends the option picked on the latest clarification as the next turn', async () => {
     const el = await render({
       role: 'assistant',
       content: '',
@@ -307,18 +234,21 @@ describe('SessionChat trust UX', () => {
         question: 'Which plan year?',
         options: [{ label: '2025' }, { label: '2026' }],
       },
-      entities: ['main.health.claims'],
-      data: [{ ...answer.data![0], truncated: true }],
     });
+    const api = TestBed.inject(SessionsApiService);
+    const stream = spyOn(api, 'streamMessage').and.resolveTo();
 
-    expect(el.textContent).toContain('Which plan year?');
-    expect(el.textContent).toContain('Data entities');
-    expect(el.textContent).toContain('main.health.claims');
-    expect(el.textContent).toContain('Data used (1 query)');
-    expect(
-      el.querySelector('[title="Row cap reached — counts may be incomplete"]'),
-    ).toBeTruthy();
-    expect(el.querySelector('[aria-label="Copy SQL"]')).toBeTruthy();
+    Array.from(el.querySelectorAll('button'))
+      .find((b) => b.textContent?.includes('2026'))!
+      .click();
+    fixture.detectChanges();
+
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(stream.calls.mostRecent().args[1]).toBe('2026');
+    expect(fixture.componentInstance.sending()).toBeTrue();
+    // Once answered, the card is no longer the latest message: it locks.
+    expect(el.textContent).not.toContain('Something else');
+    fixture.componentInstance.stop();
   });
 });
 
@@ -356,18 +286,6 @@ describe('SessionChat deep analysis', () => {
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
-
-  it('renders a report message with its summary and a download button', () => {
-    const el = mount([reportMessage]);
-
-    expect(el.textContent).toContain('Denial drivers deep dive');
-    expect(el.textContent).toContain('4 angles investigated');
-    // Executive summary goes through the markdown pipe.
-    expect(el.querySelector('.prose-dark')?.innerHTML).toContain(
-      '<strong>12.4%</strong>',
-    );
-    expect(el.querySelector('[aria-label="Download report"]')).toBeTruthy();
-  });
 
   it('downloads the report markdown', () => {
     const el = mount([reportMessage]);

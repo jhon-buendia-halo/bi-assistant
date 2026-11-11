@@ -1,4 +1,3 @@
-import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   ElementRef,
@@ -15,22 +14,14 @@ import {
 import {
   LucideAngularModule,
   ArrowUp,
-  BadgeCheck,
   BarChart3,
   Brain,
   Copy,
-  Download,
-  Info,
   Loader2,
-  ShieldAlert,
   ShieldCheck,
-  ShieldOff,
   Sparkles,
   Square,
-  FileArchive,
   Telescope,
-  ThumbsDown,
-  ThumbsUp,
   TriangleAlert,
   Wrench,
   BookOpen,
@@ -41,24 +32,16 @@ import {
   AnalysisReport,
   RfpPackage,
   ChatMessage,
-  CrossCheck,
   DataPointSelection,
   DeepAnalysisStatus,
   MessageFeedback,
   Session,
-  ReasoningStep,
-  ToolDataRecord,
   PanelItemEvent,
   ReadinessPanelItem,
   ReadinessReportRef,
   WorkflowView,
   VisualEvent,
 } from '../../models/session.model';
-import {
-  legacyTagAccentClass,
-  legacyTagDescription,
-  legacyTagLabel,
-} from '../../../ontology/models/ontology.model';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import { slug } from '../../services/slug';
@@ -67,6 +50,7 @@ import {
   readinessPanelTitle,
   readinessReportRef,
 } from '../../models/readiness.model';
+import { AnswerView } from '../answer-view/answer-view';
 import { ReadinessCard } from './readiness-card';
 
 /** Human-readable text for a clicked mark: its label when it has one. */
@@ -156,35 +140,20 @@ export function skillStepLabel(toolName: string): string | null {
 
 @Component({
   selector: 'app-session-chat',
-  imports: [LucideAngularModule, MarkdownPipe, NgTemplateOutlet, ReadinessCard],
+  imports: [LucideAngularModule, MarkdownPipe, AnswerView, ReadinessCard],
   templateUrl: './session-chat.html',
   styleUrl: './session-chat.scss',
 })
 export class SessionChat implements OnDestroy {
-  // Labels/colours for the ontology items an answer was produced under. The
-  // per-turn record keeps the legacy tags (term, default_filter, …); the
-  // ontology model maps them so the chat and the Ontology tab never drift.
-  readonly knowledgeKindLabel = legacyTagLabel;
-  readonly knowledgeDescription = legacyTagDescription;
-  readonly knowledgeAccentClass = legacyTagAccentClass;
-
   readonly ArrowUp = ArrowUp;
-  readonly BadgeCheck = BadgeCheck;
   readonly BarChart3 = BarChart3;
   readonly Brain = Brain;
   readonly Copy = Copy;
-  readonly Download = Download;
-  readonly Info = Info;
   readonly Loader2 = Loader2;
-  readonly ShieldAlert = ShieldAlert;
   readonly ShieldCheck = ShieldCheck;
-  readonly ShieldOff = ShieldOff;
   readonly Sparkles = Sparkles;
   readonly Square = Square;
   readonly Telescope = Telescope;
-  readonly FileArchive = FileArchive;
-  readonly ThumbsDown = ThumbsDown;
-  readonly ThumbsUp = ThumbsUp;
   readonly TriangleAlert = TriangleAlert;
   readonly Wrench = Wrench;
   readonly BookOpen = BookOpen;
@@ -378,8 +347,6 @@ export class SessionChat implements OnDestroy {
       this.draft.set('');
       // A new conversation starts a new session — careful mode is opt-in again.
       this.careful.set(false);
-      this.customAnswer.set('');
-      this.customAnswerOpen.set(false);
       this.resetTurnState();
       this.scrollToBottom();
     });
@@ -863,11 +830,6 @@ export class SessionChat implements OnDestroy {
   /** `rfpId/file` being downloaded right now (`rfpId/` for the zip). */
   readonly rfpDownloading = signal<string | null>(null);
 
-  /** Whether the package holds the rendered `rfp.pdf`. */
-  hasRfpPdf(pkg: RfpPackage): boolean {
-    return pkg.files.some((f) => f.name === 'rfp.pdf');
-  }
-
   /** Save an RFP package's zip, or one of its files (ui.md 4.12). */
   downloadRfpPackage(pkg: RfpPackage, file?: string): void {
     if (this.rfpDownloading()) return;
@@ -900,68 +862,10 @@ export class SessionChat implements OnDestroy {
       });
   }
 
-  // --------------------------------------------------- cross-check chip
-
-  /** What the independent re-derivation concluded, in one word. */
-  crossCheckLabel(check: CrossCheck): string {
-    if (check.status === 'agree') return 'Cross-checked';
-    return check.status === 'disagree'
-      ? 'Cross-check differs'
-      : 'Cross-check failed';
-  }
-
-  crossCheckIcon(check: CrossCheck): typeof ShieldCheck {
-    if (check.status === 'agree') return this.ShieldCheck;
-    return check.status === 'disagree' ? this.ShieldAlert : this.ShieldOff;
-  }
-
-  /** Emerald when corroborated, amber when it differs, muted when it failed. */
-  crossCheckClass(check: CrossCheck): string {
-    if (check.status === 'agree') {
-      return 'border-on-success-soft/30 bg-success-soft text-on-success-soft';
-    }
-    return check.status === 'disagree'
-      ? 'border-on-warning-soft/30 bg-warning-soft text-on-warning-soft'
-      : 'border-border bg-surface-muted text-fg-muted';
-  }
-
-  /** Tooltip: the backend's note, or the verdict when it sent none. */
-  crossCheckTitle(check: CrossCheck): string {
-    return check.note?.trim() || this.crossCheckLabel(check);
-  }
-
-  /**
-   * Muted outcome shown after one step of "How I worked this out": what the
-   * step returned, or why it failed. Empty when the step reported neither.
-   */
-  reasoningOutcome(step: ReasoningStep): string {
-    if (step.error) return `failed — ${step.error}`;
-    if (step.rowCount === undefined) return '';
-    const rows = step.rowCount.toLocaleString('en-US');
-    return `${rows} row${step.rowCount === 1 ? '' : 's'}`;
-  }
-
-  /** Short label for a persisted data record under an answer. */
-  dataLabel(record: ToolDataRecord): string {
-    if (record.error) return `${record.tool} — failed`;
-    const rows = record.rowCount ?? record.rows?.length ?? 0;
-    return `${record.tool} — ${rows} row${rows === 1 ? '' : 's'}`;
-  }
-
+  /** Copy a user message (an answer's copy button lives in `AnswerView`). */
   copyMessage(content: string): void {
-    this.copyToClipboard(content, 'Copied to clipboard');
-  }
-
-  /** Copy the query behind one persisted data record. */
-  copySql(record: ToolDataRecord): void {
-    const sql = record.input?.trim();
-    if (!sql) return;
-    this.copyToClipboard(sql, 'SQL copied to clipboard');
-  }
-
-  private copyToClipboard(text: string, success: string): void {
-    void navigator.clipboard.writeText(text).then(
-      () => this.toast.success(success),
+    void navigator.clipboard.writeText(content).then(
+      () => this.toast.success('Copied to clipboard'),
       () => this.toast.error('Copy failed'),
     );
   }
@@ -1021,46 +925,14 @@ export class SessionChat implements OnDestroy {
     this.generateVisual.emit(message);
   }
 
-  /** Clarification card actions. */
+  /**
+   * A clarification card's answer (an option, a custom answer or Skip; the
+   * card itself is in `AnswerView`) is sent as the next turn.
+   */
   pickOption(label: string): void {
     if (this.sending()) return;
-    this.customAnswer.set('');
-    this.customAnswerOpen.set(false);
     this.draft.set(label);
     this.send();
-  }
-
-  skipClarification(): void {
-    this.pickOption('Skip — proceed with your best judgment.');
-  }
-
-  /** Inline custom answer inside the clarification card. */
-  readonly customAnswerOpen = signal(false);
-  readonly customAnswer = signal('');
-
-  toggleCustomAnswer(): void {
-    this.customAnswerOpen.set(!this.customAnswerOpen());
-    if (this.customAnswerOpen()) {
-      setTimeout(() => {
-        const el = this.scroller()?.nativeElement.querySelector(
-          '#custom-answer',
-        ) as HTMLInputElement | null;
-        el?.focus();
-      });
-    }
-  }
-
-  sendCustomAnswer(): void {
-    const answer = this.customAnswer().trim();
-    if (!answer || this.sending()) return;
-    this.pickOption(answer);
-  }
-
-  onCustomAnswerKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      this.sendCustomAnswer();
-    }
   }
 
   /** Only the latest message's clarification card is actionable. */
