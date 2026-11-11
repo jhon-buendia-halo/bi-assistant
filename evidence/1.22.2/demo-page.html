@@ -1,0 +1,154 @@
+<title>1.22.2 Synthetic data script</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --fg: #1d1f23;
+  --muted: #5b616b;
+  --border: #dcdde0;
+  --accent: #2f5bd3;
+  --code-bg: #eef0f3;
+  --focus: #2f5bd3;
+  --ok-bg: #e3f4e8;
+  --ok-fg: #17663a;
+  --warn-bg: #fdf0d8;
+  --warn-fg: #7a4d00;
+  --bad-bg: #fbe4e2;
+  --bad-fg: #a3261b;
+  --neutral-bg: #eceef1;
+  --neutral-fg: #444a53;
+  --video-bg: #e9eaed;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141518;
+    --surface: #1c1e22;
+    --fg: #e7e8ea;
+    --muted: #a0a6b0;
+    --border: #33363d;
+    --accent: #8aa8ff;
+    --code-bg: #262930;
+    --focus: #8aa8ff;
+    --ok-bg: #173523;
+    --ok-fg: #8fdcaa;
+    --warn-bg: #3a2c10;
+    --warn-fg: #f2c46b;
+    --bad-bg: #42201d;
+    --bad-fg: #ff9d92;
+    --neutral-bg: #2a2d33;
+    --neutral-fg: #c3c7ce;
+    --video-bg: #0e0f11;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141518;
+  --surface: #1c1e22;
+  --fg: #e7e8ea;
+  --muted: #a0a6b0;
+  --border: #33363d;
+  --accent: #8aa8ff;
+  --code-bg: #262930;
+  --focus: #8aa8ff;
+  --ok-bg: #173523;
+  --ok-fg: #8fdcaa;
+  --warn-bg: #3a2c10;
+  --warn-fg: #f2c46b;
+  --bad-bg: #42201d;
+  --bad-fg: #ff9d92;
+  --neutral-bg: #2a2d33;
+  --neutral-fg: #c3c7ce;
+  --video-bg: #0e0f11;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-wrap: anywhere;
+}
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 48px;
+}
+header { margin-bottom: 20px; }
+.eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 0.8125rem; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 1.2rem + 1.4vw, 2rem); line-height: 1.2; letter-spacing: -0.01em; }
+h2 { margin: 36px 0 10px; font-size: 1.125rem; line-height: 1.3; }
+p, li { max-width: 65ch; }
+p { margin: 0 0 10px; }
+.intent { color: var(--muted); font-size: 1.0625rem; margin-bottom: 12px; }
+ul, ol { margin: 0 0 10px; padding-left: 1.4em; }
+li { margin: 3px 0; }
+li > ul, li > ol { margin: 4px 0 0; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, video:focus-visible, .scroll:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+code, pre { font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace; font-size: 0.875em; }
+code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+.chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.8125rem; font-weight: 600; line-height: 1.6; }
+.chip.ok { background: var(--ok-bg); color: var(--ok-fg); }
+.chip.warn { background: var(--warn-bg); color: var(--warn-fg); }
+.chip.bad { background: var(--bad-bg); color: var(--bad-fg); }
+.chip.neutral { background: var(--neutral-bg); color: var(--neutral-fg); }
+.demo { margin: 0; }
+.demo video { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; height: auto; background: var(--video-bg); border: 1px solid var(--border); border-radius: 8px; }
+.demo pre { margin: 0; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; white-space: pre; line-height: 1.45; }
+.demo figcaption { margin-top: 8px; color: var(--muted); font-size: 0.8125rem; max-width: 65ch; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; }
+.card > :last-child { margin-bottom: 0; }
+.shipped { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.shipped > li { max-width: none; margin: 0; }
+.date { color: var(--muted); font-size: 0.8125rem; margin: 0 0 4px; }
+.aside { color: var(--muted); font-size: 0.9375rem; }
+.scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td code { font-size: 0.8125em; color: var(--muted); }
+td:first-child { min-width: 16ch; }
+.result-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.8125rem; }
+footer p { margin: 0 0 4px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+</style>
+<main>
+<header>
+<p class="eyebrow">Sampled profiling and synthetic data · roadmap 1.22.2</p>
+<h1>Synthetic data script for PostgreSQL</h1>
+<p class="intent">download a realistic, privacy-safe copy of a PostgreSQL dataset&#39;s tables as a script that loads into any empty PostgreSQL database.</p>
+<span class="chip warn">In progress</span>
+</header>
+<section aria-label="Demo">
+<figure class="demo">
+<video src="demo.webm" controls playsinline muted preload="metadata" aria-label="Demo of 1.22.2 Synthetic data script for PostgreSQL"></video>
+<figcaption>Recorded by <code>scripts/qa.mjs 1.22.2 --fast</code> with <code>DEMO=1</code>; captions are the scenario's Gherkin lines.</figcaption>
+</figure>
+</section>
+<section aria-labelledby="h-scope">
+<h2 id="h-scope">Scope</h2>
+<ul><li>The deterministic generator: seeded per column, keys first, FK values drawn from the parents&#39; keys (composite keys, cycles and self-references included), strategies per column kind, null rates, clamping when a composite key cannot reach the requested rows.</li><li>The PostgreSQL writer: header, <code>BEGIN</code>/<code>COMMIT</code>, <code>CREATE SCHEMA</code> of the target, <code>CREATE TABLE</code> with an allow-listed type mapping (anything else becomes <code>text</code>), PK and UNIQUE inline, INSERTs batched by 500, FK <code>ALTER</code>s after the inserts, LF only.</li><li><code>POST /synthetic-data/scripts</code> (api.md 112): a streamed attachment, <code>X-Script-Sha256</code>, every validation error.</li><li>The Generate form in the tab: rows per table (default 100, 1–10,000), All tables + Apply, Seed (default 1), Target schema (default <code>synthetic</code>), Include keys and constraints, Generate .sql, and the expired-profile state.</li><li>A Databricks profile answers a temporary 400 until 1.22.3.</li><li>Unique integers that are not keys (requested 2026-11-11): only PK and FK integer columns get <code>sequence</code>. A column that is unique only (declared UNIQUE, or a sample distinct ratio ≥ 0.95) gets the new strategy <code>unique-range</code>, distinct integers drawn within the observed min–max. When the range holds fewer values than the requested rows, it falls back to a sequence starting at the observed minimum, and the header says so. Chip copy: <code>Distinct numbers in the observed range</code>. Example: World Cup <code>tournaments.tournament_year</code> gives years in 2018–2022, not 1, 2, 3.</li><li>The capability rules for the generator and the PostgreSQL output; the data-model note on in-memory profiles; glossary.</li></ul>
+<p class="aside"><strong>Out of scope:</strong> the Databricks writer (1.22.3); loading the script anywhere from the app; cross-column correlations other than keys.</p>
+</section>
+<section aria-labelledby="h-acceptance">
+<h2 id="h-acceptance">Acceptance</h2>
+<ul><li>On World Cup with 50 rows per table, the downloaded script, replayed into a scratch database by the API-level E2E, creates every table with the requested row counts and every FK constraint added.</li><li>The same seed gives the same <code>X-Script-Sha256</code>, and another seed gives a different one.</li><li>No real player or venue name appears in the script.</li><li><code>tournaments.tournament_year</code> shows <code>Distinct numbers in the observed range</code>, and its generated values are distinct and within 2018–2022 (or the documented fallback when more rows than years are asked for).</li><li>Generator specs prove null rates, categorical fractions and ranges within tolerance, and FK values within the parents&#39; keys.</li><li>The <code>@demo @story-1.22.2</code> scenario passes.</li><li>Unit tests, builds and check-specs are green.</li></ul>
+</section>
+<section aria-labelledby="h-gate">
+<h2 id="h-gate">Gate results</h2>
+<p class="result-line"><span class="chip neutral">Not run yet</span><span class="aside">Gate results: not run yet (<code>scripts/qa.mjs 1.22.2 --gate</code> writes <code>evidence/1.22.2/tests.md</code>).</span></p>
+</section>
+<footer>
+<p>branch <code>feat/M1-22-synthetic-data</code> · commit <code>43ecba8</code> · generated 2026-11-11</p>
+<p>Generated by scripts/demo-page.mjs from roadmap.md, changelog.md and evidence/1.22.2/</p>
+</footer>
+</main>
