@@ -70,9 +70,10 @@ Sampling method per table. The constants are `SAMPLE_SIZE = 1000` (the request m
 | | 1,001 – 1,000,000 | `SELECT * FROM "s"."t" TABLESAMPLE BERNOULLI (p) REPEATABLE (7) LIMIT 1000` | `tablesample` |
 | | > 1,000,000 | `… TABLESAMPLE SYSTEM (p) REPEATABLE (7) LIMIT 1000` | `tablesample` |
 | | unknown, or a view, foreign table or partitioned parent where TABLESAMPLE errors | `SELECT * FROM "s"."t" LIMIT 1000` | `limit` |
-| Databricks | `rowCount()` (Delta metadata); a timeout or error = unknown | | |
+| Databricks | `rowCount()` (a plain `COUNT(*)`, cheap on Delta) plus `DESCRIBE DETAIL` `sizeInBytes`; a timeout or error = unknown | | |
 | | ≤ 1,000 | ``SELECT * FROM `c`.`s`.`t` LIMIT 1000`` | `full` |
-| | > 1,000 | ``SELECT * FROM `c`.`s`.`t` TABLESAMPLE (p PERCENT) REPEATABLE (7) LIMIT 1000`` | `tablesample` |
+| | > 1,000 and `sizeInBytes` < `DATABRICKS_TABLESAMPLE_MAX_BYTES` (50 GiB) | ``SELECT * FROM `c`.`s`.`t` TABLESAMPLE (p PERCENT) REPEATABLE (7) LIMIT 1000`` | `tablesample` |
+| | `sizeInBytes` ≥ 50 GiB (live timing: 52 s cold on 160 GB) | ``SELECT * FROM `c`.`s`.`t` LIMIT 1000`` | `limit` |
 | | unknown, or TABLESAMPLE refused (views) | ``SELECT * FROM `c`.`s`.`t` LIMIT 1000`` | `limit` |
 
 - When a `tablesample` read returns fewer than half of `min(SAMPLE_SIZE, estimate)` rows, the sampler retries once with `p × 4`. The SYSTEM method is block-level and can come back short.
@@ -741,3 +742,9 @@ Between 1.22.2 and 1.22.3, `POST /synthetic-data/scripts` for a Databricks profi
   The row estimate comes from `reltuples`, not `COUNT(*)`, because a PostgreSQL `COUNT(*)` on a big table is the slow part. `REPEATABLE (7)` makes a re-profile of unchanged data give the same sample.
 - **The profile is cached in memory for 60 minutes** rather than being purely on-demand with nothing kept. The generate step needs exactly the profile the user saw, and posting it back exceeds the default body limit (G9). It is still never persisted.
 - Everything else is as briefed.
+- **After the live timings (2026-11-11, [evidence/1.22.1/sampling-timings.md](../../evidence/1.22.1/sampling-timings.md)):**
+  - PostgreSQL: every tier under 150 ms on a 349k-row table; no change.
+  - Databricks: `TABLESAMPLE` passed on `tpch.lineitem` (30 M rows: 3.6 s cold, 0.47 s warm) but took 52 s cold on `tpch_sf1000.lineitem` (6 B rows, 160 GB), over the 15 s statement timeout, where `LIMIT` took 1.6 s. So a size guard: tables of 50 GiB or more (`DESCRIBE DETAIL` `sizeInBytes`, new constant `DATABRICKS_TABLESAMPLE_MAX_BYTES` in `limits.ts`) use `limit`.
+  - Databricks `rowCount()` is a `COUNT(*)`, not Delta metadata as section 1 said; it ran in 0.3 s warm.
+  - A `limit` read that returns fewer rows than it asked for read the whole table, so it is labelled `full`, not `limit`. That fixes the never-analysed `world_cup.players` (`reltuples = -1`), which would otherwise show "sampling not supported".
+  - TABLESAMPLE on a Databricks view was not verified live: the fallback on a TABLESAMPLE error covers it.
