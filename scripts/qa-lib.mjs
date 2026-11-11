@@ -1,6 +1,7 @@
 // Pure logic for scripts/qa.mjs (delivery.md 13, roadmap 0.4.5): argument
-// parsing, the step-6 list, test selection, report counting, tests.md and the
-// single QA lane lock. No process spawning here, so `node --test` covers it.
+// parsing, the build up-to-date decision, the step-6 list and its draft, test
+// selection, report counting, tests.md and the QA locks. No process spawning
+// here, so `node --test` covers it.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -9,22 +10,45 @@ export const DECISIONS = ['add', 'update', 'delete', 're-run'];
 
 export class UsageError extends Error {}
 
-export const USAGE =
-  'Usage: node scripts/qa.mjs <roadmap-id> --fast|--gate [--base <ref>]';
+export const USAGE = [
+  'Usage: node scripts/qa.mjs <roadmap-id> --fast|--gate [--base <ref>] [--rebuild] [--no-demo] [--dry-run]',
+  '       node scripts/qa.mjs <roadmap-id> --draft-impact [--base <ref>] [--dry-run]',
+  '  --fast          fast loop: build, related unit tests, check-specs, selected Playwright specs, demo',
+  '  --gate          acceptance gate: build, full unit suites, lint, check-specs, the step-6 specs, tests.md',
+  '  --draft-impact  write a draft evidence/<id>/e2e-impact.md from the diff (never overwrites)',
+  '  --base <ref>    epic base for the diff (default: git merge-base HEAD origin/main)',
+  '  --rebuild       build even when backend/dist and backend/public are up to date',
+  '  --no-demo       S change: --fast writes demo.txt instead of recording; --gate skips the demo check',
+  '  --dry-run       print the plan and the build decision, run nothing, write nothing',
+].join('\n');
 
-/** `<roadmap-id> --fast|--gate [--base <ref>]` → { id, mode, base }. */
+const MODES = ['fast', 'gate', 'draft-impact'];
+
+/**
+ * `<roadmap-id> --fast|--gate|--draft-impact [--base <ref>] [--rebuild]
+ * [--no-demo] [--dry-run]` → { id, mode, base, rebuild, noDemo, dryRun }.
+ */
 export function parseArgs(argv) {
   let id;
   let mode;
   let base;
+  let rebuild = false;
+  let noDemo = false;
+  let dryRun = false;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === '--fast' || arg === '--gate') {
-      if (mode) throw new UsageError('Choose one of --fast and --gate');
+    if (arg.startsWith('--') && MODES.includes(arg.slice(2))) {
+      if (mode) throw new UsageError('Choose one of --fast, --gate and --draft-impact');
       mode = arg.slice(2);
     } else if (arg === '--base') {
       base = argv[++i];
       if (!base) throw new UsageError('--base needs a git ref');
+    } else if (arg === '--rebuild') {
+      rebuild = true;
+    } else if (arg === '--no-demo') {
+      noDemo = true;
+    } else if (arg === '--dry-run') {
+      dryRun = true;
     } else if (arg.startsWith('--')) {
       throw new UsageError(`Unknown option ${arg}`);
     } else if (!id) {
@@ -37,9 +61,143 @@ export function parseArgs(argv) {
   if (!/^\d+(\.\d+)+$/.test(id)) {
     throw new UsageError(`"${id}" is not a roadmap id like 1.21.6`);
   }
-  if (!mode) throw new UsageError('Choose --fast or --gate');
-  return { id, mode, base };
+  if (!mode) throw new UsageError('Choose --fast, --gate or --draft-impact');
+  if (mode === 'draft-impact' && (rebuild || noDemo)) {
+    throw new UsageError('--rebuild and --no-demo go with --fast or --gate');
+  }
+  return { id, mode, base, rebuild, noDemo, dryRun };
 }
+
+/**
+ * What `build:all` reads, relative to the repo root. Directories are walked
+ * (their own mtimes count too, so a deleted or renamed file is a change).
+ * The installed-dependency stamps (`node_modules/.package-lock.json`, rewritten
+ * by every npm install) count as inputs. Paths that do not exist are ignored.
+ */
+export const BUILD_INPUTS = [
+  'backend/src',
+  'backend/package.json',
+  'backend/package-lock.json',
+  'backend/nest-cli.json',
+  'backend/tsconfig.json',
+  'backend/tsconfig.build.json',
+  'backend/scripts/copy-web.js',
+  'backend/node_modules/.package-lock.json',
+  'frontend/src',
+  'frontend/public',
+  'frontend/package.json',
+  'frontend/package-lock.json',
+  'frontend/angular.json',
+  'frontend/tsconfig.json',
+  'frontend/tsconfig.app.json',
+  'frontend/.postcssrc.json',
+  'frontend/node_modules/.package-lock.json',
+];
+
+/** What `build:all` writes: the CLI the Playwright fixture starts and the web UI it serves. */
+export const BUILD_OUTPUTS = ['backend/dist/cli.js', 'backend/public/index.html'];
+
+/**
+ * The newest mtime under `entries` (files, or directories walked
+ * recursively, directories' own mtimes included). Returns { path, mtimeMs }
+ * of the newest, or null when none exists.
+ */
+export function newestMtime(root, entries, fsImpl = fs) {
+  let newest = null;
+  const visit = (rel) => {
+    let st;
+    try {
+      st = fsImpl.statSync(path.join(root, rel));
+    } catch {
+      return;
+    }
+    if (!newest || st.mtimeMs > newest.mtimeMs) newest = { path: toPosix(rel), mtimeMs: st.mtimeMs };
+    if (st.isDirectory()) {
+      for (const name of fsImpl.readdirSync(path.join(root, rel))) visit(path.join(rel, name));
+    }
+  };
+  for (const entry of entries) visit(entry);
+  return newest;
+}
+
+/**
+ * Whether `build:all` must run. Conservative: it is skipped only when it is
+ * not forced, the last build qa.mjs ran succeeded (`stamp`, written only on
+ * success, `{ startedAt }` in ms), every output exists, and every input is
+ * older than both that build's start and every output. Anything unknown
+ * builds. `newestInput`: { path, mtimeMs } or null; `outputs`:
+ * [{ path, mtimeMs | null }].
+ */
+export function buildDecision({ rebuild, stamp, newestInput, outputs }) {
+  if (rebuild) return { build: true, reason: '--rebuild' };
+  const missing = outputs.find((o) => o.mtimeMs == null);
+  if (missing) return { build: true, reason: `${missing.path} is missing` };
+  if (!stamp || !Number.isFinite(stamp.startedAt)) {
+    return { build: true, reason: 'no record of a successful qa.mjs build' };
+  }
+  if (!newestInput) return { build: true, reason: 'no build input found' };
+  const oldestOutput = outputs.reduce((a, o) => (o.mtimeMs < a.mtimeMs ? o : a));
+  if (newestInput.mtimeMs >= stamp.startedAt) {
+    return { build: true, reason: `${newestInput.path} changed since the last successful build` };
+  }
+  if (newestInput.mtimeMs >= oldestOutput.mtimeMs) {
+    return { build: true, reason: `${newestInput.path} is newer than ${oldestOutput.path}` };
+  }
+  return { build: false, reason: 'up to date' };
+}
+
+/**
+ * The Playwright specs `--fast` runs and `--draft-impact` lists: the
+ * `--only-changed=<base>` list, the step-6 list, every changed
+ * `frontend/e2e/*.spec.ts` and the story's demo spec.
+ */
+export function selectedSpecs({ onlyChanged = [], listed = [], changed = [], demo = [] }) {
+  return [
+    ...new Set([
+      ...onlyChanged,
+      ...listed,
+      ...changed.map(toPosix).filter((f) => /^frontend\/e2e\/[^/]+\.spec\.ts$/.test(f)),
+      ...demo,
+    ]),
+  ].sort();
+}
+
+/**
+ * A draft evidence/<id>/e2e-impact.md (step 6), in the table format
+ * parseImpact reads: every selected spec as `re-run` (or `delete` when the
+ * diff removed it), scenarios `TODO: review`.
+ */
+export function renderDraftImpact(id, specs, { base, exists = () => true } = {}) {
+  const out = [
+    `# ${id} — E2E impact (step 6)`,
+    '',
+    `> **Draft to review.** Written by \`node scripts/qa.mjs ${id} --draft-impact\` from the diff against \`${base ?? 'the epic base'}\`. Check every decision, fill in the scenarios and add the specs the diff mapping missed (shared helpers, fixtures) before the gate.`,
+    '',
+    '| Spec | Decision | Scenarios |',
+    '|---|---|---|',
+    ...specs.map((spec) => `| \`${spec}\` | ${exists(spec) ? 're-run' : 'delete'} | TODO: review |`),
+  ];
+  if (!specs.length) out.push('', 'TODO: review — no related Playwright spec was found from the diff.');
+  return `${out.join('\n')}\n`;
+}
+
+/**
+ * The gate's demo evidence step (delivery.md 13), or null when `--no-demo`
+ * skips the check (an S change; tests.md then says so).
+ */
+export function demoEvidenceStep(id, evidence, { noDemo = false } = {}) {
+  if (noDemo) return null;
+  const problems = demoEvidenceProblems(id, evidence);
+  return {
+    name: 'demo evidence',
+    command: 'demo.webm / demo.txt and the demo artifact link',
+    status: problems.length ? 'failed' : 'passed',
+    exitCode: problems.length ? 1 : 0,
+    summary: problems,
+  };
+}
+
+export const DEMO_SKIPPED_LINE = 'Demo: skipped (--no-demo, small change)';
 
 /**
  * The step-6 list from `evidence/<id>/e2e-impact.md`: every table row whose
@@ -219,14 +377,16 @@ export function renderTestsMd({
   missing,
   links = [],
   failures = [],
+  demoSkipped = false,
 }) {
   const ok = steps.every((s) => s.status === 'passed') && missing.length === 0;
   const n = (v) => (v === undefined ? '—' : String(v));
   const out = [
     `# Tests — ${id}`,
     '',
-    `Written by \`node scripts/qa.mjs ${id} --gate\` on ${date}, epic base \`${base}\`. **Result: ${ok ? 'passed' : 'failed'}.**`,
+    `Written by \`node scripts/qa.mjs ${id} --gate${demoSkipped ? ' --no-demo' : ''}\` on ${date}, epic base \`${base}\`. **Result: ${ok ? 'passed' : 'failed'}.**`,
     '',
+    ...(demoSkipped ? [`${DEMO_SKIPPED_LINE}.`, ''] : []),
     '| Step | Command | Result | Passed | Failed | Skipped |',
     '|---|---|---|---|---|---|',
     ...steps.map(
@@ -259,8 +419,11 @@ export function renderTestsMd({
 }
 
 /** evidence/<id>/demo.txt for a story with no UI: the commands and their outcome. */
-export function renderDemoTxt(id, title, steps) {
-  const out = [`Demo — ${id}${title ? ` ${title}` : ''}`, '', 'No UI scenario carries this story\'s tag, so the demo is this transcript of the checks scripts/qa.mjs ran.', ''];
+export function renderDemoTxt(id, title, steps, { noDemo = false } = {}) {
+  const why = noDemo
+    ? 'Run with --no-demo (a small change), so the demo is this transcript of the checks scripts/qa.mjs ran.'
+    : 'No UI scenario carries this story\'s tag, so the demo is this transcript of the checks scripts/qa.mjs ran.';
+  const out = [`Demo — ${id}${title ? ` ${title}` : ''}`, '', why, ''];
   for (const s of steps) {
     out.push(`$ ${s.command}`, `  exit ${s.exitCode} (${s.status})`);
     for (const line of s.summary ?? []) out.push(`  ${stripAnsi(line).trim()}`);
@@ -277,11 +440,14 @@ export function storyTitle(roadmap, id) {
 }
 
 /**
- * Takes the single QA lane. The lock file is created exclusively; while
- * another live run holds it, waits and polls. A lock whose pid is gone is
- * stale and removed. Returns a release function.
+ * Takes a lock: the shared Playwright lane (`qa.lock` in git's common dir) or
+ * this checkout's run (`qa-checkout.lock` in the worktree's git dir). The
+ * lock file is created exclusively; while another live run holds it, waits
+ * and polls. A lock whose pid is gone is stale and removed. Returns a
+ * release function.
  */
 export async function acquireLock(lockPath, info, {
+  label = 'the QA lane',
   isAlive = defaultIsAlive,
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
   log = (msg) => console.log(msg),
@@ -323,7 +489,7 @@ export async function acquireLock(lockPath, info, {
       continue;
     }
     if (!announced) {
-      log(`Waiting for the QA lane (held by ${held.story}, pid ${held.pid})`);
+      log(`Waiting for ${label} (held by ${held.story}, pid ${held.pid})`);
       announced = true;
     }
     await sleep(pollMs);

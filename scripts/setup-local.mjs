@@ -58,6 +58,18 @@ export function llmSettings(env) {
   };
 }
 
+/**
+ * The load body for one fixture. The Intellify sample goes into the database
+ * the embedded Intellify RFP API reads (`INTELLIFY_DB_NAME`, default
+ * `intellify_mercer_demo`, api.md 6.1) instead of the fixture's own default
+ * `intellify`, so the API can be registered in the same run.
+ */
+export function fixtureBody(fixture, env = {}) {
+  if (!fixture.seedable) return {};
+  if (fixture.id !== 'intellify') return fixture.defaults;
+  return { ...fixture.defaults, database: env.INTELLIFY_DB_NAME || 'intellify_mercer_demo' };
+}
+
 async function main() {
   const base = (process.argv[2] || 'http://127.0.0.1:3000').replace(/\/+$/, '');
   const file = findEnvFile();
@@ -83,6 +95,7 @@ async function main() {
   }
 
   const { fixtures } = await call('GET', '/testing-data');
+  let seededIntellify = false;
   for (const f of fixtures) {
     // Seedable Postgres fixtures load with their own defaults; the Intellify
     // RFP API registers itself (api.md 56). Other REST fixtures are script-only.
@@ -91,9 +104,15 @@ async function main() {
       console.log(`${f.id}: already loaded`);
       continue;
     }
-    const res = await call('POST', `/testing-data/${f.id}/load`, f.seedable ? f.defaults : {});
+    const res = await call('POST', `/testing-data/${f.id}/load`, fixtureBody(f, env));
     console.log(`${f.id}:`, res.message);
     failed ||= !res.ok;
+    seededIntellify ||= f.id === 'intellify' && res.ok;
+  }
+  if (seededIntellify) {
+    console.log(
+      'Restart the app once (same --data-dir) so the embedded Intellify RFP API applies its rfp migrations to the new database.',
+    );
   }
   process.exitCode = failed ? 1 : 0;
 }

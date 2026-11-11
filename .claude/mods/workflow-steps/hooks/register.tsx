@@ -35,7 +35,7 @@ const FALLBACK: Step[] = [
   { number: 10, title: 'Update changelog with evidence', summary: 'Dated changelog entry, evidence folder, roadmap entry ✅ Done.' },
   { number: 11, title: 'Retrospective', summary: 'What went well, what went wrong, what to do differently.' },
 ]
-const FALLBACK_FIRST_ACTION = 'Read retrospective.md before doing anything else.'
+const FALLBACK_FIRST_ACTION = 'Read lessons.md before doing anything else.'
 
 // Markdown to plain text: links to their text, no emphasis or code marks.
 const plain = (text: string): string =>
@@ -305,7 +305,7 @@ export const layoutFor = (width: number): RowLayout => {
 const titleOf = (list: Step[], step: number): string => list.find(s => s.number === step)?.title ?? `Step ${step}`
 const summaryOf = (task: Task): string => summarize(task.evidence, { subagents: task.agents.length, result: task.result })
 // Step 1's two checks are the session's: the first action, and any read before the first write,
-// whichever task the calls were counted for (a shell read of retrospective.md is a step-11 signal).
+// whichever task the calls were counted for (a shell read of lessons.md is a step-11 signal).
 const progressOf = (task: Task, q: Queue): Completion => {
   const facts = [...(task.facts ?? [])]
   if (task.step === 1 && q.firstActionDone) facts.push('retro-read')
@@ -569,7 +569,7 @@ export const register: Register = on => {
         </Text>
         <Text dimColor wrap="truncate">
           {from === 'claude-md' ? 'From CLAUDE.md' : 'CLAUDE.md not readable here: built-in copy'}
-          {` · retrospective read ${q.firstActionDone ? '✓' : '–'} · ${duration(now - q.startedAt)}`}
+          {` · lessons read ${q.firstActionDone ? '✓' : '–'} · ${duration(now - q.startedAt)}`}
           {silent.length > 0 ? ` · ${silent.length} step${silent.length === 1 ? '' : 's'} without a signal yet` : ''}
           {' · inferred from tool calls'}
         </Text>

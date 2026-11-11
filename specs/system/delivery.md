@@ -93,7 +93,7 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 ### Local run recipes
 
 ```bash
-(cd backend && npm ci) && (cd frontend && npm ci)    # install
+node scripts/bootstrap.mjs                           # install, Playwright browsers, build (below)
 
 cd backend && npm run start:dev                      # API only, :3000, data in backend/data
 cd frontend && npm start                             # ng serve :4200
@@ -103,10 +103,12 @@ cd backend && npm run build:all && npm run start:web # web mode from the working
 node scripts/setup-local.mjs http://127.0.0.1:<port>  # configure the running instance (below)
 ```
 
+**Preparing a fresh checkout or worktree (roadmap 0.5.5).** `node scripts/bootstrap.mjs [--force] [--no-build] [--no-playwright]` (Node 22+, no dependencies) runs `npm ci --legacy-peer-deps` in `backend/` and `frontend/` at once (the same flags as CI; a package whose `node_modules/.package-lock.json` is newer than its lockfile is skipped unless `--force`), then installs Playwright's Chromium and runs `npm --prefix backend run build:all` side by side, logging each step to `.qa-reports/bootstrap/<step>.log`. It ends by reporting whether Postgres answers on 55432 and whether Docker runs, and prints the command that starts it; it never starts the app or the compose stack. Every peer dependency the build needs is a direct dependency (the frontend lists `@floating-ui/dom`, the peer of `@tiptap/suggestion`), because `--legacy-peer-deps` skips peers. The repository's Conductor settings (`.conductor/settings.toml`) run it as the workspace setup script and add a **web** action that starts the CLI on the workspace's `CONDUCTOR_PORT` (Intellify API on the next port) with the data dir `.context/qti-data`.
+
 **Configuring a local instance for hand testing (BA-325).** `scripts/setup-local.mjs [baseUrl]` (default `http://127.0.0.1:3000`, Node only, no dependencies) configures a running instance through its own API:
 
 - **LLM:** saves `PUT /llm/settings` from `.env.llm.local`: `LLM_PROVIDER` (default `custom`), `LLM_API_STYLE` (default `anthropic`), `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`. The file is read from the checkout, else from the main checkout (through `git rev-parse --git-common-dir`), so a worktree needs no copy; environment variables win over it. It is gitignored (`*.local`); [.env.llm.example](../../.env.llm.example) is the committed template. Without `LLM_BASE_URL` and `LLM_MODEL` this step is skipped.
-- **Testing Data:** loads every seedable fixture with its defaults and registers the Intellify RFP API (`POST /testing-data/:id/load`, [api.md](api.md) 56); a fixture already loaded is skipped, so a re-run is safe.
+- **Testing Data:** loads every seedable fixture with its defaults and registers the Intellify RFP API (`POST /testing-data/:id/load`, [api.md](api.md) 56); a fixture already loaded is skipped, so a re-run is safe. The Intellify sample is loaded into the database the embedded Intellify RFP API reads (`INTELLIFY_DB_NAME`, default `intellify_mercer_demo`) rather than the fixture's own default, so the API registers in the same run; the script then says to restart the app once, because the API applies its `rfp` migrations only at start. Tests: `node --test scripts/setup-local.test.mjs`.
 
 It exits non-zero when any step fails. It writes to the sample Postgres the fixtures name (127.0.0.1:55432 by default), creating their databases if missing.
 
@@ -119,7 +121,7 @@ It exits non-zero when any step fails. It writes to the sample Postgres the fixt
 
 `node scripts/qa.mjs <roadmap-id> --gate` runs these for a story, with the story's step-6 Playwright list, and writes `evidence/<roadmap-id>/tests.md`; `--fast` runs the fast-loop subset and records the demo (section 13).
 
-`test:e2e` builds the backend with the web UI and drives the web app; its global setup starts the World Cup Postgres itself (see section 6). The desktop target (`test:e2e:desktop`) runs only when a desktop run is requested, and refuses to launch the app if port 3000 is taken. Which target to test, and how skipped desktop-only scenarios are reported, is the *Test target convention* in the [`workflow-e2e`](../../.claude/skills/workflow-e2e/SKILL.md) project skill (section 10).
+`test:e2e` builds the backend with the web UI and drives the web app; its global setup starts the World Cup Postgres itself (see section 6). The desktop target (`test:e2e:desktop`) runs only when a desktop run is requested, and refuses to launch the app if port 3000 is taken. Which target to test, and how skipped desktop-only scenarios are reported, is the *Test target convention* in the [`workflow-gate`](../../.claude/skills/workflow-gate/SKILL.md) project skill (section 10).
 
 ## 3. Desktop packaging (electron-builder)
 
@@ -214,7 +216,7 @@ All release workflows run on Node 22 and live in `.github/workflows/`. The one p
 | Permissions | `contents: write` (the tag push), `statuses: write` (the spec-check status). Branch pushes use the deploy key. |
 | Chaining | Pushes made with the deploy key do trigger workflows. The bump commit starts `spec-checks.yml` on `main` and a `version-on-merge.yml` run that skips itself (see *Skipped when*). `build-desktop.yml` runs on any pushed `v*` tag, so the tag is pushed with `GITHUB_TOKEN`, whose pushes start no workflows. That keeps merge-time tagging from starting builds; a tag pushed by hand still builds. |
 
-Conventional Commit subjects therefore drive the bump, Because the bump reads every commit since the last tag, an epic's single PR with mixed `feat`/`fix`/`docs` commits still bumps at the highest level it contains. The epic branch's type names that highest-impact type (see *Branching convention* in the [`workflow-plan`](../../.claude/skills/workflow-plan/SKILL.md) project skill).
+Conventional Commit subjects therefore drive the bump, Because the bump reads every commit since the last tag, an epic's single PR with mixed `feat`/`fix`/`docs` commits still bumps at the highest level it contains. The epic branch's type names that highest-impact type (see *Branching convention* in the [`workflow-start`](../../.claude/skills/workflow-start/SKILL.md) project skill).
 
 ### `build-desktop.yml` — Build desktop installers
 
@@ -430,21 +432,20 @@ Opens a **Workflow** pane (the right-hand sidebar in a wide fullscreen terminal 
 
 ## 10. Claude Code project skills (`.claude/skills/`)
 
-Developer tooling for people who work on this repository in Claude Code, not part of the app or its releases. `CLAUDE.md` holds only the always-on core: the mandatory first action, the eleven-step `## Workflow` list, the fast loop and acceptance gate, the hard gates and model usage. Each step's conventions live in a project skill. Claude loads the skill before the step starts, and a developer can invoke it as `/<name>`. Epic [BA-119](../epics/BA-119/spec.md).
+Developer tooling for people who work on this repository in Claude Code, not part of the app or its releases. `CLAUDE.md` holds only the always-on core: the mandatory first action (read `lessons.md`), the eleven-step `## Workflow` list, the change sizes (S, M, L), the fast loop and acceptance gate, the hard gates and model usage. The steps' conventions live in four project skills. Claude loads a skill before its steps start, and a developer can invoke it as `/<name>`. Epic [BA-119](../epics/BA-119/spec.md); merged from nine skills into four by roadmap 0.5.2 ([M0-5](../epics/M0-5/spec.md)).
 
 | Skill | Steps | Holds |
 |---|---|---|
-| `workflow-understand` | 1–2 | restating the goal, clarifying questions |
-| `workflow-plan` | 3 | Planning convention, Epic gate, Branching convention (branch, worktree, commit scope) |
-| `workflow-architecture` | 4 | Architecture convention (C4, ADRs) |
-| `workflow-specs` | 5 | Spec convention (where facts go, Gherkin, CI coverage) |
-| `workflow-e2e` | 6–7 | E2E test convention, Test target convention |
+| `workflow-start` | 1–5 | restating the goal and sizing it, clarifying questions, Planning convention, Epic gate (repo-only epics), Branching convention, Architecture convention (C4, ADRs), Spec convention (where facts go, Gherkin, CI coverage) |
 | `workflow-implement` | 8 | Code rules, Worktree deploy convention |
-| `verify` | 9 | the step-9 commands and eval bar; checking a change in the running web app |
-| `workflow-ship` | 10 | Logging and Evidence conventions, the epic PR, post-merge cleanup |
-| `workflow-retrospective` | 11 | Retrospective convention |
+| `verify` | fast-loop checks, 9 | `qa.mjs --fast` and `--gate`, the eval bar (base vs branch, parallel runs), checking a change in the running web app |
+| `workflow-gate` | 6, 7, 10, 11 | E2E impact analysis and test conventions, Test target convention, per-story evidence, the per-epic changelog entry and PR, the demo artifact, post-merge cleanup, the per-epic retrospective and `lessons.md` |
 
-Other project skills are task runbooks, not workflow steps: `jira` (the guide to the Jira tools, section 11), `intellify-api` and `deploy-labs-site` (section 8). Each step line in `CLAUDE.md` keeps the `<n>. **<title>** — <description>` form, followed by `Skill: \`<name>\``, so the `workflow-steps` mod (section 9) still parses it. `check-specs.py` checks the relative links inside every `SKILL.md` and every Markdown file under `.claude/tools/` (section 5).
+**Change sizes.** S (a fix, copy, config, dependency, docs or process change with no new user flow, endpoint, persisted shape or agent input) runs a reduced set of steps with no demo (`qa.mjs --no-demo`), no new epic spec and one changelog bullet; M (a story) runs every step; L (architectural) adds an ADR and a written plan. The table is in `CLAUDE.md`.
+
+**Process records.** `lessons.md` (about 80 lines, the distilled rules) is the mandatory first read; `retrospective.md` stays the full append-only history, one entry per epic. `changelog.md` gets one entry per epic, when its PR opens, with a bullet per story linking its evidence folder. Each story's `evidence/<roadmap-id>/` holds what `qa.mjs` writes plus a one-line `README.md` with the demo artifact URL.
+
+Other project skills are task runbooks, not workflow steps: `intellify-api` and `deploy-labs-site` (section 8). Each step line in `CLAUDE.md` keeps the `<n>. **<title>** — <description>` form, followed by `Skill: \`<name>\``, so the `workflow-steps` mod (section 9) still parses it. `check-specs.py` checks the relative links inside `CLAUDE.md`, `lessons.md`, every `SKILL.md` and every Markdown file under `.claude/tools/` (section 5).
 
 ## 11. Claude Code tools (`.claude/tools/`)
 
@@ -452,12 +453,10 @@ Developer tooling for people who work on this repository in Claude Code, not par
 
 | Kind | When | Wiring |
 |---|---|---|
-| MCP server | An external, authenticated service that Claude is the main user of, with structured inputs and shared writes that need approval per call | Registered in the repo-root `.mcp.json` (stdio, `node .claude/tools/<name>/server.mjs`) and enabled for every developer by `enabledMcpjsonServers` in the committed `.claude/settings.json`; its read tools are in `permissions.allow` there, its write tools ask on every call |
+| MCP server | An external, authenticated service that Claude is the main user of, with structured inputs and shared writes that need approval per call | Registered in a repo-root `.mcp.json` (stdio, `node .claude/tools/<name>/server.mjs`) and enabled for every developer by `enabledMcpjsonServers` in the committed `.claude/settings.json`; its read tools are in `permissions.allow` there, its write tools ask on every call |
 | Script | Deterministic, repo-local work that people and CI also run (checks, generators) | Run from the shell; no server |
 
-| Tool | Kind | Detail |
-|---|---|---|
-| `jira` | MCP server | Jira Cloud REST v3. Read tools: `whoami`, `get_project`, `search_issues`, `get_issue` (with `parent` and `parentType`, for the Epic gate), `list_statuses`, `list_transitions`. Write tools: `create_epic`, `create_issue` (Story, Bug or Task; a Story or Bug must name its epic, checked to be an Epic before anything is created), `update_issue` (summary, description, epic), `add_comment`, `transition_issue`. Credentials `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_PROJECT`: the environment, then `JIRA_CONFIG_FILE`, or else this checkout's `.env` and then the main checkout's (found through `git rev-parse --git-common-dir`), read on every call. `setup.mjs` writes them from the developer's own terminal. No dependencies (Node 22 or later). Tests: `node --test '.claude/tools/jira/tests/*.test.mjs'`, with Jira faked. Replaces the earlier `jira.sh` script ([BA-237](https://halo-powered.atlassian.net/browse/BA-237)). |
+There are no tools at the moment. The `jira` MCP server, its skill, `.mcp.json` and the `JIRA_*` template `.env.example` were removed by roadmap 0.5.1 ([M0-5](../epics/M0-5/spec.md)): planning lives only in the repository, epics are roadmap milestones with a spec in `specs/epics/`.
 
 ## 12. Claude Code agents (`.claude/agents/`)
 
@@ -469,6 +468,8 @@ Developer tooling for people who work on this repository in Claude Code, not par
 | `reviewer` | `sonnet` | read and search only (`Read`, `Grep`, `Glob`) | Reviews one story's diff against the story's Intent, Scope and Acceptance. It is given the diff and the story, never the builder's transcript. It answers `approve`, or a numbered list of findings, each with file, line, the failure it causes and the fix. It flags no style point that lint already covers. |
 | `manager` | inherits the session's | `Read`, `Grep`, `Glob`, `AskUserQuestion`, `PushNotification` | The human's single point of contact, started with `claude --agent manager`. It reads `roadmap.md` (the ticket board), the epic spec and the evidence, and answers "what needs me?" with exactly one question, recommended option first. When a story escalates after 3 failed reviews, it states the disagreement and recommends a way forward. It has no `Edit`, `Write`, `Bash` or `Agent`, so it cannot change files or start work; the pipeline does that. |
 
+`builder` and `reviewer` set `omitClaudeMd: true`: they work from their brief, so they don't load `CLAUDE.md` (roadmap 0.5.2).
+
 Rules every builder follows (from the retrospective):
 - Write files with Edit/Write, or in a scratch folder of its own; never use shared `/tmp` names.
 - Never stop a process it did not start; record the PIDs it starts.
@@ -476,38 +477,47 @@ Rules every builder follows (from the retrospective):
 - Never run `npm test`/`build` alongside `test:e2e` in the same worktree.
 - Never start the app on the default ports.
 
-Unit worktrees that the harness creates for a builder are temporary. They are exempt from the epic worktree naming rule (`workflow-plan`) and removed once their branch is merged into the epic branch.
+Unit worktrees that the harness creates for a builder are temporary. They are exempt from the epic worktree naming rule (`workflow-start`) and removed once their branch is merged into the epic branch.
 
 ## 13. Deterministic QA (`scripts/qa.mjs`)
 
-Developer tooling, epic [BA-119](../epics/BA-119/spec.md), roadmap 0.4.5. One script runs a story's checks, picks its tests, records its demo and writes its evidence, with no LLM. The `verify` and `workflow-ship` skills call it; 0.4.4's story pipeline will call it as its QA step. Node 22, no dependencies; its logic lives in `scripts/qa-lib.mjs`, tested with `node --test scripts/qa-lib.test.mjs`.
+Developer tooling, epic [BA-119](../epics/BA-119/spec.md), roadmap 0.4.5; made faster by roadmap 0.5.3 ([M0-5](../epics/M0-5/spec.md)). One script runs a story's checks, picks its tests, records its demo and writes its evidence, with no LLM. The `verify` and `workflow-gate` skills call it; 0.4.4's story pipeline will call it as its QA step. Node 22, no dependencies; its logic lives in `scripts/qa-lib.mjs`, tested with `node --test scripts/qa-lib.test.mjs`.
 
 ```
-node scripts/qa.mjs <roadmap-id> --fast|--gate [--base <ref>]
+node scripts/qa.mjs <roadmap-id> --fast|--gate [--base <ref>] [--rebuild] [--no-demo] [--dry-run]
+node scripts/qa.mjs <roadmap-id> --draft-impact [--base <ref>] [--dry-run]
 ```
 
 - **Exit codes:** 0 passed, 1 a check failed, 2 bad usage.
-- **One QA lane.** Worktrees share the Postgres on 55432, the default ports and each checkout's `backend/dist`, so runs never overlap. A run takes the lock file `qa.lock` in git's common dir (`{ pid, story, mode, startedAt }`, created exclusively). A second run prints `Waiting for the QA lane (held by <story>, pid <pid>)` and polls every 2 s. A lock whose pid is no longer running is stale and is removed. The lock is released on exit, including on a failure or Ctrl+C.
-- **Epic base.** `--base`, else `git merge-base HEAD origin/main`. The changed files are `git diff --name-only <base>` (committed and uncommitted).
+- **Locks.** Two lock files, each `{ pid, story, mode, startedAt }`, created exclusively. A waiting run prints `Waiting for <lock> (held by <story>, pid <pid>)` and polls every 2 s. A lock whose pid is no longer running is stale and is removed. Both are released on exit, including on a failure or Ctrl+C (which also stops the run's child processes).
+  - **One run per checkout:** `qa-checkout.lock` in the worktree's own git dir, held for the whole run. Runs in one checkout share its `backend/dist`, `backend/public`, `frontend/test-results` and `.qa-reports/`. The report folder is set up only after this lock is taken.
+  - **One Playwright phase across worktrees (the QA lane):** `qa.lock` in git's common dir, held only around the Playwright run and the demo recording. Every worktree's E2E uses the one compose Postgres on 55432 (fixed compose project `questions-to-insights-world-cup`): the global setup may start it, and specs create and drop databases on it. Builds, unit suites, lint and `check-specs` run outside the lane, so another worktree's run can do those while one runs Playwright. Each web E2E test starts the CLI on a free port with its own temp data dir, and the embedded Intellify API also takes a free port, so nothing else is shared; port 3000 is used only by the desktop project, which `qa.mjs` never runs.
+- **Epic base.** `--base`, else `git merge-base HEAD origin/main`. The changed files are `git diff --name-only <base>` (committed and uncommitted) plus untracked files.
+- **Build, skipped when up to date.** `npm --prefix backend run build:all` runs unless all of these hold: `--rebuild` was not passed; the last build `qa.mjs` ran succeeded (`.qa-reports/build-stamp.json`, deleted before a build and written only after a passing one, holding the build's start time); `backend/dist/cli.js` and `backend/public/index.html` exist; and every input is older than that build's start and than both outputs. The inputs are `backend/src/**`, `frontend/src/**`, `frontend/public/**` (directories' own mtimes included, so a deleted or renamed file counts), `backend/` `package.json`, `package-lock.json`, `nest-cli.json`, `tsconfig.json`, `tsconfig.build.json`, `scripts/copy-web.js`, `frontend/` `package.json`, `package-lock.json`, `angular.json`, `tsconfig.json`, `tsconfig.app.json`, `.postcssrc.json`, and each `node_modules/.package-lock.json` (rewritten by every npm install). Anything unknown builds. A skipped build prints `build: up to date, skipped (pass --rebuild to force)` and is recorded as a passed `build … (up to date, skipped)` row; otherwise the run prints `build: will run (<reason>)`. A build run outside `qa.mjs` leaves no stamp, so the next `qa.mjs` run builds again.
+- **Parallel checks.** After the build, the backend unit tests, backend lint and `check-specs.py` run concurrently; the frontend unit tests (Karma) run alone right after them, because its browser tests are timing-sensitive and leaked HTTP requests under the others' CPU load (3 of 5 gate runs failed that way on 2026-11-11, none of 4 alone). Each prints its block (command, status, log path, the last 30 output lines on failure) when it finishes; results are recorded in their declared order, so `tests.md` and the logs (`.qa-reports/<roadmap-id>/<n>-<step>.log`) keep the same order. Neither Jest nor `ng test` writes `backend/dist` or `backend/public`. Playwright runs after them, in the lane.
 - **Test selection (mechanical).**
   - Backend unit: `npx jest --findRelatedTests <changed backend/src files>`; skipped when none changed.
   - Frontend unit: `ng test --watch=false --browsers=ChromeHeadless` with `--include` for each changed `frontend/src/**/*.spec.ts` and the spec beside each changed source file; skipped when there are none.
-  - Playwright (`web` project): `--only-changed=<base>`, plus every spec in the story's step-6 list whose decision is not `delete`, plus the story's demo spec. `E2E_SKIP_DOCKER=1` is set when a Postgres already listens on 55432.
-- **Step-6 list.** `evidence/<roadmap-id>/e2e-impact.md`, written in step 6 (`workflow-e2e`). It holds a Markdown table whose first column is the Playwright spec path (``frontend/e2e/<name>.spec.ts``, in backticks) and whose second column is the decision: `add`, `update`, `delete` or `re-run`. Other rows and text are ignored.
-- **`--fast` (fast loop):** builds (`npm --prefix backend run build:all`), the selected backend and frontend unit tests, `check-specs.py`, the selected Playwright specs, then the **demo**:
+  - Playwright (`web` project): `--only-changed=<base>`, plus every spec in the story's step-6 list whose decision is not `delete`, plus every changed `frontend/e2e/*.spec.ts`, plus the story's demo spec. `E2E_SKIP_DOCKER=1` is set when a Postgres already listens on 55432 (checked again once the lane is taken).
+- **Step-6 list.** `evidence/<roadmap-id>/e2e-impact.md`, written in step 6 (`workflow-gate`). It holds a Markdown table whose first column is the Playwright spec path (``frontend/e2e/<name>.spec.ts``, in backticks) and whose second column is the decision: `add`, `update`, `delete` or `re-run`. Other rows and text are ignored.
+- **`--draft-impact`:** writes a draft step-6 list, `evidence/<roadmap-id>/e2e-impact.md`, from the same selection `--fast` uses (minus the step-6 list itself). Every spec is `re-run` (`delete` when the diff removed the file), the scenarios column says `TODO: review`, and a header line marks it as a draft to review. It never overwrites: if the file exists it prints so and exits 0. It runs no checks and takes no lock.
+- **`--dry-run`:** prints the base, the build decision, the parallel commands, the Playwright specs and the demo or demo-evidence plan; runs nothing, writes nothing, takes no lock. With `--draft-impact` it prints the draft instead of writing it.
+- **`--fast` (fast loop):** the build (unless up to date), the selected backend and frontend unit tests with `check-specs.py` in parallel, the selected Playwright specs, then the **demo**:
   - **UI story:** the Playwright test tagged `@story-<roadmap-id>` (and `@demo`) is run again with `DEMO=1`. That turns on `slowMo` (400 ms), a 1280×720 video of the app window and a caption overlay showing each Gherkin line the test passes to `scenarioStep` ([frontend/e2e/support/demo-captions.ts](../../frontend/e2e/support/demo-captions.ts)). The video is saved as `evidence/<roadmap-id>/demo.webm`. A demo over **5 MB** fails the run. Without `DEMO=1` the same test runs at normal speed with no captions and no video.
   - **Story with no UI** (no test carries its tag): `evidence/<roadmap-id>/demo.txt`, a transcript of the commands the run executed, each with its exit status and the summary lines of its output.
-- **`--gate` (acceptance gate):** builds, the full backend unit suite (`jest --json`), the full frontend unit suite, backend lint (errors fail; warnings do not), `check-specs.py`, and every spec of the step-6 list (decision not `delete`) with Playwright's JSON and HTML reporters (`QA_REPORT_DIR` = `.qa-reports/<roadmap-id>/` at the repo root, git-ignored and outside Playwright's `test-results` folder, which Playwright empties at the start of every run). Video and trace are kept for failures. It writes `evidence/<roadmap-id>/tests.md`:
+  - **`--no-demo` (an S change):** no video is recorded (a tagged test still runs at normal speed with the selected specs); `demo.txt` is written as the transcript, saying the run used `--no-demo`.
+- **`--gate` (acceptance gate):** the build (unless up to date), then in parallel the full backend unit suite (`jest --json`), backend lint (errors fail; warnings do not) and `check-specs.py`, then the full frontend unit suite alone, then every spec of the step-6 list (decision not `delete`) with Playwright's JSON and HTML reporters (`QA_REPORT_DIR` = `.qa-reports/<roadmap-id>/` at the repo root, git-ignored and outside Playwright's `test-results` folder, which Playwright empties at the start of every run). Video and trace are kept for failures. It writes `evidence/<roadmap-id>/tests.md`:
   - one row per command: what ran, passed / failed / skipped, read from the reports (Jest JSON, Playwright JSON, the Karma `TOTAL` line) or the exit code;
   - the specs run, compared with the step-6 list: a listed spec that did not run fails the gate and is named (`Listed in step 6 but not run: <spec>`); a missing step-6 list fails the gate;
   - links to `demo.webm` or `demo.txt` when present, the reports, and the video of each failed test;
-  - a **demo evidence** row (since roadmap 1.21.12): the gate fails when the story has no `demo.webm` while a test carries its `@story-<roadmap-id>` tag, has neither `demo.webm` nor `demo.txt`, or its `evidence/<roadmap-id>/README.md` has no `https://claude.ai/artifact/…` link to the demo page (`demoEvidenceProblems` in `scripts/qa-lib.mjs`).
+  - a **demo evidence** row (since roadmap 1.21.12): the gate fails when the story has no `demo.webm` while a test carries its `@story-<roadmap-id>` tag, has neither `demo.webm` nor `demo.txt`, or its `evidence/<roadmap-id>/README.md` has no `https://claude.ai/artifact/…` link to the demo page (`demoEvidenceProblems` in `scripts/qa-lib.mjs`);
+  - **`--no-demo` (an S change):** no demo evidence row and no demo check; `tests.md` names the command as `--gate --no-demo` and says `Demo: skipped (--no-demo, small change).`
 - **Demo reminder hook** (`scripts/hooks/demo-reminder.mjs`, a `PreToolUse` hook on `Bash|PowerShell` in `.claude/settings.json`, since roadmap 1.21.12): when a command starts the web app (`backend/dist/cli.js`) from a worktree under `.claude/worktrees/`, it lists the stories the branch marked `🚧 In progress` (its `roadmap.md` diff against `main`) that have no `demo.webm` or `demo.txt`, and reminds the session to run `qa.mjs --fast` and publish the demo page before handing the app over. It never blocks a command and stays silent on any error.
-- **Committed evidence:** `demo.webm`, `demo.txt`, `demo-page.html` and `tests.md`. The reports stay local.
+- **Committed evidence:** `e2e-impact.md`, `demo.webm`, `demo.txt`, `demo-page.html`, `tests.md` and the one-line `README.md` with the demo artifact link. The reports and the build stamp stay local.
 - **Shareable demo (`scripts/demo-page.mjs`).** So a teammate can watch the demo and read what was done from one link:
   1. `node scripts/demo-page.mjs <roadmap-id>` (no LLM) writes `evidence/<roadmap-id>/demo-page.html` from `roadmap.md` (the story's title, Intent, Scope, Acceptance, status, milestone and epic), `changelog.md` (the story's entry, "What shipped"), `evidence/<roadmap-id>/tests.md` (gate results) and `demo.webm` (or `demo.txt` for a story with no UI). The page follows the Artifact page contract (theme tokens, phone width, no external resources) and references the video by the relative URL `demo.webm`. It is committed under `evidence/` with the video.
   2. The Claude session publishes it with its Artifact tool: `file_path` = the generated `demo-page.html`, `files` = `{ "demo.webm": "evidence/<roadmap-id>/demo.webm" }` (omitted for `demo.txt`), an `icon` such as `video` on the first publish and a one-sentence `description`. Publishing the same story's page again (for example after the gate adds `tests.md`) updates the same artifact: pass its `url`.
   3. The artifact link is recorded in `evidence/<roadmap-id>/README.md` and linked from the story's changelog entry (`Demo: <artifact url>`). Artifacts are private by default: sharing the link with teammates, from the page's Share menu, is the human's step.
-  4. When: in the fast loop, publish right after `qa.mjs --fast` so the user can review the demo by hand; at ship (step 10), regenerate and republish to the same URL once `tests.md` exists, and only then link it from the changelog.
+  4. When: in the fast loop, publish right after `qa.mjs --fast` so the user can review the demo by hand; at step 10, regenerate and republish to the same URL only when the demo changed after the fast loop; the epic's changelog entry links it.
 - **Playwright configuration** (`frontend/playwright.config.ts`): when `QA_REPORT_DIR` is set, the reporters are `list`, `json` (`<dir>/results.json`) and `html` (`<dir>/html`). `DEMO=1` is read by the app fixture (video, `slowMo`) and by `scenarioStep` (captions).
 - **`check-specs.py` on Windows:** paths are compared with forward slashes, so the Playwright-mirror check passes on Windows as it does on Linux.

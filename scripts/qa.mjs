@@ -1,34 +1,51 @@
 #!/usr/bin/env node
 // Deterministic QA for one roadmap story (delivery.md 13, roadmap 0.4.5).
-//   node scripts/qa.mjs <roadmap-id> --fast|--gate [--base <ref>]
-// --fast: builds, related unit tests, check-specs, selected Playwright specs,
-//         then the demo (evidence/<id>/demo.webm, or demo.txt with no UI).
-// --gate: builds, full unit suites, backend lint, check-specs, the step-6
-//         Playwright list with JSON/HTML reporters, then evidence/<id>/tests.md.
-// One run at a time: a lock in git's common dir makes it the single QA lane.
-import { spawnSync } from 'node:child_process';
+//   node scripts/qa.mjs <roadmap-id> --fast|--gate [--base <ref>] [--rebuild] [--no-demo] [--dry-run]
+//   node scripts/qa.mjs <roadmap-id> --draft-impact [--base <ref>] [--dry-run]
+// --fast: builds, then related unit tests and check-specs in parallel, the
+//         selected Playwright specs, then the demo (evidence/<id>/demo.webm,
+//         or demo.txt with no UI or with --no-demo).
+// --gate: builds, then the full unit suites, backend lint and check-specs in
+//         parallel, the step-6 Playwright list with JSON/HTML reporters, then
+//         evidence/<id>/tests.md (--no-demo skips the demo evidence check).
+// --draft-impact: writes a draft evidence/<id>/e2e-impact.md from the diff,
+//         with the --fast spec selection; never overwrites.
+// The build is skipped when backend/dist and backend/public are newer than
+// every input and the last qa.mjs build succeeded (--rebuild forces it).
+// --dry-run prints the plan and the build decision and runs nothing.
+// Locks: one run per checkout (qa-checkout.lock in the worktree's git dir,
+// whole run); one Playwright phase across worktrees (qa.lock in git's common
+// dir), because every worktree's E2E shares the Postgres on 55432.
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import {
+  BUILD_INPUTS,
+  BUILD_OUTPUTS,
   DEMO_MAX_BYTES,
+  DEMO_SKIPPED_LINE,
   USAGE,
   UsageError,
   acquireLock,
   backendRelated,
-  demoEvidenceProblems,
+  buildDecision,
+  demoEvidenceStep,
   frontendRelated,
   impactSpecs,
   jestCounts,
   karmaCounts,
   listedSpecFiles,
   missingSpecs,
+  newestMtime,
   parseArgs,
   parseImpact,
   playwrightCounts,
   playwrightFailures,
   renderDemoTxt,
+  renderDraftImpact,
   renderTestsMd,
+  selectedSpecs,
   storyTitle,
   toPosix,
 } from './qa-lib.mjs';
@@ -65,6 +82,46 @@ function pythonCommand() {
   return 'python3';
 }
 
+/** Child processes still running, killed (with their trees) on Ctrl+C. */
+const children = new Set();
+
+function killTree(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  try {
+    if (IS_WIN) spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+    else process.kill(-child.pid, 'SIGTERM');
+  } catch {
+    // Already gone.
+  }
+}
+
+/** Runs a shell command, resolving with its exit code and combined output. */
+function exec(command, cwd, env) {
+  return new Promise((resolve) => {
+    // POSIX: its own process group, so Ctrl+C can stop the whole tree.
+    const child = spawn(command, {
+      cwd,
+      env,
+      shell: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: !IS_WIN,
+      windowsHide: true,
+    });
+    children.add(child);
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (c) => (stdout += c));
+    child.stderr.on('data', (c) => (stderr += c));
+    child.once('error', (err) => {
+      stderr += String(err);
+    });
+    child.once('close', (code) => {
+      children.delete(child);
+      resolve({ status: code, output: `${stdout}${stderr}` });
+    });
+  });
+}
+
 async function main() {
   let opts;
   try {
@@ -76,66 +133,33 @@ async function main() {
     }
     throw err;
   }
-  const { id, mode } = opts;
+  const { id, mode, rebuild, noDemo, dryRun } = opts;
   const root = git(['rev-parse', '--show-toplevel']);
   const commonDir = path.resolve(root, git(['rev-parse', '--git-common-dir'], root));
+  const gitDir = git(['rev-parse', '--absolute-git-dir'], root);
   const base = opts.base ?? git(['merge-base', 'HEAD', 'origin/main'], root);
   const evidenceDir = path.join(root, 'evidence', id);
   // Outside frontend/test-results, which Playwright empties at the start of
   // every run (it is its outputDir); git-ignored (delivery.md 13).
-  const reportDir = path.join(root, '.qa-reports', id);
-  fs.mkdirSync(evidenceDir, { recursive: true });
+  const reportsRoot = path.join(root, '.qa-reports');
+  const reportDir = path.join(reportsRoot, id);
+  const buildStampPath = path.join(reportsRoot, 'build-stamp.json');
+  const impactPath = path.join(evidenceDir, 'e2e-impact.md');
+  const frontend = path.join(root, 'frontend');
+  const backend = path.join(root, 'backend');
+  const pw = 'npx playwright test --project=web';
+  const relPw = (spec) => spec.replace(/^frontend\//, '');
+  const rel = (p) => toPosix(path.relative(root, p));
 
-  const release = await acquireLock(path.join(commonDir, 'qa.lock'), {
-    pid: process.pid,
-    story: id,
-    mode,
-    startedAt: new Date().toISOString(),
-  });
-  // Only once the lane is ours: a waiting run must not touch shared state.
-  fs.rmSync(reportDir, { recursive: true, force: true });
-  fs.mkdirSync(reportDir, { recursive: true });
-  const onSignal = () => {
-    release();
-    process.exit(130);
-  };
-  process.on('SIGINT', onSignal);
-  process.on('SIGTERM', onSignal);
-  process.on('exit', release);
+  // --draft-impact never overwrites a reviewed (or drafted) list.
+  if (mode === 'draft-impact' && fs.existsSync(impactPath)) {
+    console.log(`${rel(impactPath)} already exists; not overwritten. Edit it, or delete it to draft again.`);
+    process.exit(0);
+  }
 
   const env = { ...process.env };
   delete env.DEMO;
   if (await portOpen(55432)) env.E2E_SKIP_DOCKER = '1';
-
-  const steps = [];
-  /** Runs one command, logs its output to the report dir, records a step. */
-  const run = (name, command, cwd, { extraEnv = {}, counts } = {}) => {
-    console.log(`\n▶ ${name}: ${command}`);
-    const started = Date.now();
-    const r = spawnSync(command, {
-      cwd,
-      env: { ...env, ...extraEnv },
-      shell: true,
-      encoding: 'utf8',
-      maxBuffer: 256 * 1024 * 1024,
-    });
-    const output = `${r.stdout ?? ''}${r.stderr ?? ''}`;
-    fs.writeFileSync(path.join(reportDir, `${steps.length + 1}-${name.replace(/\W+/g, '-')}.log`), output);
-    const status = r.status === 0 ? 'passed' : 'failed';
-    const step = {
-      name,
-      command,
-      exitCode: r.status ?? 1,
-      status,
-      output,
-      seconds: Math.round((Date.now() - started) / 1000),
-      summary: output.split(/\r?\n/).filter((l) => l.trim()).slice(-3),
-    };
-    if (counts) step.counts = counts(output) ?? undefined;
-    steps.push(step);
-    console.log(`  ${status} (exit ${step.exitCode}, ${step.seconds}s)`);
-    return step;
-  };
 
   const changed = [
     ...new Set(
@@ -147,56 +171,247 @@ async function main() {
         .filter(Boolean),
     ),
   ];
-  const impactPath = path.join(evidenceDir, 'e2e-impact.md');
   const impactRows = fs.existsSync(impactPath) ? parseImpact(fs.readFileSync(impactPath, 'utf8')) : null;
   const listed = impactRows ? impactSpecs(impactRows) : [];
-  const frontend = path.join(root, 'frontend');
-  const backend = path.join(root, 'backend');
-  const pw = 'npx playwright test --project=web';
-  const relPw = (spec) => spec.replace(/^frontend\//, '');
 
+  // `playwright test --list` runs no global setup and starts no app: no lock needed.
+  const pwList = (args) =>
+    listedSpecFiles(spawnSync(`${pw} --list ${args}`, { cwd: frontend, env, shell: true, encoding: 'utf8' }).stdout ?? '');
   // The story's demo test, if a UI scenario carries its tag.
-  const demoList = spawnSync(`${pw} --list --grep "@story-${id}"`, {
-    cwd: frontend,
-    env,
-    shell: true,
-    encoding: 'utf8',
-  });
-  const demoSpecs = listedSpecFiles(`${demoList.stdout ?? ''}`);
+  const demoSpecs = pwList(`--grep "@story-${id}"`);
+  const fastSelection = () =>
+    selectedSpecs({ onlyChanged: pwList(`--only-changed=${base}`), listed, changed, demo: demoSpecs });
 
-  run('build', 'npm --prefix backend run build:all', root);
+  if (mode === 'draft-impact') {
+    const specs = fastSelection();
+    const draft = renderDraftImpact(id, specs, {
+      base: git(['rev-parse', '--short=7', base], root),
+      exists: (spec) => fs.existsSync(path.join(root, spec)),
+    });
+    if (dryRun) {
+      console.log(`Would write ${rel(impactPath)}:\n\n${draft}`);
+    } else {
+      fs.mkdirSync(evidenceDir, { recursive: true });
+      fs.writeFileSync(impactPath, draft);
+      console.log(`Drafted ${rel(impactPath)} (${specs.length} spec${specs.length === 1 ? '' : 's'}): review it before the gate.`);
+    }
+    process.exit(0);
+  }
+
+  const decideBuild = () => {
+    let stamp = null;
+    try {
+      stamp = JSON.parse(fs.readFileSync(buildStampPath, 'utf8'));
+    } catch {
+      stamp = null;
+    }
+    return buildDecision({
+      rebuild,
+      stamp,
+      newestInput: newestMtime(root, BUILD_INPUTS),
+      outputs: BUILD_OUTPUTS.map((p) => {
+        try {
+          return { path: p, mtimeMs: fs.statSync(path.join(root, p)).mtimeMs };
+        } catch {
+          return { path: p, mtimeMs: null };
+        }
+      }),
+    });
+  };
+  const buildLine = (d) => (d.build ? `build: will run (${d.reason})` : 'build: up to date, skipped (pass --rebuild to force)');
+
+  const jest = 'npx jest';
+  const ngTest = 'npx ng test --watch=false --browsers=ChromeHeadless';
+  /**
+   * The steps between the build and Playwright. They run in parallel, except
+   * the `solo` ones: Karma's browser tests are timing-sensitive and leaked
+   * HTTP requests under the CPU load of Jest and ESLint (3 of 5 gate runs on
+   * 2026-11-11, 0 of 4 alone), so they run alone after the others.
+   */
+  const parallelPlan = () => {
+    if (mode === 'fast') {
+      const plan = [];
+      const backendFiles = backendRelated(changed);
+      if (backendFiles.length) {
+        plan.push({ name: 'backend unit (related)', command: `${jest} --findRelatedTests ${backendFiles.join(' ')} --passWithNoTests`, cwd: backend });
+      }
+      const frontendSpecs = frontendRelated(changed, fs.existsSync, root);
+      if (frontendSpecs.length) {
+        plan.push({
+          name: 'frontend unit (related)',
+          command: `${ngTest} ${frontendSpecs.map((s) => `--include=${s}`).join(' ')}`,
+          cwd: frontend,
+          counts: karmaCounts,
+          solo: true,
+        });
+      }
+      plan.push({ name: 'check-specs', command: `${pythonCommand()} scripts/check-specs.py`, cwd: root });
+      return plan;
+    }
+    return [
+      {
+        name: 'backend unit',
+        command: `${jest} --json --outputFile=${JSON.stringify(path.join(reportDir, 'jest.json'))}`,
+        cwd: backend,
+        counts: () => readJson(path.join(reportDir, 'jest.json'), jestCounts),
+      },
+      { name: 'frontend unit', command: ngTest, cwd: frontend, counts: karmaCounts, solo: true },
+      {
+        name: 'backend lint',
+        command: 'npx eslint "{src,apps,libs,test}/**/*.ts" --rule "{\\"prettier/prettier\\": [\\"error\\", {\\"endOfLine\\": \\"auto\\"}]}"',
+        cwd: backend,
+      },
+      { name: 'check-specs', command: `${pythonCommand()} scripts/check-specs.py`, cwd: root },
+    ];
+  };
+
+  if (dryRun) {
+    const decision = decideBuild();
+    console.log(`qa ${mode} ${id} (dry run): base ${git(['rev-parse', '--short=7', base], root)}, ${changed.length} changed file(s)`);
+    console.log(buildLine(decision));
+    if (decision.build) console.log('  npm --prefix backend run build:all');
+    console.log('parallel:');
+    for (const s of parallelPlan()) console.log(`  ${s.name}${s.solo ? ' (alone, after the others)' : ''}: ${s.command}`);
+    const specs = mode === 'fast' ? fastSelection() : listed;
+    console.log(`playwright (Postgres lane ${path.join(commonDir, 'qa.lock')}): ${specs.length ? specs.join(' ') : '(none)'}`);
+    if (mode === 'fast') {
+      console.log(`demo: ${noDemo ? `demo.txt (--no-demo)` : demoSpecs.length ? `demo.webm from ${demoSpecs.join(' ')}` : 'demo.txt (no UI scenario tagged)'}`);
+    } else {
+      if (!impactRows) console.log(`step-6 list missing: ${rel(impactPath)}`);
+      console.log(noDemo ? DEMO_SKIPPED_LINE : 'demo evidence: checked');
+    }
+    process.exit(0);
+  }
+
+  // One run per checkout: runs in the same worktree share its backend/dist,
+  // backend/public, frontend/test-results and .qa-reports.
+  const releaseCheckout = await acquireLock(
+    path.join(gitDir, 'qa-checkout.lock'),
+    { pid: process.pid, story: id, mode, startedAt: new Date().toISOString() },
+    { label: "this checkout's QA run" },
+  );
+  let releaseLane = () => {};
+  const releaseAll = () => {
+    releaseLane();
+    releaseCheckout();
+  };
+  const onSignal = () => {
+    for (const child of children) killTree(child);
+    releaseAll();
+    process.exit(130);
+  };
+  process.on('SIGINT', onSignal);
+  process.on('SIGTERM', onSignal);
+  process.on('exit', releaseAll);
+  // Only once the checkout is ours: a waiting run must not touch its folders.
+  fs.mkdirSync(evidenceDir, { recursive: true });
+  fs.rmSync(reportDir, { recursive: true, force: true });
+  fs.mkdirSync(reportDir, { recursive: true });
+
+  const steps = [];
+  let logIndex = 0;
+  /**
+   * Runs one command, logs its output to the report dir and returns its
+   * step. Log numbers follow the order the steps are declared in.
+   */
+  const runStep = async ({ name, command, cwd, extraEnv = {}, counts }, { quiet = false } = {}) => {
+    const logPath = path.join(reportDir, `${++logIndex}-${name.replace(/\W+/g, '-')}.log`);
+    if (!quiet) console.log(`\n▶ ${name}: ${command}`);
+    const started = Date.now();
+    const r = await exec(command, cwd, { ...env, ...extraEnv });
+    fs.writeFileSync(logPath, r.output);
+    const step = {
+      name,
+      command,
+      exitCode: r.status ?? 1,
+      status: r.status === 0 ? 'passed' : 'failed',
+      output: r.output,
+      seconds: Math.round((Date.now() - started) / 1000),
+      summary: r.output.split(/\r?\n/).filter((l) => l.trim()).slice(-3),
+    };
+    if (counts) step.counts = counts(r.output) ?? undefined;
+    const status = `  ${step.status} (exit ${step.exitCode}, ${step.seconds}s)`;
+    if (quiet) {
+      // One block per finished parallel step, so outputs never interleave.
+      const tail = step.status === 'failed' ? `\n${r.output.split(/\r?\n/).slice(-30).join('\n')}` : '';
+      console.log(`\n▶ ${name}: ${command}\n${status}, log: ${rel(logPath)}${tail}`);
+    } else {
+      console.log(status);
+    }
+    return step;
+  };
+  const run = async (spec) => {
+    const step = await runStep(spec);
+    steps.push(step);
+    return step;
+  };
+  /**
+   * Runs independent steps concurrently, then the `solo` ones one at a time;
+   * records them in declared order.
+   */
+  const runParallel = async (plan) => {
+    const together = plan.filter((s) => !s.solo);
+    const results = new Map();
+    if (together.length) {
+      console.log(`\n▶ in parallel: ${together.map((s) => s.name).join(', ')}`);
+      const done = await Promise.all(together.map((s) => runStep(s, { quiet: true })));
+      together.forEach((s, i) => results.set(s, done[i]));
+    }
+    for (const s of plan.filter((p) => p.solo)) {
+      console.log(`\n▶ alone (timing-sensitive): ${s.name}`);
+      results.set(s, await runStep(s, { quiet: true }));
+    }
+    const done = plan.map((s) => results.get(s));
+    steps.push(...done);
+    return done;
+  };
+  /**
+   * Takes the cross-worktree Playwright lane: the E2E global setup may start
+   * the one compose Postgres on 55432 and the specs create and drop
+   * databases on it.
+   */
+  const takeLane = async () => {
+    releaseLane = await acquireLock(path.join(commonDir, 'qa.lock'), {
+      pid: process.pid,
+      story: id,
+      mode,
+      startedAt: new Date().toISOString(),
+    });
+    // Another run may have started Postgres while this one waited.
+    if (await portOpen(55432)) env.E2E_SKIP_DOCKER = '1';
+  };
+  const leaveLane = () => {
+    releaseLane();
+    releaseLane = () => {};
+  };
+
+  const decision = decideBuild();
+  console.log(`\n${buildLine(decision)}`);
+  if (decision.build) {
+    fs.rmSync(buildStampPath, { force: true });
+    const startedAt = Date.now();
+    const build = await run({ name: 'build', command: 'npm --prefix backend run build:all', cwd: root });
+    if (build.status === 'passed') fs.writeFileSync(buildStampPath, JSON.stringify({ startedAt, base }));
+  } else {
+    // Recorded so tests.md and demo.txt show the build was checked, not forgotten.
+    steps.push({
+      name: 'build',
+      command: 'npm --prefix backend run build:all (up to date, skipped)',
+      exitCode: 0,
+      status: 'passed',
+      summary: ['build: up to date, skipped (pass --rebuild to force)'],
+    });
+  }
 
   if (mode === 'fast') {
-    const backendFiles = backendRelated(changed);
-    if (backendFiles.length) {
-      run('backend unit (related)', `npx jest --findRelatedTests ${backendFiles.join(' ')} --passWithNoTests`, backend);
-    }
-    const frontendSpecs = frontendRelated(changed, fs.existsSync, root);
-    if (frontendSpecs.length) {
-      run(
-        'frontend unit (related)',
-        `npx ng test --watch=false --browsers=ChromeHeadless ${frontendSpecs.map((s) => `--include=${s}`).join(' ')}`,
-        frontend,
-        { counts: karmaCounts },
-      );
-    }
-    run('check-specs', `${pythonCommand()} scripts/check-specs.py`, root);
-    const onlyChanged = spawnSync(`${pw} --list --only-changed=${base}`, {
-      cwd: frontend,
-      env,
-      shell: true,
-      encoding: 'utf8',
-    });
-    const selected = [
-      ...new Set([
-        ...listedSpecFiles(onlyChanged.stdout ?? ''),
-        ...listed,
-        ...changed.filter((f) => /^frontend\/e2e\/[^/]+\.spec\.ts$/.test(f)),
-        ...demoSpecs,
-      ]),
-    ].sort();
+    await runParallel(parallelPlan());
+    const selected = fastSelection();
+    if (selected.length || (!noDemo && demoSpecs.length)) await takeLane();
     if (selected.length) {
-      run('playwright (selected)', `${pw} ${selected.map(relPw).join(' ')}`, frontend, {
+      await run({
+        name: 'playwright (selected)',
+        command: `${pw} ${selected.map(relPw).join(' ')}`,
+        cwd: frontend,
         extraEnv: { QA_REPORT_DIR: reportDir },
         counts: () => readPlaywright(reportDir)?.counts,
       });
@@ -204,11 +419,20 @@ async function main() {
 
     // The demo, recorded after the checks so it shows passing behaviour.
     const failedBeforeDemo = steps.some((s) => s.status === 'failed');
-    if (demoSpecs.length) {
+    if (noDemo) {
+      leaveLane();
+      const roadmap = fs.readFileSync(path.join(root, 'roadmap.md'), 'utf8');
+      fs.writeFileSync(path.join(evidenceDir, 'demo.txt'), renderDemoTxt(id, storyTitle(roadmap, id), steps, { noDemo: true }));
+      console.log(`  demo: ${rel(path.join(evidenceDir, 'demo.txt'))} (--no-demo, no video recorded)`);
+    } else if (demoSpecs.length) {
       const videoDir = path.join(reportDir, 'demo-video');
-      const demo = run('demo', `${pw} --grep "@story-${id}" --workers=1 --reporter=list`, frontend, {
+      const demo = await run({
+        name: 'demo',
+        command: `${pw} --grep "@story-${id}" --workers=1 --reporter=list`,
+        cwd: frontend,
         extraEnv: { DEMO: '1', DEMO_VIDEO_DIR: videoDir },
       });
+      leaveLane();
       const video = newestFile(videoDir, '.webm');
       if (demo.status === 'passed' && video) {
         const dest = path.join(evidenceDir, 'demo.webm');
@@ -218,60 +442,60 @@ async function main() {
           steps.push({ name: 'demo size', command: 'size check', status: 'failed', exitCode: 1, summary: [`${(size / 1048576).toFixed(1)} MB is over the 5 MB limit`] });
           console.log(`  demo.webm is ${(size / 1048576).toFixed(1)} MB, over the 5 MB limit`);
         } else {
-          console.log(`  demo: ${path.relative(root, dest)} (${(size / 1048576).toFixed(2)} MB)`);
+          console.log(`  demo: ${rel(dest)} (${(size / 1048576).toFixed(2)} MB)`);
         }
       } else if (!video) {
         demo.status = 'failed';
         console.log('  no demo video was recorded');
       }
     } else {
+      leaveLane();
       const roadmap = fs.readFileSync(path.join(root, 'roadmap.md'), 'utf8');
       fs.writeFileSync(path.join(evidenceDir, 'demo.txt'), renderDemoTxt(id, storyTitle(roadmap, id), steps));
-      console.log(`  demo: ${path.relative(root, path.join(evidenceDir, 'demo.txt'))} (no UI scenario tagged @story-${id})`);
+      console.log(`  demo: ${rel(path.join(evidenceDir, 'demo.txt'))} (no UI scenario tagged @story-${id})`);
     }
     if (failedBeforeDemo) console.log('\nThe demo was recorded, but a check above failed.');
   } else {
     if (!impactRows) {
-      console.log(`\nNo step-6 list at ${path.relative(root, impactPath)}: the gate cannot check which specs ran.`);
+      console.log(`\nNo step-6 list at ${rel(impactPath)}: the gate cannot check which specs ran.`);
     }
-    run('backend unit', `npx jest --json --outputFile=${JSON.stringify(path.join(reportDir, 'jest.json'))}`, backend, {
-      counts: () => readJson(path.join(reportDir, 'jest.json'), jestCounts),
-    });
-    run('frontend unit', 'npx ng test --watch=false --browsers=ChromeHeadless', frontend, { counts: karmaCounts });
-    run(
-      'backend lint',
-      'npx eslint "{src,apps,libs,test}/**/*.ts" --rule "{\\"prettier/prettier\\": [\\"error\\", {\\"endOfLine\\": \\"auto\\"}]}"',
-      backend,
-    );
-    run('check-specs', `${pythonCommand()} scripts/check-specs.py`, root);
+    await runParallel(parallelPlan());
     let ran = [];
     let failures = [];
     if (listed.length) {
-      run('playwright (step 6)', `${pw} ${listed.map(relPw).join(' ')}`, frontend, {
+      await takeLane();
+      await run({
+        name: 'playwright (step 6)',
+        command: `${pw} ${listed.map(relPw).join(' ')}`,
+        cwd: frontend,
         extraEnv: { QA_REPORT_DIR: reportDir },
         counts: () => readPlaywright(reportDir)?.counts,
       });
+      leaveLane();
       const pwReport = readPlaywright(reportDir);
       ran = pwReport?.counts.files ?? [];
       failures = pwReport?.failures ?? [];
     }
     const missing = impactRows ? missingSpecs(listed, ran) : ['(no step-6 list: evidence/' + id + '/e2e-impact.md)'];
-    // The demo is part of the story's evidence: no video or artifact link, no pass.
+    // The demo is part of the story's evidence: no video or artifact link, no
+    // pass, unless --no-demo marks an S change with no demo.
     const readmePath = path.join(evidenceDir, 'README.md');
-    const demoProblems = demoEvidenceProblems(id, {
-      hasWebm: fs.existsSync(path.join(evidenceDir, 'demo.webm')),
-      hasTxt: fs.existsSync(path.join(evidenceDir, 'demo.txt')),
-      uiDemo: demoSpecs.length > 0,
-      readme: fs.existsSync(readmePath) ? fs.readFileSync(readmePath, 'utf8') : '',
-    });
-    steps.push({
-      name: 'demo evidence',
-      command: 'demo.webm / demo.txt and the demo artifact link',
-      status: demoProblems.length ? 'failed' : 'passed',
-      exitCode: demoProblems.length ? 1 : 0,
-      summary: demoProblems,
-    });
-    console.log(`▶ demo evidence\n  ${demoProblems.length ? demoProblems.join('\n  ') : 'passed'}`);
+    const demoStep = demoEvidenceStep(
+      id,
+      {
+        hasWebm: fs.existsSync(path.join(evidenceDir, 'demo.webm')),
+        hasTxt: fs.existsSync(path.join(evidenceDir, 'demo.txt')),
+        uiDemo: demoSpecs.length > 0,
+        readme: fs.existsSync(readmePath) ? fs.readFileSync(readmePath, 'utf8') : '',
+      },
+      { noDemo },
+    );
+    if (demoStep) {
+      steps.push(demoStep);
+      console.log(`▶ demo evidence\n  ${demoStep.summary.length ? demoStep.summary.join('\n  ') : 'passed'}`);
+    } else {
+      console.log(`▶ ${DEMO_SKIPPED_LINE}`);
+    }
     const links = [];
     for (const name of ['demo.webm', 'demo.txt']) {
       if (fs.existsSync(path.join(evidenceDir, name))) links.push(`[${name}](${name})`);
@@ -289,17 +513,18 @@ async function main() {
         ran,
         missing,
         links,
-        failures: failures.map((f) => ({ ...f, video: f.video ? toPosix(path.relative(root, f.video)) : undefined })),
+        failures: failures.map((f) => ({ ...f, video: f.video ? rel(f.video) : undefined })),
+        demoSkipped: noDemo,
       }),
     );
     for (const spec of missing) console.log(`\n✖ Listed in step 6 but not run: ${spec}`);
-    console.log(`\ntests.md: ${path.relative(root, path.join(evidenceDir, 'tests.md'))}`);
+    console.log(`\ntests.md: ${rel(path.join(evidenceDir, 'tests.md'))}`);
     if (missing.length) steps.push({ name: 'step-6 coverage', status: 'failed' });
   }
 
   const failed = steps.filter((s) => s.status === 'failed');
   console.log(`\n${failed.length ? '✖' : '✔'} qa ${mode} ${id}: ${steps.length - failed.length}/${steps.length} steps passed`);
-  release();
+  releaseAll();
   process.exit(failed.length ? 1 : 0);
 }
 
@@ -333,6 +558,7 @@ function newestFile(dir, ext) {
 }
 
 main().catch((err) => {
+  for (const child of children) killTree(child);
   console.error(err);
   process.exit(1);
 });

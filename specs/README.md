@@ -22,7 +22,7 @@ specs/
     ui.md                          app shell, navigation, panels, design tokens, UI states
     delivery.md                    build, packaging, distribution, versioning and release
   capabilities/<capability>/spec.md  one per capability: rules, edge cases, flows (Gherkin), acceptance
-  epics/<EPIC-ID>/spec.md          one high-level spec per Jira epic
+  epics/<EPIC-ID>/spec.md          one high-level spec per epic (roadmap milestone)
 ```
 
 ### Capabilities
@@ -82,7 +82,8 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-305 US Health testing data | [epics/BA-305](epics/BA-305/spec.md) |
 | BA-318 Schema metadata in datasets | [epics/BA-318](epics/BA-318/spec.md) |
 | BA-320 Questions to Insights v2 | [epics/BA-320](epics/BA-320/spec.md) |
-| M1-22 Sampled profiling and synthetic data (repo only, no Jira key) | [epics/M1-22](epics/M1-22/spec.md) |
+| M1-22 Sampled profiling and synthetic data | [epics/M1-22](epics/M1-22/spec.md) |
+| M0-5 Faster workflow, repo-only planning | [epics/M0-5](epics/M0-5/spec.md) |
 
 ## Stack neutrality
 
@@ -144,7 +145,7 @@ How to tell the capability works end to end: the Flows above plus anything not c
 ```markdown
 # <EPIC-ID> — <Epic name>
 
-- **Jira:** <link> · **Roadmap:** Milestone R.M · **Status:** Draft | Confirmed
+- **Roadmap:** Milestone R.M · **Status:** Draft | Confirmed (<date>)
 
 ## Goal
 The user-observable outcome the epic delivers, and why.
@@ -160,7 +161,9 @@ Epic-level success criteria.
 ## Dependencies, risks and open questions
 ```
 
-Keep it high level: story detail lives in the roadmap and Jira, behaviour in the capability specs.
+Keep it high level: story detail lives in the roadmap, behaviour in the capability specs.
+
+Epic IDs: since 2026-11-11 planning lives only in this repository (no Jira). An epic is a roadmap milestone and its ID is `M<R>-<M>` (Milestone 1.22 → `M1-22`), written at the end of the milestone heading. Epics created earlier keep their former Jira key (`BA-<n>`) as their ID.
 
 ## Lifecycle
 

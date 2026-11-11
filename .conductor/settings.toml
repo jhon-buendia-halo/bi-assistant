@@ -1,0 +1,17 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+# Shared Conductor settings (roadmap 0.5.5, delivery.md 2). The Mac app reads
+# this file from main, so it takes effect once merged.
+
+[scripts]
+# Installs both packages, Playwright's Chromium, and builds the backend and web UI.
+setup = "node scripts/bootstrap.mjs"
+# Each workspace's app gets its own ports and data dir; the shared Postgres on
+# 55432 is reused, not owned.
+run_mode = "concurrent"
+
+[scripts.run.web]
+available_in = [ "local" ]
+command = "node backend/dist/cli.js --no-open --port $CONDUCTOR_PORT --intellify-api-port $((CONDUCTOR_PORT + 1)) --data-dir .context/qti-data"
+default = true
+icon = "play"
