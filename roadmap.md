@@ -691,6 +691,18 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
   - The `API_BASE_URL` sentence in CLAUDE.md ("Known gap") is updated.
 - **Notes:** moved from 0.1.1 on 2026-10-04 so the bug sits under a Jira epic (BA-11). Found while drawing the C4 container diagram ([specs/system/architecture.md](specs/system/architecture.md), Level 2). Related to ADR-0001.
 
+#### 1.7.21 — No orphaned backend survives the desktop app or an upgrade  `🚧 In progress`
+- **Intent:** on Windows a backend process sometimes outlives its window (crash, End task, sign-out) and keeps port 3000; the next launch or the upgraded version then talks to the stale backend. Nothing left over from an earlier run or version may run alongside, or answer for, the current app.
+- **Scope:** (1) the backend exits within a few seconds when the desktop window process that spawned it is gone (`DESKTOP_PARENT_PID`); (2) the desktop shell records the backend's PID in `<APP_DATA_DIR>/backend.pid`, stops a still-running backend from an earlier run at startup (only if it is the app's own executable), and the readiness probe accepts only the backend it just started (`X-Backend-Instance` header); (3) a single-instance lock: a second launch focuses the running window; (4) the Windows installer and uninstaller force-stop every copy of `Halo BI Assistant.exe` the user runs, after the usual "close the app" check (`frontend/build/installer.nsh`).
+- **Out of scope:** freeing a port held by an unrelated program; macOS installers; the web / `npx` mode.
+- **Acceptance:**
+  - A backend whose parent process has died exits within about 2 s (unit test).
+  - Startup stops a live process recorded in `backend.pid` when its image is the app's executable, leaves it alone otherwise, and clears a stale file (unit tests).
+  - With another server answering on the backend port, the app does not report `ready` and records an error diagnostic naming the port.
+  - Launching the desktop app a second time with the same profile opens no second window or backend and focuses the first.
+  - The Windows installer built by `build-desktop.yml` compiles with the custom check.
+- **Notes:** reported 2026-11-11 after the v0.48.1 build; specs in [api.md](specs/system/api.md) 4.3, [delivery.md](specs/system/delivery.md) sections 1 and 2, [data-model.md](specs/system/data-model.md) 1.2 and app-shell R54–R55.
+
 ### Milestone 1.8 — Agentic Hub Look and Feel ([BA-141](https://halo-powered.atlassian.net/browse/BA-141))
 
 The app gets the Agentic Hub visual design: a gradient frame, an "Agentic Hub" banner, white rounded cards, an icon rail, pill buttons and status chips. There is a light theme and a navy dark theme derived from it, and the app follows the OS by default. Only the look changes. All stories are built on the branch `feat/BA-141-agentic-hub-look-and-feel` and ship as one PR. Epic spec: [specs/epics/BA-141/spec.md](specs/epics/BA-141/spec.md). Decision: ADR-0007 in [specs/system/architecture.md](specs/system/architecture.md).

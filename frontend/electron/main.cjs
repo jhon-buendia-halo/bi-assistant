@@ -10,6 +10,11 @@ const crypto = require("crypto");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
+const {
+  writeBackendPid,
+  clearBackendPid,
+  stopStaleBackend,
+} = require("./stale-backend.cjs");
 
 const APP_DISPLAY_NAME = "Halo BI Assistant";
 // The window shows the Agentic Hub product name; the OS app name, installers
@@ -53,6 +58,12 @@ if (process.env.QUESTIONS_TO_INSIGHTS_USER_DATA_DIR) {
   }
 }
 
+// One instance per profile (app-shell R54): the lock is keyed by `userData`,
+// so it is taken after the path above is settled. A second launch exits here
+// and the first instance focuses its window ("second-instance" below).
+const isPrimaryInstance = app.requestSingleInstanceLock();
+if (!isPrimaryInstance) app.exit(0);
+
 // Window title and About panel. The macOS menu bar ignores this — it reads the
 // running bundle's CFBundleName (build.productName when packaged, and the
 // patched Electron.app when running unpackaged via `scripts/brand-electron.sh`).
@@ -73,6 +84,14 @@ let stableTimer = null;
 let readinessPollGeneration = 0;
 let resolvedAppDataDir = null;
 let resolvedAppSecret = null;
+// Per spawn: the readiness probe only accepts a response carrying it, so a
+// server it did not start never counts as ready (api.md 4.3, app-shell R55).
+let backendInstanceId = null;
+let foreignPortReported = false;
+
+function backendPidDir() {
+  return resolvedAppDataDir || app.getPath("userData");
+}
 
 function setBackendStatus(status) {
   backendStatus = status;
@@ -530,12 +549,17 @@ function startBackend() {
     });
     return;
   }
+  backendInstanceId = crypto.randomUUID();
+  foreignPortReported = false;
   // Reuse Electron's binary as plain Node so packaged apps don't need a system Node.
   backendProcess = spawn(process.execPath, [entry], {
     env: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: "1",
       PORT: BACKEND_PORT,
+      // The backend exits once this process is gone (api.md 4.3 Orphan exit).
+      DESKTOP_PARENT_PID: String(process.pid),
+      BACKEND_INSTANCE_ID: backendInstanceId,
       // SQLite app database lives in the OS-standard per-user app folder
       // (redirected off Windows roaming profiles — see computeAppDataDir).
       APP_DATA_DIR: resolvedAppDataDir || app.getPath("userData"),
@@ -544,6 +568,9 @@ function startBackend() {
     cwd: path.dirname(entry),
     stdio: ["ignore", "pipe", "pipe"],
   });
+  const childPid = backendProcess.pid;
+  // Recorded so the next launch can stop this backend if it outlives us.
+  if (childPid) writeBackendPid(backendPidDir(), childPid);
   captureBackendStream(backendProcess.stdout, process.stdout, "info");
   captureBackendStream(backendProcess.stderr, process.stderr, "error");
   backendProcess.on("error", (error) => {
@@ -553,6 +580,7 @@ function startBackend() {
     });
   });
   backendProcess.on("exit", (code) => {
+    if (childPid) clearBackendPid(backendPidDir(), childPid);
     console.log(`[backend] exited (code ${code})`);
     recordDiagnostic(
       code === 0 || code === null ? "info" : "error",
@@ -664,13 +692,30 @@ function stopBackend() {
   clearTimeout(stableTimer);
   stableTimer = null;
   if (backendProcess) {
-    backendProcess.kill();
+    const pid = backendProcess.pid;
+    // The app may be gone before the child's 'exit' fires; clear the PID file
+    // now unless the kill failed (then the next launch still stops it).
+    if (backendProcess.kill() && pid) clearBackendPid(backendPidDir(), pid);
     backendProcess = null;
   }
 }
 
+// A 200 without this spawn's instance header comes from another process on
+// the port (an older backend or an unrelated server): never treat it as ready.
+function reportForeignPortOnce() {
+  if (foreignPortReported) return;
+  foreignPortReported = true;
+  recordDiagnostic(
+    "error",
+    "electron",
+    `Port ${BACKEND_PORT} is answered by another process, not this app's backend`,
+    { port: BACKEND_PORT },
+  );
+}
+
 // Readiness probe (api.md 4.3): `GET /sessions` answers 200 once the backend
-// is up; there is no sign-in (ADR-0030).
+// is up; there is no sign-in (ADR-0030). Only the backend this shell spawned
+// counts (`X-Backend-Instance`, app-shell R55).
 function backendIsReady() {
   return new Promise((resolve) => {
     const request = http.get(
@@ -682,7 +727,11 @@ function backendIsReady() {
       },
       (response) => {
         response.resume();
-        resolve(response.statusCode === 200);
+        if (response.statusCode !== 200) return resolve(false);
+        const ours =
+          response.headers["x-backend-instance"] === backendInstanceId;
+        if (!ours) reportForeignPortOnce();
+        resolve(ours);
       },
     );
     request.on("timeout", () => request.destroy());
@@ -806,6 +855,8 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // A second instance is already exiting; never start a backend from it.
+  if (!isPrimaryInstance) return;
   initializeDiagnostics();
   // Unpackaged macOS runs keep Electron's own dock icon unless we set it; the
   // packaged bundle already carries the Halo BI icon.
@@ -817,6 +868,17 @@ app.whenReady().then(async () => {
   resolvedAppSecret = resolveAppSecret(resolvedAppDataDir);
 
   setBackendStatus("starting");
+  // A backend left running by an earlier launch (crash, End task) would keep
+  // the port and answer for this one (api.md 4.3 Stale backend).
+  const stale = await stopStaleBackend(resolvedAppDataDir);
+  if (stale.stopped) {
+    recordDiagnostic(
+      "warn",
+      "electron",
+      "Stopped a backend left running by an earlier launch",
+      { pid: stale.pid },
+    );
+  }
   startBackend();
   if (await waitForBackend()) {
     setBackendStatus("ready");
@@ -842,6 +904,18 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+// A second launch (app-shell R54): bring this instance's window forward.
+app.on("second-instance", () => {
+  const [win] = BrowserWindow.getAllWindows();
+  if (!win) {
+    if (app.isReady()) createWindow();
+    return;
+  }
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
 });
 
 app.on("before-quit", stopBackend);

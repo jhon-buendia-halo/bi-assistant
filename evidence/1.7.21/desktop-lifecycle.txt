@@ -1,0 +1,13 @@
+PASS  stale backend answers on the port before the app starts  (pid 12325)
+PASS  startup stops the recorded stale backend
+PASS  the app's own backend answers with an X-Backend-Instance header  (4d47f880-a91a-4d32-b83c-48888c04600d)
+PASS  backend.pid records the new backend  (12346)
+PASS  diagnostics record the stop
+PASS  a second launch exits at once (single-instance lock)  (exit 0)
+PASS  the first backend is untouched
+PASS  the backend exits once its desktop shell is killed  (1315 ms)
+PASS  the port is free afterwards
+PASS  a foreign server on the port is reported, not accepted
+PASS  no "Backend has been stable" or ready is claimed for it
+
+11/11 checks passed

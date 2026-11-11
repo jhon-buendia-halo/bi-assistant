@@ -1327,13 +1327,16 @@ Entry `id` is `<epoch ms>-<sequence>`; `timestamp` ISO. Entries are appended as 
 
 | Item | Value |
 |---|---|
-| Spawn | Electron's own binary with `ELECTRON_RUN_AS_NODE=1` running `backend/dist/main.js` (packaged: `<resources>/backend/dist/main.js`); `stdio` piped; env passes `PORT`, `APP_DATA_DIR`, `APP_SECRET`, and nothing else. Missing entry file records an error diagnostic and does not start. |
-| Readiness probe | `GET http://127.0.0.1:<BACKEND_PORT>/sessions`, **ready iff status 200**; 500 ms request timeout; retried every 100 ms until a **30 s** deadline. |
+| Spawn | Electron's own binary with `ELECTRON_RUN_AS_NODE=1` running `backend/dist/main.js` (packaged: `<resources>/backend/dist/main.js`); `stdio` piped; env passes `PORT`, `APP_DATA_DIR`, `APP_SECRET`, `DESKTOP_PARENT_PID` (the main process's PID) and `BACKEND_INSTANCE_ID` (a fresh random UUID per spawn), and nothing else. The child's PID is written to `<APP_DATA_DIR>/backend.pid` ([data-model.md](data-model.md) 1.2) and the file is removed when that child exits or is killed. Missing entry file records an error diagnostic and does not start. |
+| Readiness probe | `GET http://127.0.0.1:<BACKEND_PORT>/sessions`, **ready iff status 200 and the `X-Backend-Instance` response header equals the `BACKEND_INSTANCE_ID` of the child just spawned**; 500 ms request timeout; retried every 100 ms until a **30 s** deadline. A 200 without the matching header means another process holds the port: the probe keeps failing and one error diagnostic per spawn is recorded (`Port <port> is answered by another process, not this app's backend`). |
+| Stale backend | Before the first spawn, a PID read from `<APP_DATA_DIR>/backend.pid` is checked: if that process is alive and its image name is the main process's executable name (`tasklist` on Windows, `ps` elsewhere), it is killed, waited for (up to 5 s) and a warning diagnostic `Stopped a backend left running by an earlier launch` is recorded; the file is then removed. A dead PID, a different image or an unreadable file only removes the file. |
+| Orphan exit | A backend started with `DESKTOP_PARENT_PID` checks every 2 s whether that process is still alive (`process.kill(pid, 0)`; `EPERM` counts as alive) and exits with code 0 once it is gone. |
+| Single instance | The main process takes Electron's single-instance lock (keyed by `userData`) before anything else starts. A second launch with the same profile exits at once; the first instance restores and focuses its window (or opens one if none is open). |
 | Startup | status `starting` → spawn → probe. Ready → `ready`. Deadline missed → error diagnostic, **window opens anyway**, probing continues in the background and pushes `ready` when it succeeds. |
 | Crash handling | Any exit not caused by app quit → status `restarting`, restart after back-off **1 s, 2 s, 4 s** (3 attempts), re-probing after each start. Attempts exhausted → status `down` (error diagnostic, no further restarts). |
 | Stability reset | Backend continuously ready for **60 s** resets the attempt counter. |
 | Requested restart | `backend:restart` (4.2): kill and immediate respawn, outside the crash back-off. |
-| Quit | `before-quit` sets a quitting flag (suppresses restarts) and kills the backend. On non-macOS the app quits when all windows close. |
+| Quit | `before-quit` sets a quitting flag (suppresses restarts), kills the backend and removes `backend.pid`. On non-macOS the app quits when all windows close. |
 | Port | `BACKEND_PORT` env (default `3000`) used for both the child's `PORT` and the probe. The renderer's base URL does not honour it (G1). |
 
 The renderer maps `down`/`restarting`/`starting` to a status banner; see [ui.md](ui.md) and the app-shell capability.
@@ -1403,6 +1406,8 @@ The `Intellify API:` line carries the actual bound port of the embedded API (use
 | `PORT` | `main.ts` (Electron-spawned/standalone start) | Listen port. The Electron main process sets it from `BACKEND_PORT`. Ignored by the CLI (which uses `--port`). | `3000` |
 | `APP_DATA_DIR` | database module, Mastra storage; set by CLI and Electron main | Directory for `app.sqlite`, `mastra.sqlite`, `observability.duckdb` and `workspaces/`. | database: `<cwd>/data`; Mastra storage: `<INIT_CWD or PWD or cwd>/data` |
 | `APP_SECRET` | crypto service; set by CLI and Electron main | Key material for encrypting API keys at rest (SHA-256 to an AES-256-GCM key). Missing: the crypto service reads `<APP_DATA_DIR>/.app-secret`, or generates it (32 random bytes hex, mode 0600) and logs where. Must stay stable across launches. | `<APP_DATA_DIR>/.app-secret` |
+| `DESKTOP_PARENT_PID` | `main.ts` (set by Electron main only) | PID of the desktop main process; the backend exits once it is gone (4.3 Orphan exit). Unset or not a positive integer: no watch. | unset |
+| `BACKEND_INSTANCE_ID` | `main.ts` (set by Electron main only) | Sent back on every response as `X-Backend-Instance`, so the readiness probe can tell its own backend from another server on the port (4.3). Unset: no header. | unset |
 | `WEB_ROOT` | `app-bootstrap.ts` | Directory holding the built web UI (`index.html`). | `<package>/public` |
 | `INIT_CWD`, `PWD` | Mastra storage | Launch directory used to place the fallback `data/` folder (Studio changes `cwd`). | process cwd |
 | `VISUAL_MODEL` | visual designer agent | Forces the designer model (router id `provider/model`). Unset: reasoning-family models are swapped for `openai/gpt-4.1-mini` and `nano` models upgraded to their `mini` sibling; others kept. | unset |

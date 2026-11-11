@@ -44,6 +44,8 @@ Backend status banner
 - R20. For `restarting` the banner SHALL read "Backend restarting…" on an amber background. For `down` it SHALL read "Backend unavailable — restart the app" on a red background.
 - R21. When the app runs without the desktop shell (a plain browser, as in web mode or a dev server), the system SHALL assume the backend is externally managed: status stays `ready` and the banner SHALL never show.
 - R22. The desktop shell SHALL run the backend as a supervised child process and publish status changes to the window: `starting` when the app opens, `ready` once the backend answers its readiness probe, `restarting` while a crashed backend is being relaunched, `down` once relaunching is abandoned. It SHALL re-send the current status every time the window finishes loading, so a reloaded window is never stale.
+- R54. The desktop app SHALL run as a single instance per profile: launching it again SHALL NOT open a second window or start a second backend, and SHALL bring the running window to the front (restored if minimised).
+- R55. The desktop shell SHALL NOT report `ready` for a server it did not start: a backend left running by an earlier launch SHALL be stopped at startup, a backend SHALL exit once its desktop shell is gone, and another process answering on the backend port SHALL keep the status off `ready` and record an error diagnostic ([api.md](../../system/api.md) 4.3).
 - R23. The readiness probe SHALL be an HTTP GET of the sessions list on the loopback address at the backend port (default 3000, overridable by the backend-port environment variable), counted ready only on a 200 response. It SHALL be retried every 100 ms, each attempt timing out after 500 ms, until 30 seconds have passed.
 - R24. The window SHALL open as soon as the backend is ready, or after the 30-second probe deadline expires. If the deadline expires the shell SHALL record an error diagnostic ("Backend did not become ready before timeout"), SHALL keep probing in the background, and SHALL publish `ready` if the backend answers later.
 - R25. When the backend exits unexpectedly (anything other than the app quitting), the shell SHALL publish `restarting` and relaunch it after a delay of 1 s, then 2 s, then 4 s for the first, second and third consecutive failure, each time probing for readiness. After the third failed relaunch the shell SHALL publish `down` and record an error diagnostic ("Backend restart budget exhausted…"). `down` SHALL NOT recover without restarting the app.
@@ -319,6 +321,12 @@ Feature: App shell behaviour not yet covered by Playwright
     Given the backend has failed to come back after three relaunches
     Then I see "Backend unavailable — restart the app"
     And the banner stays until I restart the app
+
+  Scenario: Focuses the running app instead of opening a second one
+    Given the desktop app is open and minimised
+    When I launch the desktop app again
+    Then no second window opens
+    And the first window is restored and in front
 
   Scenario: Never shows the banner outside the desktop shell
     Given I am using the app in a plain browser
