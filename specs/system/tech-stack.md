@@ -63,8 +63,8 @@ Build facts: the Angular production build has budgets (initial 500 kB warn / 1 M
 | `mastra` (CLI, dev dependency) | 1.29.0 | Mastra Studio tooling against `src/mastra/index.ts`. |
 | better-sqlite3 | 13.0.3 | Application document store (`<APP_DATA_DIR>/app.sqlite`), ADR-0003. Native module; loads under `ELECTRON_RUN_AS_NODE` with the current Electron/Node pairing. If an ABI error appears after an upgrade, rebuild it for Electron. |
 | pg | 8.23.0 | PostgreSQL datasource connector. |
-| exceljs | pinned in `backend/package.json` | Streaming `.xlsx` writer (`stream.xlsx.WorkbookWriter`) for the synthetic data, profile and sample exports (ADR-0037 amendment). |
-| fflate | pinned in `backend/package.json` | Dependency-free streamed zip (`Zip`) for the CSV exports (ADR-0037 amendment). |
+| exceljs | 4.4.0 | Streaming `.xlsx` writer (`stream.xlsx.WorkbookWriter`) for the synthetic data, profile and sample exports (ADR-0037 amendment). |
+| fflate | 0.8.3 | Dependency-free streamed zip (`Zip`) for the CSV exports (ADR-0037 amendment). |
 | `@databricks/sql` | 2.1.0 | Databricks datasource connector. |
 | marked | 18.0.13 | Markdown to HTML for the analysis section of visual documents. Its lexer also feeds the Intellify RFP API's PDF renderer. |
 | `@nestjs/swagger` | 11.x, pinned (the line matching Nest 11) | The Intellify RFP API only (ADR-0027): decorators on its DTOs and controllers and `SwaggerModule.createDocument`, served as `GET /openapi.json`. Pure JavaScript. |
