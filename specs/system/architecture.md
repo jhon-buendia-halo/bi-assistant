@@ -893,7 +893,7 @@ flowchart LR
   - Stack-neutral: a rebuild needs a per-dataset item store with four item kinds, a shared flag, per-kind validation, concept-delete cascades and a block renderer with the line formats in [agents.md](agents.md) 4.1.
 
 #### ADR-0037 — Sampled profiling and synthetic data: a separate, approximate profile read from row samples, and a deterministic generator that writes a SQL script; the app stays read-only on datasources
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-11, with the M1-22 epic spec)
 - **Date:** 2026-11-11
 - **Context:**
   - The user asked on 2026-11-11 to profile data by sampling and to generate synthetic data exported in the datasource's dialect.
