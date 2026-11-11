@@ -15,6 +15,7 @@ import {
   CircleCheck,
   CircleMinus,
   Database,
+  FlaskConical,
   FolderTree,
   Loader2,
   Lock,
@@ -49,13 +50,14 @@ import { DatasetSchemaNotesService } from '../../services/dataset-schema-notes.s
 import { MetricsPanel } from '../metrics-panel/metrics-panel';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { OntologyPanel } from '../../../ontology/components/ontology-panel/ontology-panel';
+import { SyntheticDataPanel } from '../../../synthetic-data/components/synthetic-data-panel/synthetic-data-panel';
 
 /** The saved-dataset editor's tabs (BA-320). */
-export type DatasetTab = 'schema' | 'ontology';
+export type DatasetTab = 'schema' | 'ontology' | 'synthesize';
 
 @Component({
   selector: 'app-catalog-browser',
-  imports: [LucideAngularModule, MetricsPanel, OntologyPanel],
+  imports: [LucideAngularModule, MetricsPanel, OntologyPanel, SyntheticDataPanel],
   templateUrl: './catalog-browser.html',
   styleUrl: './catalog-browser.scss',
 })
@@ -135,10 +137,11 @@ export class CatalogBrowser implements OnInit, OnDestroy {
   /** When set, the browser opens in edit mode with this dataset's data. */
   readonly initial = input<Dataset | null>(null);
 
-  /** Schema | Ontology, shown only when editing a saved dataset. */
+  /** Schema | Ontology | Profile & synthesize, shown only when editing a saved dataset. */
   readonly tabs: { id: DatasetTab; label: string; icon: LucideIconData }[] = [
     { id: 'schema', label: 'Schema', icon: Database },
     { id: 'ontology', label: 'Ontology', icon: Network },
+    { id: 'synthesize', label: 'Profile & synthesize', icon: FlaskConical },
   ];
   readonly activeTab = signal<DatasetTab>('schema');
 
@@ -149,8 +152,10 @@ export class CatalogBrowser implements OnInit, OnDestroy {
     }
   }
 
-  otherTab(tab: DatasetTab): DatasetTab {
-    return tab === 'schema' ? 'ontology' : 'schema';
+  /** The tab `step` places after `tab`, wrapping around the strip. */
+  adjacentTab(tab: DatasetTab, step: 1 | -1): DatasetTab {
+    const i = this.tabs.findIndex((t) => t.id === tab);
+    return this.tabs[(i + step + this.tabs.length) % this.tabs.length].id;
   }
   readonly selectedDatasource = computed(
     () => this.datasources().find((d) => d.id === this.datasourceId()) ?? null,
