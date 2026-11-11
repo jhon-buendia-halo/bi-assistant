@@ -61,6 +61,34 @@ Entry template:
 
 ---
 
+## 2026-11-11 — 1.22.1–1.22.6 Sampled profiling and synthetic data (M1-22)
+
+### What went well
+- Timing the sampling statements live before integration (1.20 lesson) found what the plan could not: a cold `TABLESAMPLE` on a 6-billion-row Databricks table took 52 s, over the 15 s timeout, and never-analysed PostgreSQL tables (`reltuples = -1`) would have been labelled "sampling not supported". Both became plan changes before any unit started.
+- A lead-written contract file (`generator/contract.ts`: types, function signatures, error class) let eight units across two waves build the generator, both writers, the exports, the API, the UI, the E2E and the specs in parallel; every merge was clean and the API and E2E units met on the first run.
+- Asking before reversing a privacy decision. "Export the sample" was ambiguous; asking turned up a real choice (statistics vs. real rows) that reversed ADR-0039's "raw rows never leave the server", and the answer shaped a narrow, confirmed, logged-nowhere path instead of a general one.
+- Looking at the running app before hand-off caught two candidate issues; reading computed styles instead of trusting a screenshot showed the dark-theme "faded" buttons were a transient toast state, not a bug.
+- Evals ran three times in parallel on fresh data-dir copies: 11/11 each, in under 3 minutes.
+
+### What went wrong
+- Two sessions worked the same epic in one worktree. The user said "keep going" to this session while another (`bi-assistant-ff`) was building 1.22.1; only spotting a file changing under a read prevented duplicate units. The takeover needed the other session stopped by hand.
+- Merging `main` at the start of the gate surfaced three things the fast loop never saw: an ADR number collision (main had taken 0037 and 0038; ours became 0039, 33 references renamed by context), a lockfile conflict, and an initial bundle 196 bytes over the 1 MB budget. The failed build then left a stale `backend/public`, which made two navigation tests fail for a reason unrelated to them.
+- `npm run lint` is `eslint --fix`: it rewrote line endings in nine unrelated `backend/test` files, and `npm ci` was interrupted midway because the app I had started held the native SQLite module open (Windows file lock), leaving `node_modules` half-deleted.
+- Mechanical lint fixes made by string replacement broke parentheses twice (turning `async () => ({…})` into `() => Promise.resolve({…})` needs a closing paren only when the body was a bare array).
+- E2E runs again overwrote committed evidence screenshots (1.14.17–1.14.19) and wrote an unreviewed Windows visual baseline that would have made the screenshot test pass against itself.
+- The 1.22.4 builder raised the bundle budget locally to get a build, an unrequested config change it reverted only because it was told not to commit outside its scope.
+
+### What to do differently
+- At the start of a "keep going" with no context, run `ListAgents` and check for commits in the last minutes on the epic branch before touching anything; if another session is live on it, ask which one owns the work.
+- Merge `origin/main` into the epic branch **before the fast loop of the last story**, not only at the gate, and run `build:all` right after: ADR numbers, lockfiles and bundle budgets drift while an epic is open. Pick ADR numbers by reading `main`'s architecture.md at that moment.
+- When a build fails in the gate, fix it before reading any Playwright failure: `backend/public` is then stale and every UI result is suspect.
+- Run backend lint as `npx eslint <files>` on the changed files, not `npm run lint` (`--fix` on the whole tree); then `git status` and restore anything outside scope.
+- Stop any app you started from a worktree (by PID) before `npm ci`/`npm install` there.
+- After every Playwright run: `git status -- evidence/ frontend/e2e/*-snapshots/`, restore changed evidence and delete new snapshot files unless a visual change was intended (they are written when a baseline is missing).
+- Brief builders: "If a build or budget blocks you, report it; do not change build config, even locally."
+
+---
+
 ## 2026-11-10 — 1.21.12 Visuals library on the Context page (BA-320)
 
 ### What went well
