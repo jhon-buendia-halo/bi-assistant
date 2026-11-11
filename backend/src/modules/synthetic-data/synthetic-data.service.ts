@@ -13,16 +13,11 @@ import { DatasetsService } from '../datasets/datasets.service';
 import type { DatasetDoc } from '../datasets/repositories/datasets.repository';
 import { DatabricksProfiler } from '../datasources/connectors/databricks-profiling';
 import { PostgresProfiler } from '../datasources/connectors/postgres-profiling';
-import type {
-  FkEdge,
-  KeyConstraint,
-  ProfiledTable,
-  ProfilingConnector,
-  ScopedProfiler,
-} from '../datasources/connectors/profiling';
-import type {
-  RowSampler,
-  SampleOutcome,
+import type { ProfilingConnector } from '../datasources/connectors/profiling';
+import {
+  withSamplingSessions,
+  type RowSampler,
+  type SampleOutcome,
 } from '../datasources/connectors/sampling';
 import type {
   DatabricksConfig,
@@ -32,6 +27,7 @@ import type {
 import { DatasourcesService } from '../datasources/datasources.service';
 import { PROFILE_TABLES_MAX, SAMPLE_SIZE_MAX } from './limits';
 import { ProfileCache } from './profile-cache';
+import type { buildSampledProfile } from './profile';
 import type { SampledProfile, SyntheticDialect } from './types';
 
 export interface ProfileRequest {
@@ -40,23 +36,8 @@ export interface ProfileRequest {
   sampleSize?: unknown;
 }
 
-/** What the pure profile builder (profile/build-sampled-profile.ts) receives. */
-export interface BuildSampledProfileInput {
-  dataset: { name: string };
-  datasource: { id: string; name: string; dialect: SyntheticDialect };
-  /** Entity keys, parallel to `tables` (the order requested). */
-  entityKeys: string[];
-  /** Catalog entries (columns, types, nullability), parallel to `tables`. */
-  catalog: (ProfiledTable | undefined)[];
-  tables: SampleOutcome[];
-  keys: KeyConstraint[];
-  foreignKeys: FkEdge[];
-  sampleSize: number;
-  now: Date;
-}
-export type SampledProfileBuilder = (
-  input: BuildSampledProfileInput,
-) => Omit<SampledProfile, 'profileId'>;
+/** The real builder's type (profile/build-sampled-profile.ts). */
+export type SampledProfileBuilder = typeof buildSampledProfile;
 export const SAMPLED_PROFILE_BUILDER = 'SAMPLED_PROFILE_BUILDER';
 
 export interface ProfileOptions {
@@ -64,8 +45,6 @@ export interface ProfileOptions {
 }
 
 const SEED = 7;
-type Sampling<C> = ProfilingConnector<C> & RowSampler<C>;
-type Scope<C> = ScopedProfiler<C> & RowSampler<C>;
 
 @Injectable()
 export class SyntheticDataService {
@@ -112,7 +91,7 @@ export class SyntheticDataService {
       const sampled =
         kind === 'postgres'
           ? await this.sample(
-              this.postgres as unknown as Sampling<PostgresConfig>,
+              this.postgres,
               ds.config as PostgresConfig,
               kind,
               keys,
@@ -121,7 +100,7 @@ export class SyntheticDataService {
               (ds.config as PostgresConfig).database,
             )
           : await this.sample(
-              this.databricks as unknown as Sampling<DatabricksConfig>,
+              this.databricks,
               ds.config as DatabricksConfig,
               kind,
               keys,
@@ -132,10 +111,8 @@ export class SyntheticDataService {
       const now = new Date(this.cache.now());
       const built = this.buildProfile({
         dataset: { name },
-        datasource: { id: ds.id, name: ds.name, dialect: kind },
-        entityKeys: keys,
-        catalog: sampled.catalog,
-        tables: sampled.samples,
+        datasource: { id: ds.id, name: ds.name, kind },
+        tables: sampled.tables,
         keys: sampled.keys,
         foreignKeys: sampled.foreignKeys,
         sampleSize,
@@ -164,7 +141,7 @@ export class SyntheticDataService {
   }
 
   private async sample<C>(
-    profiler: Sampling<C>,
+    profiler: ProfilingConnector<C> & RowSampler<C>,
     config: C,
     kind: SyntheticDialect,
     keys: string[],
@@ -173,8 +150,7 @@ export class SyntheticDataService {
     database?: string,
   ) {
     const width = PROFILE_CONCURRENCY_BY_DIALECT[kind];
-    return profiler.withSessions(config, width, signal, async (scoped) => {
-      const scope = scoped as Scope<C>;
+    return withSamplingSessions(profiler, config, width, signal, async (scope) => {
       // A failure here means the datasource cannot be reached: 502.
       const catalog = await scope.tables(config);
       const found = await scope.keys(config);
@@ -216,10 +192,13 @@ export class SyntheticDataService {
         Array.from({ length: Math.min(width, refs.length) }, worker),
       );
       return {
-        catalog: refs.map((r) =>
-          catalog.find((t) => t.schema === r.namespace && t.table === r.name),
-        ),
-        samples,
+        tables: refs.map((r, i) => ({
+          key: keys[i],
+          table: catalog.find(
+            (t) => t.schema === r.namespace && t.table === r.name,
+          ) ?? { schema: r.namespace, table: r.name, columns: [] },
+          sample: samples[i],
+        })),
         keys: found,
         foreignKeys,
       };

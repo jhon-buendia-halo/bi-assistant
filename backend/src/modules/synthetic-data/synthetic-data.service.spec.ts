@@ -86,7 +86,7 @@ function setup(
     datasetName: i.dataset.name,
     datasourceId: i.datasource.id,
     datasourceName: i.datasource.name,
-    dialect: i.datasource.dialect,
+    dialect: i.datasource.kind,
     generatedAt: '',
     expiresAt: '',
     sampleSize: i.sampleSize,
@@ -230,7 +230,7 @@ describe('SyntheticDataService.profile (behaviour)', () => {
     const s = setup();
     const out = await s.service.profile({ datasetName: ' World Cup ' });
     expect(out.datasetName).toBe('World Cup');
-    expect(s.build.mock.calls[0][0].entityKeys).toEqual(PG_TABLES);
+    expect(s.build.mock.calls[0][0].tables.map((t) => t.key)).toEqual(PG_TABLES);
     expect(s.scoped.sampleTable).toHaveBeenCalledTimes(2);
     expect(s.scoped.sampleTable).toHaveBeenCalledWith(
       expect.anything(),
@@ -271,7 +271,7 @@ describe('SyntheticDataService.profile (behaviour)', () => {
     const s = setup({ sample });
     await s.service.profile({ datasetName: 'World Cup' });
     const outcomes = s.build.mock.calls[0][0].tables;
-    expect(outcomes.map((o) => o.error)).toEqual([
+    expect(outcomes.map((o) => o.sample.error)).toEqual([
       'permission denied',
       'permission denied',
     ]);
