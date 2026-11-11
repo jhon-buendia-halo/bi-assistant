@@ -272,6 +272,7 @@ flowchart LR
     datasets["DatasetsModule"]
     datasources["DatasourcesModule<br/>(postgres, databricks, rest connectors)"]
     testing["TestingDataModule"]
+    synthdata["SyntheticDataModule<br/>(sampled profile, generator, dialect writers; ADR-0037)"]
     metrics["MetricsModule"]
     verified["VerifiedQueriesModule"]
     llm["LlmModule<br/>(LlmService)"]
@@ -321,6 +322,8 @@ flowchart LR
   datasets --> datasources
   testing --> datasources
   testing --> datasets
+  synthdata -->|"RowSampler on the profilers"| datasources
+  synthdata --> datasets
   metrics --> verified
   llm --> crypto
   llm -->|"installs on init"| resolver
@@ -360,6 +363,7 @@ flowchart LR
     llm["llm<br/>(llm-config, llm-api)"]
     agents["agents<br/>(agent-hub, agent-card, agent-detail, eval-trace)"]
     testing["testing-data<br/>(testing-data-config)"]
+    synthdata["synthetic-data<br/>(synthetic-data-panel, sampled-table-card, synthetic-data-api)"]
   end
 
   subgraph core["core/"]
@@ -386,6 +390,7 @@ flowchart LR
   app --> diagnostics
   datasets --> datasources
   datasets --> ontology
+  datasets --> synthdata
   ontology --> datasets
   agents --> datasources
   testing --> datasources
@@ -728,7 +733,7 @@ flowchart LR
   - Re-introducing multi-user access later needs a new ADR; ADR-0010 to ADR-0012 stay as the record of the design that was removed.
 
 #### ADR-0031 — A deterministic DMBOK readiness engine owns every score; the Data Readiness Agent only presents stored reports; profiling is a connector capability
-- **Status:** Accepted; "the agent has no SQL" amended by ADR-0035 (2026-11-09): it may run read-only SQL to drill into findings, and scores stay engine-only
+- **Status:** Accepted; "the agent has no SQL" amended by ADR-0035 (2026-11-09): it may run read-only SQL to drill into findings, and scores stay engine-only. Note (ADR-0037, 2026-11-11): "profiling reads no row values" holds for readiness profiling; row samples are read only by the separate sampler of ADR-0037, and no sampled statistic feeds a score.
 - **Date:** 2026-11-03
 - **Context:**
   - The user asked on 2026-11-03 for a Data Readiness Agent that uses only the deterministic DMBOK metrics of the separate `data-readiness-agent` project ([BA-251](https://halo-powered.atlassian.net/browse/BA-251)).
@@ -886,6 +891,42 @@ flowchart LR
   - The Knowledge card leaves the Context page; the dataset editor gains Schema and Ontology tabs. (Same day, roadmap 1.21.11: an **Ontologies** card on Context lists every dataset's ontology and opens the same panel, so the ontology still has one editor.)
   - Retrieval by question relevance and SQL checks against the ontology (roadmap 1.3.3) and provenance and feedback (1.3.4) can build on stored concepts and relations.
   - Stack-neutral: a rebuild needs a per-dataset item store with four item kinds, a shared flag, per-kind validation, concept-delete cascades and a block renderer with the line formats in [agents.md](agents.md) 4.1.
+
+#### ADR-0037 — Sampled profiling and synthetic data: a separate, approximate profile read from row samples, and a deterministic generator that writes a SQL script; the app stays read-only on datasources
+- **Status:** Proposed
+- **Date:** 2026-11-11
+- **Context:**
+  - The user asked on 2026-11-11 to profile data by sampling and to generate synthetic data exported in the datasource's dialect.
+  - Readiness profiling (ADR-0031, ADR-0033) is aggregate-only and exact, and data-readiness R29 forbids sampling there. Its interface "reads no row values".
+  - Synthesis needs value-level information that aggregates do not give: shapes of text, quantiles, categorical frequencies.
+  - The app is read-only on datasources.
+- **Decision:**
+  - **A second, separate profile.** A new `RowSampler` interface is implemented additively by the PostgreSQL and Databricks profilers.
+    - It reads up to 1,000 rows per table with the engine's native `TABLESAMPLE … REPEATABLE`. Small tables are read whole, and tables where TABLESAMPLE is refused fall back to `LIMIT`.
+    - It reuses the profilers' pooled read-only sessions, statement timeout and abort.
+    - Readiness profiling, the engine and its scores are unchanged, and a sampled statistic never feeds a readiness score.
+  - **Raw rows stay in the request.** A pure builder turns them into a `SampledProfile`.
+    - The profile holds statistics, character-class shapes and only the categorical values seen at least 3 times in columns of at most 20 distinct values.
+    - The rows are never logged, cached, persisted or sent to a model.
+    - The profile is kept in memory for 60 minutes (20 at most) so a script can be generated from exactly what the user saw. It is never persisted.
+  - **A deterministic generator with no model.** Seeded per column, keys generated first so FKs always resolve, constraints added after the inserts so FK cycles load.
+  - **One dialect writer per platform** emits a UTF-8, LF-only script: `CREATE SCHEMA`, `CREATE TABLE`, batched `INSERT`, FK constraints. It is downloaded by the user.
+    - The app never executes it. The datasource connections keep their read-only guard, and no write path is added.
+  - **Agents reach the same service through a tool bridge.** The Data Readiness Agent gets two tools. The script reaches the user as a session file in the panel.
+- **Rejected:**
+  - Sampling inside readiness profiling: it would make readiness scores approximate and unrepeatable, contrary to R29.
+  - Exposing sampled rows to the LLM or letting an LLM generate the data: unrepeatable, it leaks values, and it is costly.
+  - Loading synthetic data into a datasource: it breaks the read-only guarantee and needs write credentials.
+  - A third-party fake-data library (faker): it adds a dependency and locale-dependent output, and it has no notion of the observed shapes. A small built-in word list is enough.
+  - Round-tripping the profile in the generate request: it exceeds the default JSON body limit (api.md G9) on wide datasets.
+  - Persisting profiles: not needed, and it would store more data about the user's tables.
+- **Consequences:**
+  - Sampled statistics are approximate, and the UI says so next to every profile.
+  - `TABLESAMPLE` cost and behaviour differ per engine and per table kind, and must be timed live (Databricks especially).
+  - Databricks PK and FK constraints are informational and need Unity Catalog. The script header says so, and the constraints can be switched off.
+  - The Data Readiness Agent's prompt and tools change, so its eval set must pass at 100 % over 3 runs.
+  - Stack-neutral: a rebuild needs a sampler per dialect, the pure profile builder, the generator, a writer per dialect, two endpoints, one UI tab and two tools.
+  - Capability: [synthetic-data](../capabilities/synthetic-data/spec.md).
 
 ## Level 4 — Code
 

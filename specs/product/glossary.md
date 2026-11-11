@@ -156,6 +156,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Sample values.** Up to 5 distinct real values per column, captured when a dataset is saved, so the assistant can match the user's wording to stored values.
 
+**Sampled profile.** An approximate profile of a *dataset*'s tables read from up to 1,000 sampled rows per table: types, null rates, distinct counts, ranges, categorical values and text patterns, plus how each column would be synthesized. It is kept in memory for 60 minutes and never stored, it is separate from *data readiness* (whose statistics are exact), and a sampled number never feeds a readiness score. See [../capabilities/synthetic-data/spec.md](../capabilities/synthetic-data/spec.md).
+
 **Schema.** The middle level of an *entity* name.
 
 **Schema layer.** The role of a *schema* in the data pipeline, set per schema in a *dataset*: Landing (raw, as ingested), Normalized (cleaned and conformed) or Consumption (modelled for analysis and reporting). See [../capabilities/datasets/spec.md](../capabilities/datasets/spec.md).
