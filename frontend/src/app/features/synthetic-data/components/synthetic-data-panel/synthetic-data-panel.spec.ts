@@ -44,7 +44,10 @@ const table = (over: Partial<SampledTable>): SampledTable => ({
   ...over,
 });
 
-function dataset(n: number, kind: Dataset['datasourceKind'] = 'postgres'): Dataset {
+function dataset(
+  n: number,
+  kind: Dataset['datasourceKind'] = 'postgres',
+): Dataset {
   return {
     name: 'World Cup',
     datasourceId: 'ds1',
@@ -120,9 +123,9 @@ describe('SyntheticDataPanel', () => {
   it('checks every table by default and counts them', () => {
     render(dataset(3));
     expect(q('synth-table-count')!.textContent).toContain('3 of 3 tables');
-    expect(
-      (q('synth-table-db.public.t0') as HTMLInputElement).checked,
-    ).toBe(true);
+    expect((q('synth-table-db.public.t0') as HTMLInputElement).checked).toBe(
+      true,
+    );
   });
 
   it('Clear and Select all change the selection and the Profile button', () => {
@@ -156,7 +159,9 @@ describe('SyntheticDataPanel', () => {
     fixture.detectChanges();
     expect(q('synth-profile')!.textContent).toContain('Sampling 1 tables…');
 
-    const req = http.expectOne((r) => r.url.endsWith('/synthetic-data/profiles'));
+    const req = http.expectOne((r) =>
+      r.url.endsWith('/synthetic-data/profiles'),
+    );
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({
       datasetName: 'World Cup',
@@ -181,7 +186,9 @@ describe('SyntheticDataPanel', () => {
     render(dataset(1));
     q('synth-profile')!.click();
     fixture.detectChanges();
-    const req = http.expectOne((r) => r.url.endsWith('/synthetic-data/profiles'));
+    const req = http.expectOne((r) =>
+      r.url.endsWith('/synthetic-data/profiles'),
+    );
     expect(req.cancelled).toBe(false);
     fixture.destroy();
     expect(req.cancelled).toBe(true);
@@ -193,11 +200,18 @@ describe('SyntheticDataPanel', () => {
     fixture.detectChanges();
     const p = profile();
     p.tables[0].columns = [
-      col({ name: 'national_id', type: 'bigint', kind: 'identifier', strategy: 'sequence' }),
+      col({
+        name: 'national_id',
+        type: 'bigint',
+        kind: 'identifier',
+        strategy: 'sequence',
+      }),
     ];
     http.expectOne((r) => r.url.endsWith('/synthetic-data/profiles')).flush(p);
     fixture.detectChanges();
-    const cells = q('synth-col-db.public.t0-national_id')!.querySelectorAll('td');
+    const cells = q('synth-col-db.public.t0-national_id')!.querySelectorAll(
+      'td',
+    );
     expect(cells[4].textContent!.trim()).toBe('—');
   });
 
@@ -205,7 +219,9 @@ describe('SyntheticDataPanel', () => {
     render(dataset(1));
     q('synth-profile')!.click();
     fixture.detectChanges();
-    const req = http.expectOne((r) => r.url.endsWith('/synthetic-data/profiles'));
+    const req = http.expectOne((r) =>
+      r.url.endsWith('/synthetic-data/profiles'),
+    );
     q('synth-cancel')!.click();
     fixture.detectChanges();
     expect(req.cancelled).toBe(true);
@@ -243,7 +259,11 @@ describe('profile copy helpers', () => {
   it('method chip copy', () => {
     expect(
       methodChipText(
-        table({ method: 'tablesample', sampledRows: 1000, rowCountEstimate: 2_300_000 }),
+        table({
+          method: 'tablesample',
+          sampledRows: 1000,
+          rowCountEstimate: 2_300_000,
+        }),
       ),
     ).toBe('Sampled 1,000 of ~2.3M rows');
     expect(methodChipText(table({ method: 'full', sampledRows: 32 }))).toBe(
@@ -270,6 +290,9 @@ describe('profile copy helpers', () => {
     const chip = (c: Partial<SampledColumn>) =>
       strategyChipText(col(c), t, rels, [t, parent]);
     expect(chip({ strategy: 'sequence' })).toBe('Sequence 1…n');
+    expect(chip({ strategy: 'unique-range' })).toBe(
+      'Distinct numbers in the observed range',
+    );
     expect(chip({ strategy: 'uuid' })).toBe('Random UUIDs');
     expect(chip({ strategy: 'unique-pattern' })).toBe(
       'Unique values like the pattern',

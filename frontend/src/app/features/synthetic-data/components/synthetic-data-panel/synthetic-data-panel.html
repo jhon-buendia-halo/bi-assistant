@@ -57,7 +57,10 @@
         }
       </ul>
       @if (tooMany()) {
-        <p class="text-[12px] text-on-warning-soft" data-testid="synth-too-many">
+        <p
+          class="text-[12px] text-on-warning-soft"
+          data-testid="synth-too-many"
+        >
           Choose at most {{ tablesMax }} tables.
         </p>
       }
@@ -65,6 +68,7 @@
 
     <div class="flex items-center gap-2">
       <button
+        #profileButton
         type="button"
         class="btn btn-primary"
         data-testid="synth-profile"
@@ -110,9 +114,24 @@
 
     @if (profile(); as p) {
       <div class="flex flex-col gap-4" data-testid="synth-profile-view">
-        <p class="text-[13px] text-fg-muted" data-testid="synth-profile-summary">
+        <p
+          class="text-[13px] text-fg-muted"
+          data-testid="synth-profile-summary"
+        >
           {{ summary() }}
         </p>
+        <div>
+          <app-synthetic-export-bar [profile]="p" (expired)="markExpired()" />
+        </div>
+        @if (expired()) {
+          <p
+            class="rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+            role="alert"
+            data-testid="synth-expired"
+          >
+            This profile expired. Profile the tables again.
+          </p>
+        }
         @for (table of p.tables; track table.key) {
           <app-sampled-table-card
             [table]="table"
@@ -120,6 +139,7 @@
             [relationships]="p.relationships"
           />
         }
+        <app-synthetic-generate-form [profile]="p" (expired)="markExpired()" />
       </div>
     }
   }

@@ -1,4 +1,13 @@
-import { Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  computed,
+  inject,
+  input,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { Subscription } from 'rxjs';
 import { LucideAngularModule, Loader2 } from 'lucide-angular';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
@@ -10,11 +19,18 @@ import {
 } from '../../models/synthetic-data.model';
 import { minutesLeft, relativeTime } from '../../models/synthetic-data.format';
 import { SampledTableCard } from '../sampled-table-card/sampled-table-card';
+import { SyntheticExportBar } from '../synthetic-export-bar/synthetic-export-bar';
+import { SyntheticGenerateForm } from '../synthetic-generate-form/synthetic-generate-form';
 
 /** The dataset editor's Profile & synthesize tab (M1-22, story 1.22.1). */
 @Component({
   selector: 'app-synthetic-data-panel',
-  imports: [LucideAngularModule, SampledTableCard],
+  imports: [
+    LucideAngularModule,
+    SampledTableCard,
+    SyntheticExportBar,
+    SyntheticGenerateForm,
+  ],
   templateUrl: './synthetic-data-panel.html',
 })
 export class SyntheticDataPanel {
@@ -44,6 +60,15 @@ export class SyntheticDataPanel {
   readonly error = signal<string | null>(null);
   readonly profile = signal<SampledProfile | null>(null);
   private readonly shownAt = signal(Date.now());
+  /** A generate or export answered 404: the cached profile is gone. */
+  readonly expired = signal(false);
+  private readonly profileButton =
+    viewChild<ElementRef<HTMLButtonElement>>('profileButton');
+
+  markExpired(): void {
+    this.expired.set(true);
+    setTimeout(() => this.profileButton()?.nativeElement.focus());
+  }
 
   readonly canProfile = computed(
     () => this.selected().length > 0 && !this.tooMany() && !this.running(),
@@ -79,6 +104,7 @@ export class SyntheticDataPanel {
     if (!this.canProfile()) return;
     const tables = this.selected();
     this.error.set(null);
+    this.expired.set(false);
     this.running.set(true);
     this.runningCount.set(tables.length);
     this.subscription = this.api
