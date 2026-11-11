@@ -1,6 +1,6 @@
 # Roadmap
 
-Pre-implementation plan for all work. Hierarchy: **Release → Milestone → Feature** (`R`, `R.M`, `R.M.F`). See *Planning convention* in [CLAUDE.md](CLAUDE.md).
+Pre-implementation plan for all work. Hierarchy: **Release → Milestone → Feature** (`R`, `R.M`, `R.M.F`). See *Planning convention* in the `workflow-start` skill. Each milestone is an epic, with its spec in [specs/epics/](specs/README.md); since 2026-11-11 a new milestone's heading ends in its epic ID `(M<R>-<M>)`.
 
 Status legend: `📋 Planned` · `🚧 In progress` · `✅ Done` · `🚫 Cut`
 
@@ -383,6 +383,40 @@ Adjustments to the delivery workflow harness: the CLAUDE.md conventions, the wor
   - `tokens.mjs` totals match a hand count on one sample transcript.
   - The dry-run stories in 0.4.4 report their token totals.
 - **Notes:** `brief.mjs` (0.4.4) uses this digest. It is a rule change to the first action, approved by the user on 2026-11-09.
+
+### Milestone 0.5 — Faster workflow, repo-only planning (M0-5)
+
+Shorten the time from a request to a merged PR without weakening what the workflow guarantees, and move all planning into the repository (Jira is no longer used). No app behaviour changes. Epic spec: [specs/epics/M0-5/spec.md](specs/epics/M0-5/spec.md). Requested by the user on 2026-11-11 after a review of where the workflow spends time.
+
+#### 0.5.1 — Repo-only planning  `✅ Done`
+- **Intent:** planning needs no external system; an epic and its stories live only in the repository.
+- **Scope:** epics are roadmap milestones with ID `M<R>-<M>` at the end of the heading and a spec in `specs/epics/<ID>/spec.md`; stories are features. Remove `.claude/tools/jira/`, `.claude/skills/jira/`, `.mcp.json`, the Jira entries in `.claude/settings.json` and `.env.example`. `check-specs.py` checks `(M<R>-<M>)` milestone epics as well as the older `[BA-<n>]` ones. The Epic gate in `CLAUDE.md` and `workflow-start` is repo-only.
+- **Out of scope:** renaming the `BA-*` epic folders; rewriting history.
+- **Acceptance:** no Jira tooling remains; `check-specs.py` passes and counts M1-22 and M0-5.
+
+#### 0.5.2 — Lighter workflow: sizes, lessons, per-epic records, four skills  `✅ Done`
+- **Intent:** small changes stop paying for the full process; the first read of every task is short; records are written once per epic.
+- **Scope:** an S / M / L size table in `CLAUDE.md` saying which steps each runs. `lessons.md` (under ~80 lines) becomes the mandatory first read; `retrospective.md` stays the history. One changelog entry and one retrospective per epic. The nine workflow skills become four: `workflow-start`, `workflow-implement`, `verify`, `workflow-gate`. `builder` and `reviewer` set `omitClaudeMd: true`.
+- **Out of scope:** tagged lessons and `lessons.mjs` (0.4.8).
+- **Acceptance:** the `workflow-steps` mod parses `CLAUDE.md`'s eleven steps; `check-specs.py` checks the links in `lessons.md` and the skills; no reference to a removed skill remains outside history.
+- **Notes:** delivers the digest half of 0.4.8 in distilled form.
+
+#### 0.5.3 — Faster QA script  `✅ Done`
+- **Intent:** a gate run waits less: independent checks run at once, an up-to-date build is not redone, and worktrees don't queue behind each other without need.
+- **Scope:** `qa.mjs` runs the unit suites, lint and `check-specs` in parallel; skips `build:all` when its outputs are newer than its inputs (`--rebuild` forces it); narrows the QA lane lock to what is really shared; `--draft-impact` writes the step-6 list from the diff; `--no-demo` for S changes.
+- **Acceptance:** `node --test scripts/qa-lib.test.mjs` passes, with tests for the new pure functions; `tests.md` keeps its content.
+- **Notes:** the first gate runs showed Karma's browser tests flaking under the CPU load of Jest and ESLint, so Karma runs alone after them. Two order-dependent frontend unit tests (`UiPreferencesService`, `PromptEditor`) were fixed. Evidence: [evidence/0.5.3/](evidence/0.5.3/).
+
+#### 0.5.4 — Eval bar relative to the base  `✅ Done`
+- **Intent:** eval rounds stop chasing model flakiness that the change didn't cause.
+- **Scope:** the `verify` skill: three runs per build in parallel on data-dir copies; code checks pass 3 of 3; judged cases pass at least 2 of 3 and no less often than on the base; cases flaky on both builds are listed, not chased.
+- **Acceptance:** the skill states the bar; the next agent-input change uses it.
+
+#### 0.5.5 — Workspace bootstrap  `✅ Done`
+- **Intent:** a new workspace is ready to build, test and run with one command.
+- **Scope:** `scripts/bootstrap.mjs` (install both packages, Playwright's Chromium, build, report Postgres). `.conductor/settings.toml` runs it as the setup script and adds a **web** run action. `@floating-ui/dom` becomes a direct frontend dependency, so `npm ci --legacy-peer-deps` no longer drops it. `setup-local.mjs` loads the Intellify sample into the Intellify RFP API's database (`intellify_mercer_demo`).
+- **Acceptance:** `bootstrap.mjs` builds the web UI in a checkout with no `node_modules`; `node --test scripts/setup-local.test.mjs` passes.
+- **Notes:** found on 2026-11-11, when a fresh workspace failed to build (`Could not resolve "@floating-ui/dom"`) and the Intellify API could not be registered.
 
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
@@ -1593,7 +1627,7 @@ A second built-in data-analyst agent, Questions to Insights v2, built up next to
 - **Out of scope:** the agent graph (option C of the review page); comparing sessions; replaying a turn; sessions with no recorded runs.
 - **Acceptance:** after two chat turns the session appears with 2 turns and totals equal to the sum of its LLM calls; the session page shows both questions, each model request and tool group in order, and both answers; Open timeline shows the waterfall with bars to scale and the framework switch adds the housekeeping spans; Back keeps the tab, filters and page; unit tests, the build and the impacted E2E green.
 - **Notes:** requested on 2026-11-10 after the design review page https://claude.ai/artifact/U4h5dbCbR65PSSRGbHkdPa (options A waterfall, B trajectory, C graph). The user chose the recommendation: B for the session with A as the turn drill-down, a Sessions tab on Monitoring, framework spans hidden behind a switch. No Jira key (repo only).
-### Milestone 1.22 — Sampled profiling and synthetic data
+### Milestone 1.22 — Sampled profiling and synthetic data (M1-22)
 
 Profile a PostgreSQL or Databricks dataset quickly from a sample of its rows, and download a synthetic copy as a SQL script in the datasource's dialect, a CSV zip or an Excel workbook. The copy keeps distributions, null rates, formats and keys, and never copies identifiers, names or free text. The profile can be exported as CSV or Excel, and the real sampled rows can be exported too (`.sql`, CSV or Excel) as an explicit action behind a confirm (amendment of 2026-11-11, stories 1.22.5 and 1.22.6). It is available from a **Profile & synthesize** tab in the dataset editor and, for the `.sql` synthetic script only, from the Data Readiness Agent in chat. The sampled profile is separate from the Data Readiness assessment, which stays exact (data-readiness R29), and the app never writes to a datasource. Decision: ADR-0039 (drafted in the plan, recorded in 1.22.1). All stories are built on the branch `feat/M1-22-synthetic-data` and ship as one PR. Epic spec: [specs/epics/M1-22/spec.md](specs/epics/M1-22/spec.md). Plan and contract: [docs/plans/m1-22-synthetic-data.md](docs/plans/m1-22-synthetic-data.md). No Jira key (repo only).
 

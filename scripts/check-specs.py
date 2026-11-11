@@ -55,7 +55,7 @@ check(listed_epics == set(epics), "specs/README.md lists exactly the epic specs 
 
 # 2. Every relative link resolves.
 # changelog.md and retrospective.md are excluded: past entries are never rewritten, so their links may point at moved files.
-files = ["CLAUDE.md", "README.md", "roadmap.md"] + glob.glob("specs/**/*.md", recursive=True) + glob.glob(".claude/skills/*/SKILL.md") + glob.glob(".claude/tools/**/*.md", recursive=True)
+files = ["CLAUDE.md", "README.md", "roadmap.md", "lessons.md"] + glob.glob("specs/**/*.md", recursive=True) + glob.glob(".claude/skills/*/SKILL.md") + glob.glob(".claude/tools/**/*.md", recursive=True)
 broken = []
 for f in files:
     for target in re.findall(r"\]\(([^)\s]+)\)", strip_code(read(f))):
@@ -111,8 +111,11 @@ agents = re.findall(r"'?([\w-]+)'?\s*:", registry.group(1)) if registry else []
 absent = [a for a in agents if f"`{a}`" not in agents_md]
 check(agents and not absent, f"{len(agents)} registered agents appear in specs/system/agents.md", absent)
 
-# 8. Epic gate: every epic linked from a roadmap milestone has a spec with a status.
-roadmap_epics = set(re.findall(r"^### Milestone [\d.]+ — .*?\[(BA-\d+)\]", read("roadmap.md"), flags=re.M))
+# 8. Epic gate: every epic named in a roadmap milestone heading has a spec with a status.
+# Epics are repo-only since 2026-11-11 (roadmap 0.5.1): a heading ends in "(M<R>-<M>)".
+# Older milestones still name their former Jira key as a link, "[BA-<n>]".
+roadmap_epics = set(re.findall(r"^### Milestone [\d.]+ — .*?(?:\[(BA-\d+)\]|\((M\d+-\d+)\))", read("roadmap.md"), flags=re.M))
+roadmap_epics = {a or b for a, b in roadmap_epics}
 missing = sorted(roadmap_epics - set(epics))
 check(not missing, f"{len(roadmap_epics)} roadmap milestone epics have a spec in specs/epics/", missing)
 no_status = sorted(e for e, t in epics.items() if not re.search(r"\*\*Status:\*\* (Draft|Confirmed)", t))

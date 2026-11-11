@@ -5,10 +5,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import {
+  BUILD_INPUTS,
+  DEMO_SKIPPED_LINE,
   UsageError,
   acquireLock,
   backendRelated,
+  buildDecision,
   demoEvidenceProblems,
+  demoEvidenceStep,
+  newestMtime,
+  renderDraftImpact,
+  selectedSpecs,
   storiesWithoutDemo,
   frontendRelated,
   impactSpecs,
@@ -25,12 +32,144 @@ import {
   storyTitle,
 } from './qa-lib.mjs';
 
-test('parseArgs reads the story, the mode and an optional base', () => {
-  assert.deepEqual(parseArgs(['1.21.6', '--fast']), { id: '1.21.6', mode: 'fast', base: undefined });
-  assert.deepEqual(parseArgs(['--gate', '0.4.5', '--base', 'abc123']), { id: '0.4.5', mode: 'gate', base: 'abc123' });
-  for (const bad of [[], ['1.21.6'], ['nope', '--fast'], ['1.21.6', '--fast', '--gate'], ['1.21.6', '--fast', '--x'], ['1.21.6', '--base']]) {
-    assert.throws(() => parseArgs(bad), UsageError);
+test('parseArgs reads the story, the mode, an optional base and the flags', () => {
+  const flags = { rebuild: false, noDemo: false, dryRun: false };
+  assert.deepEqual(parseArgs(['1.21.6', '--fast']), { id: '1.21.6', mode: 'fast', base: undefined, ...flags });
+  assert.deepEqual(parseArgs(['--gate', '0.4.5', '--base', 'abc123']), { id: '0.4.5', mode: 'gate', base: 'abc123', ...flags });
+  assert.deepEqual(parseArgs(['1.21.6', '--gate', '--rebuild', '--no-demo', '--dry-run']), {
+    id: '1.21.6',
+    mode: 'gate',
+    base: undefined,
+    rebuild: true,
+    noDemo: true,
+    dryRun: true,
+  });
+  assert.deepEqual(parseArgs(['1.21.6', '--draft-impact', '--base', 'HEAD', '--dry-run']), {
+    id: '1.21.6',
+    mode: 'draft-impact',
+    base: 'HEAD',
+    rebuild: false,
+    noDemo: false,
+    dryRun: true,
+  });
+  for (const bad of [
+    [],
+    ['1.21.6'],
+    ['nope', '--fast'],
+    ['zz-test', '--draft-impact'],
+    ['1.21.6', '--fast', '--gate'],
+    ['1.21.6', '--gate', '--draft-impact'],
+    ['1.21.6', '--fast', '--x'],
+    ['1.21.6', '--base'],
+    ['1.21.6', '--draft-impact', '--rebuild'],
+    ['1.21.6', '--draft-impact', '--no-demo'],
+  ]) {
+    assert.throws(() => parseArgs(bad), UsageError, JSON.stringify(bad));
   }
+});
+
+test('buildDecision skips the build only when every output is newer than every input', () => {
+  const outputs = [
+    { path: 'backend/dist/cli.js', mtimeMs: 2000 },
+    { path: 'backend/public/index.html', mtimeMs: 2100 },
+  ];
+  const stamp = { startedAt: 1500 };
+  const input = (mtimeMs) => ({ path: 'frontend/src/app/app.ts', mtimeMs });
+  assert.deepEqual(buildDecision({ rebuild: false, stamp, newestInput: input(1000), outputs }), { build: false, reason: 'up to date' });
+  // --rebuild forces it.
+  assert.equal(buildDecision({ rebuild: true, stamp, newestInput: input(1000), outputs }).build, true);
+  // An input edited after the outputs were written, or during the last build.
+  assert.match(buildDecision({ rebuild: false, stamp, newestInput: input(1600), outputs }).reason, /changed since the last successful build/);
+  assert.equal(buildDecision({ rebuild: false, stamp: { startedAt: 3000 }, newestInput: input(2050), outputs }).reason,
+    'frontend/src/app/app.ts is newer than backend/dist/cli.js');
+  // Equal mtimes are not "older": build.
+  assert.equal(buildDecision({ rebuild: false, stamp: { startedAt: 3000 }, newestInput: input(2000), outputs }).build, true);
+  // A missing output, no successful-build record or no input: build.
+  assert.match(
+    buildDecision({ rebuild: false, stamp, newestInput: input(1000), outputs: [outputs[0], { path: 'backend/public/index.html', mtimeMs: null }] }).reason,
+    /backend\/public\/index\.html is missing/,
+  );
+  assert.match(buildDecision({ rebuild: false, stamp: null, newestInput: input(1000), outputs }).reason, /no record of a successful/);
+  assert.equal(buildDecision({ rebuild: false, stamp: {}, newestInput: input(1000), outputs }).build, true);
+  assert.equal(buildDecision({ rebuild: false, stamp, newestInput: null, outputs }).build, true);
+});
+
+test('newestMtime walks files and directories, a deletion included', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qa-mtime-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'frontend/src/app'), { recursive: true });
+    const at = (rel, s) => fs.utimesSync(path.join(dir, rel), s, s);
+    fs.writeFileSync(path.join(dir, 'frontend/src/app/a.ts'), '');
+    fs.writeFileSync(path.join(dir, 'frontend/package.json'), '{}');
+    for (const rel of ['frontend/src/app/a.ts', 'frontend/src/app', 'frontend/src']) at(rel, 1000);
+    at('frontend/package.json', 1200);
+    assert.deepEqual(newestMtime(dir, ['frontend/src', 'frontend/package.json', 'frontend/missing.json']), {
+      path: 'frontend/package.json',
+      mtimeMs: 1200 * 1000,
+    });
+    at('frontend/src/app/a.ts', 1300);
+    assert.equal(newestMtime(dir, ['frontend/src', 'frontend/package.json']).path, 'frontend/src/app/a.ts');
+    // Deleting a file bumps its directory's mtime, which counts as a change.
+    fs.rmSync(path.join(dir, 'frontend/src/app/a.ts'));
+    assert.equal(newestMtime(dir, ['frontend/src', 'frontend/package.json']).path, 'frontend/src/app');
+    assert.equal(newestMtime(dir, ['nothing']), null);
+    assert.ok(BUILD_INPUTS.includes('backend/src') && BUILD_INPUTS.includes('frontend/src'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('selectedSpecs and renderDraftImpact draft a step-6 list parseImpact reads back', () => {
+  const specs = selectedSpecs({
+    onlyChanged: ['frontend/e2e/navigation.spec.ts'],
+    listed: [],
+    changed: ['frontend/e2e/old.spec.ts', 'frontend/e2e/helpers/api.ts', 'frontend\\e2e\\navigation.spec.ts', 'backend/src/x.ts'],
+    demo: ['frontend/e2e/synthetic-data.spec.ts'],
+  });
+  assert.deepEqual(specs, ['frontend/e2e/navigation.spec.ts', 'frontend/e2e/old.spec.ts', 'frontend/e2e/synthetic-data.spec.ts']);
+  const md = renderDraftImpact('1.22.9', specs, { base: 'abc1234', exists: (s) => !s.endsWith('old.spec.ts') });
+  assert.match(md, /^# 1\.22\.9 — E2E impact \(step 6\)\n/);
+  assert.match(md, /\*\*Draft to review\.\*\* Written by `node scripts\/qa\.mjs 1\.22\.9 --draft-impact` from the diff against `abc1234`/);
+  assert.match(md, /\| `frontend\/e2e\/navigation\.spec\.ts` \| re-run \| TODO: review \|/);
+  assert.deepEqual(parseImpact(md), [
+    { spec: 'frontend/e2e/navigation.spec.ts', decision: 're-run' },
+    { spec: 'frontend/e2e/old.spec.ts', decision: 'delete' },
+    { spec: 'frontend/e2e/synthetic-data.spec.ts', decision: 're-run' },
+  ]);
+  assert.deepEqual(impactSpecs(parseImpact(md)), ['frontend/e2e/navigation.spec.ts', 'frontend/e2e/synthetic-data.spec.ts']);
+  const empty = renderDraftImpact('1.22.9', [], { base: 'abc1234' });
+  assert.deepEqual(parseImpact(empty), []);
+  assert.match(empty, /TODO: review — no related Playwright spec/);
+});
+
+test('--gate --no-demo skips the demo evidence check and says so in tests.md', () => {
+  const missingAll = { hasWebm: false, hasTxt: false, uiDemo: true, readme: '' };
+  // Without the flag the check runs and fails a story with no demo.
+  const step = demoEvidenceStep('1.2.3', missingAll);
+  assert.equal(step.name, 'demo evidence');
+  assert.equal(step.status, 'failed');
+  assert.equal(step.exitCode, 1);
+  assert.equal(step.summary.length, 2);
+  assert.equal(demoEvidenceStep('1.2.3', { hasWebm: true, hasTxt: false, uiDemo: true, readme: 'https://claude.ai/artifact/abc' }).status, 'passed');
+  // With it there is no step to fail.
+  assert.equal(demoEvidenceStep('1.2.3', missingAll, { noDemo: true }), null);
+  const args = {
+    id: '1.2.3',
+    date: '2026-11-11',
+    base: 'abc1234',
+    steps: [{ name: 'backend unit', command: 'npx jest', status: 'passed' }],
+    listed: [],
+    ran: [],
+    missing: [],
+  };
+  const skipped = renderTestsMd({ ...args, demoSkipped: true });
+  assert.match(skipped, /`node scripts\/qa\.mjs 1\.2\.3 --gate --no-demo`/);
+  assert.match(skipped, /\*\*Result: passed\.\*\*/);
+  assert.ok(skipped.includes(`\n${DEMO_SKIPPED_LINE}.\n`));
+  assert.equal(DEMO_SKIPPED_LINE, 'Demo: skipped (--no-demo, small change)');
+  const normal = renderTestsMd(args);
+  assert.doesNotMatch(normal, /Demo: skipped/);
+  assert.match(normal, /`node scripts\/qa\.mjs 1\.2\.3 --gate`/);
 });
 
 test('parseImpact keeps table rows with a backticked spec and a decision', () => {
@@ -188,6 +327,8 @@ test('renderDemoTxt and storyTitle describe a story with no UI', () => {
   ]);
   assert.match(colored, / {2}▲ WARNING budget/);
   assert.doesNotMatch(colored, /\u001b/);
+  // --fast --no-demo: the transcript says why there is no video.
+  assert.match(renderDemoTxt('0.4.5', 'x', [], { noDemo: true }), /Run with --no-demo \(a small change\)/);
 });
 
 test('acquireLock makes runs wait their turn and clears a stale lock', async () => {

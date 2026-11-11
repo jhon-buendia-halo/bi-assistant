@@ -26,6 +26,14 @@ describe('parseNavExpanded', () => {
 describe('UiPreferencesService', () => {
   let http: HttpTestingController;
 
+  // Other specs that use the real ThemeService can leave a theme in storage;
+  // in a random test order that made the service move it to the backend (an
+  // unexpected PUT). Start every test from empty storage.
+  beforeEach(() => {
+    localStorage.removeItem(THEME_STORAGE_KEY);
+    localStorage.removeItem(NAV_EXPANDED_STORAGE_KEY);
+  });
+
   function create(): UiPreferencesService {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
