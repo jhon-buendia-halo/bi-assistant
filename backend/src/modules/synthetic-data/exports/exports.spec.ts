@@ -193,10 +193,10 @@ describe('writeXlsx', () => {
     const lines = csv.split('\r\n');
     const sheet = wb.getWorksheet('a')!;
     // numbers and booleans round-trip as the same text
-    expect(String(sheet.getRow(2).getCell(1).value)).toBe(
+    expect(String(sheet.getRow(2).getCell(1).value as string | number)).toBe(
       lines[1].split(',')[0],
     );
-    expect(String(sheet.getRow(2).getCell(6).value)).toBe('true');
+    expect(String(sheet.getRow(2).getCell(6).value as boolean)).toBe('true');
     expect(sheet.getRow(2).getCell(2).value).toBe(lines[1].split(',')[1]);
   });
 });

@@ -123,7 +123,7 @@ export const postgresWriter: DialectWriter = {
       );
     const values = rows.map(
       (row) =>
-        `(${row.map((v, i) => this.literal(v, table.columns[i])).join(', ')})`,
+        `(${row.map((v, i) => postgresWriter.literal(v, table.columns[i])).join(', ')})`,
     );
     return `INSERT INTO ${qualify(targetSchema, table.targetName)} (${colList(table.columns.map((c) => c.name))}) VALUES ${values.join(',\n')};`;
   },

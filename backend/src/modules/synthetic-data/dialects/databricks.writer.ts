@@ -170,7 +170,7 @@ export const databricksWriter: DialectWriter = {
         `  CONSTRAINT ${quoteIdent(`${table.targetName}_pk`)} PRIMARY KEY (${table.primaryKey.map(quoteIdent).join(', ')})`,
       );
     }
-    return `CREATE TABLE ${this.qualify(targetSchema, table.targetName)} (\n${lines.join(',\n')}\n) USING DELTA;`;
+    return `CREATE TABLE ${databricksWriter.qualify(targetSchema, table.targetName)} (\n${lines.join(',\n')}\n) USING DELTA;`;
   },
   insert(targetSchema, table, rows) {
     if (rows.length > INSERT_BATCH_ROWS) {
@@ -184,7 +184,7 @@ export const databricksWriter: DialectWriter = {
         throw new Error('Row width does not match the column count');
       return `(${row.map((v, i) => literal(v, table.columns[i])).join(', ')})`;
     });
-    return `INSERT INTO ${this.qualify(targetSchema, table.targetName)} (${cols}) VALUES ${tuples.join(',\n')};`;
+    return `INSERT INTO ${databricksWriter.qualify(targetSchema, table.targetName)} (${cols}) VALUES ${tuples.join(',\n')};`;
   },
   addForeignKey(
     targetSchema,
@@ -194,9 +194,9 @@ export const databricksWriter: DialectWriter = {
   ) {
     const name = `${from.targetName}_${rel.fromColumns.join('_')}_fk`;
     return (
-      `ALTER TABLE ${this.qualify(targetSchema, from.targetName)} ADD CONSTRAINT ${quoteIdent(name)} ` +
+      `ALTER TABLE ${databricksWriter.qualify(targetSchema, from.targetName)} ADD CONSTRAINT ${quoteIdent(name)} ` +
       `FOREIGN KEY (${rel.fromColumns.map(quoteIdent).join(', ')}) ` +
-      `REFERENCES ${this.qualify(targetSchema, to.targetName)} (${rel.toColumns.map(quoteIdent).join(', ')});`
+      `REFERENCES ${databricksWriter.qualify(targetSchema, to.targetName)} (${rel.toColumns.map(quoteIdent).join(', ')});`
     );
   },
   headerNotes: () => [

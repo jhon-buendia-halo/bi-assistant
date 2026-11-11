@@ -45,6 +45,7 @@ function setup(
   };
   const datasources = {
     get: jest.fn().mockImplementation(async () => {
+      await Promise.resolve();
       if (opts.datasourceError) throw opts.datasourceError;
       return {
         id: 'ds1',
@@ -56,15 +57,17 @@ function setup(
   };
   const sample =
     opts.sample ??
-    jest.fn().mockImplementation(async (_c, ns: string, table: string) => ({
-      namespace: ns,
-      table,
-      rowCountEstimate: 5,
-      method: 'full',
-      columns: [],
-      rows: [],
-      durationMs: 1,
-    }));
+    jest.fn().mockImplementation((_c, ns: string, table: string) =>
+      Promise.resolve({
+        namespace: ns,
+        table,
+        rowCountEstimate: 5,
+        method: 'full',
+        columns: [],
+        rows: [],
+        durationMs: 1,
+      }),
+    );
   const scoped = {
     tables: opts.tables ?? jest.fn().mockResolvedValue([]),
     keys: jest.fn().mockResolvedValue([]),
@@ -230,7 +233,9 @@ describe('SyntheticDataService.profile (behaviour)', () => {
     const s = setup();
     const out = await s.service.profile({ datasetName: ' World Cup ' });
     expect(out.datasetName).toBe('World Cup');
-    expect(s.build.mock.calls[0][0].tables.map((t) => t.key)).toEqual(PG_TABLES);
+    expect(s.build.mock.calls[0][0].tables.map((t) => t.key)).toEqual(
+      PG_TABLES,
+    );
     expect(s.scoped.sampleTable).toHaveBeenCalledTimes(2);
     expect(s.scoped.sampleTable).toHaveBeenCalledWith(
       expect.anything(),
@@ -300,7 +305,11 @@ describe('SyntheticDataService.profile (behaviour)', () => {
 
   it('an unresolvable key gets no columns from a same-named table of the current database', async () => {
     const tables = jest.fn().mockResolvedValue([
-      { schema: 'public', table: 'teams', columns: [{ name: 'id', type: 'integer', nullable: false }] },
+      {
+        schema: 'public',
+        table: 'teams',
+        columns: [{ name: 'id', type: 'integer', nullable: false }],
+      },
     ]);
     const s = setup({
       tables,
@@ -322,6 +331,7 @@ describe('SyntheticDataService.profile (behaviour)', () => {
   it('aborts when the signal fires: stops sampling and builds nothing', async () => {
     const ac = new AbortController();
     const sample = jest.fn().mockImplementation(async () => {
+      await Promise.resolve();
       ac.abort();
       return {
         namespace: 'public',

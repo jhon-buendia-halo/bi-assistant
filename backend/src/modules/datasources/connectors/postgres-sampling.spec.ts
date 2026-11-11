@@ -43,10 +43,14 @@ describe('PostgresProfiler.sampleTable', () => {
       if (t.includes('reltuples')) {
         return estimate instanceof Error
           ? Promise.reject(estimate)
-          : Promise.resolve({ rows: estimate === undefined ? [] : [{ n: estimate }] });
+          : Promise.resolve({
+              rows: estimate === undefined ? [] : [{ n: estimate }],
+            });
       }
       const r = reads(t);
-      return r instanceof Error ? Promise.reject(r) : Promise.resolve({ ...r, fields: [{ name: 'id' }] });
+      return r instanceof Error
+        ? Promise.reject(r)
+        : Promise.resolve({ ...r, fields: [{ name: 'id' }] });
     });
     (Client as unknown as jest.Mock).mockReset();
     (Client as unknown as jest.Mock).mockImplementation(() => ({
@@ -63,7 +67,11 @@ describe('PostgresProfiler.sampleTable', () => {
     reads = () => ({ rows: rowsOf(50) });
     const out = await profiler.sampleTable(config, 's"x', 't', opts);
     expect(dataSql()).toEqual(['SELECT * FROM "s""x"."t" LIMIT 1000']);
-    expect(out).toMatchObject({ method: 'full', rowCountEstimate: 50, columns: ['id'] });
+    expect(out).toMatchObject({
+      method: 'full',
+      rowCountEstimate: 50,
+      columns: ['id'],
+    });
     expect(out.rows).toHaveLength(50);
     expect(out.error).toBeUndefined();
   });
@@ -71,7 +79,12 @@ describe('PostgresProfiler.sampleTable', () => {
   it('uses BERNOULLI up to 1M rows with p from the formula and REPEATABLE (7)', async () => {
     estimate = '348950';
     reads = () => ({ rows: rowsOf(1000) });
-    const out = await profiler.sampleTable(config, 'us_health', 'medical_claims', opts);
+    const out = await profiler.sampleTable(
+      config,
+      'us_health',
+      'medical_claims',
+      opts,
+    );
     expect(dataSql()).toEqual([
       'SELECT * FROM "us_health"."medical_claims" TABLESAMPLE BERNOULLI (0.4299) REPEATABLE (7) LIMIT 1000',
     ]);
@@ -122,8 +135,15 @@ describe('PostgresProfiler.sampleTable', () => {
   it('treats reltuples -1 as unknown: LIMIT, labelled full when it returns fewer rows than asked', async () => {
     estimate = '-1';
     reads = () => ({ rows: rowsOf(50) });
-    const out = await profiler.sampleTable(config, 'world_cup', 'players', opts);
-    expect(dataSql()).toEqual(['SELECT * FROM "world_cup"."players" LIMIT 1000']);
+    const out = await profiler.sampleTable(
+      config,
+      'world_cup',
+      'players',
+      opts,
+    );
+    expect(dataSql()).toEqual([
+      'SELECT * FROM "world_cup"."players" LIMIT 1000',
+    ]);
     expect(out).toMatchObject({ method: 'full', rowCountEstimate: null });
   });
 
@@ -141,8 +161,12 @@ describe('PostgresProfiler.sampleTable', () => {
     const sample = (query.mock.calls as [Q][]).find(
       ([q]) => typeof q !== 'string' && q.text.startsWith('SELECT * '),
     )![0] as { types: { getTypeParser: () => (v: string) => string } };
-    expect(sample.types.getTypeParser()('2024-01-01 10:00:00')).toBe('2024-01-01 10:00:00');
-    expect((Client as unknown as jest.Mock).mock.calls[0][0]).not.toHaveProperty('types');
+    expect(sample.types.getTypeParser()('2024-01-01 10:00:00')).toBe(
+      '2024-01-01 10:00:00',
+    );
+    expect(
+      ((Client as unknown as jest.Mock).mock.calls as unknown[][])[0][0],
+    ).not.toHaveProperty('types');
   });
 
   it('a failing read leaves error, no rows and sampledRows 0, without leaking the config', async () => {
@@ -156,7 +180,8 @@ describe('PostgresProfiler.sampleTable', () => {
 
   it('a statement timeout becomes a table error', async () => {
     estimate = '10';
-    reads = () => Object.assign(new Error('canceling statement'), { code: '57014' });
+    reads = () =>
+      Object.assign(new Error('canceling statement'), { code: '57014' });
     const out = await profiler.sampleTable(config, 's', 't', opts);
     expect(out.error).toContain('timed out');
     expect(out.rows).toEqual([]);
@@ -165,8 +190,12 @@ describe('PostgresProfiler.sampleTable', () => {
   it('sampleTable runs on the scope of withSamplingSessions', async () => {
     estimate = '10';
     reads = () => ({ rows: rowsOf(2) });
-    const out = await withSamplingSessions(profiler, config, 2, undefined, (scoped) =>
-      scoped.sampleTable(config, 's', 't', opts),
+    const out = await withSamplingSessions(
+      profiler,
+      config,
+      2,
+      undefined,
+      (scoped) => scoped.sampleTable(config, 's', 't', opts),
     );
     expect(out.rows).toHaveLength(2);
     expect((Client as unknown as jest.Mock).mock.calls).toHaveLength(1);

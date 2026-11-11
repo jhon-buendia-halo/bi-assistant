@@ -5,12 +5,29 @@ export type SampleMethod = 'full' | 'tablesample' | 'limit';
 /** Download format of a synthetic or sample export (plan section 10). */
 export type ExportFormat = 'sql' | 'csv' | 'xlsx';
 export type ColumnKind =
-  | 'identifier' | 'categorical' | 'numeric' | 'temporal'
-  | 'boolean' | 'formatted' | 'text' | 'unsupported';
+  | 'identifier'
+  | 'categorical'
+  | 'numeric'
+  | 'temporal'
+  | 'boolean'
+  | 'formatted'
+  | 'text'
+  | 'unsupported';
 export type SynthesisStrategy =
-  | 'sequence' | 'unique-range' | 'uuid' | 'unique-pattern' | 'foreign-key'
-  | 'categorical' | 'numeric-range' | 'temporal-range' | 'boolean-rate'
-  | 'format-template' | 'pattern' | 'words' | 'null-only' | 'constant';
+  | 'sequence'
+  | 'unique-range'
+  | 'uuid'
+  | 'unique-pattern'
+  | 'foreign-key'
+  | 'categorical'
+  | 'numeric-range'
+  | 'temporal-range'
+  | 'boolean-rate'
+  | 'format-template'
+  | 'pattern'
+  | 'words'
+  | 'null-only'
+  | 'constant';
 
 /** Statistics over the sampled rows. Every number is approximate. */
 export interface SampledColumn {
@@ -27,11 +44,28 @@ export interface SampledColumn {
   distinctCount: number;
   /** distinctCount / non-null sampled values, 0..1, 4 decimals. */
   distinctRatio: number;
-  numeric?: { min: number; max: number; mean: number; quantiles: number[] /* 11: p0, p10 … p100 */; integer: boolean; scale: number /* max decimals seen, ≤ 10 */ };
-  temporal?: { min: string; max: string /* ISO, UTC */; quantiles: string[] /* 11 */; granularity: 'date' | 'second' | 'fraction' };
+  numeric?: {
+    min: number;
+    max: number;
+    mean: number;
+    quantiles: number[] /* 11: p0, p10 … p100 */;
+    integer: boolean;
+    scale: number; /* max decimals seen, ≤ 10 */
+  };
+  temporal?: {
+    min: string;
+    max: string /* ISO, UTC */;
+    quantiles: string[] /* 11 */;
+    granularity: 'date' | 'second' | 'fraction';
+  };
   boolean?: { trueFraction: number };
   /** Text length (characters) of non-null values; text, formatted, identifier text and categorical columns. */
-  length?: { min: number; max: number; mean: number; quantiles: number[] /* 11 */ };
+  length?: {
+    min: number;
+    max: number;
+    mean: number;
+    quantiles: number[]; /* 11 */
+  };
   /** Categorical columns only: values seen ≥ 3 times, at most 20, most frequent first (ties by value). */
   topValues?: { value: string; fraction: number }[];
   /** Categorical only: the share of non-null values not in topValues. */
@@ -56,40 +90,42 @@ export interface SampledTable {
   durationMs: number;
   /** Set when sampling failed; columns then come from the catalog only. Connector text, never row data. */
   error?: string;
-  primaryKey: string[];          // [] when none declared
+  primaryKey: string[]; // [] when none declared
   uniqueKeys: string[][];
-  columns: SampledColumn[];      // catalog order
+  columns: SampledColumn[]; // catalog order
 }
 
 export interface SampledRelationship {
-  fromTable: string; fromColumns: string[];  // table = SampledTable.key
-  toTable: string;   toColumns: string[];
+  fromTable: string;
+  fromColumns: string[]; // table = SampledTable.key
+  toTable: string;
+  toColumns: string[];
   origin: 'declared' | 'inferred';
 }
 
 export interface SampledProfile {
-  profileId: string;            // uuid; key in the in-memory cache
+  profileId: string; // uuid; key in the in-memory cache
   version: 1;
   datasetName: string;
   datasourceId: string;
   datasourceName: string;
   dialect: SyntheticDialect;
-  generatedAt: string;          // ISO
-  expiresAt: string;            // ISO, generatedAt + 60 min
-  sampleSize: number;           // rows requested per table (≤ 1000)
-  tables: SampledTable[];       // in the order requested
-  relationships: SampledRelationship[];  // both ends among `tables`
+  generatedAt: string; // ISO
+  expiresAt: string; // ISO, generatedAt + 60 min
+  sampleSize: number; // rows requested per table (≤ 1000)
+  tables: SampledTable[]; // in the order requested
+  relationships: SampledRelationship[]; // both ends among `tables`
 }
 
 export interface ScriptRequest {
   profileId: string;
   /** Per table key; tables left out use defaultRowCount. */
   rowCounts?: Record<string, number>;
-  defaultRowCount?: number;     // default 100
-  seed?: number;                // default 1
-  targetSchema?: string;        // default "synthetic"
+  defaultRowCount?: number; // default 100
+  seed?: number; // default 1
+  targetSchema?: string; // default "synthetic"
   includeConstraints?: boolean; // default true
-  format?: ExportFormat;        // default 'sql' (1.22.5)
+  format?: ExportFormat; // default 'sql' (1.22.5)
 }
 
 /** POST /synthetic-data/profile-exports (#113, 1.22.5). */
@@ -102,7 +138,7 @@ export interface ProfileExportRequest {
 export interface SampleExportRequest {
   profileId: string;
   format: ExportFormat;
-  targetSchema?: string;        // default "sample"
+  targetSchema?: string; // default "sample"
   confirmRealData: true;
 }
 
@@ -113,8 +149,13 @@ export interface ScriptSummary {
   seed: number;
   targetSchema: string;
   bytes: number;
-  tables: { key: string; targetName: string; rows: number; clampedFrom?: number }[];
-  droppedRelationships: SampledRelationship[];   // parent outside the profile
+  tables: {
+    key: string;
+    targetName: string;
+    rows: number;
+    clampedFrom?: number;
+  }[];
+  droppedRelationships: SampledRelationship[]; // parent outside the profile
   notSynthesized: { table: string; column: string; reason: string }[];
-  sha256: string;               // of the script bytes
+  sha256: string; // of the script bytes
 }

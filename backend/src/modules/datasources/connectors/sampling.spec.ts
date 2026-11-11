@@ -34,13 +34,29 @@ describe('sampling helpers', () => {
   it('withSamplingSessions forwards the scope from withSessions', async () => {
     const scoped = { sampleTable: jest.fn() };
     const profiler = {
-      withSessions: jest.fn((_c, _s, _sig, fn) => fn(scoped)),
+      withSessions: jest.fn(
+        (
+          _c: unknown,
+          _s: unknown,
+          _sig: unknown,
+          fn: (s: typeof scoped) => unknown,
+        ) => fn(scoped),
+      ),
     };
     const signal = new AbortController().signal;
-    const out = await withSamplingSessions(profiler as never, {}, 3, signal, (s) =>
-      Promise.resolve(s === (scoped as unknown)),
+    const out = await withSamplingSessions(
+      profiler as never,
+      {},
+      3,
+      signal,
+      (s) => Promise.resolve(s === (scoped as unknown)),
     );
     expect(out).toBe(true);
-    expect(profiler.withSessions).toHaveBeenCalledWith({}, 3, signal, expect.any(Function));
+    expect(profiler.withSessions).toHaveBeenCalledWith(
+      {},
+      3,
+      signal,
+      expect.any(Function),
+    );
   });
 });

@@ -17,7 +17,8 @@ export function quantileIndex(n: number, i: number): number {
 export function quantiles11<T>(sorted: T[]): T[] {
   if (sorted.length === 0) return [];
   const out: T[] = [];
-  for (let i = 0; i <= 10; i++) out.push(sorted[quantileIndex(sorted.length, i)]);
+  for (let i = 0; i <= 10; i++)
+    out.push(sorted[quantileIndex(sorted.length, i)]);
   return out;
 }
 
@@ -65,10 +66,15 @@ export function parseTemporal(text: string): ParsedTemporal | null {
   if (tz && tz !== 'Z') {
     const sign = tz[0] === '-' ? -1 : 1;
     const digits = tz.slice(1).replace(':', '');
-    const off = +digits.slice(0, 2) * 60 + (digits.length > 2 ? +digits.slice(2) : 0);
+    const off =
+      +digits.slice(0, 2) * 60 + (digits.length > 2 ? +digits.slice(2) : 0);
     ms -= sign * off * 60_000;
   }
-  return { ms: Math.round(ms), dateOnly: h === undefined, fraction: !!frac && /[1-9]/.test(frac) };
+  return {
+    ms: Math.round(ms),
+    dateOnly: h === undefined,
+    fraction: !!frac && /[1-9]/.test(frac),
+  };
 }
 
 export function granularityOf(
@@ -76,7 +82,8 @@ export function granularityOf(
   parsed: ParsedTemporal[],
 ): 'date' | 'second' | 'fraction' {
   if (parsed.some((p) => p.fraction)) return 'fraction';
-  if (type.toLowerCase().trim() === 'date' || parsed.every((p) => p.dateOnly)) return 'date';
+  if (type.toLowerCase().trim() === 'date' || parsed.every((p) => p.dateOnly))
+    return 'date';
   return 'second';
 }
 

@@ -1,5 +1,11 @@
 import { buildShapes } from './shapes';
-import { decimalScale, granularityOf, parseNumber, parseTemporal, quantiles11 } from './stats';
+import {
+  decimalScale,
+  granularityOf,
+  parseNumber,
+  parseTemporal,
+  quantiles11,
+} from './stats';
 
 describe('buildShapes', () => {
   it('maps classes and keeps allowed punctuation literally', () => {
@@ -23,8 +29,8 @@ describe('buildShapes', () => {
 
   it('keeps the top 5 and merges shapes seen fewer than 3 times into the dominant one', () => {
     const values = [
-      ...Array(10).fill('AB12'),
-      ...Array(4).fill('x-1'),
+      ...Array<string>(10).fill('AB12'),
+      ...Array<string>(4).fill('x-1'),
       'a', // seen once -> merged
       'b1', // seen once -> merged
     ];
@@ -37,7 +43,8 @@ describe('buildShapes', () => {
 
   it('limits to five shapes', () => {
     const values: string[] = [];
-    for (let k = 1; k <= 7; k++) values.push(...Array(3 + (7 - k)).fill('a' + '-'.repeat(k)));
+    for (let k = 1; k <= 7; k++)
+      values.push(...Array(3 + (7 - k)).fill('a' + '-'.repeat(k)));
     expect(buildShapes(values)).toHaveLength(5);
   });
 
@@ -46,13 +53,17 @@ describe('buildShapes', () => {
   });
 
   it('writes long fixed runs as X{n}', () => {
-    expect(buildShapes(['a'.repeat(12)])).toEqual([{ shape: 'a{12}', fraction: 1 }]);
+    expect(buildShapes(['a'.repeat(12)])).toEqual([
+      { shape: 'a{12}', fraction: 1 },
+    ]);
   });
 });
 
 describe('stats', () => {
   it('computes 11 nearest-rank quantiles', () => {
-    expect(quantiles11([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(quantiles11([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])).toEqual([
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    ]);
     expect(quantiles11([])).toEqual([]);
     expect(quantiles11([7])).toHaveLength(11);
   });

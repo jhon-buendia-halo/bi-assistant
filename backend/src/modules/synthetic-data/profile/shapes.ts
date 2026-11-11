@@ -11,7 +11,20 @@
 
 import { compareStrings, round4 } from './stats';
 
-const LITERALS = new Set(['-', '.', '/', ':', '@', '#', '+', ',', '(', ')', "'", '&']);
+const LITERALS = new Set([
+  '-',
+  '.',
+  '/',
+  ':',
+  '@',
+  '#',
+  '+',
+  ',',
+  '(',
+  ')',
+  "'",
+  '&',
+]);
 
 function charClass(ch: string): string {
   if (ch >= 'A' && ch <= 'Z') return 'A';

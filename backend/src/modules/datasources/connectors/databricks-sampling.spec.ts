@@ -3,7 +3,11 @@ import { DatabricksProfiler } from './databricks-profiling';
 
 jest.mock('@databricks/sql', () => ({ DBSQLClient: jest.fn() }));
 
-const config = { host: 'h.example.com', token: 'dapiSECRET', warehouseId: 'wh1' };
+const config = {
+  host: 'h.example.com',
+  token: 'dapiSECRET',
+  warehouseId: 'wh1',
+};
 const opts = { sampleSize: 1000, repeatableSeed: 7 };
 const GIB = 1024 ** 3;
 
@@ -24,8 +28,10 @@ describe('DatabricksProfiler.sampleTable', () => {
     read: (sql: string) => unknown[] | Error,
   ) => {
     responder = (sql) => {
-      if (sql.startsWith('SELECT COUNT')) return count instanceof Error ? count : [{ n: count }];
-      if (sql.startsWith('DESCRIBE DETAIL')) return bytes instanceof Error ? bytes : [{ sizeInBytes: bytes }];
+      if (sql.startsWith('SELECT COUNT'))
+        return count instanceof Error ? count : [{ n: count }];
+      if (sql.startsWith('DESCRIBE DETAIL'))
+        return bytes instanceof Error ? bytes : [{ sizeInBytes: bytes }];
       return read(sql);
     };
   };
@@ -52,15 +58,31 @@ describe('DatabricksProfiler.sampleTable', () => {
 
   it('reads a small table in full, backtick-quoted, and skips DESCRIBE DETAIL', async () => {
     warehouse(5, 0, () => rowsOf(5));
-    const out = await profiler.sampleTable(config, 'samples.tp`ch', 'region', opts);
-    expect(reads()).toEqual(['SELECT * FROM `samples`.`tp``ch`.`region` LIMIT 1000']);
+    const out = await profiler.sampleTable(
+      config,
+      'samples.tp`ch',
+      'region',
+      opts,
+    );
+    expect(reads()).toEqual([
+      'SELECT * FROM `samples`.`tp``ch`.`region` LIMIT 1000',
+    ]);
     expect(sqls.some((s) => s.startsWith('DESCRIBE'))).toBe(false);
-    expect(out).toMatchObject({ method: 'full', rowCountEstimate: 5, columns: ['id'] });
+    expect(out).toMatchObject({
+      method: 'full',
+      rowCountEstimate: 5,
+      columns: ['id'],
+    });
   });
 
   it('uses TABLESAMPLE (p PERCENT) REPEATABLE (7) below 50 GiB', async () => {
     warehouse(29_999_795, 753_837_113, () => rowsOf(1000));
-    const out = await profiler.sampleTable(config, 'samples.tpch', 'lineitem', opts);
+    const out = await profiler.sampleTable(
+      config,
+      'samples.tpch',
+      'lineitem',
+      opts,
+    );
     expect(sqls).toContain('DESCRIBE DETAIL `samples`.`tpch`.`lineitem`');
     expect(reads()).toEqual([
       'SELECT * FROM `samples`.`tpch`.`lineitem` TABLESAMPLE (0.0051 PERCENT) REPEATABLE (7) LIMIT 1000',
@@ -70,16 +92,27 @@ describe('DatabricksProfiler.sampleTable', () => {
 
   it('uses LIMIT from 50 GiB (live: 52 s cold on 160 GB)', async () => {
     warehouse(5_999_989_709, 160_349_373_524, () => rowsOf(1000));
-    const out = await profiler.sampleTable(config, 'samples.tpch_sf1000', 'lineitem', opts);
-    expect(reads()).toEqual(['SELECT * FROM `samples`.`tpch_sf1000`.`lineitem` LIMIT 1000']);
+    const out = await profiler.sampleTable(
+      config,
+      'samples.tpch_sf1000',
+      'lineitem',
+      opts,
+    );
+    expect(reads()).toEqual([
+      'SELECT * FROM `samples`.`tpch_sf1000`.`lineitem` LIMIT 1000',
+    ]);
     expect(out.method).toBe('limit');
   });
 
   it('is tablesample just under 50 GiB and limit at exactly 50 GiB', async () => {
     warehouse(1_000_000, 50 * GIB - 1, () => rowsOf(1000));
-    expect((await profiler.sampleTable(config, 'c.s', 't', opts)).method).toBe('tablesample');
+    expect((await profiler.sampleTable(config, 'c.s', 't', opts)).method).toBe(
+      'tablesample',
+    );
     warehouse(1_000_000, 50 * GIB, () => rowsOf(1000));
-    expect((await profiler.sampleTable(config, 'c.s', 't', opts)).method).toBe('limit');
+    expect((await profiler.sampleTable(config, 'c.s', 't', opts)).method).toBe(
+      'limit',
+    );
   });
 
   it('uses LIMIT when the row count or the size is unknown', async () => {
@@ -104,7 +137,9 @@ describe('DatabricksProfiler.sampleTable', () => {
 
   it('falls back to LIMIT when TABLESAMPLE is refused (views)', async () => {
     warehouse(5000, GIB, (sql) =>
-      sql.includes('TABLESAMPLE') ? new Error('[UNSUPPORTED] TABLESAMPLE on view') : rowsOf(1000),
+      sql.includes('TABLESAMPLE')
+        ? new Error('[UNSUPPORTED] TABLESAMPLE on view')
+        : rowsOf(1000),
     );
     const out = await profiler.sampleTable(config, 'c.s', 'v', opts);
     expect(reads().at(-1)).toBe('SELECT * FROM `c`.`s`.`v` LIMIT 1000');
