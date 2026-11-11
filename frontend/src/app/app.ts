@@ -62,6 +62,7 @@ import {
   ASSISTANT_WORKFLOW_DESCRIPTION,
   ASSISTANT_WORKFLOW_ID,
   ASSISTANT_WORKFLOW_NAME,
+  chatWorkflows,
   composerCreateBody,
   composerWorkflowId,
   workflowStartAction,
@@ -1266,7 +1267,8 @@ export class App {
     this.composerWorkflows.set([]);
     this.workflowsApi.getWorkflows().subscribe({
       next: (res) => {
-        this.composerWorkflows.set(res.workflows);
+        // A run workflow runs on its own page, never in a chat (R64).
+        this.composerWorkflows.set(chatWorkflows(res.workflows));
         // Falls back to Assistant when the preselected workflow is not
         // offered or cannot start a chat now.
         this.pickComposerWorkflow(preselectWorkflowId ?? ASSISTANT_WORKFLOW_ID);

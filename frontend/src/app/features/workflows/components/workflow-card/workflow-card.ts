@@ -3,6 +3,7 @@ import {
   Loader2,
   LucideAngularModule,
   MessageSquarePlus,
+  Play,
   TriangleAlert,
   Workflow,
 } from 'lucide-angular';
@@ -13,9 +14,10 @@ import {
 } from '../../services/workflows.util';
 
 /**
- * One workflow on the Workflows page (workflows R5, R6; ui.md 4.4a). The open
- * control and Start chat are sibling buttons, so no interactive control sits
- * inside another. There is no edit, delete or reorder control (R3).
+ * One workflow on the Workflows page (workflows R5, R6, R12; ui.md 4.4a). The
+ * open control and Start chat (Run, for a run workflow) are sibling buttons,
+ * so no interactive control sits inside another. There is no edit, delete or
+ * reorder control (R3).
  */
 @Component({
   selector: 'app-workflow-card',
@@ -26,6 +28,7 @@ import {
 export class WorkflowCard {
   readonly Loader2 = Loader2;
   readonly MessageSquarePlus = MessageSquarePlus;
+  readonly Play = Play;
   readonly TriangleAlert = TriangleAlert;
   readonly Workflow = Workflow;
 

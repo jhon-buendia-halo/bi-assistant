@@ -151,10 +151,10 @@ Preview sessions answer endpoints 2 and 4 to 14 like any session (a turn runs wi
 - With `agentId` set to `assistant-v2` (Questions to Insights v2; agents.md 2.11, ADR-0028 as amended by BA-320): like the assistant's composer, the agent has no dataset of its own, so `name` and `datasets` are **required and validated exactly as without `agentId`** (`"session name is required"`, `"select at least one dataset"`). The session takes the typed name (trimmed, truncated to 64 chars) and those datasets, and stores `agentKey: "assistant-v2"` and `agentName: "Questions to Insights v2"` instead of `agentId` (data-model 3.4); every turn then runs that agent. A preview (`preview: true`) of this key fails like any built-in key, with `"Agent \"assistant-v2\" not found"`.
 - With `agentId` set to `data-readiness` (agents.md 2.10): `datasets` in the body is ignored and an optional non-blank `name` works as above. The session takes the typed name, else `Data Readiness`, and every dataset bound to a `postgres` or `databricks` datasource, ordered by name, and stores `agentKey` and `agentName`. With no such dataset the call fails with `"Add a PostgreSQL or Databricks dataset first"`.
 - With `{ agentId, preview: true }` (agents-evals R60, R61): starts a **preview session** of the agent's draft. It is held in memory only (data-model 3.12), never listed and never written to the `sessions` collection. Its `id` is `preview-<uuid>`, its `name` `Preview: <draft name>`, its `datasets` those of the draft that exist, and it carries `preview: true` and `agentId`. Its derived `agent` comes from the draft. Success message `Preview started`. Failures: `"Agent \"<id>\" not found"` (also for a built-in key), `"Select at least one dataset to preview"`.
-- With `workflowId` (a workflow of 116; [workflows](../capabilities/workflows/spec.md), ADR-0040): with a workflow that picks datasets (`agent:assistant`, `qti-v2-turn`), `name` and `datasets` are **required and validated exactly as without `agentId`** (`"session name is required"`, `"select at least one dataset"`). With any other workflow, `datasets` is ignored and `name` is optional, as with `agentId`. Resolution: `agent:assistant` creates a plain session; `qti-v2-turn` creates it as `agentId: "assistant-v2"` does; `agent:<key|id>` creates it as `agentId: <key|id>` does, with the same refusals (the built-in agent's requirement text, `"None of this agent's datasets exist"`). An unknown id, a draft-only or missing user agent's id, or the id of a System agent or of a code workflow's own agent (`agent:assistant-v2`) fails with `"Workflow \"<id>\" not found"`. `workflowId` together with `agentId` fails with `"Send workflowId or agentId, not both"`. With `workflowId`, `preview` is ignored.
+- With `workflowId` (a workflow of 116; [workflows](../capabilities/workflows/spec.md), ADR-0040): with a workflow that picks datasets (`agent:assistant`, `qti-v2-turn`), `name` and `datasets` are **required and validated exactly as without `agentId`** (`"session name is required"`, `"select at least one dataset"`). With any other workflow, `datasets` is ignored and `name` is optional, as with `agentId`. Resolution: `agent:assistant` creates a plain session; `qti-v2-turn` creates it as `agentId: "assistant-v2"` does; `agent:<key|id>` creates it as `agentId: <key|id>` does, with the same refusals (the built-in agent's requirement text, `"None of this agent's datasets exist"`). An unknown id, a draft-only or missing user agent's id, or the id of a System agent or of a code workflow's own agent (`agent:assistant-v2`) fails with `"Workflow \"<id>\" not found"`. A run workflow (`seq-text-demo`, `trigger: 'run'` in 116) can't start a chat: `"Workflow \"<id>\" can't start a chat"`, creating nothing. `workflowId` together with `agentId` fails with `"Send workflowId or agentId, not both"`. With `workflowId`, `preview` is ignored.
 - **Every** session created by this endpoint (any body form, previews included) stores `workflowId`: the id its agent fields derive ([data-model.md](data-model.md) 3.4). `agentId` bodies keep working unchanged.
 - Success: `{ ok:true, message:"Session \"<name>\" created", session: SessionDoc }` with `messages: []`, `visualizations: []`, a generated UUID `id`, and a contained Mastra workspace created and linked (`workspaceId`).
-- Failures (Style A): `"session name is required"`, `"select at least one dataset"`. With `agentId`: `"Agent \"<id>\" not found"` (unknown id, or the key of a built-in agent that declares no dataset), the built-in agent's requirement text (its dataset is missing), `"Publish \"<name>\" before starting a chat"` (no Live version), `"None of this agent's datasets exist"`. With `workflowId`: `"Workflow \"<id>\" not found"`, `"Send workflowId or agentId, not both"`, and the texts above.
+- Failures (Style A): `"session name is required"`, `"select at least one dataset"`. With `agentId`: `"Agent \"<id>\" not found"` (unknown id, or the key of a built-in agent that declares no dataset), the built-in agent's requirement text (its dataset is missing), `"Publish \"<name>\" before starting a chat"` (no Live version), `"None of this agent's datasets exist"`. With `workflowId`: `"Workflow \"<id>\" not found"`, `"Workflow \"<id>\" can't start a chat"` (a run workflow), `"Send workflowId or agentId, not both"`, and the texts above.
 - Side effects: persists the session; creates the workspace directory `workspaces/session-<id>`.
 - Without `agentId`, does not verify the named datasets exist (see G7).
 
@@ -651,18 +651,19 @@ The `built-in` routes are declared before `/skills/:id`.
 
 ### 2.6.2 Workflows
 
-Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflows/spec.md) (R1-R4). Read-only: workflows are defined in code (ADR-0040), and there is no write route. `:id` is a workflow id (`qti-v2-turn`, `agent:<registry key>`, `agent:<user-agent id>`; [agents.md](agents.md) 5.12). Ids contain `:`; clients send them URL-encoded (`agent%3Arfp`) and the server decodes them.
+Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflows/spec.md) (R1-R4, R11). Workflows are defined in code (ADR-0040), and there is no write route; a run workflow can be run (118), and the run is never stored. `:id` is a workflow id (`qti-v2-turn`, `seq-text-demo`, `agent:<registry key>`, `agent:<user-agent id>`; [agents.md](agents.md) 5.12). Ids contain `:`; clients send them URL-encoded (`agent%3Arfp`) and the server decodes them.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
 | 116 | `GET /workflows` | The workflow catalogue | no |
 | 117 | `GET /workflows/:id` | One workflow with its steps | no |
+| 118 | `POST /workflows/:id/runs` | Run a run workflow once on an input; nothing stored | yes |
 
 #### 116. `GET /workflows`
 - Response `200`: `{ workflows: WorkflowSummary[] }`.
   ```ts
   type WorkflowSummary = {
-    id: string;                       // 'qti-v2-turn' | 'agent:<registry key>' | 'agent:<user-agent id>'
+    id: string;                       // 'qti-v2-turn' | 'seq-text-demo' | 'agent:<registry key>' | 'agent:<user-agent id>'
     name: string;
     description: string;
     kind: 'code' | 'agent';           // code-defined, or the one-step workflow of an agent
@@ -670,11 +671,20 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     agents: { key: string; name: string }[];   // the agents its steps call, in step order, each once
     stepCount: number;
     bar: 'steps' | 'agent';           // what drives a chat's workflow bar: these steps, or the agent's own phases
+    trigger: 'chat' | 'run';          // runs in a chat, or once on a typed input (118)
+    input: WorkflowInputField[];      // a run workflow's typed input, in form order; [] for a chat workflow
     picksDatasets: boolean;           // the session takes the datasets the user picks (Assistant, Questions to Insights v2)
     datasets: string[];               // the datasets a session would take; [] when picksDatasets
     missingDatasets: string[];        // named datasets that don't exist (as AgentSummary.missingDatasets)
     starterQuestions: string[];       // the agent's, as AgentSummary.starterQuestions
     chatRequirement?: string;         // why a chat can't start now; absent when it can
+  };
+  type WorkflowInputField = {
+    name: string;                     // the key in 118's `input`
+    label: string;
+    type: 'text' | 'textarea' | 'number';
+    required: boolean;
+    placeholder?: string;
   };
   ```
 - Values:
@@ -683,17 +693,42 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   |---|---|---|---|---|---|---|---|
   | `agent:assistant` | `Assistant` | agent | `assistant` (Questions to Insights Assistant) | 1 | agent | true | none |
   | `qti-v2-turn` | `Questions to Insights v2` | code | `assistant-v2` | 4 | steps | true | none |
+  | `seq-text-demo` | `Sequential test workflow` | code | none (`[]`) | 3 | steps | false | none |
   | `agent:data-readiness` | `Data Readiness Agent` | agent | `data-readiness` | 1 | agent | false | as its AgentSummary (`Add a PostgreSQL or Databricks dataset first`) |
   | `agent:rfp` | `RFP Builder` | agent | `rfp` | 1 | agent | false | as its AgentSummary (`Load the "Intellify RFP API" sample in Settings → Testing Data first`) |
   | `agent:<id>` (each Live user agent) | its Live name | agent | the user agent (`key` = id, `name` = Live name) | 1 | agent | false | its Live datasets that exist; `chatRequirement` `None of this agent's datasets exist` when none do |
 
 - Description, starter questions and missing datasets come from the agent's catalogue entry (33). The two exceptions are the Assistant's description, `Answers questions over the datasets you pick.`, and v2's starter questions, which are empty, as in its AgentSummary.
-- **Order:** `agent:assistant`, `qti-v2-turn`, then the other Official workflows by name, then the user agents' workflows by name. System agents and draft-only user agents are never listed.
+- **Trigger and input:** `seq-text-demo` is the one run workflow: `trigger: 'run'`, `input: [{ name: 'text', label: 'Text', type: 'textarea', required: true, placeholder: 'Paste or type any text' }]`, description `A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.`, owner `Official`, no datasets, missing datasets or starter questions. Every other workflow has `trigger: 'chat'` and `input: []`.
+- **Order:** `agent:assistant`, `qti-v2-turn`, `seq-text-demo`, then the other Official workflows by name, then the user agents' workflows by name. System agents and draft-only user agents are never listed.
 
 #### 117. `GET /workflows/:id`
 - Response `200`: `WorkflowDetail = WorkflowSummary & { steps: AgentWorkflow['steps'] }`, with `AgentWorkflow` exactly as 34 defines it. A `WorkflowDetail` is structurally an `AgentWorkflow` (it has `id` and `steps`).
-- For `qti-v2-turn`, `steps` equals `agentWorkflow('assistant-v2').steps`, the `workflow` of 34. A one-step workflow has one step, `answer` (`Answer`, kind `agent`, summary `The agent answers with its tools, streamed to the chat.`, input `question`, `datasets`, output `calls`, `stopped`, exits `Model error` fails and `Stop` stops, plus `Clarifying question` stops when the agent's tools include `ask_clarification`), whose `agent` is `{ name: <the agent's name>, tools: <its AgentSummary.tools>, maxSteps }`: `maxSteps` is 15 for `assistant`, `rfp` and user agents, 10 for `data-readiness`.
+- For `qti-v2-turn`, `steps` equals `agentWorkflow('assistant-v2').steps`, the `workflow` of 34. For `seq-text-demo`, `steps` are its three code steps (`clean-text`, `count-words`, `format-result`; [agents.md](agents.md) 5.13), none with an `agent`. A one-step workflow has one step, `answer` (`Answer`, kind `agent`, summary `The agent answers with its tools, streamed to the chat.`, input `question`, `datasets`, output `calls`, `stopped`, exits `Model error` fails and `Stop` stops, plus `Clarifying question` stops when the agent's tools include `ask_clarification`), whose `agent` is `{ name: <the agent's name>, tools: <its AgentSummary.tools>, maxSteps }`: `maxSteps` is 15 for `assistant`, `rfp` and user agents, 10 for `data-readiness`.
 - Errors (Style B): `404 "Workflow \"<id>\" not found"` for any id 116 does not list: unknown, a draft-only user agent, a System agent (`agent:sql-fixer`), or a code workflow's own agent (`agent:assistant-v2`).
+
+#### 118. `POST /workflows/:id/runs`
+- Body: `{ input: Record<string, string | number> }`. Runs the workflow once on `input` and answers when the run ends (no streaming; runs are short). Capability: [workflows](../capabilities/workflows/spec.md) R11; engine: [agents.md](agents.md) 5.13.
+- Response `200`: `WorkflowRunResult`, whether the run succeeded or a step failed (the run happened).
+  ```ts
+  type WorkflowRunResult = {
+    workflowId: string;
+    status: 'success' | 'failed';
+    steps: {                          // every step of the workflow, in its order
+      id: string;
+      title: string;
+      status: 'success' | 'failed' | 'skipped';
+      output?: Record<string, unknown>;   // a successful step's output
+      error?: string;                     // a failed step's error
+    }[];
+    output?: Record<string, unknown>; // the run's final output (success only)
+    error?: string;                   // the failing step's error (failed only)
+  };
+  ```
+- A failing step makes the run `failed`, with its error as the run's `error`; the steps after it are `skipped`. For `seq-text-demo` with `{ text: '  Hello   workflow   world  ' }`: `success`, three `success` steps and `output: { summary: '3 words, 20 characters: "Hello workflow world"' }`; with `{ text: '   ' }`: `failed`, `clean-text` failed with `The text is empty`, the other two `skipped`, `error: 'The text is empty'`.
+- Input: only the workflow's declared fields are read; a number field's value is converted to a number; any other key is ignored. A whitespace-only text is accepted (the run decides what it means). An optional field that is missing or empty is left out.
+- Errors (Style B, 400): `"Workflow \"<id>\" runs in a chat"` for a chat workflow (any `trigger: 'chat'` id of 116); `"<label> is required"` for a required field that is missing or `""` (`"Text is required"`); `"<label> must be a number"` for a number field that is not a number. `404 "Workflow \"<id>\" not found"` for any id 116 does not list.
+- Side effects: none. Nothing is stored; the run is not a session, writes no workflow bar and persists no engine snapshot.
 
 ### 2.7 Deep analysis
 

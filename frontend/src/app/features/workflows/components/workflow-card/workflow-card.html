@@ -30,11 +30,13 @@
         [class.chip-neutral]="w.kind !== 'code'"
         >{{ kindLabel() }}</span
       >
-      <span
-        [attr.data-testid]="'workflow-uses-' + w.id"
-        class="min-w-0 text-[12px] text-fg-muted"
-        >{{ usesLabel() }}</span
-      >
+      @if (usesLabel()) {
+        <span
+          [attr.data-testid]="'workflow-uses-' + w.id"
+          class="min-w-0 text-[12px] text-fg-muted"
+          >{{ usesLabel() }}</span
+        >
+      }
     </span>
     @if (missing()) {
       <span class="chip chip-warning w-fit whitespace-normal">
@@ -44,21 +46,35 @@
     }
   </button>
 
-  <!-- Bottom-right; the open control keeps room for it (pb-14). -->
-  <button
-    type="button"
-    [attr.data-testid]="'workflow-start-chat-' + w.id"
-    (click)="startChat.emit()"
-    [disabled]="starting() || !!w.chatRequirement"
-    [attr.title]="w.chatRequirement ?? null"
-    [attr.aria-label]="'Start chat with ' + w.name"
-    class="btn btn-secondary absolute right-4 bottom-4 px-3 py-1 text-[12px]"
-  >
-    @if (starting()) {
-      <lucide-angular [img]="Loader2" [size]="12" class="animate-spin" />
-    } @else {
-      <lucide-angular [img]="MessageSquarePlus" [size]="12" />
-    }
-    <span>Start chat</span>
-  </button>
+  <!-- Bottom-right; the open control keeps room for it (pb-14). A run
+       workflow runs on its page (R12), so Run opens it; no Start chat. -->
+  @if (w.trigger === 'run') {
+    <button
+      type="button"
+      [attr.data-testid]="'workflow-run-open-' + w.id"
+      (click)="open.emit()"
+      [attr.aria-label]="'Run ' + w.name"
+      class="btn btn-secondary absolute right-4 bottom-4 px-3 py-1 text-[12px]"
+    >
+      <lucide-angular [img]="Play" [size]="12" />
+      <span>Run</span>
+    </button>
+  } @else {
+    <button
+      type="button"
+      [attr.data-testid]="'workflow-start-chat-' + w.id"
+      (click)="startChat.emit()"
+      [disabled]="starting() || !!w.chatRequirement"
+      [attr.title]="w.chatRequirement ?? null"
+      [attr.aria-label]="'Start chat with ' + w.name"
+      class="btn btn-secondary absolute right-4 bottom-4 px-3 py-1 text-[12px]"
+    >
+      @if (starting()) {
+        <lucide-angular [img]="Loader2" [size]="12" class="animate-spin" />
+      } @else {
+        <lucide-angular [img]="MessageSquarePlus" [size]="12" />
+      }
+      <span>Start chat</span>
+    </button>
+  }
 </div>

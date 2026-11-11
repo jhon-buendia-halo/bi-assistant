@@ -1462,12 +1462,14 @@ Every session runs a **workflow** (ADR-0040; [workflows](../capabilities/workflo
 
 **The catalogue.** Two kinds of workflow:
 
-- **Code-defined workflows**, each with its own id, name, description, steps and the agent its agent step runs (its `primaryFor` agent). Today one: `qti-v2-turn`, *Questions to Insights v2*, whose agent is `assistant-v2` and whose steps are those of 5.11. A code workflow drives the workflow bar from its steps (`bar: 'steps'`).
+- **Code-defined workflows**, each with its own id, name, description, steps, trigger and, when its agent step runs one, its agent (its `primaryFor` agent). Today two: `qti-v2-turn`, *Questions to Insights v2*, a chat workflow whose agent is `assistant-v2` and whose steps are those of 5.11; and `seq-text-demo`, the *Sequential test workflow*, a run workflow that calls no agent (5.13). A code workflow drives the workflow bar from its steps (`bar: 'steps'`).
 - **One-step workflows**: one for each agent a chat can run that has no code-defined workflow of its own: the `assistant`, the RFP Builder (`rfp`), the Data Readiness Agent (`data-readiness`) and every **Live** user agent. A `primaryFor` agent (`assistant-v2`) gets none, and neither do the System agents. A one-step workflow is computed at read time from the agent registry and the `agents` collection; nothing is registered per agent. It never writes the workflow bar (`bar: 'agent'`): the agent's own workflow phases, `update_workflow` and the RFP stage keep driving it (ADR-0029).
 
-**Ids.** A code workflow keeps its own id (`qti-v2-turn`). A one-step workflow's id is `agent:<registry key>` for a built-in agent (`agent:assistant`, `agent:rfp`, `agent:data-readiness`) and `agent:<user-agent id>` for a user agent. An `agent:` id naming a System agent, a `primaryFor` agent or nothing at all is not a workflow. Ids contain `:`; clients send them URL-encoded.
+**Triggers** (ADR-0040 amendment). Every workflow is started one of two ways: a **chat** workflow (`trigger: 'chat'`) runs on every message of a chat; a **run** workflow (`trigger: 'run'`) runs once on a typed input declared in code with its catalogue entry (`input`: fields `{ name, label, type: 'text' | 'textarea' | 'number', required, placeholder? }`), and its result is never stored (5.13; [api.md](api.md) 118). Every one-step workflow and `qti-v2-turn` are chat workflows. A chat workflow can't be run, and a run workflow can't start a chat.
 
-**Names and listing** ([api.md](api.md) 116). A one-step workflow takes its agent's name and description, except the assistant's, which is named `Assistant` with the description `Answers questions over the datasets you pick.`. A user agent's workflow takes its Live version's name, datasets and starter questions, and is listed only while the agent is Live; a draft-only agent's id answers 404 ([api.md](api.md) 117). The order is `agent:assistant`, the code workflows, the other Official agents' workflows by name, then the user agents' by name.
+**Ids.** A code workflow keeps its own id (`qti-v2-turn`, `seq-text-demo`). A one-step workflow's id is `agent:<registry key>` for a built-in agent (`agent:assistant`, `agent:rfp`, `agent:data-readiness`) and `agent:<user-agent id>` for a user agent. An `agent:` id naming a System agent, a `primaryFor` agent or nothing at all is not a workflow. Ids contain `:`; clients send them URL-encoded.
+
+**Names and listing** ([api.md](api.md) 116). A one-step workflow takes its agent's name and description, except the assistant's, which is named `Assistant` with the description `Answers questions over the datasets you pick.`. A user agent's workflow takes its Live version's name, datasets and starter questions, and is listed only while the agent is Live; a draft-only agent's id answers 404 ([api.md](api.md) 117). The order is `agent:assistant`, the code workflows in catalogue order (`qti-v2-turn`, `seq-text-demo`), the other Official agents' workflows by name, then the user agents' by name.
 
 **The one-step workflow's step.** One agent step:
 
@@ -1492,6 +1494,26 @@ Which agent a turn runs is unchanged: `agentKey`, else the `assistant` (with a u
 **Which workflows use an agent** ([api.md](api.md) 34 `usedInWorkflows`): the code workflows whose `primaryFor` it is and its own one-step workflow, in catalogue order. `assistant` → `agent:assistant`; `assistant-v2` → `qti-v2-turn`; `rfp` → `agent:rfp`; `data-readiness` → `agent:data-readiness`; a Live user agent → `agent:<id>`; a draft-only user agent and the System agents → none.
 
 > Implementation note: the framework-free catalogue is `mastra/workflows/workflow-catalog.ts` (`CODE_WORKFLOWS`, `WRAPPED_AGENT_KEYS`, `agentWorkflowId`, `parseWorkflowId`, `sessionWorkflowId`, `workflowsUsingAgent`, `oneStepWorkflowSteps`) and `agent-turn.steps.ts` (the `answer` step). `agent-turn.workflow.ts` builds the `agent-turn` workflow, registered in `mastra/index.ts` next to `qti-v2-turn`; its step reads `AgentTurnRuntime` from the run's `RequestContext` (`AGENT_TURN_RUNTIME_KEY`) and returns `runtime.answer()`. The Official and System registry keys and the tool-loop budgets are in `mastra/agent-constants.ts`; drift tests read `mastra/index.ts`'s registered keys as text, so they never load Mastra. `agentWorkflow()` (`agent-workflows.ts`) reads v2's steps from `CODE_WORKFLOWS`. `WorkflowsService` (`modules/workflows/`) builds the API's catalogue from the pure catalogue and `AgentsService.list()`; `SessionsService` never depends on it (that would be a module cycle) and resolves workflows from the pure catalogue.
+
+### 5.13 Run workflows: `seq-text-demo` (the sequential test workflow)
+
+A **run workflow** runs once on a typed input and returns a result, with no chat (ADR-0040 amendment; [workflows](../capabilities/workflows/spec.md) R11). `POST /workflows/:id/runs` ([api.md](api.md) 118) checks the input against the workflow's fields (`<label> is required`, `<label> must be a number`), runs the registered workflow once and answers each step's status and output, and the final output. A failing step fails the run; the steps after it are `skipped`. Nothing is stored: the run is not a session, writes no workflow bar and persists no snapshot.
+
+The first run workflow is `seq-text-demo`, *Sequential test workflow*, described as `A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.`. Its input is one required field, `text` (label `Text`, a textarea, placeholder `Paste or type any text`). Its three steps are deterministic code, in this order:
+
+| # | Step id | Title | Kind | Summary | Input | Output | Other exits |
+|---|---|---|---|---|---|---|---|
+| 1 | `clean-text` | Clean text | code | `Trims the text and collapses repeated spaces. An empty text fails the step.` | text | text | `Empty text` fails |
+| 2 | `count-words` | Count words | code | `Counts the words and characters of the cleaned text.` | text | text, words, characters | — |
+| 3 | `format-result` | Format result | code | `Writes a one-line summary of the counts and the start of the text.` | text, words, characters | summary | — |
+
+- **Clean text** trims the text and collapses every run of whitespace to one space. A text that is empty after that fails the step with `The text is empty`.
+- **Count words** counts the whitespace-separated words and the characters of the cleaned text.
+- **Format result** writes `summary` = `<words> word(s), <characters> character(s): "<the text>"`, singular for 1, with the text cut to its first 60 characters and `…` appended when it is longer. For `  Hello   workflow   world  ` the run's output is `{ summary: '3 words, 20 characters: "Hello workflow world"' }`.
+
+The workflow page draws these steps with the 1.23.1 drawing (GET /workflows/seq-text-demo, [api.md](api.md) 117: no step has an `agent`). A unit test checks the steps' schema fields against the catalogue, as for 5.11.
+
+> Implementation note: `mastra/workflows/seq-text-demo.steps.ts` (framework-free: `SEQ_TEXT_DEMO_STEPS`, `cleanText`, `countWords`, `formatResult`) and `seq-text-demo.workflow.ts` (the Mastra workflow, registered in `mastra/index.ts` as `seq-text-demo`, snapshot persistence off). The catalogue entry, `trigger`, `input` and `parseWorkflowInput` are in `workflow-catalog.ts`. `MastraService.runWorkflow(key, inputData)` creates a run, `start()`s it and maps the engine's result with `workflowRunResult` (`workflow-run.ts`): the steps in the workflow's step-graph order, with the step description as the title. `WorkflowsService.run` checks the trigger and the input first.
 
 ---
 

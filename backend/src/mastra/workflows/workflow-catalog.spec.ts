@@ -9,13 +9,18 @@ import {
   ASSISTANT_WORKFLOW_ID,
   ASSISTANT_WORKFLOW_NAME,
   CODE_WORKFLOWS,
+  ONE_STEP_WORKFLOW_TRIGGER,
   oneStepWorkflowSteps,
   parseWorkflowId,
+  parseWorkflowInput,
   sessionWorkflowId,
   wrappedAgentMaxSteps,
   workflowsUsingAgent,
+  workflowStartsChat,
   WRAPPED_AGENT_KEYS,
+  type WorkflowInputField,
 } from './workflow-catalog';
+import { SEQ_TEXT_DEMO_STEPS } from './seq-text-demo.steps';
 
 /**
  * The keys `src/mastra/index.ts` registers under `agents: { … }`, read from
@@ -30,13 +35,14 @@ function registeredAgentKeys(): string[] {
 }
 
 describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
-  it('holds one code workflow today: Questions to Insights v2 for assistant-v2', () => {
+  it('holds two code workflows: Questions to Insights v2 for assistant-v2 (chat), then the sequential test workflow (run)', () => {
     expect(
-      CODE_WORKFLOWS.map(({ id, name, primaryFor, bar }) => ({
+      CODE_WORKFLOWS.map(({ id, name, primaryFor, bar, trigger }) => ({
         id,
         name,
         primaryFor,
         bar,
+        trigger,
       })),
     ).toEqual([
       {
@@ -44,6 +50,14 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         name: 'Questions to Insights v2',
         primaryFor: 'assistant-v2',
         bar: 'steps',
+        trigger: 'chat',
+      },
+      {
+        id: 'seq-text-demo',
+        name: 'Sequential test workflow',
+        primaryFor: undefined,
+        bar: 'steps',
+        trigger: 'run',
       },
     ]);
     expect(CODE_WORKFLOWS[0].steps.map((step) => step.id)).toEqual([
@@ -55,6 +69,116 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     expect(CODE_WORKFLOWS[0].description).toBe(
       'A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.',
     );
+    expect(CODE_WORKFLOWS[0].input).toBeUndefined();
+  });
+
+  describe('run workflows (plan 9.1; workflows R11)', () => {
+    it('defines the sequential test workflow with its Text input and steps', () => {
+      const seq = CODE_WORKFLOWS[1];
+      expect(seq.description).toBe(
+        'A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.',
+      );
+      expect(seq.input).toEqual([
+        {
+          name: 'text',
+          label: 'Text',
+          type: 'textarea',
+          required: true,
+          placeholder: 'Paste or type any text',
+        },
+      ]);
+      expect(seq.steps).toBe(SEQ_TEXT_DEMO_STEPS);
+    });
+
+    it('parses seq-text-demo as a code workflow, which never starts a chat', () => {
+      expect(parseWorkflowId('seq-text-demo')).toEqual({
+        kind: 'code',
+        source: CODE_WORKFLOWS[1],
+      });
+      expect(workflowStartsChat(CODE_WORKFLOWS[1])).toBe(false);
+      expect(workflowStartsChat(CODE_WORKFLOWS[0])).toBe(true);
+    });
+
+    it('a one-step workflow is a chat workflow', () => {
+      expect(ONE_STEP_WORKFLOW_TRIGGER).toBe('chat');
+    });
+
+    it('every run workflow declares its input; no chat workflow does', () => {
+      for (const source of CODE_WORKFLOWS) {
+        if (source.trigger === 'chat') expect(source.input).toBeUndefined();
+        else expect(source.input?.length).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe('parseWorkflowInput (api.md 118)', () => {
+    const fields: WorkflowInputField[] = [
+      { name: 'text', label: 'Text', type: 'textarea', required: true },
+      { name: 'title', label: 'Title', type: 'text', required: false },
+      { name: 'limit', label: 'Limit', type: 'number', required: false },
+      { name: 'count', label: 'Count', type: 'number', required: true },
+    ];
+
+    it('keeps the declared fields, numbers as numbers, and drops anything else', () => {
+      expect(
+        parseWorkflowInput(fields, {
+          text: '  Hello  ',
+          title: 'T',
+          limit: '12.5',
+          count: 3,
+          extra: 'x',
+        }),
+      ).toEqual({
+        ok: true,
+        values: { text: '  Hello  ', title: 'T', limit: 12.5, count: 3 },
+      });
+    });
+
+    it('accepts a whitespace-only text: the run decides what it means', () => {
+      expect(parseWorkflowInput(fields, { text: '   ', count: 1 })).toEqual({
+        ok: true,
+        values: { text: '   ', count: 1 },
+      });
+    });
+
+    it('leaves out an optional field that is missing or empty', () => {
+      expect(
+        parseWorkflowInput(fields, {
+          text: 'a',
+          count: 1,
+          limit: '',
+          title: '',
+        }),
+      ).toEqual({ ok: true, values: { text: 'a', count: 1 } });
+    });
+
+    it.each([
+      [{ count: 1 }, 'Text is required'],
+      [{ text: '', count: 1 }, 'Text is required'],
+      [{ text: null, count: 1 }, 'Text is required'],
+      [{ text: 'a' }, 'Count is required'],
+      [{ text: 'a', count: '' }, 'Count is required'],
+      [{ text: 'a', count: 'many' }, 'Count must be a number'],
+      [{ text: 'a', count: 1, limit: 'ten' }, 'Limit must be a number'],
+      [{ text: 'a', count: Number.NaN }, 'Count must be a number'],
+    ])('refuses %p with %p', (input, error) => {
+      expect(parseWorkflowInput(fields, input)).toEqual({ ok: false, error });
+    });
+
+    it('refuses a text field that is not a string or a number', () => {
+      expect(parseWorkflowInput(fields, { text: { a: 1 }, count: 1 })).toEqual({
+        ok: false,
+        error: 'Text is required',
+      });
+    });
+
+    it('treats a missing or non-object input as empty', () => {
+      expect(parseWorkflowInput(fields, undefined)).toEqual({
+        ok: false,
+        error: 'Text is required',
+      });
+      expect(parseWorkflowInput([], 'nope')).toEqual({ ok: true, values: {} });
+    });
   });
 
   it('names the assistant workflow as the picker does', () => {

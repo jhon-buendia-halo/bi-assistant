@@ -9,13 +9,14 @@ jest.mock('../../mastra/evals/eval-sets', () => ({
 }));
 jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
 import { agentWorkflow } from '../../mastra/workflows/agent-workflows';
+import { SEQ_TEXT_DEMO_STEPS } from '../../mastra/workflows/seq-text-demo.steps';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import type { SkillDoc } from '../skills/entities/skill.entity';
 import { SkillsRepository } from '../skills/repositories/skills.repository';
@@ -73,13 +74,18 @@ function build(
     rfp: fakeAgent('RFP Builder', ['create_rfp', 'update_rfp']),
     'data-readiness': fakeAgent('Data Readiness Agent', ['assess_readiness']),
   };
-  const mastra = { listAgents: () => registry } as unknown as MastraService;
+  const runWorkflow = jest.fn();
+  const mastra = {
+    listAgents: () => registry,
+    runWorkflow,
+  } as unknown as MastraService;
   const agents = new AgentsService(mastra, userAgents);
   return {
     db,
     userAgents,
     agents,
-    service: new WorkflowsService(agents),
+    runWorkflow,
+    service: new WorkflowsService(agents, mastra),
   };
 }
 
@@ -109,6 +115,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     expect(workflows.map((w) => w.id)).toEqual([
       'agent:assistant',
       'qti-v2-turn',
+      'seq-text-demo',
       'agent:data-readiness',
       'agent:rfp',
       `agent:${alpha.id}`,
@@ -123,6 +130,8 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
       stepCount: 1,
       bar: 'agent',
+      trigger: 'chat',
+      input: [],
       picksDatasets: true,
       datasets: [],
       missingDatasets: [],
@@ -138,12 +147,39 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
       stepCount: 4,
       bar: 'steps',
+      trigger: 'chat',
+      input: [],
       picksDatasets: true,
       datasets: [],
       missingDatasets: [],
       starterQuestions: [],
     });
     expect(workflows[2]).toEqual({
+      id: 'seq-text-demo',
+      name: 'Sequential test workflow',
+      description:
+        'A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.',
+      kind: 'code',
+      owner: 'Official',
+      agents: [],
+      stepCount: 3,
+      bar: 'steps',
+      trigger: 'run',
+      input: [
+        {
+          name: 'text',
+          label: 'Text',
+          type: 'textarea',
+          required: true,
+          placeholder: 'Paste or type any text',
+        },
+      ],
+      picksDatasets: false,
+      datasets: [],
+      missingDatasets: [],
+      starterQuestions: [],
+    });
+    expect(workflows[3]).toEqual({
       id: 'agent:data-readiness',
       name: 'Data Readiness Agent',
       description: 'Data Readiness Agent description',
@@ -152,6 +188,8 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       agents: [{ key: 'data-readiness', name: 'Data Readiness Agent' }],
       stepCount: 1,
       bar: 'agent',
+      trigger: 'chat',
+      input: [],
       picksDatasets: false,
       datasets: ['World Cup Core'],
       missingDatasets: [],
@@ -161,7 +199,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         'Show my past assessments',
       ],
     });
-    expect(workflows[3]).toEqual({
+    expect(workflows[4]).toEqual({
       id: 'agent:rfp',
       name: 'RFP Builder',
       description: 'RFP Builder description',
@@ -170,13 +208,15 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       agents: [{ key: 'rfp', name: 'RFP Builder' }],
       stepCount: 1,
       bar: 'agent',
+      trigger: 'chat',
+      input: [],
       picksDatasets: false,
       datasets: ['Intellify RFP API'],
       missingDatasets: ['Intellify RFP API'],
       starterQuestions: [],
       chatRequirement: RFP_REQUIREMENT,
     });
-    expect(workflows[4]).toEqual({
+    expect(workflows[5]).toEqual({
       id: `agent:${alpha.id}`,
       name: 'Alpha',
       description: 'Alpha description',
@@ -185,19 +225,28 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       agents: [{ key: alpha.id, name: 'Alpha' }],
       stepCount: 1,
       bar: 'agent',
+      trigger: 'chat',
+      input: [],
       picksDatasets: false,
       datasets: [],
       missingDatasets: ['Gone'],
       starterQuestions: ['Ask Alpha'],
       chatRequirement: "None of this agent's datasets exist",
     });
-    expect(workflows[5]).toMatchObject({
+    expect(workflows[6]).toMatchObject({
       id: `agent:${zeta.id}`,
       owner: 'You',
+      trigger: 'chat',
+      input: [],
       datasets: ['World Cup Core'],
       missingDatasets: [],
     });
-    expect(workflows[5]).not.toHaveProperty('chatRequirement');
+    expect(workflows[6]).not.toHaveProperty('chatRequirement');
+    // Every workflow says how it is started and what it takes.
+    for (const workflow of workflows) {
+      expect(['chat', 'run']).toContain(workflow.trigger);
+      expect(Array.isArray(workflow.input)).toBe(true);
+    }
   });
 
   it('gives the Data Readiness workflow its requirement while no dataset qualifies, and never lists System agents', async () => {
@@ -266,6 +315,28 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       });
     });
 
+    it("seq-text-demo's steps are its catalogue's, with no agent", async () => {
+      ctx = build();
+      const detail = await ctx.service.get('seq-text-demo');
+      expect(detail).toMatchObject({
+        id: 'seq-text-demo',
+        trigger: 'run',
+        stepCount: 3,
+      });
+      expect(detail.steps).toEqual(
+        SEQ_TEXT_DEMO_STEPS.map((step) => ({
+          id: step.id,
+          title: step.title,
+          kind: step.kind,
+          summary: step.summary,
+          input: [...step.input],
+          output: [...step.output],
+          exits: [...step.exits],
+        })),
+      );
+      expect(detail.steps.some((step) => step.agent)).toBe(false);
+    });
+
     it.each(['agent:sql-fixer', 'agent:assistant-v2', 'nope', 'agent-turn'])(
       'answers 404 for %p',
       async (id) => {
@@ -285,6 +356,72 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         `Workflow "agent:${doc.id}" not found`,
       );
     });
+  });
+
+  describe('run (api.md 118; workflows R11)', () => {
+    it('runs a run workflow once on its checked input and answers its result', async () => {
+      ctx = build();
+      const outcome = {
+        workflowId: 'seq-text-demo',
+        status: 'success',
+        steps: [],
+        output: { summary: '1 word, 1 character: "a"' },
+      };
+      ctx.runWorkflow.mockResolvedValue(outcome);
+      await expect(
+        ctx.service.run('seq-text-demo', { input: { text: ' a ', extra: 1 } }),
+      ).resolves.toBe(outcome);
+      expect(ctx.runWorkflow).toHaveBeenCalledWith('seq-text-demo', {
+        text: ' a ',
+      });
+    });
+
+    it.each([
+      [{}, 'Text is required'],
+      [{ input: {} }, 'Text is required'],
+      [{ input: { text: '' } }, 'Text is required'],
+      [undefined, 'Text is required'],
+    ])('refuses %p with %p (400), running nothing', async (body, message) => {
+      ctx = build();
+      const refusal = ctx.service.run('seq-text-demo', body);
+      await expect(refusal).rejects.toBeInstanceOf(BadRequestException);
+      await expect(refusal).rejects.toThrow(message);
+      expect(ctx.runWorkflow).not.toHaveBeenCalled();
+    });
+
+    it.each(['agent:assistant', 'qti-v2-turn', 'agent:rfp'])(
+      'refuses the chat workflow %p: it runs in a chat',
+      async (id) => {
+        ctx = build();
+        const refusal = ctx.service.run(id, { input: { text: 'a' } });
+        await expect(refusal).rejects.toBeInstanceOf(BadRequestException);
+        await expect(refusal).rejects.toThrow(
+          `Workflow "${id}" runs in a chat`,
+        );
+        expect(ctx.runWorkflow).not.toHaveBeenCalled();
+      },
+    );
+
+    it("refuses a Live user agent's workflow: it runs in a chat", async () => {
+      ctx = build();
+      const doc = await ctx.userAgents.create(
+        agentConfig('Historian', ['World Cup Core']),
+      );
+      await ctx.userAgents.publish(doc.id);
+      await expect(
+        ctx.service.run(`agent:${doc.id}`, { input: {} }),
+      ).rejects.toThrow(`Workflow "agent:${doc.id}" runs in a chat`);
+    });
+
+    it.each(['nope', 'agent:sql-fixer', 'agent-turn'])(
+      'answers 404 for %p',
+      async (id) => {
+        ctx = build();
+        await expect(ctx.service.run(id, { input: {} })).rejects.toThrow(
+          new NotFoundException(`Workflow "${id}" not found`),
+        );
+      },
+    );
   });
 });
 
@@ -357,6 +494,54 @@ describe('WorkflowsController (ids contain ":")', () => {
         .get('/workflows')
         .expect(200)
         .expect(({ body }) => expect(body).toEqual({ workflows: [] }));
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('WorkflowsController POST /workflows/:id/runs (api.md 118)', () => {
+  it('answers 200 with the run result, and a refusal with its status', async () => {
+    const result = { workflowId: 'seq-text-demo', status: 'failed', steps: [] };
+    const service = {
+      run: jest.fn((id: string, body: unknown) =>
+        id === 'seq-text-demo'
+          ? Promise.resolve({ ...result, body })
+          : Promise.reject(
+              new BadRequestException(`Workflow "${id}" runs in a chat`),
+            ),
+      ),
+    };
+    const moduleRef = await Test.createTestingModule({
+      controllers: [WorkflowsController],
+      providers: [{ provide: WorkflowsService, useValue: service }],
+    }).compile();
+    const app = moduleRef.createNestApplication();
+    await app.init();
+    try {
+      const server = app.getHttpServer() as Parameters<typeof request>[0];
+      await request(server)
+        .post('/workflows/seq-text-demo/runs')
+        .send({ input: { text: '   ' } })
+        .expect(200)
+        .expect(({ body }) =>
+          expect(body).toEqual({
+            ...result,
+            body: { input: { text: '   ' } },
+          }),
+        );
+      await request(server)
+        .post('/workflows/agent%3Aassistant/runs')
+        .send({ input: {} })
+        .expect(400)
+        .expect(({ body }) =>
+          expect(body).toMatchObject({
+            message: 'Workflow "agent:assistant" runs in a chat',
+          }),
+        );
+      expect(service.run).toHaveBeenLastCalledWith('agent:assistant', {
+        input: {},
+      });
     } finally {
       await app.close();
     }

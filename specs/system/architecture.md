@@ -287,7 +287,7 @@ flowchart LR
 
   subgraph mastra["mastra/"]
     mastrasvc["MastraService<br/>(getAgent, streamWorkflow, ensureSessionWorkspace)"]
-    turnwf["workflows/<br/>(agent-turn, qti-v2-turn; ADR-0034, ADR-0040)"]
+    turnwf["workflows/<br/>(agent-turn, qti-v2-turn, seq-text-demo; ADR-0034, ADR-0040)"]
     toolsvc["tool-services<br/>(setDatasetToolServices bridge)"]
     resolver["model-resolver<br/>(setAgentModelResolver)"]
     assistant["assistant agent"]
@@ -422,7 +422,7 @@ flowchart LR
 - **Consequences:** Renaming collections or persisted fields needs explicit migrations (`LEGACY_TABLE_NAMES`, `LEGACY_DOC_FIELDS`).
 
 #### ADR-0004 — Mastra as the agentic harness *(retroactive)*
-- **Status:** Accepted; amended by ADR-0040 (the instance registers the `agent-turn` workflow too)
+- **Status:** Accepted; amended by ADR-0040 (the instance registers the `agent-turn` workflow too, and since its 1.23.9 amendment the `seq-text-demo` run workflow)
 - **Date:** 2026-10-01
 - **Context:** Agents need tools, memory, and a provider-agnostic model layer.
 - **Decision:** Standalone Mastra instance wrapped by `MastraService`; models resolved at call time from persisted LLM settings; LibSQL memory; one filesystem workspace per session.
@@ -1045,6 +1045,14 @@ flowchart LR
   - **Adding a code-defined workflow** takes its Mastra workflow, its step catalogue and one catalogue entry. It then appears in the Workflows list and the new-session picker with no UI change.
   - **Evals keep calling agents directly.** The legacy non-streamed turn stays a direct agent call.
   - **Stack-neutral:** any rebuild needs an engine that runs typed steps in a fixed order and reports each step's start and end, a catalogue of workflows built from code and from stored agents, and the rule that derives a session's workflow from its stored agent binding.
+- **Amendment (2026-11-11, 1.23.9):** the user decided the same day that workflows trigger **runs**, not chats ([plan](../../docs/plans/m1-23-workflow-first.md) section 9).
+  - **Every workflow has a trigger, `chat` or `run`.** A `chat` workflow runs on every message of a chat, as above. A `run` workflow runs once on a typed input and returns a result. Every one-step workflow and `qti-v2-turn` are `chat` workflows.
+  - **A run workflow's input is defined in code** with its catalogue entry: a list of typed fields (`text`, `textarea` or `number`, with a label, whether it is required and a placeholder). The inputs will grow over time.
+  - **A run is never stored.** `POST /workflows/:id/runs` ([api.md](api.md) 118) checks the input against the fields, runs the registered workflow once through `MastraService.runWorkflow` (snapshot persistence off) and answers each step's result and the final output. A failing step fails the run, and the steps after it are skipped. The workflow's page shows the result until the user leaves it. A run is not a session, writes no workflow bar and is not listed anywhere.
+  - **The two triggers never cross.** A chat workflow can't be run (`Workflow "<id>" runs in a chat`), and a run workflow can't start a chat (`Workflow "<id>" can't start a chat`). The New conversation screen lists chat workflows only.
+  - **A run workflow may call no agent**, so `primaryFor` becomes optional. The first one is `seq-text-demo` ([agents.md](agents.md) 5.13), three code steps and no LLM. Converting the four chat workflows to run workflows, and how chats start afterwards, is story 1.23.10.
+  - **Amends ADR-0004:** the Mastra instance registers three workflows (`agent-turn`, `qti-v2-turn`, `seq-text-demo`).
+  - **Stack-neutral:** a rebuild needs the same engine to run a workflow once, synchronously, on an input validated against fields declared in code, and to report each step's status, output and error.
 
 ## Level 4 — Code
 

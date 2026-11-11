@@ -17,10 +17,14 @@ const V2_STEPS = ['Receive question', 'Load catalog', 'Analyse', 'Wrap up'];
 const HEALTH = 'Health plan analyst';
 const RFP_REQUIREMENT =
   'Load the "Intellify RFP API" sample in Settings → Testing Data first';
+const SEQ = 'Sequential test workflow';
+const SEQ_ID = 'seq-text-demo';
+const SEQ_STEPS = ['Clean text', 'Count words', 'Format result'];
 /** The Official workflows in catalogue order (workflows R1). */
 const OFFICIAL = [
   ['agent:assistant', 'Assistant'],
   [V2_ID, V2],
+  [SEQ_ID, SEQ],
   ['agent:data-readiness', 'Data Readiness Agent'],
   ['agent:rfp', 'RFP Builder'],
 ] as const;
@@ -274,6 +278,129 @@ test.describe('Feature: Workflows', () => {
   });
 });
 
+/** A run's step row on the workflow page (workflows R13). */
+function runStep(page: Page, id: string): Locator {
+  return page.getByTestId(`workflow-run-step-${id}`);
+}
+
+/** Opens the sequential test workflow's page from its card's Run. */
+async function openSeqFromRun(page: Page): Promise<void> {
+  await page.getByTestId(`workflow-run-open-${SEQ_ID}`).click();
+  await expect(page.getByTestId('workflow-detail-name')).toHaveText(SEQ);
+}
+
+test.describe('Feature: Workflows (run workflows)', () => {
+  test(
+    'I run the sequential test workflow on a text',
+    { tag: ['@demo', '@story-1.23.9'] },
+    async ({ page }) => {
+      await scenarioStep(page, 'When I open Workflows', async () => {
+        await openWorkflows(page);
+      });
+      await scenarioStep(
+        page,
+        'Then I see "Sequential test workflow" with "Runs on an input" and no Start chat',
+        async () => {
+          const card = page.getByTestId(`workflow-card-${SEQ_ID}`);
+          await expect(card).toBeVisible();
+          await expect(page.getByTestId(`workflow-${SEQ_ID}`)).toContainText(SEQ);
+          await expect(page.getByTestId(`workflow-kind-${SEQ_ID}`)).toHaveText(
+            'Runs on an input',
+          );
+          await expect(page.getByTestId(`workflow-start-chat-${SEQ_ID}`)).toHaveCount(0);
+          await expect(card.getByRole('button', { name: /start chat/i })).toHaveCount(0);
+          await expect(page.getByTestId(`workflow-run-open-${SEQ_ID}`)).toHaveAccessibleName(
+            `Run ${SEQ}`,
+          );
+        },
+      );
+      await scenarioStep(page, 'When I click its Run', async () => {
+        await openSeqFromRun(page);
+      });
+      await scenarioStep(
+        page,
+        'Then I see its three steps in the drawing and the "Text" input',
+        async () => {
+          await expect(drawnSteps(page)).toHaveText(SEQ_STEPS);
+          await expect(page.getByTestId('workflow-detail-kind')).toHaveText(
+            'Runs on an input',
+          );
+          const text = page.getByLabel('Text', { exact: true });
+          await expect(text).toBeVisible();
+          await expect(text).toHaveAttribute('placeholder', 'Paste or type any text');
+          await expect(text).toHaveAttribute('aria-required', 'true');
+          await expect(page.getByTestId('workflow-start-chat')).toHaveCount(0);
+          await expect(page.getByTestId('workflow-bar-note')).toHaveCount(0);
+        },
+      );
+      await scenarioStep(
+        page,
+        'When I type "  Hello   workflow   world  "',
+        async () => {
+          await page.getByTestId('workflow-input-text').fill('  Hello   workflow   world  ');
+        },
+      );
+      await scenarioStep(page, 'And I click Run', async () => {
+        await page.getByTestId('workflow-run').click();
+      });
+      await scenarioStep(
+        page,
+        'Then I see "Run succeeded" with "Clean text", "Count words" and "Format result" all "Done"',
+        async () => {
+          await expect(page.getByTestId('workflow-run-status')).toHaveText(
+            'Run succeeded',
+          );
+          for (const [id, title] of [
+            ['clean-text', 'Clean text'],
+            ['count-words', 'Count words'],
+            ['format-result', 'Format result'],
+          ]) {
+            await expect(runStep(page, id)).toContainText(title);
+            await expect(runStep(page, id).getByText('Done', { exact: true })).toBeVisible();
+          }
+          await expect(page.getByTestId('workflow-run')).toHaveText('Run');
+          await expect(page.getByTestId('workflow-run')).toBeEnabled();
+        },
+      );
+      await scenarioStep(
+        page,
+        'And the output summary is "3 words, 20 characters: "Hello workflow world""',
+        async () => {
+          await expect(page.getByTestId('workflow-run-output')).toContainText(
+            '3 words, 20 characters: "Hello workflow world"',
+          );
+        },
+      );
+    },
+  );
+
+  test('A failing step stops the run', async ({ page }) => {
+    await test.step('Given I am on the "Sequential test workflow" page', async () => {
+      await openWorkflows(page);
+      await openSeqFromRun(page);
+    });
+    await test.step('When I run it on a text of only spaces', async () => {
+      await page.getByTestId('workflow-input-text').fill('   ');
+      await page.getByTestId('workflow-run').click();
+    });
+    await test.step('Then I see "Run failed: The text is empty"', async () => {
+      await expect(page.getByTestId('workflow-run-status')).toHaveText(
+        'Run failed: The text is empty',
+      );
+    });
+    await test.step(
+      'And "Clean text" is "Failed" and "Count words" and "Format result" are "Skipped"',
+      async () => {
+        await expect(runStep(page, 'clean-text').getByText('Failed', { exact: true })).toBeVisible();
+        await expect(runStep(page, 'clean-text')).toContainText('The text is empty');
+        await expect(runStep(page, 'count-words').getByText('Skipped', { exact: true })).toBeVisible();
+        await expect(runStep(page, 'format-result').getByText('Skipped', { exact: true })).toBeVisible();
+        await expect(page.getByTestId('workflow-run-output')).toHaveCount(0);
+      },
+    );
+  });
+});
+
 test('the Workflows pages have no detectable accessibility violations in either theme', async ({
   page,
 }) => {
@@ -305,4 +432,18 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await openWorkflow(page, 'agent:rfp', 'RFP Builder');
   await expect(page.getByTestId('workflow-chat-requirement')).toBeVisible();
   await scan('RFP Builder page');
+
+  await page.getByTestId('workflow-back').click();
+  await openSeqFromRun(page);
+  await page.getByTestId('workflow-input-text').fill('Hello workflow world');
+  await page.getByTestId('workflow-run').click();
+  await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+  await scan('Sequential test workflow page after a run');
+
+  await page.getByTestId('workflow-input-text').fill('   ');
+  await page.getByTestId('workflow-run').click();
+  await expect(page.getByTestId('workflow-run-status')).toHaveText(
+    'Run failed: The text is empty',
+  );
+  await scan('Sequential test workflow page after a failed run');
 });

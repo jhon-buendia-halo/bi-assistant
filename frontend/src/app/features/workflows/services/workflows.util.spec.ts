@@ -1,8 +1,12 @@
-import { WorkflowSummary } from '../models/workflow.model';
+import { WorkflowRunResult, WorkflowSummary } from '../models/workflow.model';
 import {
   buildWorkflowSections,
+  chatWorkflows,
   composerCreateBody,
   composerWorkflowId,
+  runOutputEntries,
+  runStatusLine,
+  runStepStatusLabel,
   workflowKindLabel,
   workflowStartAction,
   workflowUsesLabel,
@@ -23,6 +27,8 @@ function workflow(
     agents: [{ key: id.replace(/^agent:/, ''), name }],
     stepCount: 1,
     bar: 'agent',
+    trigger: 'chat',
+    input: [],
     picksDatasets: false,
     datasets: [],
     missingDatasets: [],
@@ -30,6 +36,24 @@ function workflow(
     ...overrides,
   };
 }
+
+/** The sequential test workflow: a run workflow (plan 9.1). */
+const SEQ: WorkflowSummary = workflow('seq-text-demo', 'Sequential test workflow', {
+  kind: 'code',
+  stepCount: 3,
+  bar: 'steps',
+  trigger: 'run',
+  agents: [],
+  input: [
+    {
+      name: 'text',
+      label: 'Text',
+      type: 'textarea',
+      required: true,
+      placeholder: 'Paste or type any text',
+    },
+  ],
+});
 
 /** The catalogue as `GET /workflows` orders it (workflows R1). */
 const CATALOGUE: WorkflowSummary[] = [
@@ -127,6 +151,14 @@ describe('workflows.util', () => {
       expect(workflowKindLabel(CATALOGUE[0])).toBe('One step');
     });
 
+    it('reads "Runs on an input" for a run workflow (workflows R12)', () => {
+      expect(workflowKindLabel(SEQ)).toBe('Runs on an input');
+    });
+
+    it('says nothing about agents for a workflow that calls none', () => {
+      expect(workflowUsesLabel(SEQ)).toBe('');
+    });
+
     it('lists the agents the steps call', () => {
       expect(workflowUsesLabel(CATALOGUE[0])).toBe(
         'Uses Questions to Insights Assistant',
@@ -165,7 +197,20 @@ describe('workflows.util', () => {
     });
   });
 
+  describe('chatWorkflows (sessions-chat R64)', () => {
+    it('keeps the chat workflows in catalogue order and drops the run workflows', () => {
+      const listed = [CATALOGUE[0], CATALOGUE[1], SEQ, ...CATALOGUE.slice(2)];
+      expect(chatWorkflows(listed)).toEqual(CATALOGUE);
+    });
+  });
+
   describe('composerWorkflowId (sessions-chat R64)', () => {
+    it('falls back to Assistant for a run workflow', () => {
+      expect(composerWorkflowId([...CATALOGUE, SEQ], 'seq-text-demo')).toBe(
+        'agent:assistant',
+      );
+    });
+
     it('keeps a preselected workflow that can start a chat', () => {
       expect(composerWorkflowId(CATALOGUE, 'qti-v2-turn')).toBe('qti-v2-turn');
       expect(composerWorkflowId(CATALOGUE, 'agent:u1')).toBe('agent:u1');
@@ -213,6 +258,46 @@ describe('workflows.util', () => {
       expect(composerCreateBody(CATALOGUE[3], '', ['Core'])).toEqual({
         workflowId: 'agent:rfp',
       });
+    });
+  });
+
+  describe('a run result (workflows R13; api.md 118)', () => {
+    const success: WorkflowRunResult = {
+      workflowId: 'seq-text-demo',
+      status: 'success',
+      steps: [
+        { id: 'clean-text', title: 'Clean text', status: 'success', output: { text: 'a' } },
+      ],
+      output: { summary: '1 word, 1 character: "a"', extra: { n: 1 } },
+    };
+    const failed: WorkflowRunResult = {
+      workflowId: 'seq-text-demo',
+      status: 'failed',
+      steps: [
+        { id: 'clean-text', title: 'Clean text', status: 'failed', error: 'The text is empty' },
+        { id: 'count-words', title: 'Count words', status: 'skipped' },
+      ],
+      error: 'The text is empty',
+    };
+
+    it('says "Run succeeded" or "Run failed: <error>"', () => {
+      expect(runStatusLine(success)).toBe('Run succeeded');
+      expect(runStatusLine(failed)).toBe('Run failed: The text is empty');
+      expect(runStatusLine({ ...failed, error: undefined })).toBe('Run failed');
+    });
+
+    it('labels a step Done, Failed or Skipped', () => {
+      expect(runStepStatusLabel('success')).toBe('Done');
+      expect(runStepStatusLabel('failed')).toBe('Failed');
+      expect(runStepStatusLabel('skipped')).toBe('Skipped');
+    });
+
+    it('shows each output field, a text as it is and anything else as JSON', () => {
+      expect(runOutputEntries(success.output)).toEqual([
+        { key: 'summary', value: '1 word, 1 character: "a"' },
+        { key: 'extra', value: '{"n":1}' },
+      ]);
+      expect(runOutputEntries(undefined)).toEqual([]);
     });
   });
 });

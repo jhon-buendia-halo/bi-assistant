@@ -5,7 +5,9 @@
  * workflows and one per Live user agent, `GET /workflows/:id` answers 404
  * for System and draft-only agents, `POST /sessions { workflowId }` starts a
  * session bound to that workflow, every session read carries `workflowRef`,
- * and an agent's detail says which workflows use it.
+ * and an agent's detail says which workflows use it. The sequential test
+ * workflow runs once on a text (`POST /workflows/:id/runs`, api.md 118;
+ * workflows R11), and neither kind of workflow starts the other's way.
  *
  * Needs no Postgres: the datasource points at a closed port, and saving a
  * dataset only samples it on a best-effort basis.
@@ -27,6 +29,8 @@ interface WorkflowSummary {
   owner: 'Official' | 'You';
   agents: { key: string; name: string }[];
   stepCount: number;
+  trigger: 'chat' | 'run';
+  input: { name: string; label: string; type: string; required: boolean }[];
   picksDatasets: boolean;
   datasets: string[];
   chatRequirement?: string;
@@ -82,13 +86,21 @@ describe('The workflow catalogue (API)', () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
-  it('lists the four Official workflows on a fresh data dir, in catalogue order', async () => {
+  it('lists the five Official workflows on a fresh data dir, in catalogue order', async () => {
     const listed = await workflows();
     expect(listed.map((w) => w.id)).toEqual([
       'agent:assistant',
       'qti-v2-turn',
+      'seq-text-demo',
       'agent:data-readiness',
       'agent:rfp',
+    ]);
+    expect(listed.map((w) => w.trigger)).toEqual([
+      'chat',
+      'chat',
+      'run',
+      'chat',
+      'chat',
     ]);
     expect(listed[0]).toMatchObject({
       name: 'Assistant',
@@ -104,11 +116,27 @@ describe('The workflow catalogue (API)', () => {
       agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
     });
     expect(listed[1]).not.toHaveProperty('chatRequirement');
+    expect(listed[1].input).toEqual([]);
     expect(listed[2]).toMatchObject({
+      name: 'Sequential test workflow',
+      kind: 'code',
+      stepCount: 3,
+      agents: [],
+      input: [
+        {
+          name: 'text',
+          label: 'Text',
+          type: 'textarea',
+          required: true,
+          placeholder: 'Paste or type any text',
+        },
+      ],
+    });
+    expect(listed[3]).toMatchObject({
       name: 'Data Readiness Agent',
       chatRequirement: 'Add a PostgreSQL or Databricks dataset first',
     });
-    expect(listed[3]).toMatchObject({
+    expect(listed[4]).toMatchObject({
       name: 'RFP Builder',
       chatRequirement:
         'Load the "Intellify RFP API" sample in Settings → Testing Data first',
@@ -171,18 +199,19 @@ describe('The workflow catalogue (API)', () => {
       expect(listed.map((w) => w.id)).toEqual([
         'agent:assistant',
         'qti-v2-turn',
+        'seq-text-demo',
         'agent:data-readiness',
         'agent:rfp',
         `agent:${liveId}`,
       ]);
-      expect(listed[4]).toMatchObject({
+      expect(listed[5]).toMatchObject({
         name: 'Cup historian',
         kind: 'agent',
         owner: 'You',
         agents: [{ key: liveId, name: 'Cup historian' }],
         datasets: ['World Cup Core'],
       });
-      expect(listed[4]).not.toHaveProperty('chatRequirement');
+      expect(listed[5]).not.toHaveProperty('chatRequirement');
     });
 
     it('GET /workflows/:id answers 404 for a System agent and a draft-only agent', async () => {
@@ -286,6 +315,118 @@ describe('The workflow catalogue (API)', () => {
       const draft = (await http().get(`/agents/${draftId}`).expect(200))
         .body as { usedInWorkflows: unknown[] };
       expect(draft.usedInWorkflows).toEqual([]);
+    });
+  });
+
+  describe('running a workflow on an input (api.md 118; workflows R11)', () => {
+    interface RunResult {
+      workflowId: string;
+      status: 'success' | 'failed';
+      steps: {
+        id: string;
+        title: string;
+        status: string;
+        output?: Record<string, unknown>;
+        error?: string;
+      }[];
+      output?: Record<string, unknown>;
+      error?: string;
+    }
+    const runs = (id: string) =>
+      http().post(`/workflows/${encodeURIComponent(id)}/runs`);
+
+    it('runs seq-text-demo on a text: three steps succeed and the output has the summary', async () => {
+      const res = await runs('seq-text-demo')
+        .send({ input: { text: '  Hello   workflow   world  ' } })
+        .expect(200);
+      const run = res.body as RunResult;
+      expect(run).toEqual({
+        workflowId: 'seq-text-demo',
+        status: 'success',
+        steps: [
+          {
+            id: 'clean-text',
+            title: 'Clean text',
+            status: 'success',
+            output: { text: 'Hello workflow world' },
+          },
+          {
+            id: 'count-words',
+            title: 'Count words',
+            status: 'success',
+            output: { text: 'Hello workflow world', words: 3, characters: 20 },
+          },
+          {
+            id: 'format-result',
+            title: 'Format result',
+            status: 'success',
+            output: {
+              summary: '3 words, 20 characters: "Hello workflow world"',
+            },
+          },
+        ],
+        output: { summary: '3 words, 20 characters: "Hello workflow world"' },
+      });
+    });
+
+    it('a text of only spaces fails Clean text and skips the others, still 200', async () => {
+      const run = (
+        await runs('seq-text-demo')
+          .send({ input: { text: '   ' } })
+          .expect(200)
+      ).body as RunResult;
+      expect(run).toEqual({
+        workflowId: 'seq-text-demo',
+        status: 'failed',
+        steps: [
+          {
+            id: 'clean-text',
+            title: 'Clean text',
+            status: 'failed',
+            error: 'The text is empty',
+          },
+          { id: 'count-words', title: 'Count words', status: 'skipped' },
+          { id: 'format-result', title: 'Format result', status: 'skipped' },
+        ],
+        error: 'The text is empty',
+      });
+    });
+
+    it('refuses a missing text (400), a chat workflow (400) and an unknown id (404)', async () => {
+      const missing = await runs('seq-text-demo')
+        .send({ input: {} })
+        .expect(400);
+      expect((missing.body as { message: string }).message).toBe(
+        'Text is required',
+      );
+      const chat = await runs('agent:assistant')
+        .send({ input: { text: 'Hi' } })
+        .expect(400);
+      expect((chat.body as { message: string }).message).toBe(
+        'Workflow "agent:assistant" runs in a chat',
+      );
+      const unknown = await runs('nope').send({ input: {} }).expect(404);
+      expect((unknown.body as { message: string }).message).toBe(
+        'Workflow "nope" not found',
+      );
+    });
+
+    it("POST /sessions refuses a run workflow: it can't start a chat", async () => {
+      const before = (
+        (await http().get('/sessions').expect(200)).body as {
+          sessions: SessionView[];
+        }
+      ).sessions.length;
+      expect(await createSession({ workflowId: 'seq-text-demo' })).toEqual({
+        ok: false,
+        message: 'Workflow "seq-text-demo" can\'t start a chat',
+      });
+      const after = (
+        (await http().get('/sessions').expect(200)).body as {
+          sessions: SessionView[];
+        }
+      ).sessions.length;
+      expect(after).toBe(before);
     });
   });
 });

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { MastraService } from '../../mastra/mastra.service';
 import {
   agentWorkflow,
   type AgentWorkflow,
@@ -9,16 +14,21 @@ import {
   ASSISTANT_WORKFLOW_ID,
   ASSISTANT_WORKFLOW_NAME,
   CODE_WORKFLOWS,
+  ONE_STEP_WORKFLOW_TRIGGER,
   oneStepWorkflowSteps,
+  parseWorkflowInput,
   wrappedAgentMaxSteps,
   WRAPPED_AGENT_KEYS,
   type CodeWorkflowSource,
   type WorkflowBar,
+  type WorkflowInputField,
+  type WorkflowTrigger,
 } from '../../mastra/workflows/workflow-catalog';
+import type { WorkflowRunResult } from '../../mastra/workflows/workflow-run';
 import { AgentsService, type AgentSummary } from '../agents/agents.service';
 import { runsOnPickedDatasets } from '../agents/builtin-sessions';
 
-/** One workflow a chat can run, as `GET /workflows` lists it (api.md 116). */
+/** One workflow of the catalogue, as `GET /workflows` lists it (api.md 116). */
 export interface WorkflowSummary {
   /** `qti-v2-turn` | `agent:<registry key>` | `agent:<user-agent id>`. */
   id: string;
@@ -32,6 +42,10 @@ export interface WorkflowSummary {
   agents: { key: string; name: string }[];
   stepCount: number;
   bar: WorkflowBar;
+  /** Runs in a chat, or once on a typed input (`POST /workflows/:id/runs`). */
+  trigger: WorkflowTrigger;
+  /** The typed input of a run workflow, in form order; `[]` for a chat workflow. */
+  input: WorkflowInputField[];
   /** The session takes the datasets the user picks. */
   picksDatasets: boolean;
   /** The datasets a session would take; empty when `picksDatasets`. */
@@ -61,11 +75,15 @@ const NO_DATASETS_REQUIREMENT = "None of this agent's datasets exist";
  * code-defined workflows and the one-step workflow of every agent a chat can
  * run that has none of its own, built at read time from the pure catalogue
  * (workflow-catalog.ts) and the agent catalogue. Nothing is stored or
- * registered per workflow.
+ * registered per workflow. A run workflow runs once on its typed input
+ * through the Mastra instance, and its result is never stored (R11).
  */
 @Injectable()
 export class WorkflowsService {
-  constructor(private readonly agents: AgentsService) {}
+  constructor(
+    private readonly agents: AgentsService,
+    private readonly mastra: MastraService,
+  ) {}
 
   /**
    * Every workflow, in catalogue order: the assistant's, the code-defined
@@ -78,11 +96,36 @@ export class WorkflowsService {
 
   /** One workflow with its steps; 404 for anything `list` does not hold. */
   async get(id: string): Promise<WorkflowDetail> {
+    const entry = await this.find(id);
+    return { ...entry.summary, steps: entry.steps() };
+  }
+
+  /**
+   * Run a run workflow once on `body.input` and answer its result (api.md
+   * 118; workflows R11): 404 for anything `list` does not hold, 400 for a
+   * chat workflow and for an input its fields refuse. A failed step still
+   * answers the result. Nothing is stored.
+   */
+  async run(id: string, body: unknown): Promise<WorkflowRunResult> {
+    const { summary } = await this.find(id);
+    if (summary.trigger !== 'run') {
+      throw new BadRequestException(`Workflow "${id}" runs in a chat`);
+    }
+    const raw =
+      body && typeof body === 'object'
+        ? (body as { input?: unknown }).input
+        : undefined;
+    const parsed = parseWorkflowInput(summary.input, raw);
+    if (!parsed.ok) throw new BadRequestException(parsed.error);
+    return this.mastra.runWorkflow(id, parsed.values);
+  }
+
+  private async find(id: string): Promise<CatalogueEntry> {
     const entry = (await this.entries()).find(
       (candidate) => candidate.summary.id === id,
     );
     if (!entry) throw new NotFoundException(`Workflow "${id}" not found`);
-    return { ...entry.summary, steps: entry.steps() };
+    return entry;
   }
 
   private async entries(): Promise<CatalogueEntry[]> {
@@ -103,8 +146,9 @@ export class WorkflowsService {
     return [
       ...(assistant ? [assistantEntry(assistant)] : []),
       ...CODE_WORKFLOWS.flatMap((source) => {
+        if (!source.primaryFor) return [runEntry(source)];
         const agent = builtins.get(source.primaryFor);
-        return agent ? [codeEntry(source, agent)] : [];
+        return agent ? [codeEntry(source, source.primaryFor, agent)] : [];
       }),
       ...byName(official),
       ...byName(users),
@@ -140,6 +184,8 @@ function assistantEntry(agent: AgentSummary): CatalogueEntry {
       agents: [{ key: agent.key, name: agent.name }],
       stepCount: 1,
       bar: 'agent',
+      trigger: ONE_STEP_WORKFLOW_TRIGGER,
+      input: [],
       picksDatasets: true,
       datasets: [],
       missingDatasets: [...agent.missingDatasets],
@@ -149,12 +195,18 @@ function assistantEntry(agent: AgentSummary): CatalogueEntry {
   };
 }
 
+/** The fields of a code workflow's input, copied. */
+function inputOf(source: CodeWorkflowSource): WorkflowInputField[] {
+  return (source.input ?? []).map((field) => ({ ...field }));
+}
+
 /** A code-defined workflow, run for its `primaryFor` agent. */
 function codeEntry(
   source: CodeWorkflowSource,
+  primaryFor: string,
   agent: AgentSummary,
 ): CatalogueEntry {
-  const picksDatasets = runsOnPickedDatasets(source.primaryFor);
+  const picksDatasets = runsOnPickedDatasets(primaryFor);
   return {
     summary: {
       id: source.id,
@@ -165,6 +217,8 @@ function codeEntry(
       agents: [{ key: agent.key, name: agent.name }],
       stepCount: source.steps.length,
       bar: source.bar,
+      trigger: source.trigger,
+      input: inputOf(source),
       picksDatasets,
       datasets: picksDatasets ? [] : [...agent.datasets],
       missingDatasets: [...agent.missingDatasets],
@@ -173,7 +227,42 @@ function codeEntry(
         ? { chatRequirement: agent.chatRequirement }
         : {}),
     },
-    steps: () => agentWorkflow(source.primaryFor)?.steps ?? [],
+    steps: () => agentWorkflow(primaryFor)?.steps ?? [],
+  };
+}
+
+/**
+ * A code-defined workflow that calls no agent (a run workflow such as
+ * `seq-text-demo`): its code steps, no datasets and no requirement.
+ */
+function runEntry(source: CodeWorkflowSource): CatalogueEntry {
+  return {
+    summary: {
+      id: source.id,
+      name: source.name,
+      description: source.description,
+      kind: 'code',
+      owner: 'Official',
+      agents: [],
+      stepCount: source.steps.length,
+      bar: source.bar,
+      trigger: source.trigger,
+      input: inputOf(source),
+      picksDatasets: false,
+      datasets: [],
+      missingDatasets: [],
+      starterQuestions: [],
+    },
+    steps: () =>
+      source.steps.map((step) => ({
+        id: step.id,
+        title: step.title,
+        kind: step.kind,
+        summary: step.summary,
+        input: [...step.input],
+        output: [...step.output],
+        exits: step.exits.map((exit) => ({ ...exit })),
+      })),
   };
 }
 
@@ -206,6 +295,8 @@ function oneStepEntry(
       agents: [{ key: agent.key, name: agent.name }],
       stepCount: 1,
       bar: 'agent',
+      trigger: ONE_STEP_WORKFLOW_TRIGGER,
+      input: [],
       picksDatasets: false,
       datasets,
       missingDatasets: [...agent.missingDatasets],

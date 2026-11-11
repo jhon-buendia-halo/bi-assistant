@@ -25,17 +25,43 @@ import {
   QTI_V2_TURN_WORKFLOW_ID,
   type WorkflowStepEntry,
 } from './qti-v2-turn.steps';
+import {
+  SEQ_TEXT_DEMO_STEPS,
+  SEQ_TEXT_DEMO_WORKFLOW_ID,
+} from './seq-text-demo.steps';
 
 /** What drives a chat's workflow bar: the workflow's steps, or the agent's own phases. */
 export type WorkflowBar = 'steps' | 'agent';
+
+/**
+ * How a workflow is started (ADR-0040 amendment; plan 9.1): `chat` runs it
+ * on every message of a chat; `run` runs it once on a typed input, and its
+ * result is shown on its page and never stored.
+ */
+export type WorkflowTrigger = 'chat' | 'run';
+
+/** One field of a run workflow's input, defined in code (api.md 116). */
+export interface WorkflowInputField {
+  name: string;
+  label: string;
+  type: 'text' | 'textarea' | 'number';
+  required: boolean;
+  placeholder?: string;
+}
 
 /** One workflow defined in code. */
 export interface CodeWorkflowSource {
   id: string;
   name: string;
   description: string;
-  /** Registry key of the agent its agent step runs: that agent gets no one-step workflow. */
-  primaryFor: string;
+  /**
+   * Registry key of the agent its agent step runs: that agent gets no
+   * one-step workflow. A run workflow may call no agent.
+   */
+  primaryFor?: string;
+  trigger: WorkflowTrigger;
+  /** The typed input of a run workflow, in form order. */
+  input?: readonly WorkflowInputField[];
   steps: readonly WorkflowStepEntry[];
   /** `steps` for every code workflow today. */
   bar: WorkflowBar;
@@ -48,10 +74,82 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] = [
     name: ASSISTANT_V2_NAME,
     description: ASSISTANT_V2_DESCRIPTION,
     primaryFor: ASSISTANT_V2_AGENT_KEY,
+    trigger: 'chat',
     steps: QTI_V2_TURN_STEPS,
     bar: 'steps',
   },
+  {
+    id: SEQ_TEXT_DEMO_WORKFLOW_ID,
+    name: 'Sequential test workflow',
+    description:
+      'A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.',
+    trigger: 'run',
+    input: [
+      {
+        name: 'text',
+        label: 'Text',
+        type: 'textarea',
+        required: true,
+        placeholder: 'Paste or type any text',
+      },
+    ],
+    steps: SEQ_TEXT_DEMO_STEPS,
+    bar: 'steps',
+  },
 ];
+
+/** Every one-step workflow (`agent:*`) runs in a chat. */
+export const ONE_STEP_WORKFLOW_TRIGGER: WorkflowTrigger = 'chat';
+
+/** Whether a code workflow can start a chat (`POST /sessions { workflowId }`). */
+export function workflowStartsChat(source: CodeWorkflowSource): boolean {
+  return source.trigger === 'chat';
+}
+
+/** A run's input values, by field name. */
+export type WorkflowInputValues = Record<string, string | number>;
+
+/**
+ * A run's input checked against the workflow's fields (api.md 118): the
+ * declared fields only, a number field as a number. A required field that is
+ * missing or empty is refused with `<label> is required`, a number field
+ * that is not a number with `<label> must be a number`. A whitespace-only
+ * text passes: the run decides what it means. An optional field that is
+ * missing or empty is left out.
+ */
+export function parseWorkflowInput(
+  fields: readonly WorkflowInputField[],
+  raw: unknown,
+): { ok: true; values: WorkflowInputValues } | { ok: false; error: string } {
+  const body =
+    raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const values: WorkflowInputValues = {};
+  for (const field of fields) {
+    const value = Object.hasOwn(body, field.name)
+      ? body[field.name]
+      : undefined;
+    const usable =
+      (typeof value === 'string' && value !== '') || typeof value === 'number';
+    if (!usable) {
+      if (field.required) {
+        return { ok: false, error: `${field.label} is required` };
+      }
+      continue;
+    }
+    if (field.type === 'number') {
+      const typed = typeof value === 'string' ? value.trim() : '';
+      const number =
+        typeof value === 'number' ? value : typed ? Number(typed) : NaN;
+      if (!Number.isFinite(number)) {
+        return { ok: false, error: `${field.label} must be a number` };
+      }
+      values[field.name] = number;
+    } else {
+      values[field.name] = String(value);
+    }
+  }
+  return { ok: true, values };
+}
 
 /** The built-in agents that get a one-step workflow. */
 export const WRAPPED_AGENT_KEYS: readonly string[] = [

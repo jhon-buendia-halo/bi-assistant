@@ -16,6 +16,7 @@ import { watchSessionWorkspaceRegistry } from './session-workspaces';
 import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
 import { qtiV2TurnWorkflow } from './workflows/qti-v2-turn.workflow';
+import { seqTextDemoWorkflow } from './workflows/seq-text-demo.workflow';
 
 // Validate every bundled skill before anything is served: a broken skill
 // stops the backend here (agents.md 7.3).
@@ -38,10 +39,12 @@ export const mastra = new Mastra({
   },
   // The turn workflows (agents.md 1.2, 5.1): the code-defined ones
   // (5.11, ADR-0034) and `agent-turn`, the one engine of every one-step
-  // workflow (5.12, ADR-0040).
+  // workflow (5.12, ADR-0040), and the run workflows, which run once on a
+  // typed input (5.13; api.md 118).
   workflows: {
     'agent-turn': agentTurnWorkflow,
     'qti-v2-turn': qtiV2TurnWorkflow,
+    'seq-text-demo': seqTextDemoWorkflow,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

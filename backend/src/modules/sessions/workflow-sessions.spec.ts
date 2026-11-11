@@ -76,6 +76,7 @@ jest.mock('./visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
 
+import { BadRequestException } from '@nestjs/common';
 import { sessionWorkflowId } from '../../mastra/workflows/workflow-catalog';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
@@ -288,6 +289,18 @@ describe('SessionsService sessions bound to a workflow (ADR-0040)', () => {
       await expect(
         ctx.service.createFromWorkflow(id, 'Chat', ['World Cup']),
       ).rejects.toThrow(`Workflow "${id}" not found`);
+      expect(ctx.repository.insert).not.toHaveBeenCalled();
+    });
+
+    it("refuses a run workflow: it can't start a chat, creating nothing (workflows R11)", async () => {
+      const ctx = build();
+      const refusal = ctx.service.createFromWorkflow('seq-text-demo', 'Chat', [
+        'World Cup',
+      ]);
+      await expect(refusal).rejects.toBeInstanceOf(BadRequestException);
+      await expect(refusal).rejects.toThrow(
+        `Workflow "seq-text-demo" can't start a chat`,
+      );
       expect(ctx.repository.insert).not.toHaveBeenCalled();
     });
 

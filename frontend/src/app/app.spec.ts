@@ -750,6 +750,8 @@ describe('New conversation Workflow picker (sessions-chat R64, roadmap 1.23.6)',
     owner: 'Official' as const,
     stepCount: 1,
     bar: 'agent' as const,
+    trigger: 'chat' as const,
+    input: [],
     picksDatasets: false,
     datasets: [] as string[],
     missingDatasets: [] as string[],
@@ -887,6 +889,34 @@ describe('New conversation Workflow picker (sessions-chat R64, roadmap 1.23.6)',
     expect(options(fixture)[3].children[1].textContent).toContain(
       rfp.description,
     );
+  });
+
+  it('never lists a run workflow, nor preselects one (roadmap 1.23.9)', () => {
+    const seq = {
+      ...summary,
+      id: 'seq-text-demo',
+      name: 'Sequential test workflow',
+      description: 'A three-step example.',
+      kind: 'code' as const,
+      stepCount: 3,
+      bar: 'steps' as const,
+      trigger: 'run' as const,
+      agents: [],
+      input: [
+        { name: 'text', label: 'Text', type: 'textarea', required: true },
+      ],
+    };
+    const { fixture } = open([assistant, v2, seq, readiness], (app) =>
+      app.openComposer('seq-text-demo'),
+    );
+    expect(trigger(fixture).textContent).toContain('Assistant');
+    trigger(fixture).click();
+    fixture.detectChanges();
+    expect(optionNames(fixture)).toEqual([
+      'Assistant',
+      'Questions to Insights v2',
+      'Data Readiness Agent',
+    ]);
   });
 
   it('lists a workflow that cannot start disabled with its chatRequirement', () => {
@@ -1117,6 +1147,8 @@ describe('Workflows area (workflows R5-R8, app-shell R3)', () => {
     owner: 'Official' as const,
     stepCount: 1,
     bar: 'agent' as const,
+    trigger: 'chat' as const,
+    input: [],
     datasets: [] as string[],
     missingDatasets: [] as string[],
     starterQuestions: [] as string[],
