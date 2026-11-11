@@ -1,6 +1,6 @@
 # M1-22 — Sampled profiling and synthetic data
 
-- **Jira:** none (repo only; epic id M1-22) · **Roadmap:** Milestone 1.22 · **Status:** Confirmed (2026-11-11)
+- **Jira:** none (repo only; epic id M1-22) · **Roadmap:** Milestone 1.22 · **Status:** Draft (confirmed 2026-11-11; the export amendment of 2026-11-11, stories 1.22.5 and 1.22.6, awaits confirmation)
 
 ## Goal
 
@@ -9,7 +9,9 @@ A user can profile the tables of a PostgreSQL or Databricks dataset quickly, fro
 - The copy keeps each column's distribution, null rate and format, and keeps primary and foreign keys consistent.
 - The copy never carries a real identifier, name or free-text value.
 
-The user can do this from the dataset editor or by asking the Data Readiness Agent in chat. Why: realistic test, demo and development data without exposing the real data, and a fast first look at a dataset without a full readiness assessment.
+The synthetic copy can also be downloaded as CSV (a zip) or Excel, the profile can be exported as CSV or Excel, and the real sampled rows can be exported (`.sql`, CSV or Excel) as an explicit action behind a confirm.
+
+The user can do this from the dataset editor or, for the `.sql` synthetic script, by asking the Data Readiness Agent in chat. Why: realistic test, demo and development data without exposing the real data, and a fast first look at a dataset without a full readiness assessment.
 
 ## Scope
 
@@ -27,9 +29,17 @@ The user can do this from the dataset editor or by asking the Data Readiness Age
   - It holds a header of what was generated, `CREATE SCHEMA` of a target schema (default `synthetic`), `CREATE TABLE` per table, batched `INSERT`s and, optionally, key and foreign-key constraints.
   - It is written in PostgreSQL or Databricks SQL, after the dataset's datasource.
   - The app never runs it: datasources stay read-only.
+  - Unique integers that are not keys get distinct values within their observed range; only key integers become a sequence.
+- **Other formats (amendment of 2026-11-11).**
+  - The synthetic copy also as a CSV zip (one RFC 4180 file per table) or an Excel workbook (one sheet per table), with the same values as the script for the same seed.
+  - The profile as CSV or Excel, with exactly what the profile view shows.
+  - New dependencies for Excel and zip, recorded in an amendment to ADR-0037.
+- **Raw sample export (amendment of 2026-11-11).**
+  - The real sampled rows as `.sql` (target schema `sample`), CSV or Excel, from the editor tab only, after a confirm that the file holds real data.
+  - The rows are read again on export with the same sampling seed; the profile cache keeps statistics only. Raw rows never go to a log, a cache, a session file or a model.
 - **Dataset editor.** A third tab, **Profile & synthesize**, on a saved dataset: pick tables, profile a sample, read the profile, set rows, seed and target schema, and download the script.
 - **Data Readiness Agent.** Two tools, `profile_data_sample` and `generate_synthetic_data`, call the same service. The script is saved in the session and shown in the panel for download. Prompt rule D12 is widened and D14 added.
-- **API.** `POST /synthetic-data/profiles` and `POST /synthetic-data/scripts`.
+- **API.** `POST /synthetic-data/profiles`, `POST /synthetic-data/scripts` (with a `format`), `POST /synthetic-data/profile-exports` and `POST /synthetic-data/sample-exports`.
 
 ## Out of scope
 
@@ -40,6 +50,7 @@ The user can do this from the dataset editor or by asking the Data Readiness Age
 - LLM-written data, semantic generators (realistic person names, addresses), locale-aware text and differential-privacy guarantees.
 - Preserving cross-column correlations beyond keys (for example city ↔ country); columns are generated independently.
 - Configurable sample size above 1,000 rows, or configurable categorical thresholds.
+- Export formats other than `.sql`, CSV and Excel; masking the raw sample export; any export format other than the `.sql` synthetic script in chat.
 
 ## Stories
 
@@ -48,7 +59,9 @@ The user can do this from the dataset editor or by asking the Data Readiness Age
 | — (no Jira, repo only) | Sampled profile in the dataset editor (ADR-0037) | 1.22.1 |
 | — (no Jira, repo only) | Synthetic data script for PostgreSQL | 1.22.2 |
 | — (no Jira, repo only) | Databricks SQL script | 1.22.3 |
-| — (no Jira, repo only) | Profile and synthesize from the Data Readiness Agent | 1.22.4 |
+| — (no Jira, repo only) | Export synthetic data and the profile as CSV and Excel | 1.22.5 |
+| — (no Jira, repo only) | Export the raw sample | 1.22.6 |
+| — (no Jira, repo only) | Profile and synthesize from the Data Readiness Agent (shipped last) | 1.22.4 |
 
 The implementation contract (types, endpoints, test ids, tool inputs, units of work) is in [docs/plans/m1-22-synthetic-data.md](../../../docs/plans/m1-22-synthetic-data.md).
 
@@ -70,7 +83,9 @@ The implementation contract (types, endpoints, test ids, tool inputs, units of w
 - On World Cup (PostgreSQL), Profile & synthesize profiles every table in seconds and shows each table's sampling method and each column's statistics and strategy.
 - The downloaded PostgreSQL script loads into an empty database with every requested row and every foreign key valid, and the same seed gives the same SHA-256.
 - A Databricks dataset downloads a Databricks SQL script that passes the writer's golden tests and, if the user agrees (open question Q1 of the plan), one live run in a scratch schema.
-- No non-categorical sampled value appears in a profile or a script (privacy specs). Categorical columns reuse their real values.
+- No non-categorical sampled value appears in a profile, a profile export or a synthetic export in any format (privacy specs). Categorical columns reuse their real values.
+- The CSV zip and the Excel workbook hold the same values as the `.sql` script for the same seed.
+- The raw sample export downloads only after the confirm, and no raw value reaches a log or the profile cache.
 - The readiness engine, profiling statements and scores are unchanged: their golden and score-equality specs are green and data-readiness R29 is untouched.
 - In a Data Readiness session, asking for synthetic data puts a downloadable `.sql` file in the panel. The Data Readiness evals pass at 100 % over 3 runs.
 - `check-specs`, backend and frontend unit tests, lint, builds and the impacted Playwright specs are green.
