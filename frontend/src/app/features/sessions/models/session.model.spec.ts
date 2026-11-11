@@ -1,9 +1,11 @@
 import {
   Session,
   SessionAgent,
+  SessionWorkflowRef,
   sessionAgentLabel,
-  sessionListAgent,
   sessionListSubtitle,
+  sessionListWorkflow,
+  sessionWorkflowLabel,
 } from './session.model';
 
 const agent: SessionAgent = {
@@ -46,19 +48,63 @@ describe('sessionListSubtitle', () => {
   });
 });
 
-describe('sessionListAgent', () => {
-  it('names the bound agent, or the assistant for a plain session (R63)', () => {
-    expect(sessionListAgent(session({ agentId: agent.id, agent }))).toBe(
-      'Cup historian',
-    );
-    expect(sessionListAgent(session())).toBe('Assistant');
+describe('sessionWorkflowLabel', () => {
+  const ref: SessionWorkflowRef = {
+    id: 'agent:u-historian',
+    name: 'Cup historian',
+    kind: 'agent',
+    deleted: false,
+  };
+
+  it("names the session's workflow (R57)", () => {
+    expect(sessionWorkflowLabel(ref)).toBe('Cup historian');
+    expect(
+      sessionWorkflowLabel({
+        id: 'qti-v2-turn',
+        name: 'Questions to Insights v2',
+        kind: 'code',
+        deleted: false,
+      }),
+    ).toBe('Questions to Insights v2');
   });
 
   it('reads "<name> · agent deleted" once the agent is gone (R59)', () => {
+    expect(sessionWorkflowLabel({ ...ref, deleted: true })).toBe(
+      'Cup historian · agent deleted',
+    );
+  });
+});
+
+describe('sessionListWorkflow', () => {
+  it("names the session's workflow from its workflowRef (R63)", () => {
     expect(
-      sessionListAgent(
-        session({ agentId: agent.id, agent: { ...agent, deleted: true } }),
+      sessionListWorkflow(
+        session({
+          agentKey: 'rfp',
+          workflowRef: {
+            id: 'agent:rfp',
+            name: 'RFP Builder',
+            kind: 'agent',
+            deleted: false,
+          },
+        }),
+      ),
+    ).toBe('RFP Builder');
+    expect(
+      sessionListWorkflow(
+        session({
+          workflowRef: {
+            id: 'agent:u-historian',
+            name: 'Cup historian',
+            kind: 'agent',
+            deleted: true,
+          },
+        }),
       ),
     ).toBe('Cup historian · agent deleted');
+  });
+
+  it('falls back to Assistant when the backend sent no workflowRef', () => {
+    expect(sessionListWorkflow(session())).toBe('Assistant');
   });
 });

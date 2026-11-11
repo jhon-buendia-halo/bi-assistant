@@ -134,7 +134,7 @@ test('start chat on an agent card opens a session bound to the agent', async ({
 }) => {
   await startChatFromCard(page, HISTORIAN);
 
-  await expect(page.getByTestId('session-agent')).toHaveText(HISTORIAN);
+  await expect(page.getByTestId('session-workflow')).toHaveText(HISTORIAN);
   const welcome = page.getByTestId('session-welcome');
   await expect(welcome).toContainText(`${HISTORIAN} is ready`);
   await expect(welcome).toContainText(HISTORIAN_DESCRIPTION);
@@ -151,7 +151,7 @@ test('start chat on an agent card opens a session bound to the agent', async ({
 
   await openSessions(page);
   const row = sessionRow(page, HISTORIAN);
-  await expect(row.getByTestId('row-session-agent')).toHaveText(HISTORIAN);
+  await expect(row.getByTestId('row-session-workflow')).toHaveText(HISTORIAN);
   await expect(row).toContainText(WORLD_CUP_DATASET);
   await expect(row).toHaveClass(/list-row-selected/);
 });
@@ -187,7 +187,7 @@ test('only Live agents and the Official agent offer Start chat', async ({
   ).toBeVisible();
   await page.getByTestId('agent-start-chat').click();
   await expect(page.getByText(`Session "${HISTORIAN}" created`)).toBeVisible();
-  await expect(page.getByTestId('session-agent')).toHaveText(HISTORIAN);
+  await expect(page.getByTestId('session-workflow')).toHaveText(HISTORIAN);
 });
 
 test("start chat is unavailable when none of the agent's datasets exist", async ({
@@ -321,12 +321,12 @@ test('deleting the agent keeps its sessions on the plain assistant', async ({
   await sessionRow(page, HISTORIAN).click();
   await expect(page.getByText('Who won in 2014?').first()).toBeVisible();
   await expect(page.getByText(STUB_ANSWER)).toHaveCount(1);
-  await expect(page.getByTestId('session-agent')).toHaveText(
+  await expect(page.getByTestId('session-workflow')).toHaveText(
     `${HISTORIAN} · agent deleted`,
   );
   await openSessions(page);
   await expect(
-    sessionRow(page, HISTORIAN).getByTestId('row-session-agent'),
+    sessionRow(page, HISTORIAN).getByTestId('row-session-workflow'),
   ).toHaveText(`${HISTORIAN} · agent deleted`);
   await sessionRow(page, HISTORIAN).click();
 
@@ -394,7 +394,7 @@ test('a Questions to Insights v2 session runs v2 on every turn', async ({
   // Start chat on v2 opens New conversation with v2 selected (R52, R64).
   await openHub(page);
   await startChatButton(page, V2).click();
-  await expect(page.getByTestId('new-session-agent')).toHaveText(
+  await expect(page.getByTestId('new-session-workflow')).toHaveText(
     new RegExp(V2),
   );
   await page.getByPlaceholder('My new session').fill('V2 turn');
@@ -403,7 +403,7 @@ test('a Questions to Insights v2 session runs v2 on every turn', async ({
     .click();
   await page.getByRole('button', { name: /^Create$/ }).click();
   await expect(page.getByText('Session "V2 turn" created')).toBeVisible();
-  await expect(page.getByTestId('session-agent')).toHaveText(V2);
+  await expect(page.getByTestId('session-workflow')).toHaveText(V2);
 
   for (const [index, question] of [
     'How many matches are there?',

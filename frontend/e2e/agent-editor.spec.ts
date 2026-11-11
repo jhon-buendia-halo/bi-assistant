@@ -208,7 +208,7 @@ test('editing a Live agent keeps its sessions on the Live version until republis
       .locator('[data-testid^="session-"]')
       .filter({ hasText: HISTORIAN })
       .click();
-    await expect(page.getByTestId('session-agent')).toHaveText(HISTORIAN);
+    await expect(page.getByTestId('session-workflow')).toHaveText(HISTORIAN);
   };
   const send = async (question: string) => {
     await page.getByPlaceholder('Ask a follow-up question…').fill(question);

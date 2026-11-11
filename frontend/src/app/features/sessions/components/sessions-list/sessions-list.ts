@@ -12,18 +12,18 @@ import {
   ChevronRight,
   Copy,
   EllipsisVertical,
-  Sparkles,
   Loader2,
   LucideAngularModule,
   Search,
   SquarePen,
   Trash2,
+  Workflow,
 } from 'lucide-angular';
 import { ToastService } from '../../../../core/toast/toast.service';
 import {
   Session,
-  sessionListAgent,
   sessionListSubtitle,
+  sessionListWorkflow,
 } from '../../models/session.model';
 
 /** Sessions per page of the list (sessions-chat R63). */
@@ -90,7 +90,7 @@ export class SessionsList {
   protected readonly Trash2 = Trash2;
   protected readonly EllipsisVertical = EllipsisVertical;
   protected readonly Copy = Copy;
-  protected readonly Sparkles = Sparkles;
+  protected readonly Workflow = Workflow;
   protected readonly ChevronLeft = ChevronLeft;
   protected readonly ChevronRight = ChevronRight;
 
@@ -135,7 +135,7 @@ export class SessionsList {
   }
 
   protected subtitle = sessionListSubtitle;
-  protected agentName = sessionListAgent;
+  protected workflowName = sessionListWorkflow;
 
   protected activity(session: Session): string {
     return sessionActivityLabel(sessionActivityAt(session));

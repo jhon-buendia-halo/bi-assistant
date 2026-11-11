@@ -31,7 +31,6 @@ import {
   Settings,
   Signal,
   Sparkle,
-  Sparkles,
   TestTube,
   Workflow,
   SunMoon,
@@ -59,7 +58,15 @@ import { AgentDetail } from './features/agents/components/agent-detail/agent-det
 import { WorkflowsPage } from './features/workflows/components/workflows-page/workflows-page';
 import { WorkflowDetailPage } from './features/workflows/components/workflow-detail/workflow-detail';
 import { WorkflowSummary } from './features/workflows/models/workflow.model';
-import { workflowStartAction } from './features/workflows/services/workflows.util';
+import {
+  ASSISTANT_WORKFLOW_DESCRIPTION,
+  ASSISTANT_WORKFLOW_ID,
+  ASSISTANT_WORKFLOW_NAME,
+  composerCreateBody,
+  composerWorkflowId,
+  workflowStartAction,
+} from './features/workflows/services/workflows.util';
+import { WorkflowsApiService } from './features/workflows/services/workflows-api.service';
 import { EvalTrace } from './features/agents/components/eval-trace/eval-trace';
 import { AgentEditor } from './features/agents/components/agent-editor/agent-editor';
 import { AgentPreview } from './features/agents/components/agent-preview/agent-preview';
@@ -72,17 +79,9 @@ import { AgentEditorService } from './features/agents/services/agent-editor.serv
 import { AgentPageState } from './features/agents/services/agent-page-state.service';
 import { Agent } from './features/agents/services/agents-api.service';
 import {
-  ASSISTANT_PICKER_DESCRIPTION,
-  ASSISTANT_PICKER_KEY,
-  NewSessionAgentOption,
-  newSessionAgentOptions,
   picksDatasets,
   startsInComposer,
 } from './features/agents/services/agent-hub.util';
-import {
-  Agent as AgentEntry,
-  AgentsApiService,
-} from './features/agents/services/agents-api.service';
 import { PersonaList } from './features/personas/components/persona-list/persona-list';
 import { VisualLibrary } from './features/visuals/components/visual-library/visual-library';
 import { OntologyOverview } from './features/ontology/components/ontology-overview/ontology-overview';
@@ -120,6 +119,7 @@ import {
   SessionVisualization,
   VisualEvent,
   sessionAgentLabel,
+  sessionWorkflowLabel,
 } from './features/sessions/models/session.model';
 import {
   LlmSettingsView,
@@ -203,12 +203,12 @@ const MIN_PRIMARY_CONTENT_WIDTH = 240;
 const RIGHT_PANEL_RESIZE_STEP = 24;
 const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
 
-/** A row of the New conversation screen's Agent picker. */
-export interface ComposerAgentRow {
-  key: string;
+/** A row of the New conversation screen's Workflow picker. */
+export interface ComposerWorkflowRow {
+  id: string;
   name: string;
   description: string;
-  /** Why the agent cannot start a chat now, or null. */
+  /** Why the workflow cannot start a chat now (its `chatRequirement`), or null. */
   disabledReason: string | null;
 }
 
@@ -296,7 +296,6 @@ export class App {
   readonly Settings = Settings;
   readonly Signal = Signal;
   readonly Sparkle = Sparkle;
-  readonly Sparkles = Sparkles;
   readonly TestTube = TestTube;
   readonly Wrench = Wrench;
   readonly SunMoon = SunMoon;
@@ -508,15 +507,15 @@ export class App {
 
   /**
    * Start chat on a workflow card or page (workflows R6). A workflow that
-   * takes the datasets the user picks opens the New conversation screen,
-   * preselected through today's agent-key parameter (plan 5.7; 1.23.6 makes
-   * it a workflow id); any other workflow gets its session created at once
-   * and opened. A refusal keeps the user where they are.
+   * takes the datasets the user picks opens the New conversation screen
+   * with that workflow preselected (sessions-chat R64); any other workflow
+   * gets its session created at once and opened. A refusal keeps the user
+   * where they are.
    */
   startChatWithWorkflow(workflow: WorkflowSummary): void {
     const action = workflowStartAction(workflow);
     if (action.kind === 'composer') {
-      this.openComposer(action.agentKey);
+      this.openComposer(action.workflowId);
       return;
     }
     if (this.startingWorkflowId()) return;
@@ -569,123 +568,131 @@ export class App {
 
   /** Datasets offered in the composer; the session needs at least one. */
   readonly composerDatasets = signal<Dataset[]>([]);
-  private readonly agentsApi = inject(AgentsApiService);
-  readonly assistantPickerKey = ASSISTANT_PICKER_KEY;
-  /** Agents the New conversation screen can start (sessions-chat R64). */
-  readonly composerAgents = signal<NewSessionAgentOption[]>([]);
-  /** The picked agent's key; Assistant on every visit, never remembered. */
-  readonly composerAgentKey = signal<string>(ASSISTANT_PICKER_KEY);
-  readonly composerAgent = computed<AgentEntry | null>(
+  /** The page header's Workflow chip, for every session (sessions-chat R57). */
+  readonly workflowLabel = sessionWorkflowLabel;
+  private readonly workflowsApi = inject(WorkflowsApiService);
+  /** Workflows the New conversation screen offers, in catalogue order (R64). */
+  readonly composerWorkflows = signal<WorkflowSummary[]>([]);
+  /** The picked workflow's id; Assistant on every visit, never remembered. */
+  readonly composerWorkflowId = signal<string>(ASSISTANT_WORKFLOW_ID);
+  readonly composerWorkflow = computed<WorkflowSummary | null>(
     () =>
-      this.composerAgents().find(
-        (option) => option.agent.key === this.composerAgentKey(),
-      )?.agent ?? null,
+      this.composerWorkflows().find(
+        (w) => w.id === this.composerWorkflowId(),
+      ) ?? null,
   );
-  readonly composerAgentDescription = computed(
-    () => this.composerAgent()?.description ?? ASSISTANT_PICKER_DESCRIPTION,
+  readonly composerWorkflowDescription = computed(
+    () => this.composerWorkflow()?.description ?? ASSISTANT_WORKFLOW_DESCRIPTION,
   );
-  readonly composerAgentDatasets = computed(
-    () => this.composerAgent()?.datasets ?? [],
+  readonly composerWorkflowDatasets = computed(
+    () => this.composerWorkflow()?.datasets ?? [],
   );
   /**
-   * Whether the screen shows the dataset picker and requires a name: the
-   * assistant and the agents that pick datasets like it (R64), not an agent
-   * that brings its own datasets.
+   * Whether the screen shows the dataset picker and requires a name: a
+   * workflow that takes the datasets the user picks (Assistant, Questions to
+   * Insights v2), not one that brings its own (R64).
    */
-  readonly composerPicksDatasets = computed(() => {
-    const agent = this.composerAgent();
-    return !agent || picksDatasets(agent);
-  });
-
-  pickComposerAgent(key: string): void {
-    const option = this.composerAgents().find((o) => o.agent.key === key);
-    this.composerAgentKey.set(
-      option && !option.disabledReason ? key : ASSISTANT_PICKER_KEY,
-    );
-  }
-
-  /** Rows of the Agent picker: Assistant first, then the agents it offers. */
-  readonly composerAgentRows = computed<ComposerAgentRow[]>(() => [
-    {
-      key: ASSISTANT_PICKER_KEY,
-      name: 'Assistant',
-      description: ASSISTANT_PICKER_DESCRIPTION,
-      disabledReason: null,
-    },
-    ...this.composerAgents().map((o) => ({
-      key: o.agent.key,
-      name: o.agent.name,
-      description: o.agent.description ?? '',
-      disabledReason: o.disabledReason,
-    })),
-  ]);
-  readonly composerAgentName = computed(
-    () =>
-      this.composerAgentRows().find((r) => r.key === this.composerAgentKey())
-        ?.name ?? 'Assistant',
+  readonly composerPicksDatasets = computed(
+    () => this.composerWorkflow()?.picksDatasets ?? true,
   );
-  readonly composerAgentMenuOpen = signal(false);
-  /** Index in `composerAgentRows` of the highlighted option while open. */
-  readonly composerAgentActive = signal(0);
 
-  openComposerAgentMenu(): void {
-    const index = this.composerAgentRows().findIndex(
-      (r) => r.key === this.composerAgentKey(),
+  pickComposerWorkflow(id: string): void {
+    this.composerWorkflowId.set(composerWorkflowId(this.composerWorkflows(), id));
+  }
+
+  /**
+   * Rows of the Workflow picker: the catalogue in its own order, or
+   * Assistant alone until it loads (or when it cannot).
+   */
+  readonly composerWorkflowRows = computed<ComposerWorkflowRow[]>(() => {
+    const workflows = this.composerWorkflows();
+    if (workflows.length === 0) {
+      return [
+        {
+          id: ASSISTANT_WORKFLOW_ID,
+          name: ASSISTANT_WORKFLOW_NAME,
+          description: ASSISTANT_WORKFLOW_DESCRIPTION,
+          disabledReason: null,
+        },
+      ];
+    }
+    return workflows.map((w) => ({
+      id: w.id,
+      name: w.name,
+      description: w.description,
+      disabledReason: w.chatRequirement ?? null,
+    }));
+  });
+  readonly composerWorkflowName = computed(
+    () =>
+      this.composerWorkflowRows().find(
+        (r) => r.id === this.composerWorkflowId(),
+      )?.name ?? ASSISTANT_WORKFLOW_NAME,
+  );
+  readonly composerWorkflowMenuOpen = signal(false);
+  /** Index in `composerWorkflowRows` of the highlighted option while open. */
+  readonly composerWorkflowActive = signal(0);
+
+  openComposerWorkflowMenu(): void {
+    const index = this.composerWorkflowRows().findIndex(
+      (r) => r.id === this.composerWorkflowId(),
     );
-    this.composerAgentActive.set(Math.max(0, index));
-    this.composerAgentMenuOpen.set(true);
+    this.composerWorkflowActive.set(Math.max(0, index));
+    this.composerWorkflowMenuOpen.set(true);
   }
 
-  closeComposerAgentMenu(): void {
-    this.composerAgentMenuOpen.set(false);
-    document.getElementById('new-session-agent')?.focus();
+  closeComposerWorkflowMenu(): void {
+    this.composerWorkflowMenuOpen.set(false);
+    document.getElementById('new-session-workflow')?.focus();
   }
 
-  chooseComposerAgent(key: string): void {
-    const row = this.composerAgentRows().find((r) => r.key === key);
+  chooseComposerWorkflow(id: string): void {
+    const row = this.composerWorkflowRows().find((r) => r.id === id);
     if (!row || row.disabledReason) return;
-    this.pickComposerAgent(key);
-    this.closeComposerAgentMenu();
+    this.pickComposerWorkflow(id);
+    this.closeComposerWorkflowMenu();
   }
 
-  onComposerAgentKeydown(event: KeyboardEvent): void {
-    const rows = this.composerAgentRows();
-    if (!this.composerAgentMenuOpen()) {
+  onComposerWorkflowKeydown(event: KeyboardEvent): void {
+    const rows = this.composerWorkflowRows();
+    if (!this.composerWorkflowMenuOpen()) {
       if (['Enter', ' ', 'ArrowDown'].includes(event.key)) {
         event.preventDefault();
-        this.openComposerAgentMenu();
+        this.openComposerWorkflowMenu();
       }
       return;
     }
     const step = (dir: 1 | -1) => {
-      let i = this.composerAgentActive();
+      let i = this.composerWorkflowActive();
       for (let n = 0; n < rows.length; n++) {
         i = (i + dir + rows.length) % rows.length;
         if (!rows[i].disabledReason) return i;
       }
-      return this.composerAgentActive();
+      return this.composerWorkflowActive();
     };
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
-        this.composerAgentActive.set(step(1));
+        this.composerWorkflowActive.set(step(1));
         break;
       case 'ArrowUp':
         event.preventDefault();
-        this.composerAgentActive.set(step(-1));
+        this.composerWorkflowActive.set(step(-1));
         break;
       case 'Enter':
       case ' ':
         event.preventDefault();
-        this.chooseComposerAgent(rows[this.composerAgentActive()]?.key ?? '');
+        this.chooseComposerWorkflow(
+          rows[this.composerWorkflowActive()]?.id ?? '',
+        );
         break;
       case 'Escape':
         event.preventDefault();
         event.stopPropagation();
-        this.closeComposerAgentMenu();
+        this.closeComposerWorkflowMenu();
         break;
       case 'Tab':
-        this.composerAgentMenuOpen.set(false);
+        this.composerWorkflowMenuOpen.set(false);
         break;
     }
   }
@@ -1253,60 +1260,60 @@ export class App {
   createSession(): void {
     if (this.creatingSession()) return;
     const name = this.composerName().trim();
-    const agent = this.composerAgent();
     const picks = this.composerPicksDatasets();
     if (picks && (!name || this.selectedDatasets().size === 0)) return;
     this.creatingSession.set(true);
-    // The assistant and the agents that pick datasets like it send the
-    // picked datasets (with `agentId` for the latter); an agent with its own
-    // datasets starts through the same path as Start chat, with the typed
-    // name when there is one (sessions-chat R64).
-    (picks
-      ? this.sessionsApi.create(
-          name,
-          Array.from(this.selectedDatasets()),
-          agent?.key,
-        )
-      : this.sessionsApi.createFromAgent(agent!.key, name || undefined)
-    ).subscribe({
-      next: (res) => {
-        this.creatingSession.set(false);
-        if (res.ok && res.session) {
-          this.toast.success(res.message);
-          this.composerName.set('');
-          this.loadSessions();
-          this.openSession(res.session);
-        } else {
-          this.toast.error(res.message);
-        }
-      },
-      error: (err) => {
-        this.creatingSession.set(false);
-        this.toast.error(err?.error?.message ?? 'Backend unreachable');
-      },
-    });
+    // A workflow that picks datasets sends the name and the picked datasets;
+    // one that brings its own sends the typed name when there is one and
+    // starts exactly as Start chat on it does (sessions-chat R64).
+    const body = composerCreateBody(
+      this.composerWorkflow(),
+      name,
+      Array.from(this.selectedDatasets()),
+    );
+    this.sessionsApi
+      .createFromWorkflow(body.workflowId, body.name, body.datasets)
+      .subscribe({
+        next: (res) => {
+          this.creatingSession.set(false);
+          if (res.ok && res.session) {
+            this.toast.success(res.message);
+            this.composerName.set('');
+            this.loadSessions();
+            this.openSession(res.session);
+          } else {
+            this.toast.error(res.message);
+          }
+        },
+        error: (err) => {
+          this.creatingSession.set(false);
+          this.toast.error(err?.error?.message ?? 'Backend unreachable');
+        },
+      });
   }
 
   /**
-   * Open the New conversation screen. The Agent field starts on Assistant on
-   * every visit (R64), except from Start chat on an agent that picks datasets
-   * like the assistant, which passes its key to preselect it.
+   * Open the New conversation screen. The Workflow field starts on
+   * Assistant on every visit (R64), except from Start chat on a workflow
+   * that picks datasets, which passes its id to preselect it.
    */
-  openComposer(preselectAgentKey?: string): void {
+  openComposer(preselectWorkflowId?: string): void {
     if (!this.confirmLeaveAgentEditor()) return;
     this.mainView.set('conversation-new');
     this.selectedDatasets.set(new Set());
-    this.composerAgentKey.set(preselectAgentKey ?? ASSISTANT_PICKER_KEY);
-    this.composerAgents.set([]);
-    this.agentsApi.getAgents().subscribe({
+    this.composerWorkflowMenuOpen.set(false);
+    this.composerWorkflowId.set(preselectWorkflowId ?? ASSISTANT_WORKFLOW_ID);
+    this.composerWorkflows.set([]);
+    this.workflowsApi.getWorkflows().subscribe({
       next: (res) => {
-        this.composerAgents.set(newSessionAgentOptions(res.agents));
-        // Falls back to Assistant when the preselected agent is not offered.
-        this.pickComposerAgent(this.composerAgentKey());
+        this.composerWorkflows.set(res.workflows);
+        // Falls back to Assistant when the preselected workflow is not
+        // offered or cannot start a chat now.
+        this.pickComposerWorkflow(preselectWorkflowId ?? ASSISTANT_WORKFLOW_ID);
       },
       error: () => {
-        this.composerAgents.set([]);
-        this.composerAgentKey.set(ASSISTANT_PICKER_KEY);
+        this.composerWorkflows.set([]);
+        this.composerWorkflowId.set(ASSISTANT_WORKFLOW_ID);
       },
     });
     this.llmApi.getSettings().subscribe({

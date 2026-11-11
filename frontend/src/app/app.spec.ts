@@ -736,41 +736,73 @@ describe('Composer model chip (llm-settings R53)', () => {
   });
 });
 
-describe('New conversation Agent picker (BA-230)', () => {
+describe('New conversation Workflow picker (sessions-chat R64, roadmap 1.23.6)', () => {
   beforeEach(async () => {
+    localStorage.removeItem('questions-to-insights:right-panel-width');
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
   });
 
-  const rfp = {
-    key: 'rfp',
-    id: 'rfp',
-    name: 'RFP Builder',
-    description: 'Builds RFPs.',
-    tools: [],
-    kind: 'official',
-    status: 'builtin',
-    datasets: ['Intellify RFP API'],
-    missingDatasets: [],
-    chatRequirement: 'Load the sample first',
+  const summary = {
+    kind: 'agent' as const,
+    owner: 'Official' as const,
+    stepCount: 1,
+    bar: 'agent' as const,
+    picksDatasets: false,
+    datasets: [] as string[],
+    missingDatasets: [] as string[],
+    starterQuestions: [] as string[],
   };
-
+  const assistant = {
+    ...summary,
+    id: 'agent:assistant',
+    name: 'Assistant',
+    description: 'Answers questions over the datasets you pick.',
+    agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
+    picksDatasets: true,
+  };
   const v2 = {
-    key: 'assistant-v2',
-    id: 'questions-to-insights-v2',
+    ...summary,
+    id: 'qti-v2-turn',
     name: 'Questions to Insights v2',
     description: 'A slimmed-down data analyst under construction.',
-    tools: [],
-    kind: 'official',
-    status: 'builtin',
-    datasets: [],
-    missingDatasets: [],
+    kind: 'code' as const,
+    stepCount: 4,
+    bar: 'steps' as const,
+    agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+    picksDatasets: true,
   };
+  const readiness = {
+    ...summary,
+    id: 'agent:data-readiness',
+    name: 'Data Readiness Agent',
+    description: 'Checks datasets.',
+    agents: [{ key: 'data-readiness', name: 'Data Readiness Agent' }],
+    datasets: ['World Cup Core'],
+  };
+  const rfp = {
+    ...summary,
+    id: 'agent:rfp',
+    name: 'RFP Builder',
+    description: 'Builds RFPs.',
+    agents: [{ key: 'rfp', name: 'RFP Builder' }],
+    datasets: ['Intellify RFP API'],
+  };
+  const health = {
+    ...summary,
+    id: 'agent:u-1',
+    name: 'Health plan analyst',
+    description: 'Answers about the health plan.',
+    owner: 'You' as const,
+    agents: [{ key: 'u-1', name: 'Health plan analyst' }],
+    datasets: ['World Cup Core'],
+  };
+  const CATALOGUE = [assistant, v2, readiness, rfp, health];
 
   function open(
-    agents: unknown[] = [rfp],
+    workflows: unknown[] = CATALOGUE,
     start: (app: App) => void = (app) => app.openComposer(),
   ) {
     const fixture = TestBed.createComponent(App);
@@ -778,8 +810,8 @@ describe('New conversation Agent picker (BA-230)', () => {
     fixture.detectChanges();
     start(fixture.componentInstance);
     http
-      .match((r) => r.url.endsWith('/agents'))
-      .forEach((r) => r.flush({ agents }));
+      .match((r) => r.url.endsWith('/workflows'))
+      .forEach((r) => r.flush({ workflows }));
     fixture.detectChanges();
     return { fixture, http, app: fixture.componentInstance };
   }
@@ -787,58 +819,80 @@ describe('New conversation Agent picker (BA-230)', () => {
   type Fx = { nativeElement: HTMLElement; detectChanges(): void };
   const trigger = (fixture: Fx) =>
     fixture.nativeElement.querySelector(
-      '[data-testid="new-session-agent"]',
+      '[data-testid="new-session-workflow"]',
     ) as HTMLButtonElement;
   const listbox = (fixture: Fx) =>
     fixture.nativeElement.querySelector(
-      '[role="listbox"][aria-label="Agent"]',
+      '[role="listbox"][aria-label="Workflow"]',
     ) as HTMLElement | null;
   const options = (fixture: Fx) =>
     Array.from(
       fixture.nativeElement.querySelectorAll('[role="option"]'),
     ) as HTMLElement[];
+  const optionNames = (fixture: Fx) =>
+    options(fixture).map((o) => o.children[0].textContent?.trim());
   const press = (fixture: Fx, key: string) => {
     trigger(fixture).dispatchEvent(
       new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
     );
     fixture.detectChanges();
   };
+  const createButton = (fixture: Fx) =>
+    Array.from(fixture.nativeElement.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Create'),
+    ) as HTMLButtonElement;
+  const postBody = (http: HttpTestingController) =>
+    http.expectOne((r) => r.method === 'POST' && r.url.endsWith('/sessions'))
+      .request.body;
 
-  it('preselects Assistant and keeps the dataset picker', () => {
+  it('labels the field Workflow, preselects Assistant and keeps the dataset picker', () => {
     const { fixture } = open();
     const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('#new-session-workflow-label')?.textContent?.trim()).toBe(
+      'Workflow',
+    );
     expect(trigger(fixture).textContent).toContain('Assistant');
     expect(trigger(fixture).getAttribute('aria-haspopup')).toBe('listbox');
     expect(trigger(fixture).getAttribute('aria-expanded')).toBe('false');
     expect(listbox(fixture)).toBeNull();
-    expect(el.textContent).toContain(
-      'Answers questions over the datasets you pick.',
-    );
+    expect(
+      el.querySelector('[data-testid="new-session-workflow-description"]')
+        ?.textContent,
+    ).toContain('Answers questions over the datasets you pick.');
     expect(el.textContent).toContain(
       'Select at least one dataset for this session',
     );
     expect(
-      el.querySelector('[data-testid="new-session-agent-datasets"]'),
+      el.querySelector('[data-testid="new-session-workflow-datasets"]'),
     ).toBeNull();
+    expect(createButton(fixture).title).toBe(
+      'Name the session and select at least one dataset',
+    );
+    expect(el.querySelector('[data-testid="new-session-agent"]')).toBeNull();
   });
 
-  it('lists each agent with its name and description', () => {
+  it('lists the workflows in the catalogue order, each with its name and description', () => {
     const { fixture } = open();
     trigger(fixture).click();
     fixture.detectChanges();
     expect(trigger(fixture).getAttribute('aria-expanded')).toBe('true');
-    expect(
-      options(fixture).map((o) => o.children[0].textContent?.trim()),
-    ).toEqual(['Assistant', 'RFP Builder']);
+    expect(optionNames(fixture)).toEqual([
+      'Assistant',
+      'Questions to Insights v2',
+      'Data Readiness Agent',
+      'RFP Builder',
+      'Health plan analyst',
+    ]);
     expect(options(fixture)[0].getAttribute('aria-selected')).toBe('true');
-    expect(options(fixture)[1].children[1].textContent).toContain(
+    expect(options(fixture)[3].children[1].textContent).toContain(
       rfp.description,
     );
   });
 
-  it('lists an agent that cannot start disabled with its reason', () => {
+  it('lists a workflow that cannot start disabled with its chatRequirement', () => {
     const { fixture, app } = open([
-      { ...rfp, missingDatasets: ['Intellify RFP API'] },
+      assistant,
+      { ...rfp, chatRequirement: 'Load the sample first' },
     ]);
     trigger(fixture).click();
     fixture.detectChanges();
@@ -847,131 +901,204 @@ describe('New conversation Agent picker (BA-230)', () => {
     expect(option.children[1].textContent).toContain('Load the sample first');
     option.click();
     fixture.detectChanges();
-    expect(app.composerAgentKey()).toBe('assistant');
+    expect(app.composerWorkflowId()).toBe('agent:assistant');
     expect(listbox(fixture)).not.toBeNull();
   });
 
-  it('shows the agent datasets read-only and creates from the agent with the name', () => {
+  it('shows the datasets of a workflow that brings its own and creates with workflowId and the typed name', () => {
     const { fixture, http, app } = open();
     trigger(fixture).click();
     fixture.detectChanges();
-    options(fixture)[1].click();
+    options(fixture)[3].click();
     fixture.detectChanges();
     expect(listbox(fixture)).toBeNull();
     expect(trigger(fixture).textContent).toContain('RFP Builder');
     const el = fixture.nativeElement as HTMLElement;
     const datasets = el.querySelector(
-      '[data-testid="new-session-agent-datasets"]',
+      '[data-testid="new-session-workflow-datasets"]',
     ) as HTMLElement;
+    expect(datasets.textContent).toContain('Datasets');
     expect(datasets.textContent).toContain('Intellify RFP API');
     expect(el.textContent).not.toContain(
       'Select at least one dataset for this session',
     );
-    app.composerName.set('Acme');
-    app.createSession();
-    const req = http.expectOne(
-      (r) => r.method === 'POST' && r.url.endsWith('/sessions'),
+    expect(createButton(fixture).title).toBe(
+      'Start a session with this workflow',
     );
-    expect(req.request.body).toEqual({ agentId: 'rfp', name: 'Acme' });
+    app.composerName.set('Acme');
+    app.selectedDatasets.set(new Set(['Ignored']));
+    app.createSession();
+    expect(postBody(http)).toEqual({ workflowId: 'agent:rfp', name: 'Acme' });
   });
 
-  it('opens and picks with the keyboard, skipping disabled agents, and Escape closes', () => {
+  it('creates a workflow that brings its datasets with no name when none is typed', () => {
+    const { http, app } = open();
+    app.pickComposerWorkflow('agent:u-1');
+    app.createSession();
+    expect(postBody(http)).toEqual({ workflowId: 'agent:u-1' });
+  });
+
+  it('opens and picks with the keyboard, skipping disabled workflows, and Escape closes', () => {
     const { fixture, app } = open([
-      { ...rfp, missingDatasets: ['Intellify RFP API'] },
-      { ...rfp, key: 'rfp2', id: 'rfp2', name: 'Second' },
+      assistant,
+      { ...rfp, chatRequirement: 'Load the sample first' },
+      health,
     ]);
     press(fixture, 'ArrowDown');
     expect(listbox(fixture)).not.toBeNull();
     press(fixture, 'ArrowDown');
-    expect(app.composerAgentActive()).toBe(2);
+    expect(app.composerWorkflowActive()).toBe(2);
     press(fixture, 'ArrowUp');
-    expect(app.composerAgentActive()).toBe(0);
+    expect(app.composerWorkflowActive()).toBe(0);
     press(fixture, 'ArrowDown');
     press(fixture, 'Enter');
-    expect(app.composerAgentKey()).toBe('rfp2');
+    expect(app.composerWorkflowId()).toBe('agent:u-1');
     expect(listbox(fixture)).toBeNull();
     press(fixture, 'Enter');
     expect(listbox(fixture)).not.toBeNull();
     press(fixture, 'Escape');
     expect(listbox(fixture)).toBeNull();
-    expect(app.composerAgentKey()).toBe('rfp2');
+    expect(app.composerWorkflowId()).toBe('agent:u-1');
   });
 
   it('forgets the pick on the next visit', () => {
     const { app } = open();
-    app.pickComposerAgent('rfp');
-    expect(app.composerAgentKey()).toBe('rfp');
+    app.pickComposerWorkflow('agent:rfp');
+    expect(app.composerWorkflowId()).toBe('agent:rfp');
     app.openComposer();
-    expect(app.composerAgentKey()).toBe('assistant');
+    expect(app.composerWorkflowId()).toBe('agent:assistant');
   });
 
-  it('lists Questions to Insights v2 right after Assistant (BA-321)', () => {
-    const { fixture } = open([rfp, v2]);
-    trigger(fixture).click();
-    fixture.detectChanges();
-    expect(
-      options(fixture).map((o) => o.children[0].textContent?.trim()),
-    ).toEqual(['Assistant', 'Questions to Insights v2', 'RFP Builder']);
-    expect(options(fixture)[1].children[1].textContent).toContain(
-      v2.description,
-    );
-  });
-
-  it('preselects v2 from its Start chat and keeps the dataset picker (BA-321)', () => {
-    const { fixture, app } = open([rfp, v2], (a) =>
-      a.startChatWithAgent(v2 as never),
+  it('preselects the workflow it is opened with and keeps the dataset picker for v2', () => {
+    const { fixture, app } = open(CATALOGUE, (a) =>
+      a.openComposer('qti-v2-turn'),
     );
     const el = fixture.nativeElement as HTMLElement;
-    expect(app.composerAgentKey()).toBe('assistant-v2');
+    expect(app.composerWorkflowId()).toBe('qti-v2-turn');
     expect(trigger(fixture).textContent).toContain('Questions to Insights v2');
     expect(
-      el.querySelector('[data-testid="new-session-agent-description"]')
+      el.querySelector('[data-testid="new-session-workflow-description"]')
         ?.textContent,
     ).toContain(v2.description);
     expect(el.textContent).toContain(
       'Select at least one dataset for this session',
     );
-    expect(
-      el.querySelector('[data-testid="new-session-agent-datasets"]'),
-    ).toBeNull();
     // The preselection is not remembered (R64).
     app.openComposer();
-    expect(app.composerAgentKey()).toBe('assistant');
+    expect(app.composerWorkflowId()).toBe('agent:assistant');
   });
 
-  it('falls back to Assistant when v2 is not offered', () => {
-    const { app } = open([rfp], (a) => a.startChatWithAgent(v2 as never));
-    expect(app.composerAgentKey()).toBe('assistant');
+  it('falls back to Assistant when the preselected workflow is not offered', () => {
+    const { app } = open([assistant, rfp], (a) => a.openComposer('qti-v2-turn'));
+    expect(app.composerWorkflowId()).toBe('agent:assistant');
   });
 
-  it('requires a name and datasets for v2, then creates with its agentId (BA-321)', () => {
-    const { http, app } = open([rfp, v2], (a) =>
-      a.startChatWithAgent(v2 as never),
-    );
+  it('requires a name and datasets for v2, then creates with its workflowId', () => {
+    const { http, app } = open(CATALOGUE, (a) => a.openComposer('qti-v2-turn'));
     app.composerName.set('Q');
     app.createSession();
     http.expectNone((r) => r.method === 'POST' && r.url.endsWith('/sessions'));
     app.selectedDatasets.set(new Set(['Core']));
     app.createSession();
-    const req = http.expectOne(
-      (r) => r.method === 'POST' && r.url.endsWith('/sessions'),
-    );
-    expect(req.request.body).toEqual({
+    expect(postBody(http)).toEqual({
+      workflowId: 'qti-v2-turn',
       name: 'Q',
       datasets: ['Core'],
-      agentId: 'assistant-v2',
     });
   });
 
-  it('creates an Assistant session without an agentId', () => {
-    const { http, app } = open([rfp, v2]);
+  it('creates an Assistant session with the assistant workflow', () => {
+    const { http, app } = open();
     app.composerName.set('Q');
     app.selectedDatasets.set(new Set(['Core']));
     app.createSession();
-    const req = http.expectOne(
-      (r) => r.method === 'POST' && r.url.endsWith('/sessions'),
-    );
-    expect(req.request.body).toEqual({ name: 'Q', datasets: ['Core'] });
+    expect(postBody(http)).toEqual({
+      workflowId: 'agent:assistant',
+      name: 'Q',
+      datasets: ['Core'],
+    });
+  });
+
+  it('still offers Assistant when the catalogue fails to load', () => {
+    const fixture = TestBed.createComponent(App);
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    const app = fixture.componentInstance;
+    app.openComposer('qti-v2-turn');
+    http
+      .match((r) => r.url.endsWith('/workflows'))
+      .forEach((r) => r.flush('down', { status: 500, statusText: 'Error' }));
+    fixture.detectChanges();
+    expect(app.composerWorkflowId()).toBe('agent:assistant');
+    expect(trigger(fixture).textContent).toContain('Assistant');
+  });
+});
+
+describe('Chat header Workflow chip (sessions-chat R57, R59, roadmap 1.23.6)', () => {
+  beforeEach(async () => {
+    localStorage.removeItem('questions-to-insights:right-panel-width');
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+  });
+
+  function header(workflowRef: {
+    id: string;
+    name: string;
+    kind: 'code' | 'agent';
+    deleted: boolean;
+  }): HTMLElement {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    app.activeSession.set({
+      id: 'session-1',
+      name: 'World Cup analysis',
+      datasets: ['World Cup Core'],
+      messages: [],
+      workflowRef,
+    });
+    app.mainView.set('session-chat');
+    fixture.detectChanges();
+    return fixture.nativeElement.querySelector('header') as HTMLElement;
+  }
+
+  it('names the workflow of a plain Assistant chat', () => {
+    const el = header({
+      id: 'agent:assistant',
+      name: 'Assistant',
+      kind: 'agent',
+      deleted: false,
+    });
+    expect(el.textContent).toContain('Workflow');
+    expect(
+      el.querySelector('[data-testid="session-workflow"]')?.textContent?.trim(),
+    ).toBe('Assistant');
+    expect(el.querySelector('[data-testid="session-agent"]')).toBeNull();
+  });
+
+  it('names a code-defined workflow', () => {
+    const el = header({
+      id: 'qti-v2-turn',
+      name: 'Questions to Insights v2',
+      kind: 'code',
+      deleted: false,
+    });
+    expect(
+      el.querySelector('[data-testid="session-workflow"]')?.textContent?.trim(),
+    ).toBe('Questions to Insights v2');
+  });
+
+  it('marks a deleted agent\'s workflow', () => {
+    const el = header({
+      id: 'agent:u-1',
+      name: 'Cup historian',
+      kind: 'agent',
+      deleted: true,
+    });
+    expect(
+      el.querySelector('[data-testid="session-workflow"]')?.textContent?.trim(),
+    ).toBe('Cup historian · agent deleted');
   });
 });
 
@@ -1056,11 +1183,11 @@ describe('Workflows area (workflows R5-R8, app-shell R3)', () => {
     const { app } = setup();
     app.startChatWithWorkflow(v2);
     expect(app.mainView()).toBe('conversation-new');
-    expect(app.composerAgentKey()).toBe('assistant-v2');
+    expect(app.composerWorkflowId()).toBe('qti-v2-turn');
 
     app.startChatWithWorkflow(assistant);
     expect(app.mainView()).toBe('conversation-new');
-    expect(app.composerAgentKey()).toBe('assistant');
+    expect(app.composerWorkflowId()).toBe('agent:assistant');
   });
 
   it('Start chat on any other workflow creates the session from the workflow and opens it', () => {

@@ -477,7 +477,7 @@ test('assessing a dataset from the chat shows the scorecard', async ({
 
   // When I click "Start chat with Data Readiness Agent".
   await startReadinessChat(page);
-  await expect(page.getByTestId('session-agent')).toHaveText(AGENT);
+  await expect(page.getByTestId('session-workflow')).toHaveText(AGENT);
   await expect(
     page.getByRole('heading', { name: SESSION, exact: true }),
   ).toBeVisible();

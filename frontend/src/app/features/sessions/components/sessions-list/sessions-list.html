@@ -65,14 +65,14 @@
             }
           </button>
           <span
-            data-testid="row-session-agent"
+            data-testid="row-session-workflow"
             class="chip min-w-0 max-w-48 shrink-0"
-            [class.chip-neutral]="!session.agent?.deleted"
-            [class.chip-warning]="!!session.agent?.deleted"
-            [attr.title]="'Agent: ' + agentName(session)"
+            [class.chip-neutral]="session.workflowRef?.deleted !== true"
+            [class.chip-warning]="session.workflowRef?.deleted === true"
+            [attr.title]="'Workflow: ' + workflowName(session)"
           >
-            <lucide-angular [img]="Sparkles" [size]="12" class="shrink-0" />
-            <span class="truncate">{{ agentName(session) }}</span>
+            <lucide-angular [img]="Workflow" [size]="12" class="shrink-0" />
+            <span class="truncate">{{ workflowName(session) }}</span>
           </span>
           <button
             type="button"

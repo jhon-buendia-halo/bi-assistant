@@ -1,28 +1,36 @@
+import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
+import axe from 'axe-core';
 import { test, expect } from './fixtures/app.fixture';
 import {
   WORLD_CUP_DATASET,
   WORLD_CUP_SESSION,
   createWorldCupSession,
+  followOsTheme,
   openSessions,
 } from './helpers/app-actions';
 import { apiJson } from './helpers/api';
 import {
+  createUserAgent,
   deleteDataset,
+  publishAgent,
   seedDataset,
   seedWorldCupDataset,
 } from './helpers/agents-api';
+import { scenarioStep } from './support/demo-captions';
 
 /**
  * Mirrors the Feature "Session management" in
  * specs/capabilities/sessions-chat/spec.md: the Sessions page, the New
- * conversation screen and its Agent picker (R1, R46, R63, R64; roadmap
- * 1.14.17), and the session id in the page header (R62; roadmap 1.14.18).
- * "The conversation and its history survive a restart" is covered by the
- * datasources Feature's World Cup workflow.
+ * conversation screen and its Workflow picker (R1, R46, R63, R64; roadmap
+ * 1.14.17, 1.23.6), the Workflow chips of the page header and the Sessions
+ * list (R57, R59, R63; roadmap 1.23.6), and the session id in the page
+ * header (R62; roadmap 1.14.18). "The conversation and its history survive
+ * a restart" is covered by the datasources Feature's World Cup workflow.
  *
- * Two stories add to this file: keep each test as its owner wrote it.
+ * Several stories add to this file: keep each test as its owner wrote it.
  */
 
 const INTELLIFY_DATASET = 'Intellify RFP API';
@@ -49,10 +57,16 @@ const createButton = (page: Page) =>
   page.getByRole('button', { name: /^Create$/ });
 const datasetCard = (page: Page, name: string) =>
   page.getByRole('button', { name: new RegExp(`^${name}`) });
-const agentField = (page: Page) => page.getByTestId('new-session-agent');
-const agentList = (page: Page) => page.getByRole('listbox', { name: 'Agent' });
-const agentOption = (page: Page, name: string) =>
-  agentList(page).getByRole('option').filter({ hasText: name });
+const workflowField = (page: Page) => page.getByTestId('new-session-workflow');
+const workflowList = (page: Page) =>
+  page.getByRole('listbox', { name: 'Workflow' });
+const workflowOption = (page: Page, name: string) =>
+  workflowList(page).getByRole('option').filter({ hasText: name });
+const workflowDescription = (page: Page) =>
+  page.getByTestId('new-session-workflow-description');
+/** The page header's Workflow chip (R57). */
+const headerWorkflow = (page: Page) =>
+  page.locator('header').getByTestId('session-workflow');
 
 /** The Sessions page row of the session named `name`. */
 const sessionRow = (page: Page, name: string) =>
@@ -161,23 +175,24 @@ test('I start an RFP Builder session from New conversation', async ({
   await page.reload();
   await openComposer(page);
 
-  await expect(agentField(page)).toHaveText(/Assistant/);
-  await expect(page.getByTestId('new-session-agent-description')).toHaveText(
-    ASSISTANT_DESCRIPTION,
-  );
+  await expect(workflowField(page)).toHaveText(/Assistant/);
+  await expect(workflowField(page)).toHaveAccessibleName('Workflow');
+  await expect(workflowField(page)).toHaveRole('combobox');
+  await expect(workflowDescription(page)).toHaveText(ASSISTANT_DESCRIPTION);
   await expect(
     page.getByText('Select at least one dataset for this session'),
   ).toBeVisible();
 
-  // The Agent field is a listbox showing each agent's name and description.
-  await agentField(page).click();
-  await expect(agentList(page)).toBeVisible();
-  await expect(agentField(page)).toHaveAttribute('aria-expanded', 'true');
-  const options = agentList(page).getByRole('option');
+  // The Workflow field is a listbox showing each workflow's name and
+  // description.
+  await workflowField(page).click();
+  await expect(workflowList(page)).toBeVisible();
+  await expect(workflowField(page)).toHaveAttribute('aria-expanded', 'true');
+  const options = workflowList(page).getByRole('option');
   await expect(options.first()).toContainText('Assistant');
   await expect(options.first()).toContainText(ASSISTANT_DESCRIPTION);
   await expect(options.first()).toHaveAttribute('aria-selected', 'true');
-  const rfp = agentOption(page, 'RFP Builder');
+  const rfp = workflowOption(page, 'RFP Builder');
   await expect(rfp).not.toHaveAttribute('aria-disabled', 'true');
   await expect(rfp).not.toContainText(RFP_REQUIREMENT);
   await page.screenshot({
@@ -185,36 +200,42 @@ test('I start an RFP Builder session from New conversation', async ({
   });
 
   await rfp.click();
-  await expect(agentList(page)).toHaveCount(0);
-  await expect(agentField(page)).toHaveText(/RFP Builder/);
-  const chips = page.getByTestId('new-session-agent-datasets');
+  await expect(workflowList(page)).toHaveCount(0);
+  await expect(workflowField(page)).toHaveText(/RFP Builder/);
+  const chips = page.getByTestId('new-session-workflow-datasets');
   await expect(chips).toContainText(INTELLIFY_DATASET);
   await expect(
     page.getByText('Select at least one dataset for this session'),
   ).toHaveCount(0);
   await expect(datasetCard(page, WORLD_CUP_DATASET)).toHaveCount(0);
   await expect(createButton(page)).toBeEnabled();
+  await expect(createButton(page)).toHaveAttribute(
+    'title',
+    'Start a session with this workflow',
+  );
 
   await createButton(page).click();
   await expect(page.getByText('Session "RFP Builder" created')).toBeVisible();
-  await expect(page.locator('header')).toContainText('RFP Builder');
+  await expect(headerWorkflow(page)).toHaveText('RFP Builder');
 
   // The Sessions page shows it with its dataset under its name and its
-  // agent as the row's chip (R63).
+  // workflow as the row's chip (R63).
   await openSessions(page);
   const row = sessionRow(page, 'RFP Builder');
   await expect(row).toHaveCount(1);
   await expect(row).toContainText(INTELLIFY_DATASET);
-  await expect(row.getByTestId('row-session-agent')).toHaveText('RFP Builder');
+  await expect(row.getByTestId('row-session-workflow')).toHaveText(
+    'RFP Builder',
+  );
 });
 
-test('the Agent field disables an agent that cannot start', async ({
+test('the Workflow field disables a workflow that cannot start', async ({
   page,
 }) => {
   // Given the "Intellify RFP API" sample is not loaded
   await openComposer(page);
-  await agentField(page).click();
-  const rfp = agentOption(page, 'RFP Builder');
+  await workflowField(page).click();
+  const rfp = workflowOption(page, 'RFP Builder');
   await expect(rfp).toHaveAttribute('aria-disabled', 'true');
   await expect(rfp).toContainText(RFP_REQUIREMENT);
   await page.screenshot({
@@ -222,17 +243,14 @@ test('the Agent field disables an agent that cannot start', async ({
   });
 
   // The Background's World Cup dataset is on PostgreSQL, so the Data
-  // Readiness Agent can be chosen (data-readiness R1-R2).
-  await expect(agentOption(page, 'Data Readiness Agent')).not.toHaveAttribute(
-    'aria-disabled',
-    'true',
-  );
+  // Readiness Agent's workflow can be chosen (data-readiness R1-R2).
+  await expect(
+    workflowOption(page, 'Data Readiness Agent'),
+  ).not.toHaveAttribute('aria-disabled', 'true');
   // It cannot be chosen (clicked past Playwright's aria-disabled check).
   await rfp.click({ force: true });
-  await expect(agentField(page)).toHaveText(/Assistant/);
-  await expect(page.getByTestId('new-session-agent-description')).toHaveText(
-    ASSISTANT_DESCRIPTION,
-  );
+  await expect(workflowField(page)).toHaveText(/Assistant/);
+  await expect(workflowDescription(page)).toHaveText(ASSISTANT_DESCRIPTION);
 });
 
 test('deletes a session after confirmation', async ({ page }) => {
@@ -302,14 +320,16 @@ test('the Sessions page finds a session by name or ID', async ({ page }) => {
   await expect(rows).toHaveCount(2);
   await expect(pagination).toContainText('11–12 of 12');
 
-  // Each row shows its datasets, its agent and its id.
+  // Each row shows its datasets, its workflow and its id.
   const search = page.getByPlaceholder('Search sessions by name or ID…');
   await search.fill('cup HISTORY');
   await expect(rows).toHaveCount(1);
   await expect(pagination).toContainText('1–1 of 1');
   const row = sessionRow(page, 'Cup history');
   await expect(row).toContainText(WORLD_CUP_DATASET);
-  await expect(row.getByTestId('row-session-agent')).toHaveText('Assistant');
+  await expect(row.getByTestId('row-session-workflow')).toHaveText(
+    'Assistant',
+  );
   await expect(row.getByTestId('row-session-id')).toHaveText(
     `ID ${cupId.slice(0, 8)}`,
   );
@@ -352,55 +372,51 @@ test('I copy the session id to share it', async ({ page }) => {
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(id);
 });
 
-test('the Agent field lists only agents that can chat', async ({ page }) => {
-  await openComposer(page);
-  await agentField(page).click();
-  // allInnerTexts does not wait: wait for the last option to render first.
-  await expect(agentOption(page, 'RFP Builder')).toBeVisible();
-  const names = (await agentList(page).getByRole('option').allInnerTexts()).map(
+/** The option names of the open Workflow field, in order. */
+async function workflowNames(page: Page): Promise<string[]> {
+  // allInnerTexts does not wait: wait for a known option to render first.
+  await expect(workflowOption(page, 'RFP Builder')).toBeVisible();
+  return (await workflowList(page).getByRole('option').allInnerTexts()).map(
     (text) => text.split('\n')[0].trim(),
   );
-  // Assistant, Questions to Insights v2 (BA-320), the Official agents that
-  // bring their own datasets alphabetical (the Data Readiness Agent, BA-251,
-  // then the RFP Builder), then the user's own agents (R64).
-  expect(names.slice(0, 4)).toEqual([
+}
+
+test('the Workflow field lists the workflows in catalogue order', async ({
+  page,
+}) => {
+  await openComposer(page);
+  await workflowField(page).click();
+  // Assistant, Questions to Insights v2, the other Official workflows by
+  // name, then the user's own agents' workflows (R64; workflows R1).
+  expect((await workflowNames(page)).slice(0, 4)).toEqual([
     'Assistant',
     V2,
     'Data Readiness Agent',
     'RFP Builder',
   ]);
-  for (const name of [
-    'Benchmarking Agent',
-    'LAD COE Agent',
-    'Strategy Agent',
-    'Survey Agent',
-  ]) {
-    await expect(agentOption(page, name)).toHaveCount(0);
-  }
   // The Background's World Cup dataset is on PostgreSQL, so the Data
-  // Readiness Agent can be chosen (data-readiness R1-R2).
-  await expect(agentOption(page, 'Data Readiness Agent')).not.toHaveAttribute(
-    'aria-disabled',
-    'true',
-  );
+  // Readiness Agent's workflow can be chosen (data-readiness R1-R2).
+  await expect(
+    workflowOption(page, 'Data Readiness Agent'),
+  ).not.toHaveAttribute('aria-disabled', 'true');
 });
 
 test('I start a Questions to Insights v2 session from New conversation', async ({
   page,
 }) => {
   await openComposer(page);
-  await agentField(page).click();
-  await agentOption(page, V2).click();
-  await expect(agentList(page)).toHaveCount(0);
-  await expect(agentField(page)).toHaveText(new RegExp(V2));
-  await expect(page.getByTestId('new-session-agent-description')).toHaveText(
-    V2_DESCRIPTION,
-  );
+  await workflowField(page).click();
+  await workflowOption(page, V2).click();
+  await expect(workflowList(page)).toHaveCount(0);
+  await expect(workflowField(page)).toHaveText(new RegExp(V2));
+  await expect(workflowDescription(page)).toHaveText(V2_DESCRIPTION);
   // Like the assistant, v2 runs over the datasets the user picks (R64).
   await expect(
     page.getByText('Select at least one dataset for this session'),
   ).toBeVisible();
-  await expect(page.getByTestId('new-session-agent-datasets')).toHaveCount(0);
+  await expect(page.getByTestId('new-session-workflow-datasets')).toHaveCount(
+    0,
+  );
   await expect(createButton(page)).toBeDisabled();
 
   await datasetCard(page, WORLD_CUP_DATASET).click();
@@ -410,26 +426,33 @@ test('I start a Questions to Insights v2 session from New conversation', async (
     (r) => r.url().endsWith('/sessions') && r.request().method() === 'POST',
   );
   await createButton(page).click();
-  const body = (await (await created).json()) as {
-    session: { id: string };
-  };
+  const response = await created;
+  // Create sends the workflow, the name and the picked datasets (R64).
+  expect(response.request().postDataJSON()).toEqual({
+    workflowId: 'qti-v2-turn',
+    name: 'V2 check',
+    datasets: [WORLD_CUP_DATASET],
+  });
+  const body = (await response.json()) as { session: { id: string } };
   await expect(page.getByText('Session "V2 check" created')).toBeVisible();
-  await expect(page.getByTestId('session-agent')).toHaveText(V2);
+  await expect(headerWorkflow(page)).toHaveText(V2);
 
-  // The session is bound to v2 over the picked dataset (R61).
+  // The session is bound to v2 over the picked dataset (R61, R65).
   const session = await apiJson<{
     agentKey?: string;
     agentName?: string;
+    workflowId?: string;
     datasets: string[];
   }>(page, 'GET', `/sessions/${body.session.id}`);
   expect(session.agentKey).toBe('assistant-v2');
   expect(session.agentName).toBe(V2);
+  expect(session.workflowId).toBe('qti-v2-turn');
   expect(session.datasets).toEqual([WORLD_CUP_DATASET]);
 
   await openSessions(page);
   const row = sessionRow(page, 'V2 check');
   await expect(row).toHaveCount(1);
-  await expect(row.getByTestId('row-session-agent')).toHaveText(V2);
+  await expect(row.getByTestId('row-session-workflow')).toHaveText(V2);
 });
 
 test('Start chat on Questions to Insights v2 opens New conversation with v2 selected', async ({
@@ -450,7 +473,7 @@ test('Start chat on Questions to Insights v2 opens New conversation with v2 sele
   await expect(
     page.getByRole('heading', { name: 'New conversation', exact: true }),
   ).toBeVisible();
-  await expect(agentField(page)).toHaveText(new RegExp(V2));
+  await expect(workflowField(page)).toHaveText(new RegExp(V2));
   await expect(nameField(page)).toBeVisible();
   const after = await apiJson<{ sessions: unknown[] }>(
     page,
@@ -460,19 +483,255 @@ test('Start chat on Questions to Insights v2 opens New conversation with v2 sele
   expect(after.sessions).toHaveLength(before.sessions.length);
 });
 
-test('the Agent field lists Questions to Insights v2 right after Assistant', async ({
+// ------------------------------------------ Workflow-first (roadmap 1.23.6)
+
+const HISTORIAN = 'Cup historian';
+const V2_STEPS = ['Receive question', 'Load catalog', 'Analyse', 'Wrap up'];
+
+/** Creates and publishes a user agent over World Cup Core; returns its id. */
+async function publishHistorian(page: Page): Promise<string> {
+  const id = await createUserAgent(page, {
+    name: HISTORIAN,
+    description: 'Answers questions about World Cup history.',
+    datasets: [WORLD_CUP_DATASET],
+  });
+  await publishAgent(page, id);
+  return id;
+}
+
+/**
+ * Saves a session the way a version before workflows did (sessions-chat
+ * R65): straight into the app's SQLite store, with an agent binding and no
+ * `workflowId`. The store reads the table on every call, so the running app
+ * lists it at once.
+ */
+function seedPreWorkflowSession(
+  appDataDir: string,
+  doc: { name: string; datasets: string[]; agentKey: string; agentName: string },
+): string {
+  const backendRequire = createRequire(
+    path.resolve(__dirname, '../../backend/package.json'),
+  );
+  const Database = backendRequire('better-sqlite3') as new (
+    file: string,
+  ) => {
+    prepare(sql: string): { run(...args: unknown[]): unknown };
+    close(): void;
+  };
+  const db = new Database(path.join(appDataDir, 'app.sqlite'));
+  try {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    db.prepare('INSERT INTO "sessions" (doc) VALUES (?)').run(
+      JSON.stringify({
+        id,
+        ...doc,
+        messages: [],
+        createdAt: now,
+        updatedAt: now,
+      }),
+    );
+    return id;
+  } finally {
+    db.close();
+  }
+}
+
+// The story's main scenario: `scripts/qa.mjs 1.23.6 --fast` records it as
+// evidence/1.23.6/demo.webm, captioned with these Gherkin lines.
+test(
+  'I start a chat from the Workflow field',
+  { tag: ['@demo', '@story-1.23.6'] },
+  async ({ page }) => {
+    await scenarioStep(
+      page,
+      `Given I have published the agent "${HISTORIAN}" over "${WORLD_CUP_DATASET}"`,
+      async () => {
+        await publishHistorian(page);
+        await page.reload();
+      },
+    );
+    await scenarioStep(page, 'When I click "Sessions" on the rail', async () => {
+      await openSessions(page);
+    });
+    await scenarioStep(page, 'And I click "Start New Conversation"', async () => {
+      await page
+        .locator('header')
+        .getByRole('button', { name: 'Start New Conversation' })
+        .click();
+      await expect(nameField(page)).toBeVisible();
+    });
+    await scenarioStep(
+      page,
+      'Then the "Workflow" field shows "Assistant"',
+      async () => {
+        await expect(workflowField(page)).toHaveAccessibleName('Workflow');
+        await expect(workflowField(page)).toHaveText(/Assistant/);
+        await expect(workflowDescription(page)).toHaveText(
+          ASSISTANT_DESCRIPTION,
+        );
+      },
+    );
+    await scenarioStep(page, 'When I open the "Workflow" field', async () => {
+      await workflowField(page).click();
+      await expect(workflowList(page)).toBeVisible();
+    });
+    await scenarioStep(
+      page,
+      `Then the options are "Assistant", "${V2}", "Data Readiness Agent", "RFP Builder" and "${HISTORIAN}", in that order`,
+      async () => {
+        await expect(workflowOption(page, HISTORIAN)).toBeVisible();
+        expect(await workflowNames(page)).toEqual([
+          'Assistant',
+          V2,
+          'Data Readiness Agent',
+          'RFP Builder',
+          HISTORIAN,
+        ]);
+      },
+    );
+    await scenarioStep(
+      page,
+      `When I choose "${V2}" in the "Workflow" field`,
+      async () => {
+        await workflowOption(page, V2).click();
+        await expect(workflowList(page)).toHaveCount(0);
+        await expect(workflowField(page)).toHaveText(new RegExp(V2));
+      },
+    );
+    await scenarioStep(
+      page,
+      'And I type "Workflow check" into the session name',
+      async () => {
+        await nameField(page).fill('Workflow check');
+      },
+    );
+    await scenarioStep(
+      page,
+      `And I select the "${WORLD_CUP_DATASET}" dataset`,
+      async () => {
+        await datasetCard(page, WORLD_CUP_DATASET).click();
+      },
+    );
+    await scenarioStep(page, 'And I click "Create"', async () => {
+      await createButton(page).click();
+      await expect(
+        page.getByText('Session "Workflow check" created'),
+      ).toBeVisible();
+    });
+    await scenarioStep(
+      page,
+      `Then the page header shows "Workflow" and "${V2}"`,
+      async () => {
+        await expect(
+          page.locator('header').getByText('Workflow', { exact: true }),
+        ).toBeVisible();
+        await expect(headerWorkflow(page)).toHaveText(V2);
+      },
+    );
+    await scenarioStep(
+      page,
+      'And the workflow bar shows "Receive question", "Load catalog", "Analyse" and "Wrap up"',
+      async () => {
+        await expect(
+          page
+            .getByTestId('workflow-bar')
+            .getByRole('list', { name: 'Workflow' })
+            .getByRole('listitem'),
+        ).toHaveText(V2_STEPS.map((title) => new RegExp(title)));
+      },
+    );
+    await scenarioStep(page, 'When I click "Sessions" on the rail', async () => {
+      await openSessions(page);
+    });
+    await scenarioStep(
+      page,
+      `Then the "Workflow check" row's chip reads "${V2}" with the tooltip "Workflow: ${V2}"`,
+      async () => {
+        const chip = sessionRow(page, 'Workflow check').getByTestId(
+          'row-session-workflow',
+        );
+        await expect(chip).toHaveText(V2);
+        await expect(chip).toHaveAttribute('title', `Workflow: ${V2}`);
+      },
+    );
+  },
+);
+
+test("a deleted agent's chat names its workflow as deleted", async ({
   page,
 }) => {
-  await openComposer(page);
-  await agentField(page).click();
-  await expect(agentOption(page, 'RFP Builder')).toBeVisible();
-  const names = (await agentList(page).getByRole('option').allInnerTexts()).map(
-    (text) => text.split('\n')[0].trim(),
+  // Given a chat started from the workflow of the published agent
+  const id = await publishHistorian(page);
+  const { session } = await apiJson<{ session: { id: string } }>(
+    page,
+    'POST',
+    '/sessions',
+    { workflowId: `agent:${id}` },
   );
-  expect(names.slice(0, 4)).toEqual([
-    'Assistant',
-    V2,
-    'Data Readiness Agent',
+  // And the agent is deleted
+  await apiJson(page, 'DELETE', `/agents/${encodeURIComponent(id)}`);
+  await page.reload();
+
+  const deleted = `${HISTORIAN} · agent deleted`;
+  await openSessions(page);
+  const chip = sessionRow(page, HISTORIAN).getByTestId('row-session-workflow');
+  await expect(chip).toHaveText(deleted);
+  await expect(chip).toHaveAttribute('title', `Workflow: ${deleted}`);
+
+  await sessionRow(page, HISTORIAN)
+    .getByRole('button', { name: new RegExp(`^${HISTORIAN}`) })
+    .click();
+  await expect(page.locator('header').getByTestId('session-id')).toHaveText(
+    `ID ${session.id.slice(0, 8)}`,
+  );
+  await expect(headerWorkflow(page)).toHaveText(deleted);
+});
+
+test('a chat saved before workflows names the workflow of its agent', async ({
+  appDataDir,
+  page,
+}) => {
+  const id = seedPreWorkflowSession(appDataDir, {
+    name: 'Saved RFP chat',
+    datasets: [WORLD_CUP_DATASET],
+    agentKey: 'rfp',
+    agentName: 'RFP Builder',
+  });
+  await page.reload();
+
+  await openSessions(page);
+  const row = sessionRow(page, 'Saved RFP chat');
+  await expect(row.getByTestId('row-session-workflow')).toHaveText(
     'RFP Builder',
-  ]);
+  );
+  await row.getByRole('button', { name: /^Saved RFP chat/ }).click();
+  await expect(page.locator('header').getByTestId('session-id')).toHaveText(
+    `ID ${id.slice(0, 8)}`,
+  );
+  await expect(
+    page.locator('header').getByText('Workflow', { exact: true }),
+  ).toBeVisible();
+  await expect(headerWorkflow(page)).toHaveText('RFP Builder');
+});
+
+test('the New conversation screen has no detectable accessibility violations in either theme', async ({
+  page,
+}) => {
+  await followOsTheme(page);
+  await openComposer(page);
+  await workflowField(page).click();
+  await expect(workflowOption(page, 'RFP Builder')).toBeVisible();
+
+  await page.addScriptTag({ content: axe.source });
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    // Let the theme's colour transitions finish before axe reads colours.
+    await page.waitForTimeout(500);
+    const results = await page.evaluate(async () => {
+      return (window as unknown as { axe: typeof axe }).axe.run(document);
+    });
+    expect(results.violations, theme).toEqual([]);
+  }
 });

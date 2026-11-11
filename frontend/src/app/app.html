@@ -258,22 +258,23 @@
                     </h2>
                     @if (showSessionContext()) {
                       <div class="mt-0.5 flex min-w-0 items-center gap-2">
-                        @if (activeSession()?.agent; as agent) {
-                          <!-- Agent first, then 12 px before the datasources (R57). -->
+                        @if (activeSession()?.workflowRef; as workflowRef) {
+                          <!-- Workflow first, then 12 px before the datasources (R57). -->
                           <lucide-angular
-                            [img]="Sparkles"
+                            [img]="Workflow"
                             [size]="14"
                             class="shrink-0 text-fg-muted"
                           />
                           <span
                             class="shrink-0 text-[10px] font-medium tracking-[0.08em] text-fg-muted uppercase"
-                            >Agent</span
+                            >Workflow</span
                           >
                           <span
-                            data-testid="session-agent"
-                            class="chip chip-neutral mr-1 min-w-0"
+                            data-testid="session-workflow"
+                            class="chip chip-neutral mr-1 min-w-20"
+                            [attr.title]="'Workflow: ' + workflowLabel(workflowRef)"
                             ><span class="max-w-48 truncate">{{
-                              agentLabel(agent)
+                              workflowLabel(workflowRef)
                             }}</span></span
                           >
                         }
@@ -626,39 +627,43 @@
                     class="card w-full max-w-[920px] p-4"
                   >
                     <div class="relative mb-3 flex flex-col gap-1.5">
-                      <span class="field-label" id="new-session-agent-label"
-                        >Agent</span
+                      <span class="field-label" id="new-session-workflow-label"
+                        >Workflow</span
                       >
                       <button
                         type="button"
-                        id="new-session-agent"
-                        data-testid="new-session-agent"
+                        id="new-session-workflow"
+                        data-testid="new-session-workflow"
                         class="field flex items-center gap-2 text-left text-[14px]"
+                        role="combobox"
                         aria-haspopup="listbox"
-                        aria-labelledby="new-session-agent-label new-session-agent"
-                        [attr.aria-expanded]="composerAgentMenuOpen()"
+                        aria-labelledby="new-session-workflow-label"
+                        [attr.aria-expanded]="composerWorkflowMenuOpen()"
                         [attr.aria-controls]="
-                          composerAgentMenuOpen() ? 'new-session-agent-list' : null
+                          composerWorkflowMenuOpen()
+                            ? 'new-session-workflow-list'
+                            : null
                         "
                         [attr.aria-activedescendant]="
-                          composerAgentMenuOpen()
-                            ? 'new-session-agent-option-' + composerAgentActive()
+                          composerWorkflowMenuOpen()
+                            ? 'new-session-workflow-option-' +
+                              composerWorkflowActive()
                             : null
                         "
                         (click)="
-                          composerAgentMenuOpen()
-                            ? closeComposerAgentMenu()
-                            : openComposerAgentMenu()
+                          composerWorkflowMenuOpen()
+                            ? closeComposerWorkflowMenu()
+                            : openComposerWorkflowMenu()
                         "
-                        (keydown)="onComposerAgentKeydown($event)"
+                        (keydown)="onComposerWorkflowKeydown($event)"
                       >
                         <lucide-angular
-                          [img]="Sparkles"
+                          [img]="Workflow"
                           [size]="14"
                           class="shrink-0 text-fg-muted"
                         />
                         <span class="min-w-0 flex-1 truncate">{{
-                          composerAgentName()
+                          composerWorkflowName()
                         }}</span>
                         <lucide-angular
                           [img]="ChevronDown"
@@ -666,44 +671,47 @@
                           class="shrink-0 text-fg-muted"
                         />
                       </button>
-                      @if (composerAgentMenuOpen()) {
+                      @if (composerWorkflowMenuOpen()) {
                         <button
                           type="button"
                           tabindex="-1"
-                          aria-label="Close agent menu"
+                          aria-label="Close workflow menu"
                           class="fixed inset-0 z-20 cursor-default"
-                          (click)="closeComposerAgentMenu()"
+                          (click)="closeComposerWorkflowMenu()"
                         ></button>
                         <div
-                          id="new-session-agent-list"
+                          id="new-session-workflow-list"
                           role="listbox"
-                          aria-label="Agent"
+                          aria-label="Workflow"
                           class="menu absolute top-full right-0 left-0 z-30 mt-1 max-h-80 overflow-y-auto"
                         >
                           @for (
-                            row of composerAgentRows();
-                            track row.key;
+                            row of composerWorkflowRows();
+                            track row.id;
                             let i = $index
                           ) {
                             <div
                               role="option"
-                              [id]="'new-session-agent-option-' + i"
-                              [attr.data-agent-key]="row.key"
-                              [attr.aria-selected]="row.key === composerAgentKey()"
+                              [id]="'new-session-workflow-option-' + i"
+                              [attr.data-workflow-id]="row.id"
+                              [attr.aria-selected]="row.id === composerWorkflowId()"
                               [attr.aria-disabled]="row.disabledReason ? true : null"
                               class="flex flex-col rounded-lg px-2.5 py-2"
                               [class.cursor-pointer]="!row.disabledReason"
                               [class.cursor-not-allowed]="!!row.disabledReason"
                               [class.bg-surface-selected]="
-                                row.key === composerAgentKey() ||
-                                (i === composerAgentActive() && !row.disabledReason)
+                                row.id === composerWorkflowId() ||
+                                (i === composerWorkflowActive() &&
+                                  !row.disabledReason)
                               "
                               [class.opacity-70]="!!row.disabledReason"
                               (mousedown)="$event.preventDefault()"
                               (mouseenter)="
-                                row.disabledReason ? null : composerAgentActive.set(i)
+                                row.disabledReason
+                                  ? null
+                                  : composerWorkflowActive.set(i)
                               "
-                              (click)="chooseComposerAgent(row.key)"
+                              (click)="chooseComposerWorkflow(row.id)"
                             >
                               <span class="truncate text-[13px] text-fg">{{
                                 row.name
@@ -727,8 +735,8 @@
                       }
                       <span
                         class="text-[12px] text-fg-muted"
-                        data-testid="new-session-agent-description"
-                        >{{ composerAgentDescription() }}</span
+                        data-testid="new-session-workflow-description"
+                        >{{ composerWorkflowDescription() }}</span
                       >
                     </div>
                     <label class="flex flex-col gap-1.5">
@@ -797,7 +805,7 @@
                           [title]="
                             composerPicksDatasets()
                               ? 'Name the session and select at least one dataset'
-                              : 'Start a session with this agent'
+                              : 'Start a session with this workflow'
                           "
                           class="btn btn-primary"
                         >
@@ -813,14 +821,14 @@
                   </div>
 
                   @if (!composerPicksDatasets()) {
-                    <!-- The agent's own datasets, read-only -->
+                    <!-- The workflow's own datasets, read-only -->
                     <div
                       class="mt-8 w-full max-w-[920px]"
-                      data-testid="new-session-agent-datasets"
+                      data-testid="new-session-workflow-datasets"
                     >
                       <p class="field-label">Datasets</p>
                       <div class="mt-2 flex flex-wrap gap-2">
-                        @for (name of composerAgentDatasets(); track name) {
+                        @for (name of composerWorkflowDatasets(); track name) {
                           <span class="chip chip-neutral">{{ name }}</span>
                         }
                       </div>
