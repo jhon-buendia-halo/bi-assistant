@@ -1858,10 +1858,65 @@ The app becomes workflow-first: a chat runs a **workflow** defined in code, and 
 - **Acceptance:** unit tests for the three step functions, the catalogue entry, input validation and the drift test; a backend e2e for 118 (success, failed step, missing field, chat workflow refused); `frontend/e2e/workflows.spec.ts` with `@demo @story-1.23.9` (open the Sequential test workflow, type a text, Run, see three Done steps and the summary; an empty text shows Clean text Failed and the other two Skipped); the axe scan of the run page in both themes; builds, unit tests, lint and check-specs green.
 - **Notes:** requested on 2026-11-11 ("workflows trigger workflows, not chats; we'll define the input as we go"). The user chose: all workflows become run workflows (the four existing ones in 1.23.10), a code-only test workflow, results shown on the page and not stored.
 
-#### 1.23.10 — The four chat workflows become run workflows  `📋 Planned`
-- **Intent:** no workflow opens a chat: Assistant, Questions to Insights v2, RFP Builder and Data Readiness Agent run on an input like the test workflow.
-- **Scope:** to be written once the user decides how chats start after this (see the epic spec's open question).
-- **Notes:** requested on 2026-11-11 together with 1.23.9.
+Stories 1.23.10–1.23.27 retire chats: every workflow runs once on a typed input, runs are stored, past chats open read-only (ADR-0041). Plan and contract: [docs/plans/m1-23-retire-chats.md](docs/plans/m1-23-retire-chats.md); its section 11.1 maps the plan's ids (1.24.x, 1.25.x) to these. Phase A is 1.23.11–1.23.22, Phase B 1.23.23–1.23.25, Phase C 1.23.26–1.23.27. Requested on 2026-11-11; the user kept every phase in this epic and branch.
+
+#### 1.23.10 — The workflow page as a designer: graph canvas in the middle, configuration on the right  `🚧 In progress`
+- **Intent:** a workflow's page looks like a workflow designer: its graph on a central canvas (Start → steps → End, kind badges, zoom), and its configuration, inputs, outputs, run and code in tabs of the right-hand panel.
+- **Scope:** plan section 11.2: header with breadcrumb and Execute; the canvas (pure layout function, HTML nodes over SVG connectors, toolbar, pan, selection); the right panel's Workflow, Step, Run and Code tabs; the 1.23.9 run form and result move into Run, with run status chips on the nodes; workflows spec and ui.md 4.4b.
+- **Out of scope:** editing workflows; forks and parallel branches; the agent detail's Graph tab (unchanged).
+- **Acceptance:** layout unit tests; `@demo @story-1.23.10` (v2 opens as a designer, select Analyse → Step tab, Code tab, run the test workflow from Execute with Done chips on its nodes); the 1.23.5 and 1.23.9 scenarios updated; axe in both themes with the panel open; builds, unit tests and check-specs green.
+- **Notes:** from the user's screenshot of a workflow designer (2026-11-11). Frontend only; built first so the run stories add their inputs to the Run tab.
+
+#### 1.23.11 — Chats retired: ADR-0041, epic spec, glossary and roadmap  `🚧 In progress`
+- **Intent:** the retirement of chats is decided and scoped before code. **Scope:** ADR-0041 (Accepted) with its status pointers; the epic spec amendment; this roadmap; glossary terms Run, Run workflow, Past chat. **Acceptance:** check-specs green. **Notes:** plan 1.24.1.
+
+#### 1.23.12 — Streamed runs of agent workflows on the backend  `📋 Planned`
+- **Intent:** every agent workflow (Assistant, v2, RFP Builder, Data Readiness, user agents) runs once on a typed input with live progress, through today's turn path on a temporary host. **Acceptance:** a run's model request equals a chat turn's for the same input; per plan 1.24.2.
+
+#### 1.23.13 — The answer view, extracted from the chat  `📋 Planned`
+- **Intent:** the chat's answer rendering (text, data, SQL, visuals, files) becomes a component a run can show, with no visible change. **Acceptance:** per plan 1.24.3. Parallel with 1.23.12.
+
+#### 1.23.14 — Stored runs, the run history API and run files  `📋 Planned`
+- **Intent:** runs of agent workflows are stored (`workflow_runs`), listed and downloadable. **Acceptance:** per plan 1.24.4.
+
+#### 1.23.15 — Run the Assistant, Questions to Insights v2 and user agents from their page  `📋 Planned`
+- **Intent:** from the designer's Run tab, ask a question over picked datasets and see the answer, with Follow up carrying one earlier run. **Acceptance:** per plan 1.24.5, with `@demo @story-1.23.15`.
+
+#### 1.23.16 — Run the Data Readiness Agent on a dataset  `📋 Planned`
+- **Acceptance:** per plan 1.24.6; reports record the run that made them.
+
+#### 1.23.17 — Run the RFP Builder one exchange at a time  `📋 Planned`
+- **Acceptance:** per plan 1.24.7: one run per exchange keyed by the RFP id, with Continue.
+
+#### 1.23.18 — Move the request-recording E2E specs from chats to runs  `📋 Planned`
+- **Acceptance:** per plan 1.24.8 (tests only).
+
+#### 1.23.19 — Rate a run's answer: verified queries from runs  `📋 Planned`
+- **Acceptance:** per plan 1.24.9.
+
+#### 1.23.20 — Monitoring shows runs  `📋 Planned`
+- **Acceptance:** per plan 1.24.10.
+
+#### 1.23.21 — Runs replace Sessions on the rail; past chats open read-only  `📋 Planned`
+- **Acceptance:** per plan 1.24.11; no stored session is lost or migrated.
+
+#### 1.23.22 — Chats can no longer start  `📋 Planned`
+- **Acceptance:** per plan 1.24.12, including the desktop readiness probe on `GET /health`. Last story of Phase A.
+
+#### 1.23.23 — Try it: run an agent's draft instead of a preview chat  `📋 Planned`
+- **Acceptance:** per plan 1.25.2.
+
+#### 1.23.24 — Deep analysis as a run workflow  `📋 Planned`
+- **Acceptance:** per plan 1.25.3.
+
+#### 1.23.25 — Visual actions on a run's result  `📋 Planned`
+- **Acceptance:** per plan 1.25.4.
+
+#### 1.23.26 — Extract the turn engine; evals and dev scripts on run hosts  `📋 Planned`
+- **Acceptance:** per plan 1.25.5.
+
+#### 1.23.27 — Remove the chat write paths and specs  `📋 Planned`
+- **Acceptance:** per plan 1.25.6; past chats stay readable.
 ---
 
 ## Release 2 — Multi-user  (no target date yet)

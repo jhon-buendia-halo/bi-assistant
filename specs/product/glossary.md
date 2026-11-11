@@ -140,6 +140,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Panel item.** One thing an agent showed in the right panel with `show_in_panel`, saved on the *session* with the time it was shown: a workspace file, a Markdown document, a query result table or a *visual*. The latest one is what the panel opens on; every one is listed in the *session panel*'s shown-items menu. See [agent-panel](../capabilities/agent-panel/spec.md).
 
+**Past chat.** A *session* saved before chats were retired. It stays on disk and opens read-only under Runs: its transcript, visuals and files, and Delete. No chat can continue (ADR-0041).
+
 **Pin.** A user's mark on an agent, built-in or user-built, so it can be found quickly. Pins are stored locally and survive a restart.
 
 **Plan design.** One benefit plan a client offers on a *line of coverage*: its carrier, funding type (for example fully insured or self-funded), plan type and state, with the financials of its coverage (premiums, rates by tier, enrolment, contributions and fees).
@@ -169,6 +171,10 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **RFP package.** What the *RFP Builder* hands the consultant for one *RFP*: the RFP document in Markdown and PDF, the four *exhibits* as CSV files and a manifest, together in one zip that downloads from the chat. It is regenerated from the stored record and the live data on every export.
 
 **Row cap.** A limit on rows returned or stored. See [non-functional.md](non-functional.md). A result clipped by a cap is marked *truncated*.
+
+**Run.** One execution of a *workflow* on a typed input: its steps run once and each reports its status and output. A run of an agent workflow is stored and listed under Runs; a run can carry one earlier run as context (Follow up, a clarification answer, the RFP Builder's Continue). Replaces the chat (ADR-0041).
+
+**Run workflow.** A *workflow* that is started by a *run* on its typed input fields, defined in code, rather than by a chat. Since ADR-0041 every workflow is a run workflow.
 
 **Sample fixture.** A bundled sample database the app can provision for testing and evals: World Cup (2018 and 2022), Formula 1, Intellify (an employee-benefits data model with synthetic data) and US Health (a synthetic Mercer US Health & Benefits business: clients, plans, claims, benchmarks, surveys, life/absence/disability and strategy). Set up from Settings, Testing Data. Also called *test data* or *sample*.
 

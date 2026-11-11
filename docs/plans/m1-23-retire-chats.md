@@ -756,3 +756,50 @@ Only those whose answer changes what gets built. Each has a recommended answer.
 5. **Does the agent editor's preview become Try it, a run of the draft?**
    - Recommended: **yes, in Phase B** (1.25.2).
    - Consequence: if the preview should stay a chat, the preview session and the chat stream stay for good, Phase C keeps them, and "chats are retired" has one exception, in the editor.
+
+## 11. Decisions of 2026-11-11 (after this plan was written)
+
+The user decided:
+- **Everything stays in epic M1-23, on the branch `feat/M1-23-workflow-first`** (one PR). No M1-24 or M1-25. The old 1.23.10 placeholder is replaced.
+- **The five open questions take the recommended answers:** runs of agent workflows are stored; existing sessions stay on disk and open read-only as past chats; the RFP Builder runs one exchange per run with Continue; a run can carry one earlier run as context; the agent editor's preview becomes Try it in Phase B.
+- **A new first story: the workflow page becomes a designer-style layout** (1.23.10 below), from a screenshot the user gave (a workflow designer with the workflow graph in a central canvas and the configuration in a right-hand panel with tabs).
+
+### 11.1 Numbering in M1-23
+
+Wherever this plan says a story id, read it with this map. Content and order do not change; 1.25.1 (an epic spec for M1-25) is dropped.
+
+| Plan id | M1-23 id | | Plan id | M1-23 id |
+|---|---|---|---|---|
+| (new) workflow page layout | **1.23.10** | | 1.24.8 | 1.23.18 |
+| 1.24.1 docs | 1.23.11 | | 1.24.9 | 1.23.19 |
+| 1.24.2 | 1.23.12 | | 1.24.10 | 1.23.20 |
+| 1.24.3 | 1.23.13 | | 1.24.11 | 1.23.21 |
+| 1.24.4 | 1.23.14 | | 1.24.12 | 1.23.22 |
+| 1.24.5 | 1.23.15 | | 1.25.2 | 1.23.23 |
+| 1.24.6 | 1.23.16 | | 1.25.3 | 1.23.24 |
+| 1.24.7 | 1.23.17 | | 1.25.4 | 1.23.25 |
+| | | | 1.25.5 | 1.23.26 |
+| | | | 1.25.6 | 1.23.27 |
+
+### 11.2 Story 1.23.10 — the workflow page as a designer: graph canvas in the middle, configuration on the right
+
+Frontend only. It reshapes the workflow page of 1.23.5/1.23.9; the run stories (1.23.15–1.23.17) then add their inputs to the Run tab instead of inventing a layout.
+
+- **Header** (page top, full width): breadcrumb `Workflows / <name>` (the first part is a link back to the list, `workflow-breadcrumb`), the workflow name as `h1`, its id in monospace, and on the right the primary action: **Execute** (`workflow-execute`, rocket icon) for a run workflow, which opens the right panel on **Run**; **Start chat** for a chat workflow (until 1.23.22 removes it).
+- **Canvas** (the main content area, `workflow-canvas`): a dotted-grid background (`surface-muted` dots on `surface`), the graph drawn top to bottom and centred:
+  - a round **Start** node, then one node per step, then a round **End** node;
+  - a step node is a rounded rectangle, about 280 × 64 px: the step title in 14 px `fg-strong`, the step id under it in 12 px monospace `fg-muted`, and a kind badge on the right: `CODE` (neutral) or `LLM` (info); the agent step also shows its agent name and `≤ <n> steps`;
+  - vertical connectors with arrowheads; each connector carries the fields the step above passes on (11 px monospace, beside the line);
+  - each step's other exits as a small red (fails) or grey (stops) note at the node's right edge;
+  - **toolbar** at the canvas top-left (`workflow-canvas-toolbar`): zoom out, the zoom level (`75%`… `150%`, default 100%), zoom in, fit to screen; the canvas scrolls when the graph is larger than it, and dragging the background pans it;
+  - clicking or pressing Enter/Space on a node selects it (`aria-pressed`, `border-selected` ring) and opens the right panel on **Step**; clicking the background clears the selection.
+  - The layout (node positions, connector paths, canvas size) is a pure function of the workflow's steps, unit-tested; nodes are HTML buttons over an SVG layer of connectors, so they are keyboard- and screen-reader-accessible.
+- **Right panel** — the app's existing Details panel (`complementary` "Details panel"), opened when the page opens, resizable and collapsible as today. On this page it holds a tab strip (`workflow-panel-tab-<id>`):
+  - **Workflow** (default): Name, Id, Description, Trigger (`Runs on an input` / `Runs in a chat`), **Input parameters** (one row per input field: key, label, type, `required`), **Output** (the last step's output fields), **Agents** (the agents its steps call, each opening the agent page).
+  - **Step**: the selected step's number and title, Id, Kind, Summary, Input, Output, Other exits, and for an agent step Agent, Tools and Max steps. With no selection: `Select a step in the graph to see its configuration.`
+  - **Run** (run workflows only): the input form, **Execute** and the per-step result of 1.23.9 (same test ids: `workflow-input-<name>`, `workflow-run`, `workflow-run-result`, `workflow-run-step-<id>`, `workflow-run-output`), moved here from the page body. While a run is shown, each node on the canvas shows its step's run status (Done ✓ / Failed ✗ / Skipped) as a small chip.
+  - **Code**: the workflow definition as the API returns it (`GET /workflows/:id`), read-only, pretty JSON in a `<pre>`, with a Copy button.
+- **What goes away from the page body:** the horizontal 1.23.1 drawing, the details card and the Agents list (they move to the canvas and the panel). The agent detail's Graph tab keeps the 1.23.1 drawing unchanged.
+- **Widths:** at 1440 px the content area is about 960 px with the panel closed and 554 px with it open; the canvas must stay usable at 554 px (fit to screen picks the zoom), and the panel's forms must not overflow at its minimum width.
+- **Specs:** `specs/capabilities/workflows/spec.md` (the page rules and Feature scenarios), `specs/system/ui.md` 4.4b (the layout, tokens grepped from `frontend/src/styles/tokens.css`).
+- **Acceptance:** unit tests for the layout function (positions, connectors, canvas size for 1, 3 and 4 steps) and the panel tabs; `frontend/e2e/workflows.spec.ts` updated: `@demo @story-1.23.10` *A workflow opens as a designer* — open Workflows → Questions to Insights v2: the canvas shows Start, the four steps in order with their badges, End; the right panel is open on Workflow with its input parameters and output; click `Analyse` → the panel's Step tab shows its tools and `Max steps 15`; open Code and see the JSON; open the Sequential test workflow, click Execute → the Run tab; type a text, Execute, see the result and `Done` chips on the three canvas nodes. The existing 1.23.5 and 1.23.9 scenarios are updated to the new places; the axe scan passes on the page in both themes, panel open; builds, unit tests and check-specs green.
