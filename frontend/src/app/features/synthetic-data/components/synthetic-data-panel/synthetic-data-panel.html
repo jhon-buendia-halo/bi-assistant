@@ -1,0 +1,126 @@
+<div class="flex flex-col gap-5">
+  <div>
+    <h2 class="text-[16px] leading-6 font-normal text-fg-strong">
+      Profile &amp; synthesize
+    </h2>
+    @if (supported()) {
+      <p class="mt-1 max-w-3xl text-[13px] text-fg-muted">
+        Sample up to 1,000 rows per table to see how the data looks, then
+        generate a synthetic copy as a SQL script. Sampled statistics are
+        approximate; Data readiness scores use exact counts. Nothing is stored
+        and nothing is written to the datasource.
+      </p>
+    }
+  </div>
+
+  @if (!supported()) {
+    <p class="text-[13px] text-fg-muted" data-testid="synth-unsupported">
+      Profiling a sample works for PostgreSQL and Databricks datasets.
+    </p>
+  } @else {
+    <fieldset class="flex flex-col gap-2" [disabled]="running()">
+      <legend class="sr-only">Tables to profile</legend>
+      <div class="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          class="btn btn-outline"
+          data-testid="synth-select-all"
+          (click)="selectAll()"
+        >
+          Select all
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline"
+          data-testid="synth-select-none"
+          (click)="selectNone()"
+        >
+          Clear
+        </button>
+        <span class="text-[12px] text-fg-muted" data-testid="synth-table-count"
+          >{{ selected().length }} of {{ allTables().length }} tables</span
+        >
+      </div>
+      <ul class="flex max-h-60 flex-col gap-1 overflow-y-auto">
+        @for (key of allTables(); track key) {
+          <li>
+            <label class="flex items-center gap-2 text-[13px] text-fg">
+              <input
+                type="checkbox"
+                [attr.data-testid]="'synth-table-' + key"
+                [checked]="isChecked(key)"
+                (change)="toggle(key)"
+              />
+              <span>{{ key }}</span>
+            </label>
+          </li>
+        }
+      </ul>
+      @if (tooMany()) {
+        <p class="text-[12px] text-on-warning-soft" data-testid="synth-too-many">
+          Choose at most {{ tablesMax }} tables.
+        </p>
+      }
+    </fieldset>
+
+    <div class="flex items-center gap-2">
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-testid="synth-profile"
+        [disabled]="!canProfile()"
+        (click)="runProfile()"
+      >
+        @if (running()) {
+          <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+          <span>Sampling {{ runningCount() }} tables…</span>
+        } @else {
+          <span>Profile sample</span>
+        }
+      </button>
+      @if (running()) {
+        <button
+          type="button"
+          class="btn btn-outline"
+          data-testid="synth-cancel"
+          (click)="cancel()"
+        >
+          Cancel
+        </button>
+      }
+    </div>
+
+    @if (error(); as message) {
+      <div
+        class="flex items-center gap-3 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+        role="alert"
+        data-testid="synth-error"
+      >
+        <span class="flex-1">{{ message }}</span>
+        <button
+          type="button"
+          class="btn btn-outline"
+          data-testid="synth-retry"
+          (click)="runProfile()"
+        >
+          Retry
+        </button>
+      </div>
+    }
+
+    @if (profile(); as p) {
+      <div class="flex flex-col gap-4" data-testid="synth-profile-view">
+        <p class="text-[13px] text-fg-muted" data-testid="synth-profile-summary">
+          {{ summary() }}
+        </p>
+        @for (table of p.tables; track table.key) {
+          <app-sampled-table-card
+            [table]="table"
+            [tables]="p.tables"
+            [relationships]="p.relationships"
+          />
+        }
+      </div>
+    }
+  }
+</div>

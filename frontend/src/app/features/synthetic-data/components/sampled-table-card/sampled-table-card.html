@@ -1,0 +1,81 @@
+<section
+  class="rounded-lg border border-border bg-surface"
+  [attr.data-testid]="'synth-table-card-' + table().key"
+>
+  <header class="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+    <h3 class="text-[14px] font-normal text-fg-strong">{{ table().name }}</h3>
+    <span class="text-[12px] text-fg-muted">{{ table().namespace }}</span>
+    <span
+      class="rounded-full bg-info-soft px-2.5 py-0.5 text-[12px] text-on-info-soft"
+      [attr.data-testid]="'synth-method-' + table().key"
+      [attr.title]="methodTip()"
+      >{{ methodText() }}</span
+    >
+  </header>
+  @if (table().error; as err) {
+    <p
+      class="m-4 rounded-md bg-danger-soft px-3 py-2 text-[12px] text-on-danger-soft"
+      [attr.data-testid]="'synth-table-error-' + table().key"
+    >
+      {{ err }}
+    </p>
+  }
+  <div class="overflow-x-auto">
+    <table class="w-full text-left text-[12px]">
+      <thead class="text-fg-muted">
+        <tr>
+          <th scope="col" class="px-4 py-2 font-normal">Column</th>
+          <th scope="col" class="px-2 py-2 font-normal">Type</th>
+          <th scope="col" class="px-2 py-2 font-normal">Nulls %</th>
+          <th scope="col" class="px-2 py-2 font-normal">Distinct</th>
+          <th scope="col" class="px-2 py-2 font-normal">Range or length</th>
+          <th scope="col" class="px-2 py-2 font-normal">Top values or patterns</th>
+          <th scope="col" class="px-2 py-2 font-normal">Generated as</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (col of table().columns; track col.name) {
+          <tr
+            class="border-t border-border align-top"
+            [attr.data-testid]="'synth-col-' + table().key + '-' + col.name"
+          >
+            <td class="px-4 py-2 text-fg-strong">{{ col.name }}</td>
+            <td class="px-2 py-2 text-fg-muted">{{ col.type }}</td>
+            <td class="px-2 py-2">{{ percent(col.nullFraction) }}</td>
+            <td class="px-2 py-2">{{ col.distinctCount }}</td>
+            <td class="px-2 py-2">{{ rangeText(col) }}</td>
+            <td class="px-2 py-2">
+              @if (col.topValues && col.topValues.length) {
+                <span class="flex flex-wrap gap-1">
+                  @for (v of shownTop(col); track v.value) {
+                    <span class="rounded bg-neutral-soft px-1.5 py-0.5 text-on-neutral-soft"
+                      >{{ v.value }} · {{ percent(v.fraction) }}</span
+                    >
+                  }
+                  @if (moreTop(col) > 0) {
+                    <span class="text-fg-muted">+{{ moreTop(col) }} more</span>
+                  }
+                </span>
+              } @else if (col.patterns && col.patterns.length) {
+                <span class="flex flex-wrap gap-1">
+                  @for (p of col.patterns; track p.shape) {
+                    <code class="rounded bg-neutral-soft px-1.5 py-0.5 font-mono text-on-neutral-soft">{{
+                      p.shape
+                    }}</code>
+                  }
+                </span>
+              }
+            </td>
+            <td class="px-2 py-2">
+              <span
+                class="rounded-full bg-primary-soft px-2.5 py-0.5 text-on-primary-soft"
+                [attr.title]="col.note ?? null"
+                >{{ strategy(col) }}</span
+              >
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
