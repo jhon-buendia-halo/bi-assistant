@@ -248,7 +248,7 @@ Capability: [datasets](../capabilities/datasets/spec.md).
 Capability: [datasets](../capabilities/datasets/spec.md), data from [datasources](../capabilities/datasources/spec.md).
 
 - Header: title "New dataset" or "Edit dataset", subtitle "Catalogs, schemas and entities available through the selected datasource.", and (when editing) "Updated <date>". Right-aligned controls: a **Datasource** `field` select (`aria-label="Datasource"`, options "<name> · <PostgreSQL|Databricks>", "No datasources" when empty), a **Refresh inventory** `btn btn-outline` icon button (`aria-label="Refresh inventory"`, title "Re-read catalogs, schemas and entities from the datasource", spinning while loading), a `field` text input (placeholder `Dataset name`, width 220) and the `btn btn-primary` **Save dataset (<n>)** button where n = included entity count (disabled until a datasource is selected, at least one entity is included and a name is typed; tooltip "Name the dataset and include at least one element"; shows "Saving…").
-- **Tabs** (a saved dataset only; `app-ontology-panel` hosts the second): an underlined tab strip under the header (bottom `border`; the active tab has a `border-selected` underline and `fg-strong` text, others `fg-muted`), **Schema** (`data-testid="dataset-tab-schema"`, selected on open) and **Ontology** (`data-testid="dataset-tab-ontology"`). Schema shows the body below; Ontology replaces the body with the Ontology tab (4.8). A new dataset shows no strip: the body is the Schema content. The tab strip and the header controls keep the page's unsaved edits when switching.
+- **Tabs** (a saved dataset only; `app-ontology-panel` hosts the second and `app-synthetic-data-panel` the third): an underlined tab strip under the header (bottom `border`; the active tab has a `border-selected` underline and `fg-strong` text, others `fg-muted`), **Schema** (`data-testid="dataset-tab-schema"`, selected on open), **Ontology** (`data-testid="dataset-tab-ontology"`) and **Profile & synthesize** (`data-testid="dataset-tab-synthesize"`, `id="dataset-tab-synthesize"`, lucide `FlaskConical`, panel `dataset-panel-synthesize`). Schema shows the body below; Ontology replaces the body with the Ontology tab (4.8); Profile & synthesize replaces it with the tab of 4.3a. The Left and Right arrow keys cycle over the three tabs, in order, wrapping at both ends. A new dataset shows no strip: the body is the Schema content. The tab strip and the header controls keep the page's unsaved edits when switching.
 - Body states:
   - *Awaiting choice* (nothing is read until requested): text "Pick the datasource you want to browse, then load its entities." and the hint "Nothing is read until you load, so a sleeping Databricks warehouse never blocks switching to another datasource." with a `btn btn-primary` **Load entities from <datasource label>** (play icon, `data-testid="load-inventory"`).
   - *Loading*: spinner + `Loading inventory from <datasource label>…`, hint "The first load can take a while if the Databricks warehouse is starting up. You can switch datasource above at any time." and a `btn btn-outline` **Cancel** button.
@@ -258,6 +258,47 @@ Capability: [datasets](../capabilities/datasets/spec.md), data from [datasources
   - **Schema notes** (per dataset, kept in the page until **Save dataset**). A schema row with a layer shows a `chip chip-info` layer chip ("Landing", "Normalized" or "Consumption", `data-testid="schema-layer-<catalog>-<schema>"`) after its entity count; its tooltip is the schema's description, or "Layer" when it has none. A schema with a description but no layer shows a `chip chip-neutral` "note" chip (`data-testid="schema-note-<catalog>-<schema>"`) with the description as tooltip. Selecting a schema row shows, at the top of the right-hand details panel and above the schema's existing details, a **Layer** select (`data-testid="schema-layer-select"`, options None, Landing, Normalized, Consumption) and a **Description** textarea (`data-testid="schema-description"`, placeholder "What this schema holds and what it is used for", max 500 characters), with the hint "Saved with the dataset."
   - Below the tree, separated by a rule, the Metrics panel (4.15) scoped to the included entities.
 - Selecting a node re-opens the right panel on its details (4.14), which hosts the include/remove toggle.
+
+### 4.3a Profile & synthesize tab (dataset editor)
+
+Capability: [synthetic-data](../capabilities/synthetic-data/spec.md). Decision: ADR-0037.
+
+- Shown as the **Profile & synthesize** tab of the dataset editor (4.3) when a saved dataset is open; the component is `app-synthetic-data-panel` (`frontend/src/app/features/synthetic-data/components/synthetic-data-panel/`) with the dataset as its input. The tab's own `h2` heads it.
+- A dataset on a `rest` datasource shows the tab with the empty-state text `Profiling a sample works for PostgreSQL and Databricks datasets.` and no controls.
+- **Header:** `h2` "Profile & synthesize". Note, 13 px `fg-muted`: `Sample up to 1,000 rows per table to see how the data looks, then generate a synthetic copy as a SQL script. Sampled statistics are approximate; Data readiness scores use exact counts. Nothing is stored and nothing is written to the datasource.`
+- **Table picker:**
+  - one checkbox per table of the dataset (`data-testid="synth-table-<key>"`), all checked by default;
+  - `Select all` and `Clear` (`synth-select-all`, `synth-select-none`);
+  - the count line `<n> of <m> tables` (`synth-table-count`);
+  - more than 50 checked disables Profile sample and shows `Choose at most 50 tables.` (`synth-too-many`).
+- **Profile sample** `btn btn-primary` (`synth-profile`).
+  - While it runs, the button reads `Sampling <n> tables…` with a spinner, and a **Cancel** `btn btn-outline` appears (`synth-cancel`), which aborts the HTTP request.
+  - On error: an inline `danger-soft` block (`synth-error`) showing the server message verbatim, with **Retry**.
+- **Profile view** (`synth-profile-view`):
+  - Summary line (`synth-profile-summary`): `<n> tables · sampled <relative time> · expires in <m> min`.
+  - One card per table (`synth-table-card-<key>`): the table name; a method chip (`synth-method-<key>`) reading `Sampled 1,000 of ~2.3M rows`, `Read all 32 rows` or `First 1,000 rows (sampling not supported here)`, with the tooltip `TABLESAMPLE`, `full read` or `LIMIT`; and the error line (`synth-table-error-<key>`) when sampling that table failed.
+  - A column table per card, one row per column (`synth-col-<key>-<column>`), with the columns Column, Type, Nulls %, Distinct, Range or length, Top values or patterns, and Generated as.
+    - **Generated as** is a chip per strategy (copy below).
+    - Top values show at most 5, followed by `+<k> more`.
+    - Patterns show the shape in monospace.
+
+| Strategy | Chip text |
+|---|---|
+| `sequence` | Sequence 1…n |
+| `uuid` | Random UUIDs |
+| `unique-pattern` | Unique values like the pattern |
+| `foreign-key` | Keys of `<parent table>` |
+| `categorical` | Reuses <k> values |
+| `numeric-range` | Numbers in the observed range |
+| `temporal-range` | Dates in the observed range |
+| `boolean-rate` | True <p> % |
+| `format-template` | Example emails, phones, URLs, UUIDs or dates (per rule) |
+| `pattern` | Text like the pattern |
+| `words` | Placeholder words |
+| `null-only` | NULL (type not synthesized) |
+| `constant` | Empty value (type not synthesized) |
+
+- The Generate form (`synth-generate-form`) and its copy arrive with the script story and are specified here when it ships.
 
 ### 4.4 Agent Hub
 

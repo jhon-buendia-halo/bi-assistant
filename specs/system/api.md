@@ -42,7 +42,7 @@ interface ActionResult { ok: boolean; message: string; /* + endpoint-specific pa
 - On success: `{ ok: true, message: "<human sentence>", ...payload }`.
 - `message` is user-displayable and clients show it verbatim in toasts or inline errors. Exact success sentences are listed per endpoint because UI tests assert some of them.
 
-**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the deep-analysis download, and the whole ontology and personas controllers.
+**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the deep-analysis download, the whole ontology and personas controllers, and the data-readiness and synthetic-data controllers.
 
 ```ts
 interface HttpErrorBody { statusCode: number; message: string | string[]; error: string }   // NestJS default
@@ -1029,6 +1029,34 @@ Controller prefix `/data-readiness`. Capability: [data-readiness](../capabilitie
 #### 110. `GET /data-readiness/assessments/:id`
 - Response `200`: the full `ReadinessReport`.
 - Errors: 404 `"Readiness report \"<id>\" not found"`.
+
+### 2.18 Synthetic data
+
+Controller prefix `/synthetic-data`. Capability: [synthetic-data](../capabilities/synthetic-data/spec.md). Decision: ADR-0037. Shapes: `SampledProfile` and its parts are in the capability's Contracts; nothing is stored (profiles live in memory only). **Style B** (1.3): failures are real HTTP statuses with the framework error body. The endpoint does not stream events: it is a synchronous POST, and the UI shows a spinner.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 111 | `POST /synthetic-data/profiles` | Sample a dataset's tables and return the sampled profile (kept 60 min in memory) | yes (Profile & synthesize tab) |
+
+#### 111. `POST /synthetic-data/profiles`
+- Body: `{ datasetName: string; tables?: string[]; sampleSize?: number }`.
+  - `tables` are entity keys of the dataset. Left out or empty, it means every table of the dataset.
+  - `sampleSize` is 1–1000, default 1000.
+- Runs synchronously: reads the dataset, samples each table (up to `sampleSize` rows, native sampling, 15 s per statement), builds the profile from the rows, drops the rows and keeps the profile in memory for 60 minutes (at most 20 profiles).
+- When the client disconnects (the UI's Cancel, or navigating away) the request's `close` event aborts the sampling run.
+- Response `201`: `SampledProfile`.
+- Errors (Style B), the first that applies:
+  - 400 `datasetName is required`
+  - 404 `Dataset "<name>" not found`
+  - 400 `Dataset "<name>" has no datasource`
+  - 400 `Profiling a sample supports PostgreSQL and Databricks datasets only`
+  - 400 `tables must be an array of entity keys`
+  - 400 `"<key>" is not a table of dataset "<name>"`
+  - 400 `Choose at most 50 tables`
+  - 400 `sampleSize must be a whole number from 1 to 1,000`
+  - 404 `Datasource "<id>" not found`
+  - 502 with the connector's message, when the datasource cannot be reached at all (the table list fails)
+  - A single table that cannot be sampled is **not** an error: it gets `error` and `sampledRows: 0`.
 
 ## 3. Streaming and long-running work
 
