@@ -51,6 +51,7 @@ Capability-local vocabulary:
   - `assess_data_readiness` runs an assessment of one session dataset and stores the report.
   - `get_readiness_report` reads a stored report.
   - `list_readiness_reports` lists the stored reports of a session dataset's datasource, newest first.
+  - `profile_data_sample` profiles a sample of a session dataset's tables, and `generate_synthetic_data` saves a synthetic copy as a SQL script the user downloads from the panel ([../synthetic-data/spec.md](../synthetic-data/spec.md) R40-R44, [agents.md](../../system/agents.md) 3.14). Their numbers are approximate and never a readiness score (R29 stands).
   - `describe_entity` and `run_readonly_sql`, the assistant's shared dataset tools, to show the records behind a finding (R4, ADR-0035). They are session-scoped, read-only and guarded as in [agents.md](../../system/agents.md) 3.2 and 3.4.
 
   It SHALL have no workspace tool and no other dataset-browsing tool. A tool SHALL never fail the turn: errors reach the model as `{ error }` text ([agents.md](../../system/agents.md) 3.13).

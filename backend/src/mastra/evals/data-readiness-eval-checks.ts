@@ -496,5 +496,180 @@ export function assessOnlyWithoutReport(): EvalCustomCheck {
   );
 }
 
+// ------------------------------------------------- synthetic data (3.14, D14)
+
+/** The sampled-profile tool (agents.md 3.14). */
+export const PROFILE_SAMPLE_TOOL = 'profile_data_sample';
+/** The synthetic-script tool (agents.md 3.14). */
+export const SYNTHETIC_SCRIPT_TOOL = 'generate_synthetic_data';
+
+/** Words that make a nearby number a sampled statistic. */
+const SAMPLE_WORDS =
+  /\b(null|nulls|missing|empty|distinct|unique|rows?|sampled?|values?|range|min(?:imum)?|max(?:imum)?|between|from|estimate[sd]?|cardinality|percent)\b/i;
+
+/**
+ * Numbers the agent may quote of a sample profile besides the tool's own:
+ * the tool's limits (1,000 rows per table, 20 tables, 40 columns, 5 values).
+ */
+export const SAMPLE_CONSTANTS = [1000, 20, 40, 5, 100];
+
+/**
+ * The sample-like numbers of an answer: a number followed by `%`, or one
+ * within 40 characters of a sample word on its line. Dates, clock times and
+ * list markers are left out, as in `quotedNumbers`.
+ */
+export function quotedSampleNumbers(answer: string): QuotedNumber[] {
+  const quoted: QuotedNumber[] = [];
+  const text = answer
+    .replace(/\d{4}-\d{2}-\d{2}(?:[T ][\d:.]+Z?)?/g, ' ')
+    .replace(/\b\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?\b/g, ' ')
+    .replace(/^\s*\d+[.)]\s/gm, ' ');
+  for (const line of text.split(/\n/)) {
+    for (const match of line.matchAll(
+      /(?<![\w.])-?\d[\d,]*(?:\.\d+)?(?![\w])/g,
+    )) {
+      const raw = match[0];
+      const index = match.index ?? 0;
+      const after = line.slice(index + raw.length, index + raw.length + 2);
+      const window = line.slice(
+        Math.max(0, index - 40),
+        index + raw.length + 40,
+      );
+      if (!/^\s?%/.test(after) && !SAMPLE_WORDS.test(window)) continue;
+      const value = Number(raw.replace(/,/g, ''));
+      if (!Number.isFinite(value)) continue;
+      const decimals = raw.includes('.') ? raw.split('.')[1].length : 0;
+      quoted.push({ value, decimals, context: window.trim() });
+    }
+  }
+  return quoted;
+}
+
+/** The successful outputs of `tool`, as the model saw them. */
+function outputsOf(
+  calls: EvalRawToolCall[],
+  tool: string,
+): Record<string, unknown>[] {
+  return calls
+    .filter((call) => call.name === tool && !call.failed)
+    .map(outputObject)
+    .filter((out): out is Record<string, unknown> => out !== null);
+}
+
+/**
+ * D2, D14: every sample-like number the answer quotes is one the
+ * `profile_data_sample` projection (what the model saw) holds, or a limit
+ * of the tool. An answer quoting such numbers with no successful profile fails.
+ */
+export function sampleNumbersFromTool(): EvalCustomCheck {
+  return drCheck(
+    'every sampled number in the answer is one profile_data_sample returned',
+    ({ answer, toolCalls }) => {
+      const quoted = quotedSampleNumbers(answer);
+      if (!quoted.length) return undefined;
+      const allowed = [
+        ...numbersIn(outputsOf(toolCalls, PROFILE_SAMPLE_TOOL)),
+        ...SAMPLE_CONSTANTS,
+      ];
+      const invented = quoted.filter(
+        (q) => !allowed.some((value) => sameNumber(q, value)),
+      );
+      if (!invented.length) return undefined;
+      return (
+        `the answer quotes ${invented.length} number(s) the sample profile does not hold: ` +
+        invented
+          .slice(0, 5)
+          .map((q) => `${q.value} in "${q.context}"`)
+          .join('; ')
+      ).slice(0, 600);
+    },
+  );
+}
+
+/**
+ * D14: a sampled number is never called a score: "score 87", "score of 87",
+ * "scores: 87", "87 score", "87% score" or "87/100" on any line. Saying the
+ * numbers are not scores ("these are not readiness scores; 12% null") passes.
+ */
+export function sampleNeverAScore(): EvalCustomCheck {
+  return drCheck('no sampled number is called a score', ({ answer }) => {
+    for (const line of answer.replace(/\*\*/g, '').split(/\n/)) {
+      if (
+        /\bscor(?:e|es|ed)\s*(?:of|is|was|at|:|=)?\s*-?\d/i.test(line) ||
+        /\d(?:[\d,]*\.?\d*)\s*%?\s+(?:readiness\s+)?scores?\b/i.test(line) ||
+        /\d+(?:\.\d+)?\s?\/\s?100\b/.test(line)
+      ) {
+        return `the answer calls a number a score: "${line.trim().slice(0, 160)}"`;
+      }
+    }
+    return undefined;
+  });
+}
+
+/** `tool` was called (successfully) with `input[key]` equal to `value`. */
+export function calledWithInput(
+  tool: string,
+  key: string,
+  value: string | number,
+): EvalCustomCheck {
+  return drCheck(`"${tool}" called with ${key} ${value}`, ({ toolCalls }) => {
+    const calls = callsOf(toolCalls, tool).filter((call) => !call.failed);
+    if (!calls.length) {
+      return `no successful ${tool} call; tools: ${names(toolCalls)}`;
+    }
+    return calls.some((call) => callInput(call)[key] === value)
+      ? undefined
+      : `${tool} was called with ${calls
+          .map((call) => JSON.stringify(callInput(call)))
+          .join(' | ')
+          .slice(0, 300)}`;
+  });
+}
+
+/** A successful `profile_data_sample` result profiled `table` (any namespace). */
+export function profileCoversTable(table: string): EvalCustomCheck {
+  return drCheck(`profile_data_sample profiled "${table}"`, ({ toolCalls }) => {
+    const outputs = outputsOf(toolCalls, PROFILE_SAMPLE_TOOL);
+    if (!outputs.length) {
+      return `no successful ${PROFILE_SAMPLE_TOOL} call; tools: ${names(toolCalls)}`;
+    }
+    const tables = outputs.flatMap((out) =>
+      Array.isArray(out['tables'])
+        ? (out['tables'] as Record<string, unknown>[]).map((t) =>
+            fieldText(t?.['table']),
+          )
+        : [],
+    );
+    return tables.some(
+      (key) => key.split('.').pop()?.toLowerCase() === table.toLowerCase(),
+    )
+      ? undefined
+      : `the profile holds ${tables.join(', ') || 'no table'}, not "${table}"`;
+  });
+}
+
+/**
+ * D14: the answer names the script's file name, as the generate tool returned
+ * it, and says it is in the panel.
+ */
+export function namesScriptInPanel(): EvalCustomCheck {
+  return drCheck(
+    'the answer names the script file and says it is in the panel',
+    ({ answer, toolCalls }) => {
+      const outputs = outputsOf(toolCalls, SYNTHETIC_SCRIPT_TOOL);
+      const fileName = fieldText(outputs[outputs.length - 1]?.['fileName']);
+      if (!fileName) {
+        return `no successful ${SYNTHETIC_SCRIPT_TOOL} result; tools: ${names(toolCalls)}`;
+      }
+      if (!answer.includes(fileName)) {
+        return `the answer does not name "${fileName}"`;
+      }
+      return /\bpanel\b/i.test(answer)
+        ? undefined
+        : 'the answer does not say the script is in the panel';
+    },
+  );
+}
+
 /** Re-exported for the set and its spec. */
 export type { EvalCustomCheckInput };

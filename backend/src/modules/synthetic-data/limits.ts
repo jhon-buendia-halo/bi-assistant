@@ -11,6 +11,9 @@ export const SCRIPT_ROWS_MAX = 200000;
 export const INSERT_BATCH_ROWS = 500;
 export const PROFILE_TTL_MS = 3_600_000;
 export const PROFILE_CACHE_MAX = 20;
+/** Chat (agent) limits (agents.md 3.14): tables per call, rows per table, script bytes. */
+export const CHAT_TABLES_MAX = 20;
+export const CHAT_ROWS_PER_TABLE_MAX = 1000;
 export const CHAT_SCRIPT_BYTES_MAX = 262144;
 export const DEFAULT_SEED = 1;
 export const DEFAULT_TARGET_SCHEMA = 'synthetic';

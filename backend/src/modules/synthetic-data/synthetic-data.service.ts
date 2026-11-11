@@ -27,7 +27,11 @@ import type {
   PostgresConfig,
 } from '../datasources/entities/datasource.entity';
 import { DatasourcesService } from '../datasources/datasources.service';
-import { PROFILE_TABLES_MAX, SAMPLE_SIZE_MAX } from './limits';
+import {
+  CHAT_SCRIPT_BYTES_MAX,
+  PROFILE_TABLES_MAX,
+  SAMPLE_SIZE_MAX,
+} from './limits';
 import { ProfileCache } from './profile-cache';
 import type { buildSampledProfile } from './profile';
 import { writerFor } from './dialects';
@@ -49,7 +53,7 @@ import { generateTables } from './generator/generate';
 import { targetNames, validateScriptRequest } from './generator/plan';
 import { writeChunks, XLSX_TYPE, type Download } from './http-stream';
 import { createScript, describeExport } from './script';
-import type { SampledProfile, SyntheticDialect } from './types';
+import type { SampledProfile, ScriptRequest, SyntheticDialect } from './types';
 
 export interface ProfileRequest {
   datasetName?: unknown;
@@ -281,6 +285,70 @@ export class SyntheticDataService {
       [],
       total,
     );
+  }
+
+  /**
+   * The whole `.sql` script of a synthetic copy, for the agent tool
+   * (agents.md 3.14): validated like 112, built in memory and refused past
+   * `maxBytes` (the chat limit, 256 KB) with the text the model sees.
+   */
+  scriptText(
+    profile: SampledProfile,
+    request: Omit<ScriptRequest, 'profileId' | 'format'>,
+    maxBytes = CHAT_SCRIPT_BYTES_MAX,
+  ): {
+    fileName: string;
+    text: string;
+    bytes: number;
+    sha256: string;
+    plan: GenerationPlan;
+  } {
+    const plan = this.plan(profile, {
+      ...request,
+      profileId: profile.profileId,
+      format: 'sql',
+    });
+    const fileName = exportFileName(
+      profile.datasetName,
+      'synthetic',
+      'sql',
+      profile.dialect,
+      plan.seed,
+    );
+    const script = createScript({
+      description: {
+        content: 'synthetic',
+        datasetName: profile.datasetName,
+        datasourceKind: profile.dialect,
+        appVersion: appVersion(),
+        generatedAt: new Date(this.cache.now()),
+        profile,
+        plan,
+        notes: [],
+      },
+      writer: writerFor(profile.dialect),
+      tables: () => generateTables(profile, plan),
+    });
+    // Count every byte, but stop keeping text once past the limit.
+    let parts: string[] | undefined = [];
+    let bytes = 0;
+    for (const chunk of script.chunks()) {
+      bytes += Buffer.byteLength(chunk, 'utf8');
+      if (bytes > maxBytes) parts = undefined;
+      else parts?.push(chunk);
+    }
+    if (!parts) {
+      throw new BadRequestException(
+        `The script would be ${Math.ceil(bytes / 1024)} KB; the chat limit is ${Math.round(maxBytes / 1024)} KB. Ask for fewer rows or use Profile & synthesize on the dataset.`,
+      );
+    }
+    return {
+      fileName,
+      text: parts.join(''),
+      bytes,
+      sha256: script.sha256,
+      plan,
+    };
   }
 
   /** 113. */

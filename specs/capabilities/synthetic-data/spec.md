@@ -2,7 +2,7 @@
 
 A user can profile the tables of a PostgreSQL or Databricks dataset quickly, from a **sample** of their rows, download a synthetic copy of them as a SQL script in the datasource's own dialect (or as CSV or Excel), export the profile, and, behind an explicit confirm, export the real sampled rows. The sampled profile shows each column's type, null rate, distinct count, range, categorical values and text patterns, and says how a synthetic column would be generated. It is an approximate view, separate from [data-readiness](../data-readiness/spec.md), whose statistics stay exact.
 
-Roadmap 1.22.1 ships the sampled profile in the dataset editor; 1.22.2 the generator and the PostgreSQL script; 1.22.3 the Databricks script; 1.22.5 the CSV and Excel formats and the profile export; 1.22.6 the raw sample export. The Data Readiness Agent's tools (1.22.4) are specified here when they ship. The epic is [../../epics/M1-22/spec.md](../../epics/M1-22/spec.md); the decision is ADR-0039 in [../../system/architecture.md](../../system/architecture.md).
+Roadmap 1.22.1 ships the sampled profile in the dataset editor; 1.22.2 the generator and the PostgreSQL script; 1.22.3 the Databricks script; 1.22.5 the CSV and Excel formats and the profile export; 1.22.6 the raw sample export. 1.22.4 gives the Data Readiness Agent two tools for the same profile and script in chat (R40-R44). The epic is [../../epics/M1-22/spec.md](../../epics/M1-22/spec.md); the decision is ADR-0039 in [../../system/architecture.md](../../system/architecture.md).
 
 ## Concepts
 
@@ -118,6 +118,13 @@ Raw sample export (roadmap 1.22.6)
 - R38. The rows SHALL be **re-read on export** with the profile's tables, sample size and `REPEATABLE (7)`, through the same sampler and pooled read-only sessions. The cache keeps statistics only. A table that has changed, or a `limit` read, can give other rows than the ones profiled, and the README says so. The rows SHALL be streamed to the response and dropped: **raw rows leave the server only through this explicit, confirmed download, and never to a log, a cache, a session file or a model.** A table that fails is written with zero rows and its error in the README.
 - R39. A raw `.sql` export SHALL use the dialect writer of the datasource with `CREATE SCHEMA` of the target (default `sample`) and the real values typed by semantic type (an unparseable value is written as a string literal). CSV and Excel follow R32 and R33.
 
+Agent tools (roadmap 1.22.4)
+- R40. The Data Readiness Agent SHALL have two tools for this capability, `profile_data_sample` and `generate_synthetic_data`, with scalar inputs only and the dataset resolution of the readiness tools. Their inputs, outputs and texts are in [../../system/agents.md](../../system/agents.md) 3.14. They are not given to the assistant, Questions to Insights v2 or user agents.
+- R41. **Chat limits:** at most 20 tables per call (no `tables` means every table of the dataset, so a dataset of more than 20 tables needs `tables`), at most 1,000 rows per table, and a script of at most 256 KB. A larger request SHALL be refused with the texts of **Edge cases and errors**, which point to the dataset editor; the editor's limits (R3, R21-R23) are unchanged.
+- R42. `profile_data_sample` SHALL return a projection of the profile of R7-R13 for the model: at most 40 columns per table (`columnsOmitted` counts the rest) and at most five categorical values per column. Its numbers are approximate sample statistics: the agent SHALL NOT call them scores or use them to change a readiness score (R1, [../data-readiness/spec.md](../data-readiness/spec.md) R3).
+- R43. `generate_synthetic_data` SHALL build the `.sql` script of R24-R30 in the dataset's dialect (the `sql` format only; CSV, Excel, the profile export and the raw sample export stay in the editor tab), save it in the session workspace as `synthetic-data/<dataset-slug>-synthetic-<dialect>-seed<seed>.sql` (a second call with the same name overwrites it) and store a `file` panel item titled `Synthetic data — <dataset> (seed <seed>)`. The panel opens it and its Download serves the file ([../agent-panel/spec.md](../agent-panel/spec.md)). The app SHALL NOT run the script.
+- R44. A tool call with no `profileId` SHALL profile the tables first; with a `profileId` from `profile_data_sample` of the same dataset it SHALL reuse that profile, cut to `tables` when given.
+
 ## Edge cases and errors
 
 Exact texts of `POST /synthetic-data/profiles` ([../../system/api.md](../../system/api.md) 111), the first that applies, all Style B:
@@ -147,6 +154,15 @@ Exact texts of `POST /synthetic-data/profile-exports` (113), Style B: 400 `profi
 
 Exact texts of `POST /synthetic-data/sample-exports` (114), Style B, the first that applies: 400 `profileId is required`; 404 `Profile "<id>" expired or not found: profile the tables again`; 400 `confirmRealData must be true: this export contains real rows`; 400 `format must be sql, csv or xlsx`; 400 `targetSchema must be a plain identifier (letters, digits, underscores)` (Databricks: `targetSchema must be schema or catalog.schema (letters, digits, underscores)`). Every input is validated **before** the response headers are written.
 
+Texts of the Data Readiness Agent's tools (R40-R44), returned to the model as `{ error }`, beyond the dataset resolution texts of [../../system/agents.md](../../system/agents.md) 3.13:
+
+- `Synthetic data supports PostgreSQL and Databricks datasets only`
+- `"<name>" is not a table of dataset "<dataset>"`
+- `Choose at most 20 tables in chat; use Profile & synthesize on the dataset for more`
+- `rowsPerTable must be a whole number from 1 to 1,000 in chat`
+- `The script would be <n> KB; the chat limit is 256 KB. Ask for fewer rows or use Profile & synthesize on the dataset.`
+- the texts of 111 and 112 above for the rest (an expired `profileId`, the seed, the target schema).
+
 Other cases:
 - A synthetic request is always validated before any byte is streamed, so a refusal is a plain JSON error and never a half-written file.
 - An expired profile (60 minutes, eviction or restart) makes Generate, Export profile and Export sample rows answer the 404 above; the UI shows `This profile expired. Profile the tables again.`.
@@ -167,7 +183,7 @@ Other cases:
 
 ## Contracts
 
-- Endpoints ([../../system/api.md](../../system/api.md) 2.18): `POST /synthetic-data/profiles` (111, a `201` JSON profile), `POST /synthetic-data/scripts` (112, a streamed attachment in the chosen `format`), `POST /synthetic-data/profile-exports` (113, a CSV or Excel attachment) and `POST /synthetic-data/sample-exports` (114, a streamed attachment of real rows). 112 to 114 answer `200` and write the response themselves. Nothing is stored, so there is no collection and no file on disk ([../../system/data-model.md](../../system/data-model.md): profiles live only in memory).
+- Endpoints ([../../system/api.md](../../system/api.md) 2.18): `POST /synthetic-data/profiles` (111, a `201` JSON profile), `POST /synthetic-data/scripts` (112, a streamed attachment in the chosen `format`), `POST /synthetic-data/profile-exports` (113, a CSV or Excel attachment) and `POST /synthetic-data/sample-exports` (114, a streamed attachment of real rows). 112 to 114 answer `200` and write the response themselves. Nothing is stored by these endpoints, so there is no collection ([../../system/data-model.md](../../system/data-model.md): profiles live only in memory). The only file on disk is the chat script of R43, in the session workspace.
 - Decision: ADR-0039 in [../../system/architecture.md](../../system/architecture.md). Related: [../data-readiness/spec.md](../data-readiness/spec.md) (R29 unchanged), [../datasets/spec.md](../datasets/spec.md) R48 and R50 (the tab), [../datasources/spec.md](../datasources/spec.md) (the read-only guard).
 - Backend module `backend/src/modules/synthetic-data/`; the sampler is `sampleTable` on the PostgreSQL and Databricks profilers, with its interface in `datasources/connectors/sampling.ts`. Layout: [../../system/tech-stack.md](../../system/tech-stack.md).
 - Constants (`synthetic-data/limits.ts`, shared with the frontend mirror): `DATABRICKS_TABLESAMPLE_MAX_BYTES = 50 GiB` (backend only), `SAMPLE_SIZE_MAX = 1000`, `PROFILE_TABLES_MAX = 50`, `PROFILE_TTL_MS = 3_600_000`, `PROFILE_CACHE_MAX = 20`, `ROWS_PER_TABLE_DEFAULT = 100`, `ROWS_PER_TABLE_MAX = 10000`, `SCRIPT_ROWS_MAX = 200000`, `INSERT_BATCH_ROWS = 500`, `DEFAULT_SEED = 1`, `DEFAULT_TARGET_SCHEMA = 'synthetic'` (`'sample'` for a raw export), `TARGET_SCHEMA_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/`.
@@ -317,7 +333,7 @@ Placement: the **Profile & synthesize** tab of the dataset editor, the third tab
 
 ## Flows
 
-E2E: `frontend/e2e/synthetic-data.spec.ts` (the scenarios "Profile a sample of World Cup", "Generate a PostgreSQL script", "The script replays into an empty PostgreSQL database", "Download the synthetic data as CSV and Excel", "Export the profile", "Export the real sample rows after confirming" and "Cancelling the confirm downloads nothing" are automated; the others are not covered yet)
+E2E: `frontend/e2e/synthetic-data.spec.ts` (the scenarios "Profile a sample of World Cup", "Generate a PostgreSQL script", "The script replays into an empty PostgreSQL database", "Download the synthetic data as CSV and Excel", "Export the profile", "Export the real sample rows after confirming", "Cancelling the confirm downloads nothing" and "Generate a synthetic script from the Data Readiness Agent" (`@story-1.22.4`, model stubbed) are automated; the others are not covered yet)
 
 ```gherkin
 Feature: Synthetic data
@@ -342,6 +358,14 @@ Feature: Synthetic data
     Then every table holds the requested rows, or the clamp
     And every foreign-key constraint exists
     And generating again with seed 1 gives the same SHA-256
+
+  @story-1.22.4
+  Scenario: Generate a synthetic script from the Data Readiness Agent
+    Given I started a chat with the Data Readiness Agent on the "World Cup Core" dataset
+    When I ask "Give me 50 synthetic rows per table"
+    Then the agent calls "generate_synthetic_data" with 50 rows per table
+    And the panel shows "Synthetic data — World Cup Core (seed 1)" with the file "world-cup-core-synthetic-postgresql-seed1.sql"
+    And "Download file" downloads that .sql script, which starts with "-- Synthetic data for dataset "
 
   Scenario: Download the synthetic data as CSV and Excel
     Given I profiled the "World Cup" dataset
@@ -422,7 +446,8 @@ Feature: Synthetic data
 
 ## Acceptance
 
-- Every Gherkin scenario above passes against the running app once automated; the seven scenarios named in the E2E line pass.
+- Every Gherkin scenario above passes against the running app once automated; the eight scenarios named in the E2E line pass.
+- **Agent tools** (1.22.4): unit tests cover dataset resolution, the `tables` parsing (keys or bare names, one per line), each chat limit's text, the 256 KB refusal, the stored panel item and the 40-column projection; the Data Readiness eval cases `dr-profile-sample` and `dr-synthetic-script` pass at 100 % over 3 runs.
 - Every error text in **Edge cases and errors** has a unit test at the controller or service level, and the cache has unit tests for expiry and eviction.
 - Every classification rule of R11, the categorical rule (at least 3 sightings, at most 20 distinct values), the empty sample and the shapes of R13 have a unit test.
 - **Privacy:** a fixture of 1,000 rows with names, emails and free text yields a profile whose serialisation contains none of the non-categorical sampled values; a second fixture with numeric identifier columns (`id`, `national_id bigint`, 1,000 unique values) yields a profile with none of their values and no numeric statistics on them.
@@ -434,4 +459,4 @@ Feature: Synthetic data
 - **Formats** (1.22.5): a spec parses the `.sql`, the CSV zip and the workbook for World Cup with 50 rows and seed 1 and finds the same values; the zip holds one CSV per table and `README.txt`, the workbook one sheet per table and `About`; the profile export lists every profiled column; both formats work for a Databricks profile.
 - **Raw export** (1.22.6): without `confirmRealData: true` the API answers the 400 above; the CSV zip holds the real rows (`players.csv` has the real player names) and the `.sql` loads into a scratch database with them; a spec with a spy logger proves that no raw value reaches the logger or the profile cache during an export.
 
-<!-- sources: backend/src/modules/synthetic-data/**, backend/src/modules/datasources/connectors/sampling.ts, backend/src/modules/datasources/connectors/postgres-profiling.ts, backend/src/modules/datasources/connectors/databricks-profiling.ts, frontend/src/app/features/synthetic-data/**, frontend/src/app/features/datasets/components/catalog-browser/** -->
+<!-- sources: backend/src/modules/synthetic-data/**, backend/src/mastra/tools/synthetic-data.tools.ts, backend/src/mastra/synthetic-data-tool-services.ts, backend/src/modules/sessions/synthetic-data-bridge.ts, backend/src/modules/datasources/connectors/sampling.ts, backend/src/modules/datasources/connectors/postgres-profiling.ts, backend/src/modules/datasources/connectors/databricks-profiling.ts, frontend/src/app/features/synthetic-data/**, frontend/src/app/features/datasets/components/catalog-browser/** -->
