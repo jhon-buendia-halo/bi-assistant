@@ -184,6 +184,23 @@ export class SessionsApiService {
   }
 
   /**
+   * Start a session that runs a workflow (api.md 3, `workflowId`; workflows
+   * R6). `name` and `datasets` are required for a workflow that picks
+   * datasets, and ignored or optional otherwise.
+   */
+  createFromWorkflow(
+    workflowId: string,
+    name?: string,
+    datasets?: string[],
+  ): Observable<SessionActionResult> {
+    return this.http.post<SessionActionResult>(`${API_BASE_URL}/sessions`, {
+      workflowId,
+      ...(name ? { name } : {}),
+      ...(datasets ? { datasets } : {}),
+    });
+  }
+
+  /**
    * Start a preview conversation of a user agent's draft (agents-evals R60).
    * It is never listed; `delete` discards it.
    */

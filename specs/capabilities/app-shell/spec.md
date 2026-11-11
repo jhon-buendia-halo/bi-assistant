@@ -7,8 +7,8 @@ The app shell is the frame every other capability lives in: a navigation rail, a
 Defined in [../../product/glossary.md](../../product/glossary.md): session, dataset, datasource, entity, diagnostics (System logs), eval run.
 
 Capability-local vocabulary, used only for UI words:
-- **Navigation rail** — the narrow, always-visible left column of icon buttons: the five workspace areas at the top, and system logs and Settings at the bottom.
-- **Area** — what the rail selects: Datasets, Agents, Context, Sessions, Monitoring or Settings. Sessions and Settings show a list pane beside their content.
+- **Navigation rail** — the narrow, always-visible left column of icon buttons: the six workspace areas at the top, and system logs and Settings at the bottom.
+- **Area** — what the rail selects: Datasets, Workflows, Agents, Context, Sessions, Monitoring or Settings. Sessions and Settings show a list pane beside their content.
 - **Main view** — what the central area shows: home (empty), Datasets, dataset editor, Agents, an agent's detail, Context (its section cards) or one of its sections (Ontologies, User personas, Visuals), the Sessions area (with nothing open), new-session composer, a session's chat, or a Settings section.
 - **Details panel** — the right-hand column. What it shows depends on the main view (see R14).
 - **Backend status** — one of `starting`, `ready`, `restarting`, `down`, reported by the desktop shell's backend supervisor.
@@ -18,7 +18,7 @@ Capability-local vocabulary, used only for UI words:
 Layout and navigation
 - R1. The system SHALL present, left to right: the navigation rail (expandable into a drawer, R48), then a column holding the "US Health Agentic Hub" banner above the page and, when open, the details panel. Everything sits inside a textured gradient frame.
 - R2. On launch the navigation drawer SHALL be expanded unless the user last collapsed it (R50), the details panel SHALL be collapsed and the main view SHALL be home. The details panel state SHALL NOT be remembered between launches.
-- R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Agents**, **Context**, **Sessions** and **Monitoring**. Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it, except in the agent editor and, for **Sessions**, in a chat or the composer: there, **Agents** SHALL return to the hub, after the unsaved-changes question (agents-evals R59). Agents stays current while an agent's detail is open, Datasets while the dataset editor is open, and Sessions while the composer or a chat is open. Choosing **Sessions** SHALL open the Sessions page with the list of sessions (R46), also from an open chat or the composer, and SHALL NOT change the drawer.
+- R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Workflows**, **Agents**, **Context**, **Sessions** and **Monitoring**, in that order. Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it, except in the agent editor and, for **Sessions**, in a chat or the composer: there, **Agents** SHALL return to the hub, after the unsaved-changes question (agents-evals R59). Agents stays current while an agent's detail is open, Workflows while a workflow's page is open, Datasets while the dataset editor is open, and Sessions while the composer or a chat is open. Choosing **Workflows** on a workflow's page SHALL return to the Workflows page ([workflows](../workflows/spec.md) R5, R7). Choosing **Sessions** SHALL open the Sessions page with the list of sessions (R46), also from an open chat or the composer, and SHALL NOT change the drawer.
 - R3a. Choosing **Context** SHALL show the Context page: the level-two heading "Context", the note "What agents are given besides your data." and one card per section, laid out like the Agent Hub cards (three to a row). Each card SHALL show the section's icon tile, name and a two-line description, and clicking it SHALL open that section, with Context still the current rail item and a **Context** back control above the section that returns to the cards. Choosing **Context** on the rail from a section SHALL also return to the cards (as Sessions returns to its list, R3). The sections, in this order, are **Ontologies** ("Each dataset's concepts, relations, constraints and instructions the assistant applies.", network icon), which shows every dataset's ontology ([../dataset-ontology/spec.md](../dataset-ontology/spec.md) R40), and **User personas** ("Who asks the questions: their role, goals, typical questions and the answers they prefer.", Users icon), which shows the User personas section ([../user-personas/spec.md](../user-personas/spec.md)), and **Visuals** ("Chart types for data visualization, grouped by category, with when to use each.", chart-column icon), which shows the Visuals library section ([../visuals-library/spec.md](../visuals-library/spec.md)). Context replaced the rail's Knowledge item on 2026-11-09 (roadmap 1.21.4), User personas was added the same day (roadmap 1.21.6), and the Knowledge card left Context when knowledge became each dataset's ontology, edited in the dataset editor ([../dataset-ontology/spec.md](../dataset-ontology/spec.md), roadmap 1.21.8); the Ontologies card brought those ontologies back to Context the same day (roadmap 1.21.11), and the Visuals card was added on 2026-11-10 (roadmap 1.21.12). Later sections are added as cards.
 - R3b. Choosing **Monitoring** SHALL show the Monitoring page, with Monitoring the current rail item: the level-two heading "Monitoring" and the LLM calls page ([../monitoring/spec.md](../monitoring/spec.md)): the note "LLM calls made by the app's agents, newest first.", the filters and the table of calls, or "No LLM calls yet." when there are none. A call opens its own page with Monitoring still current, and choosing **Monitoring** on the rail from it returns to the table (as Context returns to its cards, R3a). The item and an empty page were added on 2026-11-10 (roadmap 1.21.13); the LLM calls table and the call page the same day (roadmap 1.21.14, 1.21.15).
 - R4. Below the workspace items the rail SHALL offer **Open system logs** (tooltip "System logs and diagnostics") and **Settings**, then a divider and the LenAI mark with "Powered by LenAI". The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+". The rail SHALL show no account avatar, no account menu and no Admin item: the app has one built-in super admin and nothing in the UI shows a user name.
@@ -85,7 +85,7 @@ Appearance
 Accessibility and visual stability
 - R35. The application shell, in its initial state, SHALL produce zero violations when scanned by an automated accessibility engine (axe-core, all default rules).
 - R36. The system SHALL expose labelled landmarks: "Navigation rail" (complementary), "Workspace navigation", "Sessions" (the list on the Sessions page), "Settings navigation" (in the Settings area), and "Details panel".
-- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Agents, Context, Sessions, Monitoring, Open system logs, Settings), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel and Session options.
+- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Workflows, Agents, Context, Sessions, Monitoring, Open system logs, Settings), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel and Session options.
 - R38. The application shell in its initial state SHALL match the approved `application-shell` screenshot baseline. The baseline SHALL be changed only deliberately, together with an intended visual change.
 
 ## Edge cases and errors
@@ -113,7 +113,7 @@ Accessibility and visual stability
 
 Lives in the shell itself: [../../system/ui.md](../../system/ui.md). States:
 - Banner: hidden (starting, ready), amber (restarting), red (down).
-- Rail: one current area (Datasets, Agents, Context, Sessions or Settings), or none on home.
+- Rail: one current area (Datasets, Workflows, Agents, Context, Sessions, Monitoring or Settings), or none on home.
 - Details panel: expanded at the remembered width, collapsed.
 - Toasts: success, info, error, several stacked.
 
@@ -168,6 +168,8 @@ Feature: Navigation rail
   Scenario: Moves between areas from the rail
     When I click "Datasets" on the rail
     Then I see the "Datasets" page and "Datasets" is the current rail item
+    When I click "Workflows" on the rail
+    Then I see the "Workflows" page and "Workflows" is the current rail item
     When I click "Agents" on the rail
     Then I see the "Agents" page and "Agents" is the current rail item
     When I click "Agents" on the rail again

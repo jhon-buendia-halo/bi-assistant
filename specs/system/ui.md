@@ -62,8 +62,8 @@ Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md
 1. A 20 px window-drag spacer that clears the macOS traffic lights.
 2. The **menu button** (menu icon, 18 px, `icon` colour, a 32 px square, radius 8): `aria-label` and title "Expand navigation" while collapsed, "Collapse navigation" while expanded, with `aria-expanded`. While collapsed it sits alone above the logo; while expanded it sits at the right end of the logo row, beside "Agentic Hub" (the drawer has no separate menu row).
 3. The logo row (36 px tall): a 24 px circle filled with `--logo-gradient` holding `brand/agentic-hub/logo-mark.svg`; when expanded, beside it the label "Agentic Hub" (13 px semibold `fg-strong`, filling the row) and the menu button (item 2).
-4. `nav aria-label="Workspace navigation"`: five 36 px tall buttons (radius 8, 4 px apart), each an 18 px `accent` icon and, when expanded, a 13 px medium `fg` label. Each has `title` and `aria-label` equal to its name:
-   - **Datasets** (flask icon), **Agents** (bot icon), **Context** (layers icon), **Sessions** (folder-kanban icon), **Monitoring** (activity icon).
+4. `nav aria-label="Workspace navigation"`: six 36 px tall buttons (radius 8, 4 px apart), each an 18 px `accent` icon and, when expanded, a 13 px medium `fg` label. Each has `title` and `aria-label` equal to its name:
+   - **Datasets** (flask icon), **Workflows** (workflow icon), **Agents** (bot icon), **Context** (layers icon), **Sessions** (folder-kanban icon), **Monitoring** (activity icon).
    - Hover: `surface-muted` fill. Current area: `surface-selected` fill and `aria-current="page"`.
 5. A flexible spacer.
 6. Bottom group, 4 px apart (centred while collapsed):
@@ -98,8 +98,10 @@ The main column renders exactly one of these views, held in a single "main view"
 | `home` (default) | start-up | none | welcome (4.1) | Entity details (empty state) |
 | `dataset` | rail **Datasets** | Datasets | Datasets list (4.2) | Entity details |
 | `dataset-new` | **New dataset** or opening a dataset in the list | Datasets | Catalog browser: "New dataset" / "Edit dataset" (4.3) | Entity details |
+| `workflows` | rail **Workflows** (also from a workflow's page); **All workflows** on a workflow's page | Workflows | Workflows page (4.4a) | Entity details |
+| `workflow-detail` | a workflow card's open control | Workflows | Workflow page (4.4b) | Entity details |
 | `agents` | rail **Agents** (also from the agent editor, app-shell R3); **All agents** in an agent detail; **Back** in the editor of a never-saved agent; deleting a user agent | Agents | Agent Hub (4.4) | Entity details |
-| `agent-detail` | clicking an agent card's open control; **Back** in the editor of a saved agent | Agents | Agent detail (4.5) | Eval trace (4.6) |
+| `agent-detail` | clicking an agent card's open control; an agent row on a workflow's page (4.4b); **Back** in the editor of a saved agent | Agents | Agent detail (4.5) | Eval trace (4.6) |
 | `agent-editor` | **New agent** on the hub; **Edit** in a user agent's detail | Agents | Agent editor (4.5.1) | Preview chat (4.5.1) |
 | `skills` | **Skills** on the hub; **Back** in the skill editor; deleting a skill | Agents | Skills library (4.5.2) | Entity details |
 | `skill-editor` | **New skill** or a row in the skills library | Agents | Skill editor (4.5.3) | Entity details |
@@ -108,8 +110,8 @@ The main column renders exactly one of these views, held in a single "main view"
 | `personas` | the **User personas** card on the Context page | Context | User personas list and editor (4.8b) | Entity details |
 | `visuals` | the **Visuals** card on the Context page | Context | Visuals library (4.8c) | Entity details |
 | `sessions` | rail **Sessions** (also from a chat or the composer); deleting the open session | Sessions | page header ("Sessions") + the Sessions list (4.7.1) | Entity details |
-| `conversation-new` | **Start New Conversation** in the page header or on the empty Sessions list | Sessions | page header ("New conversation") + New-session composer (4.7) | Entity details |
-| `session-chat` | a session row on the Sessions page, or creating a session | Sessions | page header (session name + datasource context) + Session chat (4.12) | Session panel (4.13) |
+| `conversation-new` | **Start New Conversation** in the page header or on the empty Sessions list; **Start chat** on a workflow that takes the datasets the user picks (4.4a, 4.4b) | Sessions | page header ("New conversation") + New-session composer (4.7) | Entity details |
+| `session-chat` | a session row on the Sessions page, or creating a session (also **Start chat** on a workflow, 4.4a, 4.4b) | Sessions | page header (session name + datasource context) + Session chat (4.12) | Session panel (4.13) |
 | `monitoring` | rail **Monitoring** (also from a call page or a session page) | Monitoring | Monitoring page: `h2` "Monitoring" (20 px light, like Context), the tabs (4.8d), the note that follows the tab (13 px `fg-muted`: "LLM calls made by the app's agents, newest first." or "Sessions with recorded agent runs, most recent first."), `data-testid="monitoring-page"`, then the LLM calls table (4.8d) or the Sessions table (4.8f) (app-shell R3b) | Entity details |
 | `llm-call` | a row of the LLM calls table, or **Open call** on the session page | Monitoring | back control (`llm-call-back`): **Monitoring** to the table, or **Session** to the session page it was opened from (monitoring R43) + the call page (4.8e) | Entity details |
 | `monitoring-session` | a row of the Sessions table | Monitoring | **Monitoring** back control (`monitoring-session-back`, to the Sessions tab) + the session page (4.8g) | Entity details |
@@ -331,6 +333,30 @@ Capability: [agents-evals](../capabilities/agents-evals/spec.md) (R1-R4, R53). T
   - the **pin toggle**, on the right of the top row, level with the icon tile: a small rounded-full `button` (12 px medium, `primary` text, padding 8 x 2, hover `surface-muted`) with `aria-pressed`, `aria-label` `Pin <name>` / `Unpin <name>` and visible text `Pin` (`pin` icon) or `Pinned` (`pin` icon, `surface-selected` fill; on hover or focus the icon becomes `pin-off`). It applies at once, re-ordering the card within its own section (never moving it to another section or hiding one), and reverts with an error toast if the save fails (R4).
 - **States:** loading `Loading agents…` (section 2); error inline (server message or `Backend unreachable`); no match `No agents match "<query>"`; the Pinned filter with nothing pinned `No pinned agents yet.` (no section shown); the Mine filter with no user agents `No agents of yours yet.` (all `fg-muted` 13 px, 40 px below the filter row). The search text, filter and expanded sections reset each time the hub opens.
 
+### 4.4a Workflows
+
+Capability: [workflows](../capabilities/workflows/spec.md) (R3, R5, R6, R9). Laid out like the Agent Hub (4.4), from `GET /workflows` (api.md 116); the root carries `data-testid="workflows-page"`. Read-only: no New, Edit, Delete or reorder control (R3).
+
+- **Header:** the page title `h2` "Workflows" (20 px light, `fg-strong`) and under it the note `Each chat runs a workflow. Its steps call agents, and agents use skills and tools.` (13 px `fg-muted`). No action buttons.
+- **Search row** (20 px below): a full-width `field` search bar (`type="search"`, `data-testid="workflow-search"`, placeholder and `aria-label` `Search workflows by name or description`, a 15 px `fg-muted` search icon inside on the left, 40 px left padding). It filters on name or description, any case, on every keystroke, and resets each time the page opens.
+- **Sections**, 24 px apart: `Official` then `Mine` (`data-testid="workflow-section-<official|mine>"`), each a `section` labelled by its `h3` uppercase micro-heading (12 px medium, tracking wider, `fg-muted`). Mine holds the user agents' workflows (owner `You`) and is omitted when it has none (or none match). Cards keep the catalogue's order (workflows R1) in a 3-column grid (`gap` 12 px), every card shown (no Show more).
+- **Card** (`data-testid="workflow-card-<id>"`): a `card` `div` (hover border `border-strong`), full height of its grid row, with two sibling controls:
+  - the **open control** (`data-testid="workflow-<id>"`, padding 16, 56 px bottom padding for Start chat), which opens the workflow page (4.4b). Inside it, top to bottom: a 32 px icon tile (radius 8, `primary-soft` fill, lucide `workflow` 15 px `on-primary-soft`); the name (14 px medium `fg-strong`, one line, truncated); the description (12 px `fg-muted`, at most 2 lines, clamped); a footer row with the kind chip (`data-testid="workflow-kind-<id>"`: `<n> steps` `chip-info` for a code-defined workflow, `One step` `chip-neutral` for a one-step workflow) and `Uses <agent names, comma-separated>` (12 px `fg-muted`, `data-testid="workflow-uses-<id>"`); and, when datasets are missing, a `chip chip-warning` note (`triangle-alert` 12 px and `Missing dataset: <names>`). Keyboard focus on it shows a 2 px `focus` outline around the whole card.
+  - **Start chat** at the bottom-right: a small `btn btn-secondary` (12 px, `message-square-plus` icon, text `Start chat`, `aria-label` `Start chat with <name>`, `data-testid="workflow-start-chat-<id>"`). Disabled while the session is being created, and while the workflow has a `chatRequirement`, which is then its title (the RFP Builder: `Load the "Intellify RFP API" sample in Settings → Testing Data first`). What it does: workflows R6.
+- **States:** `Loading workflows…` (section 2); error inline (server message or `Backend unreachable`, `danger-soft` box); no match `No workflows match "<query>"` (13 px `fg-muted`, 40 px below the search).
+- At 1440 px the content column is 960 px wide, about 554 px with the right panel open; the cards stay three to a row and their names truncate.
+
+### 4.4b Workflow page
+
+Capability: [workflows](../capabilities/workflows/spec.md) (R3, R6, R7, R8, R10). From `GET /workflows/:id` (api.md 117; the id is URL-encoded). The root carries `data-testid="workflow-detail-page"`. Read-only (R3).
+
+- **Back:** a `btn btn-ghost` (arrow-left, `All workflows`, `data-testid="workflow-back"`) to the Workflows page (4.4a). `Loading workflow…` while loading; an error inline (the server's `Workflow "<id>" not found` or `Backend unreachable`).
+- **Header** (16 px below, wrapping): a 44 px icon tile (radius 12, `primary-soft`, lucide `workflow` 19 px `on-primary-soft`); the name `h2` (20 px light `fg-strong`, `data-testid="workflow-detail-name"`) over a row with the id in 12 px monospace `fg-muted` (`data-testid="workflow-detail-id"`) and the kind chip (as on the card, `data-testid="workflow-detail-kind"`); right-aligned, **Start chat**, a `btn btn-primary` (`message-square-plus`, `Start chat`, `Starting…` with a spinner while the session is created, `data-testid="workflow-start-chat"`), disabled while the workflow has a `chatRequirement`, which is its title and is also written at its left in 12 px `fg-muted` (`data-testid="workflow-chat-requirement"`, at most 320 px wide). The name keeps at least 220 px: below that (the right panel open), Start chat and its requirement wrap to their own row, still right-aligned.
+- Under the header: the description (13 px `fg-muted`, at most 70 characters wide) and, when datasets are missing, the `Missing dataset: <names>` `chip chip-warning`.
+- **What happens on each message** (32 px below): the drawing of 4.5.6 (`data-testid="agent-workflow"`, its own `h3`, cards, exits and legend), fed by the workflow detail, unchanged; a one-step workflow draws its single `Answer` card across the width. Under it the **bar note** (12 px `fg-muted`, `data-testid="workflow-bar-note"`): `In a chat, the workflow bar shows these steps as they run.` when the workflow's `bar` is `steps`, else `In a chat, the workflow bar shows the agent's own steps as it sets them.`
+- **Agents** (32 px below): an `h3` micro-heading `Agents` and one `list-row` button per agent its steps call (`data-testid="workflow-agent-<agent key>"`, `aria-label` `Open agent <name>`): a 28 px `surface-muted` tile with a `bot` icon, the agent's name (13 px medium `fg-strong`), the owner `Official` or `You` (12 px `fg-muted`) and a chevron. It opens the agent's detail (4.5), with Agents current on the rail.
+- Workflows stays the current rail item; choosing it returns to the list (app-shell R3).
+
 ### 4.5 Agent detail
 
 Capability: [agents-evals](../capabilities/agents-evals/spec.md); agent catalogue in [agents.md](agents.md).
@@ -423,7 +449,7 @@ Capability: [agents-evals](../capabilities/agents-evals/spec.md) R88. The agent 
   4. `Every answer comes from read-only queries over the agent's datasets.`
 - **Workflow-backed agent** (Questions to Insights v2; [agents-evals](../capabilities/agents-evals/spec.md) R108). The tab opens with the `h3` **What happens on each message** and the drawing `data-testid="agent-workflow"`, built from the detail's `workflow` (api.md 34). It is HTML, not SVG, so it can wrap and be read by assistive technology.
   - **Drawing:**
-    - An ordered list of step cards in one row that shares the tab's width: each code step takes 1 part, the agent step 1.6 parts and each connector a fixed 88 px. Below 920 px the row scrolls sideways, and words are never broken mid-word.
+    - An ordered list of step cards in one row that shares the tab's width: each code step takes 1 part, the agent step 1.6 parts and each connector a fixed 88 px. With more than one step, below 920 px the row scrolls sideways; a one-step workflow's single card fills the available width (the workflow page, 4.4b). Words are never broken mid-word.
     - Each card is a `card` 12 px radius, `data-testid="workflow-step-<id>"`, holding:
       - its number in a small circle, its title in 14 px `fg-strong`, and a kind chip: `Code` (`chip-neutral`) or `LLM` (`chip-info`);
       - its summary in 12 px `fg-muted`.
@@ -879,7 +905,8 @@ Strings below are asserted by the Playwright suite or are user-facing contracts.
 |---|---|
 | Page heading (banner `h1`) | `US Health Agentic Hub` |
 | Window / document title | `Agentic Hub` (OS app name stays `Halo BI Assistant`) |
-| Rail buttons (title and aria-label) | `Expand navigation` / `Collapse navigation` (menu button), `Datasets`, `Agents`, `Context`, `Sessions`, `Monitoring`, `Settings`; `Open system logs` (title `System logs and diagnostics`) |
+| Rail buttons (title and aria-label) | `Expand navigation` / `Collapse navigation` (menu button), `Datasets`, `Workflows`, `Agents`, `Context`, `Sessions`, `Monitoring`, `Settings`; `Open system logs` (title `System logs and diagnostics`) |
+| Workflows (4.4a, 4.4b) | `Workflows`, `Each chat runs a workflow. Its steps call agents, and agents use skills and tools.`, `Search workflows by name or description`, `Official`, `Mine`, `<n> steps`, `One step`, `Uses <agent names>`, `Missing dataset: <names>`, `Start chat`, `Start chat with <name>`, `Starting…`, `Loading workflows…`, `No workflows match "<query>"`, `All workflows`, `Loading workflow…`, `Agents`, `Open agent <name>`, `In a chat, the workflow bar shows these steps as they run.`, `In a chat, the workflow bar shows the agent's own steps as it sets them.` |
 | Drawer labels | `Agentic Hub`, `System logs`, `Settings`; LenAI mark `Powered by LenAI` |
 | Sessions area | `Sessions`, `New conversation` (page title of the composer), `Start New Conversation`, `Session options`, `Options for <session name>`, `Search sessions by name or ID…`, `Session ID copied`, `<first>–<last> of <total>`, `Previous page`, `Next page`, `Page <n> of <pages>`, `Loading sessions…`, `No sessions yet. Start a new conversation or open an agent.`, `No sessions match "<query>".` |
 | Shell aria-labels | `Navigation rail`, `Workspace navigation`, `Sessions`, `Settings navigation`, `Details panel` |

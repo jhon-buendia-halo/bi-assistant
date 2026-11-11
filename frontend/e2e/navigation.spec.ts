@@ -27,6 +27,12 @@ test('moves between areas from the rail', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
   await expectCurrent(page, 'Datasets');
 
+  await railItem(page, 'Workflows').click();
+  await expect(
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
+  ).toBeVisible();
+  await expectCurrent(page, 'Workflows');
+
   await railItem(page, 'Agents').click();
   await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
   await expectCurrent(page, 'Agents');

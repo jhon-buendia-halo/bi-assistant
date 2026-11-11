@@ -282,6 +282,7 @@ describe('App', () => {
     ).map((b) => b.getAttribute('aria-label'));
     expect(labels).toEqual([
       'Datasets',
+      'Workflows',
       'Agents',
       'Context',
       'Sessions',
@@ -971,5 +972,128 @@ describe('New conversation Agent picker (BA-230)', () => {
       (r) => r.method === 'POST' && r.url.endsWith('/sessions'),
     );
     expect(req.request.body).toEqual({ name: 'Q', datasets: ['Core'] });
+  });
+});
+
+describe('Workflows area (workflows R5-R8, app-shell R3)', () => {
+  beforeEach(async () => {
+    localStorage.removeItem('questions-to-insights:right-panel-width');
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+  });
+
+  const summary = {
+    description: '',
+    kind: 'agent' as const,
+    owner: 'Official' as const,
+    stepCount: 1,
+    bar: 'agent' as const,
+    datasets: [] as string[],
+    missingDatasets: [] as string[],
+    starterQuestions: [] as string[],
+  };
+  const assistant = {
+    ...summary,
+    id: 'agent:assistant',
+    name: 'Assistant',
+    agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
+    picksDatasets: true,
+  };
+  const v2 = {
+    ...summary,
+    id: 'qti-v2-turn',
+    name: 'Questions to Insights v2',
+    kind: 'code' as const,
+    stepCount: 4,
+    bar: 'steps' as const,
+    agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+    picksDatasets: true,
+  };
+  const health = {
+    ...summary,
+    id: 'agent:u-1',
+    name: 'Health plan analyst',
+    owner: 'You' as const,
+    agents: [{ key: 'u-1', name: 'Health plan analyst' }],
+    picksDatasets: false,
+    datasets: ['World Cup Core'],
+  };
+
+  function setup() {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    return {
+      fixture,
+      app: fixture.componentInstance,
+      http: TestBed.inject(HttpTestingController),
+      el: fixture.nativeElement as HTMLElement,
+    };
+  }
+
+  it('keeps Workflows current on a workflow page, and the rail returns to the list', () => {
+    const { app, fixture, el } = setup();
+    app.selectArea('workflows');
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('workflows');
+    expect(el.querySelector('[data-testid="workflows-page"]')).toBeTruthy();
+    app.openWorkflow('agent:rfp');
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('workflow-detail');
+    expect(app.activeWorkflowId()).toBe('agent:rfp');
+    expect(app.currentArea()).toBe('workflows');
+    expect(
+      el
+        .querySelector('button[aria-label="Workflows"]')
+        ?.getAttribute('aria-current'),
+    ).toBe('page');
+    app.selectArea('workflows');
+    expect(app.mainView()).toBe('workflows');
+  });
+
+  it('Start chat on a workflow that picks datasets opens the composer preselected', () => {
+    const { app } = setup();
+    app.startChatWithWorkflow(v2);
+    expect(app.mainView()).toBe('conversation-new');
+    expect(app.composerAgentKey()).toBe('assistant-v2');
+
+    app.startChatWithWorkflow(assistant);
+    expect(app.mainView()).toBe('conversation-new');
+    expect(app.composerAgentKey()).toBe('assistant');
+  });
+
+  it('Start chat on any other workflow creates the session from the workflow and opens it', () => {
+    const { app, http } = setup();
+    app.startChatWithWorkflow(health);
+    expect(app.startingWorkflowId()).toBe('agent:u-1');
+    const req = http.expectOne(
+      (r) => r.method === 'POST' && r.url.endsWith('/sessions'),
+    );
+    expect(req.request.body).toEqual({ workflowId: 'agent:u-1' });
+    req.flush({
+      ok: true,
+      message: 'Session "Health plan analyst" created',
+      session: {
+        id: 's-1',
+        name: 'Health plan analyst',
+        datasets: ['World Cup Core'],
+        messages: [],
+      },
+    });
+    expect(app.startingWorkflowId()).toBeNull();
+    expect(app.mainView()).toBe('session-chat');
+    expect(app.activeSession()?.id).toBe('s-1');
+  });
+
+  it('a refused Start chat stays put', () => {
+    const { app, http } = setup();
+    app.openWorkflow(health.id);
+    app.startChatWithWorkflow(health);
+    http
+      .expectOne((r) => r.method === 'POST' && r.url.endsWith('/sessions'))
+      .flush({ ok: false, message: "None of this agent's datasets exist" });
+    expect(app.mainView()).toBe('workflow-detail');
+    expect(app.startingWorkflowId()).toBeNull();
   });
 });

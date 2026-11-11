@@ -1,0 +1,64 @@
+@let w = workflow();
+<div
+  [attr.data-testid]="'workflow-card-' + w.id"
+  class="card relative flex h-full hover:border-border-strong has-[.workflow-open:focus-visible]:outline-2 has-[.workflow-open:focus-visible]:outline-offset-2 has-[.workflow-open:focus-visible]:outline-focus"
+>
+  <button
+    type="button"
+    [attr.data-testid]="'workflow-' + w.id"
+    (click)="open.emit()"
+    class="workflow-open flex min-w-0 flex-1 flex-col gap-2.5 rounded-xl p-4 pb-14 text-left outline-none"
+  >
+    <span
+      class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-on-primary-soft"
+    >
+      <lucide-angular [img]="Workflow" [size]="15" />
+    </span>
+    <span class="truncate text-[14px] font-medium text-fg-strong">{{
+      w.name
+    }}</span>
+    @if (w.description) {
+      <span class="line-clamp-2 text-[12px] leading-relaxed text-fg-muted">{{
+        w.description
+      }}</span>
+    }
+    <span class="mt-auto flex flex-wrap items-center gap-2 pt-1">
+      <span
+        [attr.data-testid]="'workflow-kind-' + w.id"
+        class="chip"
+        [class.chip-info]="w.kind === 'code'"
+        [class.chip-neutral]="w.kind !== 'code'"
+        >{{ kindLabel() }}</span
+      >
+      <span
+        [attr.data-testid]="'workflow-uses-' + w.id"
+        class="min-w-0 text-[12px] text-fg-muted"
+        >{{ usesLabel() }}</span
+      >
+    </span>
+    @if (missing()) {
+      <span class="chip chip-warning w-fit whitespace-normal">
+        <lucide-angular [img]="TriangleAlert" [size]="12" class="shrink-0" />
+        <span>Missing dataset: {{ missing() }}</span>
+      </span>
+    }
+  </button>
+
+  <!-- Bottom-right; the open control keeps room for it (pb-14). -->
+  <button
+    type="button"
+    [attr.data-testid]="'workflow-start-chat-' + w.id"
+    (click)="startChat.emit()"
+    [disabled]="starting() || !!w.chatRequirement"
+    [attr.title]="w.chatRequirement ?? null"
+    [attr.aria-label]="'Start chat with ' + w.name"
+    class="btn btn-secondary absolute right-4 bottom-4 px-3 py-1 text-[12px]"
+  >
+    @if (starting()) {
+      <lucide-angular [img]="Loader2" [size]="12" class="animate-spin" />
+    } @else {
+      <lucide-angular [img]="MessageSquarePlus" [size]="12" />
+    }
+    <span>Start chat</span>
+  </button>
+</div>
