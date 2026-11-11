@@ -14,6 +14,53 @@ Entry template:
 
 ---
 
+## 2026-11-10 — 1.21.13–1.21.16 Monitoring: LLM calls, context window, session flow (BA-320)
+
+### What went well
+- Probing the real trace store first (an isolated instance, one real chat turn, the `span_events` rows exported to a fixture) pinned the reader to Mastra's actual shape; the context boxes summed to the real 18,040 input tokens on the first check.
+- Reading the store in-process through Mastra's own DuckDB connection avoided the file lock the running app holds.
+- The options page (waterfall, trajectory, graph) before building let the user pick the design in one answer.
+- The demo was recorded and published in the fast loop for every story, so each hand-over came with its video.
+
+### What went wrong
+- The session answer first showed the first request's commentary ("I'll start by checking…"): a model call's output joins the text of every request. A unit test had pinned the wrong value, so it passed; only reading the real session in the running app found it.
+- The user did not see the changes after the rebuild: the open browser tab still ran the old bundle. The hand-over did not say to reload.
+- The first E2E draft asserted the caption text where the "Context window" label is a separate heading.
+- Some Gherkin scenarios (a failed call, two agents, more than 25 calls) need data the LLM stub cannot produce, so they are covered only by component unit tests.
+
+### What to do differently
+- Check what a unit test pins against the real data before trusting it, especially derived text such as an answer.
+- When handing over a restarted instance, tell the user to hard-reload the open tab (Ctrl+Shift+R).
+- Give the LLM stub an error reply, so failed-call scenarios can run end to end.
+
+---
+
+## 2026-11-10 — 1.10.3 GitHub Copilot as an LLM provider (BA-159)
+
+### What went well
+- A spike against the real Copilot SDK came before the epic spec. It settled the hard facts first: a Free seat auto-routes and lists no models, built-in tools must be overridden, and declaration-only tools let Mastra keep the tool loop. The design held through implementation.
+- The E2E stub of the Copilot runtime was written from a recorded trace of the real runtime, captured through a logging proxy that the SDK's own `COPILOT_CLI_PATH` launches. Production code needed no test hook, and the stub matched the protocol on the first smoke run.
+- The assistant evals on the real seat found a defect that no unit or E2E test would have: the model sometimes writes a tool call's arguments as its answer. A second proxy trace located the cause (in-session model behaviour, not the adapter's history replay, which was my first guess) before any code changed. The fix (R66) has unit tests and an E2E scenario.
+- Running the full unit suites on a detached `main` checkout (junctioned `node_modules`) made "pre-existing" provable: the same 10 suites and 43 tests fail on both.
+
+### What went wrong
+- The first E2E run failed every test at teardown with EPERM. The tests listed `{ launchApp, appDataDir }`, and `launchApp` does not depend on `appDataDir`, so Playwright deleted the data dir before stopping the app. About 20 minutes went to the wrong suspects (the stub log, Windows Defender) before reading the fixture order.
+- A "custom endpoint" regression eval ran on Copilot. The user had saved Copilot in the scratch copy while testing, which removed the endpoint key (R55), and I did not check the copy's saved provider before starting. It wasted Copilot credits, and the stray loop survived `TaskStop`: two node children kept running until killed by PID.
+- I guessed the raw-JSON cause (transcript replay) before tracing it, and the guess was wrong.
+- The demo recording failed once: under `DEMO=1` the caption itself contains the asserted text ("Configuration saved"), so `getByText` matched two elements.
+- `sed` edits mangled two shell scripts (a command substitution inside an env-prefix line, an `if` inside a line continuation), against an earlier retrospective lesson.
+- The Copilot evals do not reach 100%. On a Free seat, Copilot also judges its own answers, so the remaining failures mix model and judge quality. The user chose to ship with them documented.
+
+### What to do differently
+- In a Playwright test that uses `launchApp`, destructure `appDataDir` first (`{ appDataDir, launchApp }`), so the app stops before its data dir is removed.
+- Before an eval run, print the data copy's saved provider and model (`scratchpad/read-llm-settings.js` pattern), and use `EVAL_LLM_*` for any target other than the saved one.
+- After `TaskStop` on a looping script, list `run-assistant-evals` node processes and kill leftovers by PID.
+- Trace before theorising: for a provider-side misbehaviour, record the runtime traffic (logging proxy) on one failing case first.
+- In a `@demo` test, assert texts the captions also contain with `{ exact: true }`.
+- Write multi-line shell helpers with the Write tool, never with `sed` edits.
+
+---
+
 ## 2026-11-10 — 1.21.12 Visuals library on the Context page (BA-320)
 
 ### What went well

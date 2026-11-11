@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   Logger,
+  OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
 import { Agent } from '@mastra/core/agent';
@@ -15,9 +16,12 @@ import {
   type AgentModelConfig,
 } from '../../mastra/model-resolver';
 import { rejectsMaxTokens } from '../../mastra/model-compat';
+import { COPILOT_AUTO_MODEL } from '../../mastra/copilot/copilot-contracts';
+import { getCopilotRuntime, stopCopilotRuntime } from '../../mastra/copilot';
 import {
   defaultEffort,
   effortLevelsFor,
+  effortLevelsForProvider,
   isReasoningEffort,
 } from '../../mastra/effort-levels';
 import { installRetryFetch } from './retry-fetch';
@@ -31,14 +35,17 @@ import {
   BASE_URL_INVALID,
   BASE_URL_REQUIRED,
   MODELS_PROVIDER_INVALID,
+  MODELS_TIMEOUT_MESSAGE,
 } from './custom-endpoint/messages';
 import { listEndpointModels } from './custom-endpoint/models';
 import { probeOpenAiStyle } from './custom-endpoint/probe';
 import { probeAnthropicStyle } from './custom-endpoint/probe-anthropic';
+import { probeCopilot } from './copilot/probe-copilot';
 import { LlmSettingsRepository } from './repositories/llm-settings.repository';
 import {
   API_STYLES,
   ApiStyle,
+  CopilotStatusView,
   EffortLevelsView,
   LlmProvider,
   LlmSettingsDoc,
@@ -157,7 +164,7 @@ function structuredReply(content: string): string | null {
 }
 
 @Injectable()
-export class LlmService implements OnModuleInit {
+export class LlmService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LlmService.name);
 
   constructor(
@@ -176,6 +183,17 @@ export class LlmService implements OnModuleInit {
     // global fetch rather than the agent model config.
     installRetryFetch();
     await this.reencryptFormerSecretKey();
+  }
+
+  /** Stops the Copilot runtime with the backend (never throws). */
+  async onModuleDestroy(): Promise<void> {
+    try {
+      await stopCopilotRuntime();
+    } catch (err) {
+      this.logger.warn(
+        `Could not stop the GitHub Copilot runtime: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   /**
@@ -233,6 +251,9 @@ export class LlmService implements OnModuleInit {
       return 'openai/gpt-4o-mini';
     }
     const model = modelOverride?.trim() || doc.model;
+    if (doc.provider === 'copilot') {
+      return { kind: 'copilot', id: `copilot/${model}` };
+    }
     if (doc.provider === 'custom') {
       // Keyless endpoints are called with no credential (R47).
       const apiKey = doc.apiKeyCiphertext ? this.storedApiKey(doc) : undefined;
@@ -267,6 +288,18 @@ export class LlmService implements OnModuleInit {
         apiKeyMasked: null,
         reasoningEffort: 'high',
         configured: false,
+        apiStyle: null,
+      };
+    }
+    if (doc.provider === 'copilot') {
+      // No key, no URL: the machine's GitHub login is the credential (R55).
+      return {
+        provider: 'copilot',
+        model: doc.model,
+        baseUrl: null,
+        apiKeyMasked: null,
+        reasoningEffort: doc.reasoningEffort ?? 'high',
+        configured: true,
         apiStyle: null,
       };
     }
@@ -331,6 +364,7 @@ export class LlmService implements OnModuleInit {
     // testConnection throws with the same provider-error messages surfaced
     // by the dedicated test-connection endpoint, so save fails the same way.
     const reasoningEffort = this.effortToSave(
+      provider,
       model,
       dto.reasoningEffort,
       existing?.reasoningEffort,
@@ -351,8 +385,8 @@ export class LlmService implements OnModuleInit {
   }
 
   /** The effort levels `model` accepts, for the settings form. */
-  effortLevels(model: string | undefined): EffortLevelsView {
-    const levels = effortLevelsFor(model ?? '');
+  effortLevels(model: string | undefined, provider?: string): EffortLevelsView {
+    const levels = effortLevelsForProvider(provider, model ?? '');
     return {
       levels,
       defaultEffort: defaultEffort(levels),
@@ -366,11 +400,12 @@ export class LlmService implements OnModuleInit {
    * model's default. A model without levels keeps the stored value.
    */
   private effortToSave(
+    provider: LlmProvider,
     model: string,
     chosen: unknown,
     stored: ReasoningEffort | undefined,
   ): ReasoningEffort {
-    const levels = effortLevelsFor(model);
+    const levels = effortLevelsForProvider(provider, model);
     if (chosen !== undefined && chosen !== null && chosen !== '') {
       if (!isReasoningEffort(chosen) || !levels.includes(chosen)) {
         throw new BadRequestException(
@@ -409,6 +444,7 @@ export class LlmService implements OnModuleInit {
     apiKey: string | undefined,
   ): Promise<LlmTestResult> {
     const { provider, model, baseUrl, apiStyle } = settings;
+    if (provider === 'copilot') return this.testCopilotConnection(model);
     if (provider === 'custom') {
       return this.testCustomConnection(
         model,
@@ -598,6 +634,14 @@ export class LlmService implements OnModuleInit {
     };
   }
 
+  /** GitHub Copilot's probe (R58): sign-in, then a structured reply. */
+  private async testCopilotConnection(model: string): Promise<LlmTestResult> {
+    this.logger.log(`[testConnection] copilot/${model}`);
+    const { reply, latencyMs } = await probeCopilot(model);
+    this.logger.log(`[testConnection] SUCCESS — reply="${reply}"`);
+    return { provider: 'copilot', model, latencyMs, reply };
+  }
+
   /**
    * A custom endpoint's probe (R49): the style's probe against the
    * normalised base URL, at the model's lowest effort level. The probes
@@ -642,6 +686,17 @@ export class LlmService implements OnModuleInit {
     const custom =
       provider === 'custom' ? this.validateCustomEndpoint(dto) : null;
     const model = trimmed(dto.model);
+    if (provider === 'copilot') {
+      // R56: blank (or any casing of auto) lets Copilot choose the model.
+      return {
+        provider,
+        model:
+          !model || model.toLowerCase() === COPILOT_AUTO_MODEL
+            ? COPILOT_AUTO_MODEL
+            : model,
+        baseUrl: '',
+      };
+    }
     if (!model) throw new BadRequestException('model is required');
     if (custom) return { provider, model, ...custom };
     const baseUrl = trimmed(dto.baseUrl);
@@ -689,12 +744,14 @@ export class LlmService implements OnModuleInit {
     suppliedKey: unknown,
     doc: LlmSettingsDoc | null,
   ): string | undefined {
+    // Copilot signs in with the machine's GitHub login: no key (R55).
+    if (settings.provider === 'copilot') return undefined;
     if (settings.provider === 'custom') {
       return this.customApiKey(suppliedKey, doc);
     }
     const supplied = trimmed(suppliedKey);
     if (supplied) return supplied;
-    if (!doc || doc.provider === 'custom') {
+    if (!doc || doc.provider === 'custom' || doc.provider === 'copilot') {
       throw new BadRequestException(API_KEY_REQUIRED_MESSAGE);
     }
     return this.storedApiKey(doc);
@@ -722,6 +779,7 @@ export class LlmService implements OnModuleInit {
    */
   async listModels(dto: ListModelsDto): Promise<ListModelsResult> {
     try {
+      if (dto?.provider === 'copilot') return await this.listCopilotModels();
       if (dto?.provider !== 'custom') {
         throw new BadRequestException(MODELS_PROVIDER_INVALID);
       }
@@ -738,5 +796,29 @@ export class LlmService implements OnModuleInit {
         message: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  /** The seat's Copilot models, with the 15 s limit of R48. */
+  private async listCopilotModels(): Promise<ListModelsResult> {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      const models = await Promise.race([
+        getCopilotRuntime().listModels(),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(MODELS_TIMEOUT_MESSAGE)),
+            15_000,
+          );
+        }),
+      ]);
+      return { ok: true, models };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** `GET /llm/copilot/status` (api.md 32c). */
+  copilotStatus(): Promise<CopilotStatusView> {
+    return getCopilotRuntime().status();
   }
 }

@@ -36,6 +36,7 @@ flowchart LR
     anthropic["Anthropic API"]
     openai["OpenAI API<br/>(configured, or OPENAI_API_KEY fallback)"]
     custom["Custom model endpoint<br/>(self-hosted or gateway; OpenAI- or Anthropic-compatible; ADR-0032)"]
+    copilot["GitHub Copilot<br/>(user's seat via the local Copilot runtime; ADR-0037)"]
   end
 
   subgraph gh["GitHub (distribution)"]
@@ -53,12 +54,13 @@ flowchart LR
   system -->|"messages API (HTTPS, API key)"| anthropic
   system -->|"chat completions (HTTPS)"| openai
   system -->|"chat completions or messages API (HTTP or HTTPS, optional key)"| custom
+  system -->|"Copilot SDK over a local runtime (machine's GitHub login)"| copilot
 ```
 
 *System context: the analyst uses Questions to Insights, which queries the user's datasources (PostgreSQL, Databricks, REST/OpenAPI), calls the configured LLM provider (a public API, LenAI or a custom model endpoint the user points it at), and is distributed through GitHub Releases and GitHub Packages.*
 
 
-The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI, or a custom endpoint that speaks the OpenAI or Anthropic API, such as Ollama, LM Studio, vLLM, LiteLLM or a relay; ADR-0032), GitHub (releases, GitHub Packages). There is one user, a built-in super admin who is always the caller and never signs in (ADR-0030).
+The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI, or a custom endpoint that speaks the OpenAI or Anthropic API, such as Ollama, LM Studio, vLLM, LiteLLM or a relay; ADR-0032, or the user's GitHub Copilot seat through the official Copilot SDK; ADR-0037), GitHub (releases, GitHub Packages). There is one user, a built-in super admin who is always the caller and never signs in (ADR-0030).
 
 ## Level 2 — Containers
 
@@ -272,7 +274,7 @@ flowchart LR
     datasets["DatasetsModule"]
     datasources["DatasourcesModule<br/>(postgres, databricks, rest connectors)"]
     testing["TestingDataModule"]
-    synthdata["SyntheticDataModule<br/>(sampled profile, generator, dialect writers, CSV and Excel exports; ADR-0037)"]
+    synthdata["SyntheticDataModule<br/>(sampled profile, generator, dialect writers, CSV and Excel exports; ADR-0039)"]
     metrics["MetricsModule"]
     verified["VerifiedQueriesModule"]
     llm["LlmModule<br/>(LlmService)"]
@@ -733,7 +735,7 @@ flowchart LR
   - Re-introducing multi-user access later needs a new ADR; ADR-0010 to ADR-0012 stay as the record of the design that was removed.
 
 #### ADR-0031 — A deterministic DMBOK readiness engine owns every score; the Data Readiness Agent only presents stored reports; profiling is a connector capability
-- **Status:** Accepted; "the agent has no SQL" amended by ADR-0035 (2026-11-09): it may run read-only SQL to drill into findings, and scores stay engine-only. Note (ADR-0037, 2026-11-11): "profiling reads no row values" holds for readiness profiling; row samples are read only by the separate sampler of ADR-0037, and no sampled statistic feeds a score.
+- **Status:** Accepted; "the agent has no SQL" amended by ADR-0035 (2026-11-09): it may run read-only SQL to drill into findings, and scores stay engine-only. Note (ADR-0039, 2026-11-11): "profiling reads no row values" holds for readiness profiling; row samples are read only by the separate sampler of ADR-0039, and no sampled statistic feeds a score.
 - **Date:** 2026-11-03
 - **Context:**
   - The user asked on 2026-11-03 for a Data Readiness Agent that uses only the deterministic DMBOK metrics of the separate `data-readiness-agent` project ([BA-251](https://halo-powered.atlassian.net/browse/BA-251)).
@@ -892,7 +894,62 @@ flowchart LR
   - Retrieval by question relevance and SQL checks against the ontology (roadmap 1.3.3) and provenance and feedback (1.3.4) can build on stored concepts and relations.
   - Stack-neutral: a rebuild needs a per-dataset item store with four item kinds, a shared flag, per-kind validation, concept-delete cascades and a block renderer with the line formats in [agents.md](agents.md) 4.1.
 
-#### ADR-0037 — Sampled profiling and synthetic data: a separate, approximate profile read from row samples, and a deterministic generator that writes a SQL script; the app stays read-only on datasources
+#### ADR-0037 — GitHub Copilot as an LLM provider through the official Copilot SDK, wrapped as an AI SDK model that leaves the tool loop to Mastra
+- **Status:** Accepted
+- **Date:** 2026-11-09
+- **Context:**
+  - The user asked that developers with a GitHub Copilot seat run the app on that seat, picked in Settings → LLM Configuration, with no API key and no spend beyond the seat (BA-159, story 1.10.3, [epic spec](../epics/BA-159/spec.md)).
+  - Copilot has no public chat-completions API. The ways in are reverse-engineered proxies over an undocumented API (terms-of-service and account risk), and GitHub's official **Copilot SDK** (`@github/copilot-sdk`, generally available June 2026). GitHub Models, the official OpenAI-compatible API, was retired on 2026-07-30.
+  - The SDK is not a model API. It drives a local **Copilot runtime** process over JSON-RPC, which runs its own agent loop with its own built-in tools (shell, files, a `skill` tool, sub-agents) and authenticates with the GitHub login already on the machine (gh CLI, Copilot CLI or Copilot app) or a token.
+  - The app's agents are Mastra agents (ADR-0004): Mastra runs the tool loop, calls a model per step through the AI SDK model interface (`LanguageModelV3`), executes the app's tools itself, and asks for JSON-schema structured output. ADR-0032 already lets the resolver return plain data that a factory builds into a model instance at call time.
+  - A spike on 2026-11-09 (SDK 1.0.30, Mastra 1.66, a Copilot Free seat) showed the SDK can: switch off every built-in tool and replace the system prompt; declare tools **without handlers**, so a tool request surfaces as an `external_tool.requested` event and is answered later with `session.rpc.tools.handlePendingToolCall`; return schema-valid structured output (`responseFormat`); stream text deltas. With that, the real assistant answered 6 of 7 World Cup eval cases (the seventh was a wrong answer) and a streamed chat turn.
+- **Decision:**
+  - **A fifth provider, `copilot` ("GitHub Copilot"),** in the same LLM settings document: provider, model (default `auto`) and reasoning effort; no API key, no base URL, no API style ([llm-settings](../capabilities/llm-settings/spec.md), [data-model.md](data-model.md)). New provider value only, so no migration.
+  - **Plain data, built at call time.** The resolver returns `{ kind: "copilot", id: "copilot/<model>" }`; the model factory (ADR-0032) builds it into a **Copilot model**: an app-owned `LanguageModelV3` over the SDK. Tuning and the visual designer read the plain config as before; the visual designer never swaps a Copilot config to another provider.
+  - **Mastra keeps the tool loop.** Each model step the Copilot model receives becomes a turn on a Copilot session created with: the step's system messages as a replaced system prompt; the step's tools declared without handlers, permission-free and allowed to override a built-in of the same name; only those tools enabled (every built-in off); the step's JSON schema as the response format. A tool request ends the step with finish reason `tool-calls`; the Copilot session stays open, keyed by tool-call id. When Mastra's next step carries those tool results, they are handed back with `handlePendingToolCall` and the same session continues. A step that starts without a live session renders the earlier messages into one prompt.
+  - **One Copilot runtime per backend process,** started on first use and stopped when the backend shuts down. Sessions are short-lived: closed when a step ends with text, after 10 minutes waiting for tool results, or when the turn's abort signal fires.
+  - **Sign-in is the machine's GitHub login.** The backend reports the runtime's auth status (signed in, login, how) to the settings form; with no login, Test connection fails with how to sign in. The app stores no GitHub credential.
+  - **Model `auto` lets Copilot choose** from the seat's plan; a named model is passed through. **Load models** asks the runtime for the seat's models.
+  - **Streaming:** the Copilot model emits text deltas as the runtime streams them.
+  - **New dependency `@github/copilot-sdk`, pinned exactly,** with its platform runtime package; bundled in the desktop installers and the npm package (story 1.10.4; [delivery.md](delivery.md)).
+- **Alternatives considered:**
+  - A local proxy (`copilot-api` and similar) behind the existing Custom endpoint: no app change, but reverse-engineered, outside GitHub's terms, and an account-suspension risk for every user; rejected for a shipped feature (fine for personal experiments).
+  - Calling Copilot's internal chat API directly with the user's GitHub token: same terms-of-service risk, undocumented and liable to change.
+  - Letting the Copilot runtime run the whole agent (its own loop, the app's tools registered with handlers): rejected, it would bypass Mastra's memory, tool-call records, `turn-data-records`, skills, step limits and the session stream that the app is built on, and would need a second agent path.
+  - GitHub Models: retired 2026-07-30.
+- **Consequences:**
+  - The LLM settings, the connection test, the model list, the agent catalogue and the composer chip learn a fifth provider; a GET reports the Copilot sign-in status ([api.md](api.md)).
+  - Each prompt counts against the user's Copilot allowance; a Copilot Free seat cannot choose its model and has about 200 chat credits a month (about 0.4 per assistant question in the spike).
+  - Steps without a live session send earlier turns as one rendered prompt, not as separate messages, so provider-side prompt caching and role structure are lost on those steps.
+  - `handlePendingToolCall` is marked experimental in SDK 1.0.30; an SDK upgrade re-runs the adapter's tests and the assistant evals.
+  - The runtime is a native binary of about 180 MB per platform, which grows each installer.
+  - Stack-neutral: a rebuild needs a model adapter over an agent runtime that can disable its own tools, hand tool calls back to the caller and accept a response schema.
+
+#### ADR-0038 — Monitoring reads Mastra's trace store in-process; the app records no LLM calls of its own
+- **Status:** Accepted
+- **Date:** 2026-11-10
+- **Context:**
+  - On 2026-11-10 the user asked for a Monitoring area that lists every LLM call the agents make, with its tokens, duration, cost and status, and shows what filled each call's context window (roadmap 1.21.13–1.21.15).
+  - Mastra already records this. `MastraStorageExporter` writes every span of every agent run to `<APP_DATA_DIR>/observability.duckdb`, table `span_events`, event-sourced: one `start` row and one `end` row per span. A `model_generation` span holds the model, the provider, the usage, the tool definitions and the exact messages sent; its `tool_call` spans hold the tool arguments and results (ADR-0006).
+  - The backend process keeps that file open, so another process cannot read it while the app runs.
+- **Decision:**
+  - **A `MonitoringModule` reads the trace store in-process**, through the same `DuckDBStore` the exporter writes to (`observabilityStorage` in `backend/src/mastra/storage.ts`), with parameterised SQL. Filters and paging run in SQL. A fresh data dir, where the table does not exist yet, gives an empty page.
+  - **One table row is one `model_generation` span**, the model call of one agent run. Its `model_step` children give the steps and the real input tokens of the largest request. Its `tool_call` spans give the tool results.
+  - **The context window is rebuilt from the recorded messages** into seven boxes, with token counts estimated from characters and scaled to the real input tokens ([monitoring](../capabilities/monitoring/spec.md) R17–R22).
+  - **Cost is computed on read** from a price table shipped as code (`model-prices.ts`, USD per million tokens, dated 2026-11-03). A model not in the table has no cost.
+  - **Read-only endpoints:** `GET /monitoring/llm-calls`, `GET /monitoring/llm-calls/:id`, and for the session flow (roadmap 1.21.16) `GET /monitoring/sessions`, `GET /monitoring/sessions/:id` and `GET /monitoring/traces/:traceId` ([api.md](api.md) 2.8c). No new collection and no migration.
+- **Rejected:**
+  - **A new `llm_calls` collection written by the app on every call:** it would duplicate what Mastra already stores, add a write on the hot path of every turn, and need hooks into every place a model is called (agents, sub-calls, evals). Calls from before the feature would be missing.
+  - **Reading Phoenix or the OTLP stack:** both are developer-only, run from an opt-in Docker profile and are off by default (ADR-0006). End-user installs must not need them.
+  - **Opening `observability.duckdb` from a second process or a script:** the running backend holds the file.
+- **Consequences:**
+  - Monitoring is coupled to Mastra's `span_events` shape (event-sourced rows, the JSON columns `attributes`, `input`, `output`, `error`). A unit test pins the reader to a fixture of that real shape, so a Mastra upgrade that changes it fails the test instead of the page.
+  - Only what Mastra traces is shown. Model calls that bypass it are not listed. The same reader also serves the session flow (sessions, a turn's trajectory and the waterfall, [monitoring](../capabilities/monitoring/spec.md) R26–R44) from the same table, with no new store.
+  - Calls recorded before this feature show too, because the data was already there.
+  - Prices are code, not settings: a change of price needs a release. The table says "as of 2026-11-03", and a model without a price shows a dash for cost and no context limit.
+  - Token counts per box are estimates ("≈" in the UI). Only the total is real.
+  - Stack-neutral: a rebuild needs a trace store that records, per model call, its usage, its tool definitions, its input messages and its tool calls, a read path inside the process that owns the store, and a price table.
+#### ADR-0039 — Sampled profiling and synthetic data: a separate, approximate profile read from row samples, and a deterministic generator that writes a SQL script; the app stays read-only on datasources
 - **Status:** Accepted (2026-11-11, with the M1-22 epic spec)
 - **Date:** 2026-11-11
 - **Context:**

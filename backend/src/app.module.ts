@@ -19,6 +19,7 @@ import { UiPreferencesModule } from './modules/ui-preferences/ui-preferences.mod
 import { SkillsModule } from './modules/skills/skills.module';
 import { DataReadinessModule } from './modules/data-readiness/data-readiness.module';
 import { SyntheticDataModule } from './modules/synthetic-data/synthetic-data.module';
+import { MonitoringModule } from './modules/monitoring/monitoring.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { SyntheticDataModule } from './modules/synthetic-data/synthetic-data.mod
     UiPreferencesModule,
     DataReadinessModule,
     SyntheticDataModule,
+    MonitoringModule,
   ],
   controllers: [],
   providers: [],

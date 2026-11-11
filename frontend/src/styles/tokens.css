@@ -41,6 +41,24 @@
   --qti-danger-soft: #fde3e3;
   --qti-on-danger-soft: #a2232a;
 
+  /* Context window boxes of an LLM call (Monitoring, roadmap 1.21.15): one distinct colour each. */
+  --qti-context-system-prompt: #0b41ad;
+  --qti-context-skills: #7c3aed;
+  --qti-context-tools: #0e7c86;
+  --qti-context-chat-history: #b45309;
+  --qti-context-dataset: #15803d;
+  --qti-context-user-prompt: #be185d;
+  --qti-context-tool-results: #64748b;
+
+  /* Span kinds of a turn's trace (Monitoring session flow, roadmap 1.21.16). */
+  --qti-span-agent: #7c3aed;
+  --qti-span-model: #0b41ad;
+  --qti-span-request: #4f7fe0;
+  --qti-span-tool: #0e7c86;
+  --qti-span-memory: #b45309;
+  --qti-span-framework: #94a3b8;
+  --qti-span-other: #64748b;
+
   --qti-shadow-card: 0 2px 7.5px rgb(11 65 173 / 0.15);
   --qti-shadow-subtle: 0 2px 15px rgb(11 65 173 / 0.15); /* subtle-shadow */
   --qti-shadow-input: 1px 1px 10px rgb(11 65 173 / 0.3), 0 2px 5px rgb(11 65 173 / 0.1);
@@ -83,6 +101,22 @@
   --qti-on-success-soft: #8fe0bb;
   --qti-danger-soft: #4a1c22;
   --qti-on-danger-soft: #ffb3b8;
+
+  --qti-context-system-prompt: #5b95ff;
+  --qti-context-skills: #b394ff;
+  --qti-context-tools: #4fd1c5;
+  --qti-context-chat-history: #f6ad55;
+  --qti-context-dataset: #6ee7a0;
+  --qti-context-user-prompt: #f78fbf;
+  --qti-context-tool-results: #a0aec0;
+
+  --qti-span-agent: #b394ff;
+  --qti-span-model: #5b95ff;
+  --qti-span-request: #9dc0ff;
+  --qti-span-tool: #4fd1c5;
+  --qti-span-memory: #f6ad55;
+  --qti-span-framework: #7b8aa3;
+  --qti-span-other: #a0aec0;
 
   --qti-placeholder: #93a6bf;
   --qti-icon: #a9b8cc;

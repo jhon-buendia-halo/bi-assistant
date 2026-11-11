@@ -17,6 +17,18 @@ jest.mock('./custom-endpoint/probe-anthropic', () => ({
 jest.mock('./custom-endpoint/models', () => ({
   listEndpointModels: jest.fn(),
 }));
+jest.mock('./copilot/probe-copilot', () => ({ probeCopilot: jest.fn() }));
+const mockRuntime = {
+  status: jest.fn(),
+  ensureSignedIn: jest.fn(),
+  listModels: jest.fn(),
+};
+const mockStopRuntime = jest.fn();
+jest.mock('../../mastra/copilot', () => ({
+  getCopilotRuntime: () => mockRuntime,
+  stopCopilotRuntime: () => mockStopRuntime() as unknown,
+  createCopilotModel: jest.fn(),
+}));
 
 import {
   resolveAgentModel,
@@ -26,6 +38,7 @@ import { customModelConfig, normalizeBaseUrl } from './custom-endpoint/config';
 import { probeOpenAiStyle } from './custom-endpoint/probe';
 import { probeAnthropicStyle } from './custom-endpoint/probe-anthropic';
 import { listEndpointModels } from './custom-endpoint/models';
+import { probeCopilot } from './copilot/probe-copilot';
 import { effortLevelsFor } from '../../mastra/effort-levels';
 import {
   CryptoService,
@@ -1286,7 +1299,7 @@ describe('custom endpoint provider (BA-281)', () => {
         serviceWith().listModels({ ...body, provider: 'openai' as never }),
       ).resolves.toEqual({
         ok: false,
-        message: 'provider must be custom to load models',
+        message: 'provider must be custom or copilot to load models',
       });
       expect(listModels).not.toHaveBeenCalled();
     });
@@ -1375,3 +1388,228 @@ describe('custom endpoint provider (BA-281)', () => {
     });
   });
 });
+
+/* eslint-disable @typescript-eslint/unbound-method -- jest doubles */
+describe('GitHub Copilot provider (BA-159)', () => {
+  const probe = jest.mocked(probeCopilot);
+  const copilotDoc = (
+    overrides: Partial<LlmSettingsDoc> = {},
+  ): LlmSettingsDoc => ({
+    key: 'llm',
+    provider: 'copilot',
+    model: 'auto',
+    baseUrl: '',
+    reasoningEffort: 'high',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    probe.mockResolvedValue({ reply: 'ok', latencyMs: 9 });
+  });
+
+  describe('save (R55, R56)', () => {
+    it('saves a blank model as auto with no key and no URL, after the probe', async () => {
+      const { service, repository, crypto } = serviceWithMocks();
+      const view = await service.save({
+        provider: 'copilot',
+        model: '  ',
+        apiKey: 'ignored',
+        baseUrl: 'http://ignored',
+        apiStyle: 'openai',
+      });
+      expect(probe).toHaveBeenCalledWith('auto');
+      expect(repository.save).toHaveBeenCalledWith({
+        provider: 'copilot',
+        model: 'auto',
+        baseUrl: '',
+        reasoningEffort: 'high',
+      });
+      expect(crypto.encrypt).not.toHaveBeenCalled();
+      expect(view).toMatchObject({
+        provider: 'copilot',
+        model: 'auto',
+        baseUrl: null,
+        apiStyle: null,
+        apiKeyMasked: null,
+        configured: true,
+      });
+      expect(view.keyUnreadable).toBeUndefined();
+    });
+
+    it('removes a key stored for another provider', async () => {
+      const { service, repository } = serviceWithMocks({
+        settings: {
+          key: 'llm',
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          baseUrl: '',
+          apiKeyCiphertext: 'enc(sk)',
+        },
+      });
+      await service.save({ provider: 'copilot', model: 'gpt-5' });
+      expect(jest.mocked(repository.save).mock.calls[0][0]).not.toHaveProperty(
+        'apiKeyCiphertext',
+      );
+    });
+
+    it('does not persist when the probe fails, passing its text through', async () => {
+      probe.mockRejectedValue(new Error('Not signed in to GitHub — x'));
+      const { service, repository } = serviceWithMocks();
+      await expect(
+        service.save({ provider: 'copilot', model: 'auto' }),
+      ).rejects.toThrow('Not signed in to GitHub — x');
+      expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('checks the effort against the Copilot levels, none for auto', async () => {
+      await expect(
+        serviceWith().save({
+          provider: 'copilot',
+          model: 'auto',
+          reasoningEffort: 'high',
+        }),
+      ).rejects.toThrow('reasoning effort must be one of: none for this model');
+      await expect(
+        serviceWith().save({
+          provider: 'copilot',
+          model: 'gpt-5.2',
+          reasoningEffort: 'none',
+        }),
+      ).rejects.toThrow(
+        'reasoning effort must be one of: low, medium, high, xhigh',
+      );
+    });
+
+    it('lists copilot in the provider rejection text', async () => {
+      await expect(
+        serviceWith().save({ provider: 'nope' as never, model: 'x' }),
+      ).rejects.toThrow(
+        'provider must be one of: openai, anthropic, lenai, custom, copilot',
+      );
+    });
+  });
+
+  describe('switching away from copilot', () => {
+    it.each(['openai', 'anthropic', 'lenai'] as const)(
+      'needs a key for %s: none is stored',
+      async (provider) => {
+        const service = serviceWith({ settings: copilotDoc() });
+        await expect(
+          service.save({
+            provider,
+            model: 'm',
+            baseUrl: 'https://lenai.example.com',
+          }),
+        ).rejects.toThrow('apiKey is required — none stored yet');
+      },
+    );
+  });
+
+  describe('testConnection', () => {
+    it('probes the model and reports provider copilot', async () => {
+      await expect(
+        serviceWith().testConnection({ provider: 'copilot', model: 'gpt-5' }),
+      ).resolves.toMatchObject({
+        provider: 'copilot',
+        model: 'gpt-5',
+        latencyMs: 9,
+        reply: 'ok',
+      });
+      expect(probe).toHaveBeenCalledWith('gpt-5');
+    });
+  });
+
+  describe('agent model resolver', () => {
+    it('resolves the saved model as plain Copilot data, with no key read', async () => {
+      const { service, crypto } = serviceWithMocks({
+        settings: copilotDoc({ model: 'gpt-5' }),
+      });
+      await service.onModuleInit();
+      await expect(resolveAgentModelConfig()).resolves.toEqual({
+        kind: 'copilot',
+        id: 'copilot/gpt-5',
+      });
+      expect(crypto.decrypt).not.toHaveBeenCalled();
+    });
+
+    it("honours a user agent's model override", async () => {
+      const service = serviceWith({ settings: copilotDoc() });
+      await service.onModuleInit();
+      await expect(
+        resolveAgentModelConfig(' claude-sonnet-5 '),
+      ).resolves.toEqual({
+        kind: 'copilot',
+        id: 'copilot/claude-sonnet-5',
+      });
+    });
+  });
+
+  describe('listModels (R48)', () => {
+    it('lists the seat models', async () => {
+      mockRuntime.listModels.mockResolvedValue(['gpt-5', 'claude-sonnet-5']);
+      await expect(
+        serviceWith().listModels({ provider: 'copilot' }),
+      ).resolves.toEqual({ ok: true, models: ['gpt-5', 'claude-sonnet-5'] });
+    });
+
+    it('answers a runtime failure in the body', async () => {
+      mockRuntime.listModels.mockRejectedValue(new Error('Not signed in'));
+      await expect(
+        serviceWith().listModels({ provider: 'copilot' }),
+      ).resolves.toEqual({ ok: false, message: 'Not signed in' });
+    });
+
+    it('times out after 15s', async () => {
+      jest.useFakeTimers();
+      mockRuntime.listModels.mockReturnValue(new Promise(() => undefined));
+      const pending = serviceWith().listModels({ provider: 'copilot' });
+      await jest.advanceTimersByTimeAsync(15_000);
+      await expect(pending).resolves.toEqual({
+        ok: false,
+        message: 'Model list request timed out after 15s',
+      });
+      jest.useRealTimers();
+    });
+  });
+
+  it('answers the status from the runtime', async () => {
+    const status = {
+      signedIn: false,
+      login: null,
+      method: null,
+      message: 'Not signed in to GitHub',
+    };
+    mockRuntime.status.mockResolvedValue(status);
+    await expect(serviceWith().copilotStatus()).resolves.toBe(status);
+  });
+
+  it('answers the levels lookup per provider (api.md 32a)', () => {
+    const service = serviceWith();
+    expect(service.effortLevels('auto', 'copilot')).toEqual({
+      levels: [],
+      defaultEffort: null,
+      probeEffort: null,
+    });
+    expect(service.effortLevels('gpt-5.2', 'copilot').levels).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
+    expect(service.effortLevels('gpt-5.2').levels).toContain('none');
+  });
+
+  describe('shutdown', () => {
+    it('stops the runtime', async () => {
+      await serviceWith().onModuleDestroy();
+      expect(mockStopRuntime).toHaveBeenCalled();
+    });
+
+    it('never throws', async () => {
+      mockStopRuntime.mockRejectedValue(new Error('boom'));
+      await expect(serviceWith().onModuleDestroy()).resolves.toBeUndefined();
+    });
+  });
+});
+/* eslint-enable @typescript-eslint/unbound-method */

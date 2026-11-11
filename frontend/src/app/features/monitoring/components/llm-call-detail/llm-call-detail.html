@@ -1,0 +1,287 @@
+<div class="flex flex-col" data-testid="llm-call-detail">
+  @if (loading()) {
+    <div class="mt-6 flex items-center gap-2.5 text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading the LLM call…</span>
+    </div>
+  } @else if (error(); as err) {
+    <p
+      data-testid="llm-call-load-error"
+      role="alert"
+      class="mt-2 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  } @else if (call(); as c) {
+    <h2
+      class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
+    >
+      {{ title() }}
+    </h2>
+
+    <!-- Facts -->
+    <dl
+      data-testid="llm-call-facts"
+      class="card mt-4 grid grid-cols-2 gap-x-6 gap-y-3 p-4 text-[13px] sm:grid-cols-3 lg:grid-cols-4"
+    >
+      <div class="flex flex-col gap-0.5">
+        <dt class="field-label">Started</dt>
+        <dd class="text-fg">{{ formatStarted(c.startedAt) }}</dd>
+      </div>
+      <div class="flex flex-col gap-0.5">
+        <dt class="field-label">Duration</dt>
+        <dd class="text-fg tabular-nums">{{ formatDuration(c.durationMs) }}</dd>
+      </div>
+      <div class="flex flex-col gap-0.5">
+        <dt class="field-label">Time to first token</dt>
+        <dd class="text-fg tabular-nums">
+          {{ formatDuration(c.timeToFirstTokenMs) }}
+        </dd>
+      </div>
+      <div class="flex flex-col gap-0.5">
+        <dt class="field-label">Status</dt>
+        <dd>
+          <span
+            data-testid="llm-call-status"
+            class="chip px-2 py-0.5 text-[11px]"
+            [class]="statusChips[c.status]"
+            >{{ statusLabels[c.status] }}</span
+          >
+        </dd>
+      </div>
+      <div class="flex min-w-0 flex-col gap-0.5">
+        <dt class="field-label">Session</dt>
+        <dd class="truncate text-fg" data-testid="llm-call-session">
+          @if (c.session === null) {
+            —
+          } @else if (c.session.name !== null) {
+            <button
+              type="button"
+              data-testid="llm-call-session-link"
+              class="max-w-full truncate text-left text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+              [title]="'Open the session ' + c.session.name"
+              (click)="openSession.emit(c.session.id)"
+            >
+              {{ c.session.name }}
+            </button>
+          } @else {
+            {{ sessionLabel(c.session) }}
+          }
+        </dd>
+      </div>
+      <div class="flex flex-col gap-0.5">
+        <dt class="field-label">Provider</dt>
+        <dd class="text-fg">{{ c.provider }}</dd>
+      </div>
+      <div class="flex flex-col gap-0.5">
+        <dt class="field-label">Finish reason</dt>
+        <dd class="text-fg">{{ c.finishReason ?? "—" }}</dd>
+      </div>
+      <div class="flex flex-col gap-0.5">
+        <dt class="field-label">Tokens in</dt>
+        <dd class="text-fg tabular-nums">
+          {{ formatTokens(c.inputTokens) }}
+          <span class="block text-[11px] text-fg-muted"
+            >cache read {{ formatTokens(c.cacheReadTokens) }} · cache write
+            {{ formatTokens(c.cacheWriteTokens) }}</span
+          >
+        </dd>
+      </div>
+      <div class="flex flex-col gap-0.5">
+        <dt class="field-label">Tokens out</dt>
+        <dd class="text-fg tabular-nums">
+          {{ formatTokens(c.outputTokens) }}
+          <span class="block text-[11px] text-fg-muted"
+            >reasoning {{ formatTokens(c.reasoningTokens) }}</span
+          >
+        </dd>
+      </div>
+      <div class="flex flex-col gap-0.5">
+        <dt class="field-label">Estimated cost</dt>
+        <dd class="text-fg tabular-nums">{{ formatCost(c.costUsd) }}</dd>
+      </div>
+    </dl>
+
+    @if (c.status === "failed" && c.error !== null) {
+      <p
+        data-testid="llm-call-error"
+        class="mt-3 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] whitespace-pre-wrap text-on-danger-soft"
+      >
+        {{ c.error }}
+      </p>
+    }
+
+    <!-- Context window -->
+    <section class="mt-7 flex flex-col gap-3" aria-labelledby="context-window-heading">
+      <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h3
+          id="context-window-heading"
+          class="text-[14px] font-medium text-fg-strong"
+        >
+          Context window
+        </h3>
+        <span
+          data-testid="context-caption"
+          class="text-[12px] text-fg-muted tabular-nums"
+          >{{ contextCaption() }}</span
+        >
+      </div>
+
+      <div
+        data-testid="context-bar"
+        class="flex h-3 w-full overflow-hidden rounded-full bg-surface-muted"
+        role="img"
+        [attr.aria-label]="'Context window: ' + contextCaption()"
+      >
+        @for (segment of barParts(); track segment.key) {
+          <div
+            [attr.data-testid]="'context-bar-part-' + segment.key"
+            class="h-full"
+            [style.width.%]="segment.share * 100"
+            [style.background-color]="colour(segment.key)"
+            [title]="partTitle(segment)"
+          ></div>
+        }
+      </div>
+      @if (barParts().length > 0) {
+        <ul
+          data-testid="context-legend"
+          class="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-fg-muted"
+        >
+          @for (segment of barParts(); track segment.key) {
+            <li class="flex items-center gap-1.5">
+              <span
+                class="h-2.5 w-2.5 shrink-0 rounded-sm"
+                [style.background-color]="colour(segment.key)"
+              ></span>
+              <span>{{ segment.label }}</span>
+              <span class="tabular-nums">{{ formatShare(segment.share) }}</span>
+            </li>
+          }
+        </ul>
+      }
+
+      <div class="flex flex-col gap-2.5">
+        @for (segment of c.segments; track segment.key) {
+          <div
+            [attr.data-testid]="'context-segment-' + segment.key"
+            class="card flex flex-col gap-2 p-3"
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <span
+                class="h-3 w-3 shrink-0 rounded-sm"
+                [style.background-color]="colour(segment.key)"
+              ></span>
+              <span class="text-[14px] font-medium text-fg-strong">{{
+                segment.label
+              }}</span>
+              <span
+                [attr.data-testid]="'context-segment-owner-' + segment.key"
+                class="chip px-1.5 py-0.5 text-[10px]"
+                [class.chip-info]="segment.owner === 'US Health'"
+                [class.chip-neutral]="segment.owner === 'Custom'"
+                >{{ segment.owner }}</span
+              >
+              <span class="text-[12px] text-fg-muted tabular-nums"
+                >≈ {{ formatTokens(segment.tokens) }} tokens ·
+                {{ formatShare(segment.share) }}</span
+              >
+              <span class="text-[12px] text-fg-muted">{{
+                itemCount(segment)
+              }}</span>
+              @if (segment.items.length > 0) {
+                <button
+                  type="button"
+                  [attr.data-testid]="'context-segment-toggle-' + segment.key"
+                  class="btn btn-ghost ml-auto px-2 py-1 text-[12px]"
+                  [attr.aria-expanded]="isExpanded(segment.key)"
+                  (click)="toggle(segment.key)"
+                >
+                  <lucide-angular
+                    [img]="isExpanded(segment.key) ? ChevronDown : ChevronRight"
+                    [size]="14"
+                  />
+                  <span>{{
+                    isExpanded(segment.key) ? "Hide text" : "Show text"
+                  }}</span>
+                </button>
+              }
+            </div>
+            @if (segment.items.length === 0) {
+              <p class="text-[12px] text-fg-muted">Nothing in this call.</p>
+            } @else if (isExpanded(segment.key)) {
+              <div
+                [attr.data-testid]="'context-segment-text-' + segment.key"
+                class="flex flex-col gap-3"
+              >
+                @for (item of segment.items; track $index) {
+                  <div class="flex flex-col gap-1">
+                    <span class="text-[12px] font-medium text-fg">{{
+                      item.title
+                    }}</span>
+                    <pre
+                      class="max-h-80 overflow-auto rounded-lg border border-border bg-surface-muted p-2.5 font-mono text-[11.5px] leading-relaxed break-words whitespace-pre-wrap text-fg"
+                      >{{ item.text }}</pre
+                    >
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </section>
+
+    <!-- Steps -->
+    <section class="mt-7 flex flex-col gap-3" aria-labelledby="steps-heading">
+      <h3 id="steps-heading" class="text-[14px] font-medium text-fg-strong">
+        Steps
+      </h3>
+      @if (c.steps.length === 0) {
+        <p class="text-[12px] text-fg-muted">No steps recorded.</p>
+      } @else {
+        <div class="card overflow-x-auto">
+          <table
+            data-testid="llm-call-steps"
+            class="w-full border-collapse text-left text-[12px]"
+          >
+            <thead>
+              <tr
+                class="border-b border-border bg-surface-muted font-medium text-fg-muted"
+              >
+                <th scope="col" class="px-3 py-2 font-medium">Step</th>
+                <th scope="col" class="px-3 py-2 text-right font-medium">
+                  Tokens in
+                </th>
+                <th scope="col" class="px-3 py-2 text-right font-medium">
+                  Tokens out
+                </th>
+                <th scope="col" class="px-3 py-2 font-medium">Finish reason</th>
+                <th scope="col" class="px-3 py-2 text-right font-medium">
+                  Duration
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (step of c.steps; track step.index) {
+                <tr class="border-b border-border text-fg last:border-b-0">
+                  <td class="px-3 py-2 tabular-nums">{{ step.index + 1 }}</td>
+                  <td class="px-3 py-2 text-right tabular-nums">
+                    {{ formatTokens(step.inputTokens) }}
+                  </td>
+                  <td class="px-3 py-2 text-right tabular-nums">
+                    {{ formatTokens(step.outputTokens) }}
+                  </td>
+                  <td class="px-3 py-2">{{ step.finishReason ?? "—" }}</td>
+                  <td class="px-3 py-2 text-right tabular-nums">
+                    {{ formatDuration(step.durationMs) }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+</div>

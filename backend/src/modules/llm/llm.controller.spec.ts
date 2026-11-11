@@ -74,3 +74,32 @@ describe('LlmController (custom endpoint, BA-281)', () => {
     expect(listModels).toHaveBeenCalledWith(dto);
   });
 });
+
+describe('LlmController (GitHub Copilot, BA-159)', () => {
+  it('returns the bare Copilot status (api.md 32c)', async () => {
+    const status = {
+      signedIn: true,
+      login: 'octocat',
+      method: 'gh-cli',
+      message: 'Signed in to GitHub as octocat',
+    };
+    const copilotStatus = jest.fn().mockResolvedValue(status);
+    await expect(
+      controllerWith({ copilotStatus }).copilotStatus(),
+    ).resolves.toBe(status);
+  });
+
+  it('passes the provider to the effort-levels lookup (api.md 32a)', () => {
+    const effortLevels = jest.fn().mockReturnValue({ levels: [] });
+    controllerWith({ effortLevels }).effortLevels('auto', 'copilot');
+    expect(effortLevels).toHaveBeenCalledWith('auto', 'copilot');
+  });
+
+  it('passes a copilot model list request through', async () => {
+    const listModels = jest.fn().mockResolvedValue({ ok: true, models: ['a'] });
+    await expect(
+      controllerWith({ listModels }).listModels({ provider: 'copilot' }),
+    ).resolves.toEqual({ ok: true, models: ['a'] });
+    expect(listModels).toHaveBeenCalledWith({ provider: 'copilot' });
+  });
+});

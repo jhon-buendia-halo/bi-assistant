@@ -2,7 +2,7 @@
 
 A user can profile the tables of a PostgreSQL or Databricks dataset quickly, from a **sample** of their rows, download a synthetic copy of them as a SQL script in the datasource's own dialect (or as CSV or Excel), export the profile, and, behind an explicit confirm, export the real sampled rows. The sampled profile shows each column's type, null rate, distinct count, range, categorical values and text patterns, and says how a synthetic column would be generated. It is an approximate view, separate from [data-readiness](../data-readiness/spec.md), whose statistics stay exact.
 
-Roadmap 1.22.1 ships the sampled profile in the dataset editor; 1.22.2 the generator and the PostgreSQL script; 1.22.3 the Databricks script; 1.22.5 the CSV and Excel formats and the profile export; 1.22.6 the raw sample export. The Data Readiness Agent's tools (1.22.4) are specified here when they ship. The epic is [../../epics/M1-22/spec.md](../../epics/M1-22/spec.md); the decision is ADR-0037 in [../../system/architecture.md](../../system/architecture.md).
+Roadmap 1.22.1 ships the sampled profile in the dataset editor; 1.22.2 the generator and the PostgreSQL script; 1.22.3 the Databricks script; 1.22.5 the CSV and Excel formats and the profile export; 1.22.6 the raw sample export. The Data Readiness Agent's tools (1.22.4) are specified here when they ship. The epic is [../../epics/M1-22/spec.md](../../epics/M1-22/spec.md); the decision is ADR-0039 in [../../system/architecture.md](../../system/architecture.md).
 
 ## Concepts
 
@@ -168,10 +168,10 @@ Other cases:
 ## Contracts
 
 - Endpoints ([../../system/api.md](../../system/api.md) 2.18): `POST /synthetic-data/profiles` (111, a `201` JSON profile), `POST /synthetic-data/scripts` (112, a streamed attachment in the chosen `format`), `POST /synthetic-data/profile-exports` (113, a CSV or Excel attachment) and `POST /synthetic-data/sample-exports` (114, a streamed attachment of real rows). 112 to 114 answer `200` and write the response themselves. Nothing is stored, so there is no collection and no file on disk ([../../system/data-model.md](../../system/data-model.md): profiles live only in memory).
-- Decision: ADR-0037 in [../../system/architecture.md](../../system/architecture.md). Related: [../data-readiness/spec.md](../data-readiness/spec.md) (R29 unchanged), [../datasets/spec.md](../datasets/spec.md) R48 and R50 (the tab), [../datasources/spec.md](../datasources/spec.md) (the read-only guard).
+- Decision: ADR-0039 in [../../system/architecture.md](../../system/architecture.md). Related: [../data-readiness/spec.md](../data-readiness/spec.md) (R29 unchanged), [../datasets/spec.md](../datasets/spec.md) R48 and R50 (the tab), [../datasources/spec.md](../datasources/spec.md) (the read-only guard).
 - Backend module `backend/src/modules/synthetic-data/`; the sampler is `sampleTable` on the PostgreSQL and Databricks profilers, with its interface in `datasources/connectors/sampling.ts`. Layout: [../../system/tech-stack.md](../../system/tech-stack.md).
 - Constants (`synthetic-data/limits.ts`, shared with the frontend mirror): `DATABRICKS_TABLESAMPLE_MAX_BYTES = 50 GiB` (backend only), `SAMPLE_SIZE_MAX = 1000`, `PROFILE_TABLES_MAX = 50`, `PROFILE_TTL_MS = 3_600_000`, `PROFILE_CACHE_MAX = 20`, `ROWS_PER_TABLE_DEFAULT = 100`, `ROWS_PER_TABLE_MAX = 10000`, `SCRIPT_ROWS_MAX = 200000`, `INSERT_BATCH_ROWS = 500`, `DEFAULT_SEED = 1`, `DEFAULT_TARGET_SCHEMA = 'synthetic'` (`'sample'` for a raw export), `TARGET_SCHEMA_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/`.
-- Code layout: `generator/` (pure: `prng`, `plan`, `order`, `generate`, `words`, `values/*`), `script.ts` (header, order, batching), `dialects/` (`writer.ts` interface, `postgres.writer.ts`, `databricks.writer.ts`) and `exports/` (`csv.ts`, `zip.ts`, `xlsx.ts`). Dependencies for the formats: `exceljs` (streaming workbook writer) and `fflate` (streamed zip), backend only, recorded in ADR-0037.
+- Code layout: `generator/` (pure: `prng`, `plan`, `order`, `generate`, `words`, `values/*`), `script.ts` (header, order, batching), `dialects/` (`writer.ts` interface, `postgres.writer.ts`, `databricks.writer.ts`) and `exports/` (`csv.ts`, `zip.ts`, `xlsx.ts`). Dependencies for the formats: `exceljs` (streaming workbook writer) and `fflate` (streamed zip), backend only, recorded in ADR-0039.
 
 Request, `POST /synthetic-data/profiles`:
 

@@ -5,6 +5,7 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { App, composerModelLabel } from './app';
+import { MonitoringStateService } from './features/monitoring/services/monitoring-state.service';
 
 describe('App', () => {
   beforeEach(async () => {
@@ -45,6 +46,232 @@ describe('App', () => {
     expect(compiled.querySelector('[title="Help"]')).toBeFalsy();
   });
 
+  it('opens the Monitoring page with the LLM calls table from the rail (app-shell R3b, roadmap 1.21.14)', async () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    app.selectArea('monitoring');
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('monitoring');
+    expect(app.currentArea()).toBe('monitoring');
+    expect(
+      compiled
+        .querySelector('button[aria-label="Monitoring"]')
+        ?.getAttribute('aria-current'),
+    ).toBe('page');
+    const page = compiled.querySelector('[data-testid="monitoring-page"]');
+    expect(page?.querySelector('h2')?.textContent?.trim()).toBe('Monitoring');
+
+    // The note, the tabs and the table are a deferred chunk (kept out of the
+    // initial bundle).
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(
+      page?.querySelector('[data-testid="monitoring-note"]')?.textContent?.trim(),
+    ).toBe("LLM calls made by the app's agents, newest first.");
+    expect(compiled.querySelector('app-llm-calls-page')).toBeTruthy();
+    http
+      .expectOne((req) => req.url.endsWith('/monitoring/llm-calls'))
+      .flush({
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 25,
+        facets: { agents: [], models: [], providers: [], sessions: [] },
+      });
+    fixture.detectChanges();
+    expect(
+      compiled.querySelector('[data-testid="llm-calls-empty"]')?.textContent?.trim(),
+    ).toBe('No LLM calls yet.');
+  });
+
+  it('opens an LLM call with a Monitoring back control; the rail returns to the table (roadmap 1.21.15)', async () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    app.selectArea('monitoring');
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    app.openLlmCall('call-1');
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('llm-call');
+    expect(app.currentArea()).toBe('monitoring');
+    expect(app.activeLlmCallId()).toBe('call-1');
+    expect(
+      compiled
+        .querySelector('button[aria-label="Monitoring"]')
+        ?.getAttribute('aria-current'),
+    ).toBe('page');
+    const back = compiled.querySelector(
+      '[data-testid="llm-call-back"]',
+    ) as HTMLButtonElement;
+    expect(back.textContent?.trim()).toBe('Monitoring');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const detail = compiled.querySelector('app-llm-call-detail');
+    expect(detail).toBeTruthy();
+
+    back.click();
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('monitoring');
+
+    // Choosing Monitoring on the rail from a call returns to the table.
+    app.openLlmCall('call-2');
+    app.selectArea('monitoring');
+    expect(app.mainView()).toBe('monitoring');
+    // From the table it stays on the table.
+    app.selectArea('monitoring');
+    expect(app.mainView()).toBe('monitoring');
+  });
+
+  it('switches Monitoring between LLM calls and Sessions tabs; the note follows the tab (roadmap 1.21.16)', async () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const state = TestBed.inject(MonitoringStateService);
+    app.selectArea('monitoring');
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const q = (id: string) =>
+      compiled.querySelector(`[data-testid="${id}"]`) as HTMLElement;
+
+    // The tabs and their tables are a deferred chunk.
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(compiled.querySelector('[role="tablist"]')).toBeTruthy();
+    const calls = q('monitoring-tab-calls');
+    const sessions = q('monitoring-tab-sessions');
+    expect(calls.getAttribute('role')).toBe('tab');
+    expect(calls.textContent?.trim()).toBe('LLM calls');
+    expect(sessions.textContent?.trim()).toBe('Sessions');
+    expect(calls.getAttribute('aria-selected')).toBe('true');
+    expect(sessions.getAttribute('aria-selected')).toBe('false');
+    expect(sessions.getAttribute('tabindex')).toBe('-1');
+
+    // The arrow keys move to the other tab.
+    calls.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    fixture.detectChanges();
+    expect(state.tab()).toBe('sessions');
+    expect(q('monitoring-tab-sessions').getAttribute('aria-selected')).toBe('true');
+    expect(q('monitoring-note').textContent?.trim()).toBe(
+      'Sessions with recorded agent runs, most recent first.',
+    );
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(compiled.querySelector('app-sessions-page')).toBeTruthy();
+    expect(compiled.querySelector('app-llm-calls-page')).toBeNull();
+    http
+      .expectOne((req) => req.url.endsWith('/monitoring/sessions'))
+      .flush({ items: [], total: 0, page: 1, pageSize: 25, facets: { agents: [] } });
+    fixture.detectChanges();
+    expect(q('monitoring-sessions-empty').textContent?.trim()).toBe(
+      'No sessions yet.',
+    );
+
+    q('monitoring-tab-sessions').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowLeft' }),
+    );
+    fixture.detectChanges();
+    expect(state.tab()).toBe('calls');
+    expect(q('monitoring-note').textContent?.trim()).toBe(
+      "LLM calls made by the app's agents, newest first.",
+    );
+
+    // The chosen tab is kept when Monitoring is left and chosen again.
+    q('monitoring-tab-sessions').click();
+    app.selectArea('sessions');
+    fixture.detectChanges();
+    app.selectArea('monitoring');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(q('monitoring-tab-sessions').getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('opens a session from the Sessions tab with a Monitoring back control to that tab (roadmap 1.21.16)', async () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    const state = TestBed.inject(MonitoringStateService);
+    app.selectArea('monitoring');
+    state.setTab('sessions');
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    app.openMonitoringSession('session-1');
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('monitoring-session');
+    expect(app.currentArea()).toBe('monitoring');
+    expect(app.activeMonitoringSessionId()).toBe('session-1');
+    expect(
+      compiled
+        .querySelector('button[aria-label="Monitoring"]')
+        ?.getAttribute('aria-current'),
+    ).toBe('page');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(compiled.querySelector('app-session-flow')).toBeTruthy();
+
+    const back = compiled.querySelector(
+      '[data-testid="monitoring-session-back"]',
+    ) as HTMLButtonElement;
+    expect(back.textContent?.trim()).toBe('Monitoring');
+    back.click();
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('monitoring');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(
+      compiled
+        .querySelector('[data-testid="monitoring-tab-sessions"]')
+        ?.getAttribute('aria-selected'),
+    ).toBe('true');
+
+    // The rail returns from a session page to the Monitoring page, tab kept.
+    app.openMonitoringSession('session-1');
+    app.selectArea('monitoring');
+    expect(app.mainView()).toBe('monitoring');
+    expect(state.tab()).toBe('sessions');
+  });
+
+  it('a call opened from a session page goes back to it with "Session"; from the table with "Monitoring" (roadmap 1.21.16)', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    app.selectArea('monitoring');
+    app.openMonitoringSession('session-1');
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const back = () =>
+      compiled.querySelector('[data-testid="llm-call-back"]') as HTMLButtonElement;
+
+    app.openLlmCallFromSession('gen-1');
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('llm-call');
+    expect(app.activeLlmCallId()).toBe('gen-1');
+    expect(back().textContent?.trim()).toBe('Session');
+    back().click();
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('monitoring-session');
+    expect(app.activeMonitoringSessionId()).toBe('session-1');
+
+    // From the calls table the back control stays Monitoring.
+    app.selectArea('monitoring');
+    app.openLlmCall('call-1');
+    fixture.detectChanges();
+    expect(back().textContent?.trim()).toBe('Monitoring');
+    back().click();
+    fixture.detectChanges();
+    expect(app.mainView()).toBe('monitoring');
+
+    // The rail from a call opened from a session returns to Monitoring.
+    app.openMonitoringSession('session-1');
+    app.openLlmCallFromSession('gen-1');
+    app.selectArea('monitoring');
+    expect(app.mainView()).toBe('monitoring');
+  });
+
   it('offers Context with Ontologies, User personas then Visuals; Knowledge is gone (app-shell R3a, BA-320)', () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
@@ -53,7 +280,13 @@ describe('App', () => {
     const labels = Array.from(
       compiled.querySelectorAll('nav[aria-label="Workspace navigation"] button'),
     ).map((b) => b.getAttribute('aria-label'));
-    expect(labels).toEqual(['Datasets', 'Agents', 'Context', 'Sessions']);
+    expect(labels).toEqual([
+      'Datasets',
+      'Agents',
+      'Context',
+      'Sessions',
+      'Monitoring',
+    ]);
 
     // Context opens on one card per section, like the Agent Hub.
     app.selectArea('context');
@@ -418,6 +651,12 @@ describe('composerModelLabel (llm-settings R53)', () => {
         baseUrl: 'https://gateway.example.com',
       }),
     ).toBe('claude-sonnet-5-5 · gateway.example.com');
+  });
+
+  it('shows <model> · GitHub Copilot for Copilot (R65)', () => {
+    expect(
+      composerModelLabel({ ...view, provider: 'copilot', model: 'gpt-5' }),
+    ).toBe('gpt-5 · GitHub Copilot');
   });
 
   it('is null when nothing is configured', () => {

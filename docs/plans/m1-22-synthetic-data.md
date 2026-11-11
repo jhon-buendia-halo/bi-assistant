@@ -44,7 +44,7 @@ Section 9 lists the two places where the code changed a default's detail.
 | A real PostgreSQL in E2E | `frontend/e2e/helpers/world-cup-db.ts` (the `pg` client on 55432) | replay test |
 | Blob download in the UI | `URL.createObjectURL` pattern (`session-panel.ts`) | copy |
 
-The connectors' `sampleRows` (user/assistant path) is capped at 100 rows and uses `LIMIT` without sampling, so it is **not** reused. ADR-0031 keeps the profiling interface aggregate-only, so the sampler is a separate interface: the new ADR-0037 records this.
+The connectors' `sampleRows` (user/assistant path) is capped at 100 rows and uses `LIMIT` without sampling, so it is **not** reused. ADR-0031 keeps the profiling interface aggregate-only, so the sampler is a separate interface: the new ADR-0039 records this.
 
 ## 2. Architecture
 
@@ -523,7 +523,7 @@ Both tools follow the readiness tools' conventions (agents.md 3.13):
 
 ## 4. ADR (draft for architecture.md; written into it in story 1.22.1, step 4)
 
-#### ADR-0037 — Sampled profiling and synthetic data: a separate, approximate profile read from row samples, and a deterministic generator that writes a SQL script; the app stays read-only on datasources
+#### ADR-0039 — Sampled profiling and synthetic data: a separate, approximate profile read from row samples, and a deterministic generator that writes a SQL script; the app stays read-only on datasources
 - **Status:** Proposed
 - **Date:** 2026-11-11
 - **Context:**
@@ -564,7 +564,7 @@ Both tools follow the readiness tools' conventions (agents.md 3.13):
 |---|---|---|
 | **new** `specs/capabilities/synthetic-data/spec.md` | The capability: rules R1… (sampling methods, profile contents, classification, privacy rules, cache/expiry, generator strategies, determinism, dialect output, limits, UI tab, agent tools), edge cases with exact messages, contracts, UI, Gherkin `Feature: Synthetic data` with `E2E: \`frontend/e2e/synthetic-data.spec.ts\``, acceptance | 1.22.1 (profile rules, Feature skeleton), 1.22.2 (generator + PostgreSQL), 1.22.3 (Databricks), 1.22.4 (agent) |
 | `specs/README.md` | capability row `synthetic-data` | 1.22.1 |
-| `specs/system/architecture.md` | ADR-0037; a note on ADR-0031 ("profiling reads no row values" holds for readiness profiling; row samples are read only by the sampler of ADR-0037); C4 component list adds the synthetic-data module | 1.22.1 |
+| `specs/system/architecture.md` | ADR-0039; a note on ADR-0031 ("profiling reads no row values" holds for readiness profiling; row samples are read only by the sampler of ADR-0039); C4 component list adds the synthetic-data module | 1.22.1 |
 | `specs/system/api.md` | new 2.18 with #111 (1.22.1) and #112 (1.22.2); 1.3 Style B list; 1.4 (#112 returns 200 and writes itself) | 1.22.1, 1.22.2 |
 | `specs/system/ui.md` | 4.3: three tabs, the arrow-key cycle; new 4.3a "Profile & synthesize tab" with the testids and copy of 3.4 | 1.22.1, 1.22.2 |
 | `specs/capabilities/datasets/spec.md` | R48: three tabs and the new testid; a new R50: the tab acts on the saved dataset, by name | 1.22.1 |
@@ -579,7 +579,7 @@ Both tools follow the readiness tools' conventions (agents.md 3.13):
 
 | ID | Title | UI | Scope in one line |
 |---|---|---|---|
-| 1.22.1 | Sampled profile in the dataset editor | UI | sampler on both dialects, pure profile builder, cache, `POST /synthetic-data/profiles`, the third tab with table picker and profile view; ADR-0037 |
+| 1.22.1 | Sampled profile in the dataset editor | UI | sampler on both dialects, pure profile builder, cache, `POST /synthetic-data/profiles`, the third tab with table picker and profile view; ADR-0039 |
 | 1.22.2 | Synthetic data script for PostgreSQL | UI | the generator, the PostgreSQL writer, `POST /synthetic-data/scripts`, the Generate form and download; replay into a scratch PostgreSQL database proves it loads |
 | 1.22.3 | Databricks SQL script | no-UI (backend; the button exists) | the Databricks writer; a Databricks dataset's Generate now downloads a Databricks SQL script; golden tests plus a live check |
 | 1.22.4 | Profile and synthesize from the Data Readiness Agent | UI (chat + panel) | `profile_data_sample` and `generate_synthetic_data`, the bridge, the prompt (D12, D14), the panel file item, 2 eval cases; the Data Readiness evals at 100 % at the gate |
@@ -601,7 +601,7 @@ Between 1.22.2 and 1.22.3, `POST /synthetic-data/scripts` for a Databricks profi
   - **U-API** (Sonnet): module, controller (#111 only), service `profile()`, cache with injected clock, `app.module.ts`. Specs: every #111 error text, cache TTL and LRU eviction, abort on client close.
   - **U-UI** (Sonnet): the tab, `app-synthetic-data-panel`, picker, profile view (3.4). Unit specs: tab cycle, picker limits, method chip copy, strategy chip copy, error and cancel states.
   - **U-E2E** (Sonnet): `frontend/e2e/synthetic-data.spec.ts`, scenario `@demo @story-1.22.1` "Profile a sample of World Cup", with `scenarioStep` captions: open World Cup → Profile & synthesize → Profile sample → a card per table with method `Read all … rows` and a column showing `Reuses <k> values`.
-  - **U-SPECS** (Sonnet): every spec row for 1.22.1 in section 5, from this contract. Writes ADR-0037 into architecture.md.
+  - **U-SPECS** (Sonnet): every spec row for 1.22.1 in section 5, from this contract. Writes ADR-0039 into architecture.md.
 - **Integration (lead):**
   - merge the units;
   - `node scripts/qa.mjs 1.22.1 --fast --base HEAD`;
@@ -764,8 +764,8 @@ The user asked to "export the sample and synthetic data" and chose: the profile 
 
 **Writers (`synthetic-data/exports/`, 1.22.5):** `csv.ts` (RFC 4180: `,`, `"` doubled, CRLF row ends, UTF-8 without BOM, NULL empty, a header row), `zip.ts` (fflate `Zip` streamed to the response), `xlsx.ts` (exceljs `stream.xlsx.WorkbookWriter`; sheet names cut to 31 characters with `[]:*?/\` replaced by `_`, de-duplicated with `~2`; typed number, boolean and date cells). Each format consumes the same `generateTables` stream, so values are identical across formats for the same seed.
 
-**Privacy (ADR-0037 amendment, written in 1.22.6):** raw rows may leave the server only through 114, after `confirmRealData`; they are streamed and dropped; never logged, cached, written to a session file or sent to a model. 113 and the synthetic exports carry nothing beyond the profile view. Spec: during a 114 export, a spy logger and the profile cache receive no raw value.
+**Privacy (ADR-0039 amendment, written in 1.22.6):** raw rows may leave the server only through 114, after `confirmRealData`; they are streamed and dropped; never logged, cached, written to a session file or sent to a model. 113 and the synthetic exports carry nothing beyond the profile view. Spec: during a 114 export, a spy logger and the profile cache receive no raw value.
 
-**Dependencies (ADR-0037 amendment, written in 1.22.5):** `exceljs` and `fflate` in `backend/` only (the browser downloads a blob). Rejected: SheetJS (`xlsx` on npm is frozen at 0.18.5 with open advisories; newer builds ship only from the vendor's CDN), hand-written OOXML (styles, shared strings and dates are easy to get wrong), `archiver` (heavier, Node streams only; fflate is dependency-free).
+**Dependencies (ADR-0039 amendment, written in 1.22.5):** `exceljs` and `fflate` in `backend/` only (the browser downloads a blob). Rejected: SheetJS (`xlsx` on npm is frozen at 0.18.5 with open advisories; newer builds ship only from the vendor's CDN), hand-written OOXML (styles, shared strings and dates are easy to get wrong), `archiver` (heavier, Node streams only; fflate is dependency-free).
 
 **UI (ui.md 4.3a):** a `Format` select on the Generate form (`synth-format`: `SQL script`, `CSV (zip)`, `Excel (.xlsx)`; the button reads `Generate .sql`, `Generate .zip` or `Generate .xlsx`); on the profile view, `Export profile` (`synth-export-profile`, menu `CSV` / `Excel`) and `Export sample rows` (`synth-export-sample`, menu `SQL script` / `CSV (zip)` / `Excel (.xlsx)`), the latter opening the confirm dialog `synth-confirm-real-data` with **Export** and **Cancel**.

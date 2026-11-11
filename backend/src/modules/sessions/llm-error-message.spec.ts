@@ -190,3 +190,18 @@ describe('chatTurnError (R51)', () => {
     ).toBe(original);
   });
 });
+
+describe('chatTurnError on GitHub Copilot (R64)', () => {
+  it.each([
+    'GitHub Copilot request failed — rate limited',
+    'Not signed in to GitHub — run "gh auth login" (or sign in to the GitHub Copilot CLI or app) on this machine, then test again',
+    'The GitHub Copilot runtime could not start — spawn ENOENT',
+  ])('shows %s unchanged as the turn error', async (message) => {
+    const original = new Error(message);
+    const result = await chatTurnError(original, () =>
+      Promise.resolve({ provider: 'copilot', baseUrl: null }),
+    );
+    expect(result).toBe(original);
+    expect((result as Error).message).toBe(message);
+  });
+});

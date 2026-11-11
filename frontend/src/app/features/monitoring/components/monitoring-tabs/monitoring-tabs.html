@@ -1,0 +1,54 @@
+<p class="mt-1 text-[13px] text-fg-muted" data-testid="monitoring-note">
+  {{
+    state.tab() === "sessions"
+      ? "Sessions with recorded agent runs, most recent first."
+      : "LLM calls made by the app's agents, newest first."
+  }}
+</p>
+<div
+  role="tablist"
+  aria-label="Monitoring views"
+  class="mt-4 flex items-center gap-1 border-b border-border"
+>
+  @for (tab of tabs; track tab.id) {
+    <button
+      type="button"
+      role="tab"
+      [id]="'monitoring-tab-' + tab.id"
+      [attr.data-testid]="'monitoring-tab-' + tab.id"
+      [attr.aria-selected]="state.tab() === tab.id"
+      [attr.aria-controls]="'monitoring-panel-' + tab.id"
+      [attr.tabindex]="state.tab() === tab.id ? 0 : -1"
+      (click)="select(tab.id)"
+      (keydown.arrowRight)="select(other(tab.id), true)"
+      (keydown.arrowLeft)="select(other(tab.id), true)"
+      class="-mb-px border-b-2 px-3 py-2 text-[13px]"
+      [class.border-border-selected]="state.tab() === tab.id"
+      [class.text-fg-strong]="state.tab() === tab.id"
+      [class.border-transparent]="state.tab() !== tab.id"
+      [class.text-fg-muted]="state.tab() !== tab.id"
+      [class.hover:text-fg]="state.tab() !== tab.id"
+    >
+      {{ tab.label }}
+    </button>
+  }
+</div>
+@if (state.tab() === "sessions") {
+  <div
+    class="mt-6"
+    role="tabpanel"
+    id="monitoring-panel-sessions"
+    aria-labelledby="monitoring-tab-sessions"
+  >
+    <app-sessions-page (openSession)="openSession.emit($event)" />
+  </div>
+} @else {
+  <div
+    class="mt-6"
+    role="tabpanel"
+    id="monitoring-panel-calls"
+    aria-labelledby="monitoring-tab-calls"
+  >
+    <app-llm-calls-page (openCall)="openCall.emit($event)" />
+  </div>
+}

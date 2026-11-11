@@ -15,7 +15,7 @@ Capability-local vocabulary:
   - Per **relationship**: the from and to namespace, entity and field, the orphan count, and its origin (`declared` or `inferred`).
   - No row values ever enter the profile.
 - **Check.** One rule applied to the profile. It returns its dimension, how many things it checked (*checks run*), and its findings. Entity checks run once per entity. Source checks run once per assessment.
-- **Sampled profile.** A separate, approximate view of a dataset's tables read from row samples, defined by [synthetic-data](../synthetic-data/spec.md) (ADR-0037). It never feeds a readiness score and never changes the exact statistics below: R29 stands as written.
+- **Sampled profile.** A separate, approximate view of a dataset's tables read from row samples, defined by [synthetic-data](../synthetic-data/spec.md) (ADR-0039). It never feeds a readiness score and never changes the exact statistics below: R29 stands as written.
 - **Assessment scope.** The entities assessed:
   - the entities of one dataset, on that dataset's datasource;
   - or, through the API, a given entity list or the whole datasource.

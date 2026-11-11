@@ -33,7 +33,7 @@ The user can do this from the dataset editor or, for the `.sql` synthetic script
 - **Other formats (amendment of 2026-11-11).**
   - The synthetic copy also as a CSV zip (one RFC 4180 file per table) or an Excel workbook (one sheet per table), with the same values as the script for the same seed.
   - The profile as CSV or Excel, with exactly what the profile view shows.
-  - New dependencies for Excel and zip, recorded in an amendment to ADR-0037.
+  - New dependencies for Excel and zip, recorded in an amendment to ADR-0039.
 - **Raw sample export (amendment of 2026-11-11).**
   - The real sampled rows as `.sql` (target schema `sample`), CSV or Excel, from the editor tab only, after a confirm that the file holds real data.
   - The rows are read again on export with the same sampling seed; the profile cache keeps statistics only. Raw rows never go to a log, a cache, a session file or a model.
@@ -56,7 +56,7 @@ The user can do this from the dataset editor or, for the `.sql` synthetic script
 
 | Story | Summary | Roadmap feature |
 |---|---|---|
-| — (no Jira, repo only) | Sampled profile in the dataset editor (ADR-0037) | 1.22.1 |
+| — (no Jira, repo only) | Sampled profile in the dataset editor (ADR-0039) | 1.22.1 |
 | — (no Jira, repo only) | Synthetic data script for PostgreSQL | 1.22.2 |
 | — (no Jira, repo only) | Databricks SQL script | 1.22.3 |
 | — (no Jira, repo only) | Export synthetic data and the profile as CSV and Excel | 1.22.5 |
@@ -68,7 +68,7 @@ The implementation contract (types, endpoints, test ids, tool inputs, units of w
 ## Specs touched
 
 - New capability `capabilities/synthetic-data/spec.md`: sampling, profile, classification and privacy rules, generator, determinism, dialect output, limits, the editor tab, the agent tools, and the Gherkin Feature `Synthetic data` (`frontend/e2e/synthetic-data.spec.ts`). It is listed in [README.md](../../README.md).
-- [system/architecture.md](../../system/architecture.md): ADR-0037, and a note on ADR-0031 (its "profiling reads no row values" holds for readiness profiling).
+- [system/architecture.md](../../system/architecture.md): ADR-0039, and a note on ADR-0031 (its "profiling reads no row values" holds for readiness profiling).
 - [system/api.md](../../system/api.md): a new section 2.18 with endpoints 111 and 112, and the Style B list.
 - [system/ui.md](../../system/ui.md): 4.3 (three tabs) and a new 4.3a (the Profile & synthesize tab).
 - [capabilities/datasets](../../capabilities/datasets/spec.md): R48 (three tabs) and a new rule for the tab.
