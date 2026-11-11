@@ -86,7 +86,8 @@ const tkey = (ns: string, name: string): string => `${ns}\u0000${name}`;
 export function buildSampledProfile(input: BuildProfileInput): Omit<SampledProfile, 'profileId'> {
   const { tables, keys, foreignKeys } = input;
   const byRef = new Map<string, ProfileTableInput>();
-  for (const t of tables) byRef.set(tkey(t.table.schema, t.table.table), t);
+  // An unresolved entry (no catalog columns) never takes part in relationships.
+  for (const t of tables) if (t.table.columns.length > 0) byRef.set(tkey(t.table.schema, t.table.table), t);
 
   const keysOf = (t: ProfiledTable): KeyConstraint[] =>
     keys.filter((k) => k.schema === t.schema && k.table === t.table);
@@ -328,6 +329,17 @@ function buildColumn(
   }
   if (bools.length > 0) {
     column.boolean = { trueFraction: round4(bools.filter(Boolean).length / bools.length) };
+  }
+
+  // A numeric or temporal identifier that is not a sequence, uuid or usable FK is generated
+  // from its raw text shape: patterns and length only (shapes carry class tokens, no data).
+  if (
+    cls.kind === 'identifier' &&
+    cls.strategy === 'unique-pattern' &&
+    (semanticType === 'numeric' || semanticType === 'temporal')
+  ) {
+    column.length = lengthStats(nonNullValues);
+    column.patterns = buildShapes(nonNullValues);
   }
 
   if (semanticType === 'text') {
