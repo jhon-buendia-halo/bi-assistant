@@ -177,6 +177,30 @@ describe('SyntheticDataPanel', () => {
     );
   });
 
+  it('destroying the panel mid-request cancels the HTTP request', () => {
+    render(dataset(1));
+    q('synth-profile')!.click();
+    fixture.detectChanges();
+    const req = http.expectOne((r) => r.url.endsWith('/synthetic-data/profiles'));
+    expect(req.cancelled).toBe(false);
+    fixture.destroy();
+    expect(req.cancelled).toBe(true);
+  });
+
+  it('shows a dash for the range of an identifier without stats', () => {
+    render(dataset(1));
+    q('synth-profile')!.click();
+    fixture.detectChanges();
+    const p = profile();
+    p.tables[0].columns = [
+      col({ name: 'national_id', type: 'bigint', kind: 'identifier', strategy: 'sequence' }),
+    ];
+    http.expectOne((r) => r.url.endsWith('/synthetic-data/profiles')).flush(p);
+    fixture.detectChanges();
+    const cells = q('synth-col-db.public.t0-national_id')!.querySelectorAll('td');
+    expect(cells[4].textContent!.trim()).toBe('—');
+  });
+
   it('Cancel aborts the HTTP request and restores the button', () => {
     render(dataset(1));
     q('synth-profile')!.click();

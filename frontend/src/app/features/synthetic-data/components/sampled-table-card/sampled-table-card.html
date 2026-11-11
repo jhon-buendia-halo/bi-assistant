@@ -43,7 +43,7 @@
             <td class="px-2 py-2 text-fg-muted">{{ col.type }}</td>
             <td class="px-2 py-2">{{ percent(col.nullFraction) }}</td>
             <td class="px-2 py-2">{{ col.distinctCount }}</td>
-            <td class="px-2 py-2">{{ rangeText(col) }}</td>
+            <td class="px-2 py-2">{{ rangeText(col) || '—' }}</td>
             <td class="px-2 py-2">
               @if (col.topValues && col.topValues.length) {
                 <span class="flex flex-wrap gap-1">
