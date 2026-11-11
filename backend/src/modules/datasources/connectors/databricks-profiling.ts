@@ -14,6 +14,20 @@ import type {
   ScopedProfiler,
   TablePrivilege,
 } from './profiling';
+import {
+  isAbort,
+  isShortRead,
+  limitMethod,
+  outcomeError,
+  retryPercent,
+  samplePercent,
+  type RowSampler,
+  type SampleOutcome,
+} from './sampling';
+import {
+  DATABRICKS_TABLESAMPLE_MAX_BYTES,
+  SAMPLE_SIZE_MAX,
+} from '../../synthetic-data/limits';
 
 /** Per-statement (and connection) budget. */
 const STATEMENT_TIMEOUT_MS = 15_000;
@@ -36,7 +50,9 @@ interface Scope {
 
 /** Databricks profiling queries (unit 6, BA-257). Spark SQL, aggregate-only. */
 @Injectable()
-export class DatabricksProfiler implements ProfilingConnector<DatabricksConfig> {
+export class DatabricksProfiler
+  implements ProfilingConnector<DatabricksConfig>, RowSampler<DatabricksConfig>
+{
   readonly kind = 'databricks' as const;
   private readonly logger = new Logger(DatabricksProfiler.name);
   /** Set only on the scoped copy handed out by `withSessions`. */
@@ -75,6 +91,97 @@ export class DatabricksProfiler implements ProfilingConnector<DatabricksConfig> 
       `SELECT COUNT(*) AS n FROM ${qualify(schema, table)}`,
     );
     return num(rows[0]?.n);
+  }
+
+  /**
+   * Plan 2.1: `COUNT(*)` plus `DESCRIBE DETAIL` sizeInBytes pick the tier. Up to
+   * `sampleSize` rows: read all; above, below 50 GiB: TABLESAMPLE (p PERCENT);
+   * from 50 GiB (52 s cold on 160 GB), unknown, or TABLESAMPLE refused (views):
+   * LIMIT. Every value is normalised to a string. A failure leaves `error` and
+   * no rows; raw rows are never logged or put in an error message.
+   */
+  async sampleTable(
+    config: DatabricksConfig,
+    namespace: string,
+    table: string,
+    opts: { sampleSize: number; repeatableSeed: number },
+  ): Promise<SampleOutcome> {
+    const started = Date.now();
+    const limit = Math.max(1, Math.min(opts.sampleSize, SAMPLE_SIZE_MAX));
+    const from = qualify(namespace, table);
+    const out: SampleOutcome = {
+      namespace,
+      table,
+      rowCountEstimate: null,
+      method: 'limit',
+      columns: [],
+      rows: [],
+      durationMs: 0,
+    };
+    try {
+      await this.withSession(config, async (run) => {
+        const read = async (sql: string) => {
+          const rows = await run(sql);
+          out.columns = rows.length ? Object.keys(rows[0]) : [];
+          out.rows = rows.map((r) => {
+            const o: Record<string, string | null> = {};
+            for (const k of out.columns) o[k] = sampleValue(r[k]);
+            return o;
+          });
+        };
+        const readLimit = async () => {
+          await read(`SELECT * FROM ${from} LIMIT ${limit}`);
+          out.method = limitMethod(out.rows.length, limit);
+        };
+        let count: number | null = null;
+        try {
+          const rows = await run(`SELECT COUNT(*) AS n FROM ${from}`);
+          const n = Number(rows[0]?.n);
+          count = Number.isFinite(n) && n >= 0 ? n : null;
+        } catch (err) {
+          if (isAbort(err)) throw err;
+        }
+        out.rowCountEstimate = count;
+        if (count === null) return readLimit();
+        if (count <= limit) {
+          await read(`SELECT * FROM ${from} LIMIT ${limit}`);
+          out.method = out.rows.length >= limit ? 'limit' : 'full';
+          return undefined;
+        }
+        let bytes: number | null = null;
+        try {
+          const rows = await run(`DESCRIBE DETAIL ${from}`);
+          const n = Number(rows[0]?.sizeInBytes);
+          bytes = Number.isFinite(n) && n >= 0 ? n : null;
+        } catch (err) {
+          if (isAbort(err)) throw err;
+        }
+        if (bytes === null || bytes >= DATABRICKS_TABLESAMPLE_MAX_BYTES) {
+          return readLimit();
+        }
+        const seed = Math.trunc(opts.repeatableSeed);
+        const tablesample = (p: number) =>
+          `SELECT * FROM ${from} TABLESAMPLE (${p} PERCENT) REPEATABLE (${seed}) LIMIT ${limit}`;
+        const p = samplePercent(limit, count);
+        try {
+          await read(tablesample(p));
+          out.method = 'tablesample';
+          if (p < 100 && isShortRead(out.rows.length, limit, count)) {
+            await read(tablesample(retryPercent(p)));
+          }
+        } catch (err) {
+          if (isAbort(err)) throw err;
+          return readLimit();
+        }
+        return undefined;
+      });
+    } catch (err) {
+      if (isAbort(err)) throw err;
+      out.rows = [];
+      out.error = outcomeError(err);
+    }
+    out.durationMs = Date.now() - started;
+    return out;
   }
 
   async tables(
@@ -782,6 +889,12 @@ function scalar(v: unknown): string {
   if (v instanceof Date) return v.toISOString();
   if (typeof v === 'object' && v !== null) return JSON.stringify(v);
   return text(v);
+}
+
+/** One sampled value as text: Date to ISO, bigint to decimal text, objects to JSON, null stays null. */
+function sampleValue(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  return scalar(v);
 }
 
 function toIso(v: unknown): string | undefined {

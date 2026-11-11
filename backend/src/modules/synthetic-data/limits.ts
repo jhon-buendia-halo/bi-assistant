@@ -1,5 +1,7 @@
 /** Limits and defaults shared by the controller, the agent tools and the frontend mirror. */
 export const SAMPLE_SIZE_MAX = 1000;
+/** Databricks tables at or above this size (DESCRIBE DETAIL sizeInBytes) are read with LIMIT, not TABLESAMPLE: 52 s cold on 160 GB. */
+export const DATABRICKS_TABLESAMPLE_MAX_BYTES = 50 * 1024 ** 3;
 /** Chat (agent) limit: 20. */
 export const PROFILE_TABLES_MAX = 50;
 export const ROWS_PER_TABLE_DEFAULT = 100;
