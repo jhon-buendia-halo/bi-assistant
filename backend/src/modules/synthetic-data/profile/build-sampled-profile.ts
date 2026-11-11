@@ -89,7 +89,7 @@ const tkey = (ns: string, name: string): string => `${ns}\u0000${name}`;
 export function buildSampledProfile(
   input: BuildProfileInput,
 ): Omit<SampledProfile, 'profileId'> {
-  const { tables, keys, foreignKeys } = input;
+  const { tables, keys } = input;
   const byRef = new Map<string, ProfileTableInput>();
   // An unresolved entry (no catalog columns) never takes part in relationships.
   for (const t of tables)

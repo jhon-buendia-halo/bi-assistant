@@ -538,8 +538,8 @@ describe('classification rules (first match wins)', () => {
 
   it('7. categorical: <= 20 distinct, values seen >= 3 times in topValues, the rest in otherFraction', () => {
     const rows: Row[] = [
-      ...Array(6).fill({ s: 'open' }),
-      ...Array(3).fill({ s: 'closed' }),
+      ...new Array<Row>(6).fill({ s: 'open' }),
+      ...new Array<Row>(3).fill({ s: 'closed' }),
       { s: 'rare-1' },
       { s: 'rare-2' },
       { s: null },
@@ -563,8 +563,8 @@ describe('classification rules (first match wins)', () => {
 
   it('7. ties in topValues are ordered by value', () => {
     const rows: Row[] = [
-      ...Array(3).fill({ s: 'b' }),
-      ...Array(3).fill({ s: 'a' }),
+      ...new Array<Row>(3).fill({ s: 'b' }),
+      ...new Array<Row>(3).fill({ s: 'a' }),
     ];
     expect(
       col(
@@ -865,7 +865,7 @@ describe('foreign keys whose parent is not in the profile', () => {
           refSchema: 'public',
           refTable: 'customers',
           refColumn: 'code',
-        } as never,
+        },
       ],
     },
   );

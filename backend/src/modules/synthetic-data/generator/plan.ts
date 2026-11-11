@@ -103,7 +103,7 @@ export function validateScriptRequest(
   const requested = new Map<string, number>(
     profile.tables.map((t) => [
       t.key,
-      ((rowCounts as Record<string, number>)[t.key] ?? defaultRows) as number,
+      (rowCounts as Record<string, number>)[t.key] ?? defaultRows,
     ]),
   );
   let total = 0;
