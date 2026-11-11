@@ -457,8 +457,6 @@
                     (openAgent)="openAgent($event)"
                     (newAgent)="openAgentEditor(null)"
                     (openSkills)="openSkillsLibrary()"
-                    [startingAgentKey]="startingAgentKey()"
-                    (startChat)="startChatWithAgent($event)"
                   />
                 </div>
               } @else if (mainView() === "agent-detail" && activeAgentKey()) {
@@ -470,8 +468,7 @@
                     (deleted)="onAgentDeleted()"
                     (edit)="openAgentEditor($event.key)"
                     (openBuiltInSkill)="openBuiltInSkillEditor($event, true)"
-                    [starting]="startingAgentKey() === activeAgentKey()"
-                    (startChat)="startChatWithAgent($event)"
+                    (openWorkflow)="openWorkflow($event)"
                   />
                 </div>
               } @else if (mainView() === "agent-editor") {

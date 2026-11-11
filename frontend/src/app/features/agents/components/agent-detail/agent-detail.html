@@ -50,52 +50,48 @@
             </span>
           }
         </div>
+        <!-- Used in (R109): the workflows whose steps call this agent. -->
+        <div
+          data-testid="agent-used-in"
+          role="group"
+          aria-labelledby="agent-used-in-label"
+          class="flex flex-wrap items-center gap-1.5 text-[12px]"
+        >
+          <span id="agent-used-in-label" class="text-fg-muted">Used in</span>
+          @for (workflow of usedInWorkflows(); track workflow.id) {
+            <button
+              type="button"
+              [attr.data-testid]="'agent-used-in-' + workflow.id"
+              (click)="openWorkflow.emit(workflow.id)"
+              class="chip chip-info cursor-pointer hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            >
+              <lucide-angular [img]="WorkflowIcon" [size]="12" />
+              <span>{{ workflow.name }}</span>
+            </button>
+          } @empty {
+            <span class="text-fg-muted">{{ usedInEmpty() }}</span>
+          }
+        </div>
       </div>
-      @if (showStartChat() || canChange()) {
+      @if (canChange()) {
         <div class="ml-auto flex shrink-0 items-center gap-2">
-          @if (showStartChat()) {
-            <button
-              type="button"
-              data-testid="agent-start-chat"
-              (click)="startChat.emit(agent)"
-              [disabled]="starting() || !!startChatBlockedReason()"
-              [attr.title]="startChatBlockedReason()"
-              class="btn btn-primary"
-            >
-              @if (starting()) {
-                <lucide-angular
-                  [img]="Loader2"
-                  [size]="14"
-                  class="animate-spin"
-                />
-                <span>Starting…</span>
-              } @else {
-                <lucide-angular [img]="MessageSquarePlus" [size]="14" />
-                <span>Start chat</span>
-              }
-            </button>
-          }
-          @if (canChange()) {
-            <button
-              type="button"
-              data-testid="agent-edit"
-              (click)="edit.emit(agent)"
-              class="btn btn-secondary"
-            >
-              <lucide-angular [img]="Pencil" [size]="14" />
-              <span>Edit</span>
-            </button>
-          }
+          <button
+            type="button"
+            data-testid="agent-edit"
+            (click)="edit.emit(agent)"
+            class="btn btn-secondary"
+          >
+            <lucide-angular [img]="Pencil" [size]="14" />
+            <span>Edit</span>
+          </button>
           @if (canPublish()) {
-            <!-- Secondary beside Start chat: one primary action (ui.md 4.5). -->
+            <!-- The page's one primary action (ui.md 4.5). -->
             <button
               type="button"
               data-testid="agent-publish"
               (click)="publish()"
               [disabled]="publishing()"
-              class="btn"
-              [class.btn-primary]="!showStartChat()"
-              [class.btn-secondary]="showStartChat()"
+              class="btn btn-primary"
             >
               @if (publishing()) {
                 <lucide-angular
@@ -110,27 +106,25 @@
               }
             </button>
           }
-          @if (canChange()) {
-            <button
-              type="button"
-              data-testid="agent-delete"
-              (click)="deleteAgent()"
-              [disabled]="deleting()"
-              class="btn btn-danger"
-            >
-              @if (deleting()) {
-                <lucide-angular
-                  [img]="Loader2"
-                  [size]="14"
-                  class="animate-spin"
-                />
-                <span>Deleting…</span>
-              } @else {
-                <lucide-angular [img]="Trash2" [size]="14" />
-                <span>Delete</span>
-              }
-            </button>
-          }
+          <button
+            type="button"
+            data-testid="agent-delete"
+            (click)="deleteAgent()"
+            [disabled]="deleting()"
+            class="btn btn-danger"
+          >
+            @if (deleting()) {
+              <lucide-angular
+                [img]="Loader2"
+                [size]="14"
+                class="animate-spin"
+              />
+              <span>Deleting…</span>
+            } @else {
+              <lucide-angular [img]="Trash2" [size]="14" />
+              <span>Delete</span>
+            }
+          </button>
         </div>
       }
     </div>
@@ -161,17 +155,14 @@
 
     <!-- Tab panels -->
     <div class="mt-6">
-      @if (chatMounted() && agent.kind !== "system") {
+      @if (chatMounted() && isUserAgent()) {
         <div
           [class.hidden]="activeTab() !== 'chat'"
           data-testid="agent-panel-chat"
         >
           <app-agent-chat-box
-            [style.height]="isUserAgent() ? 'calc(100vh - 22rem)' : null"
-            [style.min-height]="isUserAgent() ? '420px' : null"
+            style="height: calc(100vh - 22rem); min-height: 420px"
             [agent]="agent"
-            [starting]="starting()"
-            (startChat)="startChat.emit($event)"
             (edit)="edit.emit($event)"
           />
         </div>

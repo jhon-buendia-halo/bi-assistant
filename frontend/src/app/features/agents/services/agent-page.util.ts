@@ -28,14 +28,34 @@ export const AGENT_TAB_ORDER: { id: AgentTabId; label: string }[] = [
   { id: 'model', label: 'LLM Config' },
 ];
 
-/** The tab an agent's page opens on: the chat, or the prompt for System agents. */
+/**
+ * The tab an agent's page opens on: a user agent's Chat Box, else System
+ * Prompt (agents-evals R5, R91).
+ */
 export function defaultAgentTab(kind: AgentKind): AgentTabId {
   return hasChatTab(kind) ? 'chat' : 'prompt';
 }
 
-/** System agents have no Chat Box. */
+/**
+ * Only a user agent has a Chat Box, the chat with its draft (R90). A chat
+ * with a built-in agent starts from its workflow (workflows R6).
+ */
 export function hasChatTab(kind: AgentKind): boolean {
-  return kind !== 'system';
+  return kind === 'user';
+}
+
+/**
+ * The Used in line's text when no workflow uses the agent (R109, plan 5.8):
+ * a draft-only user agent until it is published, a System agent always.
+ */
+export function usedInEmptyText(kind: AgentKind): string {
+  if (kind === 'user') {
+    return 'Not used in any workflow yet. Publish it to get its one-step workflow.';
+  }
+  if (kind === 'system') {
+    return 'Not used in any workflow. The app calls this agent itself.';
+  }
+  return 'Not used in any workflow.';
 }
 
 /** The tab ids shown for an agent kind, in order. */

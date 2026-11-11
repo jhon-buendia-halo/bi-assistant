@@ -297,13 +297,24 @@ async function openHub(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
+async function openWorkflows(page: Page): Promise<void> {
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Workflows', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
+  ).toBeVisible();
+}
+
+/** Start chat on the agent's workflow card (workflows R6). */
 function startChatButton(page: Page): Locator {
   return page.getByRole('button', { name: `Start chat with ${AGENT}` });
 }
 
-/** Starts a chat from the hub card and waits for its session's welcome. */
+/** Starts a chat from the workflow card and waits for its session's welcome. */
 async function startReadinessChat(page: Page): Promise<void> {
-  await openHub(page);
+  await openWorkflows(page);
   await expect(startChatButton(page)).toBeEnabled();
   await startChatButton(page).click();
   await expect(page.getByText(`Session "${SESSION}" created`)).toBeVisible();
@@ -457,12 +468,15 @@ test('start chat is blocked without a PostgreSQL or Databricks dataset', async (
   await expect(card.getByTestId(`agent-${AGENT_KEY}`)).toContainText(AGENT);
   await expect(card).toContainText('Owner: Official');
   await expect(card).toContainText(DESCRIPTION.slice(0, 60));
+  // The agent card never starts a chat; its workflow does (workflows R6).
+  await expect(card.getByRole('button', { name: /Start chat/ })).toHaveCount(0);
 
+  await openWorkflows(page);
   const button = startChatButton(page);
   await expect(button).toBeVisible();
   await expect(button).toHaveAttribute(
     'data-testid',
-    `agent-start-chat-${AGENT_KEY}`,
+    `workflow-start-chat-agent:${AGENT_KEY}`,
   );
   await expect(button).toBeDisabled();
   await expect(button).toHaveAttribute('title', REQUIREMENT);

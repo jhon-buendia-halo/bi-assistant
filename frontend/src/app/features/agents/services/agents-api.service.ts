@@ -117,6 +117,8 @@ export interface AgentDetail extends Agent {
   toolLinks?: AgentToolLink[];
   /** Workflow-backed built-in agents only (Questions to Insights v2). */
   workflow?: AgentWorkflow;
+  /** The workflows whose steps call this agent, in catalogue order (api.md 34). */
+  usedInWorkflows: { id: string; name: string }[];
   /** The LLM configuration the agent uses (LLM Config tab). */
   llm?: AgentLlm;
   /** User agents only: the working copy and the published copy. */

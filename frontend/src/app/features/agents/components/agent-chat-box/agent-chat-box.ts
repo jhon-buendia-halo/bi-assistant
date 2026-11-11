@@ -2,26 +2,16 @@ import {
   Component,
   OnDestroy,
   OnInit,
-  computed,
   inject,
   input,
   output,
   signal,
 } from '@angular/core';
-import {
-  Loader2,
-  LucideAngularModule,
-  MessageSquarePlus,
-  RotateCcw,
-} from 'lucide-angular';
+import { Loader2, LucideAngularModule, RotateCcw } from 'lucide-angular';
 import { firstValueFrom } from 'rxjs';
 import { Session } from '../../../sessions/models/session.model';
 import { SessionsApiService } from '../../../sessions/services/sessions-api.service';
 import { SessionChat } from '../../../sessions/components/session-chat/session-chat';
-import {
-  picksDatasets,
-  startChatBlockedReason,
-} from '../../services/agent-hub.util';
 import { AgentDetail } from '../../services/agents-api.service';
 
 /** The chat of a draft in the Chat Box (agents-evals R85). */
@@ -37,7 +27,8 @@ export const NO_DATASET_PREVIEW_MESSAGE =
 /**
  * The Chat Box tab (agents-evals R85, ui.md 4.5): a user agent's draft in a
  * preview session (in memory, never listed), discarded by New chat and when
- * the agent page closes; the Official assistant offers Start chat.
+ * the agent page closes. Only user agents have it (R90): a chat with a
+ * built-in agent starts from its workflow (workflows R6).
  */
 @Component({
   selector: 'app-agent-chat-box',
@@ -47,31 +38,21 @@ export const NO_DATASET_PREVIEW_MESSAGE =
 })
 export class AgentChatBox implements OnInit, OnDestroy {
   readonly Loader2 = Loader2;
-  readonly MessageSquarePlus = MessageSquarePlus;
   readonly RotateCcw = RotateCcw;
 
   private readonly sessionsApi = inject(SessionsApiService);
 
+  /** A user agent; the page mounts the Chat Box for no other kind. */
   readonly agent = input.required<AgentDetail>();
-  /** True while the shell creates a session from the Official agent. */
-  readonly starting = input(false);
-  /** Start chat on the Official assistant; the shell opens the new session. */
-  readonly startChat = output<AgentDetail>();
   /** Edit link of the no-dataset message. */
   readonly edit = output<AgentDetail>();
 
   readonly state = signal<ChatBoxState>({ kind: 'starting' });
-  readonly isUserAgent = computed(() => this.agent().kind === 'user');
-  readonly startBlockedReason = computed(() =>
-    startChatBlockedReason(this.agent()),
-  );
-  /** Questions to Insights v2: chats over picked datasets (R90, R107). */
-  readonly picksDatasets = computed(() => picksDatasets(this.agent()));
 
   private generation = 0;
 
   ngOnInit(): void {
-    if (this.isUserAgent()) void this.start();
+    void this.start();
   }
 
   ngOnDestroy(): void {

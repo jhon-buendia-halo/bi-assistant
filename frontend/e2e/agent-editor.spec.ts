@@ -63,6 +63,17 @@ async function openHub(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
+/** The Workflows page, where a chat starts (workflows R6). */
+async function openWorkflows(page: Page): Promise<void> {
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Workflows', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
+  ).toBeVisible();
+}
+
 async function openNewAgent(page: Page): Promise<void> {
   await openHub(page);
   await button(page, 'New agent').click();
@@ -188,7 +199,7 @@ test('editing a Live agent keeps its sessions on the Live version until republis
     datasets: [WORLD_CUP_DATASET],
   });
   await publishAgent(page, id);
-  await openHub(page);
+  await openWorkflows(page);
   await page
     .getByRole('button', { name: `Start chat with ${HISTORIAN}` })
     .click();
@@ -590,6 +601,7 @@ test('a linked skill reaches the preview, and the Live agent keeps its copy', as
       ? { toolCall: { name: 'skill', arguments: { name: FISCAL } } }
       : { text: STUB_ANSWER };
   };
+  await openWorkflows(page);
   await page
     .getByRole('button', { name: 'Start chat with Finance helper' })
     .click();
@@ -934,13 +946,14 @@ test('the Chat Box needs a dataset', async ({ page }) => {
   await expect(page.getByTestId('agent-chat-edit')).toHaveText('Edit');
 });
 
-test("the Official agent's Chat Box offers Start chat", async ({ page }) => {
+test('an Official agent has no Chat Box and opens on System Prompt', async ({
+  page,
+}) => {
   await openAgentPage(page, 'assistant', 'Questions to Insights Assistant');
-  const chat = page.getByTestId('agent-panel-chat');
-  await expect(chat).toContainText(
-    'Chats with the assistant run over datasets you choose.',
-  );
-  await expect(chat.getByTestId('agent-chat-start')).toHaveText('Start chat');
+  await expect(page.getByTestId('agent-tab-prompt')).toBeVisible();
+  await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
+  await expect(page.getByTestId('agent-panel-chat')).toHaveCount(0);
+  await expect(page.getByTestId('agent-prompt-view')).toBeVisible();
 });
 
 test('the Skills tab shows what is linked and creates a skill inline', async ({

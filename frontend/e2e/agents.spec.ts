@@ -58,8 +58,9 @@ test('opens an agent from the Agents list and switches between its tabs', async 
     page.getByRole('heading', { name: 'Questions to Insights Assistant' }),
   ).toBeVisible();
 
-  // The Chat Box is the first tab, with Start chat (R90).
-  await expect(page.getByTestId('agent-chat-start')).toBeVisible();
+  // An Official agent has no Chat Box and opens on System Prompt (R5, R90).
+  await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
+  await expect(page.getByTestId('agent-prompt-view')).toBeVisible();
 
   await page.getByTestId('agent-tab-prompt').click();
   await expect(page.getByTestId('agent-prompt-view')).toContainText(

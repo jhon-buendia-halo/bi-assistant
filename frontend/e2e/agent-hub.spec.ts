@@ -285,22 +285,24 @@ test("a card opens the agent's detail view with its actions", async ({
 }) => {
   await openHub(page);
 
+  // No agent offers Start chat: chats start from a workflow (R53).
   await openAgent(page, claimsId, CLAIMS);
   await expect(page.getByTestId('agent-edit')).toBeVisible();
   await expect(button(page, 'Publish')).toBeVisible();
   await expect(button(page, 'Delete')).toBeVisible();
-  await expect(page.getByTestId('agent-start-chat')).toHaveCount(0);
+  await expect(button(page, 'Start chat')).toHaveCount(0);
 
   await button(page, 'All agents').click();
   await openAgent(page, healthId, HEALTH);
-  await expect(page.getByTestId('agent-start-chat')).toBeVisible();
   await expect(page.getByTestId('agent-edit')).toBeVisible();
   await expect(button(page, 'Delete')).toBeVisible();
   await expect(button(page, 'Publish')).toHaveCount(0);
+  await expect(button(page, 'Start chat')).toHaveCount(0);
 
   await button(page, 'All agents').click();
   await openAgent(page, 'assistant', ASSISTANT);
-  await expect(page.getByTestId('agent-start-chat')).toBeVisible();
+  await expect(page.getByTestId('agent-used-in')).toBeVisible();
+  await expect(button(page, 'Start chat')).toHaveCount(0);
   await expect(page.getByTestId('agent-edit')).toHaveCount(0);
   await expect(button(page, 'Publish')).toHaveCount(0);
   await expect(button(page, 'Delete')).toHaveCount(0);
@@ -435,11 +437,6 @@ test(
           const card = official.getByTestId(`agent-card-${key}`);
           await expect(card).toContainText(name);
           await expect(card).toContainText('Owner: Official');
-          // Every Official card offers Start chat; the RFP Builder's waits for
-          // its dataset, which the Background does not load.
-          const start = card.getByRole('button', { name: /Start chat/ });
-          if (key === 'rfp') await expect(start).toBeVisible();
-          else await expect(start).toBeEnabled();
         }
         await expect(page.getByTestId('agent-show-more-official')).toHaveCount(
           0,
@@ -466,9 +463,7 @@ test(
   },
 );
 
-test('Questions to Insights v2 is an Official card that starts a chat', async ({
-  page,
-}) => {
+test('Questions to Insights v2 is an Official card', async ({ page }) => {
   await openHub(page);
   const official = section(page, 'official');
   const card = official.getByTestId(`agent-card-${V2_KEY}`);
@@ -477,9 +472,6 @@ test('Questions to Insights v2 is an Official card that starts a chat', async ({
   // Right after "Questions to Insights Assistant" (R1, R107).
   const keys = await cardKeys(official);
   expect(keys.indexOf(V2_KEY)).toBe(keys.indexOf('assistant') + 1);
-  await expect(
-    card.getByRole('button', { name: `Start chat with ${V2}`, exact: true }),
-  ).toBeEnabled();
 });
 
 test("Questions to Insights v2's page shows its prompt, three tools and no skills", async ({
@@ -488,11 +480,9 @@ test("Questions to Insights v2's page shows its prompt, three tools and no skill
   await openHub(page);
   await openAgent(page, V2_KEY, V2);
   await expect(page.getByText(V2_DESCRIPTION)).toBeVisible();
-  // It opens on the Chat Box, with Start chat (R90, R107).
-  await expect(page.getByTestId('agent-chat-start')).toBeVisible();
-  await expect(
-    page.getByText(`Chats with ${V2} run over datasets you choose.`),
-  ).toBeVisible();
+  // It opens on System Prompt and has no Chat Box (R5, R90, R107).
+  await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
+  await expect(page.getByTestId('agent-prompt-view')).toBeVisible();
 
   await page.getByTestId('agent-tab-prompt').click();
   await expect(
@@ -553,4 +543,160 @@ test('saving a Questions to Insights v2 prompt that loses its identity line is r
     `/agents/${V2_KEY}`,
   );
   expect(agent.prompt?.modified).toBe(false);
+});
+
+function railItem(page: Page, name: string): Locator {
+  return page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name, exact: true });
+}
+
+const DRAFT_EMPTY =
+  'Not used in any workflow yet. Publish it to get its one-step workflow.';
+const SYSTEM_EMPTY =
+  'Not used in any workflow. The app calls this agent itself.';
+
+test(
+  'An agent shows the workflows that use it',
+  { tag: ['@demo', '@story-1.23.7'] },
+  async ({ page }) => {
+    await scenarioStep(page, 'When I open "Agents"', async () => {
+      await openHub(page);
+    });
+    await scenarioStep(page, 'Then no card has "Start chat"', async () => {
+      await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
+      await expect(cards(page).first()).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: /Start chat/ }),
+      ).toHaveCount(0);
+    });
+    await scenarioStep(page, `When I open "${V2}"`, async () => {
+      await openAgent(page, V2_KEY, V2);
+    });
+    await scenarioStep(page, `Then I see "Used in" "${V2}"`, async () => {
+      const usedIn = page.getByTestId('agent-used-in');
+      await expect(usedIn).toContainText('Used in');
+      await expect(usedIn.getByTestId('agent-used-in-qti-v2-turn')).toHaveText(
+        V2,
+      );
+      await expect(button(page, 'Start chat')).toHaveCount(0);
+    });
+    await scenarioStep(page, `When I click the "${V2}" chip`, async () => {
+      await page.getByTestId('agent-used-in-qti-v2-turn').click();
+    });
+    await scenarioStep(
+      page,
+      `Then I see the "${V2}" workflow page and "Workflows" is the current rail item`,
+      async () => {
+        await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2);
+        await expect(page.getByTestId('workflow-detail-id')).toHaveText(
+          'qti-v2-turn',
+        );
+        await expect(railItem(page, 'Workflows')).toHaveAttribute(
+          'aria-current',
+          'page',
+        );
+        await expect(railItem(page, 'Agents')).not.toHaveAttribute(
+          'aria-current',
+        );
+      },
+    );
+    await scenarioStep(
+      page,
+      'When I open the "RFP Builder" agent',
+      async () => {
+        await openHub(page);
+        await openAgent(page, 'rfp', 'RFP Builder');
+      },
+    );
+    await scenarioStep(
+      page,
+      'Then I see no "Chat Box" tab, and "System Prompt" is open',
+      async () => {
+        await expect(page.getByTestId('agent-tab-prompt')).toBeVisible();
+        await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
+        await expect(page.getByText('Chat Box', { exact: true })).toHaveCount(
+          0,
+        );
+        await expect(page.getByTestId('agent-prompt-view')).toContainText(
+          'You are the RFP Builder',
+        );
+        await expect(page.getByTestId('agent-used-in-agent:rfp')).toHaveText(
+          'RFP Builder',
+        );
+      },
+    );
+  },
+);
+
+test('a draft-only agent is used in no workflow until it is published', async ({
+  page,
+}) => {
+  await openHub(page);
+  await openAgent(page, claimsId, CLAIMS);
+  await expect(page.getByTestId('agent-used-in')).toContainText(DRAFT_EMPTY);
+  await expect(
+    page.getByTestId('agent-used-in').getByRole('button'),
+  ).toHaveCount(0);
+  // A user agent keeps its Chat Box, and opens on it (R90).
+  await expect(page.getByTestId('agent-tab-chat')).toBeVisible();
+  await expect(page.getByTestId('agent-panel-chat')).toBeVisible();
+
+  await saveAgentDraft(page, claimsId, {
+    name: CLAIMS,
+    description: CLAIMS_DESCRIPTION,
+    datasets: [WORLD_CUP_DATASET],
+  });
+  await button(page, 'All agents').click();
+  await openAgent(page, claimsId, CLAIMS);
+  await button(page, 'Publish').click();
+  await expect(page.getByText(`Agent "${CLAIMS}" is Live`)).toBeVisible();
+  const chip = page.getByTestId(`agent-used-in-agent:${claimsId}`);
+  await expect(chip).toHaveText(CLAIMS);
+  await expect(page.getByTestId('agent-used-in')).not.toContainText(
+    DRAFT_EMPTY,
+  );
+
+  await chip.click();
+  await expect(page.getByTestId('workflow-detail-name')).toHaveText(CLAIMS);
+});
+
+test('a System agent says the app calls it itself', async ({ page }) => {
+  await openHub(page);
+  await button(page, 'Show more (2)').click();
+  await openAgent(page, 'sql-fixer', 'SQL Fixer');
+  await expect(page.getByTestId('agent-used-in')).toContainText(SYSTEM_EMPTY);
+  await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
+  await expect(button(page, 'Start chat')).toHaveCount(0);
+});
+
+test('the agent detail has no detectable accessibility violations in either theme', async ({
+  page,
+}) => {
+  await followOsTheme(page);
+  await page.addScriptTag({ content: axe.source });
+
+  async function scan(label: string): Promise<void> {
+    for (const theme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      // Let the theme's colour transitions finish before axe reads colours.
+      await page.waitForTimeout(500);
+      const results = await page.evaluate(async () => {
+        return (window as unknown as { axe: typeof axe }).axe.run(document);
+      });
+      expect(results.violations, `${label}, ${theme}`).toEqual([]);
+    }
+  }
+
+  await openHub(page);
+  await openAgent(page, V2_KEY, V2);
+  await expect(page.getByTestId('agent-used-in-qti-v2-turn')).toBeVisible();
+  await expect(page.getByTestId('agent-prompt-view')).toBeVisible();
+  await scan('Official agent');
+
+  await button(page, 'All agents').click();
+  await openAgent(page, claimsId, CLAIMS);
+  await expect(page.getByTestId('agent-used-in')).toContainText(DRAFT_EMPTY);
+  await scan('draft user agent');
 });

@@ -106,39 +106,11 @@ describe('AgentChatBox', () => {
     expect(edit).toHaveBeenCalledWith(userAgent);
   });
 
-  it('offers Start chat for the Official assistant, with no preview', () => {
-    render({
-      key: 'assistant',
-      id: 'assistant',
-      name: 'Assistant',
-      kind: 'official',
-      datasets: [],
-    } as unknown as AgentDetail);
-    const start = jasmine.createSpy('start');
-    fixture.componentInstance.startChat.subscribe(start);
-    expect(el().textContent).toContain(
-      'Chats with the assistant run over datasets you choose.',
-    );
-    byId('agent-chat-start')!.click();
-    expect(start).toHaveBeenCalled();
-  });
-
-  it('names Questions to Insights v2 and offers Start chat (R90, R107)', () => {
-    const v2 = {
-      key: 'assistant-v2',
-      id: 'questions-to-insights-v2',
-      name: 'Questions to Insights v2',
-      kind: 'official',
-      datasets: [],
-    } as unknown as AgentDetail;
-    render(v2);
-    const start = jasmine.createSpy('start');
-    fixture.componentInstance.startChat.subscribe(start);
-    expect(el().textContent).toContain(
-      'Chats with Questions to Insights v2 run over datasets you choose.',
-    );
-    expect(byId('agent-chat-start')!.hasAttribute('disabled')).toBeFalse();
-    byId('agent-chat-start')!.click();
-    expect(start).toHaveBeenCalledWith(v2);
+  it('has no Start chat: a chat starts from a workflow (R90)', async () => {
+    render(userAgent);
+    await flushPreview('p1');
+    expect(el().textContent).not.toContain('Start chat');
+    expect(byId('agent-chat-start')).toBeNull();
+    expect('startChat' in fixture.componentInstance).toBeFalse();
   });
 });

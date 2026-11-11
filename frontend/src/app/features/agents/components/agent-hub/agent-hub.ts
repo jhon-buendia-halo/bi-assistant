@@ -3,7 +3,6 @@ import {
   OnInit,
   computed,
   inject,
-  input,
   output,
   signal,
 } from '@angular/core';
@@ -55,10 +54,6 @@ export class AgentHub implements OnInit {
   readonly newAgent = output<void>();
   /** Skills; the shell opens the skills library (R68). */
   readonly openSkills = output<void>();
-  /** Start chat on a card; the shell creates or composes the session (R53). */
-  readonly startChat = output<Agent>();
-  /** Key of the agent whose session is being created, if any. */
-  readonly startingAgentKey = input<string | null>(null);
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);

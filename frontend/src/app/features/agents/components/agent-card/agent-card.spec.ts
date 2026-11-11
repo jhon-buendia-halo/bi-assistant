@@ -15,56 +15,49 @@ const historian: Agent = {
   missingDatasets: [],
 };
 
-describe('AgentCard Start chat', () => {
+const assistant: Agent = {
+  key: 'assistant',
+  id: 'assistant',
+  name: 'Questions to Insights Assistant',
+  description: 'Answers questions',
+  tools: [],
+  kind: 'official',
+  owner: 'Official',
+  datasets: [],
+};
+
+/** A card is a building block: it opens the agent, never a chat (R1, R53). */
+describe('AgentCard', () => {
   let fixture: ComponentFixture<AgentCard>;
 
-  async function render(agent: Agent, starting = false): Promise<HTMLElement> {
+  beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [AgentCard],
     }).compileComponents();
+  });
+
+  function render(agent: Agent): HTMLElement {
     fixture = TestBed.createComponent(AgentCard);
     fixture.componentRef.setInput('agent', agent);
-    fixture.componentRef.setInput('starting', starting);
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
 
-  function startChat(el: HTMLElement): HTMLButtonElement | null {
-    return el.querySelector('[aria-label="Start chat with Cup historian"]');
-  }
+  it('offers no Start chat on an Official or a Live user agent', () => {
+    for (const agent of [historian, assistant]) {
+      const el = render(agent);
+      expect(el.textContent).not.toContain('Start chat');
+      expect(el.querySelector('[data-testid^="agent-start-chat"]')).toBeNull();
+    }
+  });
 
-  it('emits startChat without opening the detail', async () => {
-    const el = await render(historian);
+  it('opens the agent from its open control', () => {
+    const el = render(historian);
     const opened = jasmine.createSpy('open');
-    const started = jasmine.createSpy('startChat');
     fixture.componentInstance.open.subscribe(opened);
-    fixture.componentInstance.startChat.subscribe(started);
-
-    startChat(el)!.click();
-
-    expect(started).toHaveBeenCalledTimes(1);
-    expect(opened).not.toHaveBeenCalled();
-  });
-
-  it('is not offered on a draft', async () => {
-    const el = await render({ ...historian, status: 'draft' });
-    expect(startChat(el)).toBeNull();
-  });
-
-  it("is disabled, with a title, when none of the agent's datasets exist", async () => {
-    const el = await render({
-      ...historian,
-      missingDatasets: ['World Cup Core'],
-    });
-    const button = startChat(el)!;
-    expect(button.disabled).toBeTrue();
-    expect(button.title).toBe("None of this agent's datasets exist");
-  });
-
-  it('is disabled while the session is being created', async () => {
-    const el = await render(historian, true);
-    const button = startChat(el)!;
-    expect(button.disabled).toBeTrue();
-    expect(button.hasAttribute('title')).toBeFalse();
+    el.querySelector<HTMLButtonElement>(
+      '[data-testid="agent-u-historian"]',
+    )!.click();
+    expect(opened).toHaveBeenCalledTimes(1);
   });
 });
