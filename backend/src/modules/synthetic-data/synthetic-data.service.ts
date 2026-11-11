@@ -339,7 +339,7 @@ export class SyntheticDataService {
 
     const ds = await this.datasource(profile.datasourceId);
     const keys = profile.tables.map((t) => t.key);
-    let sampled;
+    let sampled: { tables: { key: string; sample: SampleOutcome }[] };
     try {
       sampled =
         profile.dialect === 'postgres'
@@ -428,78 +428,93 @@ export class SyntheticDataService {
     database?: string,
   ) {
     const width = PROFILE_CONCURRENCY_BY_DIALECT[kind];
-    return withSamplingSessions(profiler, config, width, signal, async (scope) => {
-      // A failure here means the datasource cannot be reached: 502.
-      const catalog = await scope.tables(config);
-      const found = await scope.keys(config);
-      const foreignKeys = await scope.foreignKeys(config);
-      // A key outside the datasource's database has no ref: it becomes a failed table (R15).
-      const resolved = keys.map((k) => entityRefFromKey(kind, k, database));
-      const refs = resolved.map(
-        (r, i) =>
-          r ?? { namespace: foreignNamespace(keys[i]), name: foreignName(keys[i]) },
-      );
-      const samples: SampleOutcome[] = new Array(refs.length);
-      let next = 0;
-      const worker = async () => {
-        while (next < refs.length) {
-          const i = next++;
-          throwIfAborted(signal);
-          const ref = refs[i];
-          if (!resolved[i]) {
-            samples[i] = {
-              namespace: ref.namespace,
-              table: ref.name,
-              rowCountEstimate: null,
-              method: 'limit',
-              columns: [],
-              rows: [],
-              durationMs: 0,
-              error: `Table ${keys[i]} is not in the datasource's database "${database}"`,
-            };
-            continue;
+    return withSamplingSessions(
+      profiler,
+      config,
+      width,
+      signal,
+      async (scope) => {
+        // A failure here means the datasource cannot be reached: 502.
+        const catalog = await scope.tables(config);
+        const found = await scope.keys(config);
+        const foreignKeys = await scope.foreignKeys(config);
+        // A key outside the datasource's database has no ref: it becomes a failed table (R15).
+        const resolved = keys.map((k) => entityRefFromKey(kind, k, database));
+        const refs = resolved.map(
+          (r, i) =>
+            r ?? {
+              namespace: foreignNamespace(keys[i]),
+              name: foreignName(keys[i]),
+            },
+        );
+        const samples: SampleOutcome[] = new Array<SampleOutcome>(refs.length);
+        let next = 0;
+        const worker = async () => {
+          while (next < refs.length) {
+            const i = next++;
+            throwIfAborted(signal);
+            const ref = refs[i];
+            if (!resolved[i]) {
+              samples[i] = {
+                namespace: ref.namespace,
+                table: ref.name,
+                rowCountEstimate: null,
+                method: 'limit',
+                columns: [],
+                rows: [],
+                durationMs: 0,
+                error: `Table ${keys[i]} is not in the datasource's database "${database}"`,
+              };
+              continue;
+            }
+            try {
+              samples[i] = await scope.sampleTable(
+                config,
+                ref.namespace,
+                ref.name,
+                {
+                  sampleSize,
+                  repeatableSeed: SEED,
+                },
+              );
+            } catch (err) {
+              if (err instanceof Error && err.name === 'AbortError') throw err;
+              samples[i] = {
+                namespace: ref.namespace,
+                table: ref.name,
+                rowCountEstimate: null,
+                method: 'limit',
+                columns: [],
+                rows: [],
+                durationMs: 0,
+                error: err instanceof Error ? err.message : String(err),
+              };
+            }
           }
-          try {
-            samples[i] = await scope.sampleTable(
-              config,
-              ref.namespace,
-              ref.name,
-              {
-                sampleSize,
-                repeatableSeed: SEED,
-              },
-            );
-          } catch (err) {
-            if (err instanceof Error && err.name === 'AbortError') throw err;
-            samples[i] = {
-              namespace: ref.namespace,
-              table: ref.name,
-              rowCountEstimate: null,
-              method: 'limit',
+        };
+        await Promise.all(
+          Array.from({ length: Math.min(width, refs.length) }, worker),
+        );
+        return {
+          tables: refs.map((r, i) => ({
+            key: keys[i],
+            // An unresolved key never borrows a same-named table of the current database.
+            table: (resolved[i]
+              ? catalog.find(
+                  (t) => t.schema === r.namespace && t.table === r.name,
+                )
+              : undefined) ?? {
+              schema: r.namespace,
+              table: r.name,
               columns: [],
-              rows: [],
-              durationMs: 0,
-              error: err instanceof Error ? err.message : String(err),
-            };
-          }
-        }
-      };
-      await Promise.all(
-        Array.from({ length: Math.min(width, refs.length) }, worker),
-      );
-      return {
-        tables: refs.map((r, i) => ({
-          key: keys[i],
-          // An unresolved key never borrows a same-named table of the current database.
-          table: (resolved[i]
-            ? catalog.find((t) => t.schema === r.namespace && t.table === r.name)
-            : undefined) ?? { schema: r.namespace, table: r.name, columns: [] },
-          sample: samples[i],
-        })),
-        keys: found,
-        foreignKeys,
-      };
-    });
+            },
+            sample: samples[i],
+          })),
+          keys: found,
+          foreignKeys,
+        };
+      },
+    );
   }
 
   private async datasource(id: string): Promise<Datasource> {
