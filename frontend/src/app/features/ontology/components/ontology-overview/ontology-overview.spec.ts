@@ -103,6 +103,9 @@ describe('OntologyOverview (dataset-ontology R40)', () => {
     await setup();
     q('ontology-dataset-World Cup')!.click();
     fixture.detectChanges();
+    // The panel is deferred (kept out of the initial bundle).
+    await fixture.whenStable();
+    fixture.detectChanges();
     expect(q('ontology-overview-dataset')).toBeTruthy();
     expect(el().querySelector('app-ontology-panel')).toBeTruthy();
     expect(el().textContent).toContain('World Cup');

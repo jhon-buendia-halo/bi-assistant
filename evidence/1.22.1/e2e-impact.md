@@ -5,7 +5,7 @@ Touched: the dataset editor tab strip (`catalog-browser`, a third tab and the ar
 | Spec | Decision | Scenarios |
 |---|---|---|
 | `frontend/e2e/synthetic-data.spec.ts` | add | Profile a sample of World Cup (`@demo @story-1.22.1`) |
-| `frontend/e2e/dataset-ontology.spec.ts` | re-run | every scenario (uses the dataset tabs) |
+| `frontend/e2e/dataset-ontology.spec.ts` | re-run | every scenario (uses the dataset tabs; the Ontology panel is now deferred in the editor and on Context to keep the initial bundle under its 1 MB budget) |
 | `frontend/e2e/dataset-schema-notes.spec.ts` | re-run | every scenario (dataset editor) |
 | `frontend/e2e/layout-accessibility.spec.ts` | re-run | tab strip, heading order and screenshot baseline |
 | `frontend/e2e/navigation.spec.ts` | re-run | rail and dataset navigation |

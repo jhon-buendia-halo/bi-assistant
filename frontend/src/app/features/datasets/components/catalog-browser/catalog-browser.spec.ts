@@ -78,11 +78,14 @@ describe('CatalogBrowser tabs (BA-320)', () => {
     expect(selected()).toBe('synthesize');
   });
 
-  it('switches to the Ontology panel and back', () => {
+  it('switches to the Ontology panel and back', async () => {
     fixture.componentRef.setInput('initial', DATASET);
     fixture.detectChanges();
 
     q('dataset-tab-ontology')!.click();
+    fixture.detectChanges();
+    // The panel is deferred (kept out of the initial bundle).
+    await fixture.whenStable();
     fixture.detectChanges();
     expect(q('dataset-tab-ontology')!.getAttribute('aria-selected')).toBe('true');
     const panel = el().querySelector('#dataset-panel-ontology')!;

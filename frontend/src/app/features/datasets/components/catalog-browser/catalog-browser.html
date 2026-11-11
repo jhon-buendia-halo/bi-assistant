@@ -36,7 +36,9 @@
         id="dataset-panel-ontology"
         aria-labelledby="dataset-tab-ontology"
       >
-        <app-ontology-panel [dataset]="editing" />
+        @defer (on immediate) {
+          <app-ontology-panel [dataset]="editing" />
+        }
       </div>
     }
     @if (activeTab() === "synthesize") {
