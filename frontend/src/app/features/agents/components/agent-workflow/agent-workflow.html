@@ -1,0 +1,157 @@
+<section aria-labelledby="agent-workflow-heading">
+  <h3
+    id="agent-workflow-heading"
+    class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+  >
+    What happens on each message
+  </h3>
+  <p class="mt-1 text-[12px] text-fg-muted">
+    The steps run in this order on every message, as defined in code. Select a
+    step to see what it receives and returns.
+  </p>
+
+  <div class="mt-4 overflow-x-auto pb-2" data-testid="agent-workflow">
+    <ol class="workflow-row m-0 flex list-none items-start p-0">
+      @for (card of cards(); track card.step.id) {
+        <li
+          class="workflow-item flex items-start"
+          [class.agent]="card.step.kind === 'agent'"
+        >
+          <div class="step-column flex flex-col gap-2">
+            <button
+              type="button"
+              class="workflow-step"
+              [class.agent]="card.step.kind === 'agent'"
+              [attr.aria-pressed]="selectedId() === card.step.id"
+              [attr.data-testid]="'workflow-step-' + card.step.id"
+              (click)="toggle(card.step.id)"
+            >
+              <span class="flex items-center gap-2">
+                <span class="step-number" aria-hidden="true">{{
+                  card.number
+                }}</span>
+                <span class="sr-only">Step {{ card.number }}:</span>
+                <span
+                  class="text-[14px] font-semibold text-fg-strong"
+                  data-testid="workflow-step-title"
+                  >{{ card.step.title }}</span
+                >
+              </span>
+              <span
+                class="chip self-start"
+                [class.chip-info]="card.step.kind === 'agent'"
+                [class.chip-neutral]="card.step.kind !== 'agent'"
+                data-testid="workflow-step-kind"
+                >{{ card.kindLabel }}</span
+              >
+              <span class="text-[12px] leading-snug text-fg-muted">{{
+                card.step.summary
+              }}</span>
+              @if (card.step.agent; as agent) {
+                <span class="text-[12px] font-medium text-fg">{{
+                  agent.name
+                }}</span>
+                <span class="flex flex-wrap gap-1">
+                  @for (tool of agent.tools; track tool) {
+                    <span
+                      class="chip chip-neutral font-mono"
+                      data-testid="workflow-step-tool"
+                      >{{ tool }}</span
+                    >
+                  }
+                </span>
+                <span
+                  class="flex items-center gap-1.5 text-[12px] text-fg-muted"
+                  data-testid="workflow-step-loop"
+                >
+                  <lucide-angular
+                    [img]="RefreshCw"
+                    [size]="12"
+                    aria-hidden="true"
+                  />≤ {{ agent.maxSteps }} steps
+                </span>
+              }
+            </button>
+            @if (card.exits.length) {
+              <ul class="m-0 flex list-none flex-col gap-1 p-0">
+                @for (exit of card.exits; track exit.text) {
+                  <li
+                    class="flex items-center gap-1.5 text-[12px]"
+                    [class.text-on-danger-soft]="exit.outcome === 'fails'"
+                    [class.text-fg-muted]="exit.outcome === 'stops'"
+                    data-testid="workflow-step-exit"
+                  >
+                    <lucide-angular
+                      [img]="exit.outcome === 'fails' ? CircleX : Square"
+                      [size]="12"
+                      aria-hidden="true"
+                    />{{ exit.text }}
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+          @if (card.edgeLabel; as label) {
+            <div
+              class="workflow-edge"
+              [attr.data-testid]="'workflow-edge-' + card.step.id"
+            >
+              <span class="edge-label">
+                <span class="sr-only">Passes on: </span>{{ label }}
+              </span>
+              <span class="edge-line" aria-hidden="true"></span>
+            </div>
+          }
+        </li>
+      }
+    </ol>
+  </div>
+
+  <ul
+    class="mt-2 flex list-none flex-wrap gap-x-6 gap-y-2 p-0 text-[12px] text-fg-muted"
+    aria-label="Legend"
+  >
+    <li class="flex items-center gap-2">
+      <span class="chip chip-neutral">Code</span>Runs the same way every time
+    </li>
+    <li class="flex items-center gap-2">
+      <span class="chip chip-info">LLM</span>The model decides what to do
+    </li>
+  </ul>
+
+  @if (selected(); as card) {
+    <div
+      class="mt-4 rounded-xl border border-border bg-surface-muted px-4 py-3"
+      data-testid="workflow-step-details"
+      aria-live="polite"
+    >
+      <p class="text-[13px] font-semibold text-fg-strong">
+        {{ card.number }}. {{ card.step.title }}
+      </p>
+      <dl
+        class="mt-2 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-[13px]"
+      >
+        <dt class="text-fg-muted">Kind</dt>
+        <dd class="text-fg" data-testid="workflow-detail-kind">
+          {{ card.kindLabel }}
+        </dd>
+        <dt class="text-fg-muted">Summary</dt>
+        <dd class="text-fg">{{ card.step.summary }}</dd>
+        <dt class="text-fg-muted">Input</dt>
+        <dd class="font-mono text-fg" data-testid="workflow-detail-input">
+          {{ card.step.input.join(", ") }}
+        </dd>
+        <dt class="text-fg-muted">Output</dt>
+        <dd class="font-mono text-fg" data-testid="workflow-detail-output">
+          {{ card.step.output.join(", ") }}
+        </dd>
+        @if (card.step.agent; as agent) {
+          <dt class="text-fg-muted">Tools</dt>
+          <dd class="font-mono text-fg">{{ agent.tools.join(", ") }}</dd>
+          <dt class="text-fg-muted">Max steps</dt>
+          <dd class="text-fg">{{ agent.maxSteps }}</dd>
+        }
+      </dl>
+    </div>
+  }
+</section>

@@ -1753,6 +1753,51 @@ Profile a PostgreSQL or Databricks dataset quickly from a sample of its rows, an
   - Unit tests, builds and check-specs are green.
 - **Notes:** depends on 1.22.2 (and 1.22.3 for Databricks sessions). Shipped last (after 1.22.6) and on its own, so the eval cost is paid once. UI story (chat and panel).
   - **Prompt delta** (measured from the compiled agent, `dataReadinessInstructions()` before and after, LF): 4,676 → 5,716 characters (+1,040, +22 %), 741 → 907 words (+166), about +260 tokens per call. Of it, the two `## Tools` lines are about 430 characters, D14 about 450 and the D12 sentence about 90. No skill was added.
+
+### Milestone 1.23 — Questions to Insights v2: a workflow you can follow (M1-23)
+
+Questions to Insights v2 (Milestone 1.21) runs each turn as a workflow defined in code (ADR-0034), but the agent's detail view shows only its prompt links, so a user can't see what the agent does on a message. This epic makes that workflow readable in the app, starting with a drawing of it in the agent's **Graph** tab. Further v2 stories are added here as the user asks for them. All stories are built on the branch `feat/M1-23-v2-workflow-graph` and ship as one PR. Epic spec: [specs/epics/M1-23/spec.md](specs/epics/M1-23/spec.md). No Jira key (repo only).
+
+#### 1.23.1 — The Graph tab draws a workflow-backed agent's turn  `🚧 In progress`
+- **Intent:** open Questions to Insights v2 → **Graph** and see, step by step, what happens on each message. Show which steps are code and which is the LLM, what each step receives and returns, the agent's tools and step limit inside the LLM step, and where a turn fails or stops.
+- **Scope:**
+  - `GET /agents/:key` (api.md 34) gains `workflow?` for a workflow-backed agent (today only `assistant-v2`). It holds the workflow id and its steps in order, each with:
+    - id, title, kind (`code` or `agent`) and a one-line summary;
+    - input and output field names, taken from the step's schemas;
+    - for the agent step, its tools and maximum steps;
+    - the step's other exits (`fails` or `stops`, with a label).
+  - The data is built from the registered workflow and its step catalogue, never written twice, so a step added in code shows up without a UI change.
+  - Graph tab of a workflow-backed agent, top section **What happens on each message**:
+    - one node per step, left to right, in the workflow bar's titles and numbering;
+    - code steps and the agent step in two distinct styles, with a legend;
+    - the agent step drawn open: agent name, its tools and a loop marker `≤ <n> steps`;
+    - labelled arrows carry the data passed between steps;
+    - each step's other exits are drawn under it.
+    - Hovering or focusing a step highlights it. Clicking it opens a details card under the drawing with its kind, summary, input and output.
+  - Under it, the existing prompt-links graph keeps its behaviour under a **Prompt links** heading.
+  - Specs: agents-evals R105 (+ a new rule and a Gherkin scenario), api.md 34, ui.md 4.5.6, agents.md 5.11 (the step catalogue's summaries and exits).
+- **Out of scope:**
+  - a run's live or last status on the drawing;
+  - editing the workflow from the UI;
+  - Graph changes for the assistant, the RFP Builder, the Data Readiness Agent, user agents and System agents;
+  - the non-streamed turn;
+  - changing the workflow's steps or what reaches the model.
+- **Acceptance:**
+  - Questions to Insights v2's Graph tab shows `Receive question`, `Load catalog`, `Analyse` and `Wrap up` in order:
+    - Analyse is in the agent style, with `list_entities`, `describe_entity`, `run_readonly_sql` and `≤ 15 steps`;
+    - the other three are in the code style;
+    - the arrows are labelled with the step outputs;
+    - the exits are visible: empty question fails, Stop ends at Analyse, model error fails.
+  - Clicking `Load catalog` shows its input `question, datasets` and output `question, catalog`.
+  - The Prompt links graph is still there.
+  - The assistant's Graph tab is unchanged.
+  - The axe scan passes in both themes.
+  - Unit tests:
+    - the `workflow` field matches the registered workflow's step order and schemas;
+    - the layout is a pure function.
+  - The `@demo @story-1.23.1` scenario passes.
+  - Builds and check-specs are green.
+- **Notes:** requested on 2026-11-11, after a review of agent-vs-workflow approaches. The user chose the Graph tab over a new tab, the definition only (no run status) for now, and a new epic because Milestone 1.21 has shipped. UI story: its demo is recorded in the fast loop.
 ---
 
 ## Release 2 — Multi-user  (no target date yet)

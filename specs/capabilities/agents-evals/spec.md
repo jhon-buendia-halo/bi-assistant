@@ -256,7 +256,7 @@ The System Prompt tab of the Official and System agents, edited in the app as ov
 - R102. **Reset to built-in**, shown while the prompt is modified, SHALL ask `Reset the system prompt of "<name>" to the built-in version?`, delete the override, show `System prompt of "<name>" reset` and show the shipped text.
 - R103. A save or a reset SHALL apply to the next call of every session, user agent, deep analysis, visual, SQL fix and verification, ontology bootstrap and eval run, without a restart. With no override every prompt is the shipped one, unchanged. A user agent runs on the assistant, so an edit of the assistant's prompt changes its core prompt too. The code-enforced guards stay whatever the prompt says.
 - R104. When a modified prompt's shipped text has changed since the override was saved, the tab SHALL say `The app's built-in version changed since this was edited. Review it, then save again or reset.` and offer **Show the built-in version**, the shipped text read-only. The override SHALL keep serving until it is saved again or reset. Overrides SHALL apply to every session and agent. The eval baseline describes the shipped prompts; an eval run uses the overrides.
-- R105. The System Prompt tab of an Official agent (the assistant, Questions to Insights v2, the RFP Builder) SHALL render `prompt.editable` with its links as chips (R86) and, in place of the `## Tools` section, a muted note `## Tools — generated from the tools the assistant gets` (for the RFP Builder: `## Tools — generated from the tools the RFP Builder gets`; for v2: `## Tools — generated from the tools Questions to Insights v2 gets`); the generated list stays available in a collapsed `<details>` titled `Prompt as sent to the model` showing `instructions`. A chip is known when it names one of that agent's own tools or skills (the assistant: the library tools and the built-in on-demand skills; the RFP Builder: its tools and its stage skills). The Graph tab of an Official agent SHALL draw its prompt's links (instructions to skills and tools) with every one of its tools shown `Always on` and the linked ones joined to the instructions; for the RFP Builder that is instructions → each of its seven stage skills and → the RFP tools its prompt links, and each stage skill → the tools its body links (the built-in skill's `tools`, [api.md](../../system/api.md) 99). The message `This agent has no links: it gets all of its tools.` stays only for System agents (R88). The shipped assistant prompt links every tool it mentions and the built-in `curated-knowledge` skill, and the shipped RFP Builder prompt links every tool it mentions and its seven stage skills ([agents.md](../../system/agents.md) 2.8); the model sees them as plain mentions (R83).
+- R105. The System Prompt tab of an Official agent (the assistant, Questions to Insights v2, the RFP Builder) SHALL render `prompt.editable` with its links as chips (R86) and, in place of the `## Tools` section, a muted note `## Tools — generated from the tools the assistant gets` (for the RFP Builder: `## Tools — generated from the tools the RFP Builder gets`; for v2: `## Tools — generated from the tools Questions to Insights v2 gets`); the generated list stays available in a collapsed `<details>` titled `Prompt as sent to the model` showing `instructions`. A chip is known when it names one of that agent's own tools or skills (the assistant: the library tools and the built-in on-demand skills; the RFP Builder: its tools and its stage skills). The Graph tab of an Official agent SHALL draw its prompt's links (instructions to skills and tools) with every one of its tools shown `Always on` and the linked ones joined to the instructions; for the RFP Builder that is instructions → each of its seven stage skills and → the RFP tools its prompt links, and each stage skill → the tools its body links (the built-in skill's `tools`, [api.md](../../system/api.md) 99). A workflow-backed agent's Graph tab first draws its workflow (R108). The message `This agent has no links: it gets all of its tools.` stays only for System agents (R88). The shipped assistant prompt links every tool it mentions and the built-in `curated-knowledge` skill, and the shipped RFP Builder prompt links every tool it mentions and its seven stage skills ([agents.md](../../system/agents.md) 2.8); the model sees them as plain mentions (R83).
 
 ### Showcase agents
 
@@ -273,6 +273,21 @@ Four Official agents built into the app to show further US Health use cases befo
   - **Start chat** (card and detail header) SHALL open the new-session screen with the **Agent** field preselected to `Questions to Insights v2` instead of the assistant ([sessions-chat](../sessions-chat/spec.md) R52, R64); the agent has no datasets of its own, so the dataset picker and the required name stay;
   - the detail SHALL open on **Chat Box** (R90) and show its description `A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.`; the **Tools** tab SHALL list its three tools, the **Memory** tab the assistant's settings (R7: 40 messages, no semantic recall, no working memory, no generated titles), the **Skills** tab no skills (R63) and the **Evals** tab no sets;
   - the **System Prompt** tab SHALL be that of an Official agent (R97-R105): `Built-in` and `Modified` chips, the editable text without `## Tools` and **Edit**, **Reset to built-in**, with the hint `Type / to link a tool. Links here are mentions; Questions to Insights v2 keeps all its tools.` and the note `The ## Tools list is generated from the tools Questions to Insights v2 gets and is inserted before ## Working rules.` Its editor links only its three tools; **Save prompt** refuses a prompt that does not start with `You are Questions to Insights v2`, any `[[skill:…]]` link and an unknown tool, with the backend's message ([api.md](../../system/api.md) 103).
+- R108. The Graph tab of a **workflow-backed agent** SHALL open with a drawing of its workflow under the heading **What happens on each message**. Today the only such agent is Questions to Insights v2 (ADR-0034, [agents.md](../../system/agents.md) 5.11).
+  - The drawing comes from the agent's `workflow` ([api.md](../../system/api.md) 34), which is built from the workflow defined in code, never from the prompt. It replaces the four-step list of R88.
+  - It SHALL draw one card per step, left to right, numbered and titled as in the workflow bar ([agent-panel](../agent-panel/spec.md) R8a).
+    - A code step is marked `Code`.
+    - The agent step is marked `LLM` and drawn open, with the agent's name, its tools and `≤ <n> steps`.
+    - A legend names `Code` and `LLM`.
+  - Between two cards, an arrow is labelled with the fields the first step passes on, comma-separated.
+  - Under a card, each of its other exits is listed as `<label> → fails the turn` or `<label> → ends the turn here`.
+  - Hovering or focusing a card SHALL highlight it.
+  - Clicking a card, or pressing Enter or Space on it, SHALL select it and show a details card under the drawing:
+    - its number and title, its kind, its summary, `Input` and `Output` (the field names, comma-separated);
+    - for the agent step, also `Tools` and `Max steps`.
+    - Selecting the same card again closes the details card.
+  - Under the drawing, the prompt-links graph of R105 SHALL stay, under the heading **Prompt links** and without the four-step list.
+  - An agent that is not workflow-backed keeps its Graph tab unchanged.
 
 ## Edge cases and errors
 
@@ -1134,6 +1149,20 @@ Feature: Built-in agent prompts
     And I see the "rfp-client-renewal" skill joined to the "list_clients" tool
     And I see every RFP Builder tool marked "Always on"
     And I do not see "This agent has no links: it gets all of its tools."
+
+  Scenario: Questions to Insights v2's Graph tab draws what happens on each message
+    When I open the "Questions to Insights v2" agent
+    And I open the Graph tab
+    Then I see "What happens on each message" with the steps "Receive question", "Load catalog", "Analyse" and "Wrap up", numbered 1 to 4
+    And "Analyse" is marked "LLM" and shows "list_entities", "describe_entity", "run_readonly_sql" and "≤ 15 steps"
+    And the other three steps are marked "Code"
+    And the arrow from "Load catalog" to "Analyse" reads "question, catalog"
+    And I see "Empty question → fails the turn", "Stop → ends the turn here" and "Model error → fails the turn"
+    When I click the "Load catalog" step
+    Then the step details show Input "question, datasets" and Output "question, catalog"
+    And I see "Prompt links" with the agent's tools
+    When I open the "Questions to Insights Assistant" agent and its Graph tab
+    Then I do not see the workflow drawing
 
   Scenario: The RFP Builder's prompt links only its own tools and skill
     Given I am editing the System Prompt of "RFP Builder"

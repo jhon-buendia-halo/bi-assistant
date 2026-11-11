@@ -1581,6 +1581,21 @@ The model never writes this state: v2 has no `update_workflow`. A failed step en
 
 The non-streamed turn (`POST /sessions/:id/messages`, 5.1) is not a workflow run: it calls the agent once, as before.
 
+**The step catalogue describes each step for the agent's Graph tab** ([agents-evals](../capabilities/agents-evals/spec.md) R108). Besides the id and title, it holds for each step:
+- its kind, `code` or `agent`;
+- a one-line summary;
+- the field names of its input and output, in the order of the step's input and output schemas;
+- its other exits.
+
+The agent detail returns it as `workflow` ([api.md](api.md) 34). For the agent step it adds the agent's name, its tools (2.11) and its maximum steps. A unit test checks the field names against the built workflow's schemas, so the drawing can't drift from the code.
+
+| Step | Summary | Input | Output | Other exits |
+|---|---|---|---|---|
+| Receive question | `Trims the question. An empty one fails the step.` | question, datasets | question, datasets | `Empty question` fails |
+| Load catalog | `Lists the entities of the session's datasets. No LLM.` | question, datasets | question, catalog | — |
+| Analyse | `The agent answers with its tools and the catalog as context, streamed to the chat.` | question, catalog | calls, stopped | `Model error` fails; `Stop` stops |
+| Wrap up | `Counts the turn's SQL queries, failed queries and rows, and logs the summary.` | calls, stopped | sqlQueries, failedQueries, rows | — |
+
 > Implementation note: `mastra/workflows/qti-v2-turn.workflow.ts` builds the workflow with `createWorkflow` / `createStep` from `@mastra/core/workflows` and registers it on the `Mastra` instance as `qti-v2-turn` (`workflows`), with snapshot persistence off: the session document holds the state. The step ids, titles and pure step code are in `qti-v2-turn.steps.ts`, which imports no framework. The session code starts a run with `run.stream()` and reads `workflow-step-start` and `workflow-step-result` (`status` `success`, `failed`, or `bailed` for a stopped turn) from its `fullStream`. The Analyse step calls back into the session code through a per-run object on the run's `RequestContext`. The event-to-state mapping is `workflowRunState` in `modules/sessions/workflow-run-state.ts`.
 
 ---

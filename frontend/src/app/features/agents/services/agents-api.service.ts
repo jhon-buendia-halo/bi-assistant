@@ -71,6 +71,25 @@ export interface AgentToolLink {
   linkedVia: { instructions: boolean; skills: string[] };
 }
 
+/** One step of a workflow-backed agent's turn (api.md 34, agents-evals R108). */
+export interface AgentWorkflowStep {
+  id: string;
+  title: string;
+  kind: 'code' | 'agent';
+  summary: string;
+  input: string[];
+  output: string[];
+  /** The agent step only. */
+  agent?: { name: string; tools: string[]; maxSteps: number };
+  exits: { label: string; outcome: 'fails' | 'stops' }[];
+}
+
+/** A workflow-backed agent's turn workflow, its steps in run order. */
+export interface AgentWorkflow {
+  id: string;
+  steps: AgentWorkflowStep[];
+}
+
 /** The LLM the agent runs on; the key is never sent, only whether it is set. */
 export interface AgentLlm {
   provider: string | null;
@@ -98,6 +117,8 @@ export interface AgentDetail extends Agent {
   prompt?: AgentPromptView;
   /** User agents only: each library tool with its link status. */
   toolLinks?: AgentToolLink[];
+  /** Workflow-backed built-in agents only (Questions to Insights v2). */
+  workflow?: AgentWorkflow;
   /** The LLM configuration the agent uses (LLM Config tab). */
   llm?: AgentLlm;
   /** User agents only: the working copy and the published copy. */

@@ -33,6 +33,11 @@ export class AgentGraph {
   /** The owner's skills, with the tools each links. */
   readonly skills = input.required<Pick<SkillSummary, 'name' | 'tools'>[]>();
   readonly toolLinks = input.required<AgentToolLink[]>();
+  /**
+   * The four-step list under the drawing; off for a workflow-backed agent,
+   * whose workflow drawing tells what happens on each message (R108).
+   */
+  readonly showSteps = input(true);
 
   protected readonly steps = GRAPH_STEPS;
   protected readonly NODE_W = NODE_W;

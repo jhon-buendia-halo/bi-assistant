@@ -309,11 +309,21 @@
             }
           } @else if (agent.prompt?.linksAllowed) {
             <!-- An Official agent: its prompt's links, every one of its tools on. -->
+            @if (agent.workflow; as workflow) {
+              <!-- A workflow-backed agent: its turn first (R108). -->
+              <app-agent-workflow [workflow]="workflow" />
+              <h3
+                class="mt-8 mb-3 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+              >
+                Prompt links
+              </h3>
+            }
             @if (officialGraph(); as graph) {
               <app-agent-graph
                 [instructions]="agent.prompt!.editable"
                 [skills]="graph.skills"
                 [toolLinks]="graph.toolLinks"
+                [showSteps]="!agent.workflow"
               />
             } @else {
               <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">

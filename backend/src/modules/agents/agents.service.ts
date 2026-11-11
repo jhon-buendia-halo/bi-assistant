@@ -61,6 +61,10 @@ import type {
 } from '../user-agents/entities/user-agent.entity';
 
 import { ASSISTANT_V2_AGENT_KEY } from '../../mastra/agents/assistant-v2-catalog';
+import {
+  agentWorkflow,
+  type AgentWorkflow,
+} from '../../mastra/workflows/agent-workflows';
 
 /** The registry key of the official agent; every other built-in is `system`. */
 const OFFICIAL_AGENT_KEY = 'assistant';
@@ -192,6 +196,8 @@ export interface AgentDetail extends AgentSummary {
   llm: AgentLlmDetail;
   /** Built-in agents only: the editable system prompt (api.md 34, ADR-0026). */
   prompt?: AgentPromptView;
+  /** Workflow-backed built-in agents only: their turn's steps (api.md 34). */
+  workflow?: AgentWorkflow;
 }
 
 @Injectable()
@@ -239,10 +245,13 @@ export class AgentsService {
       const detail = await this.builtinDetail(key);
       if (!detail) return null;
       const prompt = await this.prompts?.view(key);
+      // A workflow-backed agent's turn, for its Graph tab (R108).
+      const workflow = agentWorkflow(key);
       return {
         ...detail,
         llm: await this.llmDetail(),
         ...(prompt ? { prompt } : {}),
+        ...(workflow ? { workflow } : {}),
       };
     }
     const doc = await this.userAgents.get(key);

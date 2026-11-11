@@ -54,6 +54,7 @@ import {
 import { DatasourcesApiService } from '../../../datasources/services/datasources-api.service';
 import { AgentSkills } from '../agent-skills/agent-skills';
 import { AgentGraph } from '../agent-graph/agent-graph';
+import { AgentWorkflowView } from '../agent-workflow/agent-workflow';
 import { AgentLlmConfig } from '../agent-llm-config/agent-llm-config';
 import { AgentToolLinks } from '../agent-tool-links/agent-tool-links';
 import { AgentChatBox } from '../agent-chat-box/agent-chat-box';
@@ -87,6 +88,7 @@ type EvalTab = 'questions' | 'runs';
     LucideAngularModule,
     AgentSkills,
     AgentGraph,
+    AgentWorkflowView,
     AgentLlmConfig,
     AgentToolLinks,
     AgentChatBox,

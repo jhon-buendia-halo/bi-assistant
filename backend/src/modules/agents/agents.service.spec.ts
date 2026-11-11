@@ -169,6 +169,15 @@ describe('AgentsService (built-in and user agents)', () => {
         'list_entities',
         'run_readonly_sql',
       ]);
+      // Its turn workflow, for the Graph tab (api.md 34, R108).
+      expect(detail?.workflow?.id).toBe('qti-v2-turn');
+      expect(detail?.workflow?.steps.map((step) => step.title)).toEqual([
+        'Receive question',
+        'Load catalog',
+        'Analyse',
+        'Wrap up',
+      ]);
+      expect((await v2.service.get('assistant'))?.workflow).toBeUndefined();
       expect(await v2.service.skills('assistant-v2')).toMatchObject({
         skills: [],
       });

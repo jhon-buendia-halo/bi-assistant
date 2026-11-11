@@ -11,13 +11,74 @@ import { getDatasetToolServices } from '../tool-services';
 /** The workflow's registry key and id. */
 export const QTI_V2_TURN_WORKFLOW_ID = 'qti-v2-turn';
 
+/** How a step can end other than by passing its output on. */
+export interface WorkflowStepExit {
+  label: string;
+  /** `fails`: the run stops with an error; `stops`: it ends early. */
+  outcome: 'fails' | 'stops';
+}
+
+/**
+ * One step of a code-defined turn workflow, as the step catalogue describes
+ * it (agents.md 5.11): the workflow bar reads `id` and `title`, the agent's
+ * Graph tab all of it (agents-evals R108). `input` and `output` name the
+ * fields of the step's schemas, in schema order; a unit test of the built
+ * workflow checks them.
+ */
+export interface WorkflowStepEntry {
+  id: string;
+  title: string;
+  kind: 'code' | 'agent';
+  summary: string;
+  input: readonly string[];
+  output: readonly string[];
+  exits: readonly WorkflowStepExit[];
+}
+
 /** The steps, in the order they run: the session's workflow bar shows them. */
 export const QTI_V2_TURN_STEPS = [
-  { id: 'receive-question', title: 'Receive question' },
-  { id: 'load-catalog', title: 'Load catalog' },
-  { id: 'analyse', title: 'Analyse' },
-  { id: 'wrap-up', title: 'Wrap up' },
-] as const;
+  {
+    id: 'receive-question',
+    title: 'Receive question',
+    kind: 'code',
+    summary: 'Trims the question. An empty one fails the step.',
+    input: ['question', 'datasets'],
+    output: ['question', 'datasets'],
+    exits: [{ label: 'Empty question', outcome: 'fails' }],
+  },
+  {
+    id: 'load-catalog',
+    title: 'Load catalog',
+    kind: 'code',
+    summary: "Lists the entities of the session's datasets. No LLM.",
+    input: ['question', 'datasets'],
+    output: ['question', 'catalog'],
+    exits: [],
+  },
+  {
+    id: 'analyse',
+    title: 'Analyse',
+    kind: 'agent',
+    summary:
+      'The agent answers with its tools and the catalog as context, streamed to the chat.',
+    input: ['question', 'catalog'],
+    output: ['calls', 'stopped'],
+    exits: [
+      { label: 'Model error', outcome: 'fails' },
+      { label: 'Stop', outcome: 'stops' },
+    ],
+  },
+  {
+    id: 'wrap-up',
+    title: 'Wrap up',
+    kind: 'code',
+    summary:
+      "Counts the turn's SQL queries, failed queries and rows, and logs the summary.",
+    input: ['calls', 'stopped'],
+    output: ['sqlQueries', 'failedQueries', 'rows'],
+    exits: [],
+  },
+] as const satisfies readonly WorkflowStepEntry[];
 
 /** The run's RequestContext key holding the per-run `QtiV2TurnRuntime`. */
 export const QTI_V2_TURN_RUNTIME_KEY = 'qti-v2-turn-runtime';
