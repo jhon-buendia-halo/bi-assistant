@@ -80,6 +80,7 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-305 US Health testing data | [epics/BA-305](epics/BA-305/spec.md) |
 | BA-318 Schema metadata in datasets | [epics/BA-318](epics/BA-318/spec.md) |
 | BA-320 Questions to Insights v2 | [epics/BA-320](epics/BA-320/spec.md) |
+| M1-22 Sampled profiling and synthetic data (repo only, no Jira key) | [epics/M1-22](epics/M1-22/spec.md) |
 
 ## Stack neutrality
 
