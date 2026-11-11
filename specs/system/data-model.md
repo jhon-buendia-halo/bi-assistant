@@ -656,7 +656,11 @@ workspaces/
           exhibit-d-carriers.csv
         manifest.json              { rfpId, title, generatedAt, files[] }
         draft/                     a DRAFT package (export_rfp_draft), same layout, manifest adds draft: true and stage
+    synthetic-data/
+      <dataset-slug>-synthetic-<dialect>-seed<seed>.sql   a synthetic data script (Data Readiness Agent sessions only)
 ```
+
+The `synthetic-data/` folder holds the scripts `generate_synthetic_data` writes ([agents.md](agents.md) 3.14, [../capabilities/synthetic-data/spec.md](../capabilities/synthetic-data/spec.md) R43): UTF-8, LF-only, at most 256 KB, generated values only. A second call with the same file name overwrites the file; each call stores a new `file` panel item (3.4.4) pointing at it, so the panel and its Download (api.md 106-107) read the file as it is now. Deleted with the workspace.
 
 The `rfp/<rfp-id>/` folder is the unzipped `GET /v1/rfps/:id/package.zip` of the Intellify RFP API ([api.md](api.md) 2.16.5), written by `export_rfp_package` ([agents.md](agents.md) 3.10) and referenced by the answer's `rfpPackage` (3.4.1). Re-exporting the same RFP overwrites the folder (not `draft/`, which holds the latest draft, written by `export_rfp_draft` and replaced by the next draft; neither export touches the other): the record in the `rfp` schema (section 7) is the source of truth. Served by [api.md](api.md) #105; deleted with the workspace.
 

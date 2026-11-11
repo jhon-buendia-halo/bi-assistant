@@ -1718,6 +1718,7 @@ Profile a PostgreSQL or Databricks dataset quickly from a sample of its rows, an
   - The `@demo @story-1.22.4` scenario passes.
   - Unit tests, builds and check-specs are green.
 - **Notes:** depends on 1.22.2 (and 1.22.3 for Databricks sessions). Shipped last (after 1.22.6) and on its own, so the eval cost is paid once. UI story (chat and panel).
+  - **Prompt delta** (measured from the compiled agent, `dataReadinessInstructions()` before and after, LF): 4,676 → 5,716 characters (+1,040, +22 %), 741 → 907 words (+166), about +260 tokens per call. Of it, the two `## Tools` lines are about 430 characters, D14 about 450 and the D12 sentence about 90. No skill was added.
 ---
 
 ## Release 2 — Multi-user  (no target date yet)

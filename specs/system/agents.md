@@ -896,7 +896,7 @@ Rules:
 
 ### 2.10 `data-readiness` (id `data-readiness-agent`) — Data Readiness Agent
 
-**Purpose.** Tells a user how ready the data behind a PostgreSQL or Databricks dataset is for analysis, on the DMBOK data-quality dimensions. **A deterministic engine computes every score and finding.** The agent runs it through its tools and explains the stored report. It never computes or adjusts a number (ADR-0031). It can also run read-only SQL to show the records behind a finding, and such a query never changes a score (ADR-0035). Behaviour rules: [data-readiness](../capabilities/data-readiness/spec.md).
+**Purpose.** Tells a user how ready the data behind a PostgreSQL or Databricks dataset is for analysis, on the DMBOK data-quality dimensions. **A deterministic engine computes every score and finding.** The agent runs it through its tools and explains the stored report. It never computes or adjusts a number (ADR-0031). It can also run read-only SQL to show the records behind a finding, and such a query never changes a score (ADR-0035). It can profile a sample of the data and generate a synthetic copy as a SQL script the user downloads from the panel; sampled numbers are approximate and never scores (3.14, ADR-0039). Behaviour rules: [data-readiness](../capabilities/data-readiness/spec.md).
 
 **Invoked by.**
 
@@ -915,7 +915,9 @@ It is never called by the grounding guard (5.6), careful mode (5.8) or deep anal
 - It stores a `readiness` panel item for the report and sets the answer's `readinessReport` reference ([data-model.md](data-model.md) 3.4.1).
 - While `assess_data_readiness` runs, its progress chunks are forwarded as `tool-progress` stream events and never reach the model or the stored message (3.13, ADR-0033).
 
-**Tools**, in order: the readiness tools of 3.13 (3), then the shared `describe_entity` and `run_readonly_sql` (3.2, 3.4, ADR-0035), `show_in_panel` (3.11) and the shared `ask_clarification` (3.5).
+- A successful `generate_synthetic_data` result stores a `file` panel item and emits it as `panel-item`, as `show_in_panel` does (3.14).
+
+**Tools**, in order: the readiness tools of 3.13 (3), the synthetic-data tools `profile_data_sample` and `generate_synthetic_data` (3.14), then the shared `describe_entity` and `run_readonly_sql` (3.2, 3.4, ADR-0035), `show_in_panel` (3.11) and the shared `ask_clarification` (3.5).
 - `describe_entity` and `run_readonly_sql` are the assistant's own tools, unchanged: session-scoped to the session's datasets, with the read-only guard, the SQL Fixer and the result guards (3.2, 3.4).
 - It has no other dataset tools, no visual tools, no `update_workflow` and no workspace tools.
 - It declares `skills`, so the framework adds its skill tools (3.9).
@@ -933,7 +935,7 @@ It is never called by the grounding guard (5.6), careful mode (5.8) or deep anal
 **Prompt requirements.** The prompt MUST start with `You are the Data Readiness Agent`.
 - **Structure.** The identity paragraph, `## Tools` generated as the RFP Builder's is (2.8), and `## Working rules`. The served `## Tools` is inserted before `## Working rules`. It has no `## Workflow` section.
 - **Overrides** (ADR-0026) follow the RFP Builder's rules: the editable text and Reset leave out `## Tools`, and an override must start with the identity line.
-- **Links** (`linksAllowed: true`). An override may link only the agent's own tools (the three of 3.13, `describe_entity`, `run_readonly_sql`, `show_in_panel` and `ask_clarification`) and its own skills (`data-readiness`, `readiness-drilldown`).
+- **Links** (`linksAllowed: true`). An override may link only the agent's own tools (the three of 3.13, the two of 3.14, `describe_entity`, `run_readonly_sql`, `show_in_panel` and `ask_clarification`) and its own skills (`data-readiness`, `readiness-drilldown`).
   - Another skill is refused with `Only the Data Readiness Agent's own skills can be linked here: this prompt is shared by every user`.
   - Another tool is refused with `Unknown tool "<name>"` ([api.md](api.md) 103).
   - Links are resolved to plain mentions before the model reads them (4.1).
@@ -952,10 +954,11 @@ The rules encoded (prefix D):
 - **D9** Answer shape: overall score and band, then the weakest dimensions (the assessed ones with the lowest scores, never the ones with the most or most severe findings), then the most severe findings with recommendations. Answers are short, and use a table for more than three findings.
 - **D10** Table and column names are given exactly as in the tool result.
 - **D11** Tool errors are its own to handle; it tells the user only when they must act.
-- **D12** Scope: only the readiness of this session's data. General analysis (totals, trends, rankings) is declined in one sentence with a pointer to Questions to Insights; it runs SQL only to drill into data-quality problems.
+- **D12** Scope: only the readiness of this session's data. Profiling a sample of it and generating a synthetic copy of it are in scope too. General analysis (totals, trends, rankings) is declined in one sentence with a pointer to Questions to Insights; it runs SQL only to drill into data-quality problems.
 - **D13** Asked for the records behind a finding, or which rows are null, invalid, inconsistent, duplicated, orphaned, stale or unreasonable, it loads `readiness-drilldown`, calls `describe_entity` then `run_readonly_sql`, leads with the count, and never changes a score. When the query's count differs from the finding's, it gives both and says the data may have changed since the report was generated.
+- **D14** For a sample profile it calls `profile_data_sample`, and for a synthetic copy `generate_synthetic_data`. Sampled numbers are approximate and never readiness scores: it never calls them scores, mixes them with a score or uses them to change one. It never runs a synthetic script against the datasource: the user downloads it from the panel, and the answer gives its file name.
 
-> Implementation note: `mastra/agents/data-readiness.agent.ts` (`dataReadinessAgent`, registered as `data-readiness`). The shipped text without `## Tools` is `DATA_READINESS_PROMPT` in `agents/system-prompts.ts` and `SHIPPED['data-readiness']` in `shipped-agent-prompts.ts`. Tools are in `mastra/tools/readiness.tools.ts`. The skill is in `mastra/skills/data-readiness/SKILL.md`. The engine is in `modules/data-readiness/engine/` and has no framework imports.
+> Implementation note: `mastra/agents/data-readiness.agent.ts` (`dataReadinessAgent`, registered as `data-readiness`). The shipped text without `## Tools` is `DATA_READINESS_PROMPT` in `agents/system-prompts.ts` and `SHIPPED['data-readiness']` in `shipped-agent-prompts.ts`. Tools are in `mastra/tools/readiness.tools.ts` (the synthetic-data tools in `mastra/tools/synthetic-data.tools.ts`). The skill is in `mastra/skills/data-readiness/SKILL.md`. The engine is in `modules/data-readiness/engine/` and has no framework imports.
 
 ### 2.11 `assistant-v2` (id `questions-to-insights-v2`) — Questions to Insights v2
 
@@ -997,7 +1000,7 @@ Its streamed turn is a workflow defined in code, not one agent call (5.11, ADR-0
 
 ## 3. Tools
 
-All tools belong to the `assistant` (3.1-3.9) or to the RFP Builder (3.10); `assistant-v2` (2.11) reuses three of the assistant's (3.1, 3.2, 3.4); `ask_clarification`, `show_in_panel` (3.11) and `update_workflow` (3.12) are shared by both. Every tool returns a JSON object; **tools never throw to the model** — failures come back as `{ error: string }` so the model can react. Data tools are scoped by the session's dataset names on the requestContext (4.2).
+All tools belong to the `assistant` (3.1-3.9), to the RFP Builder (3.10) or to the Data Readiness Agent (3.13, 3.14); `assistant-v2` (2.11) reuses three of the assistant's (3.1, 3.2, 3.4); `ask_clarification`, `show_in_panel` (3.11) and `update_workflow` (3.12) are shared by both. Every tool returns a JSON object; **tools never throw to the model** — failures come back as `{ error: string }` so the model can react. Data tools are scoped by the session's dataset names on the requestContext (4.2).
 
 **Entity/datasource resolution rules** (shared):
 
@@ -1174,7 +1177,7 @@ Shared by every agent, exactly like `show_in_panel` (ADR-0029, BA-231): the assi
 
 ### 3.13 Readiness tools
 
-The Data Readiness Agent's three readiness tools (2.10, ADR-0031), in the order it is given them. None of the three runs SQL through `run_readonly_sql`: they call the tool-services bridge, which runs the profiling and the engine on the server. The agent also has the shared `describe_entity` and `run_readonly_sql` (3.2, 3.4, ADR-0035), described there and not here. Profiling reads no row values; the chat's drill-down queries are separate and read rows through the user SQL path. Every input is a scalar and `.describe()`d. **Nothing throws to the model**: every failure returns `{ error: string }` with the texts of [data-readiness](../capabilities/data-readiness/spec.md) Edge cases.
+The Data Readiness Agent's three readiness tools (2.10, ADR-0031), in the order it is given them. None of the three runs SQL through `run_readonly_sql`: they call the tool-services bridge, which runs the profiling and the engine on the server. The agent also has the shared `describe_entity` and `run_readonly_sql` (3.2, 3.4, ADR-0035), described there and not here. Readiness profiling reads no row values (exact aggregates only); the chat's drill-down queries are separate and read rows through the user SQL path, and the sampled profile of 3.14 reads row samples on the server and never shows a raw row to the model. Every input is a scalar and `.describe()`d. **Nothing throws to the model**: every failure returns `{ error: string }` with the texts of [data-readiness](../capabilities/data-readiness/spec.md) Edge cases.
 
 **Dataset resolution** (shared by all three tools):
 - `dataset` names a dataset in `datasets` (4.2).
@@ -1203,6 +1206,29 @@ The Data Readiness Agent's three readiness tools (2.10, ADR-0031), in the order 
 - `assessReadiness` also takes `{ abortSignal?, onProgress? }`; `onProgress` receives the progress frames the tool writes.
 - `assessReadiness` and `getReadinessReport` resolve to `{ report: ReadinessReport, summary: ReadinessSummary }`. The orchestrator takes `report` for the stream event and panel item, and the model receives only `summary`.
 - `listReadinessReports` resolves to the list output.
+
+### 3.14 Synthetic-data tools
+
+The Data Readiness Agent's two synthetic-data tools (2.10 D14, ADR-0039, [synthetic-data](../capabilities/synthetic-data/spec.md) R40-R44), after the readiness tools. They call the tool-services bridge `mastra/synthetic-data-tool-services.ts`, installed by `SessionsService.onModuleInit` (implemented in `modules/sessions/synthetic-data-bridge.ts` over `SyntheticDataService`). Neither runs SQL for the model, writes to the datasource or returns a raw sampled row. Every input is a scalar and `.describe()`d. **Nothing throws to the model**: every failure returns `{ error: string }`. Dataset resolution is that of 3.13, with `Synthetic data supports PostgreSQL and Databricks datasets only` for a dataset of another kind.
+
+**`tables`** (both tools): entity keys or bare table names, one per line; blank lines are ignored and a repeat counts once. A bare name matches every key of the dataset whose last segment it is (case-insensitive). Blank or absent means every table of the dataset. Tables are taken in dataset order.
+
+| Tool | Description (first sentence) | Input | Output (what the model sees) |
+|---|---|---|---|
+| `profile_data_sample` | Sample up to 1,000 rows of each table of one of this session's datasets and return an approximate profile: types, null rates, distinct counts, ranges, categorical values and text patterns. | `dataset?: string`, `tables?: string` | `{ profileId, datasetName, dialect, expiresAt, tables: [{ table, method, sampledRows, rowCountEstimate, error?, columns: [{ name, type, nullPct, distinct, kind, generatedAs, range?: { min, max }, topValues?: [{ value, pct }] (at most 5), pattern? }], columnsOmitted? }], relationships: [{ from, to, origin }] }`: at most 40 columns per table; `nullPct` and `pct` are percentages with one decimal; `from` and `to` read `<table key>(<columns>)` |
+| `generate_synthetic_data` | Generate a synthetic copy of one of this session's datasets as a SQL script in its datasource's dialect, save it in the session and show it in the panel for download; it never writes to the datasource. | `dataset?: string`, `tables?: string`, `rowsPerTable?: number` (1-1,000, default 100), `seed?: number` (default 1), `targetSchema?: string` (default `synthetic`), `profileId?: string` (from `profile_data_sample`; blank profiles now) | `{ fileName, path, panelItemId, dialect, seed, targetSchema, bytes, tables: [{ table, rows }], droppedRelationships: [{ from, to }], notSynthesized: [{ table, column, reason }] }` |
+
+**Errors** (exact, beyond dataset resolution), the first that applies:
+- `"<name>" is not a table of dataset "<dataset>"`
+- `Choose at most 20 tables in chat; use Profile & synthesize on the dataset for more`
+- `rowsPerTable must be a whole number from 1 to 1,000 in chat`
+- `Profile "<id>" expired or not found: profile the tables again` (also for a profile of another dataset); `"<key>" is not a table of this profile` when `tables` names a table the reused profile lacks
+- `The script would be <n> KB; the chat limit is 256 KB. Ask for fewer rows or use Profile & synthesize on the dataset.` (`<n>` rounded up)
+- otherwise the texts of [api.md](api.md) 111 and 112 (seed, target schema, a datasource that cannot be reached).
+
+**The script.** `generate_synthetic_data` builds the whole `.sql` script of the `sql` format (the text `POST /synthetic-data/scripts` streams) in memory, refuses it past 256 KB, writes it to the session workspace as `synthetic-data/<dataset-slug>-synthetic-<dialect>-seed<seed>.sql` (overwriting a file of the same name; [data-model.md](data-model.md)) and stores a new `file` panel item titled `Synthetic data — <dataset> (seed <seed>)` through the `show_in_panel` path (3.11). The orchestrator emits that item as `panel-item` before the step's `tool-result`, so the panel opens it and its Download serves the file ([api.md](api.md) 106-107). A refusal shows as the step's error and stores nothing.
+
+**Model-facing projection.** `profile_data_sample` returns the projection above as its result, so memory replay and an eval judge see the same text; the full profile stays in the server's profile cache (60 minutes) for `profileId`.
 
 ## 4. Per-turn context
 
@@ -2441,7 +2467,7 @@ The served prompt is not this text alone: its links are resolved to plain mentio
 ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
 
 The shipped text is `DATA_READINESS_PROMPT`. It is also the editable text and what Reset restores (2.10), with its links as written. Lines are joined with `\n`.
-- A rebuild may tune the wording but must keep every rule D1-D13, every link, the opening phrase `You are the Data Readiness Agent` and the `## Working rules` heading.
+- A rebuild may tune the wording but must keep every rule D1-D14, every link, the opening phrase `You are the Data Readiness Agent` and the `## Working rules` heading.
 - **What the model receives** is this text with every link resolved to a plain mention (4.1), plus the generated `## Tools` section inserted before `## Working rules`.
 
 ```
@@ -2498,13 +2524,21 @@ Answers:
 - A tool error is yours to handle: read it, fix the call and retry; tell
   the user only when they must act (for example, test the connection in
   Datasources).
+Sample profiles and synthetic data:
+- For a profile of a sample of the data, call [[tool:profile_data_sample]];
+  for a synthetic copy of it, call [[tool:generate_synthetic_data]].
+- Sampled numbers are approximate and never readiness scores: never call
+  them scores, mix them with a score or use them to change one.
+- Never run a synthetic script against the datasource: the user
+  downloads it from the panel; give its file name.
 Scope:
 - You only assess and explain the readiness of this session's data and
-  query it to show its data-quality problems. Decline anything else in
-  one sentence and wait for the next request. General analysis (totals,
-  trends, rankings, any question not about data quality) is declined
-  too, even though you could query it: say Questions to Insights answers
-  those.
+  query it to show its data-quality problems. Profiling a sample of it
+  and generating a synthetic copy of it are in scope too. Decline
+  anything else in one sentence and wait for the next request. General
+  analysis (totals, trends, rankings, any question not about data
+  quality) is declined too, even though you could query it: say
+  Questions to Insights answers those.
 ```
 
 ---
