@@ -18,6 +18,7 @@ import { DeveloperSettingsModule } from './modules/developer-settings/developer-
 import { UiPreferencesModule } from './modules/ui-preferences/ui-preferences.module';
 import { SkillsModule } from './modules/skills/skills.module';
 import { DataReadinessModule } from './modules/data-readiness/data-readiness.module';
+import { SyntheticDataModule } from './modules/synthetic-data/synthetic-data.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { DataReadinessModule } from './modules/data-readiness/data-readiness.mod
     DeveloperSettingsModule,
     UiPreferencesModule,
     DataReadinessModule,
+    SyntheticDataModule,
   ],
   controllers: [],
   providers: [],
