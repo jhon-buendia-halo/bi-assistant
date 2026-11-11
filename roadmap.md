@@ -1850,6 +1850,18 @@ The app becomes workflow-first: a chat runs a **workflow** defined in code, and 
 - **Out of scope:** the agent editor and preview chat.
 - **Acceptance:** `agent-hub.spec.ts` with `@demo @story-1.23.7` (no Start chat; `Used in` opens the workflow page; RFP Builder has no Chat Box tab); draft-only and System agents show their empty `Used in` text; the RFP and Data Readiness Start chat scenarios pass through Workflows; the agent editor specs pass unchanged; the axe scan in both themes.
 - **Notes:** UI story. After it, the epic's stories go through the acceptance gate, then one changelog entry and the PR.
+
+#### 1.23.9 — Run a workflow on an input: the sequential test workflow  `🚧 In progress`
+- **Intent:** a workflow runs once on a typed input and shows each step's result, with no chat. The first such workflow is a three-step test workflow.
+- **Scope:** run workflows in the catalogue (`trigger`, typed `input` fields defined in code); the `seq-text-demo` workflow (Clean text → Count words → Format result, code only); `POST /workflows/:id/runs` (api.md 118, nothing stored); the run workflow's page with its input form, Run and the per-step result; the list card's Run button; chat-only refusals and pickers. Contract: plan section 9.
+- **Out of scope:** converting the four chat workflows and changing how chats start (1.23.10); storing runs; streaming a run's progress; LLM steps.
+- **Acceptance:** unit tests for the three step functions, the catalogue entry, input validation and the drift test; a backend e2e for 118 (success, failed step, missing field, chat workflow refused); `frontend/e2e/workflows.spec.ts` with `@demo @story-1.23.9` (open the Sequential test workflow, type a text, Run, see three Done steps and the summary; an empty text shows Clean text Failed and the other two Skipped); the axe scan of the run page in both themes; builds, unit tests, lint and check-specs green.
+- **Notes:** requested on 2026-11-11 ("workflows trigger workflows, not chats; we'll define the input as we go"). The user chose: all workflows become run workflows (the four existing ones in 1.23.10), a code-only test workflow, results shown on the page and not stored.
+
+#### 1.23.10 — The four chat workflows become run workflows  `📋 Planned`
+- **Intent:** no workflow opens a chat: Assistant, Questions to Insights v2, RFP Builder and Data Readiness Agent run on an input like the test workflow.
+- **Scope:** to be written once the user decides how chats start after this (see the epic spec's open question).
+- **Notes:** requested on 2026-11-11 together with 1.23.9.
 ---
 
 ## Release 2 — Multi-user  (no target date yet)

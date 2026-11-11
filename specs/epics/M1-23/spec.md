@@ -1,6 +1,6 @@
 # M1-23 — Workflow-first: chats run workflows, agents are building blocks
 
-- **Jira:** none (repo only; epic id M1-23) · **Roadmap:** Milestone 1.23 · **Status:** Confirmed (2026-11-11; first confirmed as "Questions to Insights v2: a workflow you can follow", widened to workflow-first and confirmed again the same day)
+- **Jira:** none (repo only; epic id M1-23) · **Roadmap:** Milestone 1.23 · **Status:** Confirmed (2026-11-11; first confirmed as "Questions to Insights v2: a workflow you can follow", widened to workflow-first and confirmed again the same day; the run-workflows amendment (1.23.9) confirmed the same day)
 
 ## Goal
 
@@ -24,6 +24,7 @@ Why: the order of work and the rules that must always hold belong in code, not i
 - **Agents as a library.** Agents lose **Start chat**. The Official agents lose their Chat Box tab (user agents keep it for the draft preview), and each agent shows the workflows that use it.
 - **Showcase agents removed.** The Benchmarking, Survey, LAD COE and Strategy agents, which never ran, are removed from the app.
 - **Story 1.23.1 (done)** stays: the Graph tab draws v2's workflow, and the agent detail returns `workflow`.
+- **Workflows run on an input (amendment of 2026-11-11, confirmed by the user the same day).** A workflow runs once on a typed input defined in code and shows each step's result on its page; nothing is stored. The first is a three-step, code-only test workflow (1.23.9). All workflows become run workflows; converting the four chat workflows is 1.23.10.
 
 ## Out of scope
 
@@ -45,6 +46,8 @@ Why: the order of work and the rules that must always hold belong in code, not i
 | — (no Jira, repo only) | A Workflows area: list, workflow page and Start chat | 1.23.5 |
 | — (no Jira, repo only) | The New conversation screen picks a workflow; chats name their workflow | 1.23.6 |
 | — (no Jira, repo only) | Agents are building blocks: no Start chat, and "Used in" workflows | 1.23.7 |
+| — (no Jira, repo only) | Run a workflow on an input: the sequential test workflow | 1.23.9 |
+| — (no Jira, repo only) | The four chat workflows become run workflows (scope pending) | 1.23.10 |
 
 ## Specs touched
 
@@ -73,4 +76,4 @@ Why: the order of work and the rules that must always hold belong in code, not i
 - **Risk: Monitoring's trace shape.** A workflow run per turn may add spans. Mitigation: capture one real trace before changing anything (1.23.4).
 - **Risk: a module cycle.** The agents module already imports the sessions module. Mitigation: the sessions code reads a framework-free workflow catalogue.
 - **Risk: E2E churn.** About eight Playwright specs use the removed agent Start chat or renamed test ids. Each story updates the specs it breaks.
-- **Open questions:** none. The user answered them on 2026-11-11 (plan, section 2).
+- **Open question (blocks 1.23.10 only):** once no workflow opens a chat, how does a chat start — from an agent again, from a plain New conversation with the assistant, or are chats retired? The plan's section 9 holds the 1.23.9 contract.

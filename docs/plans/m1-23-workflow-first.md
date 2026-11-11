@@ -658,3 +658,51 @@ None open. The user answered all of them on 2026-11-11 (section 2, items 4–7):
 - the Official agents' Chat Box tab is removed;
 - every chat shows its `Workflow` chip;
 - the branch is renamed to `feat/M1-23-workflow-first`.
+
+## 9. Amendment of 2026-11-11: workflows run on an input (story 1.23.9)
+
+The user decided that workflows trigger **runs**, not chats: a workflow takes a typed input, runs its steps once and returns a result. The input of each workflow is defined in code and will grow over time. Answers given the same day:
+- **All workflows become run workflows** (no workflow opens a chat). Converting the four existing chat workflows (Assistant, Questions to Insights v2, RFP Builder, Data Readiness Agent) and what that means for chats is story **1.23.10**, scoped once the user answers how chats start. 1.23.9 builds the run mechanism and leaves the four as they are.
+- **The first run workflow is a sequential test workflow** of three code steps, no LLM.
+- **A run's result is shown on the workflow page and never stored.**
+
+### 9.1 Catalogue (framework-free, `workflow-catalog.ts`)
+
+- `CodeWorkflowSource` gains `trigger: 'chat' | 'run'` and `input?: readonly WorkflowInputField[]`; `primaryFor` becomes optional (a run workflow may call no agent). The existing `qti-v2-turn` entry gets `trigger: 'chat'`.
+- `WorkflowInputField = { name: string; label: string; type: 'text' | 'textarea' | 'number'; required: boolean; placeholder?: string }`.
+- A one-step workflow (`agent:*`) has `trigger: 'chat'`.
+- New entry, after `qti-v2-turn` in catalogue order:
+  `{ id: 'seq-text-demo', name: 'Sequential test workflow', description: 'A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.', trigger: 'run', input: [{ name: 'text', label: 'Text', type: 'textarea', required: true, placeholder: 'Paste or type any text' }], steps: SEQ_TEXT_DEMO_STEPS }`.
+- `parseWorkflowId` keeps resolving it as `{ kind: 'code' }`. A run workflow is never a session's workflow: `POST /sessions { workflowId: 'seq-text-demo' }` is refused with `Workflow "seq-text-demo" can't start a chat` (Style A, 400).
+
+### 9.2 The test workflow (`seq-text-demo.steps.ts` framework-free, `seq-text-demo.workflow.ts` Mastra)
+
+| # | id | title | kind | input | output | other exits |
+|---|---|---|---|---|---|---|
+| 1 | `clean-text` | Clean text | code | text | text | `Empty text` fails |
+| 2 | `count-words` | Count words | code | text | text, words, characters | — |
+| 3 | `format-result` | Format result | code | text, words, characters | summary | — |
+
+Summaries: `Trims the text and collapses repeated spaces. An empty text fails the step.` · `Counts the words and characters of the cleaned text.` · `Writes a one-line summary of the counts and the start of the text.`
+
+Pure functions: `cleanText(text)` (trim, collapse every run of whitespace to one space; empty → throws `The text is empty`), `countWords(text)` (`{ words, characters }`; words = whitespace-separated tokens), `formatResult({ text, words, characters })` → `summary` = `<words> word(s), <characters> character(s): "<first 60 characters>"` with `…` appended when the text is longer than 60. Registered on the Mastra instance as `seq-text-demo`, snapshot persistence off. A drift test checks the steps' schema fields against `SEQ_TEXT_DEMO_STEPS`, as for `qti-v2-turn`.
+
+### 9.3 API
+
+- `GET /workflows` and `GET /workflows/:id` items gain `trigger` and `input` (`[]` for a chat workflow).
+- **118. `POST /workflows/:id/runs`** — body `{ input: Record<string, string | number> }`. Runs the workflow once and answers when it ends (no streaming; runs are short).
+  - 200 `WorkflowRunResult = { workflowId: string; status: 'success' | 'failed'; steps: { id: string; title: string; status: 'success' | 'failed' | 'skipped'; output?: Record<string, unknown>; error?: string }[]; output?: Record<string, unknown>; error?: string }`. A failing step makes the run `failed` (still 200: the run happened); the steps after it are `skipped`.
+  - Refusals (Style A, 400): `Workflow "<id>" runs in a chat` for a chat workflow; `<label> is required` for a missing required field; `<label> must be a number` for a non-numeric number field. 404 `Workflow "<id>" not found`.
+  - Nothing is stored. The run is not a session and writes no workflow bar.
+- `MastraService.runWorkflow(key, inputData)` creates a run, starts it and returns the step results and the final output.
+
+### 9.4 UI
+
+- **List card** of a run workflow: kind chip `Runs on an input`, no Start chat; a **Run** button (`workflow-run-open-<id>`) opens the workflow page.
+- **Workflow page** of a run workflow: the drawing (1.23.1), then **Input**: one control per field (`workflow-input-<name>`: textarea, text or number input, with its label and placeholder; `aria-required` when required), and **Run** (`workflow-run`, disabled while running, label `Running…`). No Start chat and no workflow-bar note.
+- **Result** (`workflow-run-result`), under the form after a run: a status line `Run succeeded` / `Run failed: <error>`, then one row per step (`workflow-run-step-<id>`) with its number, title, a status chip (`Done`, `Failed`, `Skipped`) and its output as pretty JSON (`<pre>`), and the final output (`workflow-run-output`). Running again replaces it; leaving the page discards it.
+- The New conversation Workflow field lists chat workflows only.
+
+### 9.5 Specs
+
+ADR-0040 gains an amendment (workflows have a trigger, chat or run; a run workflow runs once on a typed input defined in code, and nothing is stored). `specs/capabilities/workflows/spec.md` (rules and a Feature scenario), `specs/system/api.md` (116/117 fields, 118, sessions refusal), `specs/system/agents.md` (the `seq-text-demo` workflow next to 5.11/5.12), `specs/system/ui.md` (4.4a/4.4b run controls), `specs/capabilities/sessions-chat/spec.md` R64 (chat workflows only).
