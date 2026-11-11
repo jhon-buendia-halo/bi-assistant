@@ -1,4 +1,5 @@
 import {
+  ExportFormat,
   SampledColumn,
   SampledRelationship,
   SampledTable,
@@ -72,7 +73,9 @@ export function strategyChipText(
       const rel = relationships.find(
         (r) => r.fromTable === table.key && r.fromColumns.includes(column.name),
       );
-      const parent = rel ? tables.find((t) => t.key === rel.toTable) : undefined;
+      const parent = rel
+        ? tables.find((t) => t.key === rel.toTable)
+        : undefined;
       return `Keys of ${parent?.name ?? rel?.toTable ?? 'the parent table'}`;
     }
     case 'categorical':
@@ -127,6 +130,26 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
   if (mins < 1) return 'just now';
   if (mins === 1) return '1 min ago';
   return `${mins} min ago`;
+}
+
+export const FORMAT_OPTIONS: { value: ExportFormat; label: string }[] = [
+  { value: 'sql', label: 'SQL script' },
+  { value: 'csv', label: 'CSV (zip)' },
+  { value: 'xlsx', label: 'Excel (.xlsx)' },
+];
+
+/** The Generate button text: `Generate .sql`, `.zip` or `.xlsx`. */
+export function generateLabel(format: ExportFormat): string {
+  return `Generate .${format === 'csv' ? 'zip' : format}`;
+}
+
+/** Whole number in [min, max]? */
+export function isWholeBetween(
+  value: number,
+  min: number,
+  max: number,
+): boolean {
+  return Number.isInteger(value) && value >= min && value <= max;
 }
 
 export function minutesLeft(iso: string, now: number = Date.now()): number {
