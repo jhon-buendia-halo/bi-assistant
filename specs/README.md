@@ -83,7 +83,7 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-318 Schema metadata in datasets | [epics/BA-318](epics/BA-318/spec.md) |
 | BA-320 Questions to Insights v2 | [epics/BA-320](epics/BA-320/spec.md) |
 | M1-22 Sampled profiling and synthetic data | [epics/M1-22](epics/M1-22/spec.md) |
-| M1-23 Questions to Insights v2: a workflow you can follow | [epics/M1-23](epics/M1-23/spec.md) |
+| M1-23 Workflow-first: chats run workflows, agents are building blocks | [epics/M1-23](epics/M1-23/spec.md) |
 | M0-5 Faster workflow, repo-only planning | [epics/M0-5](epics/M0-5/spec.md) |
 
 ## Stack neutrality
