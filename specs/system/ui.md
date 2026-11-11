@@ -282,9 +282,23 @@ Capability: [synthetic-data](../capabilities/synthetic-data/spec.md). Decision: 
     - Top values show at most 5, followed by `+<k> more`.
     - Patterns show the shape in monospace.
 
+- **Generate** (`synth-generate-form`), shown once a profile exists:
+  - a **Rows per table** number input per table (`synth-rows-<key>`, default 100, 1–10,000), plus an **All tables** input and **Apply** (`synth-rows-all`, `synth-rows-apply`);
+  - **Seed** (`synth-seed`, default 1, with the hint `Same profile and seed give the same script.`);
+  - **Target schema** (`synth-target-schema`, default `synthetic`);
+  - **Include keys and constraints** (`synth-include-constraints`, checked);
+  - **Format** select (`synth-format`): `SQL script` (default), `CSV (zip)`, `Excel (.xlsx)`;
+  - the button (`synth-generate`) reads `Generate .sql`, `Generate .zip` or `Generate .xlsx` after the format and downloads the file from `POST /synthetic-data/scripts` (api.md 112) as a blob; success toast `Downloaded <file name>`;
+  - an expired profile (404): the inline message `This profile expired. Profile the tables again.` (`synth-expired`), with the Profile button focused;
+  - invalid input: an inline message under the field, with the server text.
+- **Exports on the profile view:**
+  - **Export profile** (`synth-export-profile`, `btn btn-outline` with a menu `CSV` and `Excel`; api.md 113). No confirm.
+  - **Export sample rows** (`synth-export-sample`, `btn btn-outline` with a menu `SQL script`, `CSV (zip)` and `Excel (.xlsx)`; api.md 114). Choosing a format opens the **confirm dialog** (`synth-confirm-real-data`, modal, focus trapped, Escape cancels): `This file contains real rows from <datasource>, including identifiers, names and free text. Export anyway?` with **Export** (`btn btn-primary`) and **Cancel** (`btn btn-outline`). Cancel closes the dialog and downloads nothing; Export sends `confirmRealData: true` and shows the toast `Downloaded <file name>`. The synthetic and profile exports have no confirm.
+
 | Strategy | Chip text |
 |---|---|
 | `sequence` | Sequence 1…n |
+| `unique-range` | Distinct numbers in the observed range |
 | `uuid` | Random UUIDs |
 | `unique-pattern` | Unique values like the pattern |
 | `foreign-key` | Keys of `<parent table>` |

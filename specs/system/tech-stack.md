@@ -63,6 +63,8 @@ Build facts: the Angular production build has budgets (initial 500 kB warn / 1 M
 | `mastra` (CLI, dev dependency) | 1.29.0 | Mastra Studio tooling against `src/mastra/index.ts`. |
 | better-sqlite3 | 13.0.3 | Application document store (`<APP_DATA_DIR>/app.sqlite`), ADR-0003. Native module; loads under `ELECTRON_RUN_AS_NODE` with the current Electron/Node pairing. If an ABI error appears after an upgrade, rebuild it for Electron. |
 | pg | 8.23.0 | PostgreSQL datasource connector. |
+| exceljs | pinned in `backend/package.json` | Streaming `.xlsx` writer (`stream.xlsx.WorkbookWriter`) for the synthetic data, profile and sample exports (ADR-0037 amendment). |
+| fflate | pinned in `backend/package.json` | Dependency-free streamed zip (`Zip`) for the CSV exports (ADR-0037 amendment). |
 | `@databricks/sql` | 2.1.0 | Databricks datasource connector. |
 | marked | 18.0.13 | Markdown to HTML for the analysis section of visual documents. Its lexer also feeds the Intellify RFP API's PDF renderer. |
 | `@nestjs/swagger` | 11.x, pinned (the line matching Nest 11) | The Intellify RFP API only (ADR-0027): decorators on its DTOs and controllers and `SwaggerModule.createDocument`, served as `GET /openapi.json`. Pure JavaScript. |
@@ -161,7 +163,7 @@ Rules:
 
 Current state (verified): existing modules are `agents`, `datasets`, `datasources`, `deep-analysis`, `developer-settings`, `ontology`, `llm`, `metrics`, `sessions`, `synthetic-data`, `testing-data`, `verified-queries`.
 
-The `synthetic-data` module (ADR-0037) holds `synthetic-data.module.ts`, `.controller.ts`, `.service.ts`, `profile-cache.ts`, `types.ts` and `limits.ts`, a `profile/` folder (the pure sampled-profile builder: classification, shapes, statistics) and, from later stories, `generator/` and `dialects/`. The row sampler is an additive `sampleTable` method on the PostgreSQL and Databricks profilers, with its interface in `datasources/connectors/sampling.ts`.
+The `synthetic-data` module (ADR-0037) holds `synthetic-data.module.ts`, `.controller.ts`, `.service.ts`, `profile-cache.ts`, `types.ts` and `limits.ts`, a `profile/` folder (the pure sampled-profile builder: classification, shapes, statistics) a `generator/` folder (pure, seeded: `prng`, `plan`, `order`, `generate`, `words`, `values/*`), `script.ts` (the script header, order and batching), a `dialects/` folder (the `DialectWriter` interface, `postgres.writer.ts`, `databricks.writer.ts`) and an `exports/` folder (`csv.ts`, `zip.ts`, `xlsx.ts`, writers that consume the same generator stream, so all formats carry the same values). The row sampler is an additive `sampleTable` method on the PostgreSQL and Databricks profilers, with its interface in `datasources/connectors/sampling.ts`.
 
 The Intellify RFP API (ADR-0027, planned in BA-226/BA-227) is its own module tree, `backend/src/intellify-api/`, compiled by the same `nest build`. It imports nothing from `modules/` or `mastra/`, and the app reaches it only over HTTP; the one in-process link is the `IntellifyApiInfo` value (`{ url, apiKey }`) the Testing Data loader reads. Layout:
 
