@@ -332,9 +332,9 @@ Feature: Synthetic data
   Scenario: Generate a PostgreSQL script
     Given I profiled the "World Cup" dataset
     When I set "Rows per table" to 25 and click "Generate .sql"
-    Then a file named "world-cup-synthetic-postgresql-seed1.sql" downloads
+    Then a file named "world-cup-core-synthetic-postgresql-seed1.sql" downloads
     And its first line starts with "-- Synthetic data for dataset "World Cup""
-    And I see the toast "Downloaded world-cup-synthetic-postgresql-seed1.sql"
+    And I see the toast "Downloaded world-cup-core-synthetic-postgresql-seed1.sql"
 
   Scenario: The script replays into an empty PostgreSQL database
     Given I generated the World Cup script with seed 1 and 50 rows per table
@@ -354,7 +354,7 @@ Feature: Synthetic data
   Scenario: Export the profile
     Given I profiled the "World Cup" dataset
     When I choose "Export profile" and then "CSV"
-    Then a file named "world-cup-profile.csv" downloads with one row per profiled column
+    Then a file named "world-cup-core-profile.csv" downloads with one row per profiled column
     When I choose "Export profile" and then "Excel"
     Then a workbook downloads with a "Tables" sheet and a "Columns" sheet
 
@@ -363,7 +363,7 @@ Feature: Synthetic data
     When I choose "Export sample rows" and then "CSV (zip)"
     Then I see a dialog saying the file contains real rows from the datasource
     When I click "Export"
-    Then a file named "world-cup-sample-csv.zip" downloads
+    Then a file named "world-cup-core-sample-csv.zip" downloads
     And its "players.csv" holds the real player names
 
   Scenario: Cancelling the confirm downloads nothing
