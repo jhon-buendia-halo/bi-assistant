@@ -30,7 +30,12 @@ export interface GenerationPlan {
   includeConstraints: boolean;
   format: ExportFormat;
   /** Every table of the profile, in profile order, with its row count after clamping. */
-  tables: { key: string; targetName: string; rows: number; clampedFrom?: number }[];
+  tables: {
+    key: string;
+    targetName: string;
+    rows: number;
+    clampedFrom?: number;
+  }[];
   /** Relationships whose both ends are in the profile: FK values are drawn from the parent. */
   relationships: SampledRelationship[];
   /** Relationships whose parent is not in the profile: no constraint, the column keeps its strategy. */
