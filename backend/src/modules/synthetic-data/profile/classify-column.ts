@@ -1,6 +1,9 @@
 // Column classification (plan 2.2). Pure: the first rule that matches wins.
 
-import type { FormatRule, SemanticType } from '../../data-readiness/engine/types';
+import type {
+  FormatRule,
+  SemanticType,
+} from '../../data-readiness/engine/types';
 import type { ColumnKind, SynthesisStrategy } from '../types';
 
 export interface ClassifyInput {
@@ -14,6 +17,8 @@ export interface ClassifyInput {
   distinct: number;
   /** In the primary key or a unique key. */
   inKey: boolean;
+  /** In the primary key (plan 10: only PK and FK integers get `sequence`). */
+  inPrimaryKey: boolean;
   /** Child end of a declared or inferred relationship. */
   isForeignKey: boolean;
   /** That relationship's parent is in the profile (and, if inferred, is a key there). */
@@ -39,9 +44,14 @@ export const CATEGORICAL_MAX_DISTINCT = 20;
 export const CATEGORICAL_MIN_COUNT = 3;
 export const LONG_TEXT_MEAN_LENGTH = 40;
 
-export const isIntegerType = (type: string): boolean => INTEGER_TYPE.test(type.trim());
+export const isIntegerType = (type: string): boolean =>
+  INTEGER_TYPE.test(type.trim());
 
-function untouched(nullable: boolean, kind: ColumnKind, note: string): Classification {
+function untouched(
+  nullable: boolean,
+  kind: ColumnKind,
+  note: string,
+): Classification {
   return { kind, strategy: nullable ? 'null-only' : 'constant', note };
 }
 
@@ -49,11 +59,18 @@ function untouched(nullable: boolean, kind: ColumnKind, note: string): Classific
  * `meanLength` is only read for text columns that are neither categorical nor
  * formatted; pass the sample mean (0 when nothing was sampled).
  */
-export function classifyColumn(c: ClassifyInput, meanLength: number): Classification {
+export function classifyColumn(
+  c: ClassifyInput,
+  meanLength: number,
+): Classification {
   const type = c.type.toLowerCase().trim();
 
   // 1. unsupported
-  if (c.semanticType === 'json' || c.semanticType === 'other' || type.startsWith('interval')) {
+  if (
+    c.semanticType === 'json' ||
+    c.semanticType === 'other' ||
+    type.startsWith('interval')
+  ) {
     return untouched(c.nullable, 'unsupported', unsupportedNote(c.nullable));
   }
 
@@ -64,7 +81,9 @@ export function classifyColumn(c: ClassifyInput, meanLength: number): Classifica
     c.nonNull >= 50 &&
     (!c.formatRule || c.formatRule === 'uuid') &&
     c.distinct / c.nonNull >= 0.95 &&
-    (c.semanticType === 'text' || c.semanticType === 'uuid' || isIntegerType(type));
+    (c.semanticType === 'text' ||
+      c.semanticType === 'uuid' ||
+      isIntegerType(type));
   if (
     c.inKey ||
     c.isForeignKey ||
@@ -73,9 +92,18 @@ export function classifyColumn(c: ClassifyInput, meanLength: number): Classifica
     ratioRule
   ) {
     let strategy: SynthesisStrategy;
+    // An integer that is an identifier only because it is unique (a declared UNIQUE key
+    // or the distinct-ratio rule) keeps its observed range: `unique-range` (plan 10).
+    const uniqueOnly =
+      !c.inPrimaryKey &&
+      !c.isForeignKey &&
+      c.semanticType !== 'uuid' &&
+      !ID_NAME.test(c.name);
     if (c.isForeignKey && c.foreignKeyUsable) strategy = 'foreign-key';
-    else if (isIntegerType(type)) strategy = 'sequence';
-    else if (c.semanticType === 'uuid' || c.formatRule === 'uuid') strategy = 'uuid';
+    else if (isIntegerType(type))
+      strategy = uniqueOnly ? 'unique-range' : 'sequence';
+    else if (c.semanticType === 'uuid' || c.formatRule === 'uuid')
+      strategy = 'uuid';
     else strategy = 'unique-pattern';
     return { kind: 'identifier', strategy };
   }
@@ -88,7 +116,8 @@ export function classifyColumn(c: ClassifyInput, meanLength: number): Classifica
   ];
   for (const [semantic, kind, strategy] of typed) {
     if (c.semanticType !== semantic) continue;
-    if (c.nonNull === 0) return untouched(c.nullable, kind, emptyNote(c.nullable));
+    if (c.nonNull === 0)
+      return untouched(c.nullable, kind, emptyNote(c.nullable));
     if (!c.parsed) {
       return untouched(c.nullable, 'unsupported', unsupportedNote(c.nullable));
     }
@@ -96,7 +125,8 @@ export function classifyColumn(c: ClassifyInput, meanLength: number): Classifica
   }
 
   // Remaining semantic type is text.
-  if (c.nonNull === 0) return untouched(c.nullable, 'text', emptyNote(c.nullable));
+  if (c.nonNull === 0)
+    return untouched(c.nullable, 'text', emptyNote(c.nullable));
 
   // 6. formatted
   if (c.formatRule) return { kind: 'formatted', strategy: 'format-template' };
@@ -112,7 +142,10 @@ export function classifyColumn(c: ClassifyInput, meanLength: number): Classifica
   }
 
   // 8. text
-  return { kind: 'text', strategy: meanLength > LONG_TEXT_MEAN_LENGTH ? 'words' : 'pattern' };
+  return {
+    kind: 'text',
+    strategy: meanLength > LONG_TEXT_MEAN_LENGTH ? 'words' : 'pattern',
+  };
 }
 
 function unsupportedNote(nullable: boolean): string {

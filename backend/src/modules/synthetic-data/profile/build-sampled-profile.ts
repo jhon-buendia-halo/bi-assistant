@@ -3,7 +3,10 @@
 // patterns come out. The only data values in the result are the `topValues` of
 // categorical columns (values seen at least 3 times, never key columns).
 
-import { classifyDatabricksType, classifyType } from '../../data-readiness/adapters/classify';
+import {
+  classifyDatabricksType,
+  classifyType,
+} from '../../data-readiness/adapters/classify';
 import { detectFormatRule } from '../../data-readiness/adapters/format-rules';
 import { inferJoinCandidates } from '../../data-readiness/engine/infer-joins';
 import type { FormatRule } from '../../data-readiness/engine/types';
@@ -83,11 +86,15 @@ const FORMAT_CHECKS: Record<FormatRule, RegExp> = {
 
 const tkey = (ns: string, name: string): string => `${ns}\u0000${name}`;
 
-export function buildSampledProfile(input: BuildProfileInput): Omit<SampledProfile, 'profileId'> {
-  const { tables, keys, foreignKeys } = input;
+export function buildSampledProfile(
+  input: BuildProfileInput,
+): Omit<SampledProfile, 'profileId'> {
+  const { tables, keys } = input;
   const byRef = new Map<string, ProfileTableInput>();
   // An unresolved entry (no catalog columns) never takes part in relationships.
-  for (const t of tables) if (t.table.columns.length > 0) byRef.set(tkey(t.table.schema, t.table.table), t);
+  for (const t of tables)
+    if (t.table.columns.length > 0)
+      byRef.set(tkey(t.table.schema, t.table.table), t);
 
   const keysOf = (t: ProfiledTable): KeyConstraint[] =>
     keys.filter((k) => k.schema === t.schema && k.table === t.table);
@@ -110,11 +117,15 @@ export function buildSampledProfile(input: BuildProfileInput): Omit<SampledProfi
       ...input.foreignKeys
         .filter((e) => e.schema === t.table.schema && e.table === t.table.table)
         .map((e) => e.column),
-      ...relationships.filter((r) => r.fromTable === t.key).flatMap((r) => r.fromColumns),
+      ...relationships
+        .filter((r) => r.fromTable === t.key)
+        .flatMap((r) => r.fromColumns),
     ]);
     // Only relationships (both ends in the profile) are usable for generation.
     const usableFkColumns = new Set(
-      relationships.filter((r) => r.fromTable === t.key).flatMap((r) => r.fromColumns),
+      relationships
+        .filter((r) => r.fromTable === t.key)
+        .flatMap((r) => r.fromColumns),
     );
     const rows = t.sample.rows;
     return {
@@ -134,6 +145,7 @@ export function buildSampledProfile(input: BuildProfileInput): Omit<SampledProfi
           rows.map((r) => r[c.name] ?? null),
           input.datasource.kind,
           keyColumns.has(c.name),
+          primaryKey.includes(c.name),
           fkColumns.has(c.name),
           usableFkColumns.has(c.name),
         ),
@@ -204,8 +216,11 @@ function buildRelationships(
     const parent = byRef.get(tkey(cand.refSchema, cand.refTable));
     if (!child || !parent) continue;
     const isKey =
-      (primaryOf(parent.table).length === 1 && primaryOf(parent.table)[0] === cand.refColumn) ||
-      uniquesOf(parent.table).some((u) => u.length === 1 && u[0] === cand.refColumn);
+      (primaryOf(parent.table).length === 1 &&
+        primaryOf(parent.table)[0] === cand.refColumn) ||
+      uniquesOf(parent.table).some(
+        (u) => u.length === 1 && u[0] === cand.refColumn,
+      );
     if (isKey) add(child, cand.column, parent, cand.refColumn, 'inferred');
   }
   return rels;
@@ -216,11 +231,14 @@ function buildColumn(
   values: (string | null)[],
   dialect: SyntheticDialect,
   inKey: boolean,
+  inPrimaryKey: boolean,
   isForeignKey: boolean,
   foreignKeyUsable: boolean,
 ): SampledColumn {
   const semanticType =
-    dialect === 'databricks' ? classifyDatabricksType(col.type) : classifyType(col.type);
+    dialect === 'databricks'
+      ? classifyDatabricksType(col.type)
+      : classifyType(col.type);
   const nonNullValues = values.filter((v): v is string => v !== null);
   const nonNull = nonNullValues.length;
   const counts = new Map<string, number>();
@@ -249,15 +267,16 @@ function buildColumn(
           return b === null ? [] : [b];
         })
       : [];
-  const parsed =
-    nums.length > 0 || temporals.length > 0 || bools.length > 0;
+  const parsed = nums.length > 0 || temporals.length > 0 || bools.length > 0;
 
   // Format rule: by name, kept only when the sample agrees (>= 80% of values match).
   let formatRule: FormatRule | undefined;
   if (semanticType === 'text' && nonNull > 0) {
     const rule = detectFormatRule(col.name);
     if (rule) {
-      const ok = nonNullValues.filter((v) => FORMAT_CHECKS[rule].test(v.trim())).length;
+      const ok = nonNullValues.filter((v) =>
+        FORMAT_CHECKS[rule].test(v.trim()),
+      ).length;
       if (ok / nonNull >= 0.8) formatRule = rule;
     }
   }
@@ -266,7 +285,9 @@ function buildColumn(
     .filter(([, n]) => n >= CATEGORICAL_MIN_COUNT)
     .sort((a, b) => b[1] - a[1] || compareStrings(a[0], b[0]));
   const meanLength =
-    semanticType === 'text' && nonNull > 0 ? lengthStats(nonNullValues).mean : 0;
+    semanticType === 'text' && nonNull > 0
+      ? lengthStats(nonNullValues).mean
+      : 0;
 
   const cls = classifyColumn(
     {
@@ -277,6 +298,7 @@ function buildColumn(
       nonNull,
       distinct,
       inKey,
+      inPrimaryKey,
       isForeignKey,
       foreignKeyUsable,
       formatRule,
@@ -293,19 +315,29 @@ function buildColumn(
     nullable: col.nullable,
     kind: cls.kind,
     strategy: cls.strategy,
-    nullFraction: values.length === 0 ? 0 : round4((values.length - nonNull) / values.length),
+    nullFraction:
+      values.length === 0
+        ? 0
+        : round4((values.length - nonNull) / values.length),
     distinctCount: distinct,
     distinctRatio: nonNull === 0 ? 0 : round4(distinct / nonNull),
   };
   if (cls.note) column.note = cls.note;
 
-  const hasData = nonNull > 0 && cls.kind !== 'unsupported' && cls.strategy !== 'null-only' &&
+  const hasData =
+    nonNull > 0 &&
+    cls.kind !== 'unsupported' &&
+    cls.strategy !== 'null-only' &&
     cls.strategy !== 'constant';
   if (!hasData) return column;
 
   // Value statistics (extremes, quantiles) only for real numeric / temporal columns;
   // identifier columns keep counts, null share, distinct count and shapes (privacy).
-  if (cls.kind === 'numeric' && nums.length > 0) {
+  // A `unique-range` integer keeps its range too: it is generated inside it (plan 10).
+  if (
+    (cls.kind === 'numeric' || cls.strategy === 'unique-range') &&
+    nums.length > 0
+  ) {
     const sorted = nums.map((x) => x.n).sort((a, b) => a - b);
     const scale = Math.max(...nums.map((x) => x.scale));
     column.numeric = {
@@ -328,7 +360,9 @@ function buildColumn(
     };
   }
   if (bools.length > 0) {
-    column.boolean = { trueFraction: round4(bools.filter(Boolean).length / bools.length) };
+    column.boolean = {
+      trueFraction: round4(bools.filter(Boolean).length / bools.length),
+    };
   }
 
   // A numeric or temporal identifier that is not a sequence, uuid or usable FK is generated
@@ -347,7 +381,10 @@ function buildColumn(
     if (cls.kind === 'categorical') {
       const top = frequent.slice(0, CATEGORICAL_MAX_DISTINCT);
       const topSet = new Set(top.map(([v]) => v));
-      column.topValues = top.map(([value, n]) => ({ value, fraction: round4(n / nonNull) }));
+      column.topValues = top.map(([value, n]) => ({
+        value,
+        fraction: round4(n / nonNull),
+      }));
       const topCount = top.reduce((s, [, n]) => s + n, 0);
       column.otherFraction = round4((nonNull - topCount) / nonNull);
       const rare = nonNullValues.filter((v) => !topSet.has(v));
