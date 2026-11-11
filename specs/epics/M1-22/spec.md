@@ -1,6 +1,6 @@
 # M1-22 — Sampled profiling and synthetic data
 
-- **Jira:** none (repo only; epic id M1-22) · **Roadmap:** Milestone 1.22 · **Status:** Draft (confirmed 2026-11-11; the export amendment of 2026-11-11, stories 1.22.5 and 1.22.6, awaits confirmation)
+- **Jira:** none (repo only; epic id M1-22) · **Roadmap:** Milestone 1.22 · **Status:** Confirmed (2026-11-11; the export amendment, stories 1.22.5 and 1.22.6, confirmed the same day)
 
 ## Goal
 

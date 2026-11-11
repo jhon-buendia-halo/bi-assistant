@@ -2,11 +2,13 @@ import type { FormatRule, SemanticType } from '../data-readiness/engine/types';
 
 export type SyntheticDialect = 'postgres' | 'databricks';
 export type SampleMethod = 'full' | 'tablesample' | 'limit';
+/** Download format of a synthetic or sample export (plan section 10). */
+export type ExportFormat = 'sql' | 'csv' | 'xlsx';
 export type ColumnKind =
   | 'identifier' | 'categorical' | 'numeric' | 'temporal'
   | 'boolean' | 'formatted' | 'text' | 'unsupported';
 export type SynthesisStrategy =
-  | 'sequence' | 'uuid' | 'unique-pattern' | 'foreign-key'
+  | 'sequence' | 'unique-range' | 'uuid' | 'unique-pattern' | 'foreign-key'
   | 'categorical' | 'numeric-range' | 'temporal-range' | 'boolean-rate'
   | 'format-template' | 'pattern' | 'words' | 'null-only' | 'constant';
 
@@ -87,6 +89,21 @@ export interface ScriptRequest {
   seed?: number;                // default 1
   targetSchema?: string;        // default "synthetic"
   includeConstraints?: boolean; // default true
+  format?: ExportFormat;        // default 'sql' (1.22.5)
+}
+
+/** POST /synthetic-data/profile-exports (#113, 1.22.5). */
+export interface ProfileExportRequest {
+  profileId: string;
+  format: 'csv' | 'xlsx';
+}
+
+/** POST /synthetic-data/sample-exports (#114, 1.22.6): the real sampled rows. */
+export interface SampleExportRequest {
+  profileId: string;
+  format: ExportFormat;
+  targetSchema?: string;        // default "sample"
+  confirmRealData: true;
 }
 
 /** What the script header and the agent tool report. */

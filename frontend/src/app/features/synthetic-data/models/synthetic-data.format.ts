@@ -62,6 +62,8 @@ export function strategyChipText(
   switch (column.strategy) {
     case 'sequence':
       return 'Sequence 1…n';
+    case 'unique-range':
+      return 'Distinct numbers in the observed range';
     case 'uuid':
       return 'Random UUIDs';
     case 'unique-pattern':
