@@ -59,7 +59,7 @@ Not registered (never listed in the catalogue):
 
 - **LLM connection probe** (`llm-connection-probe`, "LLM connection probe", instructions `You answer connection probes exactly as asked.`) — a throwaway agent built per test on the *submitted, not yet saved* Anthropic settings, or custom settings with the Anthropic API style, or `copilot` settings (its model comes from the model factory, 1.3). See [llm-settings](../capabilities/llm-settings/spec.md).
 
-> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the nine agents, a composite storage, a Pino logger and observability. It also registers one workflow, `qti-v2-turn` (5.11). `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `streamWorkflow(key, inputData, requestContext)` (creates a run and streams it), `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
+> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the nine agents, a composite storage, a Pino logger and observability. It also registers two workflows: `agent-turn`, the one engine of every one-step workflow (5.12), and `qti-v2-turn` (5.11). Every streamed chat turn is a run of one of them (5.1). `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `streamWorkflow(key, inputData, requestContext)` (creates a run and streams it), `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
 
 ### 1.3 Model resolution
 
@@ -189,7 +189,7 @@ A `copilot` config is never swapped: rules 2 and 3 do not apply to it, so the de
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| Streamed chat turn (`POST /sessions/:id/messages/stream`) | stream | session thread | all | 15 |
+| The **Answer** step of `agent-turn` (5.12), which runs every streamed chat turn (`POST /sessions/:id/messages/stream`) of a plain session (`agent:assistant`) and of a user agent's session (`agent:<id>`) | stream | session thread | all | 15 |
 | Non-streamed chat turn (`POST /sessions/:id/messages`) | generate | session thread | all | 15 |
 | Grounding-guard corrective pass (5.6) | generate | **none** | all | 15 |
 | Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
@@ -698,7 +698,7 @@ The report markdown (title, question, meta line, executive summary, body, data a
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| Streamed chat turn of a session bound to it (`agentKey: 'rfp'`, sessions-chat R61) | stream | session thread | all | 15 |
+| The **Answer** step of `agent-turn` (5.12), which runs every streamed chat turn of a session bound to it (`agent:rfp`, `agentKey: 'rfp'`, sessions-chat R61) | stream | session thread | all | 15 |
 | Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
 | `rfp` eval set (8) | generate | none | all | 15 |
 
@@ -756,7 +756,7 @@ The four showcase agents (`benchmarking`, `survey`, `lad-coe`, `strategy`; BA-23
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| Streamed chat turn of a session bound to it (`agentKey: 'data-readiness'`, sessions-chat R61) | stream | session thread | all | 10 |
+| The **Answer** step of `agent-turn` (5.12), which runs every streamed chat turn of a session bound to it (`agent:data-readiness`, `agentKey: 'data-readiness'`, sessions-chat R61) | stream | session thread | all | 10 |
 | Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
 | `data-readiness` eval set (8) | generate | none | all | 10 |
 
@@ -1238,6 +1238,8 @@ User prompts are trimmed; an empty prompt is a 400 `message is required`. When t
 
 ### 5.1 Streamed chat turn
 
+**Every streamed turn is one run of the session's workflow** (5.12, ADR-0040). Step 1 happens before the run; steps 2 and 3 happen inside its agent step (the **Answer** step of `agent-turn` for a one-step workflow, the **Analyse** step of `qti-v2-turn` for v2, 5.11); steps 4 to 7 happen after the run, as before. The run adds nothing the user sees: the same events, answer and stored message. Only a code-defined workflow's steps write the workflow bar (5.11); a one-step workflow's run never does, and the agent's own phases, `update_workflow` and the RFP stage keep driving it (ADR-0029).
+
 1. Append (or reuse, 4.3) the user message and **persist it before the model starts**, so a stop during provider connection still survives reload.
 2. Build input (4.3) and options (4.1, 4.2, memory thread, effort, `maxSteps: 15`). Own abort controller, chained to the client's abort.
 3. Consume the stream:
@@ -1256,11 +1258,13 @@ User prompts are trimmed; an empty prompt is a 400 `message is required`. When t
 
 Wire format of these events: [api.md](api.md). Errors thrown during the stream (other than the turn's own abort) propagate and are sent as an `error` event by the controller.
 
+**Errors of the Answer step.** An error thrown by the agent call itself, or while consuming its stream, fails the step, and the turn's `error` event carries that error's own message. A model error that the stream reports as a chunk fails the step only on a custom endpoint, with the R50 text of [llm-settings](../capabilities/llm-settings/spec.md) (R51); for any other provider the turn goes on at step 4, as before. A clarifying question or a stop ends the step early (the run ends there, `stopped: true`); the clarification is persisted and `done` sent after the run, as before.
+
 **Panel items (ADR-0029).** For every agent, `show_in_panel` (3.11) saves a panel item on the session as the result arrives, so an aborted turn keeps what was shown; the persisted `done` session (5.7) and `GET /sessions/:id` carry `panelItems` and the derived `workflow`. `update_workflow` (3.12) saves the workflow state the same way and emits `workflow` instead; the `done` session and `GET /sessions/:id` carry the extended view (`source`, `skipped`, `waiting`, `note`).
 
 **Data record** (from a `run_readonly_sql` / `sample_rows` result; shape in [data-model.md](data-model.md)): `input` = the corrected SQL when repaired, else the SQL, else the entity key; failed calls keep `{tool, input, error, rationale?}`; successful ones keep `columns` (declared, else first row's keys), at most **200** rows, `rowCount` = rows returned, `truncated` when the tool flagged it or rows > 200, `rationale`, and the tool's `warnings`.
 
-**Per-agent turn (ADR-0028).** The turn runs the session's agent: the `assistant`, or the built-in agent named by the session's `agentKey` ([data-model.md](data-model.md) 3.4). For `agentKey: 'assistant-v2'` (2.11) the streamed turn runs as the workflow `qti-v2-turn` (5.11): steps 2 and 3 happen inside its **Analyse** step, whose context is Block 1 (4.1) and the catalog block; the grounding guard (5.6), careful mode (5.8) and deep analysis do not apply; clarification interception has nothing to intercept (no `ask_clarification`). For `agentKey: 'rfp'` the steps above change as follows; an assistant turn is unchanged.
+**Per-agent turn (ADR-0028).** The turn runs the session's agent: the `assistant`, or the built-in agent named by the session's `agentKey` ([data-model.md](data-model.md) 3.4). Which of the steps below apply depends on that agent, never on the workflow. For `agentKey: 'assistant-v2'` (2.11) the streamed turn runs as the workflow `qti-v2-turn` (5.11): steps 2 and 3 happen inside its **Analyse** step, whose context is Block 1 (4.1) and the catalog block; the grounding guard (5.6), careful mode (5.8) and deep analysis do not apply; clarification interception has nothing to intercept (no `ask_clarification`). For `agentKey: 'rfp'` the steps above change as follows; an assistant turn is unchanged.
 
 - Step 2: the context is Block R1 only (4.1) and the requestContext carries the `rfp` keys (4.2); no metrics, knowledge, verified-query or agent-instructions block.
 - Step 3: clarification interception is kept. A `tool-result` that carries `columns` and `rows` (`get_client_financials`) becomes a data record like a SQL result (`{ tool, input: <client and line summary>, columns, rows (≤ 200), rowCount }`; SQL records are unchanged). A `tool-result` of `export_rfp_package` emits the `rfp-package` event ([api.md](api.md) 3.1) and is stored as the answer's `rfpPackage`. Every other RFP tool result emits `tool-result { tool, input: <its first string argument>, error? }`.
@@ -1406,7 +1410,7 @@ Composed answer: <guidance>          ← only when composition applies
 
 ### 5.11 Workflow-backed turn: `qti-v2-turn` (Questions to Insights v2)
 
-A streamed turn of a session bound to `assistant-v2` (2.11) is one run of a workflow defined in code (ADR-0034), not one agent call. Its steps run in this fixed order. Each is deterministic code or one bounded agent call, and the order never comes from a prompt.
+A streamed turn of a session bound to `assistant-v2` (2.11) is one run of a workflow defined in code (ADR-0034), not one agent call. It is the catalogue's one code-defined workflow (5.12); every other session runs a one-step workflow on `agent-turn`, through the same turn path (5.1). Its steps run in this fixed order. Each is deterministic code or one bounded agent call, and the order never comes from a prompt.
 
 | # | Step id | Title | Kind | Does |
 |---|---|---|---|---|
@@ -1450,7 +1454,7 @@ The agent detail returns it as `workflow` ([api.md](api.md) 34). For the agent s
 | Analyse | `The agent answers with its tools and the catalog as context, streamed to the chat.` | question, catalog | calls, stopped | `Model error` fails; `Stop` stops |
 | Wrap up | `Counts the turn's SQL queries, failed queries and rows, and logs the summary.` | calls, stopped | sqlQueries, failedQueries, rows | — |
 
-> Implementation note: `mastra/workflows/qti-v2-turn.workflow.ts` builds the workflow with `createWorkflow` / `createStep` from `@mastra/core/workflows` and registers it on the `Mastra` instance as `qti-v2-turn` (`workflows`), with snapshot persistence off: the session document holds the state. The step ids, titles and pure step code are in `qti-v2-turn.steps.ts`, which imports no framework. The session code starts a run with `run.stream()` and reads `workflow-step-start` and `workflow-step-result` (`status` `success`, `failed`, or `bailed` for a stopped turn) from its `fullStream`. The Analyse step calls back into the session code through a per-run object on the run's `RequestContext`. The event-to-state mapping is `workflowRunState` in `modules/sessions/workflow-run-state.ts`.
+> Implementation note: `mastra/workflows/qti-v2-turn.workflow.ts` builds the workflow with `createWorkflow` / `createStep` from `@mastra/core/workflows` and registers it on the `Mastra` instance as `qti-v2-turn` (`workflows`), with snapshot persistence off: the session document holds the state. The step ids, titles and pure step code are in `qti-v2-turn.steps.ts`, which imports no framework. The session code starts a run with `run.stream()` and reads `workflow-step-start` and `workflow-step-result` (`status` `success`, `failed`, or `bailed` for a stopped turn) from its `fullStream`. The Analyse step calls back into the session code through a per-run object on the run's `RequestContext`. The event-to-state mapping is `workflowRunState` in `modules/sessions/workflow-run-state.ts`. `SessionsService.runTurnWorkflow` runs every streamed turn, of v2 and of a one-step workflow alike, and maps the step events to the state only when the workflow's `bar` is `steps`.
 
 ### 5.12 Workflows: the catalogue, ids and the one-step workflow
 
@@ -1471,7 +1475,7 @@ Every session runs a **workflow** (ADR-0040; [workflows](../capabilities/workflo
 |---|---|---|---|---|---|---|
 | `answer` | Answer | agent | `The agent answers with its tools, streamed to the chat.` | question, datasets | calls, stopped | `Model error` fails; `Stop` stops; `Clarifying question` stops (only when the agent has `ask_clarification`) |
 
-Its agent is the workflow's agent with its tools (a user agent: the assistant's tools its selection gives it, 2.1) and its tool-loop budget: 15 for the `assistant`, the RFP Builder and user agents, 10 for the Data Readiness Agent. Every one-step workflow shares one engine, `agent-turn`, never one per agent. How a turn of a one-step workflow runs is 5.1's per-agent turn.
+Its agent is the workflow's agent with its tools (a user agent: the assistant's tools its selection gives it, 2.1) and its tool-loop budget: 15 for the `assistant`, the RFP Builder and user agents, 10 for the Data Readiness Agent. Every one-step workflow shares one engine, `agent-turn`, never one per agent. Its input is `{ question, datasets }`, and its output is the step's (`{ calls: { tool, rowCount?, failed }[], stopped }`); it never persists a snapshot. How a turn of a one-step workflow runs is 5.1's per-agent turn: the session code picks the agent and hands the run the turn on its `RequestContext`.
 
 **A session's workflow** ([data-model.md](data-model.md) 3.4). A new session stores `workflowId`, whichever body of [api.md](api.md) 3 created it. A session without it, or whose stored id no longer resolves, derives it from its agent fields:
 
@@ -1487,7 +1491,7 @@ Which agent a turn runs is unchanged: `agentKey`, else the `assistant` (with a u
 
 **Which workflows use an agent** ([api.md](api.md) 34 `usedInWorkflows`): the code workflows whose `primaryFor` it is and its own one-step workflow, in catalogue order. `assistant` → `agent:assistant`; `assistant-v2` → `qti-v2-turn`; `rfp` → `agent:rfp`; `data-readiness` → `agent:data-readiness`; a Live user agent → `agent:<id>`; a draft-only user agent and the System agents → none.
 
-> Implementation note: the framework-free catalogue is `mastra/workflows/workflow-catalog.ts` (`CODE_WORKFLOWS`, `WRAPPED_AGENT_KEYS`, `agentWorkflowId`, `parseWorkflowId`, `sessionWorkflowId`, `workflowsUsingAgent`, `oneStepWorkflowSteps`) and `agent-turn.steps.ts` (the `answer` step). The Official and System registry keys and the tool-loop budgets are in `mastra/agent-constants.ts`; drift tests read `mastra/index.ts`'s registered keys as text, so they never load Mastra. `agentWorkflow()` (`agent-workflows.ts`) reads v2's steps from `CODE_WORKFLOWS`. `WorkflowsService` (`modules/workflows/`) builds the API's catalogue from the pure catalogue and `AgentsService.list()`; `SessionsService` never depends on it (that would be a module cycle) and resolves workflows from the pure catalogue.
+> Implementation note: the framework-free catalogue is `mastra/workflows/workflow-catalog.ts` (`CODE_WORKFLOWS`, `WRAPPED_AGENT_KEYS`, `agentWorkflowId`, `parseWorkflowId`, `sessionWorkflowId`, `workflowsUsingAgent`, `oneStepWorkflowSteps`) and `agent-turn.steps.ts` (the `answer` step). `agent-turn.workflow.ts` builds the `agent-turn` workflow, registered in `mastra/index.ts` next to `qti-v2-turn`; its step reads `AgentTurnRuntime` from the run's `RequestContext` (`AGENT_TURN_RUNTIME_KEY`) and returns `runtime.answer()`. The Official and System registry keys and the tool-loop budgets are in `mastra/agent-constants.ts`; drift tests read `mastra/index.ts`'s registered keys as text, so they never load Mastra. `agentWorkflow()` (`agent-workflows.ts`) reads v2's steps from `CODE_WORKFLOWS`. `WorkflowsService` (`modules/workflows/`) builds the API's catalogue from the pure catalogue and `AgentsService.list()`; `SessionsService` never depends on it (that would be a module cycle) and resolves workflows from the pure catalogue.
 
 ---
 

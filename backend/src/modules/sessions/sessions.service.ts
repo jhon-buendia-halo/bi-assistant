@@ -145,15 +145,21 @@ import {
 import {
   QTI_V2_TURN_RUNTIME_KEY,
   QTI_V2_TURN_STEPS,
-  QTI_V2_TURN_WORKFLOW_ID,
   type AnalyseOutcome,
   type QtiV2TurnInput,
   type QtiV2TurnRuntime,
 } from '../../mastra/workflows/qti-v2-turn.steps';
 import {
+  AGENT_TURN_RUNTIME_KEY,
+  AGENT_TURN_STEPS,
+  AGENT_TURN_WORKFLOW_ID,
+  type AgentTurnRuntime,
+} from '../../mastra/workflows/agent-turn.steps';
+import {
   ASSISTANT_WORKFLOW_NAME,
   parseWorkflowId,
   sessionWorkflowId,
+  type WorkflowBar,
 } from '../../mastra/workflows/workflow-catalog';
 import { renderPdf } from '../../common/markdown-pdf';
 import {
@@ -2479,10 +2485,15 @@ export class SessionsService implements OnModuleInit {
       }
     };
     try {
-      if (agentKey === ASSISTANT_V2_AGENT_KEY) {
-        // v2's turn is a workflow defined in code; its Analyse step streams
-        // the agent through `consume` (agents.md 5.11, ADR-0034).
-        await this.runAssistantV2Workflow(session, trimmed, emit, {
+      // Every streamed turn is one run of the session's workflow (agents.md
+      // 5.1, ADR-0040). Its agent step streams the agent through `consume`:
+      // v2's Analyse step (5.11, ADR-0034) or a one-step workflow's Answer.
+      await this.runTurnWorkflow(
+        session,
+        turnWorkflowOf(session),
+        trimmed,
+        emit,
+        {
           analyse: async ({ catalogBlock }) => {
             await consume(
               await agent.stream(input, {
@@ -2501,20 +2512,22 @@ export class SessionsService implements OnModuleInit {
             }
             return analyseOutcomeOf(data, turn.signal.aborted);
           },
-        });
-      } else {
-        await consume(await agent.stream(input, options));
-      }
+          answer: async () => {
+            await consume(await agent.stream(input, options));
+            if (streamError !== undefined && !turn.signal.aborted) {
+              // A custom endpoint's failure fails the turn in R50's words
+              // (R51); any other keeps today's handling.
+              const failure = await chatTurnError(streamError, () =>
+                this.llmService.getView(),
+              );
+              if (failure !== streamError) throw failure;
+            }
+            return analyseOutcomeOf(data, turn.signal.aborted);
+          },
+        },
+      );
     } finally {
       abortSignal?.removeEventListener('abort', forwardAbort);
-    }
-    if (streamError !== undefined && !turn.signal.aborted) {
-      // A custom endpoint's failure fails the turn in R50's words (R51);
-      // any other keeps today's handling.
-      const failure = await chatTurnError(streamError, () =>
-        this.llmService.getView(),
-      );
-      if (failure !== streamError) throw failure;
     }
     // The stage `create_rfp` or `get_rfp` reported moves the tracker too.
     if (rfpHolder?.stage !== undefined && rfpHolder.stage !== drivenStage) {
@@ -2636,46 +2649,57 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * Run one turn of Questions to Insights v2 as its workflow (agents.md 5.11,
-   * ADR-0034): the session's workflow state follows the run's step events and
-   * each change is emitted as `workflow`, so the bar moves live. A failed step
-   * throws its error (the Analyse step's own error when it failed); a stopped
-   * turn ends at Analyse.
+   * Run one turn as a run of the session's workflow (agents.md 5.1, 5.11,
+   * 5.12; ADR-0034, ADR-0040): `qti-v2-turn` hands its Analyse step
+   * `runtime.analyse`, `agent-turn` hands its Answer step `runtime.answer`.
+   * Only a workflow whose steps drive the bar (`bar: 'steps'`) writes the
+   * session's workflow state from the run's step events and emits each
+   * change as `workflow`; a one-step workflow never does (agent-panel R15).
+   * A failed step throws its own error, so the `error` event reads as the
+   * agent's; a stopped turn ends at its agent step.
    */
-  private async runAssistantV2Workflow(
+  private async runTurnWorkflow(
     session: SessionDoc,
+    workflow: TurnWorkflow,
     question: string,
     emit: (event: StreamEvent) => void,
-    runtime: QtiV2TurnRuntime,
+    runtime: QtiV2TurnRuntime & AgentTurnRuntime,
   ): Promise<void> {
-    // The Analyse step's own failure, kept so the turn reports it as is.
-    let analyseError: unknown;
+    // The agent step's own failure, kept so the turn reports it as is.
+    let stepError: unknown;
+    const captured = async <T>(step: () => Promise<T>): Promise<T> => {
+      try {
+        return await step();
+      } catch (error) {
+        stepError = error;
+        throw error;
+      }
+    };
     const requestContext = new RequestContext();
-    requestContext.set(QTI_V2_TURN_RUNTIME_KEY, {
-      analyse: async (input) => {
-        try {
-          return await runtime.analyse(input);
-        } catch (error) {
-          analyseError = error;
-          throw error;
-        }
-      },
-    } satisfies QtiV2TurnRuntime);
+    if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
+      requestContext.set(AGENT_TURN_RUNTIME_KEY, {
+        answer: () => captured(() => runtime.answer()),
+      } satisfies AgentTurnRuntime);
+    } else {
+      requestContext.set(QTI_V2_TURN_RUNTIME_KEY, {
+        analyse: (input) => captured(() => runtime.analyse(input)),
+      } satisfies QtiV2TurnRuntime);
+    }
     const turnInput: QtiV2TurnInput = {
       question,
       datasets: session.datasets,
     };
     const run = await this.mastra.streamWorkflow(
-      QTI_V2_TURN_WORKFLOW_ID,
+      workflow.engineId,
       turnInput,
       requestContext,
     );
-    const stepIds = QTI_V2_TURN_STEPS.map((step) => step.id);
     let state = session.workflowState;
     for await (const event of run.fullStream) {
+      if (workflow.bar !== 'steps') continue;
       const stepEvent = stepEventOf(event);
       if (!stepEvent) continue;
-      const next = workflowRunState(state, stepEvent, stepIds);
+      const next = workflowRunState(state, stepEvent, workflow.stepIds);
       if (!next) continue;
       state = next;
       await this.updateDoc(session.id, { workflowState: state });
@@ -2685,7 +2709,7 @@ export class SessionsService implements OnModuleInit {
     const result = await run.result;
     if (result.status === 'failed') {
       const failure: unknown =
-        analyseError ?? result.error ?? new Error('The turn failed');
+        stepError ?? result.error ?? new Error('The turn failed');
       throw failure;
     }
     if (result.status === 'success' && isTurnSummary(result.result)) {
@@ -3153,9 +3177,46 @@ function parseJsonObject(text: string | undefined): unknown {
   }
 }
 
-/** Where a session's fixed workflow steps come from (agents.md 5.11). */
+/** A session's workflow as its turn runs it (agents.md 5.12, ADR-0040). */
+interface TurnWorkflow {
+  /** The catalogue id: `qti-v2-turn`, `agent:<key>` or `agent:<user-agent id>`. */
+  id: string;
+  /** The registered Mastra workflow the turn runs. */
+  engineId: string;
+  /** What drives the bar: the run's step events, or the agent's own phases. */
+  bar: WorkflowBar;
+  stepIds: string[];
+}
+
+/**
+ * The workflow a session's turn runs: its code-defined workflow, else its
+ * one-step workflow on the `agent-turn` engine.
+ */
+function turnWorkflowOf(session: SessionDoc): TurnWorkflow {
+  const id = sessionWorkflowId(session);
+  const parsed = parseWorkflowId(id);
+  if (parsed?.kind === 'code') {
+    return {
+      id,
+      engineId: parsed.source.id,
+      bar: parsed.source.bar,
+      stepIds: parsed.source.steps.map((step) => step.id),
+    };
+  }
+  return {
+    id,
+    engineId: AGENT_TURN_WORKFLOW_ID,
+    bar: 'agent',
+    stepIds: AGENT_TURN_STEPS.map((step) => step.id),
+  };
+}
+
+/**
+ * Where a session's fixed workflow steps come from (agents.md 5.11, 5.12):
+ * a workflow whose steps drive the bar, else the agent's prompt.
+ */
 function workflowSourceOf(session: SessionDoc): 'prompt' | 'workflow' {
-  return session.agentKey === ASSISTANT_V2_AGENT_KEY ? 'workflow' : 'prompt';
+  return turnWorkflowOf(session).bar === 'steps' ? 'workflow' : 'prompt';
 }
 
 /** The Analyse step's outcome from the turn's data records (agents.md 5.11). */

@@ -286,7 +286,8 @@ flowchart LR
   end
 
   subgraph mastra["mastra/"]
-    mastrasvc["MastraService<br/>(getAgent, ensureSessionWorkspace)"]
+    mastrasvc["MastraService<br/>(getAgent, streamWorkflow, ensureSessionWorkspace)"]
+    turnwf["workflows/<br/>(agent-turn, qti-v2-turn; ADR-0034, ADR-0040)"]
     toolsvc["tool-services<br/>(setDatasetToolServices bridge)"]
     resolver["model-resolver<br/>(setAgentModelResolver)"]
     assistant["assistant agent"]
@@ -308,6 +309,7 @@ flowchart LR
   sessions --> metrics
   sessions --> ontology
   sessions -->|"assistant, sql-fixer, sql-verifier"| mastrasvc
+  sessions -->|"every streamed turn: one workflow run"| mastrasvc
   sessions -->|"installs on init"| toolsvc
   visualization -->|"visualization agent, workspace fs"| mastrasvc
   agentsmod --> sessions
@@ -336,6 +338,8 @@ flowchart LR
   mastrasvc --> sqlagents
   mastrasvc --> bootstrap
   mastrasvc --> rfpagent
+  mastrasvc --> turnwf
+  turnwf -.->|"agent step calls back into the session turn"| sessions
   rfpagent --> rfptools
   rfpagent -.->|"its seven stage skills (catalog + skill tool)"| skills
   rfptools -->|"restTarget(), exportRfpPackage()"| toolsvc
@@ -347,7 +351,7 @@ flowchart LR
   assistant -.->|"model: async resolveAgentModel()"| resolver
 ```
 
-*Backend components: NestJS feature modules and their constructor-level dependencies, the `DocStore` behind every repository, and the `mastra/` harness reached only through `MastraService` plus the two DI bridges (`tool-services`, `model-resolver`) installed on module init.*
+*Backend components: NestJS feature modules and their constructor-level dependencies, the `DocStore` behind every repository, and the `mastra/` harness reached only through `MastraService` plus the two DI bridges (`tool-services`, `model-resolver`) installed on module init. Every streamed chat turn is one run of a registered turn workflow ([agents.md](agents.md) 5.1): `qti-v2-turn` for a Questions to Insights v2 session, `agent-turn` (one `answer` step) for every other session. `SessionsService` starts the run through `MastraService.streamWorkflow` and hands it the turn's agent call on the run's `RequestContext`; the agent step calls back into it, so the agent, its context and its tools are chosen by the session code, never per registered workflow (ADR-0040).*
 
 **Frontend**
 

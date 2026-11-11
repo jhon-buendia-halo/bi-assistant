@@ -16,6 +16,12 @@ jest.mock('@mastra/core/request-context', () => ({
   },
 }));
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
+// Every streamed turn runs its workflow (agents.md 5.1): the engine stand-in.
+jest.mock('@mastra/core/workflows', () =>
+  jest.requireActual<typeof import('../../mastra/testing/workflows.stub')>(
+    '../../mastra/testing/workflows.stub',
+  ),
+);
 jest.mock('../../mastra/model-resolver', () => ({
   AGENT_OVERRIDES_CONTEXT_KEY: 'agent-overrides',
   isCustomAnthropicConfig: (c: unknown) =>
@@ -81,6 +87,7 @@ import type { DatasetToolServices } from '../../mastra/tool-services';
 import { isoToday } from '../../mastra/rfp-context';
 import { SUPER_ADMIN } from '../../common/super-admin';
 import { SessionsService, type StreamEvent } from './sessions.service';
+import { streamTurnWorkflow } from '../../mastra/testing/turn-workflow.stub';
 import { toolDataRecord } from './turn-data';
 import { setAgentPromptOverrides } from '../../mastra/agent-prompt-overrides';
 import type { SessionDoc } from './entities/session.entity';
@@ -183,6 +190,7 @@ function build(options: BuildOptions = {}) {
   const mastra = {
     getAgent: jest.fn((key: string) => registry[key]),
     listAgents: () => registry,
+    streamWorkflow: streamTurnWorkflow,
     ensureSessionWorkspace: jest
       .fn()
       .mockImplementation((id: string) =>

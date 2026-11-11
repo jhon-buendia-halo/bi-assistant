@@ -16,6 +16,12 @@ jest.mock('@mastra/core/request-context', () => ({
   },
 }));
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
+// Every streamed turn runs its workflow (agents.md 5.1): the engine stand-in.
+jest.mock('@mastra/core/workflows', () =>
+  jest.requireActual<typeof import('../../mastra/testing/workflows.stub')>(
+    '../../mastra/testing/workflows.stub',
+  ),
+);
 jest.mock('../../mastra/model-resolver', () => ({
   AGENT_OVERRIDES_CONTEXT_KEY: 'agent-overrides',
   isCustomAnthropicConfig: (c: unknown) =>
@@ -109,6 +115,7 @@ import {
   toolCallInput,
 } from './sessions.service';
 import type { SessionDoc } from './entities/session.entity';
+import { streamTurnWorkflow } from '../../mastra/testing/turn-workflow.stub';
 import { setAgentPromptOverrides } from '../../mastra/agent-prompt-overrides';
 
 describe('SessionsService streaming', () => {
@@ -247,6 +254,7 @@ describe('SessionsService streaming', () => {
           .mockImplementation((id: string) =>
             id === 'sql-verifier' ? verifier : agent,
           ),
+        streamWorkflow: streamTurnWorkflow,
         ensureSessionWorkspace: jest
           .fn()
           .mockResolvedValue({ id: 'workspace-1' }),
