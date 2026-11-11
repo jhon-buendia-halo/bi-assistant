@@ -1,6 +1,8 @@
 // The row shares the tab's width: code steps 1 part, the agent step 1.6,
-// arrows a fixed 88 px; under 920 px the row scrolls sideways.
-.workflow-row {
+// arrows a fixed 88 px; with more than one step, under 920 px the row
+// scrolls sideways. A one-step workflow's single card just fills the width
+// (the workflow page, ui.md 4.4b).
+.workflow-row:has(> li + li) {
   min-width: 920px;
 }
 

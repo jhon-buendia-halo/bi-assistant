@@ -56,6 +56,10 @@ import { UiPreferencesService } from './core/preferences/ui-preferences.service'
 import { DatasetList } from './features/datasets/components/dataset-list/dataset-list';
 import { AgentHub } from './features/agents/components/agent-hub/agent-hub';
 import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
+import { WorkflowsPage } from './features/workflows/components/workflows-page/workflows-page';
+import { WorkflowDetailPage } from './features/workflows/components/workflow-detail/workflow-detail';
+import { WorkflowSummary } from './features/workflows/models/workflow.model';
+import { workflowStartAction } from './features/workflows/services/workflows.util';
 import { EvalTrace } from './features/agents/components/eval-trace/eval-trace';
 import { AgentEditor } from './features/agents/components/agent-editor/agent-editor';
 import { AgentPreview } from './features/agents/components/agent-preview/agent-preview';
@@ -130,6 +134,8 @@ type MainView =
   | 'home'
   | 'dataset'
   | 'dataset-new'
+  | 'workflows'
+  | 'workflow-detail'
   | 'agents'
   | 'agent-detail'
   | 'agent-editor'
@@ -150,6 +156,7 @@ type MainView =
 /** What the navigation rail selects (app-shell R3–R5, R46). */
 type Area =
   | 'datasets'
+  | 'workflows'
   | 'agents'
   | 'context'
   | 'sessions'
@@ -159,6 +166,7 @@ type Area =
 /** The view each workspace area opens on. */
 const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
   datasets: 'dataset',
+  workflows: 'workflows',
   agents: 'agents',
   context: 'context',
   sessions: 'sessions',
@@ -168,6 +176,8 @@ const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
 const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   dataset: 'datasets',
   'dataset-new': 'datasets',
+  workflows: 'workflows',
+  'workflow-detail': 'workflows',
   agents: 'agents',
   'agent-detail': 'agents',
   'agent-editor': 'agents',
@@ -236,6 +246,8 @@ function urlHost(baseUrl: string): string {
     DatasetList,
     AgentHub,
     AgentDetail,
+    WorkflowsPage,
+    WorkflowDetailPage,
     EvalTrace,
     AgentEditor,
     SkillsLibrary,
@@ -464,6 +476,64 @@ export class App {
       },
       error: (err) => {
         this.startingAgentKey.set(null);
+        this.toast.error(err?.error?.message ?? 'Backend unreachable');
+      },
+    });
+  }
+
+  /** Id of the workflow open on its page (workflows R7). */
+  readonly activeWorkflowId = signal<string | null>(null);
+  /** Id of the workflow a session is being created from, while in flight. */
+  readonly startingWorkflowId = signal<string | null>(null);
+
+  /** A workflow card on the Workflows page opens the workflow's page (R7). */
+  openWorkflow(id: string): void {
+    if (!this.confirmLeaveAgentEditor()) return;
+    this.settingsOpen.set(false);
+    this.activeWorkflowId.set(id);
+    this.mainView.set('workflow-detail');
+  }
+
+  /** All workflows, from a workflow's page. */
+  closeWorkflowDetail(): void {
+    this.mainView.set('workflows');
+  }
+
+  /** An agent row on a workflow's page opens the agent's detail (R8). */
+  openAgentByKey(key: string): void {
+    if (!this.confirmLeaveAgentEditor()) return;
+    this.activeAgentKey.set(key);
+    this.mainView.set('agent-detail');
+  }
+
+  /**
+   * Start chat on a workflow card or page (workflows R6). A workflow that
+   * takes the datasets the user picks opens the New conversation screen,
+   * preselected through today's agent-key parameter (plan 5.7; 1.23.6 makes
+   * it a workflow id); any other workflow gets its session created at once
+   * and opened. A refusal keeps the user where they are.
+   */
+  startChatWithWorkflow(workflow: WorkflowSummary): void {
+    const action = workflowStartAction(workflow);
+    if (action.kind === 'composer') {
+      this.openComposer(action.agentKey);
+      return;
+    }
+    if (this.startingWorkflowId()) return;
+    this.startingWorkflowId.set(workflow.id);
+    this.sessionsApi.createFromWorkflow(workflow.id).subscribe({
+      next: (res) => {
+        this.startingWorkflowId.set(null);
+        if (res.ok && res.session) {
+          this.toast.success(res.message);
+          this.loadSessions();
+          this.openSession(res.session);
+        } else {
+          this.toast.error(res.message);
+        }
+      },
+      error: (err) => {
+        this.startingWorkflowId.set(null);
         this.toast.error(err?.error?.message ?? 'Backend unreachable');
       },
     });
@@ -1306,6 +1376,7 @@ export class App {
     icon: LucideIconData;
   }[] = [
     { area: 'datasets', label: 'Datasets', icon: FlaskConical },
+    { area: 'workflows', label: 'Workflows', icon: Workflow },
     { area: 'agents', label: 'Agents', icon: Bot },
     { area: 'context', label: 'Context', icon: Layers },
     { area: 'sessions', label: 'Sessions', icon: FolderKanban },
@@ -1493,13 +1564,14 @@ export class App {
     // to the hub (agents-evals R59).
     const leavingEditor = !this.settingsOpen() && this.inEditor();
     // Sessions is shown only on its list: from a chat or the composer the
-    // rail returns to the list (app-shell R3). Context likewise returns from
-    // a section to its cards (R3a), and Monitoring from a call to its table
-    // (roadmap 1.21.15).
+    // rail returns to the list (app-shell R3). Workflows likewise returns
+    // from a workflow's page to the list (R3), Context from a section to its
+    // cards (R3a), and Monitoring from a call to its table (roadmap 1.21.15).
     const alreadyShown =
       this.currentArea() === area &&
       !leavingEditor &&
       (area !== 'sessions' || this.mainView() === 'sessions') &&
+      (area !== 'workflows' || this.mainView() === 'workflows') &&
       (area !== 'context' || this.mainView() === 'context') &&
       (area !== 'monitoring' || this.mainView() === 'monitoring');
     if (!alreadyShown && !this.confirmLeaveAgentEditor()) return;

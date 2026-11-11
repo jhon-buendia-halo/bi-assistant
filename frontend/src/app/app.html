@@ -427,6 +427,28 @@
                     (saved)="mainView.set('dataset')"
                   />
                 </div>
+              } @else if (mainView() === "workflows") {
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+                  <app-workflows-page
+                    class="w-full max-w-[960px]"
+                    (openWorkflow)="openWorkflow($event)"
+                    [startingWorkflowId]="startingWorkflowId()"
+                    (startChat)="startChatWithWorkflow($event)"
+                  />
+                </div>
+              } @else if (
+                mainView() === "workflow-detail" && activeWorkflowId() !== null
+              ) {
+                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+                  <app-workflow-detail
+                    class="w-full max-w-[960px]"
+                    [workflowId]="activeWorkflowId()!"
+                    [starting]="startingWorkflowId() === activeWorkflowId()"
+                    (back)="closeWorkflowDetail()"
+                    (startChat)="startChatWithWorkflow($event)"
+                    (openAgent)="openAgentByKey($event)"
+                  />
+                </div>
               } @else if (mainView() === "agents") {
                 <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
                   <app-agent-hub
