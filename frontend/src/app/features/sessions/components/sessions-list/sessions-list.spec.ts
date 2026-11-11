@@ -39,28 +39,59 @@ describe('SessionsList', () => {
 
   beforeEach(() => TestBed.configureTestingModule({ imports: [SessionsList] }));
 
-  it('lists a row per session with its agent line, in landmark nav', () => {
+  it('lists a row per session with its workflow chip, in landmark nav', () => {
     setup([
       session({
         id: 'a',
         name: 'Alpha',
         datasets: ['World Cup'],
-        agent: { name: 'RFP Builder' } as Session['agent'],
+        workflowRef: {
+          id: 'agent:rfp',
+          name: 'RFP Builder',
+          kind: 'agent',
+          deleted: false,
+        },
         updatedAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
       }),
-      session({ id: 'b', name: 'Beta', datasets: ['F1'] }),
+      session({
+        id: 'b',
+        name: 'Beta',
+        datasets: ['F1'],
+        workflowRef: {
+          id: 'agent:assistant',
+          name: 'Assistant',
+          kind: 'agent',
+          deleted: false,
+        },
+      }),
+      session({
+        id: 'c',
+        name: 'Gamma',
+        workflowRef: {
+          id: 'agent:u-1',
+          name: 'Cup historian',
+          kind: 'agent',
+          deleted: true,
+        },
+      }),
     ]);
     expect(root().querySelector('nav[aria-label="Sessions"]')).toBeTruthy();
     const rows = root().querySelectorAll('[data-testid^="session-"]');
-    expect(rows.length).toBe(2);
+    expect(rows.length).toBe(3);
     expect(rows[0].textContent).toContain('Alpha');
-    expect(
-      rows[0].querySelector('[data-testid="row-session-agent"]')?.textContent,
-    ).toContain('RFP Builder');
+    const chip = (row: Element) =>
+      row.querySelector('[data-testid="row-session-workflow"]') as HTMLElement;
+    expect(chip(rows[0]).textContent?.trim()).toBe('RFP Builder');
+    expect(chip(rows[0]).title).toBe('Workflow: RFP Builder');
     expect(rows[0].textContent).toContain('World Cup');
-    expect(
-      rows[1].querySelector('[data-testid="row-session-agent"]')?.textContent,
-    ).toContain('Assistant');
+    expect(chip(rows[1]).textContent?.trim()).toBe('Assistant');
+    expect(chip(rows[2]).textContent?.trim()).toBe(
+      'Cup historian · agent deleted',
+    );
+    expect(chip(rows[2]).title).toBe(
+      'Workflow: Cup historian · agent deleted',
+    );
+    expect(root().querySelector('[data-testid="row-session-agent"]')).toBeNull();
     expect(rows[0].textContent).toContain('2 h ago');
     expect(rows[1].textContent).toContain('F1');
   });

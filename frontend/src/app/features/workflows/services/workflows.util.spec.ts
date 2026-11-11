@@ -1,6 +1,8 @@
 import { WorkflowSummary } from '../models/workflow.model';
 import {
   buildWorkflowSections,
+  composerCreateBody,
+  composerWorkflowId,
   workflowKindLabel,
   workflowStartAction,
   workflowUsesLabel,
@@ -143,23 +145,72 @@ describe('workflows.util', () => {
   });
 
   describe('workflowStartAction (R6)', () => {
-    it('opens the composer on Assistant for the assistant workflow', () => {
+    it('opens the composer on the assistant workflow for the assistant workflow', () => {
       expect(workflowStartAction(CATALOGUE[0])).toEqual({
         kind: 'composer',
-        agentKey: undefined,
+        workflowId: 'agent:assistant',
       });
     });
 
-    it('opens the composer preselected to the agent of a dataset-picking code workflow', () => {
+    it('opens the composer preselected to a dataset-picking code workflow', () => {
       expect(workflowStartAction(CATALOGUE[1])).toEqual({
         kind: 'composer',
-        agentKey: 'assistant-v2',
+        workflowId: 'qti-v2-turn',
       });
     });
 
     it('creates the session at once for any other workflow', () => {
       expect(workflowStartAction(CATALOGUE[2])).toEqual({ kind: 'create' });
       expect(workflowStartAction(CATALOGUE[4])).toEqual({ kind: 'create' });
+    });
+  });
+
+  describe('composerWorkflowId (sessions-chat R64)', () => {
+    it('keeps a preselected workflow that can start a chat', () => {
+      expect(composerWorkflowId(CATALOGUE, 'qti-v2-turn')).toBe('qti-v2-turn');
+      expect(composerWorkflowId(CATALOGUE, 'agent:u1')).toBe('agent:u1');
+    });
+
+    it('falls back to Assistant with nothing preselected, an unknown id or a disabled workflow', () => {
+      expect(composerWorkflowId(CATALOGUE, undefined)).toBe('agent:assistant');
+      expect(composerWorkflowId(CATALOGUE, 'agent:gone')).toBe(
+        'agent:assistant',
+      );
+      expect(composerWorkflowId(CATALOGUE, 'agent:rfp')).toBe(
+        'agent:assistant',
+      );
+      expect(composerWorkflowId([], 'qti-v2-turn')).toBe('agent:assistant');
+    });
+
+    it("maps the agent key of a dataset-picking workflow's agent to that workflow", () => {
+      expect(composerWorkflowId(CATALOGUE, 'assistant-v2')).toBe('qti-v2-turn');
+    });
+  });
+
+  describe('composerCreateBody (sessions-chat R64; api.md 3)', () => {
+    it('sends the name and the picked datasets for a workflow that picks datasets', () => {
+      expect(
+        composerCreateBody(CATALOGUE[1], 'V2 check', ['World Cup Core']),
+      ).toEqual({
+        workflowId: 'qti-v2-turn',
+        name: 'V2 check',
+        datasets: ['World Cup Core'],
+      });
+      expect(composerCreateBody(null, 'Q', ['Core'])).toEqual({
+        workflowId: 'agent:assistant',
+        name: 'Q',
+        datasets: ['Core'],
+      });
+    });
+
+    it('sends no datasets, and the name only when typed, for any other workflow', () => {
+      expect(composerCreateBody(CATALOGUE[3], 'Acme', ['Core'])).toEqual({
+        workflowId: 'agent:rfp',
+        name: 'Acme',
+      });
+      expect(composerCreateBody(CATALOGUE[3], '', ['Core'])).toEqual({
+        workflowId: 'agent:rfp',
+      });
     });
   });
 });

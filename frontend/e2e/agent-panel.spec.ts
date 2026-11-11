@@ -1030,9 +1030,9 @@ async function v2Session(page: Page): Promise<string> {
     .locator('header')
     .getByRole('button', { name: 'Start New Conversation' })
     .click();
-  await page.getByTestId('new-session-agent').click();
+  await page.getByTestId('new-session-workflow').click();
   await page
-    .getByRole('listbox', { name: 'Agent' })
+    .getByRole('listbox', { name: 'Workflow' })
     .getByRole('option')
     .filter({ hasText: V2 })
     .click();
@@ -1041,7 +1041,7 @@ async function v2Session(page: Page): Promise<string> {
     .getByRole('button', { name: new RegExp(`^${WORLD_CUP_DATASET}`) })
     .click();
   await page.getByRole('button', { name: /^Create$/ }).click();
-  await expect(page.getByTestId('session-agent')).toHaveText(V2);
+  await expect(page.getByTestId('session-workflow')).toHaveText(V2);
   return sessionIdFromHeader(page);
 }
 

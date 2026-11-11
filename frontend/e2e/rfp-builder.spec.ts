@@ -318,7 +318,7 @@ test.describe('with the API sample registered', () => {
   }, testInfo) => {
     await startRfpChat(page);
 
-    await expect(page.getByTestId('session-agent')).toHaveText(AGENT);
+    await expect(page.getByTestId('session-workflow')).toHaveText(AGENT);
     const welcome = page.getByTestId('session-welcome');
     await expect(welcome).toContainText(DESCRIPTION);
     for (const starter of STARTERS) {
