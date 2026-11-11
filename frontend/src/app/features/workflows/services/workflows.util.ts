@@ -91,18 +91,14 @@ export function workflowStartAction(
 /**
  * The workflow the New conversation screen's Workflow field shows
  * (sessions-chat R64): the preselected one when it is listed and can start a
- * chat, else Assistant. A preselection may still be the agent key of a
- * dataset-picking workflow's agent (Start chat on an agent, until 1.23.7
- * moves it to workflows); it maps to that workflow.
+ * chat, else Assistant.
  */
 export function composerWorkflowId(
   workflows: readonly WorkflowSummary[],
   preselect: string | undefined,
 ): string {
   if (!preselect) return ASSISTANT_WORKFLOW_ID;
-  const workflow =
-    workflows.find((w) => w.id === preselect) ??
-    workflows.find((w) => w.picksDatasets && w.agents[0]?.key === preselect);
+  const workflow = workflows.find((w) => w.id === preselect);
   return workflow && !workflow.chatRequirement
     ? workflow.id
     : ASSISTANT_WORKFLOW_ID;

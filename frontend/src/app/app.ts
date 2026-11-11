@@ -78,9 +78,6 @@ import { SkillEditorService } from './features/agents/services/skill-editor.serv
 import { AgentEditorService } from './features/agents/services/agent-editor.service';
 import { AgentPageState } from './features/agents/services/agent-page-state.service';
 import { Agent } from './features/agents/services/agents-api.service';
-import {
-  picksDatasets,
-} from './features/agents/services/agent-hub.util';
 import { PersonaList } from './features/personas/components/persona-list/persona-list';
 import { VisualLibrary } from './features/visuals/components/visual-library/visual-library';
 import { OntologyOverview } from './features/ontology/components/ontology-overview/ontology-overview';
@@ -117,7 +114,6 @@ import {
   SessionActionResult,
   SessionVisualization,
   VisualEvent,
-  sessionAgentLabel,
   sessionWorkflowLabel,
 } from './features/sessions/models/session.model';
 import {
@@ -431,8 +427,6 @@ export class App {
       this.mainView() === 'builtin-skill-editor'
     );
   }
-
-  readonly agentLabel = sessionAgentLabel;
 
   /**
    * Back to the hub after deleting a user agent. Its sessions now read

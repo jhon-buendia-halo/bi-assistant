@@ -38,18 +38,6 @@ describe('SessionsApiService feedback', () => {
     req.flush(sampleReadinessReport());
   });
 
-  it('creates from an agent, sending the typed name only when given', () => {
-    service.createFromAgent('rfp', 'Acme').subscribe();
-    expect(http.expectOne(`${API_BASE_URL}/sessions`).request.body).toEqual({
-      agentId: 'rfp',
-      name: 'Acme',
-    });
-    service.createFromAgent('rfp').subscribe();
-    expect(http.expectOne(`${API_BASE_URL}/sessions`).request.body).toEqual({
-      agentId: 'rfp',
-    });
-  });
-
   it('creates over picked datasets, sending agentId only when given (R64)', () => {
     service.create('Q', ['Core']).subscribe();
     expect(http.expectOne(`${API_BASE_URL}/sessions`).request.body).toEqual({

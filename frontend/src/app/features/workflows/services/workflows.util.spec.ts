@@ -182,8 +182,10 @@ describe('workflows.util', () => {
       expect(composerWorkflowId([], 'qti-v2-turn')).toBe('agent:assistant');
     });
 
-    it("maps the agent key of a dataset-picking workflow's agent to that workflow", () => {
-      expect(composerWorkflowId(CATALOGUE, 'assistant-v2')).toBe('qti-v2-turn');
+    it('takes workflow ids only: an agent key falls back to Assistant', () => {
+      expect(composerWorkflowId(CATALOGUE, 'assistant-v2')).toBe(
+        'agent:assistant',
+      );
     });
   });
 

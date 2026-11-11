@@ -172,17 +172,6 @@ export class SessionsApiService {
     });
   }
 
-  /** Start a session bound to a Live user agent, named after it (R52). */
-  createFromAgent(
-    agentId: string,
-    name?: string,
-  ): Observable<SessionActionResult> {
-    return this.http.post<SessionActionResult>(`${API_BASE_URL}/sessions`, {
-      agentId,
-      ...(name ? { name } : {}),
-    });
-  }
-
   /**
    * Start a session that runs a workflow (api.md 3, `workflowId`; workflows
    * R6). `name` and `datasets` are required for a workflow that picks
