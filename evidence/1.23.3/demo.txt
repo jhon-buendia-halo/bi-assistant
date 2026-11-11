@@ -1,0 +1,375 @@
+Story 1.23.3 — the workflow catalogue (api.md 116, 117, 3, 2.1, 34)
+Backend: node backend/dist/cli.js --no-open --port 3471 --data-dir <fresh scratch dir> --intellify-api-port 3491
+Data dir: fresh (no datasets, no user agents).
+
+$ curl -s http://127.0.0.1:3471/workflows
+{
+    "workflows": [
+        {
+            "id": "agent:assistant",
+            "name": "Assistant",
+            "description": "Answers questions over the datasets you pick.",
+            "kind": "agent",
+            "owner": "Official",
+            "agents": [
+                {
+                    "key": "assistant",
+                    "name": "Questions to Insights Assistant"
+                }
+            ],
+            "stepCount": 1,
+            "bar": "agent",
+            "picksDatasets": true,
+            "datasets": [],
+            "missingDatasets": [],
+            "starterQuestions": []
+        },
+        {
+            "id": "qti-v2-turn",
+            "name": "Questions to Insights v2",
+            "description": "A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.",
+            "kind": "code",
+            "owner": "Official",
+            "agents": [
+                {
+                    "key": "assistant-v2",
+                    "name": "Questions to Insights v2"
+                }
+            ],
+            "stepCount": 4,
+            "bar": "steps",
+            "picksDatasets": true,
+            "datasets": [],
+            "missingDatasets": [],
+            "starterQuestions": []
+        },
+        {
+            "id": "agent:data-readiness",
+            "name": "Data Readiness Agent",
+            "description": "Assesses how ready a PostgreSQL or Databricks dataset is for analysis, scoring it on the DMBOK data-quality dimensions with a deterministic engine and explaining the findings.",
+            "kind": "agent",
+            "owner": "Official",
+            "agents": [
+                {
+                    "key": "data-readiness",
+                    "name": "Data Readiness Agent"
+                }
+            ],
+            "stepCount": 1,
+            "bar": "agent",
+            "picksDatasets": false,
+            "datasets": [],
+            "missingDatasets": [],
+            "starterQuestions": [
+                "Assess the readiness of this dataset",
+                "What are the worst data-quality problems?",
+                "Show my past assessments"
+            ],
+            "chatRequirement": "Add a PostgreSQL or Databricks dataset first"
+        },
+        {
+            "id": "agent:rfp",
+            "name": "RFP Builder",
+            "description": "Walks a Mercer benefits consultant through building a carrier RFP for one client over the Intellify data, stage by stage, and assembles the RFP package.",
+            "kind": "agent",
+            "owner": "Official",
+            "agents": [
+                {
+                    "key": "rfp",
+                    "name": "RFP Builder"
+                }
+            ],
+            "stepCount": 1,
+            "bar": "agent",
+            "picksDatasets": false,
+            "datasets": [
+                "Intellify RFP API"
+            ],
+            "missingDatasets": [
+                "Intellify RFP API"
+            ],
+            "starterQuestions": [],
+            "chatRequirement": "Load the \"Intellify RFP API\" sample in Settings \u2192 Testing Data first"
+        }
+    ]
+}
+
+$ curl -s http://127.0.0.1:3471/workflows/qti-v2-turn
+{
+    "id": "qti-v2-turn",
+    "name": "Questions to Insights v2",
+    "description": "A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.",
+    "kind": "code",
+    "owner": "Official",
+    "agents": [
+        {
+            "key": "assistant-v2",
+            "name": "Questions to Insights v2"
+        }
+    ],
+    "stepCount": 4,
+    "bar": "steps",
+    "picksDatasets": true,
+    "datasets": [],
+    "missingDatasets": [],
+    "starterQuestions": [],
+    "steps": [
+        {
+            "id": "receive-question",
+            "title": "Receive question",
+            "kind": "code",
+            "summary": "Trims the question. An empty one fails the step.",
+            "input": [
+                "question",
+                "datasets"
+            ],
+            "output": [
+                "question",
+                "datasets"
+            ],
+            "exits": [
+                {
+                    "label": "Empty question",
+                    "outcome": "fails"
+                }
+            ]
+        },
+        {
+            "id": "load-catalog",
+            "title": "Load catalog",
+            "kind": "code",
+            "summary": "Lists the entities of the session's datasets. No LLM.",
+            "input": [
+                "question",
+                "datasets"
+            ],
+            "output": [
+                "question",
+                "catalog"
+            ],
+            "exits": []
+        },
+        {
+            "id": "analyse",
+            "title": "Analyse",
+            "kind": "agent",
+            "summary": "The agent answers with its tools and the catalog as context, streamed to the chat.",
+            "input": [
+                "question",
+                "catalog"
+            ],
+            "output": [
+                "calls",
+                "stopped"
+            ],
+            "agent": {
+                "name": "Questions to Insights v2",
+                "tools": [
+                    "list_entities",
+                    "describe_entity",
+                    "run_readonly_sql"
+                ],
+                "maxSteps": 15
+            },
+            "exits": [
+                {
+                    "label": "Model error",
+                    "outcome": "fails"
+                },
+                {
+                    "label": "Stop",
+                    "outcome": "stops"
+                }
+            ]
+        },
+        {
+            "id": "wrap-up",
+            "title": "Wrap up",
+            "kind": "code",
+            "summary": "Counts the turn's SQL queries, failed queries and rows, and logs the summary.",
+            "input": [
+                "calls",
+                "stopped"
+            ],
+            "output": [
+                "sqlQueries",
+                "failedQueries",
+                "rows"
+            ],
+            "exits": []
+        }
+    ]
+}
+
+$ curl -s http://127.0.0.1:3471/workflows/agent%3Arfp
+{
+    "id": "agent:rfp",
+    "name": "RFP Builder",
+    "description": "Walks a Mercer benefits consultant through building a carrier RFP for one client over the Intellify data, stage by stage, and assembles the RFP package.",
+    "kind": "agent",
+    "owner": "Official",
+    "agents": [
+        {
+            "key": "rfp",
+            "name": "RFP Builder"
+        }
+    ],
+    "stepCount": 1,
+    "bar": "agent",
+    "picksDatasets": false,
+    "datasets": [
+        "Intellify RFP API"
+    ],
+    "missingDatasets": [
+        "Intellify RFP API"
+    ],
+    "starterQuestions": [],
+    "chatRequirement": "Load the \"Intellify RFP API\" sample in Settings \u2192 Testing Data first",
+    "steps": [
+        {
+            "id": "answer",
+            "title": "Answer",
+            "kind": "agent",
+            "summary": "The agent answers with its tools, streamed to the chat.",
+            "input": [
+                "question",
+                "datasets"
+            ],
+            "output": [
+                "calls",
+                "stopped"
+            ],
+            "agent": {
+                "name": "RFP Builder",
+                "tools": [
+                    "ask_clarification",
+                    "create_rfp",
+                    "export_rfp_draft",
+                    "export_rfp_package",
+                    "get_client_census",
+                    "get_client_commercials",
+                    "get_client_financials",
+                    "get_client_program",
+                    "get_client_renewals",
+                    "get_marketing_history",
+                    "get_plan_design",
+                    "get_rfp",
+                    "list_carriers",
+                    "list_clients",
+                    "list_reference_data",
+                    "list_rfps",
+                    "set_rfp_carriers",
+                    "set_rfp_lines",
+                    "set_rfp_requirements",
+                    "set_rfp_timeline",
+                    "show_in_panel",
+                    "update_rfp",
+                    "update_workflow"
+                ],
+                "maxSteps": 15
+            },
+            "exits": [
+                {
+                    "label": "Model error",
+                    "outcome": "fails"
+                },
+                {
+                    "label": "Stop",
+                    "outcome": "stops"
+                },
+                {
+                    "label": "Clarifying question",
+                    "outcome": "stops"
+                }
+            ]
+        }
+    ]
+}
+
+$ curl -s -w ' HTTP %{http_code}' http://127.0.0.1:3471/workflows/agent%3Asql-fixer
+{"message":"Workflow \"agent:sql-fixer\" not found","error":"Not Found","statusCode":404} HTTP 404
+
+$ curl -s -X POST http://127.0.0.1:3471/sessions -H Content-Type: application/json -d {"workflowId":"qti-v2-turn","name":"v2 demo","datasets":["World Cup Core"]}
+{
+    "ok": true,
+    "message": "Session \"v2 demo\" created",
+    "session": {
+        "id": "6f0752d5-1646-4bbb-840f-3226d5daea5f",
+        "name": "v2 demo",
+        "workspaceId": "session-6f0752d5-1646-4bbb-840f-3226d5daea5f",
+        "datasets": [
+            "World Cup Core"
+        ],
+        "agentKey": "assistant-v2",
+        "agentName": "Questions to Insights v2",
+        "workflowId": "qti-v2-turn",
+        "messages": [],
+        "visualizations": [],
+        "createdAt": "2026-11-11T21:09:02.766Z",
+        "updatedAt": "2026-11-11T21:09:02.766Z",
+        "agent": {
+            "id": "assistant-v2",
+            "name": "Questions to Insights v2",
+            "deleted": false,
+            "description": "A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.",
+            "starterQuestions": []
+        },
+        "workflowRef": {
+            "id": "qti-v2-turn",
+            "name": "Questions to Insights v2",
+            "kind": "code",
+            "deleted": false
+        },
+        "panelItems": [],
+        "workflow": {
+            "phases": [
+                {
+                    "number": 1,
+                    "title": "Receive question"
+                },
+                {
+                    "number": 2,
+                    "title": "Load catalog"
+                },
+                {
+                    "number": 3,
+                    "title": "Analyse"
+                },
+                {
+                    "number": 4,
+                    "title": "Wrap up"
+                }
+            ],
+            "source": "workflow",
+            "current": null,
+            "done": [],
+            "skipped": []
+        }
+    }
+}
+
+$ curl -s -X POST http://127.0.0.1:3471/sessions -H Content-Type: application/json -d {"workflowId":"qti-v2-turn","agentId":"rfp"}
+{
+    "ok": false,
+    "message": "Send workflowId or agentId, not both"
+}
+
+$ curl -s -X POST http://127.0.0.1:3471/sessions -H Content-Type: application/json -d {"workflowId":"nope"}
+{
+    "ok": false,
+    "message": "Workflow \"nope\" not found"
+}
+
+$ curl -s http://127.0.0.1:3471/sessions | (workflowId and workflowRef of each session)
+{"name": "v2 demo", "agentKey": "assistant-v2", "workflowId": "qti-v2-turn", "workflowRef": {"id": "qti-v2-turn", "name": "Questions to Insights v2", "kind": "code", "deleted": false}}
+
+$ curl -s http://127.0.0.1:3471/agents/assistant-v2 | (usedInWorkflows)
+[
+  {
+    "id": "qti-v2-turn",
+    "name": "Questions to Insights v2"
+  }
+]
+
+$ curl -s http://127.0.0.1:3471/agents/sql-fixer | (usedInWorkflows)
+[]

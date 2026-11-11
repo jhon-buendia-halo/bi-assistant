@@ -35,5 +35,7 @@ import { EvalRunsRepository } from './repositories/eval-runs.repository';
     EvalRunsService,
     EvalRunsRepository,
   ],
+  // WorkflowsModule builds the workflow catalogue from the agent catalogue.
+  exports: [AgentsService],
 })
 export class AgentsModule {}

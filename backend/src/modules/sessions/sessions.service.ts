@@ -150,6 +150,11 @@ import {
   type QtiV2TurnInput,
   type QtiV2TurnRuntime,
 } from '../../mastra/workflows/qti-v2-turn.steps';
+import {
+  ASSISTANT_WORKFLOW_NAME,
+  parseWorkflowId,
+  sessionWorkflowId,
+} from '../../mastra/workflows/workflow-catalog';
 import { renderPdf } from '../../common/markdown-pdf';
 import {
   WorkspaceFileError,
@@ -176,6 +181,7 @@ import {
   SessionDoc,
   SessionView,
   SessionVisualization,
+  SessionWorkflowRef,
   ReasoningStep,
   ReadinessReportRef,
   RfpPackageRef,
@@ -1338,6 +1344,40 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
+   * Start a chat on a workflow (api.md 3; workflows R4, ADR-0040).
+   * `agent:assistant` creates a plain session; a code workflow creates it as
+   * `agentId: <its primaryFor>` does; `agent:<key|id>` as `agentId: <key|id>`
+   * does, with the same refusals. An unknown id, a draft-only or missing user
+   * agent, a System agent and a code workflow's `primaryFor` agent are "not
+   * found". Resolved from the pure catalogue, never from `WorkflowsService`
+   * (its module imports this one).
+   */
+  async createFromWorkflow(
+    workflowId: string,
+    name?: string,
+    datasets?: string[],
+  ): Promise<SessionDoc> {
+    const notFound = () =>
+      new NotFoundException(`Workflow "${workflowId}" not found`);
+    const parsed = parseWorkflowId(workflowId);
+    if (!parsed) throw notFound();
+    if (parsed.kind === 'code') {
+      if (!this.mastra.listAgents()[parsed.source.primaryFor]) throw notFound();
+      return this.createFromAgent(parsed.source.primaryFor, name, datasets);
+    }
+    if (parsed.kind === 'builtin-agent') {
+      if (parsed.agentKey === ASSISTANT_AGENT_KEY) {
+        return this.create(name ?? '', datasets ?? []);
+      }
+      if (!this.mastra.listAgents()[parsed.agentKey]) throw notFound();
+      return this.createFromAgent(parsed.agentKey, name);
+    }
+    const agent = await this.userAgents.get(parsed.agentId);
+    if (!agent?.live) throw notFound();
+    return this.createFromAgent(parsed.agentId, name);
+  }
+
+  /**
    * Keeps only `datasets` among a session's datasets (agents.md 8.1): an eval
    * run bound to a built-in agent that takes every qualifying dataset (the
    * Data Readiness Agent) is narrowed to the datasets the run names, so a data
@@ -1381,6 +1421,7 @@ export class SessionsService implements OnModuleInit {
       datasets,
       agentId,
       agentName: agent.draft.name,
+      workflowId: sessionWorkflowId({ agentId }),
       preview: true,
       messages: [],
       visualizations: [],
@@ -1447,6 +1488,12 @@ export class SessionsService implements OnModuleInit {
       workspaceId: workspace.id,
       datasets,
       ...(agent ?? {}),
+      // Every new session stores the workflow it runs (ADR-0040): the one
+      // its agent fields derive (workflows R4).
+      workflowId: sessionWorkflowId({
+        agentKey: agent?.agentKey,
+        agentId: agent?.agentId,
+      }),
       messages: [],
       visualizations: [],
     });
@@ -1496,9 +1543,40 @@ export class SessionsService implements OnModuleInit {
     return {
       ...session,
       ...(agent ? { agent } : {}),
+      workflowRef: this.workflowRefOf(session, config),
       panelItems: withVisualItems(session),
       ...(workflow ? { workflow } : {}),
     };
+  }
+
+  /**
+   * The workflow a session runs, as the API shows it (api.md 2.1): its
+   * stored or derived id (agents.md 5.12) and the catalogue name. A user
+   * agent's workflow takes the running version's name (Live; a preview's
+   * draft); once the agent is deleted, the stored `agentName`, with
+   * `deleted: true`. `config` is the running agent version, when any.
+   */
+  private workflowRefOf(
+    session: SessionDoc,
+    config?: AgentConfig,
+  ): SessionWorkflowRef {
+    const id = sessionWorkflowId(session);
+    const parsed = parseWorkflowId(id);
+    if (parsed?.kind === 'code') {
+      return { id, name: parsed.source.name, kind: 'code', deleted: false };
+    }
+    if (parsed?.kind === 'builtin-agent') {
+      const name =
+        parsed.agentKey === ASSISTANT_AGENT_KEY
+          ? ASSISTANT_WORKFLOW_NAME
+          : (this.mastra.listAgents()[parsed.agentKey]?.name ??
+            session.agentName ??
+            parsed.agentKey);
+      return { id, name, kind: 'agent', deleted: false };
+    }
+    return config
+      ? { id, name: config.name, kind: 'agent', deleted: false }
+      : { id, name: session.agentName ?? '', kind: 'agent', deleted: true };
   }
 
   /**

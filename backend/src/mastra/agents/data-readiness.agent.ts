@@ -14,8 +14,8 @@ import { DATA_READINESS_PROMPT } from './system-prompts';
 /** The Data Readiness Agent's registry key (agents.md 1.2). */
 export const DATA_READINESS_AGENT_KEY = 'data-readiness';
 
-/** Its tool-loop budget per turn (agents.md 2.10). */
-export const DATA_READINESS_MAX_STEPS = 10;
+// Its tool-loop budget per turn (agents.md 2.10), kept framework-free.
+export { DATA_READINESS_MAX_STEPS } from '../agent-constants';
 
 // Links become plain mentions before the model reads them (agents.md 2.10, 4.1).
 const shippedInstructions = withToolSection(

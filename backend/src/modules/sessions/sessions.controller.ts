@@ -280,26 +280,42 @@ export class SessionsController {
       datasets?: string[];
       agentId?: string;
       preview?: boolean;
+      workflowId?: string;
     },
   ): Promise<{ ok: boolean; message: string; session?: SessionDoc }> {
     try {
       const agentId =
         typeof body?.agentId === 'string' && body.agentId ? body.agentId : '';
-      // With an agent, the agent decides the name and datasets (R52), except
-      // one that runs on picked datasets (Questions to Insights v2), which
-      // takes both from the body; a preview runs its draft (agents-evals R60).
-      const session = !agentId
-        ? await this.sessionsService.create(
-            body?.name ?? '',
-            body?.datasets ?? [],
+      const workflowId =
+        typeof body?.workflowId === 'string' && body.workflowId
+          ? body.workflowId
+          : '';
+      if (workflowId && agentId) {
+        throw new BadRequestException('Send workflowId or agentId, not both');
+      }
+      // With a workflow, the workflow decides as its agent would (api.md 3;
+      // ADR-0040); `preview` is ignored. With an agent, the agent decides the
+      // name and datasets (R52), except one that runs on picked datasets
+      // (Questions to Insights v2), which takes both from the body; a preview
+      // runs its draft (agents-evals R60).
+      const session = workflowId
+        ? await this.sessionsService.createFromWorkflow(
+            workflowId,
+            body?.name,
+            body?.datasets,
           )
-        : body?.preview === true
-          ? await this.sessionsService.createPreview(agentId)
-          : await this.sessionsService.createFromAgent(
-              agentId,
-              body?.name,
-              body?.datasets,
-            );
+        : !agentId
+          ? await this.sessionsService.create(
+              body?.name ?? '',
+              body?.datasets ?? [],
+            )
+          : body?.preview === true
+            ? await this.sessionsService.createPreview(agentId)
+            : await this.sessionsService.createFromAgent(
+                agentId,
+                body?.name,
+                body?.datasets,
+              );
       return {
         ok: true,
         message: session.preview

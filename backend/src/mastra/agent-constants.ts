@@ -11,3 +11,31 @@
  * number, not the `Agent` class.
  */
 export const ASSISTANT_MAX_STEPS = 15;
+
+/** The RFP Builder's tool-loop budget per turn (agents.md 2.8). */
+export const RFP_MAX_STEPS = 15;
+
+/** The Data Readiness Agent's tool-loop budget per turn (agents.md 2.10). */
+export const DATA_READINESS_MAX_STEPS = 10;
+
+/**
+ * The registry keys of the built-in agents shown as Official (api.md 33):
+ * the agents a chat can run. Every other registered agent is a System agent
+ * (`SYSTEM_AGENT_KEYS`). Kept here, with no framework import, so the
+ * workflow catalogue and its drift tests can read them without Mastra.
+ */
+export const OFFICIAL_AGENT_KEYS: readonly string[] = [
+  'assistant',
+  'assistant-v2',
+  'rfp',
+  'data-readiness',
+];
+
+/** The registry keys of the System agents: the app calls them itself. */
+export const SYSTEM_AGENT_KEYS: readonly string[] = [
+  'visualization',
+  'sql-fixer',
+  'sql-verifier',
+  'assistant-eval-judge',
+  'knowledge-bootstrap',
+];

@@ -11,6 +11,10 @@ export const ASSISTANT_V2_AGENT_KEY = 'assistant-v2';
 /** Its display name; a session bound to it stores it as `agentName`. */
 export const ASSISTANT_V2_NAME = 'Questions to Insights v2';
 
+/** Its description, as the hub and its code-defined workflow show it. */
+export const ASSISTANT_V2_DESCRIPTION =
+  'A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.';
+
 /** Where its prompt, shipped or overridden, must start (api.md 103). */
 export const ASSISTANT_V2_IDENTITY_START = 'You are Questions to Insights v2';
 

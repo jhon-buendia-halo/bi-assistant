@@ -1452,6 +1452,43 @@ The agent detail returns it as `workflow` ([api.md](api.md) 34). For the agent s
 
 > Implementation note: `mastra/workflows/qti-v2-turn.workflow.ts` builds the workflow with `createWorkflow` / `createStep` from `@mastra/core/workflows` and registers it on the `Mastra` instance as `qti-v2-turn` (`workflows`), with snapshot persistence off: the session document holds the state. The step ids, titles and pure step code are in `qti-v2-turn.steps.ts`, which imports no framework. The session code starts a run with `run.stream()` and reads `workflow-step-start` and `workflow-step-result` (`status` `success`, `failed`, or `bailed` for a stopped turn) from its `fullStream`. The Analyse step calls back into the session code through a per-run object on the run's `RequestContext`. The event-to-state mapping is `workflowRunState` in `modules/sessions/workflow-run-state.ts`.
 
+### 5.12 Workflows: the catalogue, ids and the one-step workflow
+
+Every session runs a **workflow** (ADR-0040; [workflows](../capabilities/workflows/spec.md)). A workflow is a fixed sequence of steps defined in code, each deterministic code or one bounded call to an agent. Workflows are never created, edited or stored by the app.
+
+**The catalogue.** Two kinds of workflow:
+
+- **Code-defined workflows**, each with its own id, name, description, steps and the agent its agent step runs (its `primaryFor` agent). Today one: `qti-v2-turn`, *Questions to Insights v2*, whose agent is `assistant-v2` and whose steps are those of 5.11. A code workflow drives the workflow bar from its steps (`bar: 'steps'`).
+- **One-step workflows**: one for each agent a chat can run that has no code-defined workflow of its own: the `assistant`, the RFP Builder (`rfp`), the Data Readiness Agent (`data-readiness`) and every **Live** user agent. A `primaryFor` agent (`assistant-v2`) gets none, and neither do the System agents. A one-step workflow is computed at read time from the agent registry and the `agents` collection; nothing is registered per agent. It never writes the workflow bar (`bar: 'agent'`): the agent's own workflow phases, `update_workflow` and the RFP stage keep driving it (ADR-0029).
+
+**Ids.** A code workflow keeps its own id (`qti-v2-turn`). A one-step workflow's id is `agent:<registry key>` for a built-in agent (`agent:assistant`, `agent:rfp`, `agent:data-readiness`) and `agent:<user-agent id>` for a user agent. An `agent:` id naming a System agent, a `primaryFor` agent or nothing at all is not a workflow. Ids contain `:`; clients send them URL-encoded.
+
+**Names and listing** ([api.md](api.md) 116). A one-step workflow takes its agent's name and description, except the assistant's, which is named `Assistant` with the description `Answers questions over the datasets you pick.`. A user agent's workflow takes its Live version's name, datasets and starter questions, and is listed only while the agent is Live; a draft-only agent's id answers 404 ([api.md](api.md) 117). The order is `agent:assistant`, the code workflows, the other Official agents' workflows by name, then the user agents' by name.
+
+**The one-step workflow's step.** One agent step:
+
+| Step id | Title | Kind | Summary | Input | Output | Other exits |
+|---|---|---|---|---|---|---|
+| `answer` | Answer | agent | `The agent answers with its tools, streamed to the chat.` | question, datasets | calls, stopped | `Model error` fails; `Stop` stops; `Clarifying question` stops (only when the agent has `ask_clarification`) |
+
+Its agent is the workflow's agent with its tools (a user agent: the assistant's tools its selection gives it, 2.1) and its tool-loop budget: 15 for the `assistant`, the RFP Builder and user agents, 10 for the Data Readiness Agent. Every one-step workflow shares one engine, `agent-turn`, never one per agent. How a turn of a one-step workflow runs is 5.1's per-agent turn.
+
+**A session's workflow** ([data-model.md](data-model.md) 3.4). A new session stores `workflowId`, whichever body of [api.md](api.md) 3 created it. A session without it, or whose stored id no longer resolves, derives it from its agent fields:
+
+| Session stored | Derived workflow |
+|---|---|
+| `workflowId` set and resolvable | that id |
+| `agentKey: 'assistant-v2'` | `qti-v2-turn` (the code workflow whose `primaryFor` is the key) |
+| `agentKey: 'rfp'` / `'data-readiness'` | `agent:rfp` / `agent:data-readiness` |
+| `agentId: <id>`, agent exists or deleted | `agent:<id>` |
+| neither (or an `agentKey` that is neither wrapped nor a `primaryFor`) | `agent:assistant` |
+
+Which agent a turn runs is unchanged: `agentKey`, else the `assistant` (with a user agent's Live configuration, or a preview's draft). A deleted user agent's session keeps `agent:<id>`, shows the stored `agentName` with `deleted: true` ([api.md](api.md) 2.1), and its turns run the plain assistant (sessions-chat R59).
+
+**Which workflows use an agent** ([api.md](api.md) 34 `usedInWorkflows`): the code workflows whose `primaryFor` it is and its own one-step workflow, in catalogue order. `assistant` → `agent:assistant`; `assistant-v2` → `qti-v2-turn`; `rfp` → `agent:rfp`; `data-readiness` → `agent:data-readiness`; a Live user agent → `agent:<id>`; a draft-only user agent and the System agents → none.
+
+> Implementation note: the framework-free catalogue is `mastra/workflows/workflow-catalog.ts` (`CODE_WORKFLOWS`, `WRAPPED_AGENT_KEYS`, `agentWorkflowId`, `parseWorkflowId`, `sessionWorkflowId`, `workflowsUsingAgent`, `oneStepWorkflowSteps`) and `agent-turn.steps.ts` (the `answer` step). The Official and System registry keys and the tool-loop budgets are in `mastra/agent-constants.ts`; drift tests read `mastra/index.ts`'s registered keys as text, so they never load Mastra. `agentWorkflow()` (`agent-workflows.ts`) reads v2's steps from `CODE_WORKFLOWS`. `WorkflowsService` (`modules/workflows/`) builds the API's catalogue from the pure catalogue and `AgentsService.list()`; `SessionsService` never depends on it (that would be a module cycle) and resolves workflows from the pure catalogue.
+
 ---
 
 ## 6. Visual designer pipeline

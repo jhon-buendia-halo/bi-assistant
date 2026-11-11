@@ -55,24 +55,20 @@ import type {
   UserAgentDoc,
 } from '../user-agents/entities/user-agent.entity';
 
-import { ASSISTANT_V2_AGENT_KEY } from '../../mastra/agents/assistant-v2-catalog';
+import { OFFICIAL_AGENT_KEYS } from '../../mastra/agent-constants';
 import {
   agentWorkflow,
   type AgentWorkflow,
 } from '../../mastra/workflows/agent-workflows';
+import {
+  ASSISTANT_WORKFLOW_ID,
+  ASSISTANT_WORKFLOW_NAME,
+  parseWorkflowId,
+  workflowsUsingAgent,
+} from '../../mastra/workflows/workflow-catalog';
 
 /** The registry key of the official agent; every other built-in is `system`. */
 const OFFICIAL_AGENT_KEY = 'assistant';
-/**
- * The built-in agents shown as Official (api.md 2.6 #33): the assistant,
- * Questions to Insights v2, the RFP Builder and the Data Readiness Agent.
- */
-const OFFICIAL_AGENT_KEYS: readonly string[] = [
-  OFFICIAL_AGENT_KEY,
-  ASSISTANT_V2_AGENT_KEY,
-  'rfp',
-  'data-readiness',
-];
 
 export interface AgentSummary {
   /** Registry key the agent is registered under in the Mastra instance. */
@@ -189,6 +185,8 @@ export interface AgentDetail extends AgentSummary {
   prompt?: AgentPromptView;
   /** Workflow-backed built-in agents only: their turn's steps (api.md 34). */
   workflow?: AgentWorkflow;
+  /** The workflows whose steps call this agent, in catalogue order (api.md 34). */
+  usedInWorkflows: { id: string; name: string }[];
 }
 
 @Injectable()
@@ -243,6 +241,7 @@ export class AgentsService {
         llm: await this.llmDetail(),
         ...(prompt ? { prompt } : {}),
         ...(workflow ? { workflow } : {}),
+        usedInWorkflows: usedInWorkflows(key, detail.name, { builtin: true }),
       };
     }
     const doc = await this.userAgents.get(key);
@@ -270,6 +269,11 @@ export class AgentsService {
       model: assistant?.model ?? null,
       toolLinks: toolLinks(doc, skills),
       llm: await this.llmDetail(effectiveConfig(doc)),
+      // Only a Live agent has a one-step workflow (workflows R1).
+      usedInWorkflows: usedInWorkflows(doc.id, doc.live?.name ?? '', {
+        builtin: false,
+        userAgentLive: Boolean(doc.live),
+      }),
     };
   }
 
@@ -460,7 +464,7 @@ export class AgentsService {
   private async builtinDetail(
     key: string,
     requestContext?: RequestContext,
-  ): Promise<Omit<AgentDetail, 'llm'> | null> {
+  ): Promise<Omit<AgentDetail, 'llm' | 'usedInWorkflows'> | null> {
     const agent = this.mastra.listAgents()[key];
     if (!agent) return null;
 
@@ -547,6 +551,28 @@ export class AgentsService {
         : {}),
     };
   }
+}
+
+/**
+ * The workflows that use an agent, with their catalogue names (api.md 34):
+ * a code workflow's own name, `Assistant` for the assistant's one-step
+ * workflow, and the agent's name for any other one-step workflow.
+ */
+function usedInWorkflows(
+  key: string,
+  agentName: string,
+  opts: { builtin: boolean; userAgentLive?: boolean },
+): { id: string; name: string }[] {
+  return workflowsUsingAgent(key, opts).map((id) => {
+    const parsed = parseWorkflowId(id);
+    const name =
+      parsed?.kind === 'code'
+        ? parsed.source.name
+        : id === ASSISTANT_WORKFLOW_ID
+          ? ASSISTANT_WORKFLOW_NAME
+          : agentName;
+    return { id, name };
+  });
 }
 
 /** A user agent as a catalogue entry; `key` is its id (R48). */

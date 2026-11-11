@@ -326,6 +326,12 @@ export interface SessionDoc {
    * `agentId`.
    */
   agentKey?: string;
+  /**
+   * The workflow the session runs (api.md 116; ADR-0040): set at creation
+   * from this version on, never changed. Absent on sessions saved before:
+   * derived at read time from `agentKey` / `agentId` (agents.md 5.12).
+   */
+  workflowId?: string;
   /** `agentKey: 'rfp'` only: the active RFP, stamped from `turn-rfp`. */
   rfpId?: string;
   /** An agent editor's preview, held in memory only (agents-evals R60). */
@@ -351,12 +357,22 @@ export interface SessionAgentRef {
   starterQuestions: string[];
 }
 
+/** The workflow a session runs, as the API shows it (api.md 2.1). */
+export interface SessionWorkflowRef {
+  id: string;
+  name: string;
+  kind: 'code' | 'agent';
+  /** A deleted user agent's workflow: `name` is the stored `agentName`. */
+  deleted: boolean;
+}
+
 /**
  * A session on the wire: the stored document plus its derived `agent`,
- * `workflow` and the full `panelItems` list (visuals included).
+ * `workflowRef`, `workflow` and the full `panelItems` list (visuals included).
  */
 export type SessionView = SessionDoc & {
   agent?: SessionAgentRef;
+  workflowRef: SessionWorkflowRef;
   panelItems: PanelItem[];
   workflow?: WorkflowView;
 };

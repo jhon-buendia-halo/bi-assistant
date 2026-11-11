@@ -15,6 +15,7 @@ import {
 import { ASSISTANT_V2_PROMPT } from './system-prompts';
 import {
   ASSISTANT_V2_AGENT_KEY,
+  ASSISTANT_V2_DESCRIPTION,
   ASSISTANT_V2_NAME,
 } from './assistant-v2-catalog';
 
@@ -67,8 +68,7 @@ export function assistantV2Instructions(): string {
 export const assistantV2Agent = new Agent({
   id: 'questions-to-insights-v2',
   name: ASSISTANT_V2_NAME,
-  description:
-    'A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.',
+  description: ASSISTANT_V2_DESCRIPTION,
   instructions: () => assistantV2Instructions(),
   // Resolved at call time from the persisted LLM settings (agents.md 1.3).
   model: async () => resolveAgentModel(),

@@ -402,7 +402,17 @@ describe('SessionsService streaming', () => {
     );
     expect(events.at(-1)).toEqual({
       type: 'done',
-      session: { ...session, panelItems: [] },
+      session: {
+        ...session,
+        panelItems: [],
+        // A plain session runs the assistant's one-step workflow (api.md 2.1).
+        workflowRef: {
+          id: 'agent:assistant',
+          name: 'Assistant',
+          kind: 'agent',
+          deleted: false,
+        },
+      },
     });
   });
 

@@ -11,12 +11,8 @@ import {
   ASSISTANT_V2_NAME,
   ASSISTANT_V2_TOOL_NAMES,
 } from '../agents/assistant-v2-catalog';
-import {
-  QTI_V2_TURN_STEPS,
-  QTI_V2_TURN_WORKFLOW_ID,
-  type WorkflowStepEntry,
-  type WorkflowStepExit,
-} from './qti-v2-turn.steps';
+import type { WorkflowStepExit } from './qti-v2-turn.steps';
+import { CODE_WORKFLOWS } from './workflow-catalog';
 
 export interface AgentWorkflowStep {
   id: string;
@@ -35,31 +31,30 @@ export interface AgentWorkflow {
   steps: AgentWorkflowStep[];
 }
 
-interface WorkflowSource {
-  id: string;
-  steps: readonly WorkflowStepEntry[];
-  agent: { name: string; tools: readonly string[]; maxSteps: number };
-}
-
-/** The workflow-backed agents, by registry key (today only v2, ADR-0034). */
-const WORKFLOWS: Record<string, WorkflowSource> = {
+/** The agent each code workflow's agent step runs, by its registry key. */
+const STEP_AGENTS: Record<
+  string,
+  { name: string; tools: readonly string[]; maxSteps: number }
+> = {
   [ASSISTANT_V2_AGENT_KEY]: {
-    id: QTI_V2_TURN_WORKFLOW_ID,
-    steps: QTI_V2_TURN_STEPS,
-    agent: {
-      name: ASSISTANT_V2_NAME,
-      tools: ASSISTANT_V2_TOOL_NAMES,
-      maxSteps: ASSISTANT_V2_MAX_STEPS,
-    },
+    name: ASSISTANT_V2_NAME,
+    tools: ASSISTANT_V2_TOOL_NAMES,
+    maxSteps: ASSISTANT_V2_MAX_STEPS,
   },
 };
 
-/** The agent's workflow, or undefined when it is not workflow-backed. */
+/**
+ * The agent's workflow, or undefined when it is not workflow-backed: the
+ * code workflow whose `primaryFor` it is (workflow-catalog.ts, ADR-0040).
+ */
 export function agentWorkflow(agentKey: string): AgentWorkflow | undefined {
-  const source = Object.prototype.hasOwnProperty.call(WORKFLOWS, agentKey)
-    ? WORKFLOWS[agentKey]
-    : undefined;
-  if (!source) return undefined;
+  const workflow = CODE_WORKFLOWS.find((w) => w.primaryFor === agentKey);
+  const agent =
+    workflow && Object.hasOwn(STEP_AGENTS, agentKey)
+      ? STEP_AGENTS[agentKey]
+      : undefined;
+  if (!workflow || !agent) return undefined;
+  const source = { id: workflow.id, steps: workflow.steps, agent };
   return {
     id: source.id,
     steps: source.steps.map((step) => ({
