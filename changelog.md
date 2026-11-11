@@ -1,6 +1,6 @@
 # Changelog
 
-Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
+Running log of every meaningful change, newest first. One entry per epic, written when its PR opens; see step 10 of the `workflow-gate` skill. Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
 ## 2026-11-11
 
@@ -16,7 +16,19 @@ Running log of every meaningful change, newest first. See *Logging convention* a
   - Known gaps: columns are generated independently (a start date can follow its end date); views are generated as plain tables; the Databricks script has not been run live.
 
 ### Changed
+- **Faster workflow, repo-only planning** (epic M0-5, roadmap 0.5.1–0.5.5, [specs/epics/M0-5/spec.md](specs/epics/M0-5/spec.md), [delivery.md](specs/system/delivery.md) 2, 10–13). No app behaviour changes.
+  - 0.5.1: **Jira is no longer used.** The Jira MCP server, its skill, `.mcp.json`, the Jira settings and `.env.example` are removed. An epic is a roadmap milestone with the ID `M<R>-<M>` at the end of its heading and a spec in `specs/epics/`; `check-specs.py` checks those IDs (26 epics). Evidence: [evidence/0.5.1/](evidence/0.5.1/).
+  - 0.5.2: `CLAUDE.md` sizes every change **S / M / L**; an S change skips the new epic spec, the demo video, most of the gate and the retrospective. **`lessons.md`** (about 75 lines) replaces the 1,300-line `retrospective.md` as the first read. One changelog entry and one retrospective **per epic**. Nine workflow skills become four (`workflow-start`, `workflow-implement`, `verify`, `workflow-gate`); `builder` and `reviewer` skip `CLAUDE.md`; the `workflow-steps` mod treats `lessons.md` as the first action. Evidence: [evidence/0.5.2/](evidence/0.5.2/).
+  - 0.5.3: **`qa.mjs`** runs backend unit tests, lint and `check-specs` in parallel and the Karma suite alone after them; skips `build:all` when nothing changed (`--rebuild` forces it); holds the cross-worktree lock only around Playwright; adds `--draft-impact`, `--no-demo` and `--dry-run`. A full gate ran in about 50 s. Evidence: [evidence/0.5.3/](evidence/0.5.3/).
+  - 0.5.4: the **eval bar** in `verify`: three runs per build in parallel on data-dir copies; code checks 3 of 3; judged cases at least 2 of 3 and no worse than the base; cases flaky on both builds are listed, not chased. Evidence: [evidence/0.5.4/](evidence/0.5.4/).
+  - 0.5.5: **`scripts/bootstrap.mjs`** installs both packages, Playwright's Chromium and builds in one command (about 22 s on a clean copy); `.conductor/settings.toml` runs it when a workspace is created and adds a **web** run action. Evidence: [evidence/0.5.5/](evidence/0.5.5/).
+  - Gate (2026-11-11, macOS, web target, `--gate --no-demo` per story): builds, backend unit 2,808/2,808, frontend unit 631/631, backend lint, `check-specs`, and `builtin-agent-prompts.spec.ts` 7/7 for 0.5.5. Desktop not run.
 - **The Ontology panel loads lazily** in the dataset editor and on Context (roadmap 1.22.1). The initial frontend bundle had reached 1 MB + 196 bytes after merging main's Monitoring work on top of the new tab, failing the build budget; it is now 930.80 kB, the Ontology panel a 70 kB chunk.
+
+### Fixed
+- **A fresh install failed to build the web UI** (`Could not resolve "@floating-ui/dom"`): `npm ci --legacy-peer-deps` skips peer dependencies, and `@tiptap/suggestion`'s peer was not a direct dependency. It now is (roadmap 0.5.5).
+- **`setup-local.mjs` could not register the Intellify RFP API** on a fresh machine: it loaded the Intellify sample into `intellify` while the API reads `intellify_mercer_demo`. It now loads it where the API reads it and says to restart the app once (roadmap 0.5.5).
+- **Two flaky frontend unit tests**: `UiPreferencesService` depended on a theme other specs left in `localStorage`, and `PromptEditor` "inserts the chosen link" on document focus another spec left elsewhere. Both now set up their own state. Before: 5 failed runs in 10 under load, 1 in 12 alone; after: 0 in 12 alone and 5 green gates (roadmap 0.5.3).
 
 ## 2026-11-10
 

@@ -1,6 +1,6 @@
 # Retrospective
 
-Lessons from each completed change, newest first. **Read this file before starting any task.** See *Retrospective convention* in [CLAUDE.md](CLAUDE.md).
+Lessons from each completed epic, newest first. This is the full history: the rules still in force are distilled into [lessons.md](lessons.md), which every task reads first. See step 11 of the `workflow-gate` skill.
 
 Entry template:
 
@@ -11,6 +11,28 @@ Entry template:
 ### What went wrong
 ### What to do differently
 ```
+
+---
+
+## 2026-11-11 — M0-5 Faster workflow, repo-only planning (0.5.1–0.5.5)
+
+### What went well
+- Starting from evidence, not a guess: the retrospective's own complaints (five eval rounds, a merge that waited a day, the whole workflow re-run per request) and today's failed fresh build pointed at the slow steps before any change was proposed.
+- Two subagents ran the independent pieces (the `qa.mjs` changes, distilling `lessons.md`) while the docs, skills and Jira removal were done in the main session; neither touched the other's files.
+- Keeping the `<n>. **<title>** — …` step format meant the `workflow-steps` mod parsed the new `CLAUDE.md` unchanged; only its first-action file and labels moved to `lessons.md`.
+- Testing `bootstrap.mjs` on an rsync'd copy without `node_modules` proved the dependency fix with CI's own install flags without disturbing the running app.
+- The first real gate run of the parallel `qa.mjs` caught a regression the unit tests of the script could not: Karma under load.
+
+### What went wrong
+- The parallel checks made the frontend suite fail in 3 of 5 gate runs. The subagent had only tested the runner on dummy commands. It took two rounds to separate the two causes: CPU contention made it worse, and two order-dependent tests (shared `localStorage`, document focus) were flaky even alone (1 of 12).
+- My first install used `--legacy-peer-deps` as documented, which silently dropped `@floating-ui/dom`; the user had to say "try again".
+- `docker compose up -d` from this worktree recreated the shared Postgres container (an existing lesson) — the data survived on the volume, but I should have checked first.
+- `setup-local.mjs` printed a failure for the Intellify RFP API on a fresh machine, and fixing it by hand needed the `intellify-api` runbook and an app restart.
+
+### What to do differently
+- When a change makes test steps run concurrently, run the real gate several times before calling it done, and compare with the same suite run alone.
+- Before blaming a change for a failing test, count its flake rate on unchanged code (run it alone 5–10 times).
+- Reset shared browser state a unit test reads (`localStorage`, focus) in its own `beforeEach`; Jasmine shuffles the order on every run.
 
 ---
 
