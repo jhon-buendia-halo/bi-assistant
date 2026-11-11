@@ -272,7 +272,7 @@ flowchart LR
     datasets["DatasetsModule"]
     datasources["DatasourcesModule<br/>(postgres, databricks, rest connectors)"]
     testing["TestingDataModule"]
-    synthdata["SyntheticDataModule<br/>(sampled profile, generator, dialect writers; ADR-0037)"]
+    synthdata["SyntheticDataModule<br/>(sampled profile, generator, dialect writers, CSV and Excel exports; ADR-0037)"]
     metrics["MetricsModule"]
     verified["VerifiedQueriesModule"]
     llm["LlmModule<br/>(LlmService)"]
@@ -927,6 +927,17 @@ flowchart LR
   - The Data Readiness Agent's prompt and tools change, so its eval set must pass at 100 % over 3 runs.
   - Stack-neutral: a rebuild needs a sampler per dialect, the pure profile builder, the generator, a writer per dialect, two endpoints, one UI tab and two tools.
   - Capability: [synthetic-data](../capabilities/synthetic-data/spec.md).
+- **Amendment (2026-11-11, stories 1.22.2, 1.22.5 and 1.22.6): exports, raw sample rows and unique integers.** The user asked to export the profile, the synthetic data and the sample in `.sql`, CSV and Excel.
+  - **(a) Raw rows may leave the server only through one explicit, confirmed download.**
+    - The endpoint `POST /synthetic-data/sample-exports` re-reads the profile's tables (same keys, sample size and `REPEATABLE (7)`) and streams the real rows to the response, after the UI's confirm dialog and a request carrying `confirmRealData: true`. The rows are dropped when the response ends.
+    - They are never logged, cached, written to a session file or sent to a model. The cache still holds statistics only, and the agent tools have no raw export.
+    - The statement "raw rows never leave the service" of the decision above holds for everything except this download.
+    - Rejected: keeping the raw rows in the cache for 60 minutes so an export would not re-read. It would put up to 1,000 real rows per table in process memory for an hour, a much larger exposure than a user-requested download, and the cache is the thing a log or a crash dump might reach.
+  - **(b) Two new backend dependencies** for the CSV and Excel formats, `exceljs` (the streaming `WorkbookWriter`, for `.xlsx`) and `fflate` (a dependency-free streamed zip, for the CSV files). The browser only receives a blob, so the frontend gains none. CSV needs no library (RFC 4180 by hand).
+    - Rejected: SheetJS (the `xlsx` package on npm is frozen at 0.18.5 with open advisories, and newer builds ship only from the vendor's CDN); hand-written OOXML (styles, shared strings and date serials are easy to get wrong); `archiver` (heavier and Node-streams only, where fflate is dependency-free).
+    - All formats consume the same generator stream, so the values are identical across `.sql`, CSV and Excel for the same seed.
+  - **(c) `unique-range`.** An integer column that is only unique (not a primary or foreign key) is generated as distinct integers drawn without replacement within its observed range, so `tournament_year` gives years, not 1, 2, 3. When the range is smaller than the rows asked for, it falls back to a sequence from the observed minimum, and the script header says so. Only key integers stay a `sequence`.
+  - Consequences: the privacy rules of the capability gain the raw-export rule; the new endpoints are 112 (with `format`), 113 and 114 ([api.md](api.md) 2.18); the stack gains the two packages ([tech-stack.md](tech-stack.md)).
 
 ## Level 4 — Code
 
