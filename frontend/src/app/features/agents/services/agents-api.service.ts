@@ -43,8 +43,6 @@ export interface Agent {
   datasets?: string[];
   /** Official agents with a dataset: what must exist before Start chat. */
   chatRequirement?: string;
-  /** A showcase agent: an Official card that cannot chat (agents-evals R106). */
-  showcase?: boolean;
   starterQuestions?: string[];
 }
 

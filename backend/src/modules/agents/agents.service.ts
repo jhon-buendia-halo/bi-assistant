@@ -41,11 +41,6 @@ import {
   existingDatasetsFor,
 } from './builtin-sessions';
 import {
-  SHOWCASE_AGENT_KEYS,
-  SHOWCASE_REASON,
-  isShowcaseAgent,
-} from '../../mastra/agents/showcase-catalog';
-import {
   effectiveConfig,
   hasUnpublishedChanges,
   missingDatasets,
@@ -70,15 +65,13 @@ import {
 const OFFICIAL_AGENT_KEY = 'assistant';
 /**
  * The built-in agents shown as Official (api.md 2.6 #33): the assistant,
- * Questions to Insights v2, the RFP Builder, the Data Readiness Agent and the
- * showcase agents.
+ * Questions to Insights v2, the RFP Builder and the Data Readiness Agent.
  */
 const OFFICIAL_AGENT_KEYS: readonly string[] = [
   OFFICIAL_AGENT_KEY,
   ASSISTANT_V2_AGENT_KEY,
   'rfp',
   'data-readiness',
-  ...SHOWCASE_AGENT_KEYS,
 ];
 
 export interface AgentSummary {
@@ -108,8 +101,6 @@ export interface AgentSummary {
    * blocked while that dataset is missing. Absent otherwise.
    */
   chatRequirement?: string;
-  /** A showcase agent: an Official card that cannot chat (agents-evals R106). */
-  showcase?: boolean;
 }
 
 export interface AgentToolDetail {
@@ -553,10 +544,6 @@ export class AgentsService {
           : [],
       ...(builtinSession && declared && !canStartBuiltinSession(declared)
         ? { chatRequirement: builtinSession.requirement }
-        : {}),
-      // A showcase agent never chats; the hub shows why (R106).
-      ...(isShowcaseAgent(key)
-        ? { showcase: true, chatRequirement: SHOWCASE_REASON }
         : {}),
     };
   }

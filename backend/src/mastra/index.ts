@@ -7,7 +7,6 @@ import { dataReadinessAgent } from './agents/data-readiness.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
 import { rfpAgent } from './agents/rfp.agent';
-import { showcaseAgents } from './agents/showcase.agents';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
 import { sqlVerifierAgent } from './agents/sql-verifier.agent';
 import { visualizationAgent } from './agents/visualization.agent';
@@ -35,11 +34,6 @@ export const mastra = new Mastra({
     'knowledge-bootstrap': knowledgeBootstrapAgent,
     rfp: rfpAgent,
     'data-readiness': dataReadinessAgent,
-    // Showcase agents (agents.md 2.9), Official cards that cannot chat.
-    benchmarking: showcaseAgents.benchmarking,
-    survey: showcaseAgents.survey,
-    'lad-coe': showcaseAgents['lad-coe'],
-    strategy: showcaseAgents.strategy,
   },
   // Code-defined turn workflows (agents.md 5.11, ADR-0034).
   workflows: {

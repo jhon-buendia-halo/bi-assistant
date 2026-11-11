@@ -49,15 +49,9 @@ function byName(a: Agent, b: Agent): number {
 }
 
 /** Pinned cards first, then the others, each group alphabetical (R1). */
-/** Showcase agents after the agents that can chat (R106), then by name. */
-function showcaseLast(a: Agent, b: Agent): number {
-  if (!!a.showcase !== !!b.showcase) return a.showcase ? 1 : -1;
-  return byName(a, b);
-}
-
 function pinnedFirst(a: Agent, b: Agent): number {
   if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
-  return showcaseLast(a, b);
+  return byName(a, b);
 }
 
 const KIND_ORDER: Record<AgentKind, number> = {
@@ -153,8 +147,6 @@ export const NO_DATASETS_LEFT = "None of this agent's datasets exist";
 export function startChatBlockedReason(agent: Agent): string | null {
   const kind = agentKind(agent);
   if (kind === 'official') {
-    // A showcase agent never chats (R106).
-    if (agent.showcase) return agent.chatRequirement ?? null;
     // An Official agent with a requirement waits for its datasets: the RFP
     // Builder while its dataset is missing, the Data Readiness Agent while no
     // PostgreSQL or Databricks dataset exists (data-readiness R2), which the
@@ -181,7 +173,6 @@ export function startChatBlockedReason(agent: Agent): string | null {
 export function startsInComposer(agent: Agent): boolean {
   return (
     agentKind(agent) === 'official' &&
-    !agent.showcase &&
     (agent.datasets ?? []).length === 0
   );
 }
@@ -219,7 +210,7 @@ export function picksDatasets(
  * The agents the New conversation screen offers besides the assistant
  * (sessions-chat R64): the built-in agents that pick datasets like it (today
  * Questions to Insights v2), then Official agents that bring their own dataset
- * (the RFP Builder, the Data Readiness Agent) with showcase agents last, then
+ * (the RFP Builder, the Data Readiness Agent), then
  * Live user agents, each group alphabetical. System agents, drafts and the
  * assistant itself are left out; one that cannot start a chat now stays
  * listed with its reason.
@@ -235,7 +226,7 @@ export function newSessionAgentOptions(
       canStartChat(agent) && !startsInComposer(agent) && !picksDatasets(agent),
   );
   const group = (kind: AgentKind) =>
-    startable.filter((agent) => agentKind(agent) === kind).sort(showcaseLast);
+    startable.filter((agent) => agentKind(agent) === kind).sort(byName);
   return [...pickers, ...group('official'), ...group('user')].map((agent) => ({
     agent,
     disabledReason: startChatBlockedReason(agent),

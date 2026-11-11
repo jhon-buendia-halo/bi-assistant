@@ -6,9 +6,9 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Active visual.** The visual currently open in the right-hand panel. The assistant tailors it by default when the user asks for a change. See *Visual*.
 
-**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships thirteen built-in agents (the assistant, *Questions to Insights v2*, the *RFP Builder*, the *Data Readiness Agent*, the four *showcase agents*, the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all. An agent is a building block that the steps of a *workflow* call (ADR-0040).
+**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships nine built-in agents (the assistant, *Questions to Insights v2*, the *RFP Builder*, the *Data Readiness Agent*, the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all. An agent is a building block that the steps of a *workflow* call (ADR-0040).
 
-**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant, the *RFP Builder*, the *Data Readiness Agent* and the *showcase agents*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
+**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant, the *RFP Builder*, the *Data Readiness Agent* and *Questions to Insights v2*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
 **Angle.** One sub-question of a *deep analysis*. A plan has between 3 and 5 angles (hard cap 5). Each is investigated on its own.
 
@@ -128,7 +128,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Mined item.** An *ontology item* with source `mined`: drafted by the *ontology bootstrap*, saved disabled until a human accepts it.
 
-**Official agent.** One of the app's own agents shown in the agent hub's Official section: the *assistant*, the *RFP Builder* and the four *showcase agents*. The assistant and the RFP Builder are the only built-in agents that can start a chat; the showcase agents cannot yet.
+**Official agent.** One of the app's own agents shown in the agent hub's Official section: the *assistant*, *Questions to Insights v2*, the *RFP Builder* and the *Data Readiness Agent*. Each can start a chat.
 
 **One-step workflow.** The *workflow* the app makes for an agent that a chat can run and that has no workflow of its own (the assistant, the *RFP Builder*, the *Data Readiness Agent*, every *Live* *user agent*): one step that runs the agent. Its id is `agent:<agent key or id>`. It never writes the *workflow bar*; the agent's own *workflow phases* keep driving it. See [../system/architecture.md](../system/architecture.md) ADR-0040.
 
@@ -191,8 +191,6 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Session panel.** The right-hand panel when the main view is a *session*'s chat. It shows one *panel item* at a time (the *visual* panel, a document, a file or a table), with a menu of everything shown in the session and a Download button. See [agent-panel](../capabilities/agent-panel/spec.md).
 
 **Shared item.** An *ontology item* that belongs to no dataset (`dataset` is null) and so appears in every dataset's Ontology tab, marked "All datasets", and applies to every session. Chosen with "Share with all datasets" when creating an item; old global knowledge snippets migrated to shared items.
-
-**Showcase agent.** An *Official agent* shown to present a further US Health use case before it can chat: the Benchmarking Agent, the Survey Agent, the LAD COE Agent (Life, Absence and Disability Center of Excellence) and the Strategy Agent. It has a description and an editable system prompt, but no tools, dataset, skills or evals; its card carries a `Showcase` chip and its Start chat is always disabled with `Showcase agent: not available to chat yet.` See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R106 and [../system/agents.md](../system/agents.md) 2.9.
 
 **Skill.** A folder of instructions an agent gets: a `SKILL.md` (a name, a "Use when…" description, then a short phase map or router) plus the `phases/` and `reference/` files it names. It loads *on demand* (the framework lists it in a catalog and the model loads it with the skill tool when a request matches) or *by the app* (code sends it when a condition holds). Built-in skills ship with the app (there are no user or project skills); a user can also write *in-app skills* for her agents, and edit a built-in skill's text, which overrides the bundled one. The agent page's Skills tab shows them (see [../system/agents.md](../system/agents.md) 7.3, [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R63-R67).
 

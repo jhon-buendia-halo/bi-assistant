@@ -1,7 +1,7 @@
-import path from 'node:path';
 import axe from 'axe-core';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
+import { scenarioStep } from './support/demo-captions';
 import { WORLD_CUP_DATASET, followOsTheme } from './helpers/app-actions';
 import { apiJson } from './helpers/api';
 import {
@@ -20,23 +20,12 @@ const V2_KEY = 'assistant-v2';
 const V2_DESCRIPTION =
   'A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.';
 const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
-/** The showcase agents in hub order (agents-evals R106). */
-const SHOWCASE_KEYS = ['benchmarking', 'lad-coe', 'strategy', 'survey'];
 /**
- * The Official cards in hub order: the agents that can chat alphabetical by
- * name ("Data Readiness Agent", "Questions to Insights Assistant",
- * "Questions to Insights v2", "RFP Builder"), then the showcase agents
- * (agents-evals R1, R106, R107).
+ * The Official cards in hub order, alphabetical by name ("Data Readiness
+ * Agent", "Questions to Insights Assistant", "Questions to Insights v2",
+ * "RFP Builder"; agents-evals R1, R107).
  */
-const OFFICIAL_KEYS = [
-  'data-readiness',
-  'assistant',
-  V2_KEY,
-  'rfp',
-  ...SHOWCASE_KEYS,
-];
-const SHOWCASE_REASON = 'Showcase agent: not available to chat yet.';
-const EVIDENCE_1_15_2 = path.resolve(__dirname, '../../evidence/1.15.2');
+const OFFICIAL_KEYS = ['data-readiness', 'assistant', V2_KEY, 'rfp'];
 const HEALTH = 'Health plan analyst';
 const HEALTH_DESCRIPTION = 'Answers questions about the 2026 health plan';
 const CLAIMS = 'Claims triage';
@@ -198,8 +187,8 @@ test('filters limit the hub to one kind of agent', async ({ page }) => {
 
   await filter(page, 'Official').click();
   // The assistant, Questions to Insights v2, the RFP Builder, the Data
-  // Readiness Agent and the four showcase agents are Official; every card
-  // shows, alphabetical by name, showcase agents last (R1-R3, R106, R107).
+  // Readiness Agent are Official; every card shows, alphabetical by name
+  // (R1-R3, R107).
   await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
   await expect(cards(page)).toHaveCount(OFFICIAL_KEYS.length);
   expect(await cardKeys(page)).toEqual(OFFICIAL_KEYS);
@@ -421,83 +410,61 @@ test('the hub has no detectable accessibility violations in either theme', async
   }
 });
 
-test('the showcase agents are Official cards that cannot chat yet', async ({
-  page,
-}) => {
-  await openHub(page);
-  const official = section(page, 'official');
-  await expect(official.getByTestId('agent-card-survey')).toBeVisible();
-  expect(await cardKeys(official)).toEqual(OFFICIAL_KEYS);
-  await expect(page.getByTestId('agent-show-more-official')).toHaveCount(0);
-  for (const key of SHOWCASE_KEYS) {
-    const card = official.getByTestId(`agent-card-${key}`);
-    await expect(card).toContainText('Owner: Official');
-    const chip = card.getByTestId(`agent-showcase-${key}`);
-    await expect(chip).toHaveText('Showcase');
-    await expect(chip).toHaveAttribute('title', SHOWCASE_REASON);
-    const start = card.getByRole('button', { name: /Start chat/ });
-    await expect(start).toBeDisabled();
-    await expect(start).toHaveAttribute('title', SHOWCASE_REASON);
-  }
-  const assistant = official.getByTestId('agent-card-assistant');
-  await expect(
-    assistant.getByRole('button', { name: /Start chat/ }),
-  ).toBeEnabled();
-  await expect(assistant.getByTestId('agent-showcase-assistant')).toHaveCount(
-    0,
-  );
-  // The Data Readiness Agent can chat: the Background's World Cup dataset is
-  // bound to a PostgreSQL datasource (data-readiness R1).
-  const readiness = official.getByTestId('agent-card-data-readiness');
-  await expect(readiness).toContainText('Data Readiness Agent');
-  await expect(readiness).toContainText('Owner: Official');
-  await expect(
-    readiness.getByRole('button', {
-      name: 'Start chat with Data Readiness Agent',
-    }),
-  ).toBeEnabled();
-  await expect(
-    readiness.getByTestId('agent-showcase-data-readiness'),
-  ).toHaveCount(0);
-  await page.screenshot({
-    path: path.join(EVIDENCE_1_15_2, 'hub-showcase-agents.png'),
-    fullPage: true,
-  });
-});
-
-test("a showcase agent's page shows its description and System Prompt", async ({
-  page,
-}) => {
-  await openHub(page);
-  await openAgent(page, 'lad-coe', 'LAD COE Agent');
-  await expect(
-    page.getByText(
-      'The Life, Absence and Disability Center of Excellence: reviews life, disability and leave programs against the market, claims experience and leave rules.',
-    ),
-  ).toBeVisible();
-  const start = page.getByTestId('agent-start-chat');
-  await expect(start).toBeDisabled();
-  await expect(start).toHaveAttribute('title', SHOWCASE_REASON);
-  await expect(page.getByTestId('agent-showcase-reason')).toHaveText(
-    SHOWCASE_REASON,
-  );
-  // No agent-level actions: the only Edit is the System Prompt's (R97).
-  for (const name of ['Publish', 'Delete']) {
-    await expect(button(page, name)).toHaveCount(0);
-  }
-  await expect(button(page, 'Edit')).toHaveCount(1);
-  // No Chat Box: the page opens on the System Prompt (R90, R106).
-  await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
-  await expect(page.getByTestId('agent-tab-prompt')).toHaveClass(
-    /border-border-selected/,
-  );
-  await expect(
-    page.getByText('You are the LAD COE Agent of the US Health Agentic Hub'),
-  ).toBeVisible();
-  await page.screenshot({
-    path: path.join(EVIDENCE_1_15_2, 'showcase-agent-page.png'),
-  });
-});
+test(
+  'The Official section holds only agents that can chat',
+  { tag: ['@demo', '@story-1.23.8'] },
+  async ({ page }) => {
+    await scenarioStep(page, 'When I open "Agents"', async () => {
+      await openHub(page);
+    });
+    const official = section(page, 'official');
+    await scenarioStep(
+      page,
+      'Then the Official section shows "Questions to Insights Assistant", "Questions to Insights v2", "Data Readiness Agent" and "RFP Builder"',
+      async () => {
+        await expect(
+          official.getByTestId('agent-card-assistant'),
+        ).toBeVisible();
+        expect(await cardKeys(official)).toEqual(OFFICIAL_KEYS);
+        for (const [key, name] of [
+          ['assistant', ASSISTANT],
+          [V2_KEY, V2],
+          ['data-readiness', 'Data Readiness Agent'],
+          ['rfp', 'RFP Builder'],
+        ]) {
+          const card = official.getByTestId(`agent-card-${key}`);
+          await expect(card).toContainText(name);
+          await expect(card).toContainText('Owner: Official');
+          // Every Official card offers Start chat; the RFP Builder's waits for
+          // its dataset, which the Background does not load.
+          const start = card.getByRole('button', { name: /Start chat/ });
+          if (key === 'rfp') await expect(start).toBeVisible();
+          else await expect(start).toBeEnabled();
+        }
+        await expect(page.getByTestId('agent-show-more-official')).toHaveCount(
+          0,
+        );
+      },
+    );
+    await scenarioStep(
+      page,
+      'And I see no "Showcase" chip and no "Benchmarking Agent", "Survey Agent", "LAD COE Agent" or "Strategy Agent"',
+      async () => {
+        await expect(page.getByText('Showcase', { exact: true })).toHaveCount(
+          0,
+        );
+        for (const name of [
+          'Benchmarking Agent',
+          'Survey Agent',
+          'LAD COE Agent',
+          'Strategy Agent',
+        ]) {
+          await expect(page.getByText(name, { exact: true })).toHaveCount(0);
+        }
+      },
+    );
+  },
+);
 
 test('Questions to Insights v2 is an Official card that starts a chat', async ({
   page,
@@ -507,7 +474,6 @@ test('Questions to Insights v2 is an Official card that starts a chat', async ({
   const card = official.getByTestId(`agent-card-${V2_KEY}`);
   await expect(card).toContainText(V2);
   await expect(card).toContainText('Owner: Official');
-  await expect(card.getByTestId(`agent-showcase-${V2_KEY}`)).toHaveCount(0);
   // Right after "Questions to Insights Assistant" (R1, R107).
   const keys = await cardKeys(official);
   expect(keys.indexOf(V2_KEY)).toBe(keys.indexOf('assistant') + 1);

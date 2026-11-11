@@ -98,6 +98,23 @@ describe('AgentPromptsService (ADR-0026)', () => {
     expect(await service.view('user-1')).toBeUndefined();
   });
 
+  it('ignores a prompt override saved for a removed showcase agent (1.23.8)', async () => {
+    const { service, store } = build();
+    await store.insert({
+      key: 'strategy',
+      prompt: 'Old text.',
+      baseHash: 'x',
+      updatedBy: 'u',
+    });
+    await expect(service.onModuleInit()).resolves.toBeUndefined();
+    expect(await service.view('strategy')).toBeUndefined();
+    await expect(service.save('strategy', { prompt: 'x' })).rejects.toThrow(
+      'Agent "strategy" not found',
+    );
+    // The other agents still read their own prompts.
+    expect(await service.view('sql-fixer')).toMatchObject({ modified: false });
+  });
+
   it('saves, serves on the next call and shows the override as the editable text', async () => {
     const { service } = build();
     const name = await service.save('sql-fixer', { prompt: '  Fix it.  ' });

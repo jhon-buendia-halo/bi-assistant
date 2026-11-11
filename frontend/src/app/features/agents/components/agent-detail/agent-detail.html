@@ -53,13 +53,6 @@
       </div>
       @if (showStartChat() || canChange()) {
         <div class="ml-auto flex shrink-0 items-center gap-2">
-          @if (agent.showcase && startChatBlockedReason()) {
-            <span
-              data-testid="agent-showcase-reason"
-              class="text-[12px] text-fg-muted"
-              >{{ startChatBlockedReason() }}</span
-            >
-          }
           @if (showStartChat()) {
             <button
               type="button"

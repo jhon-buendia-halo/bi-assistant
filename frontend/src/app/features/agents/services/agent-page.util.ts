@@ -29,19 +29,19 @@ export const AGENT_TAB_ORDER: { id: AgentTabId; label: string }[] = [
 ];
 
 /** The tab an agent's page opens on: the chat, or the prompt for System agents. */
-export function defaultAgentTab(kind: AgentKind, showcase = false): AgentTabId {
-  return hasChatTab(kind, showcase) ? 'chat' : 'prompt';
+export function defaultAgentTab(kind: AgentKind): AgentTabId {
+  return hasChatTab(kind) ? 'chat' : 'prompt';
 }
 
-/** System agents and showcase agents (R106) have no Chat Box. */
-export function hasChatTab(kind: AgentKind, showcase = false): boolean {
-  return kind !== 'system' && !showcase;
+/** System agents have no Chat Box. */
+export function hasChatTab(kind: AgentKind): boolean {
+  return kind !== 'system';
 }
 
 /** The tab ids shown for an agent kind, in order. */
-export function agentTabIds(kind: AgentKind, showcase = false): AgentTabId[] {
+export function agentTabIds(kind: AgentKind): AgentTabId[] {
   return AGENT_TAB_ORDER.filter(
-    (tab) => tab.id !== 'chat' || hasChatTab(kind, showcase),
+    (tab) => tab.id !== 'chat' || hasChatTab(kind),
   ).map((tab) => tab.id);
 }
 

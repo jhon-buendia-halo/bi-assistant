@@ -72,8 +72,8 @@ export class AgentHub implements OnInit {
       (section) => ({
         ...section,
         expanded: this.expanded().has(section.id),
-        // The Official section shows every card and no Show more, so the
-        // showcase agents are seen at once (R3, R106); the others start on
+        // The Official section shows every card and no Show more (R3); the
+        // others start on
         // their first row.
         ...(section.id === 'official'
           ? { shown: section.agents, hidden: 0 }

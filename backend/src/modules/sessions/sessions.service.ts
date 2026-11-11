@@ -60,10 +60,6 @@ import {
   type SyntheticDataBridgeDeps,
 } from './synthetic-data-bridge';
 import { SYNTHETIC_DATA_SERVICE } from '../synthetic-data/synthetic-data.token';
-import {
-  SHOWCASE_REASON,
-  isShowcaseAgent,
-} from '../../mastra/agents/showcase-catalog';
 import { RfpPackagesService } from '../rfp-packages/rfp-packages.service';
 import { MastraService } from '../../mastra/mastra.service';
 import {
@@ -1300,9 +1296,6 @@ export class SessionsService implements OnModuleInit {
     // An optional typed name (the New conversation screen) replaces the
     // agent's default one; blank keeps the default.
     const typed = typeof name === 'string' ? name.trim().slice(0, 64) : '';
-    // A showcase agent is shown in the hub but never chats (R106).
-    if (isShowcaseAgent(agentId))
-      throw new BadRequestException(SHOWCASE_REASON);
     const picked = runsOnPickedDatasets(agentId)
       ? this.mastra.listAgents()[agentId]
       : undefined;

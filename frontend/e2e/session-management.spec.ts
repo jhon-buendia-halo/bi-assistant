@@ -352,26 +352,22 @@ test('I copy the session id to share it', async ({ page }) => {
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(id);
 });
 
-test('the Agent field lists the showcase agents disabled', async ({ page }) => {
+test('the Agent field lists only agents that can chat', async ({ page }) => {
   await openComposer(page);
   await agentField(page).click();
   // allInnerTexts does not wait: wait for the last option to render first.
-  await expect(agentOption(page, 'Survey Agent')).toBeVisible();
+  await expect(agentOption(page, 'RFP Builder')).toBeVisible();
   const names = (await agentList(page).getByRole('option').allInnerTexts()).map(
     (text) => text.split('\n')[0].trim(),
   );
   // Assistant, Questions to Insights v2 (BA-320), the Official agents that
   // bring their own datasets alphabetical (the Data Readiness Agent, BA-251,
-  // then the RFP Builder), then the showcase agents (R64).
-  expect(names.slice(0, 8)).toEqual([
+  // then the RFP Builder), then the user's own agents (R64).
+  expect(names.slice(0, 4)).toEqual([
     'Assistant',
     V2,
     'Data Readiness Agent',
     'RFP Builder',
-    'Benchmarking Agent',
-    'LAD COE Agent',
-    'Strategy Agent',
-    'Survey Agent',
   ]);
   for (const name of [
     'Benchmarking Agent',
@@ -379,11 +375,7 @@ test('the Agent field lists the showcase agents disabled', async ({ page }) => {
     'Strategy Agent',
     'Survey Agent',
   ]) {
-    const option = agentOption(page, name);
-    await expect(option).toHaveAttribute('aria-disabled', 'true');
-    await expect(option).toContainText(
-      'Showcase agent: not available to chat yet.',
-    );
+    await expect(agentOption(page, name)).toHaveCount(0);
   }
   // The Background's World Cup dataset is on PostgreSQL, so the Data
   // Readiness Agent can be chosen (data-readiness R1-R2).
@@ -391,9 +383,6 @@ test('the Agent field lists the showcase agents disabled', async ({ page }) => {
     'aria-disabled',
     'true',
   );
-  // It cannot be chosen (clicked past Playwright's aria-disabled check).
-  await agentOption(page, 'Survey Agent').click({ force: true });
-  await expect(agentField(page)).toHaveText(/Assistant/);
 });
 
 test('I start a Questions to Insights v2 session from New conversation', async ({

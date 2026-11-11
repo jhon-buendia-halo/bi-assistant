@@ -86,7 +86,12 @@ function build(extra: Record<string, unknown> = {}) {
     ...extra,
   };
   const mastra = { listAgents: () => registry } as unknown as MastraService;
-  return { db, skills, service: new AgentsService(mastra, userAgents) };
+  return {
+    db,
+    skills,
+    userAgents,
+    service: new AgentsService(mastra, userAgents),
+  };
 }
 
 describe('AgentsService (built-in and user agents)', () => {
@@ -122,21 +127,21 @@ describe('AgentsService (built-in and user agents)', () => {
   );
 
   it(
-    'lists a showcase agent as Official, blocked with its reason (agents-evals R106)',
+    'ignores a pin saved for a removed showcase agent (1.23.8)',
     asDemoUser(async () => {
-      const showcase = build({ survey: fakeAgent('Survey Agent', []) });
-      const agents = await showcase.service.list();
-      expect(agents.find((agent) => agent.key === 'survey')).toMatchObject({
-        kind: 'official',
-        owner: 'Official',
-        showcase: true,
-        chatRequirement: 'Showcase agent: not available to chat yet.',
-        datasets: [],
-      });
-      expect(
-        agents.find((agent) => agent.key === 'assistant'),
-      ).not.toHaveProperty('showcase');
-      showcase.db.close();
+      await ctx.service.setPinned('assistant', true);
+      // A pin left behind by an earlier version, for an agent no longer registered.
+      await ctx.userAgents.setBuiltinPin('strategy', true);
+      const agents = await ctx.service.list();
+      expect(agents.map((agent) => agent.key)).toEqual([
+        'assistant',
+        'assistant-eval-judge',
+        'sql-fixer',
+      ]);
+      expect(agents.find((agent) => agent.key === 'assistant')?.pinned).toBe(
+        true,
+      );
+      expect(await ctx.service.get('strategy')).toBeNull();
     }),
   );
 
@@ -162,7 +167,6 @@ describe('AgentsService (built-in and user agents)', () => {
         starterQuestions: [],
       });
       expect(entry).not.toHaveProperty('chatRequirement');
-      expect(entry).not.toHaveProperty('showcase');
       const detail = await v2.service.get('assistant-v2');
       expect(detail?.toolDetails.map((tool) => tool.name)).toEqual([
         'describe_entity',
