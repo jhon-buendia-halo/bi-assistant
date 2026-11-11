@@ -691,7 +691,7 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
   - The `API_BASE_URL` sentence in CLAUDE.md ("Known gap") is updated.
 - **Notes:** moved from 0.1.1 on 2026-10-04 so the bug sits under a Jira epic (BA-11). Found while drawing the C4 container diagram ([specs/system/architecture.md](specs/system/architecture.md), Level 2). Related to ADR-0001.
 
-#### 1.7.21 — No orphaned backend survives the desktop app or an upgrade  `🚧 In progress`
+#### 1.7.21 — No orphaned backend survives the desktop app or an upgrade  `✅ Done`
 - **Intent:** on Windows a backend process sometimes outlives its window (crash, End task, sign-out) and keeps port 3000; the next launch or the upgraded version then talks to the stale backend. Nothing left over from an earlier run or version may run alongside, or answer for, the current app.
 - **Scope:** (1) the backend exits within a few seconds when the desktop window process that spawned it is gone (`DESKTOP_PARENT_PID`); (2) the desktop shell records the backend's PID in `<APP_DATA_DIR>/backend.pid`, stops a still-running backend from an earlier run at startup (only if it is the app's own executable), and the readiness probe accepts only the backend it just started (`X-Backend-Instance` header); (3) a single-instance lock: a second launch focuses the running window; (4) the Windows installer and uninstaller force-stop every copy of `Halo BI Assistant.exe` the user runs, after the usual "close the app" check (`frontend/build/installer.nsh`).
 - **Out of scope:** freeing a port held by an unrelated program; macOS installers; the web / `npx` mode.
@@ -703,7 +703,7 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
   - The Windows installer built by `build-desktop.yml` compiles with the custom check.
 - **Notes:** reported 2026-11-11 after the v0.48.1 build; specs in [api.md](specs/system/api.md) 4.3, [delivery.md](specs/system/delivery.md) sections 1 and 2, [data-model.md](specs/system/data-model.md) 1.2 and app-shell R54–R55.
 
-#### 1.7.22 — Windows install takes over 5 minutes  `🚧 In progress`
+#### 1.7.22 — Windows install takes over 5 minutes  `✅ Done`
 - **Intent:** the installer writes about 47,000 files, 98% of them the backend's `node_modules`, and more than half are build-time leftovers (type declarations, source maps, TypeScript sources, docs, lint configs). Per-file cost on Windows (NTFS plus Defender scanning each new file) dominates install and uninstall time.
 - **Scope:** `frontend/scripts/prune-node-modules.mjs`, run by `stage-backend.sh` after `npm ci`, deletes those files from the staged backend's `node_modules`, keeping licence files and leaving `@github/copilot-sdk*` untouched (its bundled runtime reads its own `.md` and `.ts` files).
 - **Out of scope:** bundling the backend into one file; de-duplicating the nested `@opentelemetry` copies under `@mastra/*`; code signing.
