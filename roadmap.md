@@ -1597,7 +1597,7 @@ A second built-in data-analyst agent, Questions to Insights v2, built up next to
 
 Profile a PostgreSQL or Databricks dataset quickly from a sample of its rows, and download a synthetic copy as a SQL script in the datasource's dialect, a CSV zip or an Excel workbook. The copy keeps distributions, null rates, formats and keys, and never copies identifiers, names or free text. The profile can be exported as CSV or Excel, and the real sampled rows can be exported too (`.sql`, CSV or Excel) as an explicit action behind a confirm (amendment of 2026-11-11, stories 1.22.5 and 1.22.6). It is available from a **Profile & synthesize** tab in the dataset editor and, for the `.sql` synthetic script only, from the Data Readiness Agent in chat. The sampled profile is separate from the Data Readiness assessment, which stays exact (data-readiness R29), and the app never writes to a datasource. Decision: ADR-0039 (drafted in the plan, recorded in 1.22.1). All stories are built on the branch `feat/M1-22-synthetic-data` and ship as one PR. Epic spec: [specs/epics/M1-22/spec.md](specs/epics/M1-22/spec.md). Plan and contract: [docs/plans/m1-22-synthetic-data.md](docs/plans/m1-22-synthetic-data.md). No Jira key (repo only).
 
-#### 1.22.1 — Sampled profile in the dataset editor  `🚧 In progress`
+#### 1.22.1 — Sampled profile in the dataset editor  `✅ Done`
 - **Intent:** see how a dataset's tables really look (types, null rates, distinct counts, ranges, categorical values, text patterns) in seconds, from a sample, without running a full readiness assessment.
 - **Scope:**
   - ADR-0039.
@@ -1621,7 +1621,7 @@ Profile a PostgreSQL or Databricks dataset quickly from a sample of its rows, an
   - Unit tests, builds and check-specs are green.
 - **Notes:** requested on 2026-11-11. The user chose the editor tab plus agent tools, a profile separate from readiness, a `.sql` download, and reuse of real values only for low-cardinality categorical columns. UI story: its demo is recorded in the fast loop.
 
-#### 1.22.2 — Synthetic data script for PostgreSQL  `🚧 In progress`
+#### 1.22.2 — Synthetic data script for PostgreSQL  `✅ Done`
 - **Intent:** download a realistic, privacy-safe copy of a PostgreSQL dataset's tables as a script that loads into any empty PostgreSQL database.
 - **Scope:**
   - The deterministic generator: seeded per column, keys first, FK values drawn from the parents' keys (composite keys, cycles and self-references included), strategies per column kind, null rates, clamping when a composite key cannot reach the requested rows.
@@ -1642,7 +1642,7 @@ Profile a PostgreSQL or Databricks dataset quickly from a sample of its rows, an
   - Unit tests, builds and check-specs are green.
 - **Notes:** depends on 1.22.1. UI story.
 
-#### 1.22.3 — Databricks SQL script  `🚧 In progress`
+#### 1.22.3 — Databricks SQL script  `✅ Done`
 - **Intent:** a Databricks dataset downloads its synthetic copy in Databricks SQL, ready to run in a Databricks SQL editor.
 - **Scope:**
   - The Databricks writer: backtick identifiers; Spark string escaping (`\` then `'`); typed literals (`DATE'…'`, `TIMESTAMP'…'`, `TIMESTAMP_NTZ'…'`); `CREATE TABLE … USING DELTA`; allow-listed types (anything else becomes `string`); informational PK and FK constraints (Unity Catalog), switchable off; `schema` or `catalog.schema` targets; no transaction.
@@ -1657,7 +1657,7 @@ Profile a PostgreSQL or Databricks dataset quickly from a sample of its rows, an
   - Unit tests, builds and check-specs are green.
 - **Notes:** depends on 1.22.2. No-UI story (the button exists): its fast-loop demo is `demo.txt`.
 
-#### 1.22.5 — Export synthetic data and the profile as CSV and Excel  `🚧 In progress`
+#### 1.22.5 — Export synthetic data and the profile as CSV and Excel  `✅ Done`
 - **Intent:** take the synthetic copy and the sampled profile into a spreadsheet or any CSV tool, not only into a SQL database.
 - **Scope:**
   - A **Format** choice on the Generate form: `SQL script` (default), `CSV (zip)` or `Excel (.xlsx)`. The same generator, seed and row counts give the same values in every format.
@@ -1678,7 +1678,7 @@ Profile a PostgreSQL or Databricks dataset quickly from a sample of its rows, an
   - Unit tests, builds and check-specs are green.
 - **Notes:** requested on 2026-11-11 ("export the sample and synthetic data"; the user picked `.sql`, CSV and Excel). Depends on 1.22.2. UI story.
 
-#### 1.22.6 — Export the raw sample  `🚧 In progress`
+#### 1.22.6 — Export the raw sample  `✅ Done`
 - **Intent:** download the real rows the profile was computed from, when the user explicitly asks for them and confirms that the file holds real data.
 - **Scope:**
   - **Export sample rows** on the profile view, with the formats `SQL script`, `CSV (zip)` and `Excel (.xlsx)`.
@@ -1697,7 +1697,7 @@ Profile a PostgreSQL or Databricks dataset quickly from a sample of its rows, an
   - Unit tests, builds and check-specs are green.
 - **Notes:** requested on 2026-11-11. The user chose to re-sample on export, a confirm dialog, and the editor tab only. Depends on 1.22.3 (both dialect writers) and 1.22.5 (CSV and Excel writers). UI story.
 
-#### 1.22.4 — Profile and synthesize from the Data Readiness Agent  `📋 Planned`
+#### 1.22.4 — Profile and synthesize from the Data Readiness Agent  `✅ Done`
 - **Intent:** ask the Data Readiness Agent in chat for a sampled profile or a synthetic copy of the session's data, and download the script from the panel.
 - **Scope:**
   - Two tools with scalar inputs (agents.md 3.14):
