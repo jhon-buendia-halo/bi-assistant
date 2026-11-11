@@ -10,6 +10,10 @@ import {
 import { askClarificationTool } from './clarification.tool';
 import { describeEntityTool, runReadOnlySqlTool } from './dataset.tools';
 import { showInPanelTool } from './panel.tool';
+import {
+  generateSyntheticDataTool,
+  profileDataSampleTool,
+} from './synthetic-data.tools';
 import { SESSION_ID_CONTEXT_KEY } from './visual.tools';
 
 /**
@@ -220,13 +224,18 @@ export const listReadinessReportsTool = createTool({
 
 /**
  * Every tool the Data Readiness Agent is given, in the order of agents.md
- * 2.10: the three readiness tools, then `show_in_panel` and
- * `ask_clarification`.
+ * 2.10: the three readiness tools, the two synthetic-data tools (3.14),
+ * the shared `describe_entity` and `run_readonly_sql`, then `show_in_panel`
+ * and `ask_clarification`.
  */
 export const readinessTools = {
   assess_data_readiness: assessDataReadinessTool,
   get_readiness_report: getReadinessReportTool,
   list_readiness_reports: listReadinessReportsTool,
+  // Sampled profile and synthetic script (ADR-0039): approximate numbers,
+  // never a score; the script is never run against the datasource.
+  profile_data_sample: profileDataSampleTool,
+  generate_synthetic_data: generateSyntheticDataTool,
   // Drill-down into findings (ADR-0035): the shared, session-scoped,
   // read-only dataset tools. They never touch a score.
   describe_entity: describeEntityTool,

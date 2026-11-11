@@ -26,8 +26,14 @@ import {
   answerExcludes,
   assessOnlyWithoutReport,
   calledAtMost,
+  calledWithInput,
   firstDataCall,
+  namesScriptInPanel,
   namesWeakestDimension,
+  profileCoversTable,
+  quotedSampleNumbers,
+  sampleNeverAScore,
+  sampleNumbersFromTool,
   noScoreForUnassessed,
   numbersIn,
   oneSucceeded,
@@ -527,6 +533,148 @@ describe('data readiness eval checks', () => {
         assess,
       ]),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('synthetic data eval checks (story 1.22.4, D14)', () => {
+  /** The model-facing projection of profile_data_sample (agents.md 3.14). */
+  const PROFILE = {
+    profileId: 'p-1',
+    datasetName: 'World Cup',
+    dialect: 'postgres',
+    expiresAt: '2026-11-11T11:00:00.000Z',
+    tables: [
+      {
+        table: 'world_cup.world_cup.players',
+        method: 'full',
+        sampledRows: 812,
+        rowCountEstimate: 812,
+        columns: [
+          {
+            name: 'height_cm',
+            type: 'integer',
+            nullPct: 23.5,
+            distinct: 41,
+            kind: 'numeric',
+            generatedAs: 'numeric-range',
+            range: { min: 163, max: 202 },
+          },
+        ],
+      },
+    ],
+    relationships: [],
+  };
+  const profiled = [
+    call('profile_data_sample', PROFILE, { tables: 'players' }),
+  ];
+  const SCRIPT = {
+    fileName: 'world-cup-synthetic-postgresql-seed1.sql',
+    path: 'synthetic-data/world-cup-synthetic-postgresql-seed1.sql',
+    panelItemId: 'i-1',
+    tables: [{ table: 'world_cup.world_cup.players', rows: 50 }],
+  };
+
+  it('quotedSampleNumbers takes percentages and numbers near sample words', () => {
+    expect(
+      quotedSampleNumbers(
+        'players: 812 rows sampled; height_cm is 23.5% null, 41 distinct values, from 163 to 202.',
+      ).map((q) => q.value),
+    ).toEqual([812, 23.5, 41, 163, 202]);
+  });
+
+  it('sampleNumbersFromTool passes numbers of the projection and fails invented ones', async () => {
+    const check = sampleNumbersFromTool();
+    await expect(
+      run(
+        check,
+        'height_cm: 23.5% null, 41 distinct values, range 163 to 202 (812 rows sampled, up to 1,000).',
+        profiled,
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      run(check, 'height_cm is 30% null.', profiled),
+    ).resolves.toMatch(/30 in/);
+    await expect(run(check, 'height_cm is 23.5% null.', [])).resolves.toMatch(
+      /does not hold/,
+    );
+  });
+
+  it('sampleNeverAScore fails a sampled number called a score, not a disclaimer', async () => {
+    const check = sampleNeverAScore();
+    await expect(
+      run(
+        check,
+        'These are approximate sample statistics, not readiness scores; height_cm is 23.5% null.',
+        profiled,
+      ),
+    ).resolves.toBeUndefined();
+    for (const bad of [
+      'Completeness score: 76.5',
+      'height_cm scores 76.5 on completeness',
+      'a **76.5** score for height_cm',
+      'Sample quality 76/100',
+    ]) {
+      await expect(run(check, bad, profiled)).resolves.toMatch(/score/);
+    }
+  });
+
+  it('profileCoversTable reads the projected table keys', async () => {
+    await expect(
+      run(profileCoversTable('players'), '', profiled),
+    ).resolves.toBeUndefined();
+    await expect(
+      run(profileCoversTable('teams'), '', profiled),
+    ).resolves.toMatch(/not "teams"/);
+  });
+
+  it('calledWithInput and namesScriptInPanel check the generate call and the answer', async () => {
+    const calls = [
+      call('generate_synthetic_data', SCRIPT, { rowsPerTable: 50 }),
+    ];
+    await expect(
+      run(
+        calledWithInput('generate_synthetic_data', 'rowsPerTable', 50),
+        '',
+        calls,
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      run(
+        calledWithInput('generate_synthetic_data', 'rowsPerTable', 100),
+        '',
+        calls,
+      ),
+    ).resolves.toMatch(/rowsPerTable/);
+    const check = namesScriptInPanel();
+    await expect(
+      run(
+        check,
+        'Done: world-cup-synthetic-postgresql-seed1.sql is in the panel to download.',
+        calls,
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      run(check, 'The script is in the panel.', calls),
+    ).resolves.toMatch(/does not name/);
+    await expect(
+      run(check, 'Saved world-cup-synthetic-postgresql-seed1.sql.', calls),
+    ).resolves.toMatch(/panel/);
+  });
+
+  it('the set has the two synthetic cases with their checks', () => {
+    const byId = new Map(DATA_READINESS_EVAL_SET.cases.map((c) => [c.id, c]));
+    const ids = (id: string) =>
+      (byId.get(id)?.customChecks ?? []).map((k) => k.id);
+    expect(ids('dr-profile-sample')).toEqual([
+      'dr-profile-data-sample-profiled-players',
+      'dr-every-sampled-number-in-the-answer-is-one-profile-data-sampl',
+      'dr-no-sampled-number-is-called-a-score',
+    ]);
+    expect(ids('dr-synthetic-script')).toEqual([
+      'dr-generate-synthetic-data-called-with-rowspertable-50',
+      'dr-the-answer-names-the-script-file-and-says-it-is-in-the-panel',
+      'dr-no-sampled-number-is-called-a-score',
+    ]);
   });
 });
 

@@ -19,6 +19,7 @@ import {
 import { ProfileCache } from './profile-cache';
 import { SyntheticDataService } from './synthetic-data.service';
 import type { SampledProfileBuilder } from './synthetic-data.service';
+import { worldCupProfile } from './generator/world-cup-profile.stub';
 
 const PG_TABLES = ['wc.public.players', 'wc.public.teams'];
 
@@ -366,5 +367,63 @@ describe('SyntheticDataService.profile (behaviour)', () => {
     );
     expect(e?.name).toBe('AbortError');
     expect(s.profiler.withSessions).not.toHaveBeenCalled();
+  });
+});
+
+describe('SyntheticDataService.scriptText (agent tool, agents.md 3.14)', () => {
+  const thrown = (run: () => unknown): Error | null => {
+    try {
+      run();
+      return null;
+    } catch (err) {
+      return err as Error;
+    }
+  };
+
+  it('builds the whole LF-only .sql script with its file name and plan', () => {
+    const { service } = setup();
+    const out = service.scriptText(worldCupProfile(), {
+      defaultRowCount: 5,
+      seed: 2,
+    });
+    expect(out.fileName).toBe('world-cup-synthetic-postgresql-seed2.sql');
+    expect(
+      out.text.startsWith('-- Synthetic data for dataset "World Cup"'),
+    ).toBe(true);
+    expect(out.text).toContain('CREATE TABLE');
+    expect(out.text).not.toContain('\r');
+    expect(out.bytes).toBe(Buffer.byteLength(out.text, 'utf8'));
+    expect(out.plan.seed).toBe(2);
+    expect(out.plan.tables.every((t) => t.rows <= 5)).toBe(true);
+  });
+
+  it('refuses a script past the limit with the exact text', () => {
+    const { service } = setup();
+    const full = service.scriptText(worldCupProfile(), { defaultRowCount: 5 });
+    const limit = full.bytes - 1;
+    const e = thrown(() =>
+      service.scriptText(worldCupProfile(), { defaultRowCount: 5 }, limit),
+    );
+    expect(e).toBeInstanceOf(BadRequestException);
+    expect(e?.message).toBe(
+      `The script would be ${Math.ceil(full.bytes / 1024)} KB; the chat limit is ${Math.round(limit / 1024)} KB. Ask for fewer rows or use Profile & synthesize on the dataset.`,
+    );
+  });
+
+  it('says 256 KB for the default chat limit', () => {
+    const { service } = setup();
+    const e = thrown(() =>
+      service.scriptText(worldCupProfile(), { defaultRowCount: 1000 }),
+    );
+    expect(e?.message).toMatch(
+      /^The script would be \d+ KB; the chat limit is 256 KB\. Ask for fewer rows or use Profile & synthesize on the dataset\.$/,
+    );
+  });
+
+  it('keeps the request errors of #112', () => {
+    const { service } = setup();
+    expect(() => service.scriptText(worldCupProfile(), { seed: -1 })).toThrow(
+      'seed must be a whole number from 0 to 2147483647',
+    );
   });
 });

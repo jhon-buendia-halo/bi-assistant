@@ -1,5 +1,5 @@
-import { lstat, readFile } from 'fs/promises';
-import { join, posix } from 'path';
+import { lstat, mkdir, readFile, writeFile } from 'fs/promises';
+import { dirname, join, posix } from 'path';
 import { sessionWorkspacePath } from '../../mastra/session-workspaces';
 
 /** Largest text file the panel shows or downloads (api.md #106). */
@@ -50,6 +50,25 @@ export function safeRelativePath(name: string): string | undefined {
 /** The content type a text file of the allow-list is served with. */
 export function textContentType(path: string): string | undefined {
   return TEXT_CONTENT_TYPES[posix.extname(path).toLowerCase()];
+}
+
+/**
+ * Write a text file into the session workspace (agents.md 3.14: the
+ * synthetic-data script), creating its folders; an existing file of the same
+ * name is overwritten. The path must be a safe relative path.
+ */
+export async function writeWorkspaceFile(
+  sessionId: string,
+  path: string,
+  text: string,
+): Promise<void> {
+  const safe = safeRelativePath(path ?? '');
+  if (!safe) {
+    throw new WorkspaceFileError('invalid', `Invalid file path "${path}"`);
+  }
+  const target = join(sessionWorkspacePath(sessionId), ...safe.split('/'));
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, text, 'utf8');
 }
 
 /**

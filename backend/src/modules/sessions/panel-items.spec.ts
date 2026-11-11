@@ -22,6 +22,7 @@ import {
   upsertPanelItem,
   withVisualItems,
 } from './panel-items';
+import { writeWorkspaceFile } from './workspace-files';
 
 const session: SessionDoc = {
   id: 's1',
@@ -202,6 +203,27 @@ describe('buildPanelItem', () => {
       base,
     );
     expect(item).toMatchObject({ id: 'visual:v1', title: 'Chart' });
+  });
+
+  describe('a written workspace file (agents.md 3.14)', () => {
+    it('shows a synthetic script written into the workspace, overwriting the same name', async () => {
+      const path = 'synthetic-data/world-cup-synthetic-postgresql-seed1.sql';
+      await writeWorkspaceFile('s1', path, '-- old\n');
+      await writeWorkspaceFile('s1', path, '-- Synthetic data\n');
+      const { item } = await buildPanelItem(
+        { kind: 'file', path, title: 'Synthetic data — World Cup (seed 1)' },
+        base,
+      );
+      expect(item).toMatchObject({
+        kind: 'file',
+        title: 'Synthetic data — World Cup (seed 1)',
+        path,
+        bytes: 18,
+      });
+      await expect(
+        writeWorkspaceFile('s1', '../escape.sql', 'x'),
+      ).rejects.toThrow('Invalid file path "../escape.sql"');
+    });
   });
 
   describe('files', () => {
