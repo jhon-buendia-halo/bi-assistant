@@ -75,11 +75,11 @@ test.describe('Feature: Synthetic data', () => {
       );
       await scenarioStep(
         page,
-        'And the "stage" column is generated as "Reuses 6 values"',
+        'And the "stage" column shows the chip "Reuses" followed by a number of values',
         async () => {
           await expect(
             page.getByTestId(`synth-col-${MATCHES}-stage`),
-          ).toContainText('Reuses 6 values');
+          ).toContainText(/Reuses \d+ values?/);
         },
       );
     },

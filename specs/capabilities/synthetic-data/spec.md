@@ -188,14 +188,11 @@ E2E: `frontend/e2e/synthetic-data.spec.ts` (only "Profile a sample of World Cup"
 Feature: Synthetic data
 
   Scenario: Profile a sample of World Cup
-    Given the sample dataset "World Cup" exists on a PostgreSQL datasource
-    When I open "World Cup" from the Datasets list
-    And I click the "Profile & synthesize" tab
+    Given I open the "World Cup Core" dataset
+    When I open the "Profile & synthesize" tab
     And I click "Profile sample"
-    Then I see a card for each table of the dataset
-    And the "players" card shows the method "Read all" followed by its row count
-    And a column shows the chip "Reuses" followed by a number of values
-    And I see the summary line with the number of tables and when the profile expires
+    Then I see a card for "matches" whose method reads "Read all … rows"
+    And the "stage" column shows the chip "Reuses" followed by a number of values
 
   Scenario: The tab sits third and the arrow keys cycle the three tabs
     Given I opened a saved dataset from the Datasets list
