@@ -14,6 +14,23 @@ Entry template:
 
 ---
 
+## 2026-11-11 — BA-11 Desktop leftover processes and slow Windows install (1.7.21, 1.7.22)
+
+### What went well
+- Reading electron-builder's NSIS templates first showed the installer already uninstalls the previous version, which turned "add uninstall" into the real question (a leftover backend process) before any code was written.
+- A scripted check against the real Electron app (stale backend, second launch, hard kill, foreign server on the port) proved all four guards in one run, and the same script is kept with the evidence.
+- Counting the installed files by extension found the cause of the slow install in minutes: over half of the 46,955 files were declarations, source maps, sources and docs.
+
+### What went wrong
+- The first `installer.nsh` did not compile: defining `customCheckAppRunning` makes electron-builder skip `getProcessInfo.nsh` and `Var pid`, which its own `_CHECK_APP_RUNNING` (reused inside the hook) needs. It was caught only because the installer was built locally before CI.
+- Spec edits were made with a Python heredoc against the lessons rule; asserted anchor counts kept it safe, but it was the wrong tool.
+- The gate's demo-link check needs the Artifact tool, which this session did not have, so both stories ran the gate with `--no-demo`.
+- Nothing was run on Windows: the `tasklist`/`taskkill` paths and the install time saving are unmeasured there.
+
+### What to do differently
+- Before pushing a change to `frontend/build/installer.nsh` or the `build` config, compile the Windows installer locally: `CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win nsis --x64 -c.win.signAndEditExecutable=false -c.directories.output=<scratch>` runs on macOS without Wine.
+- When an override hook replaces an electron-builder macro, read the template's `!ifmacrondef` guards and include what they skip.
+
 ## 2026-11-11 — M0-5 Faster workflow, repo-only planning (0.5.1–0.5.5)
 
 ### What went well

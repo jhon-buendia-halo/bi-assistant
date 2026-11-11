@@ -34,6 +34,7 @@
     "files": [
       "dist/frontend/**",
       "electron/**",
+      "!electron/**/*.test.cjs",
       "package.json"
     ],
     "extraResources": [

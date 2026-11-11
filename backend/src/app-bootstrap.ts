@@ -31,6 +31,11 @@ export interface CreateAppOptions {
   webRoot?: string;
   /** Allow cross-origin requests (Electron renderer runs from file://). */
   cors?: boolean;
+  /**
+   * Echoed on every response as `X-Backend-Instance`, so the desktop shell's
+   * readiness probe can tell its own backend from another server (api.md 4.3).
+   */
+  instanceId?: string;
 }
 
 export interface CreatedApp {
@@ -148,6 +153,13 @@ export async function createApp(
   installNestLogRedaction();
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   if (options.cors) app.enableCors();
+  const instanceId = options.instanceId;
+  if (instanceId) {
+    app.use((_req: Request, res: Response, next: () => void) => {
+      res.setHeader('X-Backend-Instance', instanceId);
+      next();
+    });
+  }
 
   const webRoot = options.webRoot ? resolve(options.webRoot) : resolveWebRoot();
   const serveWeb = hasWebUi(webRoot);
