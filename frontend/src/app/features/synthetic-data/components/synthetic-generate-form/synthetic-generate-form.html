@@ -1,0 +1,149 @@
+<form
+  class="flex flex-col gap-3"
+  data-testid="synth-generate-form"
+  aria-labelledby="synth-generate-title"
+  (submit)="$event.preventDefault(); generate()"
+>
+  <h3 id="synth-generate-title" class="text-[14px] font-medium text-fg-strong">
+    Generate synthetic data
+  </h3>
+
+  <div class="flex flex-col gap-2">
+    <span class="field-label">Rows per table</span>
+    <div class="flex flex-wrap items-end gap-2">
+      <label class="flex flex-col gap-1 text-[12px] text-fg-muted">
+        All tables
+        <input
+          type="number"
+          min="1"
+          [max]="rowsMax"
+          class="field w-28"
+          data-testid="synth-rows-all"
+          [value]="allText()"
+          (input)="allText.set($any($event.target).value)"
+        />
+      </label>
+      <button
+        type="button"
+        class="btn btn-outline"
+        data-testid="synth-rows-apply"
+        [disabled]="allInvalid()"
+        (click)="applyAll()"
+      >
+        Apply
+      </button>
+    </div>
+    <ul class="flex flex-col gap-1">
+      @for (table of profile().tables; track table.key) {
+        <li class="flex flex-wrap items-center gap-2">
+          <label class="flex items-center gap-2 text-[13px] text-fg">
+            <input
+              type="number"
+              min="1"
+              [max]="rowsMax"
+              class="field w-28"
+              [attr.data-testid]="'synth-rows-' + table.key"
+              [attr.aria-invalid]="rowInvalid(table.key)"
+              [value]="rowValue(table.key)"
+              (input)="setRows(table.key, $any($event.target).value)"
+            />
+            <span>{{ table.name }}</span>
+          </label>
+          @if (rowInvalid(table.key)) {
+            <span
+              class="text-[12px] text-on-danger-soft"
+              [attr.data-testid]="'synth-rows-error-' + table.key"
+              >{{ rowsMessage }}</span
+            >
+          }
+        </li>
+      }
+    </ul>
+  </div>
+
+  <div class="flex flex-wrap items-start gap-4">
+    <label class="flex flex-col gap-1 text-[13px] text-fg">
+      <span class="field-label">Seed</span>
+      <input
+        type="number"
+        min="0"
+        class="field w-40"
+        data-testid="synth-seed"
+        [attr.aria-invalid]="seedInvalid()"
+        [value]="seedText()"
+        (input)="seedText.set($any($event.target).value)"
+      />
+      <span class="text-[12px] text-fg-muted">{{ seedHint }}</span>
+      @if (seedInvalid()) {
+        <span
+          class="text-[12px] text-on-danger-soft"
+          data-testid="synth-seed-error"
+          >seed must be a whole number from 0 to 2147483647</span
+        >
+      }
+    </label>
+    <label class="flex flex-col gap-1 text-[13px] text-fg">
+      <span class="field-label">Target schema</span>
+      <input
+        type="text"
+        class="field w-48"
+        data-testid="synth-target-schema"
+        [value]="targetSchema()"
+        (input)="targetSchema.set($any($event.target).value)"
+      />
+    </label>
+    <label class="flex flex-col gap-1 text-[13px] text-fg">
+      <span class="field-label">Format</span>
+      <select
+        class="field w-44"
+        data-testid="synth-format"
+        [value]="format()"
+        (change)="setFormat($any($event.target).value)"
+      >
+        @for (option of formats; track option.value) {
+          <option [value]="option.value" [selected]="option.value === format()">
+            {{ option.label }}
+          </option>
+        }
+      </select>
+    </label>
+  </div>
+
+  <label class="flex items-center gap-2 text-[13px] text-fg">
+    <input
+      type="checkbox"
+      data-testid="synth-include-constraints"
+      [checked]="includeConstraints()"
+      [disabled]="format() !== 'sql'"
+      (change)="includeConstraints.set($any($event.target).checked)"
+    />
+    <span>Include keys and constraints</span>
+    @if (format() !== "sql") {
+      <span class="text-[12px] text-fg-muted">(SQL script only)</span>
+    }
+  </label>
+
+  <div class="flex items-center gap-2">
+    <button
+      type="submit"
+      class="btn btn-primary"
+      data-testid="synth-generate"
+      [disabled]="!canGenerate()"
+    >
+      @if (generating()) {
+        <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+      }
+      <span>{{ buttonLabel() }}</span>
+    </button>
+  </div>
+
+  @if (error(); as message) {
+    <p
+      class="rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+      role="alert"
+      data-testid="synth-generate-error"
+    >
+      {{ message }}
+    </p>
+  }
+</form>

@@ -12,7 +12,9 @@
     <p class="text-[12px] text-fg-muted">
       Dataset <span class="font-medium text-fg">{{ dataset.name }}</span>
     </p>
-    <app-ontology-panel [dataset]="dataset" />
+    @defer (on immediate) {
+      <app-ontology-panel [dataset]="dataset" />
+    }
   </div>
 } @else {
   <div class="flex flex-col" data-testid="ontology-overview">

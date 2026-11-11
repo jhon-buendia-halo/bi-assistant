@@ -77,6 +77,8 @@
     "better-sqlite3": "13.0.3",
     "class-transformer": "0.5.1",
     "class-validator": "0.15.1",
+    "exceljs": "4.4.0",
+    "fflate": "0.8.3",
     "marked": "18.0.13",
     "pdfkit": "0.17.2",
     "pg": "8.23.0",

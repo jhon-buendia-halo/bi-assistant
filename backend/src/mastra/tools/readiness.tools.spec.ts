@@ -143,11 +143,13 @@ beforeEach(() => {
 });
 
 describe('the readiness tools (agents.md 3.13)', () => {
-  it('are the three readiness tools, the drill-down dataset tools, then show_in_panel and ask_clarification', () => {
+  it('are the three readiness tools, the two synthetic-data tools, the drill-down dataset tools, then show_in_panel and ask_clarification', () => {
     expect(Object.keys(readinessTools)).toEqual([
       'assess_data_readiness',
       'get_readiness_report',
       'list_readiness_reports',
+      'profile_data_sample',
+      'generate_synthetic_data',
       'describe_entity',
       'run_readonly_sql',
       'show_in_panel',

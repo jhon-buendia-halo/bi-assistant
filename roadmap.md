@@ -1593,6 +1593,132 @@ A second built-in data-analyst agent, Questions to Insights v2, built up next to
 - **Out of scope:** the agent graph (option C of the review page); comparing sessions; replaying a turn; sessions with no recorded runs.
 - **Acceptance:** after two chat turns the session appears with 2 turns and totals equal to the sum of its LLM calls; the session page shows both questions, each model request and tool group in order, and both answers; Open timeline shows the waterfall with bars to scale and the framework switch adds the housekeeping spans; Back keeps the tab, filters and page; unit tests, the build and the impacted E2E green.
 - **Notes:** requested on 2026-11-10 after the design review page https://claude.ai/artifact/U4h5dbCbR65PSSRGbHkdPa (options A waterfall, B trajectory, C graph). The user chose the recommendation: B for the session with A as the turn drill-down, a Sessions tab on Monitoring, framework spans hidden behind a switch. No Jira key (repo only).
+### Milestone 1.22 — Sampled profiling and synthetic data
+
+Profile a PostgreSQL or Databricks dataset quickly from a sample of its rows, and download a synthetic copy as a SQL script in the datasource's dialect, a CSV zip or an Excel workbook. The copy keeps distributions, null rates, formats and keys, and never copies identifiers, names or free text. The profile can be exported as CSV or Excel, and the real sampled rows can be exported too (`.sql`, CSV or Excel) as an explicit action behind a confirm (amendment of 2026-11-11, stories 1.22.5 and 1.22.6). It is available from a **Profile & synthesize** tab in the dataset editor and, for the `.sql` synthetic script only, from the Data Readiness Agent in chat. The sampled profile is separate from the Data Readiness assessment, which stays exact (data-readiness R29), and the app never writes to a datasource. Decision: ADR-0039 (drafted in the plan, recorded in 1.22.1). All stories are built on the branch `feat/M1-22-synthetic-data` and ship as one PR. Epic spec: [specs/epics/M1-22/spec.md](specs/epics/M1-22/spec.md). Plan and contract: [docs/plans/m1-22-synthetic-data.md](docs/plans/m1-22-synthetic-data.md). No Jira key (repo only).
+
+#### 1.22.1 — Sampled profile in the dataset editor  `✅ Done`
+- **Intent:** see how a dataset's tables really look (types, null rates, distinct counts, ranges, categorical values, text patterns) in seconds, from a sample, without running a full readiness assessment.
+- **Scope:**
+  - ADR-0039.
+  - A `RowSampler` added to the PostgreSQL and Databricks profilers, reading up to 1,000 rows per table:
+    - PostgreSQL: a full read at ≤ 1,000 estimated rows, `TABLESAMPLE BERNOULLI … REPEATABLE` up to 1 M, `SYSTEM` above, with the estimate from `reltuples`;
+    - Databricks: `TABLESAMPLE (p PERCENT) REPEATABLE`;
+    - both: `LIMIT` fallback for views and unknown sizes, values read as raw text.
+  - A pure profile builder: statistics, column kind, synthesis strategy, character-class shapes, and categorical values only for at most 20 distinct values each seen at least 3 times. Raw rows are never kept, logged or sent to a model.
+  - An in-memory profile cache (20 profiles, 60 min).
+  - `POST /synthetic-data/profiles` (api.md 111).
+  - The third dataset-editor tab **Profile & synthesize**: table picker, Profile sample with Cancel, and the profile view with method chips and "Generated as" chips. The test ids and copy are in the plan, 3.4.
+  - The new capability spec `synthetic-data`; datasets R48; ui.md 4.3 and 4.3a; api.md 2.18; a concept note in data-readiness; glossary and tech-stack.
+- **Out of scope:** generating or downloading data (1.22.2); agent tools (1.22.4); any change to readiness profiling, scoring or R29.
+- **Acceptance:**
+  - On World Cup, the tab profiles every table and shows each one's method (`Read all <n> rows` for the small ones) and each column's statistics and strategy. A categorical column shows its real values, and a name column shows only a pattern.
+  - A failing table shows its own error while the rest still profile.
+  - The privacy unit spec proves the profile holds no non-categorical sampled value.
+  - Sampling timings on a small and a large real table, for both dialects, are recorded in `evidence/1.22.1/sampling-timings.md` before integration.
+  - The readiness specs, golden suite and score-equality specs are unchanged and green.
+  - The `@demo @story-1.22.1` scenario passes.
+  - Unit tests, builds and check-specs are green.
+- **Notes:** requested on 2026-11-11. The user chose the editor tab plus agent tools, a profile separate from readiness, a `.sql` download, and reuse of real values only for low-cardinality categorical columns. UI story: its demo is recorded in the fast loop.
+
+#### 1.22.2 — Synthetic data script for PostgreSQL  `✅ Done`
+- **Intent:** download a realistic, privacy-safe copy of a PostgreSQL dataset's tables as a script that loads into any empty PostgreSQL database.
+- **Scope:**
+  - The deterministic generator: seeded per column, keys first, FK values drawn from the parents' keys (composite keys, cycles and self-references included), strategies per column kind, null rates, clamping when a composite key cannot reach the requested rows.
+  - The PostgreSQL writer: header, `BEGIN`/`COMMIT`, `CREATE SCHEMA` of the target, `CREATE TABLE` with an allow-listed type mapping (anything else becomes `text`), PK and UNIQUE inline, INSERTs batched by 500, FK `ALTER`s after the inserts, LF only.
+  - `POST /synthetic-data/scripts` (api.md 112): a streamed attachment, `X-Script-Sha256`, every validation error.
+  - The Generate form in the tab: rows per table (default 100, 1–10,000), All tables + Apply, Seed (default 1), Target schema (default `synthetic`), Include keys and constraints, Generate .sql, and the expired-profile state.
+  - A Databricks profile answers a temporary 400 until 1.22.3.
+  - Unique integers that are not keys (requested 2026-11-11): only PK and FK integer columns get `sequence`. A column that is unique only (declared UNIQUE, or a sample distinct ratio ≥ 0.95) gets the new strategy `unique-range`, distinct integers drawn within the observed min–max. When the range holds fewer values than the requested rows, it falls back to a sequence starting at the observed minimum, and the header says so. Chip copy: `Distinct numbers in the observed range`. Example: World Cup `tournaments.tournament_year` gives years in 2018–2022, not 1, 2, 3.
+  - The capability rules for the generator and the PostgreSQL output; the data-model note on in-memory profiles; glossary.
+- **Out of scope:** the Databricks writer (1.22.3); loading the script anywhere from the app; cross-column correlations other than keys.
+- **Acceptance:**
+  - On World Cup with 50 rows per table, the downloaded script, replayed into a scratch database by the API-level E2E, creates every table with the requested row counts and every FK constraint added.
+  - The same seed gives the same `X-Script-Sha256`, and another seed gives a different one.
+  - No real player or venue name appears in the script.
+  - `tournaments.tournament_year` shows `Distinct numbers in the observed range`, and its generated values are distinct and within 2018–2022 (or the documented fallback when more rows than years are asked for).
+  - Generator specs prove null rates, categorical fractions and ranges within tolerance, and FK values within the parents' keys.
+  - The `@demo @story-1.22.2` scenario passes.
+  - Unit tests, builds and check-specs are green.
+- **Notes:** depends on 1.22.1. UI story.
+
+#### 1.22.3 — Databricks SQL script  `✅ Done`
+- **Intent:** a Databricks dataset downloads its synthetic copy in Databricks SQL, ready to run in a Databricks SQL editor.
+- **Scope:**
+  - The Databricks writer: backtick identifiers; Spark string escaping (`\` then `'`); typed literals (`DATE'…'`, `TIMESTAMP'…'`, `TIMESTAMP_NTZ'…'`); `CREATE TABLE … USING DELTA`; allow-listed types (anything else becomes `string`); informational PK and FK constraints (Unity Catalog), switchable off; `schema` or `catalog.schema` targets; no transaction.
+  - A statement smoke check.
+  - The temporary 400 removed.
+  - The capability rules for the Databricks output.
+- **Out of scope:** running the script from the app; `hive_metastore`-specific DDL beyond switching constraints off.
+- **Acceptance:**
+  - The writer's inline golden specs and the smoke check pass, and there is no `\r` in any script.
+  - Generate on a Databricks dataset downloads `…-synthetic-databricks-seed<n>.sql`.
+  - With the user's agreement, one generated script runs in a scratch schema of the user's workspace, and its row counts are recorded in `evidence/1.22.3/databricks-run.md`. Otherwise the gap is stated in the changelog.
+  - Unit tests, builds and check-specs are green.
+- **Notes:** depends on 1.22.2. No-UI story (the button exists): its fast-loop demo is `demo.txt`.
+
+#### 1.22.5 — Export synthetic data and the profile as CSV and Excel  `✅ Done`
+- **Intent:** take the synthetic copy and the sampled profile into a spreadsheet or any CSV tool, not only into a SQL database.
+- **Scope:**
+  - A **Format** choice on the Generate form: `SQL script` (default), `CSV (zip)` or `Excel (.xlsx)`. The same generator, seed and row counts give the same values in every format.
+    - CSV: one file per table, `<target table name>.csv`, RFC 4180 (comma, `"` quoting, CRLF rows), UTF-8 without BOM, a header row, NULL as an empty field, all in one `.zip`.
+    - Excel: one sheet per table (names cut to 31 characters and made unique), a bold header row, numbers, booleans and dates as typed cells, NULL as an empty cell.
+    - Both also hold a `README` (a `README.txt` in the zip, a first `About` sheet in the workbook) with the header text the `.sql` script carries (dataset, seed, rows, dropped relationships, not-synthesized columns).
+  - **Export profile** on the profile view: `CSV` (one row per column of every table, with the table's method and sampled rows) or `Excel` (a `Tables` sheet and a `Columns` sheet). Same contents as the view, so no sampled value beyond the categorical top values.
+  - API: `format` (`sql` | `csv` | `xlsx`, default `sql`) on `POST /synthetic-data/scripts` (api.md 112); a new `POST /synthetic-data/profile-exports` (api.md 113).
+  - New dependencies `exceljs` (xlsx, streaming writer) and `fflate` (zip), recorded in an ADR-0039 amendment and tech-stack.md.
+  - The capability rules and ui.md 4.3a for the formats.
+- **Out of scope:** raw sampled rows (1.22.6); formats beyond these three (Parquet, JSON lines); these formats in chat.
+- **Acceptance:**
+  - World Cup with 50 rows per table and seed 1: the CSV zip and the workbook hold the same values as the `.sql` script, checked by a spec that parses all three.
+  - The zip opens with one CSV per table plus `README.txt`; the workbook opens in Excel with one sheet per table plus `About`.
+  - Export profile in CSV and Excel lists every profiled column with the values the view shows.
+  - Both formats work for a Databricks dataset (they do not depend on the dialect).
+  - The `@demo @story-1.22.5` scenario passes.
+  - Unit tests, builds and check-specs are green.
+- **Notes:** requested on 2026-11-11 ("export the sample and synthetic data"; the user picked `.sql`, CSV and Excel). Depends on 1.22.2. UI story.
+
+#### 1.22.6 — Export the raw sample  `✅ Done`
+- **Intent:** download the real rows the profile was computed from, when the user explicitly asks for them and confirms that the file holds real data.
+- **Scope:**
+  - **Export sample rows** on the profile view, with the formats `SQL script`, `CSV (zip)` and `Excel (.xlsx)`.
+  - A confirm dialog before every raw export: `This file contains real rows from <datasource>, including identifiers, names and free text. Export anyway?`. The synthetic and profile exports have no confirm.
+  - The rows are **re-read on export** with the profile's tables, sample size and `REPEATABLE (7)` seed, through the same sampler and pooled read-only sessions. The cache still holds statistics only. A table that has changed, or a `limit` read, can give other rows than the ones profiled, and the file's README says so.
+  - `.sql`: `CREATE SCHEMA` of a target (default `sample`), `CREATE TABLE` and `INSERT`s of the real values in the datasource's dialect, through the writers of 1.22.2 and 1.22.3. CSV and Excel: as in 1.22.5.
+  - API: `POST /synthetic-data/sample-exports` (api.md 114), which answers 400 without `confirmRealData: true`. Nothing is logged or cached; the rows are streamed to the response and dropped.
+  - Amend ADR-0039: raw rows may leave the server only through this explicit, confirmed download, never to a log, a cache, a session file or a model. Update the capability's privacy rules and the epic spec.
+- **Out of scope:** raw rows in chat or in the agent tools; masking or partial redaction of the raw export; exporting more rows than the sample size.
+- **Acceptance:**
+  - Export sample rows on World Cup asks for confirmation, and Cancel downloads nothing.
+  - After confirming, the CSV zip holds each table's real rows (`players.csv` has the real player names); the `.sql` script loads into a scratch PostgreSQL database with those rows.
+  - The API refuses a request without `confirmRealData: true`.
+  - A spec proves that no raw value reaches the logger or the profile cache during an export.
+  - The `@demo @story-1.22.6` scenario passes.
+  - Unit tests, builds and check-specs are green.
+- **Notes:** requested on 2026-11-11. The user chose to re-sample on export, a confirm dialog, and the editor tab only. Depends on 1.22.3 (both dialect writers) and 1.22.5 (CSV and Excel writers). UI story.
+
+#### 1.22.4 — Profile and synthesize from the Data Readiness Agent  `✅ Done`
+- **Intent:** ask the Data Readiness Agent in chat for a sampled profile or a synthetic copy of the session's data, and download the script from the panel.
+- **Scope:**
+  - Two tools with scalar inputs (agents.md 3.14):
+    - `profile_data_sample(dataset?, tables?)`;
+    - `generate_synthetic_data(dataset?, tables?, rowsPerTable?, seed?, targetSchema?, profileId?)`.
+  - Chat limits: 20 tables, 1,000 rows per table, a 256 KB script.
+  - A tool-services bridge installed by `SessionsService`.
+  - The script is saved in the session workspace under `synthetic-data/` and stored as a `file` panel item, so the panel's Download works unchanged.
+  - The prompt: D12 widened and D14 added (Appendix D), with the generated `## Tools` section; the prompt delta is measured from the compiled agent.
+  - Two eval cases, `dr-profile-sample` and `dr-synthetic-script`.
+  - agents.md 2.10 and 3.14; data-readiness R3; data-model workspace files.
+- **Out of scope:** these tools for the assistant, v2 or user agents; a new skill; raising the panel file limit; the CSV, Excel, profile and raw-sample exports of 1.22.5 and 1.22.6 (editor tab only, decided 2026-11-11).
+- **Acceptance:**
+  - In a Data Readiness session on World Cup, "give me 50 synthetic rows per table" calls `generate_synthetic_data` with 50 rows, and the panel shows the `.sql` file and downloads it.
+  - "Profile a sample of the players table" quotes only numbers from the tool and never calls them scores.
+  - A request over the chat limits gets the exact refusal.
+  - The Data Readiness evals pass at 100 % over 3 runs at the gate.
+  - The `@demo @story-1.22.4` scenario passes.
+  - Unit tests, builds and check-specs are green.
+- **Notes:** depends on 1.22.2 (and 1.22.3 for Databricks sessions). Shipped last (after 1.22.6) and on its own, so the eval cost is paid once. UI story (chat and panel).
+  - **Prompt delta** (measured from the compiled agent, `dataReadinessInstructions()` before and after, LF): 4,676 → 5,716 characters (+1,040, +22 %), 741 → 907 words (+166), about +260 tokens per call. Of it, the two `## Tools` lines are about 430 characters, D14 about 450 and the D12 sentence about 90. No skill was added.
 ---
 
 ## Release 2 — Multi-user  (no target date yet)

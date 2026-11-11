@@ -49,11 +49,43 @@ describe('CatalogBrowser tabs (BA-320)', () => {
     expect(el().querySelector('app-ontology-panel')).toBeNull();
   });
 
-  it('switches to the Ontology panel and back', () => {
+  it('has a third Profile & synthesize tab and arrow keys cycle all three', async () => {
+    fixture.componentRef.setInput('initial', DATASET);
+    fixture.detectChanges();
+
+    const synth = q('dataset-tab-synthesize')!;
+    expect(synth.getAttribute('role')).toBe('tab');
+    expect(synth.textContent).toContain('Profile & synthesize');
+    const press = (id: string, key: string) => {
+      q(id)!.dispatchEvent(new KeyboardEvent('keydown', { key }));
+      fixture.detectChanges();
+    };
+    const selected = () =>
+      ['schema', 'ontology', 'synthesize'].find(
+        (t) => q('dataset-tab-' + t)!.getAttribute('aria-selected') === 'true',
+      );
+
+    press('dataset-tab-schema', 'ArrowRight');
+    expect(selected()).toBe('ontology');
+    press('dataset-tab-ontology', 'ArrowRight');
+    expect(selected()).toBe('synthesize');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el().querySelector('#dataset-panel-synthesize app-synthetic-data-panel')).toBeTruthy();
+    press('dataset-tab-synthesize', 'ArrowRight');
+    expect(selected()).toBe('schema');
+    press('dataset-tab-schema', 'ArrowLeft');
+    expect(selected()).toBe('synthesize');
+  });
+
+  it('switches to the Ontology panel and back', async () => {
     fixture.componentRef.setInput('initial', DATASET);
     fixture.detectChanges();
 
     q('dataset-tab-ontology')!.click();
+    fixture.detectChanges();
+    // The panel is deferred (kept out of the initial bundle).
+    await fixture.whenStable();
     fixture.detectChanges();
     expect(q('dataset-tab-ontology')!.getAttribute('aria-selected')).toBe('true');
     const panel = el().querySelector('#dataset-panel-ontology')!;

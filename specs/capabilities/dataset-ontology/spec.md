@@ -95,7 +95,7 @@ On the Context page
 
 ## UI
 
-Placement: the **Ontology** tab of the dataset editor. Opening a saved dataset from the Datasets list shows the editor with two tabs, **Schema** (the catalog browser as before) and **Ontology**; a dataset being created shows no tabs (Schema only) until it is saved and opened again ([datasets](../datasets/spec.md) R48, [../../system/ui.md](../../system/ui.md) 4.3 and 4.8). Before 2026-11-09 (roadmap 1.21.7–1.21.9) this was a Knowledge screen under Context.
+Placement: the **Ontology** tab of the dataset editor. Opening a saved dataset from the Datasets list shows the editor with three tabs, **Schema** (the catalog browser as before), **Ontology** and **Profile & synthesize** ([synthetic-data](../synthetic-data/spec.md)); a dataset being created shows no tabs (Schema only) until it is saved and opened again ([datasets](../datasets/spec.md) R48, [../../system/ui.md](../../system/ui.md) 4.3 and 4.8). Before 2026-11-09 (roadmap 1.21.7–1.21.9) this was a Knowledge screen under Context.
 
 - Header: title "Ontology", subtitle "Concepts, relations, constraints and instructions the assistant uses for this dataset. Only enabled items are applied.", and two buttons, "Generate suggestions" and "New item".
 - Filter row: kind pills "All", "Concepts", "Relations", "Constraints", "Instructions" (each with a tooltip describing the kind), and a toggle "Pending suggestions" with a count badge of mined, still-disabled items. Choosing a kind leaves the pending view.

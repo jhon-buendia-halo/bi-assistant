@@ -1,6 +1,6 @@
 <div class="flex flex-col">
   @if (initial(); as editing) {
-    <!-- Saved dataset: Schema | Ontology (BA-320). A new dataset has no tabs. -->
+    <!-- Saved dataset: Schema | Ontology | Profile & synthesize (BA-320, M1-22). A new dataset has no tabs. -->
     <div
       role="tablist"
       aria-label="Dataset sections"
@@ -16,8 +16,8 @@
           [attr.aria-controls]="'dataset-panel-' + tab.id"
           [attr.tabindex]="activeTab() === tab.id ? 0 : -1"
           (click)="selectTab(tab.id)"
-          (keydown.arrowRight)="selectTab(otherTab(tab.id), true)"
-          (keydown.arrowLeft)="selectTab(otherTab(tab.id), true)"
+          (keydown.arrowRight)="selectTab(adjacentTab(tab.id, 1), true)"
+          (keydown.arrowLeft)="selectTab(adjacentTab(tab.id, -1), true)"
           class="-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-[13px]"
           [class.border-border-selected]="activeTab() === tab.id"
           [class.text-fg-strong]="activeTab() === tab.id"
@@ -36,7 +36,21 @@
         id="dataset-panel-ontology"
         aria-labelledby="dataset-tab-ontology"
       >
-        <app-ontology-panel [dataset]="editing" />
+        @defer (on immediate) {
+          <app-ontology-panel [dataset]="editing" />
+        }
+      </div>
+    }
+    @if (activeTab() === "synthesize") {
+      <div
+        role="tabpanel"
+        id="dataset-panel-synthesize"
+        aria-labelledby="dataset-tab-synthesize"
+        data-testid="dataset-panel-synthesize"
+      >
+        @defer (on immediate) {
+          <app-synthetic-data-panel [dataset]="editing" />
+        }
       </div>
     }
   }

@@ -42,7 +42,7 @@ interface ActionResult { ok: boolean; message: string; /* + endpoint-specific pa
 - On success: `{ ok: true, message: "<human sentence>", ...payload }`.
 - `message` is user-displayable and clients show it verbatim in toasts or inline errors. Exact success sentences are listed per endpoint because UI tests assert some of them.
 
-**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the deep-analysis download, and the whole ontology and personas controllers.
+**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the deep-analysis download, the whole ontology and personas controllers, and the data-readiness and synthetic-data controllers.
 
 ```ts
 interface HttpErrorBody { statusCode: number; message: string | string[]; error: string }   // NestJS default
@@ -59,7 +59,7 @@ Clients read the error text from `error.message` (Style B) or `body.message` wit
 
 ### 1.4 Success status codes
 
-POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56). GET/PUT/DELETE return **200**; `DELETE /ontology/:id`, `DELETE /personas/:id` and `DELETE /visuals/:id` return **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
+POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56). GET/PUT/DELETE return **200**; `DELETE /ontology/:id`, `DELETE /personas/:id` and `DELETE /visuals/:id` return **204 No Content**. The file downloads write the response themselves and return **200**; so do `POST /synthetic-data/scripts`, `/profile-exports` and `/sample-exports` (112 to 114), which stream an attachment (only 111 returns **201**). Clients treat any 2xx as success and do not depend on 200 vs 201.
 
 ### 1.5 Validation
 
@@ -1097,6 +1097,75 @@ Controller prefix `/data-readiness`. Capability: [data-readiness](../capabilitie
 #### 110. `GET /data-readiness/assessments/:id`
 - Response `200`: the full `ReadinessReport`.
 - Errors: 404 `"Readiness report \"<id>\" not found"`.
+
+### 2.18 Synthetic data
+
+Controller prefix `/synthetic-data`. Capability: [synthetic-data](../capabilities/synthetic-data/spec.md). Decision: ADR-0039. Shapes: `SampledProfile` and its parts are in the capability's Contracts; nothing is stored (profiles live in memory only). **Style B** (1.3): failures are real HTTP statuses with the framework error body. No endpoint streams events: 111 is a synchronous POST (the UI shows a spinner) and 112 to 114 write their response themselves as file attachments.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 111 | `POST /synthetic-data/profiles` | Sample a dataset's tables and return the sampled profile (kept 60 min in memory) | yes (Profile & synthesize tab) |
+| 112 | `POST /synthetic-data/scripts` | Generate the synthetic copy from a profile as a `.sql` script, a CSV zip or an Excel workbook (streamed attachment) | yes (Generate) |
+| 113 | `POST /synthetic-data/profile-exports` | Export the profile as CSV or Excel | yes (Export profile) |
+| 114 | `POST /synthetic-data/sample-exports` | Export the real sampled rows, re-read, as `.sql`, CSV or Excel; refused without `confirmRealData: true` | yes (Export sample rows) |
+
+#### 111. `POST /synthetic-data/profiles`
+- Body: `{ datasetName: string; tables?: string[]; sampleSize?: number }`.
+  - `tables` are entity keys of the dataset. Left out or empty, it means every table of the dataset.
+  - `sampleSize` is 1–1000, default 1000.
+- Runs synchronously: reads the dataset, samples each table (up to `sampleSize` rows, native sampling, 15 s per statement), builds the profile from the rows, drops the rows and keeps the profile in memory for 60 minutes (at most 20 profiles).
+- When the client disconnects (the UI's Cancel, or navigating away) the request's `close` event aborts the sampling run.
+- Response `201`: `SampledProfile`.
+- Errors (Style B), the first that applies:
+  - 400 `datasetName is required`
+  - 404 `Dataset "<name>" not found`
+  - 400 `Dataset "<name>" has no datasource`
+  - 400 `Profiling a sample supports PostgreSQL and Databricks datasets only`
+  - 400 `tables must be an array of entity keys`
+  - 400 `"<key>" is not a table of dataset "<name>"`
+  - 400 `Choose at most 50 tables`
+  - 400 `sampleSize must be a whole number from 1 to 1,000`
+  - 404 `Datasource "<id>" not found`
+  - 502 with the connector's message, when the datasource cannot be reached at all (the table list fails)
+  - A single table that cannot be sampled is **not** an error: it gets `error` and `sampledRows: 0`.
+
+#### 112. `POST /synthetic-data/scripts`
+- Body: `ScriptRequest` (capability Contracts): `{ profileId, rowCounts?, defaultRowCount?, seed?, targetSchema?, includeConstraints?, format? }`. `format` is `sql` (default), `csv` or `xlsx`.
+- Generates the synthetic copy from the cached profile and **streams it as an attachment**: every input is validated before the headers are written. The same profile and request give the same bytes apart from the header's `generated on` line.
+- Response `200`:
+  - `format` `sql`: `Content-Type: application/sql; charset=utf-8`; `Content-Disposition: attachment; filename="<dataset-slug>-synthetic-<dialect>-seed<seed>.sql"` (the slug as in 14, the dialect `postgresql` or `databricks`); `X-Script-Sha256: <hex>`, the SHA-256 of the script without the `generated on` and hash header lines; `X-Script-Rows: <total>`. A Databricks profile gets a Databricks SQL script.
+  - `format` `csv`: `Content-Type: application/zip`; `filename="<dataset-slug>-synthetic-seed<seed>-csv.zip"`; one `<target table name>.csv` per table plus `README.txt`; `X-Export-Rows: <total>`.
+  - `format` `xlsx`: `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`; `filename="<dataset-slug>-synthetic-seed<seed>.xlsx"`; one sheet per table plus `About`; `X-Export-Rows: <total>`.
+  - CSV and Excel do not depend on the dialect, so they work for a Databricks profile.
+- Errors (Style B), the first that applies:
+  - 400 `profileId is required`
+  - 404 `Profile "<id>" expired or not found: profile the tables again`
+  - 400 `format must be sql, csv or xlsx`
+  - 400 `Row counts must be whole numbers from 1 to 10,000` (also for `defaultRowCount`); a `rowCounts` key that is not in the profile gives 400 `"<key>" is not a table of this profile`
+  - 400 `A script holds at most 200,000 rows`
+  - 400 `seed must be a whole number from 0 to 2147483647`
+  - 400 `targetSchema must be a plain identifier (letters, digits, underscores)`; for a Databricks profile `targetSchema must be schema or catalog.schema (letters, digits, underscores)`
+
+#### 113. `POST /synthetic-data/profile-exports`
+- Body: `{ profileId: string; format: 'csv' | 'xlsx' }`.
+- Exports exactly what the profile view shows, from the cached profile (no datasource access, no sampled value beyond the categorical top values). Response `200`:
+  - `csv`: `Content-Type: text/csv; charset=utf-8`; `filename="<dataset-slug>-profile.csv"`; one row per column of every table: table, method, sampledRows, rowCountEstimate, column, type, kind, strategy, nullPct, distinct, range or length, top values joined by ` | `, patterns joined by ` | `.
+  - `xlsx`: the spreadsheet type of 112; `filename="<dataset-slug>-profile.xlsx"`; sheets `Tables` and `Columns`.
+- Errors (Style B), the first that applies:
+  - 400 `profileId is required`
+  - 404 `Profile "<id>" expired or not found: profile the tables again`
+  - 400 `format must be csv or xlsx`
+
+#### 114. `POST /synthetic-data/sample-exports`
+- Body: `{ profileId: string; format: 'sql' | 'csv' | 'xlsx'; targetSchema?: string; confirmRealData: true }`. `targetSchema` defaults to `sample`.
+- **Exports real rows.** It re-reads the profile's tables (the same keys, `sampleSize` and `REPEATABLE (7)`) through the sampler and the pooled read-only sessions and streams them to the response; the rows are never logged, cached, written to a session file or sent to a model, and the cache keeps statistics only. A table that has changed, or a `limit` read, can give other rows than the ones profiled, and the README says so. A table that fails is written with zero rows and its error in the README. When the client disconnects the sampling run is aborted.
+- Response `200`, an attachment: `sql` with `Content-Type: application/sql; charset=utf-8` and `filename="<dataset-slug>-sample-<dialect>.sql"` (the dialect writer of 112, values typed by semantic type, an unparseable value written as a string literal); `csv` with `application/zip` and `filename="<dataset-slug>-sample-csv.zip"`; `xlsx` with the spreadsheet type and `filename="<dataset-slug>-sample.xlsx"`. `X-Export-Rows: <total>` is set.
+- Errors (Style B), the first that applies:
+  - 400 `profileId is required`
+  - 404 `Profile "<id>" expired or not found: profile the tables again`
+  - 400 `confirmRealData must be true: this export contains real rows`
+  - 400 `format must be sql, csv or xlsx`
+  - 400 `targetSchema must be a plain identifier (letters, digits, underscores)`; for a Databricks profile `targetSchema must be schema or catalog.schema (letters, digits, underscores)`
 
 ## 3. Streaming and long-running work
 

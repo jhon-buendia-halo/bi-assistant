@@ -274,6 +274,7 @@ flowchart LR
     datasets["DatasetsModule"]
     datasources["DatasourcesModule<br/>(postgres, databricks, rest connectors)"]
     testing["TestingDataModule"]
+    synthdata["SyntheticDataModule<br/>(sampled profile, generator, dialect writers, CSV and Excel exports; ADR-0039)"]
     metrics["MetricsModule"]
     verified["VerifiedQueriesModule"]
     llm["LlmModule<br/>(LlmService)"]
@@ -323,6 +324,8 @@ flowchart LR
   datasets --> datasources
   testing --> datasources
   testing --> datasets
+  synthdata -->|"RowSampler on the profilers"| datasources
+  synthdata --> datasets
   metrics --> verified
   llm --> crypto
   llm -->|"installs on init"| resolver
@@ -362,6 +365,7 @@ flowchart LR
     llm["llm<br/>(llm-config, llm-api)"]
     agents["agents<br/>(agent-hub, agent-card, agent-detail, eval-trace)"]
     testing["testing-data<br/>(testing-data-config)"]
+    synthdata["synthetic-data<br/>(synthetic-data-panel, sampled-table-card, synthetic-data-api)"]
   end
 
   subgraph core["core/"]
@@ -388,6 +392,7 @@ flowchart LR
   app --> diagnostics
   datasets --> datasources
   datasets --> ontology
+  datasets --> synthdata
   ontology --> datasets
   agents --> datasources
   testing --> datasources
@@ -730,7 +735,7 @@ flowchart LR
   - Re-introducing multi-user access later needs a new ADR; ADR-0010 to ADR-0012 stay as the record of the design that was removed.
 
 #### ADR-0031 — A deterministic DMBOK readiness engine owns every score; the Data Readiness Agent only presents stored reports; profiling is a connector capability
-- **Status:** Accepted; "the agent has no SQL" amended by ADR-0035 (2026-11-09): it may run read-only SQL to drill into findings, and scores stay engine-only
+- **Status:** Accepted; "the agent has no SQL" amended by ADR-0035 (2026-11-09): it may run read-only SQL to drill into findings, and scores stay engine-only. Note (ADR-0039, 2026-11-11): "profiling reads no row values" holds for readiness profiling; row samples are read only by the separate sampler of ADR-0039, and no sampled statistic feeds a score.
 - **Date:** 2026-11-03
 - **Context:**
   - The user asked on 2026-11-03 for a Data Readiness Agent that uses only the deterministic DMBOK metrics of the separate `data-readiness-agent` project ([BA-251](https://halo-powered.atlassian.net/browse/BA-251)).
@@ -944,6 +949,52 @@ flowchart LR
   - Prices are code, not settings: a change of price needs a release. The table says "as of 2026-11-03", and a model without a price shows a dash for cost and no context limit.
   - Token counts per box are estimates ("≈" in the UI). Only the total is real.
   - Stack-neutral: a rebuild needs a trace store that records, per model call, its usage, its tool definitions, its input messages and its tool calls, a read path inside the process that owns the store, and a price table.
+#### ADR-0039 — Sampled profiling and synthetic data: a separate, approximate profile read from row samples, and a deterministic generator that writes a SQL script; the app stays read-only on datasources
+- **Status:** Accepted (2026-11-11, with the M1-22 epic spec)
+- **Date:** 2026-11-11
+- **Context:**
+  - The user asked on 2026-11-11 to profile data by sampling and to generate synthetic data exported in the datasource's dialect.
+  - Readiness profiling (ADR-0031, ADR-0033) is aggregate-only and exact, and data-readiness R29 forbids sampling there. Its interface "reads no row values".
+  - Synthesis needs value-level information that aggregates do not give: shapes of text, quantiles, categorical frequencies.
+  - The app is read-only on datasources.
+- **Decision:**
+  - **A second, separate profile.** A new `RowSampler` interface is implemented additively by the PostgreSQL and Databricks profilers.
+    - It reads up to 1,000 rows per table with the engine's native `TABLESAMPLE … REPEATABLE`. Small tables are read whole, and tables where TABLESAMPLE is refused fall back to `LIMIT`.
+    - It reuses the profilers' pooled read-only sessions, statement timeout and abort.
+    - Readiness profiling, the engine and its scores are unchanged, and a sampled statistic never feeds a readiness score.
+  - **Raw rows stay in the request.** A pure builder turns them into a `SampledProfile`.
+    - The profile holds statistics, character-class shapes and only the categorical values seen at least 3 times in columns of at most 20 distinct values.
+    - The rows are never logged, cached, persisted or sent to a model.
+    - The profile is kept in memory for 60 minutes (20 at most) so a script can be generated from exactly what the user saw. It is never persisted.
+  - **A deterministic generator with no model.** Seeded per column, keys generated first so FKs always resolve, constraints added after the inserts so FK cycles load.
+  - **One dialect writer per platform** emits a UTF-8, LF-only script: `CREATE SCHEMA`, `CREATE TABLE`, batched `INSERT`, FK constraints. It is downloaded by the user.
+    - The app never executes it. The datasource connections keep their read-only guard, and no write path is added.
+  - **Agents reach the same service through a tool bridge.** The Data Readiness Agent gets two tools. The script reaches the user as a session file in the panel.
+- **Rejected:**
+  - Sampling inside readiness profiling: it would make readiness scores approximate and unrepeatable, contrary to R29.
+  - Exposing sampled rows to the LLM or letting an LLM generate the data: unrepeatable, it leaks values, and it is costly.
+  - Loading synthetic data into a datasource: it breaks the read-only guarantee and needs write credentials.
+  - A third-party fake-data library (faker): it adds a dependency and locale-dependent output, and it has no notion of the observed shapes. A small built-in word list is enough.
+  - Round-tripping the profile in the generate request: it exceeds the default JSON body limit (api.md G9) on wide datasets.
+  - Persisting profiles: not needed, and it would store more data about the user's tables.
+- **Consequences:**
+  - Sampled statistics are approximate, and the UI says so next to every profile.
+  - `TABLESAMPLE` cost and behaviour differ per engine and per table kind, and must be timed live (Databricks especially).
+  - Databricks PK and FK constraints are informational and need Unity Catalog. The script header says so, and the constraints can be switched off.
+  - The Data Readiness Agent's prompt and tools change, so its eval set must pass at 100 % over 3 runs.
+  - Stack-neutral: a rebuild needs a sampler per dialect, the pure profile builder, the generator, a writer per dialect, two endpoints, one UI tab and two tools.
+  - Capability: [synthetic-data](../capabilities/synthetic-data/spec.md).
+- **Amendment (2026-11-11, stories 1.22.2, 1.22.5 and 1.22.6): exports, raw sample rows and unique integers.** The user asked to export the profile, the synthetic data and the sample in `.sql`, CSV and Excel.
+  - **(a) Raw rows may leave the server only through one explicit, confirmed download.**
+    - The endpoint `POST /synthetic-data/sample-exports` re-reads the profile's tables (same keys, sample size and `REPEATABLE (7)`) and streams the real rows to the response, after the UI's confirm dialog and a request carrying `confirmRealData: true`. The rows are dropped when the response ends.
+    - They are never logged, cached, written to a session file or sent to a model. The cache still holds statistics only, and the agent tools have no raw export.
+    - The statement "raw rows never leave the service" of the decision above holds for everything except this download.
+    - Rejected: keeping the raw rows in the cache for 60 minutes so an export would not re-read. It would put up to 1,000 real rows per table in process memory for an hour, a much larger exposure than a user-requested download, and the cache is the thing a log or a crash dump might reach.
+  - **(b) Two new backend dependencies** for the CSV and Excel formats, `exceljs` (the streaming `WorkbookWriter`, for `.xlsx`) and `fflate` (a dependency-free streamed zip, for the CSV files). The browser only receives a blob, so the frontend gains none. CSV needs no library (RFC 4180 by hand).
+    - Rejected: SheetJS (the `xlsx` package on npm is frozen at 0.18.5 with open advisories, and newer builds ship only from the vendor's CDN); hand-written OOXML (styles, shared strings and date serials are easy to get wrong); `archiver` (heavier and Node-streams only, where fflate is dependency-free).
+    - All formats consume the same generator stream, so the values are identical across `.sql`, CSV and Excel for the same seed.
+  - **(c) `unique-range`.** An integer column that is only unique (not a primary or foreign key) is generated as distinct integers drawn without replacement within its observed range, so `tournament_year` gives years, not 1, 2, 3. When the range is smaller than the rows asked for, it falls back to a sequence from the observed minimum, and the script header says so. Only key integers stay a `sequence`.
+  - Consequences: the privacy rules of the capability gain the raw-export rule; the new endpoints are 112 (with `format`), 113 and 114 ([api.md](api.md) 2.18); the stack gains the two packages ([tech-stack.md](tech-stack.md)).
 
 ## Level 4 — Code
 

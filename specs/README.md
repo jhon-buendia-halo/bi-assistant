@@ -48,6 +48,7 @@ specs/
 | [agents-evals](capabilities/agents-evals/spec.md) | Agent Hub, agent catalogue and user agents, eval sets, eval runs and reports | Agents (`agents.spec.ts`), Agent Hub (`agent-hub.spec.ts`) |
 | [rfp](capabilities/rfp/spec.md) | The RFP Builder agent, the Intellify RFP API, RFP records and the RFP package | RFP builder (E2E: none yet), Intellify RFP API (API-level) |
 | [agent-panel](capabilities/agent-panel/spec.md) | `show_in_panel`: what an agent shows in the right panel (file, document, table, visual), the workflow bar and its Details, its history and download | Agent panel (E2E: none yet) |
+| [synthetic-data](capabilities/synthetic-data/spec.md) | Sampled profile of a dataset's tables (native sampling, up to 1,000 rows per table, approximate, separate from readiness) in the dataset editor's Profile & synthesize tab; synthetic data scripts follow in later stories | Synthetic data (`synthetic-data.spec.ts`) |
 | [data-readiness](capabilities/data-readiness/spec.md) | The Data Readiness Agent, the deterministic DMBOK readiness engine, profiling, saved readiness reports and the scorecard | Data readiness (E2E: none yet) |
 
 A Gherkin Feature that spans capabilities lives in the capability that owns its main outcome; the others link to it.
@@ -81,6 +82,7 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-305 US Health testing data | [epics/BA-305](epics/BA-305/spec.md) |
 | BA-318 Schema metadata in datasets | [epics/BA-318](epics/BA-318/spec.md) |
 | BA-320 Questions to Insights v2 | [epics/BA-320](epics/BA-320/spec.md) |
+| M1-22 Sampled profiling and synthetic data (repo only, no Jira key) | [epics/M1-22](epics/M1-22/spec.md) |
 
 ## Stack neutrality
 

@@ -386,45 +386,63 @@ export class ReadinessBridge implements ReadinessToolServices {
   }
 
   /** Dataset resolution shared by the three tools (agents.md 3.13). */
-  private async resolveDataset(
+  private resolveDataset(
     sessionId: string,
     datasetName?: string,
   ): Promise<ReadinessDataset & { datasourceId: string }> {
-    const names = await this.deps.sessionDatasetNames(sessionId);
-    const list = names.join(', ');
-    const wanted = datasetName?.trim();
-    let name: string | undefined;
-    if (!wanted) {
-      if (names.length > 1) {
-        throw new Error(
-          `This session has several datasets: ${list}. Name the one to assess.`,
-        );
-      }
-      name = names[0];
-    } else {
-      name =
-        names.find((n) => n === wanted) ??
-        names.find((n) => n.toLowerCase() === wanted.toLowerCase());
-      if (!name) {
-        throw new Error(
-          `Dataset "${wanted}" is not in this session. Choose one of: ${list}.`,
-        );
-      }
-    }
-    if (!name) throw new Error('This session has no dataset to assess.');
-    const dataset = (await this.deps.datasets([name])).find(
-      (d) => d.name === name,
+    return resolveSessionDataset(
+      this.deps,
+      sessionId,
+      datasetName,
+      UNSUPPORTED_KIND,
     );
-    if (!dataset) throw new Error(`Dataset "${name}" no longer exists.`);
-    if (
-      !dataset.datasourceId ||
-      !dataset.datasourceKind ||
-      !READINESS_KINDS.includes(dataset.datasourceKind)
-    ) {
-      throw new Error(UNSUPPORTED_KIND);
-    }
-    return { ...dataset, datasourceId: dataset.datasourceId };
   }
+}
+
+/**
+ * Dataset resolution (agents.md 3.13), shared by the readiness and the
+ * synthetic-data tools (3.14): the named session dataset, or the only one.
+ * Throws the text the model sees; `unsupported` when the dataset is not bound
+ * to a PostgreSQL or Databricks datasource.
+ */
+export async function resolveSessionDataset(
+  deps: Pick<ReadinessBridgeDeps, 'sessionDatasetNames' | 'datasets'>,
+  sessionId: string,
+  datasetName: string | undefined,
+  unsupported: string,
+): Promise<ReadinessDataset & { datasourceId: string }> {
+  const names = await deps.sessionDatasetNames(sessionId);
+  const list = names.join(', ');
+  const wanted = datasetName?.trim();
+  let name: string | undefined;
+  if (!wanted) {
+    if (names.length > 1) {
+      throw new Error(
+        `This session has several datasets: ${list}. Name the one to assess.`,
+      );
+    }
+    name = names[0];
+  } else {
+    name =
+      names.find((n) => n === wanted) ??
+      names.find((n) => n.toLowerCase() === wanted.toLowerCase());
+    if (!name) {
+      throw new Error(
+        `Dataset "${wanted}" is not in this session. Choose one of: ${list}.`,
+      );
+    }
+  }
+  if (!name) throw new Error('This session has no dataset to assess.');
+  const dataset = (await deps.datasets([name])).find((d) => d.name === name);
+  if (!dataset) throw new Error(`Dataset "${name}" no longer exists.`);
+  if (
+    !dataset.datasourceId ||
+    !dataset.datasourceKind ||
+    !READINESS_KINDS.includes(dataset.datasourceKind)
+  ) {
+    throw new Error(unsupported);
+  }
+  return { ...dataset, datasourceId: dataset.datasourceId };
 }
 
 function statusOf(error: unknown): number | undefined {

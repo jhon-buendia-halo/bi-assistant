@@ -43,7 +43,7 @@ The directory is created (recursively) at backend start if it does not exist.
 | **Renderer preference cache** (client) | Browser/Electron `localStorage` key `questions-to-insights:nav-expanded` | String: `true` or `false` | A copy of the navigation drawer state held in `ui-preferences`. Missing or any other value = `true` (expanded). See app-shell R50. | Frontend |
 | **Renderer preference** (client) | Browser/Electron `localStorage` key `questions-to-insights:workflow-bar-collapsed` | String: `true` or `false` | Whether the workflow bar above the chat is folded to one line ([agent-panel](../capabilities/agent-panel/spec.md) R18). Per browser, not per session, and never synced to the backend; missing, unreadable or any other value = unfolded. Reads and writes are guarded, so the bar works without storage. | Frontend |
 
-Nothing else is persisted in the app data dir; the RFP records of the RFP Builder live in an external PostgreSQL database behind the Intellify RFP API (section 7). Deep-analysis jobs and REST-datasource row materialisation are in-memory only (sections 3.11, 3.12).
+Nothing else is persisted in the app data dir; the RFP records of the RFP Builder live in an external PostgreSQL database behind the Intellify RFP API (section 7). Deep-analysis jobs and REST-datasource row materialisation are in-memory only (sections 3.11, 3.12), and so are the **sampled profiles** of the synthetic-data capability (ADR-0039): at most 20 profiles, each kept 60 minutes, forgotten on restart, in no collection and no file. The synthetic data exports (`.sql`, CSV, Excel), the profile export and the raw sample export are streamed to the HTTP response and store nothing; raw sample rows are re-read on request and never kept.
 
 **Implementation note.** The current implementation uses `better-sqlite3` for `app.sqlite`, `@mastra/libsql` for `mastra.sqlite` and `@mastra/duckdb` for `observability.duckdb` (see [tech-stack.md](tech-stack.md)). Only the *document shapes* and the *file layout under `workspaces/`* are contracts that matter across stacks; the agent memory store is opaque framework state, and so is the observability store apart from the `span_events` columns Monitoring reads (a unit test pins them to a fixture of the real shape, ADR-0038).
 
@@ -656,7 +656,11 @@ workspaces/
           exhibit-d-carriers.csv
         manifest.json              { rfpId, title, generatedAt, files[] }
         draft/                     a DRAFT package (export_rfp_draft), same layout, manifest adds draft: true and stage
+    synthetic-data/
+      <dataset-slug>-synthetic-<dialect>-seed<seed>.sql   a synthetic data script (Data Readiness Agent sessions only)
 ```
+
+The `synthetic-data/` folder holds the scripts `generate_synthetic_data` writes ([agents.md](agents.md) 3.14, [../capabilities/synthetic-data/spec.md](../capabilities/synthetic-data/spec.md) R43): UTF-8, LF-only, at most 256 KB, generated values only. A second call with the same file name overwrites the file; each call stores a new `file` panel item (3.4.4) pointing at it, so the panel and its Download (api.md 106-107) read the file as it is now. Deleted with the workspace.
 
 The `rfp/<rfp-id>/` folder is the unzipped `GET /v1/rfps/:id/package.zip` of the Intellify RFP API ([api.md](api.md) 2.16.5), written by `export_rfp_package` ([agents.md](agents.md) 3.10) and referenced by the answer's `rfpPackage` (3.4.1). Re-exporting the same RFP overwrites the folder (not `draft/`, which holds the latest draft, written by `export_rfp_draft` and replaced by the next draft; neither export touches the other): the record in the `rfp` schema (section 7) is the source of truth. Served by [api.md](api.md) #105; deleted with the workspace.
 

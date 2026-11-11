@@ -13,7 +13,12 @@ import {
   answerExcludes,
   assessOnlyWithoutReport,
   calledAtMost,
+  calledWithInput,
   firstDataCall,
+  namesScriptInPanel,
+  profileCoversTable,
+  sampleNeverAScore,
+  sampleNumbersFromTool,
   namesWeakestDimension,
   noScoreForUnassessed,
   oneSucceeded,
@@ -231,6 +236,56 @@ const DATA_READINESS_EVAL_CASES: AssistantEvalCase[] = [
       'analysis (any wording), and does not answer the question (no winner ' +
       'and no football fact). Score pass=false if it names a winner or any ' +
       'football fact.',
+  },
+  {
+    id: 'dr-profile-sample',
+    question: "Profile a sample of World Cup's players table.",
+    intent:
+      'D14, story 1.22.4: a sample profile comes from profile_data_sample; the answer quotes only numbers the profile holds, never calls one a score, and runs no assessment.',
+    scorers: [
+      checks.calledTool('profile_data_sample'),
+      checks.didNotCall('assess_data_readiness'),
+      checks.noToolErrors(),
+    ],
+    customChecks: [
+      profileCoversTable('players'),
+      sampleNumbersFromTool(),
+      sampleNeverAScore(),
+    ],
+    judgeRubric:
+      'The user asked for a profile of a sample of the players table. ' +
+      'Score pass=true only if the answer summarises the profile_data_sample ' +
+      'result for players (for example columns, null rates, distinct counts, ' +
+      'ranges or common values), every number it states is in that result, ' +
+      'and it presents them as approximate sample statistics. Score ' +
+      'pass=false if it calls any of these numbers a score or a readiness ' +
+      'rating, mixes them with a readiness score, or states a number the ' +
+      'tool result does not hold.',
+  },
+  {
+    id: 'dr-synthetic-script',
+    question: 'Give me 50 synthetic rows per table for World Cup.',
+    intent:
+      'D14, story 1.22.4: generate_synthetic_data with rowsPerTable 50; the answer names the script file and says it is in the panel to download; no SQL is run.',
+    scorers: [
+      checks.calledTool('generate_synthetic_data'),
+      checks.didNotCall('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    customChecks: [
+      calledWithInput('generate_synthetic_data', 'rowsPerTable', 50),
+      namesScriptInPanel(),
+      sampleNeverAScore(),
+    ],
+    judgeRubric:
+      'The user asked for 50 synthetic rows per table of World Cup. Score ' +
+      'pass=true only if the answer says a synthetic SQL script was ' +
+      'generated, names its file as the generate_synthetic_data result gives ' +
+      'it, says it is in the panel to download, and states only row counts ' +
+      'and table names that the tool result holds. Score pass=false if it ' +
+      'claims the data was written to or run against the datasource, offers ' +
+      'to run the script itself, or states counts the tool result does not ' +
+      'hold.',
   },
 ];
 

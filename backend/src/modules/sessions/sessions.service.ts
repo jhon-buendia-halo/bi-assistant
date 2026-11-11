@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -51,6 +52,14 @@ import {
   readinessReportOf,
   readinessReportRef,
 } from './readiness-bridge';
+import { setSyntheticDataToolServices } from '../../mastra/synthetic-data-tool-services';
+import {
+  SYNTHETIC_DATA_TOOLS,
+  SyntheticDataBridge,
+  syntheticPanelItemId,
+  type SyntheticDataBridgeDeps,
+} from './synthetic-data-bridge';
+import { SYNTHETIC_DATA_SERVICE } from '../synthetic-data/synthetic-data.token';
 import {
   SHOWCASE_REASON,
   isShowcaseAgent,
@@ -146,7 +155,11 @@ import {
   type QtiV2TurnRuntime,
 } from '../../mastra/workflows/qti-v2-turn.steps';
 import { renderPdf } from '../../common/markdown-pdf';
-import { WorkspaceFileError, readWorkspaceFile } from './workspace-files';
+import {
+  WorkspaceFileError,
+  readWorkspaceFile,
+  writeWorkspaceFile,
+} from './workspace-files';
 import { compareResults } from './result-compare';
 import {
   STORED_ROWS_CAP,
@@ -333,6 +346,10 @@ export class SessionsService implements OnModuleInit {
     @Optional() private readonly rfpPackages?: RfpPackagesService,
     // The Data Readiness Agent's assessments (agents.md 3.13).
     @Optional() private readonly readiness?: DataReadinessService,
+    // Sampled profiles and synthetic scripts for the same agent (agents.md 3.14).
+    @Optional()
+    @Inject(SYNTHETIC_DATA_SERVICE)
+    private readonly syntheticData?: SyntheticDataBridgeDeps['synthetic'],
   ) {}
 
   /** The readiness tools' bridge, once installed (agents.md 3.13). */
@@ -397,6 +414,21 @@ export class SessionsService implements OnModuleInit {
         readiness: this.readiness,
       });
       setReadinessToolServices(this.readinessBridge);
+    }
+
+    if (this.syntheticData) {
+      setSyntheticDataToolServices(
+        new SyntheticDataBridge({
+          sessionDatasetNames: async (sessionId) =>
+            (await this.get(sessionId)).datasets,
+          datasets: (names) => this.boundDatasets(names),
+          synthetic: this.syntheticData,
+          writeFile: (sessionId, path, text) =>
+            writeWorkspaceFile(sessionId, path, text),
+          showFile: async (sessionId, path, title) =>
+            this.showPanelItem(sessionId, { kind: 'file', path, title }),
+        }),
+      );
     }
 
     // A preview left open when the app stopped has no session left to own
@@ -2292,6 +2324,22 @@ export class SessionsService implements OnModuleInit {
                 );
                 if (shown) readinessReport = shown;
               }
+              emit({
+                type: 'tool-result',
+                content: JSON.stringify({
+                  tool: toolName,
+                  input: firstStringArgument(args),
+                  error,
+                }),
+              });
+              continue;
+            }
+            if (!isAssistant && SYNTHETIC_DATA_TOOLS.has(toolName)) {
+              // Each synthetic-data tool shows its step; a script opens in
+              // the panel as `show_in_panel` does (agents.md 3.14).
+              const error = resultError(payload.result);
+              const itemId = syntheticPanelItemId(payload.result);
+              if (!error && itemId) await this.emitPanelItem(id, itemId, emit);
               emit({
                 type: 'tool-result',
                 content: JSON.stringify({

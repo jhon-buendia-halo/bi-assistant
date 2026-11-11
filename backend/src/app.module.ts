@@ -18,6 +18,7 @@ import { DeveloperSettingsModule } from './modules/developer-settings/developer-
 import { UiPreferencesModule } from './modules/ui-preferences/ui-preferences.module';
 import { SkillsModule } from './modules/skills/skills.module';
 import { DataReadinessModule } from './modules/data-readiness/data-readiness.module';
+import { SyntheticDataModule } from './modules/synthetic-data/synthetic-data.module';
 import { MonitoringModule } from './modules/monitoring/monitoring.module';
 
 @Module({
@@ -41,6 +42,7 @@ import { MonitoringModule } from './modules/monitoring/monitoring.module';
     DeveloperSettingsModule,
     UiPreferencesModule,
     DataReadinessModule,
+    SyntheticDataModule,
     MonitoringModule,
   ],
   controllers: [],

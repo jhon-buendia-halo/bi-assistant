@@ -79,6 +79,7 @@ jest.mock('./visualization-document', () => ({
 import { BadRequestException } from '@nestjs/common';
 import { isoToday } from '../../mastra/rfp-context';
 import { getReadinessToolServices } from '../../mastra/readiness-tool-services';
+import { getSyntheticDataToolServices } from '../../mastra/synthetic-data-tool-services';
 import type {
   ReadinessReport,
   ReadinessSummary,
@@ -131,6 +132,8 @@ const DATASETS = [
 ];
 
 interface BuildOptions {
+  /** The synthetic-data service the tools' bridge calls (agents.md 3.14). */
+  synthetic?: unknown;
   session?: Partial<SessionDoc>;
   /** The datasets that exist (default: all of DATASETS). */
   existing?: typeof DATASETS;
@@ -263,6 +266,7 @@ function build(options: BuildOptions = {}) {
     userAgents as never,
     undefined,
     readiness as never,
+    options.synthetic as never,
   );
   return {
     service,
@@ -693,6 +697,109 @@ describe('SessionsService sessions bound to the Data Readiness Agent (BA-261)', 
         { tool: 'list_readiness_reports' },
       ]);
       expect(ctx.session.messages.at(-1)).not.toHaveProperty('readinessReport');
+    });
+  });
+
+  describe('a synthetic script reaches the panel (agents.md 3.14, story 1.22.4)', () => {
+    const ITEM = {
+      id: 'item-1',
+      kind: 'file' as const,
+      title: 'Synthetic data — World Cup (seed 1)',
+      shownAt: '2026-11-11T10:00:00.000Z',
+      path: 'synthetic-data/world-cup-synthetic-postgresql-seed1.sql',
+      bytes: 42,
+    };
+
+    it('installs the bridge, which resolves the session dataset', async () => {
+      const synthetic = {
+        profile: jest.fn().mockRejectedValue(new Error('stop here')),
+        getProfile: jest.fn(),
+        scriptText: jest.fn(),
+      };
+      const ctx = build({ synthetic });
+      await ctx.service.onModuleInit();
+      await expect(
+        getSyntheticDataToolServices().profileSample({ sessionId: 's-1' }),
+      ).rejects.toThrow('stop here');
+      expect(synthetic.profile).toHaveBeenCalledWith(
+        {
+          datasetName: 'World Cup',
+          tables: ['wc.public.matches', 'wc.public.teams'],
+        },
+        { signal: undefined },
+      );
+    });
+
+    it('emits the stored file item as panel-item just before its tool-result', async () => {
+      const ctx = build({
+        session: { panelItems: [ITEM] },
+        chunks: [
+          () =>
+            Promise.resolve({
+              type: 'tool-call',
+              payload: {
+                toolCallId: 't1',
+                toolName: 'generate_synthetic_data',
+                args: { dataset: 'World Cup', rowsPerTable: 50 },
+              },
+            }),
+          () =>
+            Promise.resolve({
+              type: 'tool-result',
+              payload: {
+                toolCallId: 't1',
+                toolName: 'generate_synthetic_data',
+                result: {
+                  fileName: 'world-cup-synthetic-postgresql-seed1.sql',
+                  path: ITEM.path,
+                  panelItemId: 'item-1',
+                },
+              },
+            }),
+          () =>
+            Promise.resolve({
+              type: 'text-delta',
+              payload: { text: 'The script is in the panel.' },
+            }),
+        ],
+      });
+      const events = await turn(ctx, 'Give me 50 synthetic rows per table');
+      const types = events.map((e) => e.type);
+      const at = types.indexOf('panel-item');
+      expect(at).toBeGreaterThan(-1);
+      expect(JSON.parse(events[at].content!)).toEqual({ item: ITEM });
+      expect(types[at + 1]).toBe('tool-result');
+      expect(JSON.parse(events[at + 1].content!)).toEqual({
+        tool: 'generate_synthetic_data',
+        input: 'World Cup',
+      });
+    });
+
+    it('shows a refusal as the step error, with no panel-item', async () => {
+      const ctx = build({
+        chunks: [
+          () =>
+            Promise.resolve({
+              type: 'tool-result',
+              payload: {
+                toolCallId: 't1',
+                toolName: 'profile_data_sample',
+                result: {
+                  error:
+                    'Choose at most 20 tables in chat; use Profile & synthesize on the dataset for more',
+                },
+              },
+            }),
+        ],
+      });
+      const events = await turn(ctx, 'Profile a sample');
+      expect(events.map((e) => e.type)).not.toContain('panel-item');
+      const result = events.find((e) => e.type === 'tool-result')!;
+      expect(JSON.parse(result.content!)).toEqual({
+        tool: 'profile_data_sample',
+        error:
+          'Choose at most 20 tables in chat; use Profile & synthesize on the dataset for more',
+      });
     });
   });
 });

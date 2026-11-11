@@ -1,0 +1,139 @@
+<div class="flex flex-wrap items-center gap-2">
+  <div class="relative">
+    <button
+      type="button"
+      class="btn btn-outline"
+      data-testid="synth-export-profile"
+      aria-haspopup="menu"
+      [attr.aria-expanded]="menu() === 'profile'"
+      [disabled]="busy()"
+      (click)="toggle('profile')"
+    >
+      <span>Export profile</span>
+      <lucide-angular [img]="ChevronDown" [size]="12" />
+    </button>
+    @if (menu() === "profile") {
+      <button
+        type="button"
+        aria-label="Close export menu"
+        class="fixed inset-0 z-20 cursor-default"
+        (click)="menu.set(null)"
+      ></button>
+      <div class="absolute top-full left-0 z-30 mt-1 w-44 menu" role="menu">
+        @for (option of profileFormats; track option.value) {
+          <button
+            type="button"
+            role="menuitem"
+            class="menu-item"
+            [attr.data-testid]="'synth-export-profile-' + option.value"
+            (click)="exportProfile(option.value)"
+          >
+            {{ option.label }}
+          </button>
+        }
+      </div>
+    }
+  </div>
+
+  <div class="relative">
+    <button
+      #sampleTrigger
+      type="button"
+      class="btn btn-outline"
+      data-testid="synth-export-sample"
+      aria-haspopup="menu"
+      [attr.aria-expanded]="menu() === 'sample'"
+      [disabled]="busy()"
+      (click)="toggle('sample')"
+    >
+      <span>Export sample rows</span>
+      <lucide-angular [img]="ChevronDown" [size]="12" />
+    </button>
+    @if (menu() === "sample") {
+      <button
+        type="button"
+        aria-label="Close export menu"
+        class="fixed inset-0 z-20 cursor-default"
+        (click)="menu.set(null)"
+      ></button>
+      <div class="absolute top-full left-0 z-30 mt-1 w-44 menu" role="menu">
+        @for (option of sampleFormats; track option.value) {
+          <button
+            type="button"
+            role="menuitem"
+            class="menu-item"
+            [attr.data-testid]="'synth-export-sample-' + option.value"
+            (click)="askSample(option.value)"
+          >
+            {{ option.label }}
+          </button>
+        }
+      </div>
+    }
+  </div>
+
+  @if (busy()) {
+    <lucide-angular
+      [img]="Loader2"
+      [size]="14"
+      class="animate-spin text-fg-muted"
+    />
+  }
+</div>
+
+@if (error(); as message) {
+  <p
+    class="mt-2 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+    role="alert"
+    data-testid="synth-export-error"
+  >
+    {{ message }}
+  </p>
+}
+
+@if (confirming() !== null) {
+  <div
+    class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
+  >
+    <div
+      class="menu w-full max-w-md px-4 py-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="synth-confirm-title"
+      aria-describedby="synth-confirm-text"
+      data-testid="synth-confirm-real-data"
+      (keydown)="onDialogKey($event)"
+    >
+      <h3
+        id="synth-confirm-title"
+        class="text-[14px] font-medium text-fg-strong"
+      >
+        Export real rows
+      </h3>
+      <p id="synth-confirm-text" class="mt-2 text-[13px] text-fg">
+        This file contains real rows from {{ profile().datasourceName }},
+        including identifiers, names and free text. Export anyway?
+      </p>
+      <div class="mt-4 flex justify-end gap-2">
+        <button
+          #cancelBtn
+          type="button"
+          class="btn btn-outline"
+          data-testid="synth-confirm-cancel"
+          (click)="cancelSample()"
+        >
+          Cancel
+        </button>
+        <button
+          #confirmBtn
+          type="button"
+          class="btn btn-primary"
+          data-testid="synth-confirm-export"
+          (click)="confirmSample()"
+        >
+          Export
+        </button>
+      </div>
+    </div>
+  </div>
+}
