@@ -80,6 +80,6 @@ The implementation contract (types, endpoints, test ids, tool inputs, units of w
 - **Depends on** the readiness profilers' pooled sessions (ADR-0031, ADR-0033), the dataset editor tabs (1.21.8), `show_in_panel` file items and their download (ADR-0029), and the tool-services bridge pattern.
 - **Risk: sampling cost on large Databricks tables and views.** Mitigated by timing the statements live on a small and a large real table before integration (1.22.1), the per-statement timeout, and falling back to a first-rows read.
 - **Risk: Databricks script correctness without a CI warehouse.** Golden tests, a statement smoke check and one live run.
-- **Risk: privacy by construction.** Only categorical values are reused, and numeric and temporal extremes can appear. Both are stated in the capability spec and tested.
+- **Risk: privacy by construction.** Only categorical values are reused, and the real minimum, maximum and 11 quantiles of numeric and temporal (non-identifier) columns can appear; identifier columns carry none. Both are stated in the capability spec and tested.
 - **Decided Q1 (2026-11-11):** the 1.22.3 gate runs one generated Databricks script once, pasted by the user into the SQL editor against a scratch schema of their workspace; the app itself never writes.
 - **Decided Q2 (2026-11-11):** scripts generated in chat keep the 256 KB panel-file limit; larger requests are refused with a pointer to the dataset editor.

@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { LucideAngularModule, Loader2 } from 'lucide-angular';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
@@ -23,6 +23,11 @@ export class SyntheticDataPanel {
 
   private readonly api = inject(SyntheticDataApiService);
   private subscription: Subscription | null = null;
+
+  constructor() {
+    // Leaving the tab aborts the request, so the backend stops sampling.
+    inject(DestroyRef).onDestroy(() => this.subscription?.unsubscribe());
+  }
 
   readonly tablesMax = PROFILE_TABLES_MAX;
   readonly supported = computed(() => this.dataset().datasourceKind !== 'rest');

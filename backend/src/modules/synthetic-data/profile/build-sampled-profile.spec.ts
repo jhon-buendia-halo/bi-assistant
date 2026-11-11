@@ -410,3 +410,79 @@ describe('privacy: no sampled data values leave the builder, except categorical 
     expect(col(p, 'w').kind).toBe('text');
   });
 });
+
+describe('privacy: identifier columns carry no value statistics', () => {
+  const rows: Row[] = range(1000).map((i) => ({
+    id: String(5000001 + i * 3),
+    national_id: String(7345120000 + i * 37),
+    born: new Date(Date.UTC(1950, 0, 1 + i * 7)).toISOString(),
+    created_at: new Date(Date.UTC(2020, 0, 1, 0, i)).toISOString(),
+    amount: String(100 + (i % 50)),
+  }));
+  const p = build([
+    table(
+      'people',
+      [
+        { name: 'id', type: 'bigint', nullable: false },
+        { name: 'national_id', type: 'bigint' },
+        { name: 'born', type: 'timestamp' },
+        { name: 'created_at', type: 'timestamp' },
+        { name: 'amount', type: 'integer' },
+      ],
+      rows,
+    ),
+  ]);
+  const json = JSON.stringify(p);
+
+  it('classifies the numeric identifier columns as identifiers', () => {
+    expect(col(p, 'id').kind).toBe('identifier');
+    expect(col(p, 'national_id').kind).toBe('identifier');
+  });
+
+  it('gives identifiers no numeric or temporal stats', () => {
+    expect(col(p, 'id').numeric).toBeUndefined();
+    expect(col(p, 'national_id').numeric).toBeUndefined();
+    expect(col(p, 'national_id').distinctCount).toBe(1000);
+  });
+
+  it('none of the identifier values appears in the profile', () => {
+    for (const r of rows) {
+      expect(json.includes(r.id as string)).toBe(false);
+      expect(json.includes(r.national_id as string)).toBe(false);
+    }
+  });
+
+  it('still gives real numeric and temporal columns their stats', () => {
+    expect(col(p, 'amount').numeric).toMatchObject({ min: 100, max: 149 });
+    expect(col(p, 'amount').numeric!.quantiles).toHaveLength(11);
+    expect(col(p, 'created_at').temporal).toBeDefined();
+  });
+});
+
+describe('foreign keys whose parent is not in the profile', () => {
+  const rows: Row[] = range(60).map((i) => ({ customer_code: `C${i % 4}` }));
+  const p = build(
+    [table('orders', [{ name: 'customer_code', type: 'text' }], rows)],
+    {
+      foreignKeys: [
+        {
+          schema: 'public',
+          table: 'orders',
+          column: 'customer_code',
+          refSchema: 'public',
+          refTable: 'customers',
+          refColumn: 'code',
+        } as never,
+      ],
+    },
+  );
+
+  it('is an identifier (unique-pattern), never categorical, with no topValues', () => {
+    const c = col(p, 'customer_code');
+    expect(c.kind).toBe('identifier');
+    expect(c.strategy).toBe('unique-pattern');
+    expect(c.topValues).toBeUndefined();
+    expect(JSON.stringify(p)).not.toContain('"C1"');
+    expect(p.relationships).toEqual([]);
+  });
+});

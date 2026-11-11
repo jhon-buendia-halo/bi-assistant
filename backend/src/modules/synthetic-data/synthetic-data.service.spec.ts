@@ -277,6 +277,27 @@ describe('SyntheticDataService.profile (behaviour)', () => {
     ]);
   });
 
+  it('a table of another database is recorded as an error and the others still profile', async () => {
+    const s = setup({
+      datasets: [
+        {
+          name: 'World Cup',
+          datasourceId: 'ds1',
+          datasourceKind: 'postgres',
+          tables: ['wc.public.players', 'other.public.teams'],
+        },
+      ],
+    });
+    await s.service.profile({ datasetName: 'World Cup' });
+    const outcomes = s.build.mock.calls[0][0].tables;
+    expect(outcomes[0].sample.error).toBeUndefined();
+    expect(outcomes[1].key).toBe('other.public.teams');
+    expect(outcomes[1].sample.error).toBe(
+      'Table other.public.teams is not in the datasource\'s database "wc"',
+    );
+    expect(s.scoped.sampleTable).toHaveBeenCalledTimes(1);
+  });
+
   it('aborts when the signal fires: stops sampling and builds nothing', async () => {
     const ac = new AbortController();
     const sample = jest.fn().mockImplementation(async () => {

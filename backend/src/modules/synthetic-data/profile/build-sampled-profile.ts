@@ -103,7 +103,16 @@ export function buildSampledProfile(input: BuildProfileInput): Omit<SampledProfi
     const primaryKey = primaryOf(t.table);
     const uniqueKeys = uniquesOf(t.table);
     const keyColumns = new Set([...primaryKey, ...uniqueKeys.flat()]);
-    const fkColumns = new Set(
+    // Every declared FK edge whose child is this table marks its column a foreign key,
+    // whether or not the parent is in the profile (an unpicked parent still makes it an id).
+    const fkColumns = new Set([
+      ...input.foreignKeys
+        .filter((e) => e.schema === t.table.schema && e.table === t.table.table)
+        .map((e) => e.column),
+      ...relationships.filter((r) => r.fromTable === t.key).flatMap((r) => r.fromColumns),
+    ]);
+    // Only relationships (both ends in the profile) are usable for generation.
+    const usableFkColumns = new Set(
       relationships.filter((r) => r.fromTable === t.key).flatMap((r) => r.fromColumns),
     );
     const rows = t.sample.rows;
@@ -125,6 +134,7 @@ export function buildSampledProfile(input: BuildProfileInput): Omit<SampledProfi
           input.datasource.kind,
           keyColumns.has(c.name),
           fkColumns.has(c.name),
+          usableFkColumns.has(c.name),
         ),
       ),
     };
@@ -206,6 +216,7 @@ function buildColumn(
   dialect: SyntheticDialect,
   inKey: boolean,
   isForeignKey: boolean,
+  foreignKeyUsable: boolean,
 ): SampledColumn {
   const semanticType =
     dialect === 'databricks' ? classifyDatabricksType(col.type) : classifyType(col.type);
@@ -266,7 +277,7 @@ function buildColumn(
       distinct,
       inKey,
       isForeignKey,
-      foreignKeyUsable: isForeignKey,
+      foreignKeyUsable,
       formatRule,
       frequentValues: Math.min(frequent.length, CATEGORICAL_MAX_DISTINCT),
       parsed,
@@ -291,7 +302,9 @@ function buildColumn(
     cls.strategy !== 'constant';
   if (!hasData) return column;
 
-  if (nums.length > 0) {
+  // Value statistics (extremes, quantiles) only for real numeric / temporal columns;
+  // identifier columns keep counts, null share, distinct count and shapes (privacy).
+  if (cls.kind === 'numeric' && nums.length > 0) {
     const sorted = nums.map((x) => x.n).sort((a, b) => a - b);
     const scale = Math.max(...nums.map((x) => x.scale));
     column.numeric = {
@@ -303,7 +316,7 @@ function buildColumn(
       scale,
     };
   }
-  if (temporals.length > 0) {
+  if (cls.kind === 'temporal' && temporals.length > 0) {
     const sorted = temporals.map((p) => p.ms).sort((a, b) => a - b);
     const iso = (ms: number): string => new Date(ms).toISOString();
     column.temporal = {

@@ -155,7 +155,12 @@ export class SyntheticDataService {
       const catalog = await scope.tables(config);
       const found = await scope.keys(config);
       const foreignKeys = await scope.foreignKeys(config);
-      const refs = keys.map((k) => entityRefFromKey(kind, k, database)!);
+      // A key outside the datasource's database has no ref: it becomes a failed table (R15).
+      const resolved = keys.map((k) => entityRefFromKey(kind, k, database));
+      const refs = resolved.map(
+        (r, i) =>
+          r ?? { namespace: foreignNamespace(keys[i]), name: foreignName(keys[i]) },
+      );
       const samples: SampleOutcome[] = new Array(refs.length);
       let next = 0;
       const worker = async () => {
@@ -163,6 +168,19 @@ export class SyntheticDataService {
           const i = next++;
           throwIfAborted(signal);
           const ref = refs[i];
+          if (!resolved[i]) {
+            samples[i] = {
+              namespace: ref.namespace,
+              table: ref.name,
+              rowCountEstimate: null,
+              method: 'limit',
+              columns: [],
+              rows: [],
+              durationMs: 0,
+              error: `Table ${keys[i]} is not in the datasource's database "${database}"`,
+            };
+            continue;
+          }
           try {
             samples[i] = await scope.sampleTable(
               config,
@@ -215,6 +233,16 @@ export class SyntheticDataService {
       throw err;
     }
   }
+}
+
+/** Namespace and name of a key that does not resolve (kept only to label its failed entry). */
+function foreignNamespace(key: string): string {
+  const parts = key.split('.');
+  return parts.length >= 3 ? parts[1] : '';
+}
+function foreignName(key: string): string {
+  const parts = key.split('.');
+  return parts.length >= 3 ? parts.slice(2).join('.') : key;
 }
 
 function requestedKeys(value: unknown, dataset: DatasetDoc): string[] {
