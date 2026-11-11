@@ -486,3 +486,47 @@ describe('foreign keys whose parent is not in the profile', () => {
     expect(p.relationships).toEqual([]);
   });
 });
+
+describe('identifier columns without an integer, uuid or usable FK type', () => {
+  const dec = range(1000).map((i) => ({ customer_id: String(1000000000 + i * 7) }));
+
+  it('a numeric(10,0) id is unique-pattern with patterns and length, and leaks no value', () => {
+    const p = build([table('t', [{ name: 'customer_id', type: 'numeric(10,0)' }], dec)]);
+    const c = col(p, 'customer_id');
+    expect(c).toMatchObject({ kind: 'identifier', strategy: 'unique-pattern' });
+    expect(c.patterns?.length).toBeGreaterThan(0);
+    expect(c.length).toBeDefined();
+    expect(c.numeric).toBeUndefined();
+    const json = JSON.stringify(p);
+    for (const r of dec.slice(0, 50)) expect(json).not.toContain(r.customer_id);
+  });
+
+  it('a temporal column of a composite primary key keeps patterns and length', () => {
+    const rows = range(1000).map((i) => ({
+      k: String(i),
+      at: new Date(Date.UTC(2020, 0, 1) + i * 3_600_000).toISOString(),
+    }));
+    const p = build(
+      [table('t', [{ name: 'k', type: 'integer' }, { name: 'at', type: 'timestamp' }], rows)],
+      { keys: [{ schema: 'public', table: 't', kind: 'primary', columns: ['k', 'at'] }] },
+    );
+    const c = col(p, 'at');
+    expect(c).toMatchObject({ kind: 'identifier', strategy: 'unique-pattern' });
+    expect(c.patterns?.length).toBeGreaterThan(0);
+    expect(c.length).toBeDefined();
+    expect(c.temporal).toBeUndefined();
+    expect(JSON.stringify(p)).not.toContain(rows[3].at);
+  });
+
+  it('an unresolved same-named entry does not shadow the real table in relationships', () => {
+    const parent = table('teams', [{ name: 'id', type: 'integer', nullable: false }], [{ id: '1' }]);
+    const child = table('players', [{ name: 'team_id', type: 'integer' }], [{ team_id: '1' }]);
+    const ghost = { ...table('teams', [], []), key: 'other.public.teams' };
+    const p = build([parent, child, ghost], {
+      foreignKeys: [
+        { schema: 'public', table: 'players', column: 'team_id', refSchema: 'public', refTable: 'teams', refColumn: 'id' },
+      ],
+    });
+    expect(p.relationships.map((r) => r.toTable)).toEqual(['db.public.teams']);
+  });
+});

@@ -298,6 +298,27 @@ describe('SyntheticDataService.profile (behaviour)', () => {
     expect(s.scoped.sampleTable).toHaveBeenCalledTimes(1);
   });
 
+  it('an unresolvable key gets no columns from a same-named table of the current database', async () => {
+    const tables = jest.fn().mockResolvedValue([
+      { schema: 'public', table: 'teams', columns: [{ name: 'id', type: 'integer', nullable: false }] },
+    ]);
+    const s = setup({
+      tables,
+      datasets: [
+        {
+          name: 'World Cup',
+          datasourceId: 'ds1',
+          datasourceKind: 'postgres',
+          tables: ['other.public.teams'],
+        },
+      ],
+    });
+    await s.service.profile({ datasetName: 'World Cup' });
+    const t = s.build.mock.calls[0][0].tables[0];
+    expect(t.sample.error).toBeDefined();
+    expect(t.table.columns).toEqual([]);
+  });
+
   it('aborts when the signal fires: stops sampling and builds nothing', async () => {
     const ac = new AbortController();
     const sample = jest.fn().mockImplementation(async () => {

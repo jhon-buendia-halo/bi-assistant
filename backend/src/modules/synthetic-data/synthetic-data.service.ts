@@ -212,9 +212,10 @@ export class SyntheticDataService {
       return {
         tables: refs.map((r, i) => ({
           key: keys[i],
-          table: catalog.find(
-            (t) => t.schema === r.namespace && t.table === r.name,
-          ) ?? { schema: r.namespace, table: r.name, columns: [] },
+          // An unresolved key never borrows a same-named table of the current database.
+          table: (resolved[i]
+            ? catalog.find((t) => t.schema === r.namespace && t.table === r.name)
+            : undefined) ?? { schema: r.namespace, table: r.name, columns: [] },
           sample: samples[i],
         })),
         keys: found,
