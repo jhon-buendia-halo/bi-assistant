@@ -464,3 +464,66 @@ describe('InteractiveVisualPanel theme', () => {
     expect(frame().getAttribute('srcdoc')).toBe(before);
   });
 });
+
+describe('InteractiveVisualPanel on a run (visuals R12-R24; api.md 130, 132, 133)', () => {
+  let fixture: ComponentFixture<InteractiveVisualPanel>;
+  let panel: InteractiveVisualPanel;
+  let http: HttpTestingController;
+  const base = `${API_BASE_URL}/workflow-runs/r1/visualizations/visual-1`;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [InteractiveVisualPanel],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    fixture = TestBed.createComponent(InteractiveVisualPanel);
+    panel = fixture.componentInstance;
+    http = TestBed.inject(HttpTestingController);
+    fixture.componentRef.setInput('runId', 'r1');
+    fixture.componentRef.setInput('visualization', visual());
+    fixture.detectChanges();
+  });
+
+  afterEach(() => http.verify());
+
+  it('tailors through the run route and emits the stored run with the new version', () => {
+    const results: unknown[] = [];
+    panel.visualRefreshed.subscribe((result) => results.push(result));
+    panel.tailorChartType.set('bar');
+    panel.applyTailoring();
+
+    const req = http.expectOne(`${base}/tailor`);
+    expect(req.request.body).toEqual({
+      instruction: 'Change the visual to a bar chart.',
+    });
+    const result = {
+      ok: true,
+      message: 'Updated to version 3',
+      run: { id: 'r1' },
+      visualization: visual({ version: 3, currentVersion: 3 }),
+    };
+    req.flush(result);
+    expect(results).toEqual([result]);
+    expect(panel.tailorMenuOpen()).toBeFalse();
+  });
+
+  it('refreshes through the run route', () => {
+    panel.refreshData();
+    const req = http.expectOne(`${base}/refresh`);
+    expect(req.request.method).toBe('POST');
+    req.flush({
+      ok: true,
+      message: 'Refreshed data for version 2',
+      run: { id: 'r1' },
+      visualization: visual(),
+    });
+    expect(panel.refreshingData()).toBeFalse();
+  });
+
+  it('repairs through the run route', () => {
+    panel.onFrameMessage(errorMessage('x is not defined'));
+    const req = http.expectOne(`${base}/repair`);
+    expect(req.request.body).toEqual({ error: 'x is not defined', version: 2 });
+    req.flush({ ok: false, message: 'no' });
+  });
+});

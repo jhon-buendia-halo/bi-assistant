@@ -19,6 +19,7 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
 
 - R1. The system SHALL create a visual only from a completed assistant answer. The answer must have non-empty text and must not be a clarification. When no answer is named, the latest such answer is used.
 - R2. Every answer with text SHALL offer "Generate interactive visuals". While generating, the label reads "Generating interactive visuals…" and the button is disabled. It is also disabled while a chat turn runs. One generation runs per session at a time.
+  - On a run (workflows R18-R20), the button sits under the answer in the Run tab and on the run page. It is disabled while the run is `running`, and one generation runs at a time.
 - R3. The assistant SHALL create a visual when the user asks for a chart or visual of an answer, and SHALL never paste HTML, CSS or JavaScript into the chat. A visual created during a turn SHALL also see that turn's query results, merged onto the source answer's data records. When both share the same SQL text, the turn's record wins.
 - R4. A new visual SHALL get a unique id and start at version 1, with `currentVersion` = 1. Its title comes from the designer, trimmed to 100 characters (default "Interactive visual"). Its description (the takeaway) also comes from the designer. Its source answer is recorded by timestamp.
 
@@ -273,9 +274,20 @@ Placement in the shell's right "Details panel" is in [ui.md](../../system/ui.md)
 
 The scenario "Renders a deterministic interactive visualization and its version controls" belongs to the Feature "Chat and visuals" in [sessions-chat](../sessions-chat/spec.md#feature-chat-and-visuals) (E2E: `frontend/e2e/chat-and-visuals.spec.ts`). It covers generating a visual from an answer, the frame title, "Download bundle", and the "Version history" list with "Version 1" and "current".
 
+### Visual actions on a run
+
+R2 and R12-R24 hold on a stored agent run (workflows R18-R20): the answer's "Generate interactive visuals", the panel's Tailor form, version menu, "Make v<N> the current version", "Refresh data", auto-repair and "Download bundle" work over `/workflow-runs/:id/visualizations` (api.md 123, 124, 129-133) instead of a session's, on the run's workspace, with these differences:
+
+- The visual opens in a "Visual" section under the answer, in the Run tab of the designer and on the run page (ui.md 4.4c): the right panel holds the designer, so there is no panel history. The card's "View" and a new visual open it there; "Close visual" hides it.
+- The cards (R18) are stored on the run (`events`, data-model 3.16), shown after the answer, and reappear when the run is reopened. The agent's own `create_visual` and `update_visual` cards stay on the answer.
+- R19 is the generate and tailor result opening in the section; R20 does not apply: a run opens with no visual until "View" is pressed.
+- A running run, or a code-only run, refuses every action (api.md 129).
+
+The scenario "I generate, tailor, revert and refresh a visual on a run answer" of the Feature below covers them.
+
 ### Feature: Visual tailoring
 
-E2E: `frontend/e2e/visual-tailoring.spec.ts` covers "The visual follows the app's theme" (the theme is switched through System and the operating system setting, so the chat and its panel stay open) and "An older visual opens in the current theme" (the stored visual is rewritten on disk as a legacy bundle whose own styles hardcode the old dark frame); the other scenarios have none yet.
+E2E: `frontend/e2e/visual-tailoring.spec.ts` covers "The visual follows the app's theme" (the theme is switched through System and the operating system setting, so the chat and its panel stay open) and "An older visual opens in the current theme" (the stored visual is rewritten on disk as a legacy bundle whose own styles hardcode the old dark frame); and "I generate, tailor, revert and refresh a visual on a run answer" (a stored run of the Assistant opened from Runs: its answer's visual is generated, tailored with Sort, reverted and refreshed); the other scenarios have none yet.
 
 ```gherkin
 Feature: Visual tailoring
@@ -387,6 +399,8 @@ Feature: Visual tailoring
     And the app is in the Dark theme
     When I open the visual
     Then the frame and its chart are dark
+
+  Scenario: I generate, tailor, revert and refresh a visual on a run answer
 ```
 
 ### Feature: Skills the designer is given

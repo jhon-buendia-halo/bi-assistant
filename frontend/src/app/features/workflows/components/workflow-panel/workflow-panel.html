@@ -671,11 +671,29 @@
                   [showRating]="true"
                   [ratingPending]="designer.ratingPending()"
                   [rfpDownloading]="designer.rfpDownloading()"
+                  [showGenerateVisual]="!designer.running() && designer.run() !== null"
+                  [visualGenerating]="visualGenerating()"
                   (rate)="designer.rateAnswer($event)"
                   (optionPicked)="designer.followUp($event)"
+                  (generateVisual)="generateVisual()"
+                  (viewVisual)="viewVisual($event)"
                   (openScorecard)="openScorecard($event)"
                   (downloadRfp)="designer.downloadRfpPackage($event.pkg, $event.file)"
                 />
+                @if (designer.run(); as stored) {
+                  @for (event of stored.events ?? []; track event.at) {
+                    <app-answer-view
+                      class="mt-2 block"
+                      [message]="event"
+                      [busy]="designer.running()"
+                      (viewVisual)="viewVisual($event)"
+                    />
+                  }
+                  <!-- Deferred: the interactive panel stays out of the initial bundle -->
+                  @defer (when visuals.shown() !== null || visuals.loading() || visuals.error() !== null) {
+                    <app-run-visual [run]="stored" (runChange)="applyRun($event)" />
+                  }
+                }
               </div>
               @if (designer.rfpDocument(); as doc) {
                 <!-- The RFP document the agent showed in the panel (rfp R9, R16) -->

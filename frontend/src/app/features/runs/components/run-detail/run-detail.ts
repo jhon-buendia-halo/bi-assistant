@@ -14,7 +14,10 @@ import {
   runStatusLine,
   runStepStatusLabel,
 } from '../../../workflows/services/workflows.util';
+import { RunVisualsState } from '../../services/run-visuals-state';
 import { RunsState } from '../../services/runs-state';
+import { RunVisual } from '../run-visual/run-visual';
+import { WorkflowRun } from '../../../workflows/models/workflow.model';
 
 /** One field of a run's input as `run-detail` shows it. */
 export interface RunInputEntry {
@@ -33,17 +36,23 @@ export function runInputEntries(
 }
 
 /**
- * A stored run reopened, read-only (workflows R18-R20; ui.md 4.4c `run-detail`):
+ * A stored run reopened (workflows R18-R20; ui.md 4.4c `run-detail`): its result is read-only apart from the visual actions of its answer;
  * its workflow and status, its input, its steps, the answer through
- * `answer-view`, and Run again. Nothing here changes the run.
+ * `answer-view`, and Run again. Only the visual actions of the answer change
+ * the run.
  */
 @Component({
   selector: 'app-run-detail',
-  imports: [LucideAngularModule, AnswerView, WorkflowBar],
+  imports: [LucideAngularModule, AnswerView, RunVisual, WorkflowBar],
   templateUrl: './run-detail.html',
 })
 export class RunDetail {
   protected readonly state = inject(RunsState);
+  protected readonly visuals = inject(RunVisualsState);
+
+  /** A visual action stored the run: show it as it is now. */
+  protected readonly applyRun = (run: WorkflowRun): void =>
+    this.state.activeRun.set(run);
 
   protected readonly ArrowLeft = ArrowLeft;
   protected readonly Loader2 = Loader2;

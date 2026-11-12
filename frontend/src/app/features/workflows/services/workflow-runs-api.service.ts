@@ -2,7 +2,10 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
-import { MessageFeedback } from '../../sessions/models/session.model';
+import {
+  InteractiveVisualization,
+  MessageFeedback,
+} from '../../sessions/models/session.model';
 import {
   AgentStreamHandlers,
   StreamFrame,
@@ -16,6 +19,14 @@ import {
   WorkflowRunSummary,
   WorkflowRunStep,
 } from '../models/workflow.model';
+
+/** What a visual action on a run answers (api.md 129-133). */
+export interface RunVisualResult {
+  ok: boolean;
+  message: string;
+  run?: WorkflowRun;
+  visualization?: InteractiveVisualization;
+}
 
 /** What a streamed run reports (api.md 3.6), beside the agent turn's events. */
 export interface RunStreamHandlers extends AgentStreamHandlers {
@@ -88,6 +99,91 @@ export class WorkflowRunsApiService {
     return this.http.get<WorkflowRun>(
       `${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}`,
     );
+  }
+
+  private visualUrl(runId: string, visualId?: string, action?: string) {
+    const base = `${API_BASE_URL}/workflow-runs/${encodeURIComponent(runId)}/visualizations`;
+    return visualId
+      ? `${base}/${encodeURIComponent(visualId)}${action ? `/${action}` : ''}`
+      : base;
+  }
+
+  /** Generate a visual from the run's answer (api.md 129). */
+  generateVisualization(
+    runId: string,
+    sourceMessageAt?: string,
+  ): Observable<RunVisualResult> {
+    return this.http.post<RunVisualResult>(
+      this.visualUrl(runId),
+      sourceMessageAt ? { sourceMessageAt } : {},
+    );
+  }
+
+  /** A run's visual, at a version or its current one (api.md 123). */
+  getVisualization(
+    runId: string,
+    visualId: string,
+    version?: number,
+  ): Observable<InteractiveVisualization> {
+    return this.http.get<InteractiveVisualization>(
+      this.visualUrl(runId, visualId),
+      version ? { params: { version: String(version) } } : {},
+    );
+  }
+
+  /** Tailor a run's visual from an instruction (api.md 130). */
+  tailorVisualization(
+    runId: string,
+    visualId: string,
+    instruction: string,
+  ): Observable<RunVisualResult> {
+    return this.http.post<RunVisualResult>(
+      this.visualUrl(runId, visualId, 'tailor'),
+      { instruction },
+    );
+  }
+
+  /** Move a run's visual to an earlier version (api.md 131). */
+  revertVisualization(
+    runId: string,
+    visualId: string,
+    version: number,
+  ): Observable<RunVisualResult> {
+    return this.http.post<RunVisualResult>(
+      this.visualUrl(runId, visualId, 'revert'),
+      { version },
+    );
+  }
+
+  /** Re-run the SQL behind a run's visual (api.md 132). */
+  refreshVisualization(
+    runId: string,
+    visualId: string,
+  ): Observable<RunVisualResult> {
+    return this.http.post<RunVisualResult>(
+      this.visualUrl(runId, visualId, 'refresh'),
+      {},
+    );
+  }
+
+  /** Repair a run's failing visual once (api.md 133). */
+  repairVisualization(
+    runId: string,
+    visualId: string,
+    error: string,
+    version: number,
+  ): Observable<RunVisualResult> {
+    return this.http.post<RunVisualResult>(
+      this.visualUrl(runId, visualId, 'repair'),
+      { error, version },
+    );
+  }
+
+  /** A run's visual as a zip (api.md 124). */
+  downloadVisualization(runId: string, visualId: string): Observable<Blob> {
+    return this.http.get(this.visualUrl(runId, visualId, 'download'), {
+      responseType: 'blob',
+    });
   }
 
   /** A run's file panel item as its bytes (api.md 126). */

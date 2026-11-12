@@ -75,6 +75,12 @@ export interface WorkflowRun {
   rfpId?: string;
   panelItems?: PanelItem[];
   visualizations?: SessionVisualization[];
+  /**
+   * Agent workflows: the cards of the visual actions taken after the run
+   * (created, updated, reverted), as the assistant messages a session logs
+   * (api.md 125a-125e); `runHostDoc` places them after the answer.
+   */
+  events?: ChatMessage[];
   workflowState?: WorkflowState;
   /** The agent's phases (the derived view, api.md 2.1). */
   workflow?: WorkflowView;
@@ -174,6 +180,7 @@ export function runHostDoc(run: WorkflowRunDoc): SessionDoc {
         ? [{ role: 'user' as const, content: run.question, at: run.startedAt }]
         : []),
       ...(run.answer ? [run.answer] : []),
+      ...(run.events ?? []),
     ],
     ...(run.panelItems ? { panelItems: run.panelItems } : {}),
     visualizations: run.visualizations ?? [],

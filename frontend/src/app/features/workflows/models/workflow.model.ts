@@ -133,6 +133,8 @@ export interface WorkflowRun {
   rfpId?: string;
   panelItems?: PanelItem[];
   visualizations?: SessionVisualization[];
+  /** The cards of the visual actions taken after the run (api.md 129-133). */
+  events?: ChatMessage[];
   workflow?: WorkflowView;
   startedAt: string;
   finishedAt?: string;

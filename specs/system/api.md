@@ -757,7 +757,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 
 ### 2.6.3 Workflow runs
 
-Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/workflows/spec.md) (R18-R20). The stored runs of 118 and 119 ([data-model.md](data-model.md) 3.16): the history, one run, its deletion, and the files of its workspace. The file routes are served by the same services as a session's (9, 14, 105-107), given the run's **run-backed host**: a `SessionDoc` shaped from the stored run (id `run-<id>`, workspace `session-run-<id>`, its agent binding, `rfpId`, panel items, visuals, and its question and answer as the transcript), never held or listed. `:id` is a run id (a uuid). Style B throughout.
+Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/workflows/spec.md) (R18-R20) and [visuals](../capabilities/visuals/spec.md) (129-133). The stored runs of 118 and 119 ([data-model.md](data-model.md) 3.16): the history, one run, its deletion, and the files of its workspace. The file routes are served by the same services as a session's (9, 14, 105-107), given the run's **run-backed host**: a `SessionDoc` shaped from the stored run (id `run-<id>`, workspace `session-run-<id>`, its agent binding, `rfpId`, panel items, visuals, and its question and answer as the transcript), never held or listed. `:id` is a run id (a uuid). Style B throughout.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -770,6 +770,11 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 | 126 | `GET /workflow-runs/:id/panel-items/:itemId/download` | Download a run's file, document or table panel item | yes |
 | 127 | `GET /workflow-runs/:id/rfp-packages/:rfpId/download` | Download a run's RFP package (zip) or one of its files | yes |
 | 128 | `POST /workflow-runs/:id/answer/feedback` | Thumbs up/down on a run's answer | yes |
+| 129 | `POST /workflow-runs/:id/visualizations` | Generate a visual from the run's answer | yes |
+| 130 | `POST /workflow-runs/:id/visualizations/:vid/tailor` | Tailor a run's visual from an instruction | yes |
+| 131 | `POST /workflow-runs/:id/visualizations/:vid/revert` | Move a run's visual to an earlier version | yes |
+| 132 | `POST /workflow-runs/:id/visualizations/:vid/refresh` | Re-run the SQL behind a run's visual | yes |
+| 133 | `POST /workflow-runs/:id/visualizations/:vid/repair` | Repair a run's failing visual once | yes |
 
 #### 120. `GET /workflow-runs`
 - Query: `workflowId` (optional): only that workflow's runs.
@@ -821,6 +826,32 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 - Body: `{ rating: "up" | "down" }`. As 7 on the run's answer: sets `feedback` and `verified` on the stored answer; `up` saves a verified query keyed by `sourceRunId` (question = the run's question; same SQL, datasource and entity rules as 7), `down` deletes it.
 - Success `200`: `{ ok: true, message, run }` (`message` as 7, `run` as 121).
 - Errors (Style B): `400 "rating must be 'up' or 'down'"`; `404 "Run \"<id>\" not found"`; `404 "Run \"<id>\" has no answer"`.
+
+#### 129. `POST /workflow-runs/:id/visualizations`
+- Body: `{ sourceMessageAt?: string }`. Omitted: the run's answer. As 8, over the run's workspace and its answer as the source.
+- Success `201`: `{ ok: true, message: "Interactive visual generated", run, visualization }` (`run` as 121, `visualization` as 9, version 1).
+- Side effects: writes the bundle under `workspaces/session-run-<id>/visuals/<visualId>/v1/`, upserts the run's `visualizations` and its `visual:<visualId>` panel item, and appends the card `Created interactive visual "<title>" (v1).` (a `ChatMessage` carrying `visual`) to the run's `events` (data-model 3.16).
+- Errors (Style B): `404 "Run \"<id>\" not found"`; `400 "Run \"<id>\" has no answer to visualize"` (a code-only run); `400 "Wait for the run to finish"` (a run still `running`); then 8's refusals as statuses (`400 "completed assistant answer not found"`, `400` on a designer or validation error, timeout).
+
+#### 130. `POST /workflow-runs/:id/visualizations/:vid/tailor`
+- Body: `{ instruction: string }` (required, trimmed non-empty). As 10: a new version `v<n+1>`, the card `Updated interactive visual "<title>" (v<n+1>).` appended to `events`.
+- Success `201`: `{ ok: true, message: "Updated to version <n>", run, visualization }`.
+- Errors (Style B): as 129; `400 "instruction is required"`; `404 "Visualization <vid> not found in session run-<id>"`.
+
+#### 131. `POST /workflow-runs/:id/visualizations/:vid/revert`
+- Body: `{ version: number }`. As 11: moves `currentVersion` only; the card `Reverted interactive visual "<title>" (v<n>).` is appended to `events`.
+- Success `201`: `{ ok: true, message: "Reverted to version <n>", run, visualization }`.
+- Errors (Style B): as 129; `400 "Version <n> does not exist"` (also a missing or non-numeric `version`).
+
+#### 132. `POST /workflow-runs/:id/visualizations/:vid/refresh`
+- Body: none. As 12 over the run's `datasets`: re-runs each stored `run_readonly_sql` record of the current version and rewrites `data.json` and `index.html` in place; no new version, no designer call, no card.
+- Success `201`: `{ ok: true, message: "Refreshed data for version <n>", run, visualization }`.
+- Errors (Style B): as 129; `404 "Visualization <vid> not found in session run-<id>"`.
+
+#### 133. `POST /workflow-runs/:id/visualizations/:vid/repair`
+- Body: `{ error?: string; version: number }`. As 13: only the current version, and never an automatic repair again; no card.
+- Success `201`: `{ ok: true, message: "Repaired as version <n>", run, visualization }`.
+- Errors (Style B): as 129; `400 "Only the current version can be repaired (requested v<x>, current v<y>)"`; `400 "Version <n> is already an automatic repair; not repairing again"`.
 
 ### 2.7 Deep analysis
 

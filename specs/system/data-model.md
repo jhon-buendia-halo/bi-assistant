@@ -661,6 +661,7 @@ One document per run of a workflow on an input ([workflows](../capabilities/work
 | `rfpId` | uuid | no | RFP Builder runs: the RFP the run worked on. |
 | `panelItems` | `PanelItem[]` (3.4.4) | no | Agent runs: the host's panel items when the run ended. |
 | `visualizations` | `SessionVisualization[]` (3.4.3) | no | Agent runs: the visuals the turn made, under the run's workspace. |
+| `events` | `ChatMessage[]` (3.4.1) | no | Agent runs: the cards of the visual actions taken after the run (created, updated, reverted), each an assistant message carrying `visual`, oldest first (api.md 129-131). The run-backed host places them after `answer`. |
 | `workflowState` | `WorkflowState` (3.4.4) | no | Agent runs: the agent's saved phases. |
 | `ownerId` | `local` | no | Legacy and inert (3.14), stamped on insert. |
 | `startedAt` | ISO | yes | When the run started; orders the history (newest first). |

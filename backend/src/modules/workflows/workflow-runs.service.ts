@@ -19,13 +19,16 @@ import {
 } from '../../mastra/workflows/workflow-run';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import type {
+  ChatMessage,
   FilePanelItem,
   InteractiveVisualization,
+  VisualEvent,
   WorkflowState,
 } from '../sessions/entities/session.entity';
 import {
   RUN_HOST_ID_PREFIX,
   SessionsService,
+  type RunVisualAction,
   type StreamEvent,
 } from '../sessions/sessions.service';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
@@ -41,6 +44,28 @@ import {
   type WorkflowRunSummary,
 } from './workflow-run-steps';
 import { WorkflowsService, type WorkflowDetail } from './workflows.service';
+
+/** What a visual action on a run answers (api.md 129-133). */
+export interface RunVisualResult {
+  run: WorkflowRun;
+  visualization: InteractiveVisualization;
+}
+
+/** The assistant message a visual event is logged as, as a session logs it. */
+function visualEventMessage(event: VisualEvent): ChatMessage {
+  const verb =
+    event.action === 'created'
+      ? 'Created'
+      : event.action === 'updated'
+        ? 'Updated'
+        : 'Reverted';
+  return {
+    role: 'assistant',
+    content: `${verb} interactive visual "${event.title}" (v${event.version}).`,
+    at: new Date().toISOString(),
+    visual: event,
+  };
+}
 
 /** One event of the run stream (api.md 119): the turn's events, and the run's own. */
 export type RunStreamEvent =
@@ -352,6 +377,121 @@ export class WorkflowRunsService implements OnModuleInit {
       visualizationId,
       version,
     );
+  }
+
+  /** Create a visual from the run's answer (api.md 129), as a session's (8). */
+  generateVisualization(
+    id: string,
+    sourceMessageAt?: string,
+  ): Promise<RunVisualResult> {
+    return this.visualAction(id, (run) => ({
+      kind: 'create',
+      sourceMessageAt: sourceMessageAt || run.answer?.at,
+    }));
+  }
+
+  /** Tailor a run's visual from an instruction (api.md 130), as 10. */
+  tailorVisualization(
+    id: string,
+    visualizationId: string,
+    instruction: string,
+  ): Promise<RunVisualResult> {
+    return this.visualAction(id, () => ({
+      kind: 'tailor',
+      visualId: visualizationId,
+      instruction,
+    }));
+  }
+
+  /** Move a run's visual to an earlier version (api.md 131), as 11. */
+  revertVisualization(
+    id: string,
+    visualizationId: string,
+    version: number,
+  ): Promise<RunVisualResult> {
+    return this.visualAction(id, () => ({
+      kind: 'revert',
+      visualId: visualizationId,
+      version,
+    }));
+  }
+
+  /** Re-run the SQL behind a run's visual (api.md 132), as 12. */
+  refreshVisualization(
+    id: string,
+    visualizationId: string,
+  ): Promise<RunVisualResult> {
+    return this.visualAction(id, () => ({
+      kind: 'refresh',
+      visualId: visualizationId,
+    }));
+  }
+
+  /** Repair a run's failing visual once (api.md 133), as 13. */
+  repairVisualization(
+    id: string,
+    visualizationId: string,
+    error: string,
+    version: number,
+  ): Promise<RunVisualResult> {
+    return this.visualAction(id, () => ({
+      kind: 'repair',
+      visualId: visualizationId,
+      error,
+      version,
+    }));
+  }
+
+  /**
+   * One visual action on a finished agent run (api.md 129-133): the sessions
+   * service does the work on the run-backed host; the new metadata, the
+   * visual's panel item and, for create, tailor and revert, the event card
+   * are stored on the run, so a later read of it shows them.
+   */
+  private async visualAction(
+    id: string,
+    action: (run: WorkflowRunDoc) => RunVisualAction,
+  ): Promise<RunVisualResult> {
+    const run = await this.stored(id);
+    if (run.question === undefined) {
+      throw new BadRequestException(`Run "${id}" has no answer to visualize`);
+    }
+    if (run.status === 'running') {
+      throw new BadRequestException('Wait for the run to finish');
+    }
+    const outcome = await this.sessions.runVisualAction(
+      runHostDoc(run),
+      action(run),
+    );
+    const fresh = await this.stored(id);
+    const { metadata } = outcome;
+    const patch: Partial<WorkflowRunDoc> = {
+      visualizations: [
+        ...(fresh.visualizations ?? []).filter((v) => v.id !== metadata.id),
+        metadata,
+      ],
+      panelItems: outcome.panelItems,
+      ...(outcome.event
+        ? {
+            events: [
+              ...(fresh.events ?? []),
+              visualEventMessage(outcome.event),
+            ],
+          }
+        : {}),
+    };
+    const updated = (await this.repository.update(id, patch)) ?? {
+      ...fresh,
+      ...patch,
+    };
+    return {
+      run: await this.wire(updated),
+      visualization: await this.sessions.getVisualizationOf(
+        runHostDoc(updated),
+        metadata.id,
+        outcome.version,
+      ),
+    };
   }
 
   /** A run's file item's text (api.md 125), as a session's (106). */

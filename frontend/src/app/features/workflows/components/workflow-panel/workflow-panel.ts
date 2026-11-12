@@ -19,6 +19,9 @@ import {
 } from 'lucide-angular';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
 import { ReadinessHistory } from '../../../data-readiness/components/readiness-history/readiness-history';
+import { VisualEvent } from '../../../sessions/models/session.model';
+import { RunVisual } from '../../../runs/components/run-visual/run-visual';
+import { RunVisualsState } from '../../../runs/services/run-visuals-state';
 import { AnswerView } from '../../../sessions/components/answer-view/answer-view';
 import { PanelReadinessView } from '../../../sessions/components/panel-readiness-view/panel-readiness-view';
 import {
@@ -31,7 +34,11 @@ import {
   ReadinessReportRef,
 } from '../../../sessions/models/session.model';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
-import { WorkflowInputField, WorkflowSummary } from '../../models/workflow.model';
+import {
+  WorkflowInputField,
+  WorkflowRun,
+  WorkflowSummary,
+} from '../../models/workflow.model';
 import { WorkflowRunFiles } from '../workflow-run-files/workflow-run-files';
 import {
   WorkflowDesigner,
@@ -75,6 +82,7 @@ const COPIED_MS = 2000;
     MarkdownPipe,
     PanelReadinessView,
     ReadinessHistory,
+    RunVisual,
     WorkflowRunFiles,
   ],
   templateUrl: './workflow-panel.html',
@@ -98,6 +106,27 @@ export class WorkflowPanel {
   protected readonly X = X;
 
   protected readonly designer = inject(WorkflowDesigner);
+  protected readonly visuals = inject(RunVisualsState);
+
+  /** A visual action stored the run: show it as it is now. */
+  protected readonly applyRun = (run: WorkflowRun): void =>
+    this.designer.run.set(run);
+
+  protected readonly visualGenerating = computed(
+    () => this.visuals.generating() === this.designer.run()?.id,
+  );
+
+  /** "Generate interactive visuals" on the stored run's answer. */
+  protected generateVisual(): void {
+    const run = this.designer.run();
+    if (run !== null) this.visuals.generate(run, this.applyRun);
+  }
+
+  /** A visual card's View: open that visual under the answer. */
+  protected viewVisual(event: VisualEvent): void {
+    const run = this.designer.run();
+    if (run !== null) this.visuals.view(run, event);
+  }
 
   /** An agent row; the shell opens the agent's detail (R8). */
   readonly openAgent = output<string>();

@@ -122,7 +122,28 @@
 
       @if (run.answer; as answer) {
         <section aria-label="Answer" data-testid="run-detail-answer">
-          <app-answer-view [message]="answer" [latest]="false" [busy]="false" />
+          <app-answer-view
+            [message]="answer"
+            [latest]="false"
+            [busy]="false"
+            [showGenerateVisual]="run.status !== 'running'"
+            [visualGenerating]="visuals.generating() === run.id"
+            (generateVisual)="visuals.generate(run, applyRun)"
+            (viewVisual)="visuals.view(run, $event)"
+          />
+          @for (event of run.events ?? []; track event.at) {
+            <app-answer-view
+              class="mt-2 block"
+              [message]="event"
+              [latest]="false"
+              [busy]="false"
+              (viewVisual)="visuals.view(run, $event)"
+            />
+          }
+          <!-- Deferred: the interactive panel stays out of the initial bundle -->
+          @defer (when visuals.shown() !== null || visuals.loading() || visuals.error() !== null) {
+            <app-run-visual [run]="run" (runChange)="applyRun($event)" />
+          }
         </section>
       }
 

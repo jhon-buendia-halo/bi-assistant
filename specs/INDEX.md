@@ -1325,65 +1325,66 @@ specs/capabilities/visuals-library/spec.md:98-175  ## Flows
 specs/capabilities/visuals-library/spec.md:177-183  ## Acceptance
 
 specs/capabilities/visuals/spec.md:12-14  ## Concepts
-specs/capabilities/visuals/spec.md:16-201  ## Rules
-specs/capabilities/visuals/spec.md:18-23  ### Creating
+specs/capabilities/visuals/spec.md:16-202  ## Rules
+specs/capabilities/visuals/spec.md:18-24  ### Creating
 specs/capabilities/visuals/spec.md:20-20  R1 The system SHALL create a visual only from a completed assistant answe
-specs/capabilities/visuals/spec.md:21-21  R2 Every answer with text SHALL offer "Generate interactive visuals". Whi
-specs/capabilities/visuals/spec.md:22-22  R3 The assistant SHALL create a visual when the user asks for a chart or
-specs/capabilities/visuals/spec.md:23-23  R4 A new visual SHALL get a unique id and start at version 1, with `curre
-specs/capabilities/visuals/spec.md:25-59  ### Designing (spec first, freeform fallback)
-specs/capabilities/visuals/spec.md:27-36  R5 The designer SHALL receive:
-specs/capabilities/visuals/spec.md:37-40  R6 When there are rows, the designer SHALL first produce a visual spec, u
-specs/capabilities/visuals/spec.md:41-49  R7 Before anything is written, the system SHALL validate the spec against
-specs/capabilities/visuals/spec.md:50-50  R8 A freeform visual's script SHALL be compile-checked without being exec
-specs/capabilities/visuals/spec.md:51-51  R9 Tailoring a freeform visual SHALL stay freeform. Tailoring a spec visu
-specs/capabilities/visuals/spec.md:52-52  R10 Each designer call SHALL time out after 120 seconds with "interactive
-specs/capabilities/visuals/spec.md:53-59  R11 A spec visual SHALL be drawn by one fixed, hand-written chart runtime,
-specs/capabilities/visuals/spec.md:61-79  ### Tailoring and versions
-specs/capabilities/visuals/spec.md:63-63  R12 Tailoring (from chat or the panel) SHALL require a non-blank instructi
-specs/capabilities/visuals/spec.md:64-64  R13 In chat, the assistant SHALL tailor the visual open in the panel by de
-specs/capabilities/visuals/spec.md:65-70  R14 The panel's Tailor form SHALL turn its fields into one plain-English i
-specs/capabilities/visuals/spec.md:71-71  R15 Each version SHALL record its number, creation time, the instruction t
-specs/capabilities/visuals/spec.md:72-75  R16 Viewing a version SHALL be read-only and SHALL NOT change the current
-specs/capabilities/visuals/spec.md:76-76  R17 Reverting SHALL only move the current-version pointer to an existing v
-specs/capabilities/visuals/spec.md:77-77  R18 Creating (button), tailoring (panel) and reverting SHALL each add a vi
-specs/capabilities/visuals/spec.md:78-78  R19 When a chat turn creates or updates a visual, the panel SHALL switch t
-specs/capabilities/visuals/spec.md:79-79  R20 Opening a session SHALL load into the panel the latest item the agent
-specs/capabilities/visuals/spec.md:81-89  ### Refresh data in place
-specs/capabilities/visuals/spec.md:83-83  R21 "Refresh data" SHALL re-run every successful stored SQL query behind t
-specs/capabilities/visuals/spec.md:84-88  R22 During a refresh:
-specs/capabilities/visuals/spec.md:89-89  R23 The rationale of each query SHALL survive a refresh. The frame's reaso
-specs/capabilities/visuals/spec.md:91-109  ### Runtime errors and silent auto-repair
-specs/capabilities/visuals/spec.md:93-96  R24 The sandboxed visual SHALL report to the host:
-specs/capabilities/visuals/spec.md:97-103  R25 On a reported error the panel SHALL silently request one repair, but o
-specs/capabilities/visuals/spec.md:104-108  R26 A repair SHALL regenerate the current version with the runtime error,
-specs/capabilities/visuals/spec.md:109-109  R27 When a repair is not allowed or fails, the panel SHALL show the runtim
-specs/capabilities/visuals/spec.md:111-156  ### Readable frame
-specs/capabilities/visuals/spec.md:113-122  R28 Every visual SHALL render inside a fixed frame. The frame's content co
-specs/capabilities/visuals/spec.md:123-126  R29 Data provenance SHALL list each query as `Query <i> — <n> row(s)[ (tru
-specs/capabilities/visuals/spec.md:127-127  R30 Answer Markdown in the frame SHALL be sanitized to an allowlist of tex
-specs/capabilities/visuals/spec.md:128-128  R31 The designer's styles SHALL be confined to the visual's own area so th
-specs/capabilities/visuals/spec.md:129-129  R32 The visual SHALL read its rows from the embedded data at runtime, neve
-specs/capabilities/visuals/spec.md:130-130  R33 A frame generated or refreshed at a given time SHALL show that time. O
-specs/capabilities/visuals/spec.md:132-156  R40 The frame SHALL follow the app's Light or Dark theme (BA-230), numbere
-specs/capabilities/visuals/spec.md:158-164  ### Sandboxing
-specs/capabilities/visuals/spec.md:160-163  R34 The visual SHALL run in a sandboxed frame:
-specs/capabilities/visuals/spec.md:164-164  R35 The visual SHALL talk to the host only through messages: runtime error
-specs/capabilities/visuals/spec.md:166-173  ### Click to follow up
-specs/capabilities/visuals/spec.md:168-173  R36 A data mark the visual flags as selectable SHALL, on click or Enter, s
-specs/capabilities/visuals/spec.md:175-189  ### Export
-specs/capabilities/visuals/spec.md:177-188  R37 "Download bundle" SHALL download a zip of the visual. It always contai
-specs/capabilities/visuals/spec.md:189-189  R38 The downloaded file SHALL be named after the visual's title, slugged a
-specs/capabilities/visuals/spec.md:191-201  ### Storage
-specs/capabilities/visuals/spec.md:193-201  R39 Each version's files SHALL live in the session workspace under the vis
-specs/capabilities/visuals/spec.md:203-224  ## Edge cases and errors
-specs/capabilities/visuals/spec.md:226-239  ## Contracts
-specs/capabilities/visuals/spec.md:241-268  ## UI
-specs/capabilities/visuals/spec.md:270-423  ## Flows
-specs/capabilities/visuals/spec.md:272-274  ### Covered: Chat and visuals
-specs/capabilities/visuals/spec.md:276-390  ### Feature: Visual tailoring
-specs/capabilities/visuals/spec.md:392-423  ### Feature: Skills the designer is given
-specs/capabilities/visuals/spec.md:425-437  ## Acceptance
+specs/capabilities/visuals/spec.md:21-22  R2 Every answer with text SHALL offer "Generate interactive visuals". Whi
+specs/capabilities/visuals/spec.md:23-23  R3 The assistant SHALL create a visual when the user asks for a chart or
+specs/capabilities/visuals/spec.md:24-24  R4 A new visual SHALL get a unique id and start at version 1, with `curre
+specs/capabilities/visuals/spec.md:26-60  ### Designing (spec first, freeform fallback)
+specs/capabilities/visuals/spec.md:28-37  R5 The designer SHALL receive:
+specs/capabilities/visuals/spec.md:38-41  R6 When there are rows, the designer SHALL first produce a visual spec, u
+specs/capabilities/visuals/spec.md:42-50  R7 Before anything is written, the system SHALL validate the spec against
+specs/capabilities/visuals/spec.md:51-51  R8 A freeform visual's script SHALL be compile-checked without being exec
+specs/capabilities/visuals/spec.md:52-52  R9 Tailoring a freeform visual SHALL stay freeform. Tailoring a spec visu
+specs/capabilities/visuals/spec.md:53-53  R10 Each designer call SHALL time out after 120 seconds with "interactive
+specs/capabilities/visuals/spec.md:54-60  R11 A spec visual SHALL be drawn by one fixed, hand-written chart runtime,
+specs/capabilities/visuals/spec.md:62-80  ### Tailoring and versions
+specs/capabilities/visuals/spec.md:64-64  R12 Tailoring (from chat or the panel) SHALL require a non-blank instructi
+specs/capabilities/visuals/spec.md:65-65  R13 In chat, the assistant SHALL tailor the visual open in the panel by de
+specs/capabilities/visuals/spec.md:66-71  R14 The panel's Tailor form SHALL turn its fields into one plain-English i
+specs/capabilities/visuals/spec.md:72-72  R15 Each version SHALL record its number, creation time, the instruction t
+specs/capabilities/visuals/spec.md:73-76  R16 Viewing a version SHALL be read-only and SHALL NOT change the current
+specs/capabilities/visuals/spec.md:77-77  R17 Reverting SHALL only move the current-version pointer to an existing v
+specs/capabilities/visuals/spec.md:78-78  R18 Creating (button), tailoring (panel) and reverting SHALL each add a vi
+specs/capabilities/visuals/spec.md:79-79  R19 When a chat turn creates or updates a visual, the panel SHALL switch t
+specs/capabilities/visuals/spec.md:80-80  R20 Opening a session SHALL load into the panel the latest item the agent
+specs/capabilities/visuals/spec.md:82-90  ### Refresh data in place
+specs/capabilities/visuals/spec.md:84-84  R21 "Refresh data" SHALL re-run every successful stored SQL query behind t
+specs/capabilities/visuals/spec.md:85-89  R22 During a refresh:
+specs/capabilities/visuals/spec.md:90-90  R23 The rationale of each query SHALL survive a refresh. The frame's reaso
+specs/capabilities/visuals/spec.md:92-110  ### Runtime errors and silent auto-repair
+specs/capabilities/visuals/spec.md:94-97  R24 The sandboxed visual SHALL report to the host:
+specs/capabilities/visuals/spec.md:98-104  R25 On a reported error the panel SHALL silently request one repair, but o
+specs/capabilities/visuals/spec.md:105-109  R26 A repair SHALL regenerate the current version with the runtime error,
+specs/capabilities/visuals/spec.md:110-110  R27 When a repair is not allowed or fails, the panel SHALL show the runtim
+specs/capabilities/visuals/spec.md:112-157  ### Readable frame
+specs/capabilities/visuals/spec.md:114-123  R28 Every visual SHALL render inside a fixed frame. The frame's content co
+specs/capabilities/visuals/spec.md:124-127  R29 Data provenance SHALL list each query as `Query <i> — <n> row(s)[ (tru
+specs/capabilities/visuals/spec.md:128-128  R30 Answer Markdown in the frame SHALL be sanitized to an allowlist of tex
+specs/capabilities/visuals/spec.md:129-129  R31 The designer's styles SHALL be confined to the visual's own area so th
+specs/capabilities/visuals/spec.md:130-130  R32 The visual SHALL read its rows from the embedded data at runtime, neve
+specs/capabilities/visuals/spec.md:131-131  R33 A frame generated or refreshed at a given time SHALL show that time. O
+specs/capabilities/visuals/spec.md:133-157  R40 The frame SHALL follow the app's Light or Dark theme (BA-230), numbere
+specs/capabilities/visuals/spec.md:159-165  ### Sandboxing
+specs/capabilities/visuals/spec.md:161-164  R34 The visual SHALL run in a sandboxed frame:
+specs/capabilities/visuals/spec.md:165-165  R35 The visual SHALL talk to the host only through messages: runtime error
+specs/capabilities/visuals/spec.md:167-174  ### Click to follow up
+specs/capabilities/visuals/spec.md:169-174  R36 A data mark the visual flags as selectable SHALL, on click or Enter, s
+specs/capabilities/visuals/spec.md:176-190  ### Export
+specs/capabilities/visuals/spec.md:178-189  R37 "Download bundle" SHALL download a zip of the visual. It always contai
+specs/capabilities/visuals/spec.md:190-190  R38 The downloaded file SHALL be named after the visual's title, slugged a
+specs/capabilities/visuals/spec.md:192-202  ### Storage
+specs/capabilities/visuals/spec.md:194-202  R39 Each version's files SHALL live in the session workspace under the vis
+specs/capabilities/visuals/spec.md:204-225  ## Edge cases and errors
+specs/capabilities/visuals/spec.md:227-240  ## Contracts
+specs/capabilities/visuals/spec.md:242-269  ## UI
+specs/capabilities/visuals/spec.md:271-437  ## Flows
+specs/capabilities/visuals/spec.md:273-275  ### Covered: Chat and visuals
+specs/capabilities/visuals/spec.md:277-286  ### Visual actions on a run
+specs/capabilities/visuals/spec.md:288-404  ### Feature: Visual tailoring
+specs/capabilities/visuals/spec.md:406-437  ### Feature: Skills the designer is given
+specs/capabilities/visuals/spec.md:439-451  ## Acceptance
 
 specs/capabilities/workflows/spec.md:7-11  ## Concepts
 specs/capabilities/workflows/spec.md:13-49  ## Rules
@@ -1762,7 +1763,7 @@ specs/system/api.md:71-76  ### 1.6 CORS
 specs/system/api.md:78-88  ### 1.7 Static web UI and SPA fallback
 specs/system/api.md:90-94  ### 1.8 Conventions used by the UI that clients should preserve
 specs/system/api.md:96-102  ### 1.9 Authentication
-specs/system/api.md:104-1346  ## 2. Endpoints
+specs/system/api.md:104-1377  ## 2. Endpoints
 specs/system/api.md:108-241  ### 2.1 Sessions
 specs/system/api.md:138-141  #### 1. `GET /sessions`
 specs/system/api.md:143-145  #### 2. `GET /sessions/:id`
@@ -1838,90 +1839,95 @@ specs/system/api.md:663-722  #### 116. `GET /workflows`
 specs/system/api.md:724-727  #### 117. `GET /workflows/:id`
 specs/system/api.md:729-750  #### 118. `POST /workflows/:id/runs`
 specs/system/api.md:752-756  #### 119. `POST /workflows/:id/runs/stream`
-specs/system/api.md:758-823  ### 2.6.3 Workflow runs
-specs/system/api.md:774-789  #### 120. `GET /workflow-runs`
-specs/system/api.md:791-793  #### 121. `GET /workflow-runs/:id`
-specs/system/api.md:795-798  #### 122. `DELETE /workflow-runs/:id`
-specs/system/api.md:800-802  #### 123. `GET /workflow-runs/:id/visualizations/:vid`
-specs/system/api.md:804-806  #### 124. `GET /workflow-runs/:id/visualizations/:vid/download`
-specs/system/api.md:808-810  #### 125. `GET /workflow-runs/:id/panel-items/:itemId/file`
-specs/system/api.md:812-814  #### 126. `GET /workflow-runs/:id/panel-items/:itemId/download`
-specs/system/api.md:816-818  #### 127. `GET /workflow-runs/:id/rfp-packages/:rfpId/download`
-specs/system/api.md:820-823  #### 128. `POST /workflow-runs/:id/answer/feedback`
-specs/system/api.md:825-847  ### 2.7 Deep analysis
-specs/system/api.md:835-839  #### 46. `POST /sessions/:id/deep-analysis`
-specs/system/api.md:841-842  #### 47. `GET /sessions/:id/deep-analysis/:jobId`
-specs/system/api.md:844-847  #### 48. `GET /sessions/:id/deep-analysis/:jobId/download`
-specs/system/api.md:849-892  ### 2.8 Ontology
-specs/system/api.md:864-867  #### 49. `GET /datasets/:name/ontology`
-specs/system/api.md:869-872  #### 50. `POST /datasets/:name/ontology`
-specs/system/api.md:874-877  #### 51. `PATCH /ontology/:id`
-specs/system/api.md:879-881  #### 52. `DELETE /ontology/:id`
-specs/system/api.md:883-887  #### 53. `POST /datasets/:name/ontology/bootstrap`
-specs/system/api.md:889-892  #### 54. `POST /datasets/:name/ontology/bootstrap/stream`
-specs/system/api.md:894-920  ### 2.8a Personas
-specs/system/api.md:905-906  #### 49a. `GET /personas`
-specs/system/api.md:908-912  #### 49b. `POST /personas`
-specs/system/api.md:914-917  #### 49c. `PATCH /personas/:id`
-specs/system/api.md:919-920  #### 49d. `DELETE /personas/:id`
-specs/system/api.md:922-948  ### 2.8b Visuals library
-specs/system/api.md:933-934  #### 49e. `GET /visuals`
-specs/system/api.md:936-940  #### 49f. `POST /visuals`
-specs/system/api.md:942-945  #### 49g. `PATCH /visuals/:id`
-specs/system/api.md:947-948  #### 49h. `DELETE /visuals/:id`
-specs/system/api.md:950-994  ### 2.8c Monitoring
-specs/system/api.md:962-967  #### 111. `GET /monitoring/llm-calls`
-specs/system/api.md:969-973  #### 112. `GET /monitoring/llm-calls/:id`
-specs/system/api.md:975-981  #### 113. `GET /monitoring/sessions`
-specs/system/api.md:983-987  #### 114. `GET /monitoring/sessions/:id`
-specs/system/api.md:989-994  #### 115. `GET /monitoring/traces/:traceId`
-specs/system/api.md:996-1035  ### 2.9 Testing data
-specs/system/api.md:1006-1023  #### 55. `GET /testing-data`
-specs/system/api.md:1025-1031  #### 56. `POST /testing-data/:fixtureId/load`
-specs/system/api.md:1033-1035  #### 57. `DELETE /testing-data/:fixtureId`
-specs/system/api.md:1037-1068  ### 2.10 Shared wire shapes
-specs/system/api.md:1070-1101  ### 2.11 Developer settings
-specs/system/api.md:1089-1090  #### 53. `GET /developer-settings`
-specs/system/api.md:1092-1096  #### 54. `PUT /developer-settings`
-specs/system/api.md:1098-1101  #### 55. `POST /developer-settings/test-endpoint`
-specs/system/api.md:1104-1124  ### 2.12 UI preferences
-specs/system/api.md:1118-1119  #### 56. `GET /ui-preferences`
-specs/system/api.md:1121-1124  #### 57. `PUT /ui-preferences`
-specs/system/api.md:1126-1244  ### 2.16 Intellify RFP API
-specs/system/api.md:1144-1149  #### 2.16.1 Service
-specs/system/api.md:1151-1166  #### 2.16.2 Collections
-specs/system/api.md:1168-1181  #### 2.16.3 Per-client reads
-specs/system/api.md:1183-1217  #### 2.16.4 RFP records
-specs/system/api.md:1219-1244  #### 2.16.5 RFP package
-specs/system/api.md:1246-1277  ### 2.17 Data readiness
-specs/system/api.md:1256-1268  #### 108. `POST /data-readiness/assessments`
-specs/system/api.md:1270-1273  #### 109. `GET /data-readiness/assessments`
-specs/system/api.md:1275-1277  #### 110. `GET /data-readiness/assessments/:id`
-specs/system/api.md:1279-1346  ### 2.18 Synthetic data
-specs/system/api.md:1290-1308  #### 111. `POST /synthetic-data/profiles`
-specs/system/api.md:1310-1325  #### 112. `POST /synthetic-data/scripts`
-specs/system/api.md:1327-1335  #### 113. `POST /synthetic-data/profile-exports`
-specs/system/api.md:1337-1346  #### 114. `POST /synthetic-data/sample-exports`
-specs/system/api.md:1348-1513  ## 3. Streaming and long-running work
-specs/system/api.md:1352-1415  ### 3.1 Chat stream: `POST /sessions/:id/messages/stream`
-specs/system/api.md:1417-1424  ### 3.2 Deep analysis
-specs/system/api.md:1426-1434  ### 3.3 Eval runs
-specs/system/api.md:1436-1448  ### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
-specs/system/api.md:1450-1459  ### 3.5 Other long-running calls (no progress channel)
-specs/system/api.md:1461-1513  ### 3.6 Workflow run stream: `POST /workflows/:id/runs/stream`
-specs/system/api.md:1515-1577  ## 4. Desktop bridge (IPC)
-specs/system/api.md:1519-1536  ### 4.1 Globals exposed on `window`
-specs/system/api.md:1538-1554  ### 4.2 IPC channels
-specs/system/api.md:1556-1569  ### 4.3 Backend supervisor and readiness signal
-specs/system/api.md:1571-1577  ### 4.4 Data directory and secret (desktop)
-specs/system/api.md:1579-1625  ## 5. CLI contract
-specs/system/api.md:1627-1682  ## 6. Environment variables
-specs/system/api.md:1629-1655  ### 6.1 Backend (server process)
-specs/system/api.md:1657-1661  ### 6.2 CLI-only
-specs/system/api.md:1663-1672  ### 6.3 Electron main process
-specs/system/api.md:1674-1676  ### 6.4 Developer scripts (not part of the shipped app)
-specs/system/api.md:1678-1682  ### 6.5 Frontend build/runtime
-specs/system/api.md:1684-1700  ## 7. Gaps and open questions
+specs/system/api.md:758-854  ### 2.6.3 Workflow runs
+specs/system/api.md:779-794  #### 120. `GET /workflow-runs`
+specs/system/api.md:796-798  #### 121. `GET /workflow-runs/:id`
+specs/system/api.md:800-803  #### 122. `DELETE /workflow-runs/:id`
+specs/system/api.md:805-807  #### 123. `GET /workflow-runs/:id/visualizations/:vid`
+specs/system/api.md:809-811  #### 124. `GET /workflow-runs/:id/visualizations/:vid/download`
+specs/system/api.md:813-815  #### 125. `GET /workflow-runs/:id/panel-items/:itemId/file`
+specs/system/api.md:817-819  #### 126. `GET /workflow-runs/:id/panel-items/:itemId/download`
+specs/system/api.md:821-823  #### 127. `GET /workflow-runs/:id/rfp-packages/:rfpId/download`
+specs/system/api.md:825-828  #### 128. `POST /workflow-runs/:id/answer/feedback`
+specs/system/api.md:830-834  #### 129. `POST /workflow-runs/:id/visualizations`
+specs/system/api.md:836-839  #### 130. `POST /workflow-runs/:id/visualizations/:vid/tailor`
+specs/system/api.md:841-844  #### 131. `POST /workflow-runs/:id/visualizations/:vid/revert`
+specs/system/api.md:846-849  #### 132. `POST /workflow-runs/:id/visualizations/:vid/refresh`
+specs/system/api.md:851-854  #### 133. `POST /workflow-runs/:id/visualizations/:vid/repair`
+specs/system/api.md:856-878  ### 2.7 Deep analysis
+specs/system/api.md:866-870  #### 46. `POST /sessions/:id/deep-analysis`
+specs/system/api.md:872-873  #### 47. `GET /sessions/:id/deep-analysis/:jobId`
+specs/system/api.md:875-878  #### 48. `GET /sessions/:id/deep-analysis/:jobId/download`
+specs/system/api.md:880-923  ### 2.8 Ontology
+specs/system/api.md:895-898  #### 49. `GET /datasets/:name/ontology`
+specs/system/api.md:900-903  #### 50. `POST /datasets/:name/ontology`
+specs/system/api.md:905-908  #### 51. `PATCH /ontology/:id`
+specs/system/api.md:910-912  #### 52. `DELETE /ontology/:id`
+specs/system/api.md:914-918  #### 53. `POST /datasets/:name/ontology/bootstrap`
+specs/system/api.md:920-923  #### 54. `POST /datasets/:name/ontology/bootstrap/stream`
+specs/system/api.md:925-951  ### 2.8a Personas
+specs/system/api.md:936-937  #### 49a. `GET /personas`
+specs/system/api.md:939-943  #### 49b. `POST /personas`
+specs/system/api.md:945-948  #### 49c. `PATCH /personas/:id`
+specs/system/api.md:950-951  #### 49d. `DELETE /personas/:id`
+specs/system/api.md:953-979  ### 2.8b Visuals library
+specs/system/api.md:964-965  #### 49e. `GET /visuals`
+specs/system/api.md:967-971  #### 49f. `POST /visuals`
+specs/system/api.md:973-976  #### 49g. `PATCH /visuals/:id`
+specs/system/api.md:978-979  #### 49h. `DELETE /visuals/:id`
+specs/system/api.md:981-1025  ### 2.8c Monitoring
+specs/system/api.md:993-998  #### 111. `GET /monitoring/llm-calls`
+specs/system/api.md:1000-1004  #### 112. `GET /monitoring/llm-calls/:id`
+specs/system/api.md:1006-1012  #### 113. `GET /monitoring/sessions`
+specs/system/api.md:1014-1018  #### 114. `GET /monitoring/sessions/:id`
+specs/system/api.md:1020-1025  #### 115. `GET /monitoring/traces/:traceId`
+specs/system/api.md:1027-1066  ### 2.9 Testing data
+specs/system/api.md:1037-1054  #### 55. `GET /testing-data`
+specs/system/api.md:1056-1062  #### 56. `POST /testing-data/:fixtureId/load`
+specs/system/api.md:1064-1066  #### 57. `DELETE /testing-data/:fixtureId`
+specs/system/api.md:1068-1099  ### 2.10 Shared wire shapes
+specs/system/api.md:1101-1132  ### 2.11 Developer settings
+specs/system/api.md:1120-1121  #### 53. `GET /developer-settings`
+specs/system/api.md:1123-1127  #### 54. `PUT /developer-settings`
+specs/system/api.md:1129-1132  #### 55. `POST /developer-settings/test-endpoint`
+specs/system/api.md:1135-1155  ### 2.12 UI preferences
+specs/system/api.md:1149-1150  #### 56. `GET /ui-preferences`
+specs/system/api.md:1152-1155  #### 57. `PUT /ui-preferences`
+specs/system/api.md:1157-1275  ### 2.16 Intellify RFP API
+specs/system/api.md:1175-1180  #### 2.16.1 Service
+specs/system/api.md:1182-1197  #### 2.16.2 Collections
+specs/system/api.md:1199-1212  #### 2.16.3 Per-client reads
+specs/system/api.md:1214-1248  #### 2.16.4 RFP records
+specs/system/api.md:1250-1275  #### 2.16.5 RFP package
+specs/system/api.md:1277-1308  ### 2.17 Data readiness
+specs/system/api.md:1287-1299  #### 108. `POST /data-readiness/assessments`
+specs/system/api.md:1301-1304  #### 109. `GET /data-readiness/assessments`
+specs/system/api.md:1306-1308  #### 110. `GET /data-readiness/assessments/:id`
+specs/system/api.md:1310-1377  ### 2.18 Synthetic data
+specs/system/api.md:1321-1339  #### 111. `POST /synthetic-data/profiles`
+specs/system/api.md:1341-1356  #### 112. `POST /synthetic-data/scripts`
+specs/system/api.md:1358-1366  #### 113. `POST /synthetic-data/profile-exports`
+specs/system/api.md:1368-1377  #### 114. `POST /synthetic-data/sample-exports`
+specs/system/api.md:1379-1544  ## 3. Streaming and long-running work
+specs/system/api.md:1383-1446  ### 3.1 Chat stream: `POST /sessions/:id/messages/stream`
+specs/system/api.md:1448-1455  ### 3.2 Deep analysis
+specs/system/api.md:1457-1465  ### 3.3 Eval runs
+specs/system/api.md:1467-1479  ### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
+specs/system/api.md:1481-1490  ### 3.5 Other long-running calls (no progress channel)
+specs/system/api.md:1492-1544  ### 3.6 Workflow run stream: `POST /workflows/:id/runs/stream`
+specs/system/api.md:1546-1608  ## 4. Desktop bridge (IPC)
+specs/system/api.md:1550-1567  ### 4.1 Globals exposed on `window`
+specs/system/api.md:1569-1585  ### 4.2 IPC channels
+specs/system/api.md:1587-1600  ### 4.3 Backend supervisor and readiness signal
+specs/system/api.md:1602-1608  ### 4.4 Data directory and secret (desktop)
+specs/system/api.md:1610-1656  ## 5. CLI contract
+specs/system/api.md:1658-1713  ## 6. Environment variables
+specs/system/api.md:1660-1686  ### 6.1 Backend (server process)
+specs/system/api.md:1688-1692  ### 6.2 CLI-only
+specs/system/api.md:1694-1703  ### 6.3 Electron main process
+specs/system/api.md:1705-1707  ### 6.4 Developer scripts (not part of the shipped app)
+specs/system/api.md:1709-1713  ### 6.5 Frontend build/runtime
+specs/system/api.md:1715-1731  ## 7. Gaps and open questions
 
 specs/system/architecture.md:18-63  ## Level 1 — System Context
 specs/system/architecture.md:65-260  ## Level 2 — Containers
@@ -1973,7 +1979,7 @@ specs/system/data-model.md:61-73  ### 2.1 Abstract interface
 specs/system/data-model.md:75-79  ### 2.2 Filters and sorts
 specs/system/data-model.md:81-89  ### 2.3 Secret handling (`CryptoService`)
 specs/system/data-model.md:91-97  ### 2.4 Concurrency and atomicity
-specs/system/data-model.md:99-674  ## 3. Collections
+specs/system/data-model.md:99-675  ## 3. Collections
 specs/system/data-model.md:125-180  ### 3.1 `connections` — datasources
 specs/system/data-model.md:182-210  ### 3.2 `settings` — LLM settings
 specs/system/data-model.md:201-210  #### 3.2.1 `settings` document `ui-preferences`
@@ -1999,23 +2005,23 @@ specs/system/data-model.md:576-581  ### 3.12 Other non-persisted data
 specs/system/data-model.md:583-608  ### 3.13 Relationships and referential rules
 specs/system/data-model.md:610-617  ### 3.14 Ownership (legacy `ownerId`)
 specs/system/data-model.md:619-640  ### 3.15 `readiness_reports` — data-readiness assessments
-specs/system/data-model.md:642-674  ### 3.16 `workflow_runs` — workflow runs
-specs/system/data-model.md:676-822  ## 4. Files on disk
-specs/system/data-model.md:680-713  ### 4.1 Workspace layout
-specs/system/data-model.md:715-733  ### 4.2 Visual version directory
-specs/system/data-model.md:735-750  ### 4.3 `manifest.json`
-specs/system/data-model.md:752-800  ### 4.4 Visual spec (`spec.json`, schema v1)
-specs/system/data-model.md:802-804  ### 4.5 Reports
-specs/system/data-model.md:806-808  ### 4.6 No skills in workspaces
-specs/system/data-model.md:810-812  ### 4.8 Old user skill folder
-specs/system/data-model.md:814-822  ### 4.7 Legacy visual layout
-specs/system/data-model.md:824-833  ## 5. Agent memory
-specs/system/data-model.md:835-867  ## 6. Migrations
-specs/system/data-model.md:869-978  ## 7. External databases
-specs/system/data-model.md:873-894  ### 7.1 The Intellify database
-specs/system/data-model.md:896-969  ### 7.2 The `rfp` schema
-specs/system/data-model.md:971-978  ### 7.3 Migration rule
-specs/system/data-model.md:980-991  ## Open questions, gaps and discrepancies
+specs/system/data-model.md:642-675  ### 3.16 `workflow_runs` — workflow runs
+specs/system/data-model.md:677-823  ## 4. Files on disk
+specs/system/data-model.md:681-714  ### 4.1 Workspace layout
+specs/system/data-model.md:716-734  ### 4.2 Visual version directory
+specs/system/data-model.md:736-751  ### 4.3 `manifest.json`
+specs/system/data-model.md:753-801  ### 4.4 Visual spec (`spec.json`, schema v1)
+specs/system/data-model.md:803-805  ### 4.5 Reports
+specs/system/data-model.md:807-809  ### 4.6 No skills in workspaces
+specs/system/data-model.md:811-813  ### 4.8 Old user skill folder
+specs/system/data-model.md:815-823  ### 4.7 Legacy visual layout
+specs/system/data-model.md:825-834  ## 5. Agent memory
+specs/system/data-model.md:836-868  ## 6. Migrations
+specs/system/data-model.md:870-979  ## 7. External databases
+specs/system/data-model.md:874-895  ### 7.1 The Intellify database
+specs/system/data-model.md:897-970  ### 7.2 The `rfp` schema
+specs/system/data-model.md:972-979  ### 7.3 Migration rule
+specs/system/data-model.md:981-992  ## Open questions, gaps and discrepancies
 
 specs/system/delivery.md:7-41  ## 1. Electron single-app delivery
 specs/system/delivery.md:24-26  ### Why `--base-href ./`

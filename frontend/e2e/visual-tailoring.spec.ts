@@ -3,11 +3,13 @@ import path from 'node:path';
 import type { Frame, Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.fixture';
 import {
+  WORLD_CUP_DATASET,
   createWorldCupSession,
   followOsTheme,
   openSessions,
   WORLD_CUP_SESSION,
 } from './helpers/app-actions';
+import { apiJson } from './helpers/api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import {
   LlmStub,
@@ -16,6 +18,7 @@ import {
   startLlmStub,
   systemTexts,
 } from './helpers/llm-stub';
+import { scenarioStep } from './support/demo-captions';
 
 /**
  * Mirrors the Feature "Visual tailoring" in specs/capabilities/visuals/spec.md:
@@ -244,3 +247,97 @@ test('an older visual opens in the current theme', async ({
     path: path.join(EVIDENCE, 'visual-older-opens-dark.png'),
   });
 });
+
+/**
+ * "Visual actions on a run's result" (visuals R2, R12-R24 on a run; roadmap
+ * 1.23.25): the visual of a run's answer opens under it on the run page, with
+ * Tailor, versions, Refresh and Download over `/workflow-runs/:id/visualizations`.
+ */
+test(
+  'I generate, tailor, revert and refresh a visual on a run answer',
+  { tag: ['@demo', '@story-1.23.25'] },
+  async ({ page }) => {
+    const runVisual = page.getByTestId('run-visual');
+    const versionButton = runVisual.getByTitle('Version history');
+    let runId = '';
+    await scenarioStep(page, 'Given a run of the Assistant with an answer', async () => {
+      const run = await apiJson<{ id: string }>(
+        page,
+        'POST',
+        '/workflows/agent%3Aassistant/runs',
+        { input: { question: QUESTION, datasets: [WORLD_CUP_DATASET] } },
+      );
+      runId = run.id;
+      await page.reload();
+    });
+    await scenarioStep(page, 'And I open the run from Runs', async () => {
+      await page
+        .getByRole('complementary', { name: 'Navigation rail' })
+        .getByRole('button', { name: 'Runs', exact: true })
+        .click();
+      await page.getByTestId(`run-${runId}`).getByRole('button').first().click();
+      await expect(page.getByTestId('run-detail-answer')).toContainText(ANSWER);
+    });
+    await scenarioStep(page, 'When I click Generate interactive visuals', async () => {
+      await page
+        .getByRole('button', { name: 'Generate interactive visuals' })
+        .click();
+    });
+    await scenarioStep(page, 'Then the visual opens under the answer at version 1', async () => {
+      await expect(runVisual.locator('iframe[title="Interactive visualization"]')).toBeVisible();
+      await expect(versionButton).toHaveText(/v1/);
+      await expect(page.getByTestId('run-detail-answer')).toContainText(
+        `Created ${VISUAL_TITLE}`,
+      );
+    });
+    await scenarioStep(page, 'When I tailor it with Sort ascending', async () => {
+      await runVisual.getByRole('button', { name: 'Tailor' }).click();
+      await runVisual.getByLabel('Sort').selectOption('asc');
+      await runVisual.getByRole('button', { name: 'Apply' }).click();
+    });
+    await scenarioStep(page, 'Then it is version 2', async () => {
+      await expect(versionButton).toHaveText(/v2/);
+      await expect(page.getByTestId('run-detail-answer')).toContainText(
+        `Updated ${VISUAL_TITLE}`,
+      );
+    });
+    await scenarioStep(page, 'When I make version 1 the current version', async () => {
+      await versionButton.click();
+      await runVisual.getByRole('button', { name: /Version 1/ }).click();
+      await versionButton.click();
+      await runVisual
+        .getByRole('button', { name: /Make v1 the current version/ })
+        .click();
+    });
+    await scenarioStep(page, 'Then version 1 is current again', async () => {
+      await expect(versionButton).toHaveText(/v1/);
+      await expect(page.getByTestId('run-detail-answer')).toContainText(
+        `Reverted ${VISUAL_TITLE}`,
+      );
+    });
+    await scenarioStep(page, 'When I refresh its data', async () => {
+      const refreshed = page.waitForResponse(
+        (res) =>
+          res.url().includes(`/workflow-runs/${runId}/visualizations/`) &&
+          res.url().endsWith('/refresh'),
+      );
+      await runVisual.getByRole('button', { name: 'Refresh data' }).click();
+      expect((await refreshed).ok()).toBe(true);
+    });
+    await scenarioStep(page, 'Then the visual stays at version 1 with no new version', async () => {
+      await expect(versionButton).toHaveText(/v1/);
+      await expect(runVisual.locator('iframe[title="Interactive visualization"]')).toBeVisible();
+    });
+    await scenarioStep(page, 'And reopening the run still shows the visual and its three cards', async () => {
+      await page.reload();
+      await page
+        .getByRole('complementary', { name: 'Navigation rail' })
+        .getByRole('button', { name: 'Runs', exact: true })
+        .click();
+      await page.getByTestId(`run-${runId}`).getByRole('button').first().click();
+      await expect(page.getByRole('button', { name: 'View' })).toHaveCount(3);
+      await page.getByRole('button', { name: 'View' }).first().click();
+      await expect(runVisual.locator('iframe[title="Interactive visualization"]')).toBeVisible();
+    });
+  },
+);

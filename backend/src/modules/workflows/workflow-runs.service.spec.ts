@@ -238,6 +238,55 @@ function build(
     getVisualizationOf: jest.fn(() =>
       Promise.resolve({ id: 'v1', document: '<html>', version: 1 }),
     ),
+    // The visual pipeline itself is the sessions service's; here it answers
+    // what each action would: new metadata, the version to show, the event.
+    runVisualAction: jest.fn(
+      (
+        _host: unknown,
+        action: { kind: string; visualId?: string; version?: number },
+      ) => {
+        const visualId = action.visualId ?? 'vis-1';
+        const version =
+          action.kind === 'create' ? 1 : action.kind === 'revert' ? 1 : 2;
+        const metadata = {
+          id: visualId,
+          title: 'Goals by team',
+          description: '',
+          path: `visuals/${visualId}`,
+          sourceMessageAt: 't',
+          createdAt: 't',
+          currentVersion: version,
+        };
+        const named: Record<string, string> = {
+          create: 'created',
+          tailor: 'updated',
+          revert: 'reverted',
+        };
+        return Promise.resolve({
+          metadata,
+          version,
+          panelItems: [
+            {
+              id: `visual:${visualId}`,
+              kind: 'visual',
+              title: 'Goals by team',
+              shownAt: 't',
+              visualId,
+            },
+          ],
+          ...(named[action.kind]
+            ? {
+                event: {
+                  visualId,
+                  version,
+                  title: 'Goals by team',
+                  action: named[action.kind],
+                },
+              }
+            : {}),
+        });
+      },
+    ),
     downloadVisualizationOf: jest.fn(() =>
       Promise.resolve({
         filename: 'goals-v1.zip',
@@ -643,7 +692,10 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
   it("an RFP Continue gives the run the RFP, the last proposal and the earlier run's stages (plan 4.3)", async () => {
     ctx = build(
       [...DATASETS, { name: 'Intellify RFP API', datasourceKind: 'rest' }],
-      { answer: 'Stage 1: Orchard Manufacturing renews on 1 January 2027. Confirm?' },
+      {
+        answer:
+          'Stage 1: Orchard Manufacturing renews on 1 January 2027. Confirm?',
+      },
     );
     const stages = {
       current: 1,
@@ -657,7 +709,9 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
       workflowState: stages,
     }));
     const first = await streamed(ctx, 'agent:rfp', {
-      input: { message: 'Start an RFP for Orchard Manufacturing, plan year 2027' },
+      input: {
+        message: 'Start an RFP for Orchard Manufacturing, plan year 2027',
+      },
     });
     expect(first.run.rfpId).toBe('rfp-1');
     const second = await streamed(ctx, 'agent:rfp', {
@@ -1263,6 +1317,111 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
   });
 });
 
+describe('WorkflowRunsService: visual actions on a run (api.md 129-133; visuals R2, R12-R24)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+
+  const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+
+  it('generates a visual from the answer: stores its metadata, panel item and a created card on the run', async () => {
+    ctx = build(DATASETS, { answer: 'Brazil won.' });
+    const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
+
+    const result = await ctx.service.generateVisualization(run.id);
+
+    expect(ctx.sessions.runVisualAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: `run-${run.id}`,
+        workspaceId: `session-run-${run.id}`,
+      }),
+      { kind: 'create', sourceMessageAt: run.answer?.at },
+    );
+    expect(ctx.sessions.getVisualizationOf).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'vis-1',
+      1,
+    );
+    expect(result.visualization.document).toBe('<html>');
+    const stored = await ctx.service.get(run.id);
+    expect(stored.visualizations).toEqual([
+      expect.objectContaining({ id: 'vis-1' }),
+    ]);
+    expect(stored.panelItems).toEqual([
+      expect.objectContaining({ id: 'visual:vis-1', kind: 'visual' }),
+    ]);
+    expect(stored.events).toEqual([
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'Created interactive visual "Goals by team" (v1).',
+        visual: {
+          visualId: 'vis-1',
+          version: 1,
+          title: 'Goals by team',
+          action: 'created',
+        },
+      }),
+    ]);
+    expect(result.run.events).toHaveLength(1);
+    // The answer itself is untouched.
+    expect(stored.answer?.content).toBe('Brazil won.');
+  });
+
+  it('tailors and reverts: each adds a card; refresh and repair add none and keep one visual entry', async () => {
+    ctx = build(DATASETS, { answer: 'Brazil won.' });
+    const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
+    await ctx.service.generateVisualization(run.id);
+
+    await ctx.service.tailorVisualization(
+      run.id,
+      'vis-1',
+      'Make the bars green',
+    );
+    expect(ctx.sessions.runVisualAction).toHaveBeenLastCalledWith(
+      expect.anything(),
+      { kind: 'tailor', visualId: 'vis-1', instruction: 'Make the bars green' },
+    );
+    await ctx.service.revertVisualization(run.id, 'vis-1', 1);
+    await ctx.service.refreshVisualization(run.id, 'vis-1');
+    await ctx.service.repairVisualization(run.id, 'vis-1', 'boom', 2);
+
+    const stored = await ctx.service.get(run.id);
+    expect(stored.visualizations).toHaveLength(1);
+    expect(stored.panelItems?.filter((i) => i.kind === 'visual')).toHaveLength(
+      1,
+    );
+    expect(stored.events?.map((e) => e.visual?.action)).toEqual([
+      'created',
+      'updated',
+      'reverted',
+    ]);
+  });
+
+  it('refuses a run that is still running, a code-only run, and an unknown run', async () => {
+    ctx = build(DATASETS, { answer: 'Brazil won.' });
+    const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
+    await ctx.repository.update(run.id, { status: 'running' });
+    await expect(ctx.service.generateVisualization(run.id)).rejects.toThrow(
+      new BadRequestException('Wait for the run to finish'),
+    );
+    await ctx.repository.update(run.id, {
+      status: 'success',
+      question: undefined,
+    });
+    await expect(ctx.service.generateVisualization(run.id)).rejects.toThrow(
+      BadRequestException,
+    );
+    await expect(ctx.service.generateVisualization('nope')).rejects.toThrow(
+      new NotFoundException('Run "nope" not found'),
+    );
+    expect(ctx.sessions.runVisualAction).not.toHaveBeenCalled();
+  });
+});
+
+const RUN_VISUAL = {
+  run: { id: 'r1' },
+  visualization: { id: 'v1', document: '<html>', version: 2 },
+};
+
 describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
   it('lists, gets, deletes and serves the files of runs', async () => {
     const runs = {
@@ -1282,6 +1441,11 @@ describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
       getVisualization: jest
         .fn()
         .mockResolvedValue({ id: 'v1', document: '<html>', version: 2 }),
+      generateVisualization: jest.fn().mockResolvedValue(RUN_VISUAL),
+      tailorVisualization: jest.fn().mockResolvedValue(RUN_VISUAL),
+      revertVisualization: jest.fn().mockResolvedValue(RUN_VISUAL),
+      refreshVisualization: jest.fn().mockResolvedValue(RUN_VISUAL),
+      repairVisualization: jest.fn().mockResolvedValue(RUN_VISUAL),
       downloadVisualization: jest.fn().mockResolvedValue({
         filename: 'goals-v2.zip',
         archive: Buffer.from('zip'),
@@ -1342,6 +1506,46 @@ describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
         .get('/workflow-runs/r1/visualizations/v1?version=2')
         .expect(200, { id: 'v1', document: '<html>', version: 2 });
       expect(runs.getVisualization).toHaveBeenCalledWith('r1', 'v1', 2);
+      await request(server)
+        .post('/workflow-runs/r1/visualizations')
+        .send({ sourceMessageAt: 't' })
+        .expect(201, {
+          ok: true,
+          message: 'Interactive visual generated',
+          ...RUN_VISUAL,
+        });
+      expect(runs.generateVisualization).toHaveBeenCalledWith('r1', 't');
+      await request(server)
+        .post('/workflow-runs/r1/visualizations/v1/tailor')
+        .send({ instruction: 'Make the bars green' })
+        .expect(201)
+        .expect(({ body }) =>
+          expect(body).toMatchObject({ message: 'Updated to version 2' }),
+        );
+      expect(runs.tailorVisualization).toHaveBeenCalledWith(
+        'r1',
+        'v1',
+        'Make the bars green',
+      );
+      await request(server)
+        .post('/workflow-runs/r1/visualizations/v1/revert')
+        .send({ version: 1 })
+        .expect(201);
+      expect(runs.revertVisualization).toHaveBeenCalledWith('r1', 'v1', 1);
+      await request(server)
+        .post('/workflow-runs/r1/visualizations/v1/refresh')
+        .expect(201);
+      expect(runs.refreshVisualization).toHaveBeenCalledWith('r1', 'v1');
+      await request(server)
+        .post('/workflow-runs/r1/visualizations/v1/repair')
+        .send({ error: 'blank', version: 2 })
+        .expect(201);
+      expect(runs.repairVisualization).toHaveBeenCalledWith(
+        'r1',
+        'v1',
+        'blank',
+        2,
+      );
       const zip = await request(server)
         .get('/workflow-runs/r1/visualizations/v1/download?version=x')
         .expect(200);
