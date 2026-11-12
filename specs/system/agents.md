@@ -58,7 +58,7 @@ Not registered (never listed in the catalogue):
 
 - **LLM connection probe** (`llm-connection-probe`, "LLM connection probe", instructions `You answer connection probes exactly as asked.`) — a throwaway agent built per test on the *submitted, not yet saved* Anthropic settings, or custom settings with the Anthropic API style, or `copilot` settings (its model comes from the model factory, 1.3). See [llm-settings](../capabilities/llm-settings/spec.md).
 
-> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the nine agents, a composite storage, a Pino logger and observability. It also registers one workflow, `qti-v2-turn` (5.11); the `agent-turn` engine of the removed one-step workflows (5.12) is gone, and Try it and the eval runner call an agent's turn directly (ADR-0042). `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `streamWorkflow(key, inputData, requestContext)` (creates a run and streams it), `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
+> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the nine agents, a composite storage, a Pino logger and observability. It registers two workflows: `qti-v2-turn` (5.11) and `agent-turn`, which is no longer a catalogue entry but the internal single-step turn behind Try it (draft runs), the eval runner and stored sessions (ADR-0042); the `agent:<key>` ids are internal and never listed. `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `streamWorkflow(key, inputData, requestContext)` (creates a run and streams it), `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
 
 ### 1.3 Model resolution
 
@@ -188,7 +188,7 @@ A `copilot` config is never swapped: rules 2 and 3 do not apply to it, so the de
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| A user agent's Try it (draft run) and the eval runner's turn, on a preview-shaped host (agents-evals R5) | stream | session thread | all | 15 |
+| The Answer step of the internal `agent-turn` (5.12), behind a user agent's Try it (draft run) and the eval runner, on a run host (5.14) | stream | session thread | all | 15 |
 | Grounding-guard corrective pass (5.6) | generate | **none** | all | 15 |
 | Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
 | Assistant eval suite (8) | generate | none | all | 15 |
@@ -624,7 +624,7 @@ The four showcase agents (`benchmarking`, `survey`, `lad-coe`, `strategy`; BA-23
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| The eval runner's turn (the agent stays in the library; the UI starts no new assessment, 2026-11-12; stored sessions of it stay readable) | stream | session thread | all | 10 |
+| The Answer step of the internal `agent-turn` (5.12), behind the eval runner (the agent stays in the library; the UI starts no new assessment, 2026-11-12; stored sessions of it stay readable) | stream | session thread | all | 10 |
 | Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
 | `data-readiness` eval set (8) | generate | none | all | 10 |
 
@@ -651,7 +651,7 @@ It is never called by the grounding guard (5.6), careful mode (5.8) (and no deep
 **Max steps.** 10.
 
 **Chat requirement.** It is an Official agent that declares a dataset *kind* rather than a named dataset.
-- Start chat is available while at least one dataset is bound to a datasource of kind `postgres` or `databricks`. Otherwise the catalogue gives `chatRequirement` `Add a PostgreSQL or Databricks dataset first` ([api.md](api.md) 33).
+- The agent no longer runs from the UI (2026-11-12, ADR-0042); no requirement text is produced ([api.md](api.md) 33).
 - Start chat binds the session to all such datasets, ordered by name, and names it "Data Readiness" ([data-readiness](../capabilities/data-readiness/spec.md) R2).
 
 **Prompt requirements.** The prompt MUST start with `You are the Data Readiness Agent`.
@@ -707,7 +707,7 @@ Its streamed turn is a workflow defined in code, not one agent call (5.11, ADR-0
 
 **Max steps.** 15.
 
-**Datasets and chat requirement.** Like the assistant it has no datasets of its own: no `chatRequirement`, empty `datasets`. A session takes the datasets the user picked ([api.md](api.md) 3).
+**Datasets.** Like the assistant it has no datasets of its own: empty `datasets`. A session takes the datasets the user picked ([api.md](api.md) 3).
 
 **Prompt requirements.** The prompt MUST start with `You are Questions to Insights v2`.
 - **Structure.** The identity paragraph only (no `## Workflow` section: its steps live in code, 5.11), then the generated `## Tools` section (one line per tool, `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`, as the assistant's and the Data Readiness Agent's). With no `## Working rules` heading the served `## Tools` is appended after a blank line; otherwise it is inserted before the first line that is exactly `## Working rules`. The shipped text has no rules, workflow or links.
@@ -1275,7 +1275,7 @@ The agent detail returns it as `workflow` ([api.md](api.md) 34). For the agent s
 
 A **workflow** is a fixed sequence of steps defined in code, each deterministic code or one bounded call to an agent ([workflows](../capabilities/workflows/spec.md); ADR-0040, partly superseded by ADR-0042). Workflows are never created, edited or stored by the app. Agents are not workflows (2026-11-12): they are a library that workflow steps call.
 
-**The catalogue.** One code-defined workflow, `qti-v2-turn`, *Questions to Insights v2*, a run workflow (`trigger: 'run'`) whose agent is `assistant-v2` (its `primaryFor` agent) and whose steps are those of 5.11. It drives the workflow bar's view from its steps (`bar: 'steps'`). The one-step workflow of ADR-0040 (one per agent, id `agent:<registry key>` or `agent:<user-agent id>`), the `agent-turn` engine behind it, `seq-text-demo` (5.13) and `deep-analysis` (5.15) are removed; a user agent's only run is its draft preview, Try it (agents-evals R5), which runs the agent turn directly on a preview host.
+**The catalogue.** One code-defined workflow, `qti-v2-turn`, *Questions to Insights v2*, a run workflow (`trigger: 'run'`) whose agent is `assistant-v2` (its `primaryFor` agent) and whose steps are those of 5.11. It drives the workflow bar's view from its steps (`bar: 'steps'`). The one-step workflows of ADR-0040 (one per agent, id `agent:<registry key>` or `agent:<user-agent id>`), `seq-text-demo` (5.13) and `deep-analysis` (5.15) are removed from the catalogue and the API. The `agent-turn` Mastra workflow stays as an internal turn only: Try it (agents-evals R60), the eval runner (`createRunHost({ agentKey })`) and stored sessions use it; its `agent:<key>` ids never reach `GET /workflows`. A user agent's only run is its draft preview, Try it.
 
 **Triggers.** Every workflow is a run workflow: `trigger: 'run'`, once on a typed input declared in code with its catalogue entry (`input`: fields `{ name, label, type: 'text' | 'textarea' | 'number' | 'boolean' | 'datasets' | 'dataset', required, placeholder?, help?, default?, datasourceKinds?, hidden? }`; [api.md](api.md) 116, 118). No chat starts (ADR-0041). `qti-v2-turn` declares `question` and `datasets` and runs one agent turn in its analyse step (5.14).
 
@@ -1286,7 +1286,8 @@ A **workflow** is a fixed sequence of steps defined in code, each deterministic 
 | Session stored | Derived workflow |
 |---|---|
 | `agentKey: 'assistant-v2'` or `workflowId: 'qti-v2-turn'` | `qti-v2-turn` |
-| anything else (a plain session, `agentKey: 'data-readiness'`, an `agentId`, a stored `agent:*`, `seq-text-demo` or `deep-analysis` id) | no workflow: `workflowRef.deleted: true` with the stored id (else the one derived from the binding), and the name the session last had; it opens as a plain past chat |
+| `agentKey: 'data-readiness'`, an `agentId`, a stored `agent:*` id, or none | the internal `agent:*` reference as before (`agent:data-readiness`, `agent:<id>`, `agent:assistant`); not in the catalogue, no workflow page |
+| a stored `seq-text-demo` or `deep-analysis` id | a plain Assistant session (`agent:assistant`) |
 
 Which agent a stored session's turn ran is unchanged history; no new turn runs on a session (ADR-0041).
 
@@ -1566,7 +1567,7 @@ The full current wording lives with the skill asset; a rebuild may reword it but
 The decisions are ADR-0018, ADR-0021, ADR-0022, ADR-0023 and ADR-0025 in [architecture.md](architecture.md).
 
 - **Built-in only.** Every skill ships with the backend build, one folder per skill (`skills/<name>/`). There are no user or project skills: the backend reads no other folder and no environment variable for skills (ADR-0021). A `<data dir>/skills/` folder left by an older version is ignored; it is neither read nor deleted ([data-model.md](data-model.md) section 4.8). The backend reads the skills once, when it starts; they change only with an app update. Folders whose name starts with `.` are ignored.
-- **In-app override of a built-in.** An **in-app override** of a built-in ([data-model.md](data-model.md) 3.10.2, ADR-0023) wins over the bundled skill with that name. It is read per call, not at startup, so a save or a reset applies to the next call. It keeps the built-in's agents, loading mode and file locations: the framework's catalog shows its description and the skill tool returns its content, and the deep-analysis service and the visual designer read its phase and reference files. Eval runs use it too. The skill that wins is the only one with that name any agent gets. Its body and files replace the others' wholesale; nothing is merged.
+- **In-app override of a built-in.** An **in-app override** of a built-in ([data-model.md](data-model.md) 3.10.2, ADR-0023) wins over the bundled skill with that name. It is read per call, not at startup, so a save or a reset applies to the next call. It keeps the built-in's agents, loading mode and file locations: the framework's catalog shows its description and the skill tool returns its content, and the visual designer reads its reference files. Eval runs use it too. The skill that wins is the only one with that name any agent gets. Its body and files replace the others' wholesale; nothing is merged.
 - **Layout.** `SKILL.md` starts with front matter between `---` lines:
   - `name` equal to the folder name, and `description`, which starts with `Use when`. Both are required, and no other key is used. `name` is on one line. `description` may wrap onto indented continuation lines, or use a `>` or `|` block; the lines are joined with single spaces.
 
@@ -1595,7 +1596,7 @@ Skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS` for har
 
 | Agent | On demand (catalog) | Harness-loaded |
 |---|---|---|
-| `assistant` | `curated-knowledge` (how to apply Block 3, 4.1, its `[relation]` lines included), and in a session bound to a user agent that agent's in-app skills (7.3) | `deep-analysis`: one phase file per deep-analysis call (2.7). |
+| `assistant` | `curated-knowledge` (how to apply Block 3, 4.1, its `[relation]` lines included), and in a session bound to a user agent that agent's in-app skills (7.3) | none (the `deep-analysis` skill was removed 2026-11-12). |
 | `visualization` (designer) | none (it runs without tools) | `interactive-visuals` (7.2): the router body of `SKILL.md`, plus `reference/spec-mode.md` on spec calls or `reference/freeform.md` on freeform calls |
 | `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
 | `data-readiness` (Data Readiness Agent, 2.10) | `data-readiness` and `readiness-drilldown` (below) | none |
@@ -1791,7 +1792,6 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 - **Note:** besides swapping gpt-5/o-series models to `openai/gpt-4.1-mini` (LenAI deployments kept), the designer also upgrades any `nano` model, LenAI included, to its `mini` sibling. The old CLAUDE.md omitted this; this spec is now the reference.
 - **Open question:** the designer's effort/cap tuning is computed from `resolveVisualizationModel()`, but the per-call bucket for the chat is computed from the plain resolved model — consistent today; confirm that `VISUAL_MODEL` pointing at a different provider than the saved key is supported (it reuses the saved API key with the overridden id).
 - **Open question:** the eval judge sends `temperature: 0` as a *provider option*; for OpenAI/LenAI buckets this is likely an unknown option rather than the sampling temperature. Is temperature actually applied?
-- **Gap:** deep-analysis investigation calls keep `ask_clarification`, `create_visual` and `update_visual` available; only the prompt forbids them, and nothing intercepts a clarification in `generate` mode. Should these tools be removed for background calls?
 - **Gap:** `list_entities`' description says the kind is "databricks or postgres", omitting `rest` (which the SQL tool description and prompt do mention).
 - **Gap:** `run_readonly_sql` does not enforce that the SQL only references session entities (prompt-only rule A24); any table reachable on the datasource can be read.
 - **Gap:** auto-repair designs from the **source answer's** data, not the current version's stored `data.json` (which may include merged turn records or refreshed rows), so a repaired version can lose drill-down data or a refresh.
@@ -1977,7 +1977,7 @@ Curated knowledge:
   never assume a snippet exists that you cannot see.
 ```
 
-> Implementation note (file map): agents in `backend/src/mastra/agents/*.agent.ts`; tools in `mastra/tools/`; context builders `mastra/context-blocks.ts`; step budget `mastra/agent-constants.ts`; bridges `mastra/model-resolver.ts`, `mastra/tool-services.ts`; tuning `mastra/model-compat.ts`; storage `mastra/storage.ts`; workspaces `mastra/session-workspaces.ts`; skills `mastra/app-skills.ts` and `mastra/skills/<name>/`; orchestration `modules/sessions/sessions.service.ts` (sessions, run hosts, panel items) and its turn engine in `modules/sessions/turn/` (`turn-engine.ts`, `turn-options.ts`, `sql-checks.ts`; tech-stack.md, code layout), `turn-data.ts`, `result-guards.ts`, `result-compare.ts`, `chart-heuristic.ts`; designer pipeline `modules/sessions/visualization.service.ts`, `visual-spec.ts`, `visual-runtime.ts`, `visualization-document.ts`; ontology bootstrap `modules/ontology/ontology-bootstrap.service.ts`; deep analysis `modules/deep-analysis/`; catalogue and eval runs `modules/agents/`; model settings `modules/llm/`.
+> Implementation note (file map): agents in `backend/src/mastra/agents/*.agent.ts`; tools in `mastra/tools/`; context builders `mastra/context-blocks.ts`; step budget `mastra/agent-constants.ts`; bridges `mastra/model-resolver.ts`, `mastra/tool-services.ts`; tuning `mastra/model-compat.ts`; storage `mastra/storage.ts`; workspaces `mastra/session-workspaces.ts`; skills `mastra/app-skills.ts` and `mastra/skills/<name>/`; orchestration `modules/sessions/sessions.service.ts` (sessions, run hosts, panel items) and its turn engine in `modules/sessions/turn/` (`turn-engine.ts`, `turn-options.ts`, `sql-checks.ts`; tech-stack.md, code layout), `turn-data.ts`, `result-guards.ts`, `result-compare.ts`, `chart-heuristic.ts`; designer pipeline `modules/sessions/visualization.service.ts`, `visual-spec.ts`, `visual-runtime.ts`, `visualization-document.ts`; ontology bootstrap `modules/ontology/ontology-bootstrap.service.ts`;; catalogue and eval runs `modules/agents/`; model settings `modules/llm/`.
 
 ## Appendix C — Retired (2026-11-12)
 

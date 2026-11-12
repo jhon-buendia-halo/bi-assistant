@@ -425,12 +425,6 @@ Feature: Skills the designer is given
     And the designer received the interactive-visuals router and its spec-mode reference
     And the designer received nothing of the freeform reference
 
-  Scenario: A chart asked for in a run is designed from my request when the model gives no instruction
-    Given I ran the Assistant on "World Cup Core" with "How many matches were played at each stage?" and the model answered from one query
-    When I run the Assistant again as a follow-up of that run with "Chart the matches per stage as bars."
-    And the model calls create_visual with no instruction, then answers
-    Then the run holds the visual "Matches by stage"
-    And the designer received "Chart the matches per stage as bars." as its instruction
 ```
 
 ## Acceptance

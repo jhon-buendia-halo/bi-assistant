@@ -1093,14 +1093,14 @@ flowchart LR
 - **Decision:**
   - **The workflow catalogue is `[qti-v2-turn]`.** An agent is not a workflow. The one-step workflow, its `agent:<key or id>` ids, the Sequential test workflow and Deep analysis are removed from the code, the API and the UI.
   - **Agents are a library.** The Agents area configures them (prompt, tools, skills, evals, versions). A user agent keeps **Try it** (a draft run, not a workflow run); no agent has a **Run** on its page. The `assistant-v2` agent keeps being called by the `analyse` step of `qti-v2-turn`; `GET /agents/:key` `usedInWorkflows` lists `qti-v2-turn` for it and is empty for every other agent.
-  - **The agent turn engine stays.** `qti-v2-turn`'s analyse step, Try it and the eval runner (`assistant`, `data-readiness`) call it directly, with no workflow host.
+  - **The agent turn engine stays.** `qti-v2-turn`'s analyse step, Try it and the eval runner (`assistant`, `data-readiness`, through `createRunHost({ agentKey })`) use it. The internal `agent-turn` Mastra workflow stays for Try it, evals and stored sessions, with `agent:<key>` ids that never reach the catalogue.
   - **Stored data stays.** Runs of removed workflows list and open read-only as legacy runs (no Run again, no follow-up). Sessions bound to a removed workflow id read as plain past chats (`workflowRef.deleted: true`). Stored readiness reports stay viewable; the Data Readiness Agent stays in the library but the UI generates no new report.
 - **Rejected:**
   - **Keeping the one-step workflows hidden:** dead code with a public API for nothing.
   - **Migrating or deleting stored runs:** silent data loss, and the runs are still readable.
   - **Removing the agents themselves:** the user asked to separate them from workflows, not to remove them.
 - **Consequences:**
-  - **Partly supersedes ADR-0040:** "an agent without a workflow gets a one-step workflow" no longer holds; its catalogue, ids and code-defined workflow remain only as `qti-v2-turn`; the agent turn engine stays as that workflow's analyse step, Try it and the eval runner. Marked in ADR-0040's status.
+  - **Partly supersedes ADR-0040:** "an agent without a workflow gets a one-step workflow" no longer holds; its catalogue, ids and code-defined workflow remain only as `qti-v2-turn`; the agent turn engine stays as that workflow's analyse step and behind Try it and the eval runner (the internal `agent-turn` workflow). Marked in ADR-0040's status.
   - **Amends ADR-0041:** a run of an agent workflow is no longer a thing; a run is a run of `qti-v2-turn` (or a legacy run). Deep analysis, deferred by ADR-0041 to a code-defined run workflow, is dropped.
   - **Amends ADR-0008:** a user agent no longer runs as a one-step workflow; Try it is its only run.
   - **Stack-neutral:** a rebuild needs one stored, streamed run workflow, an agent library with a draft preview, and read-only legacy runs.

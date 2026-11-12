@@ -111,77 +111,17 @@ Feature: Agent panel
     Given the app runs with the LLM stub as its provider
     And the World Cup sample dataset is loaded
 
-  Scenario: A composed document is a run panel item and downloads as Markdown
-    Given the stub answers by calling "show_in_panel" with kind "document", title "Findings" and markdown "# Findings\n\nBrazil scored most."
-    And the stub then answers with text "The findings are in the panel."
-    When I run the Assistant on "Write up the findings"
-    Then the stream announces the panel item before the run ends
-    And the run holds the document "Findings"
-    And its download is "findings.md" containing "Brazil scored most."
-
-  Scenario: A query result is a run table panel item and downloads as CSV
-    Given the stub answers by calling "run_readonly_sql" for the top scorers
-    And the stub then calls "show_in_panel" with kind "table" and no record
-    When I run the Assistant on "Show me the top scorers as a table"
-    Then the run holds one table item titled by the query's rationale
-    And its download is a CSV with the header row first and one row per stage
-
-  Scenario: A workspace file is a run panel item with a download
-    Given the stub writes "notes/summary.md" to the run's workspace
-    And then answers by calling "show_in_panel" with kind "file" and path "notes/summary.md"
-    When I run the Assistant on "Show me the summary notes"
-    Then the run holds the file "summary.md", read as "text/markdown"
-    And its download is the file's own bytes
-
-  Scenario: An invalid path is refused and the run items do not change
-    Given the stub shows the document "Findings"
-    And then answers by calling "show_in_panel" with kind "file" and path "../secrets.md"
-    When I run the Assistant on "Show me the findings and the secrets"
-    Then the step "show_in_panel" shows the error "Invalid file path \"../secrets.md\""
-    And the run still holds only "Findings"
-
-  Scenario: The agent brings an existing visual back
+  Scenario: a visual generated on a v2 answer is the run's panel item, kept on reopening and downloaded only through its own route
     Given I ran the Assistant on "How many matches were played at each stage?"
     When I run it again as a follow-up that makes a visual, shows a document and shows the visual by its id
     Then the run lists the visual "Goals per team" first and "Findings" second, once each
     And the visual downloads through its own route, never as a panel item
 
-  Scenario: The workflow never appears among a run's panel items
+  Scenario: a v2 run's workflow never appears among its panel items
     Given an agent whose instructions have a "## Workflow" section with the phases "Understand", "Analyse" and "Report"
     When the stub answers by calling "update_workflow" with current 2 and done "1"
     And I run that agent on "Go on"
     Then the run holds no panel item and its workflow has the three phases
-
-  Scenario: The run shows the agent's phases and moves them as it goes
-    Given an agent whose instructions have a "## Workflow" section with the phases "Understand", "Analyse" and "Report"
-    And the stub answers by calling "update_workflow" with current 2, done "1", waiting true, todo "2: Choose the lines to market" and note "Pick the lines to market."
-    When I open the agent's workflow, its Run tab, type "Go on" and click Execute
-    Then the agent's step lists the three phases with "Understand" as Done and "Analyse" as Current
-
-  Scenario: The run keeps the moved workflow with its next step and note
-    Given the same agent and the same stub
-    When I run that agent on "Go on"
-    Then the run's workflow has the prompt's three steps, "Analyse" current and waiting, "Understand" done, and the note "Pick the lines to market."
-    And "Report" says "Review the report and approve it."
-    And the stored run reads back the same workflow
-
-  Scenario: An agent without a Workflow section creates its own steps
-    Given an agent whose instructions have no "## Workflow" section
-    And the stub answers by calling "update_workflow" with steps "Scope | Analyse | Report" and current 1
-    When I run that agent on "Guide me through a review"
-    Then the run's workflow has the three steps "Scope", "Analyse" and "Report" with "Scope" as current
-
-  Scenario: The agent can't rename prompt-defined steps
-    Given an agent whose instructions have a "## Workflow" section with the steps "Understand", "Analyse" and "Report"
-    And the stub answers by calling "update_workflow" with steps "One | Two"
-    When I run that agent on "Rename the steps"
-    Then the next model request carries the tool message "Your ## Workflow section defines the steps; set their status instead"
-    And the run's workflow still has "Understand", "Analyse" and "Report"
-
-  Scenario: Shown items survive reopening the run
-    Given I ran the Assistant to show a document "Findings", then followed up to show a table
-    When I reload the app
-    Then each stored run reads back its own items
 
   Scenario: Questions to Insights v2 shows its code-defined steps advancing
     When the stub answers by running "run_readonly_sql" and then "There were 64 matches."
