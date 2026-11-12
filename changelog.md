@@ -48,7 +48,7 @@ Running log of every meaningful change, newest first. One entry per epic, writte
     - 1.23.33: `app.ts`/`app.html` split by area (1,567 → 270 and 1,091 → 336 lines).
     - Evidence: [1.23.28](evidence/1.23.28/)–[1.23.33](evidence/1.23.33/), wave reports in [evidence/waves/](evidence/waves/).
   - **Gate (2026-11-12, macOS, web target).** One `qa.mjs --wave` over all 34 stories against `main`, plus the full suites on the final build:
-    - backend `tsc` clean, unit 3,068/3,068, e2e 84/84;
+    - backend `tsc` clean, unit 3,078/3,078, e2e 87/87 (after merging `main` at v0.48.2, desktop readiness probe on `/health` with the `X-Backend-Instance` check);
     - frontend unit 736/736;
     - the full web Playwright suite 266 passed, 2 skipped, with the one known failure below;
     - backend eslint on the changed files, clean after three test-file errors were fixed at the gate; `check-specs` green; initial bundle 935.7 kB (budget 1 MB).
