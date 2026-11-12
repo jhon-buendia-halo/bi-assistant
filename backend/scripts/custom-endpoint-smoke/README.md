@@ -14,7 +14,7 @@ waits until `GET /llm/settings` answers, then for **each API style that has a ba
 2. `POST /llm/test-connection`: must pass and name the route `custom/<MODEL>` (R49).
 3. `PUT /llm/settings`: saves the configuration.
 4. `GET /llm/settings`: `configured: true`, provider `custom`, this `apiStyle` and model, the key only in masked form (none for a keyless setup, R47).
-5. One data-free assistant turn: `POST /sessions` (with a placeholder dataset name, `custom-endpoint-smoke`), then `POST /sessions/:id/messages/stream` with `Reply with exactly: pong`; the turn must end with `done`, carry no `error` event, and its answer must contain `pong`.
+5. One data-free assistant turn: a placeholder dataset (`custom-endpoint-smoke`, on a closed port, removed afterwards), then `POST /workflows/agent%3Aassistant/runs/stream` with `Reply with exactly: pong`; the run must end with `done`, carry no `error` event, and its answer must contain `pong`.
 
 Finally it stops the app by its PID and scans **every API response, every file in the data dir and the app log** for the raw `CUSTOM_API_KEY` (R54). It fails if the key appears anywhere. The temp dir is removed at the end.
 

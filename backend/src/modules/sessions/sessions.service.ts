@@ -746,6 +746,21 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
+   * Keep only `datasets` among a run host's datasets (agents.md 8.3): an eval
+   * run bound to a built-in agent that takes every qualifying dataset (the
+   * Data Readiness Agent) is narrowed to the datasets the run names. Datasets
+   * the host does not have are ignored; an empty result keeps the host as it
+   * was.
+   */
+  narrowRunHost(hostId: string, datasets: string[]): void {
+    const host = this.memoryHosts.get(hostId);
+    if (!host?.run) return;
+    const keep = host.datasets.filter((name) => datasets.includes(name));
+    if (keep.length === 0 || keep.length === host.datasets.length) return;
+    this.memoryHosts.set(hostId, { ...host, datasets: keep });
+  }
+
+  /**
    * The run host ids (`run-<run id>`) that have a workspace on disk, for
    * the runs' start-up recovery (agents.md 5.14). Throws when the
    * workspaces directory can't be read.

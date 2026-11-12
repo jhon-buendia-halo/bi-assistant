@@ -1,6 +1,7 @@
 import { checks } from '@mastra/evals/checks';
 import { runEvals } from '@mastra/core/evals';
 import { RequestContext } from '@mastra/core/request-context';
+import { randomUUID } from 'node:crypto';
 import type { MastraScorer } from '@mastra/core/evals';
 import type { Agent } from '@mastra/core/agent';
 import { assistantAgent } from '../agents/assistant.agent';
@@ -1196,61 +1197,65 @@ function captureStepRecords(
   }
 }
 
-/** A throwaway session created purely to give `create_visual`/`update_visual`
- * somewhere to write during an eval run. */
-export interface EvalSession {
+/** A throwaway run host created purely to give `create_visual`/`update_visual`
+ * somewhere to write during an eval run (agents.md 8.3). */
+export interface EvalHost {
   id: string;
 }
 
 /**
- * `create_visual` looks up the session's latest completed answer before it
- * will do anything — a throwaway session with no chat history has none, so
- * seed one generic placeholder once. The chart's actual data comes from the
- * run's own captured records (merged over this placeholder via
+ * `create_visual` looks up the host's latest completed answer before it
+ * will do anything — a throwaway host with no history has none, so seed one
+ * generic placeholder once (the host's `context`). The chart's actual data
+ * comes from the run's own captured records (merged over this placeholder via
  * `TURN_RECORDS_CONTEXT_KEY`), not from this message's (empty) data.
  */
-const EVAL_SESSION_PLACEHOLDER_ANSWER =
-  'This is a throwaway session created for the assistant eval suite.';
+const EVAL_HOST_PLACEHOLDER = {
+  question: 'Eval suite placeholder question',
+  answer: 'This is a throwaway host created for the assistant eval suite.',
+};
 
 /**
- * A real, disposable session so `create_visual`/`update_visual` — which read
- * `session-id` from requestContext and look up session state — behave the
- * same way they do in a real chat turn. Both callers of the eval suite
+ * A real, disposable run host (the temporary host a workflow run's agent
+ * turn runs on, agents.md 5.14) so `create_visual`/`update_visual` — which
+ * read `session-id` from requestContext and look up host state — behave the
+ * same way they do in a real turn. Both callers of the eval suite
  * (`EvalRunsService`, the in-app runner, and `run-assistant-evals.ts`, the
  * CLI) boot the full Nest app and can hand this a `SessionsService`; callers
  * that cannot (e.g. a lightweight unit test) simply omit it and the suite
  * still runs — `create_visual` then reports "No session in context", scored
  * like any other tool error.
  */
-export async function createEvalSession(
+export async function createEvalHost(
   sessions: SessionsService,
   datasets: string[],
-  /** Bind the session to this built-in agent (`EvalTarget.sessionAgentKey`). */
+  /** Bind the host to this built-in agent (`EvalTarget.sessionAgentKey`). */
   agentKey?: string,
-): Promise<EvalSession> {
-  const name =
-    `${agentKey ?? 'assistant'} eval ${new Date().toISOString()}`.slice(0, 64);
-  let session = agentKey
-    ? await sessions.createFromAgent(agentKey, name)
-    : await sessions.create(name, datasets);
+): Promise<EvalHost> {
+  // An agent that declares its own datasets (RFP Builder, Data Readiness)
+  // takes them; the assistant runs over the run's.
+  const host = await sessions.createRunHost({
+    runId: `eval-${randomUUID()}`,
+    workflowId: `agent:${agentKey ?? 'assistant'}`,
+    name: `${agentKey ?? 'assistant'} eval`,
+    ...(agentKey ? {} : { datasets }),
+    context: EVAL_HOST_PLACEHOLDER,
+  });
   // An agent that binds every qualifying dataset (Data Readiness) is narrowed
   // to the run's datasets, matching the orientation the case is given.
   if (agentKey && datasets.length > 0) {
-    session = (await sessions.narrowDatasets(session.id, datasets)) ?? session;
+    sessions.narrowRunHost(host.id, datasets);
   }
-  await sessions.appendAssistantMessage(session.id, {
-    content: EVAL_SESSION_PLACEHOLDER_ANSWER,
-  });
-  return { id: session.id };
+  return { id: host.id };
 }
 
-/** Best-effort cleanup — a throwaway session must never outlive its run. */
-export async function cleanupEvalSession(
+/** Best-effort cleanup — a throwaway host must never outlive its run. */
+export async function cleanupEvalHost(
   sessions: SessionsService | undefined,
-  session: EvalSession | undefined,
+  host: EvalHost | undefined,
 ): Promise<void> {
-  if (!sessions || !session) return;
-  await sessions.delete(session.id).catch(() => undefined);
+  if (!sessions || !host) return;
+  await sessions.deleteRunHostResources(host.id).catch(() => undefined);
 }
 
 /** Parse a model's JSON reply, tolerating a markdown fence around it —
@@ -1637,7 +1642,7 @@ export async function runAssistantEvals(
   );
   if (datasetError) throw new Error(datasetError);
   const evalSession = sessions
-    ? await createEvalSession(sessions, datasets, target.sessionAgentKey)
+    ? await createEvalHost(sessions, datasets, target.sessionAgentKey)
     : undefined;
   try {
     const results: AssistantEvalCaseResult[] = [];
@@ -1655,6 +1660,6 @@ export async function runAssistantEvals(
     return results;
   } finally {
     await target.finish?.(datasets);
-    await cleanupEvalSession(sessions, evalSession);
+    await cleanupEvalHost(sessions, evalSession);
   }
 }

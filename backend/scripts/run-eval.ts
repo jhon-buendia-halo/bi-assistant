@@ -8,6 +8,7 @@
  *
  * Run with `npm run eval` from `backend/`. See `eval/README.md`.
  */
+import { randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
 import { isAbsolute, join, resolve } from 'path';
 import type { INestApplicationContext, LogLevel } from '@nestjs/common';
@@ -114,7 +115,7 @@ function printUsage(): void {
       '  -f, --file <path>         golden set to run (default eval/golden-set.json)',
       '  -o, --only <substring>    run only cases whose name contains <substring>',
       '      --include-placeholders run cases still marked "placeholder": true',
-      '      --keep-sessions       do not delete the throwaway sessions',
+      '      --keep-sessions       do not delete the throwaway run hosts workspaces',
       '  -v, --verbose             show Nest logs and per-case SQL',
       '',
       'Env: EVAL_ROW_LIMIT (default 500), EVAL_TIMEOUT_MS (default 300000),',
@@ -232,11 +233,7 @@ async function preflight(
   const datasources = app.get(DatasourcesService);
   const byName = new Map<string, string>();
   for (const name of new Set(cases.map((c) => c.dataset))) {
-    const datasourceId = await resolveDatasourceId(
-      datasets,
-      datasources,
-      name,
-    );
+    const datasourceId = await resolveDatasourceId(datasets, datasources, name);
     try {
       await datasources.runReadOnlySql(datasourceId, 'SELECT 1', 1);
     } catch (error) {
@@ -266,19 +263,24 @@ async function runCase(
     ...result,
   });
 
-  const session = await sessions.create(
-    `eval ${testCase.name} ${new Date().toISOString()}`.slice(0, 64),
-    [testCase.dataset],
-  );
+  // The turn runs on a throwaway run host, as a workflow run's does.
+  const session = await sessions.createRunHost({
+    runId: `eval-${randomUUID()}`,
+    workflowId: 'agent:assistant',
+    name: `eval ${testCase.name}`.slice(0, 64),
+    datasets: [testCase.dataset],
+  });
   try {
     const turn = new AbortController();
     const timer = setTimeout(() => turn.abort(), TURN_TIMEOUT_MS);
     try {
-      await sessions.streamMessage(
+      await sessions.streamRunTurn(
         session.id,
         testCase.question,
         () => {},
         turn.signal,
+        false,
+        () => {},
       );
     } finally {
       clearTimeout(timer);
@@ -291,7 +293,7 @@ async function runCase(
       });
     }
 
-    const answered = await sessions.get(session.id);
+    const answered = await sessions.finishRunHost(session.id);
     const answer = lastAssistantMessage(answered);
     const record = lastSuccessfulSql(answer);
     if (!record?.input) {
@@ -367,10 +369,10 @@ async function runCase(
   } finally {
     if (!options.keepSessions) {
       await sessions
-        .delete(session.id)
+        .deleteRunHostResources(session.id)
         .catch((error: unknown) =>
           console.warn(
-            `  ! could not delete throwaway session ${session.id} — ${message(error)}`,
+            `  ! could not delete throwaway run host ${session.id} — ${message(error)}`,
           ),
         );
     }

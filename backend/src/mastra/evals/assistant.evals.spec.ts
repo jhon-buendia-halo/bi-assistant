@@ -25,7 +25,8 @@ import { runEvals } from '@mastra/core/evals';
 import { appSkillBody } from '../app-skills';
 import {
   ASSISTANT_EVAL_SETS,
-  createEvalSession,
+  cleanupEvalHost,
+  createEvalHost,
   runAssistantEvalCase,
 } from './assistant.evals';
 import type { SessionsService } from '../../modules/sessions/sessions.service';
@@ -163,50 +164,59 @@ describe('tool selection in the eval cases (agents.md 8.1, ADR-0022)', () => {
   });
 });
 
-describe('createEvalSession (agents.md 8.1)', () => {
+describe('createEvalHost (agents.md 8.3)', () => {
   function fakeSessions() {
     return {
-      create: jest
-        .fn()
-        .mockResolvedValue({ id: 'plain', datasets: ['World Cup'] }),
-      createFromAgent: jest.fn().mockResolvedValue({
-        id: 'bound',
-        datasets: ['Formula 1', 'World Cup'],
-      }),
-      narrowDatasets: jest
-        .fn()
-        .mockResolvedValue({ id: 'bound', datasets: ['World Cup'] }),
-      appendAssistantMessage: jest.fn().mockResolvedValue(undefined),
+      createRunHost: jest.fn().mockResolvedValue({ id: 'run-eval-1' }),
+      narrowRunHost: jest.fn(),
+      deleteRunHostResources: jest.fn().mockResolvedValue(undefined),
     };
   }
 
-  it("narrows an agent-bound session to the run's datasets", async () => {
+  it("puts the assistant's host over the run's datasets, seeded with a placeholder answer", async () => {
     const sessions = fakeSessions();
-    const session = await createEvalSession(
+    const host = await createEvalHost(sessions as unknown as SessionsService, [
+      'World Cup',
+    ]);
+    expect(host).toEqual({ id: 'run-eval-1' });
+    expect(sessions.createRunHost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowId: 'agent:assistant',
+        datasets: ['World Cup'],
+        context: expect.objectContaining({ answer: expect.any(String) }),
+      }),
+    );
+    expect(sessions.narrowRunHost).not.toHaveBeenCalled();
+  });
+
+  it("binds an agent's host to the agent and narrows it to the run's datasets", async () => {
+    const sessions = fakeSessions();
+    await createEvalHost(
       sessions as unknown as SessionsService,
       ['World Cup'],
       'data-readiness',
     );
-    expect(sessions.createFromAgent).toHaveBeenCalledWith(
-      'data-readiness',
-      expect.any(String),
-    );
-    expect(sessions.narrowDatasets).toHaveBeenCalledWith('bound', [
+    const [spec] = sessions.createRunHost.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
+    expect(spec['workflowId']).toBe('agent:data-readiness');
+    expect(spec).not.toHaveProperty('datasets');
+    expect(sessions.narrowRunHost).toHaveBeenCalledWith('run-eval-1', [
       'World Cup',
     ]);
-    expect(session).toEqual({ id: 'bound' });
   });
 
-  it('leaves a plain session and an agent session with no named datasets alone', async () => {
+  it('leaves an agent host with no named datasets alone, and cleans up by host id', async () => {
     const sessions = fakeSessions();
-    await createEvalSession(sessions as unknown as SessionsService, [
-      'World Cup',
-    ]);
-    await createEvalSession(
+    await createEvalHost(
       sessions as unknown as SessionsService,
       [],
       'data-readiness',
     );
-    expect(sessions.narrowDatasets).not.toHaveBeenCalled();
+    expect(sessions.narrowRunHost).not.toHaveBeenCalled();
+    await cleanupEvalHost(sessions as unknown as SessionsService, {
+      id: 'run-eval-1',
+    });
+    expect(sessions.deleteRunHostResources).toHaveBeenCalledWith('run-eval-1');
   });
 });

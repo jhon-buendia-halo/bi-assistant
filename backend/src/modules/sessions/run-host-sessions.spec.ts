@@ -561,6 +561,24 @@ describe('the run host (agents.md 5.14)', () => {
     );
   });
 
+  it('narrows a host to the datasets an eval run names, and deletes its workspace with it (agents.md 8.3)', async () => {
+    const ctx = build();
+    const host = await ctx.sessions.createRunHost({
+      runId: 'eval-1',
+      workflowId: 'agent:assistant',
+      name: 'assistant eval',
+      datasets: ['World Cup', 'Formula 1'],
+    });
+    ctx.sessions.narrowRunHost(host.id, ['World Cup', 'Unknown']);
+    expect((await ctx.sessions.get(host.id)).datasets).toEqual(['World Cup']);
+    // Nothing to keep leaves the host as it was.
+    ctx.sessions.narrowRunHost(host.id, ['Unknown']);
+    expect((await ctx.sessions.get(host.id)).datasets).toEqual(['World Cup']);
+    await ctx.sessions.deleteRunHostResources(host.id);
+    expect(ctx.mastra.deleteSessionResources).toHaveBeenCalledWith(host.id);
+    await expect(ctx.sessions.get(host.id)).rejects.toThrow('not found');
+  });
+
   it('sends the earlier run as two messages before this question (plan 5.4)', async () => {
     const ctx = build();
     const first = await runOf(ctx, 'assistant', INPUTS.assistant);
