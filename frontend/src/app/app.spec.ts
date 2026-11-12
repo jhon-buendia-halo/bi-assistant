@@ -36,7 +36,7 @@ describe('App', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(
       compiled.querySelector(
-        '[aria-label="Navigation rail"] button[aria-label="Sessions"]',
+        '[aria-label="Navigation rail"] button[aria-label="Runs"]',
       ),
     ).toBeTruthy();
     expect(

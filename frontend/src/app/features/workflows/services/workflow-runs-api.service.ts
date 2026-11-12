@@ -11,6 +11,7 @@ import {
 import {
   WorkflowRun,
   WorkflowRunRequest,
+  WorkflowRunSummary,
   WorkflowRunStep,
 } from '../models/workflow.model';
 
@@ -66,6 +67,20 @@ function stepOf(event: StreamFrame): WorkflowRunStep {
 @Injectable({ providedIn: 'root' })
 export class WorkflowRunsApiService {
   private readonly http = inject(HttpClient);
+
+  /** The run history, newest first (api.md 120). */
+  list(): Observable<{ runs: WorkflowRunSummary[] }> {
+    return this.http.get<{ runs: WorkflowRunSummary[] }>(
+      `${API_BASE_URL}/workflow-runs`,
+    );
+  }
+
+  /** Delete a stored run with its workspace (api.md 122). */
+  delete(id: string): Observable<{ ok: boolean; message: string }> {
+    return this.http.delete<{ ok: boolean; message: string }>(
+      `${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}`,
+    );
+  }
 
   getRun(id: string): Observable<WorkflowRun> {
     return this.http.get<WorkflowRun>(

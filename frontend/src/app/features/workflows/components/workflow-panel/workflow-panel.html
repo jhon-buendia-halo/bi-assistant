@@ -521,6 +521,14 @@
                       {{ step.error }}
                     </p>
                   }
+                  @if (step.kind === "agent" && designer.phases()) {
+                    <!-- The agent's phases bar, live and as stored (agent-panel R16) -->
+                    <app-workflow-bar
+                      class="block"
+                      data-testid="workflow-run-phases"
+                      [workflow]="designer.phases()"
+                    />
+                  }
                   @if (step.kind === "agent" && step.status === "running" && designer.running()) {
                     <!-- The agent step, live: Thinking, its tool calls and the answer forming -->
                     <div class="flex flex-col gap-2" data-testid="workflow-run-live">

@@ -39,6 +39,7 @@
             [sessionId]="sessionId"
             (openCall)="monitoring.openLlmCallFromSession($event)"
             (openChat)="sessions.openSessionById($event)"
+            (openRun)="runs.openRun($event)"
           />
         }
       }

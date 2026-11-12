@@ -146,9 +146,9 @@
             [anchorId]="'msg-' + i"
             [latest]="isLatest(i)"
             [busy]="sending()"
-            [showRating]="true"
+            [showRating]="!readOnly()"
             [ratingPending]="feedbackPending() === message.at"
-            [showGenerateVisual]="runsAssistant()"
+            [showGenerateVisual]="runsAssistant() && !readOnly()"
             [visualGenerating]="visualGenerating()"
             [reportDownloading]="
               !!message.report &&
@@ -314,7 +314,8 @@
     </div>
   </div>
 
-  <!-- Input -->
+  <!-- Input: a past chat has none (sessions-chat R66) -->
+  @if (!readOnly()) {
   <div class="flex flex-col items-center px-6 pb-3">
     @if (followUpVisible()) {
       <!-- Follow-ups for the data mark just clicked in the visual -->
@@ -443,4 +444,5 @@
       incomplete. Please verify against source data before sharing.
     </p>
   </div>
+  }
 </div>

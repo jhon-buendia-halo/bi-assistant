@@ -121,7 +121,7 @@ describe('Monitoring area (app-shell R3b, roadmap 1.21.14-1.21.16)', () => {
     const sessions = q('monitoring-tab-sessions');
     expect(calls.getAttribute('role')).toBe('tab');
     expect(calls.textContent?.trim()).toBe('LLM calls');
-    expect(sessions.textContent?.trim()).toBe('Sessions');
+    expect(sessions.textContent?.trim()).toBe('Runs');
     expect(calls.getAttribute('aria-selected')).toBe('true');
     expect(sessions.getAttribute('aria-selected')).toBe('false');
     expect(sessions.getAttribute('tabindex')).toBe('-1');
@@ -132,7 +132,7 @@ describe('Monitoring area (app-shell R3b, roadmap 1.21.14-1.21.16)', () => {
     expect(state.tab()).toBe('sessions');
     expect(q('monitoring-tab-sessions').getAttribute('aria-selected')).toBe('true');
     expect(q('monitoring-note').textContent?.trim()).toBe(
-      'Sessions with recorded agent runs, most recent first.',
+      'Runs with recorded agent calls, most recent first.',
     );
     await fixture.whenStable();
     fixture.detectChanges();
@@ -143,7 +143,7 @@ describe('Monitoring area (app-shell R3b, roadmap 1.21.14-1.21.16)', () => {
       .flush({ items: [], total: 0, page: 1, pageSize: 25, facets: { agents: [] } });
     fixture.detectChanges();
     expect(q('monitoring-sessions-empty').textContent?.trim()).toBe(
-      'No sessions yet.',
+      'No runs yet.',
     );
 
     q('monitoring-tab-sessions').dispatchEvent(
@@ -157,7 +157,7 @@ describe('Monitoring area (app-shell R3b, roadmap 1.21.14-1.21.16)', () => {
 
     // The chosen tab is kept when Monitoring is left and chosen again.
     q('monitoring-tab-sessions').click();
-    shellState().selectArea('sessions');
+    shellState().selectArea('runs');
     fixture.detectChanges();
     shellState().selectArea('monitoring');
     fixture.detectChanges();

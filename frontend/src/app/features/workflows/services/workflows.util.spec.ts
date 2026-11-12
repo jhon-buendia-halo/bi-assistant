@@ -6,6 +6,9 @@ import {
   initialInputValues,
   questionFieldName,
   runInput,
+  filterRuns,
+  runAgainValues,
+  runRowStatus,
   chatWorkflows,
   composerCreateBody,
   composerWorkflowId,
@@ -403,4 +406,35 @@ describe('workflows.util', () => {
     });
   });
 
+});
+
+describe('Runs list helpers (plan 1.24.11)', () => {
+  const rows = [
+    { id: 'aa11', title: 'Most goals?', workflowName: 'Assistant' },
+    { id: 'bb22', title: 'Fewest goals?', workflowName: 'Questions to Insights v2' },
+  ];
+
+  it('searches a run by title, workflow name or id', () => {
+    expect(filterRuns(rows, '')).toEqual(rows);
+    expect(filterRuns(rows, 'FEWEST').map((r) => r.id)).toEqual(['bb22']);
+    expect(filterRuns(rows, 'insights').map((r) => r.id)).toEqual(['bb22']);
+    expect(filterRuns(rows, 'aa1').map((r) => r.id)).toEqual(['aa11']);
+    expect(filterRuns(rows, 'nothing')).toEqual([]);
+  });
+
+  it('labels a run row status', () => {
+    expect(runRowStatus('success')).toBe('Done');
+    expect(runRowStatus('running')).toBe('Running');
+  });
+
+  it('refills a form from a stored input, keeping the defaults of fields it lacks', () => {
+    const fields = [
+      { name: 'question', label: 'Question', type: 'textarea', required: true },
+      { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
+      { name: 'careful', label: 'Careful', type: 'boolean', required: false, default: false },
+    ] as WorkflowInputField[];
+    expect(
+      runAgainValues(fields, { question: 'Why?', datasets: ['World Cup Core'] }),
+    ).toEqual({ careful: false, question: 'Why?', datasets: ['World Cup Core'] });
+  });
 });

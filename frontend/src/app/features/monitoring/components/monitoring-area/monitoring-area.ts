@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { ArrowLeft, LucideAngularModule } from 'lucide-angular';
 import { ShellState } from '../../../../core/shell/shell-state';
+import { RunsState } from '../../../runs/services/runs-state';
 import { SessionsState } from '../../../sessions/services/sessions-state';
 import { MonitoringNavState } from '../../services/monitoring-nav-state';
 import { LlmCallDetailPage } from '../llm-call-detail/llm-call-detail';
@@ -23,5 +24,6 @@ export class MonitoringArea {
   readonly shell = inject(ShellState);
   readonly monitoring = inject(MonitoringNavState);
   readonly sessions = inject(SessionsState);
+  readonly runs = inject(RunsState);
   readonly ArrowLeft = ArrowLeft;
 }

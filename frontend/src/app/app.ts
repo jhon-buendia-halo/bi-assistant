@@ -122,7 +122,7 @@ export class App {
     { area: 'workflows', label: 'Workflows', icon: Workflow },
     { area: 'agents', label: 'Agents', icon: Bot },
     { area: 'context', label: 'Context', icon: Layers },
-    { area: 'sessions', label: 'Sessions', icon: FolderKanban },
+    { area: 'runs', label: 'Runs', icon: FolderKanban },
     { area: 'monitoring', label: 'Monitoring', icon: Activity },
   ];
 

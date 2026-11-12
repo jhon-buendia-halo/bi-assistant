@@ -191,7 +191,7 @@
           }
 
           <div class="flex min-w-0 flex-1 flex-col">
-            @if (shell.currentArea() === "sessions") {
+            @if (shell.currentArea() === "runs") {
               <app-sessions-header />
             } @else if (!shell.rightPanelOpen()) {
               <button
@@ -222,7 +222,7 @@
                   @case ("context") {
                     <app-context-area />
                   }
-                  @case ("sessions") {
+                  @case ("runs") {
                     <app-sessions-area />
                   }
                   @case ("monitoring") {

@@ -297,3 +297,48 @@ export function followUpRequest(
     context: { fromRunId: run.id },
   };
 }
+
+/**
+ * The form values that run a stored run's input again (plan 1.24.11): its
+ * visible fields as the form holds them, a number as text.
+ */
+export function runAgainValues(
+  fields: WorkflowInputField[],
+  input: Record<string, WorkflowInputValue>,
+): RunFormValues {
+  const values = initialInputValues(fields);
+  for (const field of fields) {
+    if (field.hidden || !Object.hasOwn(input, field.name)) continue;
+    const value = input[field.name];
+    values[field.name] = Array.isArray(value)
+      ? [...value]
+      : typeof value === 'boolean'
+        ? value
+        : String(value);
+  }
+  return values;
+}
+
+/** One page of the Runs list (ten, as sessions-chat R63). */
+export const RUNS_PAGE_SIZE = 10;
+
+/** The runs whose title, workflow name or id contains the query. */
+export function filterRuns<
+  T extends { title: string; workflowName: string; id: string },
+>(runs: T[], query: string): T[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return runs;
+  return runs.filter(
+    (run) =>
+      run.title.toLowerCase().includes(q) ||
+      run.workflowName.toLowerCase().includes(q) ||
+      run.id.toLowerCase().includes(q),
+  );
+}
+
+/** A run row's status chip text. */
+export function runRowStatus(status: WorkflowRun['status']): string {
+  return { success: 'Done', failed: 'Failed', stopped: 'Stopped', running: 'Running' }[
+    status
+  ];
+}

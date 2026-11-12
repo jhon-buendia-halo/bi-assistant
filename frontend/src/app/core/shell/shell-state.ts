@@ -20,7 +20,8 @@ export type MainView =
   | 'personas'
   | 'visuals'
   | 'ontologies'
-  | 'sessions'
+  | 'runs'
+  | 'run-detail'
   | 'conversation-new'
   | 'session-chat'
   | 'monitoring'
@@ -33,7 +34,7 @@ export type Area =
   | 'workflows'
   | 'agents'
   | 'context'
-  | 'sessions'
+  | 'runs'
   | 'monitoring'
   | 'settings';
 
@@ -43,7 +44,7 @@ export const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
   workflows: 'workflows',
   agents: 'agents',
   context: 'context',
-  sessions: 'sessions',
+  runs: 'runs',
   monitoring: 'monitoring',
 };
 
@@ -62,9 +63,10 @@ export const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   personas: 'context',
   visuals: 'context',
   ontologies: 'context',
-  sessions: 'sessions',
-  'conversation-new': 'sessions',
-  'session-chat': 'sessions',
+  runs: 'runs',
+  'run-detail': 'runs',
+  'conversation-new': 'runs',
+  'session-chat': 'runs',
   monitoring: 'monitoring',
   'monitoring-session': 'monitoring',
   'llm-call': 'monitoring',
@@ -129,14 +131,14 @@ export class ShellState {
     // The rail is a way out of the agent editor, Agents included: it returns
     // to the hub (agents-evals R59).
     const leavingEditor = !this.settingsOpen() && this.inEditor();
-    // Sessions is shown only on its list: from a chat or the composer the
-    // rail returns to the list (app-shell R3). Workflows likewise returns
+    // Runs is shown only on its list: from a run, a past chat or the composer
+    // the rail returns to the list (app-shell R3). Workflows likewise returns
     // from a workflow's page to the list (R3), Context from a section to its
     // cards (R3a), and Monitoring from a call to its table (roadmap 1.21.15).
     const alreadyShown =
       this.currentArea() === area &&
       !leavingEditor &&
-      (area !== 'sessions' || this.mainView() === 'sessions') &&
+      (area !== 'runs' || this.mainView() === 'runs') &&
       (area !== 'workflows' || this.mainView() === 'workflows') &&
       (area !== 'context' || this.mainView() === 'context') &&
       (area !== 'monitoring' || this.mainView() === 'monitoring');

@@ -17,6 +17,7 @@ import {
 } from 'lucide-angular';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
 import { AnswerView } from '../../../sessions/components/answer-view/answer-view';
+import { WorkflowBar } from '../../../sessions/components/workflow-bar/workflow-bar';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import { WorkflowInputField, WorkflowSummary } from '../../models/workflow.model';
 import {
@@ -55,7 +56,7 @@ const COPIED_MS = 2000;
  */
 @Component({
   selector: 'app-workflow-panel',
-  imports: [AnswerView, LucideAngularModule, MarkdownPipe],
+  imports: [AnswerView, LucideAngularModule, MarkdownPipe, WorkflowBar],
   templateUrl: './workflow-panel.html',
   host: { class: 'flex min-h-0 flex-col', 'data-testid': 'workflow-panel' },
 })
