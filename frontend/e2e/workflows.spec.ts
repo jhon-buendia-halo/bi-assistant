@@ -384,7 +384,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       await runOnQuestion(page, QUESTION);
     });
     await test.step('Then I see "Run failed" with the error', async () => {
-      await expect(page.getByTestId('workflow-run-status')).toHaveText(/^Run failed: \S/, {
+      await expect(page.getByTestId('workflow-run-status')).toHaveText(/^\s*Run failed: \S/, {
         timeout: FAILED_RUN_TIMEOUT,
       });
     });
@@ -610,7 +610,7 @@ test.describe('Feature: Workflows (the designer)', () => {
       await test.step('When the model fails and I run it again', async () => {
         failTheModel();
         await page.getByTestId('workflow-run').click();
-        await expect(page.getByTestId('workflow-run-status')).toHaveText(/^Run failed: \S/, {
+        await expect(page.getByTestId('workflow-run-status')).toHaveText(/^\s*Run failed: \S/, {
           timeout: FAILED_RUN_TIMEOUT,
         });
       });
@@ -678,7 +678,7 @@ test('the Workflows pages have no detectable accessibility violations in either 
 
   failTheModel();
   await page.getByTestId('workflow-run').click();
-  await expect(page.getByTestId('workflow-run-status')).toHaveText(/^Run failed: \S/, {
+  await expect(page.getByTestId('workflow-run-status')).toHaveText(/^\s*Run failed: \S/, {
     timeout: FAILED_RUN_TIMEOUT,
   });
   await scan('Questions to Insights v2 page after a failed run');

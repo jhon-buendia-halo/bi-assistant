@@ -95,22 +95,22 @@ test('backend traces reach the OTLP endpoint when observability is on', async ({
   expect(payload).toContain('/llm/settings');
 });
 
-test('agent runs reach Phoenix when observability is on', async ({
+test('workflow runs reach Phoenix when observability is on', async ({
   app,
   page,
 }) => {
   await seedWorldCupDataset(page);
   await saveAndRestart(app, true);
 
-  // A run of Questions to Insights v2: one turn of the `assistant-v2` agent
-  // (id `questions-to-insights-v2`; no model is configured, so the turn ends
-  // in the model error; its trace is exported all the same).
+  // A run of Questions to Insights v2. No model is configured, so the run
+  // fails before its agent step; the spans of the steps that ran (the first
+  // is `receive-question`) are exported all the same.
   const run = await runQuestion(page, 'Who won the 2022 World Cup?');
   expect(run.status, run.body).toBe(200);
 
   await expect
     .poll(() => payloadOf(phoenix, '/v1/traces'), { timeout: 30_000 })
-    .toMatch(/questions-to-insights-v2|assistant-v2/);
+    .toContain('receive-question');
   expect(phoenix.received('/v1/traces')[0].contentType).toContain(
     'application/x-protobuf',
   );

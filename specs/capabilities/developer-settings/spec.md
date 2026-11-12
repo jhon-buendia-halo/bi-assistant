@@ -171,11 +171,11 @@ Feature: Developer observability export
     And I open "LLM Configuration"
     Then the OTLP receiver gets trace data from the service "questions-to-insights"
 
-  Scenario: Agent runs reach Phoenix when observability is on
-    Given a session on the World Cup dataset and no model is configured
+  Scenario: Workflow runs reach Phoenix when observability is on
+    Given the World Cup dataset and no model is configured
     When I turn on "Developer observability", click "Save" and restart the backend
-    And I ask a question in the session
-    Then the Phoenix receiver gets trace data for the "assistant" agent
+    And I run Questions to Insights v2 on a question
+    Then the Phoenix receiver gets trace data for the run's workflow steps
 
   Scenario: Backend logs reach the OTLP endpoint when observability is on
     When I turn on "Developer observability", click "Save" and restart the backend
