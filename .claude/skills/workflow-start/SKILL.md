@@ -5,9 +5,9 @@ description: Use at workflow steps 1–5 of any change in this repo (after readi
 
 # Steps 1–5 — Understand, plan, architecture, specs
 
-Part of the workflow in [CLAUDE.md](../../../CLAUDE.md), which keeps the always-on core (the mandatory first action, the step list, the change sizes, the story lane, wave check and acceptance gate, the hard gates). Load this skill once, before step 1; it covers every step up to the code.
+Part of the [`workflow-strict`](../workflow-strict/SKILL.md) workflow (the step list, the change sizes, the story lane, wave check, acceptance gate and Epic gate); [`workflow-free-style`](../workflow-free-style/SKILL.md) uses its steps 1–2 and, when they run, its optional roadmap, ADR and spec conventions. Load this skill once, before step 1; it covers every step up to the code.
 
-Scale each step to the change's size (**S / M / L**, defined in CLAUDE.md). The S column of each step says what a small change does.
+Scale each step to the change's size (**S / M / L**, defined in `workflow-strict`). The S column of each step says what a small change does.
 
 ## 1–2. Understand the goal and clarify
 

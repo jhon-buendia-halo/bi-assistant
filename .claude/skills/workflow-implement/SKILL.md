@@ -5,7 +5,7 @@ description: Use at workflow step 8 when writing production code in frontend/ or
 
 # Step 8 — Implement, and run the app locally
 
-Part of the workflow in [CLAUDE.md](../../../CLAUDE.md), which keeps the always-on core (the mandatory first action, the step list, the story lane, wave check and acceptance gate, the hard gates). Load this skill before the step starts.
+Step 8 of [`workflow-strict`](../workflow-strict/SKILL.md) and step 3 of [`workflow-free-style`](../workflow-free-style/SKILL.md). Load this skill before the step starts.
 
 ## The step
 

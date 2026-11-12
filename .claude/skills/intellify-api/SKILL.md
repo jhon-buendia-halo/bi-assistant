@@ -74,5 +74,5 @@ Collections are paged: `page` (1-based), `per_page` (default 100, max 500), resp
   ```bash
   cd backend && node -e "const {Client}=require('pg');const c=new Client({host:'127.0.0.1',port:55432,user:'world_cup',password:'world_cup_dev',database:'world_cup'});c.connect().then(()=>c.query('select datname from pg_database where not datistemplate')).then(r=>{console.log(r.rows.map(x=>x.datname).join(', '));return c.end()})"
   ```
-- **Running from a worktree:** follow CLAUDE.md's *Worktree deploy convention* — ask shared vs isolated, use an isolated `--data-dir` and free ports (e.g. `--port 3400 --intellify-api-port 3420`), never port 3000. Stop the app by its PID or background task, never `pkill -f`. A fresh data dir has no LLM provider: the RFP Builder needs one set in Settings before it can chat; the API itself does not.
+- **Running from a worktree:** follow the *Worktree deploy convention* in the `workflow-implement` skill — ask shared vs isolated, use an isolated `--data-dir` and free ports (e.g. `--port 3400 --intellify-api-port 3420`), never port 3000. Stop the app by its PID or background task, never `pkill -f`. A fresh data dir has no LLM provider: the RFP Builder needs one set in Settings before it can chat; the API itself does not.
 - **Restarting** = stop the CLI process and start it again with the *same* `--data-dir` (so the key stays the same).
