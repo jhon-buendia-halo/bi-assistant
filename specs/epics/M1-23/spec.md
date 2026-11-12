@@ -26,6 +26,17 @@ Why: the order of work and the rules that must always hold belong in code, not i
 - **Story 1.23.1 (done)** stays: the Graph tab draws v2's workflow, and the agent detail returns `workflow`.
 - **Workflows run on an input (amendment of 2026-11-11, confirmed by the user the same day).** A workflow runs once on a typed input defined in code and shows each step's result on its page; nothing is stored. The first is a three-step, code-only test workflow (1.23.9). All workflows become run workflows.
 - **Chats retired (amendment of 2026-11-11, confirmed by the user the same day; ADR-0041).** The workflow page becomes a designer: graph canvas in the middle, configuration in the right panel (1.23.10). Every workflow, the four agent workflows and user agents included, runs once on a typed input with live progress; runs of agent workflows are stored and listed under Runs, which replaces Sessions; existing sessions stay on disk and open read-only as past chats; no chat can start (Phase A, 1.23.11–1.23.22). Try it replaces the preview chat, and deep analysis and visual actions work on runs (Phase B). The chat code and specs are removed (Phase C). Plan: [docs/plans/m1-23-retire-chats.md](../../../docs/plans/m1-23-retire-chats.md). This supersedes "Evals" and "the legacy turn" in Out of scope below, which Phase C changes.
+- **A faster, cheaper development workflow (amendment of 2026-11-11, confirmed by the user the same day).**
+  - A lean story lane: builders do code, unit tests and one scenario, and the lead verifies per wave.
+  - Model and effort routing.
+  - Decide before building: a prototype first, and one confirmation per epic.
+  - Gherkin kept once, in the test.
+  - Generated story packs and a spec section index.
+  - Finished roadmap milestones archived.
+  - `qa.mjs --wave` for several stories at once.
+  - Playwright running in parallel.
+  - 1.23.26, extracting the turn engine, moved up, and `app.ts`/`app.html` split by area (1.23.28–1.23.33).
+  - Contract: [docs/plans/m1-23-dev-speedup.md](../../../docs/plans/m1-23-dev-speedup.md).
 
 ## Out of scope
 
@@ -51,7 +62,8 @@ Why: the order of work and the rules that must always hold belong in code, not i
 | — (no Jira, repo only) | The workflow page as a designer (graph canvas, right-panel configuration) | 1.23.10 |
 | — (no Jira, repo only) | Chats retired, Phase A: every workflow runs, runs are stored, no chat can start (ADR-0041) | 1.23.11–1.23.22 |
 | — (no Jira, repo only) | Chats retired, Phase B: Try it, deep analysis and visual actions on runs | 1.23.23–1.23.25 |
-| — (no Jira, repo only) | Chats retired, Phase C: the chat code and specs removed | 1.23.26–1.23.27 |
+| — (no Jira, repo only) | Chats retired, Phase C: the chat code and specs removed (1.23.26 moved up) | 1.23.26–1.23.27 |
+| — (no Jira, repo only) | A faster, cheaper development workflow: lean story lane, story packs, roadmap archive, wave QA, parallel Playwright, `app.ts` split | 1.23.28–1.23.33 |
 
 ## Specs touched
 

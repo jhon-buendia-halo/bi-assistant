@@ -1917,6 +1917,26 @@ Stories 1.23.10–1.23.27 retire chats: every workflow runs once on a typed inpu
 
 #### 1.23.27 — Remove the chat write paths and specs  `📋 Planned`
 - **Acceptance:** per plan 1.25.6; past chats stay readable.
+
+Stories 1.23.28–1.23.33 make the development workflow faster and cheaper, and 1.23.26 moves up to run before the rest of Phase A. The user decided on 2026-11-11 to implement every suggestion of the speed-up review on this branch. Contract: [docs/plans/m1-23-dev-speedup.md](docs/plans/m1-23-dev-speedup.md). Waves: S1 = 1.23.28, 1.23.29, 1.23.30, 1.23.31, 1.23.32; S2 = 1.23.26, 1.23.33; then Phase A resumes.
+
+#### 1.23.28 — Lean story lane, model and effort routing, decide-before-build  `🚧 In progress`
+- **Intent:** a story costs a fraction of today's time and tokens. **Scope:** contract section 1.23.28 (CLAUDE.md, the four workflow skills, builder.md, reviewer.md, delivery.md §10/12/13, lessons.md). **Acceptance:** check-specs green; a reviewer finds no contradiction between the documents.
+
+#### 1.23.29 — `story-pack.mjs` and the spec section index  `📋 Planned`
+- **Intent:** a builder starts from one generated brief instead of exploring. **Acceptance:** contract section 1.23.29.
+
+#### 1.23.30 — Archive finished milestones of the roadmap  `📋 Planned`
+- **Intent:** `roadmap.md` shrinks from 277 KB to under ~40 KB. **Acceptance:** contract section 1.23.30.
+
+#### 1.23.31 — `qa.mjs --wave`: one verification for several stories  `📋 Planned`
+- **Acceptance:** contract section 1.23.31.
+
+#### 1.23.32 — Playwright in parallel  `📋 Planned`
+- **Acceptance:** contract section 1.23.32: 3 workers, three green runs in a row, timings before and after.
+
+#### 1.23.33 — Split `app.ts` / `app.html` by area  `📋 Planned`
+- **Acceptance:** contract section 1.23.33: no visible or test-id change.
 ---
 
 ## Release 2 — Multi-user  (no target date yet)
