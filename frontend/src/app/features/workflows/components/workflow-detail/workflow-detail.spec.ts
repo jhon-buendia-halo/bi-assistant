@@ -19,15 +19,14 @@ const STEP = (id: string, title: string) => ({
   exits: [],
 });
 
-const SEQ: WorkflowDetail = {
-  id: 'seq-text-demo',
-  name: 'Sequential test workflow',
+const THREE_STEPS: WorkflowDetail = {
+  id: 'three-steps',
+  name: 'Three steps',
   description: 'A three-step example.',
   kind: 'code',
   owner: 'Official',
   agents: [],
   stepCount: 3,
-  bar: 'steps',
   trigger: 'run',
   input: [
     { name: 'text', label: 'Text', type: 'textarea', required: true },
@@ -43,7 +42,7 @@ const SEQ: WorkflowDetail = {
 };
 
 const V2: WorkflowDetail = {
-  ...SEQ,
+  ...THREE_STEPS,
   id: 'qti-v2-turn',
   name: 'Questions to Insights v2',
   trigger: 'run',
@@ -90,19 +89,19 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
   const text = (testId: string) => q(testId)?.textContent?.trim() ?? '';
 
   it('shows the breadcrumb, the name as h1, the id and kind, and the canvas', () => {
-    open(SEQ);
+    open(THREE_STEPS);
     const nav = el.querySelector('nav[aria-label="Breadcrumb"]')!;
     expect(nav.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-      'Workflows / Sequential test workflow',
+      'Workflows / Three steps',
     );
     expect(nav.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe(
-      'Sequential test workflow',
+      'Three steps',
     );
     q('workflow-breadcrumb')!.click();
     expect(events).toEqual(['back']);
     expect(q('workflow-detail-name')?.tagName).toBe('H1');
-    expect(text('workflow-detail-name')).toBe('Sequential test workflow');
-    expect(text('workflow-detail-id')).toBe('seq-text-demo');
+    expect(text('workflow-detail-name')).toBe('Three steps');
+    expect(text('workflow-detail-id')).toBe('three-steps');
     expect(text('workflow-detail-kind')).toBe('3 steps');
     expect(q('workflow-canvas')).not.toBeNull();
     expect(
@@ -113,7 +112,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
   });
 
   it('Execute workflow on the canvas opens the panel and asks for its run form; it never runs', () => {
-    open(SEQ);
+    open(THREE_STEPS);
     expect(q('workflow-start-chat')).toBeNull();
     expect(text('workflow-execute')).toBe('Execute workflow');
     expect(el.querySelector('header [data-testid="workflow-execute"]')).toBeNull();
@@ -125,7 +124,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(designer.runResult()).toBeNull();
   });
 
-  it('an agent workflow with an input has Execute and no Start chat (workflows R21)', () => {
+  it('Questions to Insights v2 with its input has Execute and no Start chat (workflows R21)', () => {
     open({
       ...V2,
       input: [
@@ -141,17 +140,8 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(events).toEqual(['openPanel']);
   });
 
-  it('the Data Readiness Agent has Execute workflow (every agent workflow runs from its page)', () => {
-    open({
-      ...V2,
-      id: 'agent:data-readiness',
-      input: [{ name: 'question', label: 'Question', type: 'textarea', required: false }],
-    });
-    expect(text('workflow-execute')).toBe('Execute workflow');
-  });
-
   it('a node selects it on the canvas and in the Workflow state panel; the background clears it', () => {
-    open(SEQ);
+    open(THREE_STEPS);
     q('workflow-node-count-words')!.click();
     fixture.detectChanges();
     expect(designer.selectedStepId()).toBe('count-words');
@@ -171,7 +161,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
   });
 
   it('a state panel row selects its node; the toggle collapses the panel', () => {
-    open(SEQ);
+    open(THREE_STEPS);
     q('workflow-state-node-clean-text')!.click();
     fixture.detectChanges();
     expect(designer.selectedStepId()).toBe('clean-text');
@@ -185,7 +175,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
   });
 
   it('a double click opens the node dialog; Close returns the focus to the node', fakeAsync(() => {
-    open(SEQ);
+    open(THREE_STEPS);
     q('workflow-node-count-words')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     fixture.detectChanges();
     expect(designer.openNodeId()).toBe('count-words');
@@ -221,14 +211,14 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
   });
 
   it('shows the run status on the canvas nodes while a run is shown', () => {
-    open(SEQ);
+    open(THREE_STEPS);
     designer.run.set({
       id: 'run-1',
-      workflowId: 'seq-text-demo',
-      workflowName: 'Sequential test workflow',
+      workflowId: 'three-steps',
+      workflowName: 'Three steps',
       input: { text: 'a' },
       status: 'success',
-      steps: SEQ.steps.map((s) => ({ id: s.id, title: s.title, status: 'success' as const })),
+      steps: THREE_STEPS.steps.map((s) => ({ id: s.id, title: s.title, status: 'success' as const })),
       datasets: [],
       startedAt: '2026-11-11T10:00:00.000Z',
     });
@@ -258,7 +248,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(el.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe('nope');
 
     fixture.destroy();
-    open(SEQ);
+    open(THREE_STEPS);
     designer.openNode('clean-text');
     designer.setInput('text', 'x');
     fixture.destroy();
@@ -269,7 +259,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
   });
 
   it('leaves room for the Expand button when the right panel is closed', () => {
-    open(SEQ);
+    open(THREE_STEPS);
     const header = el.querySelector('header')!;
     expect(header.classList).toContain('pr-6');
     fixture.componentRef.setInput('panelOpen', false);

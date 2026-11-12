@@ -9,8 +9,8 @@ import {
 } from './workflow-node-inspection';
 
 const WORKFLOW = {
-  id: 'agent:assistant',
-  name: 'Assistant',
+  id: 'two-steps',
+  name: 'Two steps',
   description: 'Answers questions.',
   agents: [{ key: 'assistant', name: 'Assistant', model: 'openai/gpt-5' }],
   steps: [

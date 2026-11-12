@@ -86,11 +86,6 @@ export interface ChatMessage {
   /** Curated knowledge snippets this answer's context carried. */
   knowledge?: KnowledgeUse[];
   /**
-   * Present when a deep-analysis job produced a report. The content is the
-   * report's executive summary; the full markdown is downloadable.
-   */
-  report?: AnalysisReport;
-  /**
    * The last readiness report this turn produced (Data Readiness Agent
    * sessions; data-model 3.4.1). Drives the readiness card.
    */
@@ -112,31 +107,6 @@ export interface ReadinessReportRef {
   overallScore: number;
   maturity: ReadinessMaturity;
   generatedAt: string;
-}
-
-export interface AnalysisReport {
-  jobId: string;
-  title: string;
-  /** Workspace-relative path of the stored markdown report. */
-  path: string;
-  angles: number;
-}
-
-/** Deep-analysis job lifecycle, as reported by polling. */
-export type DeepAnalysisStatus =
-  'planning' | 'investigating' | 'writing' | 'done' | 'error';
-
-export interface DeepAnalysisResult {
-  ok: boolean;
-  message: string;
-  jobId?: string;
-  status?: DeepAnalysisStatus;
-  /** Human-readable line for the pending card. */
-  progress?: string;
-  step?: number;
-  steps?: number;
-  title?: string;
-  error?: string;
 }
 
 export type MessageFeedback = 'up' | 'down';

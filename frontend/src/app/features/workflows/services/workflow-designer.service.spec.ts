@@ -10,7 +10,6 @@ import {
   WorkflowRun,
   WorkflowRunRequest,
 } from '../models/workflow.model';
-import { ToastService } from '../../../core/toast/toast.service';
 import { WorkflowDesigner } from './workflow-designer.service';
 import { RunStreamHandlers, WorkflowRunsApiService } from './workflow-runs-api.service';
 
@@ -42,22 +41,22 @@ class FakeRunsApi {
   }
 }
 
+/** A one-agent-step code workflow over picked datasets, with a checkbox. */
 const ASSISTANT: WorkflowDetail = {
-  id: 'agent:assistant',
-  name: 'Assistant',
+  id: 'qti-v2-turn',
+  name: 'Questions to Insights v2',
   description: 'Answers questions over the datasets you pick.',
-  kind: 'agent',
+  kind: 'code',
   owner: 'Official',
-  agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
+  agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
   stepCount: 1,
-  bar: 'agent',
   trigger: 'run',
   input: [
     { name: 'question', label: 'Question', type: 'textarea', required: true },
     { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
     {
-      name: 'careful',
-      label: 'Careful: cross-check the result with an independent query',
+      name: 'verbose',
+      label: 'Verbose',
       type: 'boolean',
       required: false,
       default: false,
@@ -82,9 +81,9 @@ const ASSISTANT: WorkflowDetail = {
 function storedRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
   return {
     id: 'run-1',
-    workflowId: 'agent:assistant',
-    workflowName: 'Assistant',
-    input: { question: 'Which team scored the most goals?', datasets: ['World Cup Core'], careful: false },
+    workflowId: 'qti-v2-turn',
+    workflowName: 'Questions to Insights v2',
+    input: { question: 'Which team scored the most goals?', datasets: ['World Cup Core'], verbose: false },
     status: 'success',
     steps: [{ id: 'answer', title: 'Answer', status: 'success', output: { stopped: false } }],
     question: 'Which team scored the most goals?',
@@ -112,7 +111,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer = TestBed.inject(WorkflowDesigner);
     http = TestBed.inject(HttpTestingController);
     designer.load(ASSISTANT.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/agent%3Aassistant')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(ASSISTANT);
     http
       .expectOne((r) => r.url.endsWith('/datasets'))
       .flush({ datasets: [{ name: 'World Cup Core', tables: ['a', 'b'], datasourceKind: 'postgres' }] });
@@ -130,24 +129,24 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer.prefillRunAgain({
       question: 'Which team scored the most goals?',
       datasets: ['World Cup Core'],
-      careful: true,
+      verbose: true,
     });
     designer.load(ASSISTANT.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/agent%3Aassistant')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(ASSISTANT);
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
     expect(designer.runFormRequest()).toBe(1);
     expect(designer.inputValue('question')).toBe('Which team scored the most goals?');
     expect(designer.picked('datasets')).toEqual(['World Cup Core']);
-    expect(designer.checked('careful')).toBeTrue();
+    expect(designer.checked('verbose')).toBeTrue();
     // A second open starts from the defaults again.
     designer.load(ASSISTANT.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/agent%3Aassistant')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(ASSISTANT);
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
     expect(designer.runFormRequest()).toBe(0);
   });
 
   it('starts the form from the defaults and loads the datasets to pick from', () => {
-    expect(designer.inputValues()).toEqual({ careful: false });
+    expect(designer.inputValues()).toEqual({ verbose: false });
     expect(designer.datasets().map((d) => d.name)).toEqual(['World Cup Core']);
   });
 
@@ -195,9 +194,9 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.liveInput()).toEqual({
       question: 'Which team scored the most goals?',
       datasets: ['World Cup Core'],
-      careful: false,
+      verbose: false,
     });
-    h.onRun!({ runId: 'run-1', workflowId: 'agent:assistant' });
+    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
     h.onStep!({
       id: 'answer',
       title: 'Answer',
@@ -274,31 +273,15 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
 
   it("sends the form's typed input to the workflow's stream", () => {
     executeQuestion();
-    expect(runs.last.workflowId).toBe('agent:assistant');
+    expect(runs.last.workflowId).toBe('qti-v2-turn');
     expect(runs.last.body).toEqual({
       input: {
         question: 'Which team scored the most goals?',
         datasets: ['World Cup Core'],
-        careful: false,
+        verbose: false,
       },
     });
     expect(designer.running()).toBe(true);
-  });
-
-  it('keeps the agent phases of the run for the phases bar, live and as stored (plan 1.24.5)', () => {
-    executeQuestion();
-    expect(designer.phases()).toBeNull();
-    const view = {
-      phases: [{ number: 1, title: 'Understand' }],
-      current: 1,
-      done: [],
-      skipped: [],
-      source: 'workflow' as const,
-    };
-    runs.last.handlers.onWorkflow!(view);
-    expect(designer.phases()).toEqual(view);
-    runs.last.handlers.onDone!({ ...storedRun(), workflow: { ...view, current: null, done: [1] } });
-    expect(designer.phases()?.done).toEqual([1]);
   });
 
   it('shows the steps progress live, the tool calls and the answer forming, then the stored run', () => {
@@ -307,7 +290,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.runResult()?.status).toBe('running');
     expect(designer.runResult()?.steps.map((s) => s.status)).toEqual([null]);
 
-    h.onRun!({ runId: 'run-1', workflowId: 'agent:assistant' });
+    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
     h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
     expect(designer.nodeStatuses()).toEqual({ start: 'success', answer: 'running' });
     h.onReasoning!('Looking at goals');
@@ -373,7 +356,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
   it('an error after the run started fails the run with it, and the running step', () => {
     executeQuestion();
     const h = runs.last.handlers;
-    h.onRun!({ runId: 'run-1', workflowId: 'agent:assistant' });
+    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
     h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
     h.onError!('The endpoint rejected the API key (401)');
     expect(designer.runError()).toBeNull();
@@ -387,7 +370,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
   it('Stop aborts the stream, shows the run stopped, then reads back the stored run with its partial answer', fakeAsync(() => {
     executeQuestion();
     const h = runs.last.handlers;
-    h.onRun!({ runId: 'run-1', workflowId: 'agent:assistant' });
+    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
     h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
     runs.getRun.and.returnValues(
       of(storedRun({ status: 'running', answer: undefined })),
@@ -424,7 +407,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer.followUp(designer.followUpText());
     expect(runs.calls.length).toBe(2);
     expect(runs.last.body).toEqual({
-      input: { question: 'And the fewest?', datasets: ['World Cup Core'], careful: false },
+      input: { question: 'And the fewest?', datasets: ['World Cup Core'], verbose: false },
       context: { fromRunId: 'run-1' },
     });
     expect(designer.inputValue('question')).toBe('And the fewest?');
@@ -455,7 +438,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     );
     designer.followUp('Highest win rate');
     expect(runs.last.body).toEqual({
-      input: { question: 'Highest win rate', datasets: ['World Cup Core'], careful: false },
+      input: { question: 'Highest win rate', datasets: ['World Cup Core'], verbose: false },
       context: { fromRunId: 'run-1' },
     });
   });
@@ -468,241 +451,18 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.runResult()).toBeNull();
     expect(designer.running()).toBe(false);
   });
-});
-
-const PHASED: WorkflowDetail = {
-  ...ASSISTANT,
-  id: 'agent:phased',
-  name: 'Phased agent',
-  description: 'Walks a consultant through a review.',
-  agents: [{ key: 'phased', name: 'Phased agent' }],
-  input: [
-    {
-      name: 'message',
-      label: 'Message',
-      type: 'textarea',
-      required: true,
-      placeholder: 'Name the client and plan year, or state your decision',
-    },
-  ],
-  datasets: ['Sample data'],
-  starterQuestions: ['Start a review for a client'],
-};
-
-const START = 'Start a review for Orchard Manufacturing, plan year 2027';
-const PROPOSAL = 'Stage 1: Orchard Manufacturing renews on 1 January 2027. Confirm?';
-
-function phasedRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
-  return storedRun({
-    workflowId: 'agent:phased',
-    workflowName: 'Phased agent',
-    input: { message: START },
-    question: START,
-    answer: { role: 'assistant', content: PROPOSAL, at: '2026-11-11T10:00:01.000Z' },
-    datasets: ['Sample data'],
-    ...overrides,
-  });
-}
-
-describe('WorkflowDesigner, an agent workflow with phases', () => {
-  let designer: WorkflowDesigner;
-  let runs: FakeRunsApi;
-  let http: HttpTestingController;
-
-  beforeEach(() => {
-    runs = new FakeRunsApi();
-    TestBed.configureTestingModule({
-      providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        { provide: WorkflowRunsApiService, useValue: runs },
-      ],
-    });
-    designer = TestBed.inject(WorkflowDesigner);
-    http = TestBed.inject(HttpTestingController);
-    designer.load(PHASED.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/agent%3Aphased')).flush(PHASED);
-  });
-
-  afterEach(() => http.verify());
-
-  function firstExchange(run: WorkflowRun = phasedRun()): void {
-    designer.setInput('message', START);
-    designer.execute();
-    runs.last.handlers.onRun!({ runId: run.id, workflowId: 'agent:phased' });
-    runs.last.handlers.onDone!(run);
-  }
-
-  it('runs from its page, with the message only', () => {
-    designer.setInput('message', START);
-    designer.execute();
-    expect(runs.last.body).toEqual({ input: { message: START } });
-  });
-
-  it('offers Follow up under a stored answer', () => {
-    firstExchange();
-    expect(designer.canFollowUp()).toBe(true);
-  });
-
-  it('a clarification pick follows up with the earlier run as its context', () => {
-    firstExchange(
-      phasedRun({
-        answer: {
-          role: 'assistant',
-          content: 'Which client do you mean?',
-          at: 'x',
-          clarification: {
-            question: 'Which client do you mean?',
-            options: [{ label: 'Orchard Manufacturing' }, { label: 'Orchard Foods' }],
-          },
-        },
-      }),
-    );
-    designer.followUp('Orchard Manufacturing');
-    expect(runs.last.body).toEqual({
-      input: { message: 'Orchard Manufacturing' },
-      context: { fromRunId: 'run-1' },
-    });
-  });
 
   it('an old stored run that still carries an rfpId is shown as a plain run', () => {
-    firstExchange({ ...phasedRun(), rfpId: 'rfp-1' } as WorkflowRun);
-    expect(designer.run()?.answer?.content).toBe(PROPOSAL);
+    executeQuestion();
+    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    runs.last.handlers.onDone!({ ...storedRun(), rfpId: 'rfp-1' } as WorkflowRun);
+    expect(designer.run()?.answer?.content).toBe('Brazil scored the most.');
     expect(designer.canFollowUp()).toBe(true);
-    designer.followUp('Orchard Foods');
-    expect(runs.last.body.input).toEqual({ message: 'Orchard Foods' });
   });
 
-  it("shows the phases live from the agent's workflow events, then as stored", () => {
-    designer.setInput('message', START);
-    designer.execute();
-    expect(designer.phases()).toBeNull();
-    runs.last.handlers.onWorkflow!({
-      phases: [
-        { number: 1, title: 'Client and renewal' },
-        { number: 2, title: 'Current program' },
-      ],
-      current: 1,
-      done: [],
-      source: 'prompt',
-      skipped: [],
-    });
-    expect(designer.phases()?.current).toBe(1);
-    runs.last.handlers.onDone!(
-      phasedRun({
-        workflow: {
-          phases: [
-            { number: 1, title: 'Client and renewal' },
-            { number: 2, title: 'Current program' },
-          ],
-          current: 2,
-          done: [1],
-          source: 'prompt',
-          skipped: [],
-        },
-      }),
-    );
-    expect(designer.phases()?.done).toEqual([1]);
-    expect(designer.phases()?.current).toBe(2);
-  });
-});
-
-describe('WorkflowDesigner, a deep-analysis run (plan 1.25.3)', () => {
-  const REPORT_PATH = 'reports/denial-drivers.md';
-  const DEEP: WorkflowDetail = {
-    ...ASSISTANT,
-    id: 'deep-analysis',
-    name: 'Deep analysis',
-    kind: 'code',
-    stepCount: 4,
-    bar: 'steps',
-    trigger: 'run',
-    input: ASSISTANT.input.slice(0, 2),
-    steps: ['plan', 'investigate', 'write', 'assemble'].map((id) => ({
-      id,
-      title: id,
-      kind: id === 'assemble' ? ('code' as const) : ('agent' as const),
-      summary: id,
-      input: [],
-      output: [],
-      exits: [],
-    })),
-  };
-  const report = { jobId: 'run-1', title: 'Denial drivers', path: REPORT_PATH, angles: 3 };
-  let designer: WorkflowDesigner;
-  let runs: FakeRunsApi & { downloadPanelItem: jasmine.Spy };
-  let http: HttpTestingController;
-  let toast: jasmine.SpyObj<ToastService>;
-
-  beforeEach(() => {
-    runs = Object.assign(new FakeRunsApi(), {
-      downloadPanelItem: jasmine
-        .createSpy('downloadPanelItem')
-        .and.returnValue(of(new Blob(['# Denial drivers']))),
-    });
-    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
-    TestBed.configureTestingModule({
-      providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        { provide: WorkflowRunsApiService, useValue: runs },
-        { provide: ToastService, useValue: toast },
-      ],
-    });
-    designer = TestBed.inject(WorkflowDesigner);
-    http = TestBed.inject(HttpTestingController);
-    designer.load(DEEP.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/deep-analysis')).flush(DEEP);
-    http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
-  });
-
-  afterEach(() => http.verify());
-
-  function finish(): void {
-    designer.setInput('question', 'Why are denials rising?');
-    designer.toggleDataset('datasets', 'World Cup Core');
-    designer.execute();
-    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'deep-analysis' });
-    runs.last.handlers.onDone!(
-      storedRun({
-        workflowId: 'deep-analysis',
-        workflowName: 'Deep analysis',
-        steps: DEEP.steps.map((step) => ({ id: step.id, title: step.title, status: 'success' })),
-        answer: {
-          role: 'assistant',
-          content: 'Denials rose to 12.4%.',
-          at: '2026-11-11T10:00:01.000Z',
-          report,
-        },
-        panelItems: [
-          {
-            id: 'deep-analysis-report',
-            kind: 'file',
-            title: 'Denial drivers',
-            shownAt: 'x',
-            path: REPORT_PATH,
-            bytes: 2048,
-          },
-        ],
-      }),
-    );
-  }
-
-  it("downloads the report from the run's file route, named as the file, with a toast", () => {
-    finish();
-    const click = spyOn(HTMLAnchorElement.prototype, 'click');
-    designer.downloadReport(report);
-    expect(runs.downloadPanelItem).toHaveBeenCalledWith('run-1', 'deep-analysis-report');
-    const link = click.calls.mostRecent().object as HTMLAnchorElement;
-    expect(link.download).toBe('denial-drivers.md');
-    expect(toast.success).toHaveBeenCalledWith('Report downloaded');
-    expect(designer.reportDownloading()).toBeFalse();
-  });
-
-  it('says the download failed when the run has no file at the report path', () => {
-    finish();
-    designer.downloadReport({ ...report, path: 'reports/other.md' });
-    expect(runs.downloadPanelItem).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith('Report download failed');
+  it('no longer reads agent phases from the stream (agents have no workflow of their own)', () => {
+    executeQuestion();
+    expect('phases' in designer).toBe(false);
+    expect(runs.last.handlers.onWorkflow).toBeUndefined();
   });
 });

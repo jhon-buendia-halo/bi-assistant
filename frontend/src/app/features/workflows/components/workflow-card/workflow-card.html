@@ -25,9 +25,7 @@
     <span class="mt-auto flex flex-wrap items-center gap-2 pt-1">
       <span
         [attr.data-testid]="'workflow-kind-' + w.id"
-        class="chip"
-        [class.chip-info]="w.kind === 'code'"
-        [class.chip-neutral]="w.kind !== 'code'"
+        class="chip chip-info"
         >{{ kindLabel() }}</span
       >
       @if (usesLabel()) {

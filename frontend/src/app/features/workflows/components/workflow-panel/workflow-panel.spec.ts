@@ -4,7 +4,6 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { of } from 'rxjs';
 import {
   WorkflowDetail,
   WorkflowRun,
@@ -15,10 +14,6 @@ import {
   RunStreamHandlers,
   WorkflowRunsApiService,
 } from '../../services/workflow-runs-api.service';
-import {
-  sampleReadinessPanelItem,
-  sampleReadinessReport,
-} from '../../../sessions/models/readiness.testing';
 import { WorkflowPanel } from './workflow-panel';
 
 const STEP = (id: string, title: string, input: string[], output: string[]) => ({
@@ -31,15 +26,15 @@ const STEP = (id: string, title: string, input: string[], output: string[]) => (
   exits: [],
 });
 
+/** A code workflow that calls no agent. */
 const SEQ: WorkflowDetail = {
-  id: 'seq-text-demo',
-  name: 'Sequential test workflow',
+  id: 'three-steps',
+  name: 'Three steps',
   description: 'A three-step example.',
   kind: 'code',
   owner: 'Official',
   agents: [],
   stepCount: 3,
-  bar: 'steps',
   trigger: 'run',
   input: [
     {
@@ -96,7 +91,6 @@ class FakeRunsApi {
     signal?: AbortSignal;
   }[] = [];
   getRun = jasmine.createSpy('getRun');
-  downloadPanelItem = jasmine.createSpy('downloadPanelItem');
 
   streamRun(
     workflowId: string,
@@ -113,15 +107,14 @@ class FakeRunsApi {
   }
 }
 
+/** A code workflow with one agent step, a question, datasets and a checkbox. */
 const ASSISTANT: WorkflowDetail = {
   ...SEQ,
-  id: 'agent:assistant',
-  name: 'Assistant',
-  kind: 'agent',
+  id: 'qti-v2-turn',
+  name: 'Questions to Insights v2',
   trigger: 'run',
-  bar: 'agent',
   stepCount: 1,
-  agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
+  agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
   input: [
     {
       name: 'question',
@@ -132,8 +125,8 @@ const ASSISTANT: WorkflowDetail = {
     },
     { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
     {
-      name: 'careful',
-      label: 'Careful: cross-check the result with an independent query',
+      name: 'verbose',
+      label: 'Verbose',
       type: 'boolean',
       required: false,
       default: false,
@@ -150,8 +143,8 @@ const ASSISTANT: WorkflowDetail = {
 function seqRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
   return {
     id: 'run-1',
-    workflowId: 'seq-text-demo',
-    workflowName: 'Sequential test workflow',
+    workflowId: 'three-steps',
+    workflowName: 'Three steps',
     input: { text: 'a' },
     status: 'success',
     steps: [],
@@ -163,9 +156,9 @@ function seqRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
 
 function assistantRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
   return seqRun({
-    workflowId: 'agent:assistant',
-    workflowName: 'Assistant',
-    input: { question: 'Which team scored the most goals?', datasets: [], careful: false },
+    workflowId: 'qti-v2-turn',
+    workflowName: 'Questions to Insights v2',
+    input: { question: 'Which team scored the most goals?', datasets: [], verbose: false },
     question: 'Which team scored the most goals?',
     steps: [{ id: 'answer', title: 'Answer', status: 'success', output: { stopped: false } }],
     ...overrides,
@@ -291,7 +284,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       openRun();
       type('  Hello  ');
       const call = execute();
-      expect(call.workflowId).toBe('seq-text-demo');
+      expect(call.workflowId).toBe('three-steps');
       expect(call.body).toEqual({ input: { text: '  Hello  ' } });
       fixture.detectChanges();
       const button = q('workflow-run') as HTMLButtonElement;
@@ -300,7 +293,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(text('workflow-run-stop')).toBe('Stop');
       expect(text('workflow-run-status')).toBe('Running…');
 
-      call.handlers.onRun!({ runId: 'run-1', workflowId: 'seq-text-demo' });
+      call.handlers.onRun!({ runId: 'run-1', workflowId: 'three-steps' });
       call.handlers.onStep!({ id: 'clean-text', title: 'Clean text', status: 'running' });
       fixture.detectChanges();
       expect(q('workflow-run-step-clean-text')?.textContent).toContain('Running');
@@ -374,7 +367,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
     });
   });
 
-  describe('Run tab of an agent workflow (workflows R21)', () => {
+  describe('Run tab of a workflow with an agent step (workflows R21)', () => {
     const DATASETS = [
       { name: 'World Cup Core', tables: ['a', 'b'], datasourceKind: 'postgres' },
       { name: 'Sales', tables: ['c'], datasourceKind: 'rest' },
@@ -382,7 +375,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
 
     function openAssistant(workflow: WorkflowDetail = ASSISTANT): void {
       open(workflow, () => {
-        if (workflow.input.some((f) => f.type === 'datasets' || f.type === 'dataset')) {
+        if (workflow.input.some((f) => f.type === 'datasets')) {
           http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: DATASETS });
         }
       });
@@ -420,15 +413,15 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(cards[0].getAttribute('aria-pressed')).toBe('true');
       expect(designer.picked('datasets')).toEqual(['World Cup Core']);
 
-      const careful = q('workflow-input-careful') as HTMLInputElement;
-      expect(careful.type).toBe('checkbox');
-      expect(careful.checked).toBe(false);
-      expect(careful.closest('label')?.textContent?.trim()).toBe(
-        'Careful: cross-check the result with an independent query',
+      const verbose = q('workflow-input-verbose') as HTMLInputElement;
+      expect(verbose.type).toBe('checkbox');
+      expect(verbose.checked).toBe(false);
+      expect(verbose.closest('label')?.textContent?.trim()).toBe(
+        'Verbose',
       );
-      careful.click();
+      verbose.click();
       fixture.detectChanges();
-      expect(designer.checked('careful')).toBe(true);
+      expect(designer.checked('verbose')).toBe(true);
 
       typeQuestion('Which team scored the most goals?');
       click('workflow-run');
@@ -436,30 +429,30 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
         input: {
           question: 'Which team scored the most goals?',
           datasets: ['World Cup Core'],
-          careful: true,
+          verbose: true,
         },
       });
     });
 
-    it('a dataset field is a list of the datasets of its kinds', () => {
+    it('a datasets field lists only the datasets of its kinds', () => {
       openAssistant({
         ...ASSISTANT,
         input: [
           {
-            name: 'dataset',
-            label: 'Dataset',
-            type: 'dataset',
+            name: 'datasets',
+            label: 'Datasets',
+            type: 'datasets',
             required: true,
             datasourceKinds: ['postgres', 'databricks'],
           },
         ],
       });
-      const select = q('workflow-input-dataset') as HTMLSelectElement;
-      expect(select.tagName).toBe('SELECT');
-      expect(Array.from(select.options).map((o) => o.textContent?.trim())).toEqual([
-        'Select a dataset',
-        'World Cup Core',
-      ]);
+      const picker = q('workflow-input-datasets')!;
+      expect(
+        Array.from(picker.querySelectorAll('button')).map((b) =>
+          b.querySelector('span')?.textContent?.trim(),
+        ),
+      ).toEqual(['World Cup Core']);
     });
 
     it('example chips fill the question and do not run', () => {
@@ -469,18 +462,6 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
         'Which team scored the most goals?',
       );
       expect(runs.calls.length).toBe(0);
-    });
-
-    it("a user agent's own datasets are read-only chips, not a picker", () => {
-      openAssistant({
-        ...ASSISTANT,
-        id: 'agent:u1',
-        owner: 'You',
-        datasets: ['World Cup Core'],
-        input: ASSISTANT.input.filter((f) => f.type !== 'datasets'),
-      });
-      expect(q('workflow-input-datasets')).toBeNull();
-      expect(text('workflow-run-datasets')).toContain('World Cup Core');
     });
 
     it('a run requirement disables Execute with its text', () => {
@@ -496,7 +477,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       typeQuestion('Which team scored the most goals?');
       click('workflow-run');
       const h = runs.last.handlers;
-      h.onRun!({ runId: 'run-1', workflowId: 'agent:assistant' });
+      h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
       h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
       h.onReasoning!('Looking at the goals table');
       h.onTool!({ name: 'run_readonly_sql', input: 'SELECT 1' });
@@ -537,155 +518,13 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       fixture.detectChanges();
       click('workflow-run-follow-up');
       expect(runs.last.body).toEqual({
-        input: { question: 'And the fewest?', datasets: [], careful: false },
+        input: { question: 'And the fewest?', datasets: [], verbose: false },
         context: { fromRunId: 'run-1' },
       });
       fixture.detectChanges();
       expect(text('workflow-run-context')).toBe(
         'Follows up on “Which team scored the most goals?”',
       );
-    });
-
-    describe('a Data Readiness run (1.23.16; data-readiness R2, R5)', () => {
-      const REPORT = sampleReadinessReport({ id: 'r1', datasourceName: 'World Cup DB' });
-      const READINESS: WorkflowDetail = {
-        ...ASSISTANT,
-        id: 'agent:data-readiness',
-        name: 'Data Readiness Agent',
-        agents: [{ key: 'data-readiness', name: 'Data Readiness Agent' }],
-        input: [
-          {
-            name: 'dataset',
-            label: 'Dataset',
-            type: 'dataset',
-            required: true,
-            datasourceKinds: ['postgres', 'databricks'],
-          },
-          {
-            name: 'question',
-            label: 'Question',
-            type: 'textarea',
-            required: false,
-            placeholder: 'Assess the readiness of this dataset',
-            default: 'Assess the readiness of this dataset',
-          },
-        ],
-      };
-      const SQL_FILE = {
-        id: 'file:synthetic/world_cup.sql',
-        kind: 'file' as const,
-        title: 'Synthetic data — World Cup',
-        shownAt: '2026-11-11T10:00:02.000Z',
-        path: 'synthetic/world_cup.sql',
-        bytes: 2048,
-      };
-
-      function readinessRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
-        return assistantRun({
-          workflowId: 'agent:data-readiness',
-          workflowName: 'Data Readiness Agent',
-          input: { dataset: 'World Cup Core', question: 'Assess the readiness of this dataset' },
-          question: 'Assess the readiness of this dataset',
-          answer: {
-            role: 'assistant',
-            content: 'The dataset scored 82.',
-            at: 'x',
-            readinessReport: {
-              reportId: 'r1',
-              datasourceName: 'World Cup DB',
-              overallScore: 82,
-              maturity: 'Managed',
-              generatedAt: REPORT.generatedAt,
-            },
-          },
-          panelItems: [sampleReadinessPanelItem('r1')],
-          ...overrides,
-        });
-      }
-
-      function finishRun(run: WorkflowRun): void {
-        click('workflow-run');
-        const h = runs.last.handlers;
-        h.onRun!({ runId: run.id, workflowId: run.workflowId });
-        h.onDone!(run);
-        fixture.detectChanges();
-      }
-
-      it('the running tool row shows the assessment progress', () => {
-        openAssistant(READINESS);
-        click('workflow-run');
-        const h = runs.last.handlers;
-        h.onRun!({ runId: 'run-1', workflowId: 'agent:data-readiness' });
-        h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
-        h.onTool!({ name: 'assess_data_readiness' });
-        h.onToolProgress!({
-          tool: 'assess_data_readiness',
-          phase: 'profiling',
-          message: 'Profiling world_cup.goals (3/12)…',
-          done: 3,
-          total: 12,
-        });
-        fixture.detectChanges();
-        expect(q('workflow-run-tool')?.textContent).toContain(
-          'Profiling world_cup.goals (3/12)…',
-        );
-      });
-
-      it('Open scorecard on the readiness card shows the scorecard in the Run tab, and Close hides it', () => {
-        openAssistant(READINESS);
-        finishRun(readinessRun());
-        expect(q('workflow-run-scorecard')).toBeNull();
-        click('readiness-open-scorecard');
-        http
-          .expectOne((r) => r.url.endsWith('/data-readiness/assessments/r1'))
-          .flush(REPORT);
-        fixture.detectChanges();
-        const scorecard = q('workflow-run-scorecard')!;
-        expect(scorecard.querySelector('[data-testid="readiness-scorecard"]')?.textContent).toContain(
-          'World Cup DB',
-        );
-        expect(scorecard.textContent).toContain('Past assessments');
-        click('workflow-run-scorecard-close');
-        expect(q('workflow-run-scorecard')).toBeNull();
-      });
-
-      it('a new run closes the scorecard of the earlier one', () => {
-        openAssistant(READINESS);
-        finishRun(readinessRun());
-        click('readiness-open-scorecard');
-        http
-          .expectOne((r) => r.url.endsWith('/data-readiness/assessments/r1'))
-          .flush(REPORT);
-        finishRun(readinessRun({ id: 'run-2' }));
-        expect(q('workflow-run-scorecard')).toBeNull();
-      });
-
-      it("lists the run's synthetic SQL files and downloads one through the run's route", () => {
-        runs.downloadPanelItem.and.returnValue(of(new Blob(['INSERT INTO t VALUES (1);'])));
-        spyOn(URL, 'createObjectURL').and.returnValue('blob:x');
-        const clicks = spyOn(HTMLAnchorElement.prototype, 'click');
-        openAssistant(READINESS);
-        finishRun(readinessRun({ panelItems: [sampleReadinessPanelItem('r1'), SQL_FILE] }));
-        const files = q('workflow-run-files')!;
-        expect(files.textContent).toContain('Synthetic data — World Cup');
-        expect(files.textContent).toContain('world_cup.sql');
-        const button = files.querySelector<HTMLButtonElement>(
-          'button[aria-label="Download world_cup.sql"]',
-        )!;
-        button.click();
-        fixture.detectChanges();
-        expect(runs.downloadPanelItem).toHaveBeenCalledOnceWith(
-          'run-1',
-          'file:synthetic/world_cup.sql',
-        );
-        expect(clicks).toHaveBeenCalled();
-      });
-
-      it('a run without file items lists no files', () => {
-        openAssistant(READINESS);
-        finishRun(readinessRun());
-        expect(q('workflow-run-files')).toBeNull();
-      });
     });
 
     it('Stop ends the run: the run reads "Run stopped"', () => {
@@ -700,131 +539,43 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(q('workflow-run-step-answer')?.textContent).toContain('Stopped');
       expect(text('workflow-run')).toBe('Execute');
     });
-  });
 
-  describe('Run tab of an agent workflow with phases (agent-panel R16)', () => {
-    const PHASED: WorkflowDetail = {
-      ...ASSISTANT,
-      id: 'agent:phased',
-      name: 'Phased agent',
-      agents: [{ key: 'phased', name: 'Phased agent' }],
-      datasets: ['Sample data'],
-      input: [
-        {
-          name: 'message',
-          label: 'Message',
-          type: 'textarea',
-          required: true,
-          placeholder: 'Name the client and plan year, or state your decision',
-        },
-      ],
-    };
-    const START = 'Start a review for Orchard Manufacturing, plan year 2027';
-    const STAGES = [
-      { number: 1, title: 'Client and renewal' },
-      { number: 2, title: 'Current program' },
-      { number: 3, title: 'What to market' },
-    ];
-
-    function phasedRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
-      return assistantRun({
-        workflowId: 'agent:phased',
-        workflowName: 'Phased agent',
-        input: { message: START },
-        question: START,
-        answer: { role: 'assistant', content: 'Stage 1 proposal. Confirm?', at: 'x' },
-        ...overrides,
-      });
-    }
-
-    function typeMessage(value: string): void {
-      const field = q('workflow-input-message') as HTMLTextAreaElement;
-      field.value = value;
-      field.dispatchEvent(new Event('input'));
-      fixture.detectChanges();
-    }
-
-    it('the form is the message only', () => {
-      open(PHASED);
-      expect(
-        (q('workflow-input-message') as HTMLTextAreaElement).placeholder,
-      ).toBe('Name the client and plan year, or state your decision');
-      expect(q('workflow-input-datasets')).toBeNull();
-    });
-
-    it('without its sample Execute is disabled with the requirement', () => {
-      const requirement = 'Load the sample in Settings → Testing Data first';
-      open({ ...PHASED, runRequirement: requirement });
-      const button = q('workflow-run') as HTMLButtonElement;
-      expect(button.disabled).toBe(true);
-      expect(button.title).toBe(requirement);
-      expect(text('workflow-run-requirement')).toBe(requirement);
-    });
-
-    it('shows the phases inside the agent step, live and as stored', () => {
-      open(PHASED);
-      typeMessage(START);
+    it('an old run that carries an rfpId, a deep-analysis report or files shows as a plain answer', () => {
+      openAssistant();
+      typeQuestion('Export a draft');
       click('workflow-run');
       const h = runs.last.handlers;
-      h.onRun!({ runId: 'run-1', workflowId: 'agent:phased' });
-      h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
-      h.onWorkflow!({ phases: STAGES, current: 1, done: [], source: 'prompt', skipped: [] });
-      fixture.detectChanges();
-      const phases = q('workflow-run-phases')!;
-      expect(phases).not.toBeNull();
-      expect(q('workflow-run-phase-1')?.getAttribute('aria-current')).toBe('step');
-      expect(q('workflow-run-phase-1')?.textContent).toContain('Client and renewal');
-
-      h.onDone!(
-        phasedRun({
-          workflow: { phases: STAGES, current: 2, done: [1], source: 'prompt', skipped: [] },
+      h.onRun!({ runId: 'run-3', workflowId: 'qti-v2-turn' });
+      h.onDone!({
+        ...assistantRun({
+          id: 'run-3',
+          answer: {
+            role: 'assistant',
+            content: 'Stage 1 proposal. Confirm?',
+            at: 'x',
+            report: { jobId: 'run-3', title: 'Drivers', path: 'reports/d.md', angles: 3 },
+          } as WorkflowRun['answer'],
+          panelItems: [
+            {
+              id: 'p1',
+              kind: 'file',
+              title: 'rfp.md',
+              path: 'rfp/rfp-1/draft/rfp.md',
+              bytes: 10,
+              shownAt: 'x',
+            },
+          ],
         }),
-      );
-      fixture.detectChanges();
-      expect(q('workflow-run-phase-1')?.textContent).toContain('Done');
-      expect(q('workflow-run-phase-2')?.getAttribute('aria-current')).toBe('step');
-    });
-
-    it('a code workflow (bar: steps) shows no phases list, even when the run carries phases', () => {
-      open({ ...PHASED, bar: 'steps' });
-      typeMessage(START);
-      click('workflow-run');
-      const h = runs.last.handlers;
-      h.onRun!({ runId: 'run-1', workflowId: 'agent:phased' });
-      h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
-      h.onWorkflow!({ phases: STAGES, current: 1, done: [], source: 'prompt', skipped: [] });
-      fixture.detectChanges();
-      expect(q('workflow-run-phases')).toBeNull();
-    });
-
-    it('an old run that still carries an rfpId and an RFP panel item shows as a plain run', () => {
-      open(PHASED);
-      typeMessage('Export a draft');
-      click('workflow-run');
-      const h = runs.last.handlers;
-      h.onRun!({ runId: 'run-3', workflowId: 'agent:phased' });
-      h.onDone!(
-        {
-          ...phasedRun({
-            id: 'run-3',
-            panelItems: [
-              {
-                id: 'p1',
-                kind: 'file',
-                title: 'rfp.md',
-                path: 'rfp/rfp-1/draft/rfp.md',
-                bytes: 10,
-                shownAt: 'x',
-              },
-            ],
-          }),
-          rfpId: 'rfp-1',
-        } as WorkflowRun,
-      );
+        rfpId: 'rfp-1',
+      } as WorkflowRun);
       fixture.detectChanges();
       expect(text('run-answer')).toContain('Stage 1 proposal. Confirm?');
       expect(q('run-rfp-document')).toBeNull();
       expect(q('workflow-run-continue')).toBeNull();
+      expect(q('workflow-run-files')).toBeNull();
+      expect(q('workflow-run-scorecard')).toBeNull();
+      expect(q('workflow-run-phases')).toBeNull();
+      expect(el.querySelector('[aria-label="Download report"]')).toBeNull();
     });
   });
 });

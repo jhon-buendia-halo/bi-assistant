@@ -5,13 +5,7 @@ import {
   DatasetsApiService,
 } from '../../datasets/services/datasets-api.service';
 import { ToastService } from '../../../core/toast/toast.service';
-import {
-  AnalysisReport,
-  ChatMessage,
-  MessageFeedback,
-  WorkflowView,
-} from '../../sessions/models/session.model';
-import { saveFile } from '../../synthetic-data/services/synthetic-data-api.service';
+import { MessageFeedback } from '../../sessions/models/session.model';
 import {
   LiveToolCall,
   RunStepView,
@@ -108,8 +102,6 @@ export class WorkflowDesigner {
   readonly ratingPending = signal(false);
   /** The earlier run this one follows up (its context), if any. */
   readonly contextRun = signal<{ id: string; question: string } | null>(null);
-  /** The deep-analysis report of the run shown is being downloaded (plan 1.25.3). */
-  readonly reportDownloading = signal(false);
 
   /** The input of the run started here (Execute, Follow up, Continue); null before one. */
   readonly liveInput = signal<Record<string, WorkflowInputValue> | null>(null);
@@ -124,14 +116,6 @@ export class WorkflowDesigner {
   readonly toolCalls = signal<LiveToolCall[]>([]);
   /** Live: the answer text so far (not authoritative; `done.run` replaces it). */
   readonly streamingText = signal('');
-  /** Live: the agent's phases (`workflow` event), for the phases bar. */
-  private readonly livePhases = signal<WorkflowView | null>(null);
-  /** The agent's phases bar: live while it streams, then as stored. */
-  readonly phases = computed<WorkflowView | null>(() => {
-    // A code workflow's steps already drive the canvas: no phases list inside them.
-    if (this.workflow()?.bar === 'steps') return null;
-    return this.run()?.workflow ?? this.livePhases();
-  });
   /** The run started, then the stream failed (`error` event, a dropped stream). */
   private readonly streamError = signal<string | null>(null);
   /** The user stopped the run shown. */
@@ -142,7 +126,6 @@ export class WorkflowDesigner {
 
   private loadSubscription: Subscription | null = null;
   private datasetsSubscription: Subscription | null = null;
-  private downloadSubscription: Subscription | null = null;
   private stoppedSubscription: Subscription | null = null;
   private stoppedTimer: ReturnType<typeof setTimeout> | null = null;
   private abort: AbortController | null = null;
@@ -295,9 +278,7 @@ export class WorkflowDesigner {
         }
         if (
           workflow.input.some(
-            (field) =>
-              !field.hidden &&
-              (field.type === 'datasets' || field.type === 'dataset'),
+            (field) => !field.hidden && field.type === 'datasets',
           )
         ) {
           this.loadDatasets();
@@ -323,9 +304,6 @@ export class WorkflowDesigner {
     this.loadSubscription = null;
     this.datasetsSubscription?.unsubscribe();
     this.datasetsSubscription = null;
-    this.downloadSubscription?.unsubscribe();
-    this.downloadSubscription = null;
-    this.reportDownloading.set(false);
     this.cancelStream();
     this.loading.set(false);
     this.error.set(null);
@@ -403,36 +381,6 @@ export class WorkflowDesigner {
     const workflow = this.workflow();
     if (workflow === null || this.running()) return;
     this.start(workflow, { input: runInput(workflow.input, this.inputValues()) }, null);
-  }
-
-  /**
-   * Save the shown run's deep-analysis report (plan 1.25.3): the run's file
-   * item at the report's path, from the run's route (api.md 126), named as
-   * the file is.
-   */
-  downloadReport(report: AnalysisReport): void {
-    const run = this.run();
-    if (run === null || this.reportDownloading()) return;
-    const item = (run.panelItems ?? []).find(
-      (candidate) => candidate.kind === 'file' && candidate.path === report.path,
-    );
-    if (item === undefined) {
-      this.toast.error('Report download failed');
-      return;
-    }
-    const fileName = report.path.split('/').pop() || 'report.md';
-    this.reportDownloading.set(true);
-    this.downloadSubscription = this.runsApi.downloadPanelItem(run.id, item.id).subscribe({
-      next: (blob) => {
-        this.reportDownloading.set(false);
-        saveFile({ blob, fileName });
-        this.toast.success('Report downloaded');
-      },
-      error: (err) => {
-        this.reportDownloading.set(false);
-        this.toast.error(err?.error?.message ?? 'Report download failed');
-      },
-    });
   }
 
   /**
@@ -539,7 +487,6 @@ export class WorkflowDesigner {
     this.reasoning.set('');
     this.toolCalls.set([]);
     this.streamingText.set('');
-    this.livePhases.set(null);
     this.streamError.set(null);
     this.stopped.set(false);
   }
@@ -569,16 +516,13 @@ export class WorkflowDesigner {
           onRun: ({ runId }) => {
             if (!live()) return;
             this.runId.set(runId);
-                  },
+          },
           onStep: (step) => {
             if (!live()) return;
             this.liveSteps.update((steps) => ({ ...steps, [step.id]: step }));
           },
           onReasoning: (delta) => {
             if (live()) this.reasoning.update((text) => text + delta);
-          },
-          onWorkflow: (view) => {
-            if (live()) this.livePhases.set(view);
           },
           onText: (delta) => {
             if (live()) this.streamingText.update((text) => text + delta);

@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ToastService } from '../../../../core/toast/toast.service';
 import {
-  AnalysisReport,
   ChatMessage,
   MessageFeedback,
   ReadinessReportRef,
@@ -423,44 +422,23 @@ describe('AnswerView', () => {
   });
 
   describe('the cards', () => {
-    const report: AnalysisReport = {
-      jobId: 'job-1',
-      title: 'Denial drivers deep dive',
-      path: 'reports/job-1.md',
-      angles: 4,
-    };
-
-    it('renders a report card and emits its download', () => {
-      const el = render(
-        {
-          role: 'assistant',
-          content: 'Denials rose to **12.4%**, driven by payer A.',
-          at: '2026-01-01T00:00:02.000Z',
-          report,
+    it('renders an old message that carries a deep-analysis report as a plain answer', () => {
+      const el = render({
+        role: 'assistant',
+        content: 'Denials rose to **12.4%**, driven by payer A.',
+        at: '2026-01-01T00:00:02.000Z',
+        report: {
+          jobId: 'job-1',
+          title: 'Denial drivers deep dive',
+          path: 'reports/job-1.md',
+          angles: 4,
         },
-        { anchorId: 'msg-3' },
-      );
-      const downloads: AnalysisReport[] = [];
-      fixture.componentInstance.downloadReport.subscribe((r) =>
-        downloads.push(r),
-      );
-
-      expect(el.textContent).toContain('Denial drivers deep dive');
-      expect(el.textContent).toContain('4 angles investigated');
+      } as ChatMessage);
       expect(el.querySelector('.prose-dark')?.innerHTML).toContain(
         '<strong>12.4%</strong>',
       );
-      expect(el.querySelector('#msg-3')).toBeTruthy();
-      button(el, '[aria-label="Download report"]').click();
-      expect(downloads).toEqual([report]);
-    });
-
-    it('disables the report download while it runs', () => {
-      const el = render(
-        { role: 'assistant', content: '', at: 'x', report },
-        { reportDownloading: true },
-      );
-      expect(button(el, '[aria-label="Download report"]').disabled).toBeTrue();
+      expect(el.textContent).not.toContain('angles investigated');
+      expect(el.querySelector('[aria-label="Download report"]')).toBeNull();
     });
 
     it('renders an old message that carries an RFP package as plain text', () => {

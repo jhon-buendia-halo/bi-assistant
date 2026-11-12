@@ -7,11 +7,11 @@ import {
   WorkflowSummary,
 } from '../models/workflow.model';
 
-export type WorkflowSectionId = 'official' | 'mine';
+export type WorkflowSectionId = 'official';
 
 export interface WorkflowSection {
   id: WorkflowSectionId;
-  label: 'Official' | 'Mine';
+  label: 'Official';
   workflows: WorkflowSummary[];
 }
 
@@ -25,10 +25,10 @@ function matches(workflow: WorkflowSummary, query: string): boolean {
 }
 
 /**
- * The Workflows page's sections (workflows R5, ui.md 4.4a): Official, then
- * Mine (the user agents' workflows), each in the catalogue's own order
- * (workflows R1). A section with nothing to show, after the search, is left
- * out.
+ * The Workflows page's sections (workflows R5, ui.md 4.4a): Official, in the
+ * catalogue's own order (workflows R1). Agents have no workflow of their own,
+ * so there is no Mine section. A section with nothing to show, after the
+ * search, is left out.
  */
 export function buildWorkflowSections(
   workflows: readonly WorkflowSummary[],
@@ -37,16 +37,7 @@ export function buildWorkflowSections(
   const needle = query.trim().toLowerCase();
   const shown = workflows.filter((workflow) => matches(workflow, needle));
   const sections: WorkflowSection[] = [
-    {
-      id: 'official',
-      label: 'Official',
-      workflows: shown.filter((workflow) => workflow.owner === 'Official'),
-    },
-    {
-      id: 'mine',
-      label: 'Mine',
-      workflows: shown.filter((workflow) => workflow.owner === 'You'),
-    },
+    { id: 'official', label: 'Official', workflows: shown },
   ];
   return sections.filter((section) => section.workflows.length > 0);
 }
@@ -61,12 +52,11 @@ export function workflowsEmptyMessage(
   return trimmed ? `No workflows match "${trimmed}"` : null;
 }
 
-/**
- * The kind chip: `<n> steps` for a code-defined workflow, else `One step`
- * (workflows R5).
- */
-export function workflowKindLabel(workflow: WorkflowSummary): string {
-  return workflow.kind === 'code' ? `${workflow.stepCount} steps` : 'One step';
+/** The kind chip: `<n> steps` (workflows R5). */
+export function workflowKindLabel(
+  workflow: Pick<WorkflowSummary, 'stepCount'>,
+): string {
+  return `${workflow.stepCount} steps`;
 }
 
 /**
@@ -168,8 +158,8 @@ export function initialInputValues(fields: WorkflowInputField[]): RunFormValues 
 
 /**
  * The `input` a run sends (api.md 118): each visible field in form order, as
- * its type takes it (a boolean always, a list of datasets, one dataset or a
- * text); an untouched field is left out, so the server applies its default
+ * its type takes it (a boolean always, a list of datasets or a text); an
+ * untouched field is left out, so the server applies its default
  * or refuses a required one.
  */
 export function runInput(

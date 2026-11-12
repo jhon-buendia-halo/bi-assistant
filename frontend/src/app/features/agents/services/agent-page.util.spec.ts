@@ -40,9 +40,7 @@ describe('agent page util', () => {
   });
 
   it('words the empty Used in line per agent kind (R109)', () => {
-    expect(usedInEmptyText('user')).toBe(
-      'Not used in any workflow yet. Publish it to get its one-step workflow.',
-    );
+    expect(usedInEmptyText('user')).toBe('Not used in any workflow.');
     expect(usedInEmptyText('system')).toBe(
       'Not used in any workflow. The app calls this agent itself.',
     );
@@ -107,13 +105,11 @@ describe('agent page util', () => {
   it("lists only the built-in skills every agent gets, not an Official agent's own (R75)", () => {
     const builtIn = [
       { name: 'curated-knowledge', agents: ['assistant'] },
-      { name: 'deep-analysis', agents: ['assistant'] },
       { name: 'interactive-visuals', agents: ['visualization'] },
       { name: 'report-carriers', agents: ['report'] },
     ];
     expect(includedInEveryAgent(builtIn).map((skill) => skill.name)).toEqual([
       'curated-knowledge',
-      'deep-analysis',
       'interactive-visuals',
     ]);
   });

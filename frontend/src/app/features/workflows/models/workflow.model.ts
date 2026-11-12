@@ -15,9 +15,7 @@ export type WorkflowInputFieldType =
   /** A checkbox; absent means false (or its default). */
   | 'boolean'
   /** One or more dataset names. */
-  | 'datasets'
-  /** Exactly one dataset name. */
-  | 'dataset';
+  | 'datasets';
 
 /** One field of a workflow's input, defined in code (api.md 116). */
 export interface WorkflowInputField {
@@ -30,7 +28,7 @@ export interface WorkflowInputField {
   help?: string;
   /** The value of a field that is missing or empty. */
   default?: string | number | boolean;
-  /** 'dataset' / 'datasets': only datasets bound to these kinds. */
+  /** 'datasets': only datasets bound to these kinds. */
   datasourceKinds?: ('postgres' | 'databricks' | 'rest')[];
   /** Set by the app, never rendered as a control. */
   hidden?: boolean;
@@ -45,24 +43,24 @@ export type WorkflowInputValue = string | number | boolean | string[];
  * (backend/src/modules/workflows/workflows.service.ts).
  */
 export interface WorkflowSummary {
-  /** `qti-v2-turn` | `agent:<registry key>` | `agent:<user-agent id>`. */
+  /**
+   * `qti-v2-turn`, the catalogue's only workflow. Agents are a library and
+   * have no workflow of their own.
+   */
   id: string;
   name: string;
   description: string;
-  /** Defined in code, or the one-step workflow of an agent. */
-  kind: 'code' | 'agent';
-  /** `You` for a user agent's workflow. */
-  owner: 'Official' | 'You';
+  /** Defined in code. */
+  kind: 'code';
+  owner: 'Official';
   /** The agents its steps call, in step order, each once. */
   agents: { key: string; name: string }[];
   stepCount: number;
-  /** What drives a chat's workflow bar: these steps, or the agent's own phases. */
-  bar: 'steps' | 'agent';
   /** Every workflow runs once on a typed input (api.md 118). */
   trigger: 'run';
   /** The typed input of a run workflow, in form order. */
   input: WorkflowInputField[];
-  /** The datasets the workflow's agent declares; empty when the run picks them. */
+  /** Empty: the run picks its datasets. */
   datasets: string[];
   /** Named datasets that don't exist. */
   missingDatasets: string[];
@@ -156,7 +154,8 @@ export interface WorkflowRunRequest {
 
 /**
  * A stored run (api.md 3.6 `WorkflowRun`, 121), as `done.run` carries it.
- * Copied from api.md, not from the backend.
+ * Copied from api.md, not from the backend. Runs stored by a workflow that
+ * is no longer in the catalogue keep their shape and read as plain runs.
  */
 export interface WorkflowRun {
   id: string;
@@ -168,9 +167,9 @@ export interface WorkflowRun {
   steps: WorkflowRunStep[];
   output?: Record<string, unknown>;
   error?: string;
-  /** Agent workflows: the user message the agent received. */
+  /** A run with an agent step: the user message the agent received. */
   question?: string;
-  /** Agent workflows: the persisted answer; absent when it stopped or failed first. */
+  /** A run with an agent step: the persisted answer; absent when it stopped or failed first. */
   answer?: ChatMessage;
   datasets: string[];
   agentKey?: string;
@@ -224,7 +223,7 @@ export interface RunView {
   error?: string;
   steps: RunStepView[];
   output?: Record<string, unknown>;
-  /** Agent workflows: the answer (absent while streaming, or when none came). */
+  /** The agent step's answer (absent while streaming, or when none came). */
   answer?: ChatMessage;
   /** Null until the stream's `run` event arrives. */
   runId?: string | null;

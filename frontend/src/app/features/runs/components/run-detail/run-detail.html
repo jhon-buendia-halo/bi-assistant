@@ -43,15 +43,18 @@
           class="text-[13px] font-medium text-fg-strong"
           >{{ status() }}</span
         >
-        <button
-          type="button"
-          data-testid="run-again"
-          (click)="state.runAgain(run)"
-          class="btn btn-secondary ml-auto"
-        >
-          <lucide-angular [img]="RotateCcw" [size]="14" />
-          <span>Run again</span>
-        </button>
+        @if (state.canRunAgain()) {
+          <!-- Only while the run's workflow is still in the catalogue -->
+          <button
+            type="button"
+            data-testid="run-again"
+            (click)="state.runAgain(run)"
+            class="btn btn-secondary ml-auto"
+          >
+            <lucide-angular [img]="RotateCcw" [size]="14" />
+            <span>Run again</span>
+          </button>
+        }
       </section>
 
       <section aria-labelledby="run-input-heading" data-testid="run-detail-input">
@@ -107,13 +110,6 @@
                 >
                   {{ step.error }}
                 </p>
-              }
-              @if (run.workflow && run.answer && step.id === "answer") {
-                <app-workflow-bar
-                  class="block"
-                  data-testid="run-detail-phases"
-                  [workflow]="run.workflow"
-                />
               }
             </li>
           }

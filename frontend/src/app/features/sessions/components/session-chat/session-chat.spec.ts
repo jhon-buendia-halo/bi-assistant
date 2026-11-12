@@ -1,9 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
 import { ChatMessage, Session } from '../../models/session.model';
-import { SessionsApiService } from '../../services/sessions-api.service';
 import { SessionChat } from './session-chat';
 
 function sessionWith(message: ChatMessage): Session {
@@ -96,55 +94,5 @@ describe('SessionChat past chat (past-chats R66)', () => {
       .find((b) => b.textContent?.trim() === 'View')!
       .click();
     expect(viewed).toEqual([visual]);
-  });
-});
-
-describe('SessionChat downloads', () => {
-  let fixture: ComponentFixture<SessionChat>;
-
-  const reportMessage: ChatMessage = {
-    role: 'assistant',
-    content: 'Denials rose to **12.4%**, driven by payer A.',
-    at: '2026-01-01T00:00:02.000Z',
-    report: {
-      jobId: 'job-1',
-      title: 'Denial drivers deep dive',
-      path: 'reports/job-1.md',
-      angles: 4,
-    },
-  };
-
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [SessionChat],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
-    }).compileComponents();
-  });
-
-  /** Mount the chat over a transcript and return its root element. */
-  function mount(messages: ChatMessage[] = []): HTMLElement {
-    fixture = TestBed.createComponent(SessionChat);
-    fixture.componentRef.setInput('session', {
-      id: 'session-1',
-      name: 'Session 1',
-      datasets: [],
-      messages,
-    } satisfies Session);
-    fixture.detectChanges();
-    return fixture.nativeElement as HTMLElement;
-  }
-
-  it('downloads the report markdown', () => {
-    const el = mount([reportMessage]);
-    const api = TestBed.inject(SessionsApiService);
-    const download = spyOn(api, 'downloadDeepAnalysis').and.returnValue(
-      of(new Blob(['# report'], { type: 'text/markdown' })),
-    );
-
-    el.querySelector<HTMLButtonElement>(
-      '[aria-label="Download report"]',
-    )!.click();
-
-    expect(download).toHaveBeenCalledWith('session-1', 'job-1');
   });
 });

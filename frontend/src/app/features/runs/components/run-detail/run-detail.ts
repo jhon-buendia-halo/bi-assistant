@@ -8,7 +8,6 @@ import {
   Workflow,
 } from 'lucide-angular';
 import { AnswerView } from '../../../sessions/components/answer-view/answer-view';
-import { WorkflowBar } from '../../../sessions/components/workflow-bar/workflow-bar';
 import {
   runOutputEntries,
   runStatusLine,
@@ -38,12 +37,13 @@ export function runInputEntries(
 /**
  * A stored run reopened (workflows R18-R20; ui.md 4.4c `run-detail`): its result is read-only apart from the visual actions of its answer;
  * its workflow and status, its input, its steps, the answer through
- * `answer-view`, and Run again. Only the visual actions of the answer change
- * the run.
+ * `answer-view`, and Run again while its workflow is still in the
+ * catalogue. A run of a removed workflow reads as a plain run. Only the
+ * visual actions of the answer change the run.
  */
 @Component({
   selector: 'app-run-detail',
-  imports: [LucideAngularModule, AnswerView, RunVisual, WorkflowBar],
+  imports: [LucideAngularModule, AnswerView, RunVisual],
   templateUrl: './run-detail.html',
 })
 export class RunDetail {
