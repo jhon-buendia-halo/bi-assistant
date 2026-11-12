@@ -244,6 +244,17 @@
       }
 
       @case ("run") {
+        @if (fixedDatasets().length > 0) {
+          <!-- A user agent's own datasets, read-only (plan 4.2) -->
+          <div class="mb-4" data-testid="workflow-run-datasets">
+            <p class="field-label">Datasets</p>
+            <ul class="m-0 mt-1.5 flex list-none flex-wrap gap-1.5 p-0">
+              @for (name of fixedDatasets(); track name) {
+                <li class="chip chip-neutral">{{ name }}</li>
+              }
+            </ul>
+          </div>
+        }
         <section aria-labelledby="workflow-input-heading">
           <h2
             id="workflow-input-heading"
@@ -253,52 +264,189 @@
           </h2>
           <form
             class="mt-3 flex flex-col gap-4"
-            (submit)="$event.preventDefault(); designer.run()"
+            (submit)="$event.preventDefault(); designer.execute()"
           >
-            @for (field of w.input; track field.name) {
-              <div class="flex flex-col gap-1.5">
-                <label [for]="inputId(field.name)" class="field-label">{{
-                  field.label
-                }}</label>
-                @if (field.type === "textarea") {
-                  <textarea
-                    [id]="inputId(field.name)"
-                    [attr.data-testid]="inputId(field.name)"
-                    [attr.placeholder]="field.placeholder ?? null"
-                    [attr.aria-required]="field.required ? 'true' : null"
-                    [value]="designer.inputValue(field.name)"
-                    (input)="onInput(field.name, $event)"
-                    rows="4"
-                    class="field resize-y"
-                  ></textarea>
-                } @else {
-                  <input
-                    [id]="inputId(field.name)"
-                    [attr.data-testid]="inputId(field.name)"
-                    [type]="field.type === 'number' ? 'number' : 'text'"
-                    [attr.placeholder]="field.placeholder ?? null"
-                    [attr.aria-required]="field.required ? 'true' : null"
-                    [value]="designer.inputValue(field.name)"
-                    (input)="onInput(field.name, $event)"
-                    class="field"
-                  />
+            @for (field of visibleFields(); track field.name) {
+              @switch (field.type) {
+                @case ("boolean") {
+                  <div class="flex flex-col gap-1">
+                    <label class="flex items-start gap-2 text-[13px] text-fg">
+                      <input
+                        type="checkbox"
+                        [id]="inputId(field.name)"
+                        [attr.data-testid]="inputId(field.name)"
+                        [checked]="designer.checked(field.name)"
+                        (change)="onCheck(field.name, $event)"
+                        class="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                      />
+                      <span>{{ field.label }}</span>
+                    </label>
+                    @if (field.help) {
+                      <p class="m-0 text-[12px] text-fg-muted">{{ field.help }}</p>
+                    }
+                  </div>
                 }
-              </div>
-            }
-            <button
-              type="submit"
-              data-testid="workflow-run"
-              [disabled]="designer.running()"
-              class="btn btn-primary w-fit"
-            >
-              @if (designer.running()) {
-                <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
-                <span>Executing…</span>
-              } @else {
-                <lucide-angular [img]="Rocket" [size]="14" />
-                <span>Execute</span>
+                @case ("datasets") {
+                  <div
+                    role="group"
+                    [attr.aria-labelledby]="inputId(field.name) + '-label'"
+                    data-testid="workflow-input-datasets"
+                    class="flex flex-col gap-1.5"
+                  >
+                    <span [id]="inputId(field.name) + '-label'" class="field-label">{{
+                      field.label
+                    }}</span>
+                    @if (datasetChoices(field).length === 0) {
+                      <p class="m-0 text-[13px] text-fg-muted">
+                        No datasets yet — create one in Datasets first.
+                      </p>
+                    } @else {
+                      <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
+                        @for (dataset of datasetChoices(field); track dataset.name) {
+                          <li>
+                            <button
+                              type="button"
+                              [attr.aria-pressed]="designer.picked(field.name).includes(dataset.name)"
+                              (click)="designer.toggleDataset(field.name, dataset.name)"
+                              class="list-row flex w-full items-center gap-2.5 px-3 py-2 text-left"
+                              [class.list-row-selected]="designer.picked(field.name).includes(dataset.name)"
+                            >
+                              <lucide-angular
+                                [img]="Database"
+                                [size]="14"
+                                class="shrink-0 text-fg-muted"
+                              />
+                              <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-fg">{{
+                                dataset.name
+                              }}</span>
+                              <span class="shrink-0 text-[12px] text-fg-muted"
+                                >{{ dataset.tables.length }} entities</span
+                              >
+                              @if (designer.picked(field.name).includes(dataset.name)) {
+                                <lucide-angular
+                                  [img]="CircleCheck"
+                                  [size]="15"
+                                  class="shrink-0 text-primary"
+                                />
+                              }
+                            </button>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </div>
+                }
+                @case ("dataset") {
+                  <div class="flex flex-col gap-1.5">
+                    <label [for]="inputId(field.name)" class="field-label">{{
+                      field.label
+                    }}</label>
+                    <select
+                      [id]="inputId(field.name)"
+                      [attr.data-testid]="inputId(field.name)"
+                      [attr.aria-required]="field.required ? 'true' : null"
+                      [value]="designer.inputValue(field.name)"
+                      (change)="onInput(field.name, $event)"
+                      class="field"
+                    >
+                      <option value="">Select a dataset</option>
+                      @for (dataset of datasetChoices(field); track dataset.name) {
+                        <option [value]="dataset.name">{{ dataset.name }}</option>
+                      }
+                    </select>
+                  </div>
+                }
+                @case ("textarea") {
+                  <div class="flex flex-col gap-1.5">
+                    <label [for]="inputId(field.name)" class="field-label">{{
+                      field.label
+                    }}</label>
+                    <textarea
+                      [id]="inputId(field.name)"
+                      [attr.data-testid]="inputId(field.name)"
+                      [attr.placeholder]="field.placeholder ?? null"
+                      [attr.aria-required]="field.required ? 'true' : null"
+                      [value]="designer.inputValue(field.name)"
+                      (input)="onInput(field.name, $event)"
+                      rows="4"
+                      class="field resize-y"
+                    ></textarea>
+                    @if (field.name === designer.questionField() && w.starterQuestions.length > 0) {
+                      <ul
+                        class="m-0 flex list-none flex-wrap gap-1.5 p-0"
+                        aria-label="Example questions"
+                      >
+                        @for (example of w.starterQuestions; track example; let n = $index) {
+                          <li>
+                            <button
+                              type="button"
+                              [attr.data-testid]="'workflow-example-' + n"
+                              (click)="pickExample(example)"
+                              class="rounded-full border border-border px-2.5 py-1 text-left text-[12px] text-fg hover:border-border-strong hover:bg-surface-muted"
+                            >
+                              {{ example }}
+                            </button>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </div>
+                }
+                @default {
+                  <div class="flex flex-col gap-1.5">
+                    <label [for]="inputId(field.name)" class="field-label">{{
+                      field.label
+                    }}</label>
+                    <input
+                      [id]="inputId(field.name)"
+                      [attr.data-testid]="inputId(field.name)"
+                      [type]="field.type === 'number' ? 'number' : 'text'"
+                      [attr.placeholder]="field.placeholder ?? null"
+                      [attr.aria-required]="field.required ? 'true' : null"
+                      [value]="designer.inputValue(field.name)"
+                      (input)="onInput(field.name, $event)"
+                      class="field"
+                    />
+                  </div>
+                }
               }
-            </button>
+            }
+            @if (w.runRequirement) {
+              <p
+                data-testid="workflow-run-requirement"
+                class="m-0 text-[12px] text-fg-muted"
+              >
+                {{ w.runRequirement }}
+              </p>
+            }
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                type="submit"
+                data-testid="workflow-run"
+                [disabled]="designer.running() || !!w.runRequirement"
+                [attr.title]="w.runRequirement ?? null"
+                class="btn btn-primary w-fit"
+              >
+                @if (designer.running()) {
+                  <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+                  <span>Executing…</span>
+                } @else {
+                  <lucide-angular [img]="Rocket" [size]="14" />
+                  <span>Execute</span>
+                }
+              </button>
+              @if (designer.running()) {
+                <button
+                  type="button"
+                  data-testid="workflow-run-stop"
+                  (click)="designer.stop()"
+                  class="btn btn-secondary w-fit"
+                >
+                  <lucide-angular [img]="Square" [size]="14" />
+                  <span>Stop</span>
+                </button>
+              }
+            </div>
             @if (designer.runError(); as message) {
               <p
                 data-testid="workflow-run-error"
@@ -323,6 +471,14 @@
             >
               Result
             </h2>
+            @if (designer.contextRun(); as earlier) {
+              <p
+                data-testid="workflow-run-context"
+                class="m-0 mt-3 text-[12px] text-fg-muted"
+              >
+                Follows up on “{{ earlier.question }}”
+              </p>
+            }
             <p
               data-testid="workflow-run-status"
               role="status"
@@ -347,13 +503,16 @@
                       class="min-w-0 flex-1 truncate text-[13px] font-medium text-fg-strong"
                       >{{ step.title }}</span
                     >
-                    <span
-                      class="chip"
-                      [class.chip-success]="step.status === 'success'"
-                      [class.chip-danger]="step.status === 'failed'"
-                      [class.chip-neutral]="step.status === 'skipped'"
-                      >{{ stepStatusLabel(step.status) }}</span
-                    >
+                    @if (step.status !== null) {
+                      <span
+                        class="chip"
+                        [class.chip-success]="step.status === 'success'"
+                        [class.chip-danger]="step.status === 'failed'"
+                        [class.chip-info]="step.status === 'running'"
+                        [class.chip-neutral]="step.status === 'skipped' || step.status === 'stopped'"
+                        >{{ stepStatusLabel(step.status) }}</span
+                      >
+                    }
                   </div>
                   @if (step.error) {
                     <p
@@ -362,14 +521,123 @@
                       {{ step.error }}
                     </p>
                   }
-                  @if (step.output; as stepOutput) {
-                    <pre
-                      class="m-0 font-mono text-[11px] break-words whitespace-pre-wrap text-fg-muted"
-                    >{{ pretty(stepOutput) }}</pre>
+                  @if (step.kind === "agent" && step.status === "running" && designer.running()) {
+                    <!-- The agent step, live: Thinking, its tool calls and the answer forming -->
+                    <div class="flex flex-col gap-2" data-testid="workflow-run-live">
+                      <div class="flex min-w-0 items-center gap-2">
+                        <lucide-angular
+                          [img]="Brain"
+                          [size]="14"
+                          class="shrink-0 text-fg-muted"
+                        />
+                        <span class="text-[13px] font-medium text-fg">Thinking</span>
+                        @if (reasoningSnippet()) {
+                          <span
+                            class="min-w-0 truncate rounded bg-surface-muted px-2 py-0.5 text-[12px] text-fg-muted"
+                            >{{ reasoningSnippet() }}</span
+                          >
+                        }
+                      </div>
+                      @for (call of designer.toolCalls(); track $index) {
+                        <div
+                          class="flex min-w-0 items-center gap-2 text-fg-muted"
+                          data-testid="workflow-run-tool"
+                        >
+                          <lucide-angular [img]="Wrench" [size]="13" class="shrink-0" />
+                          <span class="truncate font-mono text-[12px]">{{ call.name }}</span>
+                          @if (call.error) {
+                            <span class="text-[12px] text-on-danger-soft">failed</span>
+                          } @else if (call.rowCount !== undefined) {
+                            <span class="text-[12px]">{{ call.rowCount }} rows</span>
+                          } @else if (!call.finished) {
+                            <lucide-angular
+                              [img]="Loader2"
+                              [size]="11"
+                              class="shrink-0 animate-spin"
+                            />
+                            @if (call.progress) {
+                              <span class="min-w-0 truncate text-[12px]">{{ call.progress }}</span>
+                            }
+                          }
+                        </div>
+                      }
+                      @if (designer.streamingText()) {
+                        <div
+                          class="prose-dark text-[13px]"
+                          [innerHTML]="designer.streamingText() | markdown"
+                        ></div>
+                      }
+                    </div>
+                  }
+                  @if (step.output; as out) {
+                    <details
+                      class="text-[12px]"
+                      [attr.open]="result.answer === undefined ? '' : null"
+                      data-testid="workflow-run-step-output"
+                    >
+                      <summary class="cursor-pointer text-fg-muted">Output</summary>
+                      <dl class="m-0 mt-1.5 flex flex-col gap-1">
+                        @for (entry of stepOutput(out); track entry.key) {
+                          <div class="flex flex-wrap gap-x-3 gap-y-0.5">
+                            <dt class="font-mono text-fg-muted">{{ entry.key }}</dt>
+                            @if (entry.structured) {
+                              <dd
+                                class="m-0 w-full max-h-48 overflow-auto rounded bg-surface-muted px-2 py-1 font-mono text-[11px] whitespace-pre-wrap break-words text-fg"
+                              >{{ entry.value }}</dd>
+                            } @else {
+                              <dd class="m-0 min-w-0 break-words text-fg-strong">
+                                {{ entry.value }}
+                              </dd>
+                            }
+                          </div>
+                        }
+                      </dl>
+                    </details>
+                  } @else if (step.outputTruncated) {
+                    <p class="m-0 text-[12px] text-fg-muted">
+                      Output too large to show
+                    </p>
                   }
                 </li>
               }
             </ol>
+
+            @if (result.answer; as answer) {
+              <div class="mt-4" data-testid="run-answer">
+                <app-answer-view
+                  [message]="answer"
+                  [latest]="true"
+                  [busy]="designer.running()"
+                  (optionPicked)="designer.followUp($event)"
+                />
+              </div>
+              @if (designer.canFollowUp() && !answer.clarification) {
+                <form
+                  class="mt-4 flex items-center gap-2"
+                  (submit)="$event.preventDefault(); sendFollowUp()"
+                >
+                  <input
+                    type="text"
+                    data-testid="workflow-follow-up-input"
+                    aria-label="Follow-up question"
+                    placeholder="Ask a follow-up about this result"
+                    [value]="designer.followUpText()"
+                    (input)="onFollowUpInput($event)"
+                    class="field min-w-0 flex-1"
+                  />
+                  <button
+                    type="submit"
+                    data-testid="workflow-run-follow-up"
+                    [disabled]="!designer.followUpText().trim()"
+                    class="btn btn-secondary shrink-0"
+                  >
+                    <lucide-angular [img]="MessageSquareReply" [size]="14" />
+                    <span>Follow up</span>
+                  </button>
+                </form>
+              }
+            }
+
             @if (runOutput().length > 0) {
               <div class="mt-4" data-testid="workflow-run-output">
                 <h3 class="text-[12px] font-medium text-fg-muted">Output</h3>
@@ -377,9 +645,15 @@
                   @for (entry of runOutput(); track entry.key) {
                     <div class="flex flex-wrap gap-x-3 gap-y-0.5">
                       <dt class="font-mono text-[12px] text-fg-muted">{{ entry.key }}</dt>
-                      <dd class="m-0 text-[13px] break-words text-fg-strong">
-                        {{ entry.value }}
-                      </dd>
+                      @if (entry.structured) {
+                        <dd
+                          class="m-0 w-full max-h-48 overflow-auto rounded bg-surface-muted px-2 py-1 font-mono text-[11px] whitespace-pre-wrap break-words text-fg"
+                        >{{ entry.value }}</dd>
+                      } @else {
+                        <dd class="m-0 text-[13px] break-words text-fg-strong">
+                          {{ entry.value }}
+                        </dd>
+                      }
                     </div>
                   }
                 </dl>

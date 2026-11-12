@@ -1,6 +1,11 @@
-import { WorkflowRunResult, WorkflowSummary } from '../models/workflow.model';
+import { WorkflowInputField, WorkflowSummary } from '../models/workflow.model';
 import {
   buildWorkflowSections,
+  canRunFromPage,
+  followUpRequest,
+  initialInputValues,
+  questionFieldName,
+  runInput,
   chatWorkflows,
   composerCreateBody,
   composerWorkflowId,
@@ -261,43 +266,141 @@ describe('workflows.util', () => {
     });
   });
 
-  describe('a run result (workflows R13; api.md 118)', () => {
-    const success: WorkflowRunResult = {
-      workflowId: 'seq-text-demo',
-      status: 'success',
-      steps: [
-        { id: 'clean-text', title: 'Clean text', status: 'success', output: { text: 'a' } },
-      ],
+  describe('a run result (workflows R13, R21; api.md 3.6)', () => {
+    const success = {
+      status: 'success' as const,
       output: { summary: '1 word, 1 character: "a"', extra: { n: 1 } },
     };
-    const failed: WorkflowRunResult = {
-      workflowId: 'seq-text-demo',
-      status: 'failed',
-      steps: [
-        { id: 'clean-text', title: 'Clean text', status: 'failed', error: 'The text is empty' },
-        { id: 'count-words', title: 'Count words', status: 'skipped' },
-      ],
-      error: 'The text is empty',
-    };
+    const failed = { status: 'failed' as const, error: 'The text is empty' };
 
-    it('says "Run succeeded" or "Run failed: <error>"', () => {
+    it('says "Run succeeded", "Run failed: <error>", "Run stopped" or "Running…"', () => {
       expect(runStatusLine(success)).toBe('Run succeeded');
       expect(runStatusLine(failed)).toBe('Run failed: The text is empty');
-      expect(runStatusLine({ ...failed, error: undefined })).toBe('Run failed');
+      expect(runStatusLine({ status: 'failed' })).toBe('Run failed');
+      expect(runStatusLine({ status: 'stopped' })).toBe('Run stopped');
+      expect(runStatusLine({ status: 'running' })).toBe('Running…');
     });
 
-    it('labels a step Done, Failed or Skipped', () => {
+    it('labels a step Running, Done, Failed, Skipped or Stopped', () => {
+      expect(runStepStatusLabel('running')).toBe('Running');
       expect(runStepStatusLabel('success')).toBe('Done');
       expect(runStepStatusLabel('failed')).toBe('Failed');
       expect(runStepStatusLabel('skipped')).toBe('Skipped');
+      expect(runStepStatusLabel('stopped')).toBe('Stopped');
     });
 
     it('shows each output field, a text as it is and anything else as JSON', () => {
       expect(runOutputEntries(success.output)).toEqual([
-        { key: 'summary', value: '1 word, 1 character: "a"' },
-        { key: 'extra', value: '{"n":1}' },
+        { key: 'summary', value: '1 word, 1 character: "a"', structured: false },
+        { key: 'extra', value: '{\n  "n": 1\n}', structured: true },
       ]);
       expect(runOutputEntries(undefined)).toEqual([]);
     });
+
+    it('shows a text with quotes unescaped, and numbers, booleans and null as they read', () => {
+      expect(
+        runOutputEntries({ text: '"Hello" world', words: 2, stopped: false, x: null }),
+      ).toEqual([
+        { key: 'text', value: '"Hello" world', structured: false },
+        { key: 'words', value: '2', structured: false },
+        { key: 'stopped', value: 'false', structured: false },
+        { key: 'x', value: 'null', structured: false },
+      ]);
+    });
   });
+
+  describe('runs from the page (workflows R21)', () => {
+    const ASSISTANT_INPUT: WorkflowInputField[] = [
+      { name: 'question', label: 'Question', type: 'textarea', required: true },
+      { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
+      {
+        name: 'careful',
+        label: 'Careful: cross-check the result with an independent query',
+        type: 'boolean',
+        required: false,
+        default: false,
+      },
+    ];
+
+    it('the run workflows, the Assistant, v2 and user agents run from their page; Data Readiness and the RFP Builder not yet', () => {
+      const runnable = [SEQ, ...CATALOGUE]
+        .map((w) => ({ ...w, input: w.input.length ? w.input : ASSISTANT_INPUT }))
+        .filter(canRunFromPage)
+        .map((w) => w.id);
+      expect(runnable).toEqual([
+        'seq-text-demo',
+        'agent:assistant',
+        'qti-v2-turn',
+        'agent:u2',
+        'agent:u1',
+      ]);
+      expect(canRunFromPage(workflow('agent:assistant', 'Assistant'))).toBe(false);
+    });
+
+    it('the form starts from the defaults: a boolean unchecked unless its default is true', () => {
+      expect(initialInputValues(ASSISTANT_INPUT)).toEqual({ careful: false });
+      expect(
+        initialInputValues([
+          { name: 'on', label: 'On', type: 'boolean', required: false, default: true },
+          { name: 'n', label: 'N', type: 'number', required: false, default: 3 },
+        ]),
+      ).toEqual({ on: true, n: '3' });
+    });
+
+    it('sends each visible field as its type takes it, and leaves out what is untouched', () => {
+      expect(
+        runInput(ASSISTANT_INPUT, {
+          question: 'Which team scored the most goals?',
+          datasets: ['World Cup Core'],
+          careful: true,
+          stray: 'ignored',
+        }),
+      ).toEqual({
+        question: 'Which team scored the most goals?',
+        datasets: ['World Cup Core'],
+        careful: true,
+      });
+      expect(runInput(ASSISTANT_INPUT, {})).toEqual({ careful: false });
+      expect(
+        runInput(
+          [
+            { name: 'dataset', label: 'Dataset', type: 'dataset', required: true },
+            { name: 'rfpId', label: 'RFP', type: 'text', required: false, hidden: true },
+          ],
+          { dataset: 'World Cup Core', rfpId: 'r-1' },
+        ),
+      ).toEqual({ dataset: 'World Cup Core' });
+    });
+
+    it("the question field is the first visible text area: the follow-up's", () => {
+      expect(questionFieldName(ASSISTANT_INPUT)).toBe('question');
+      expect(
+        questionFieldName([
+          { name: 'message', label: 'Message', type: 'textarea', required: true },
+        ]),
+      ).toBe('message');
+      expect(questionFieldName([])).toBeNull();
+    });
+
+    it('a follow-up runs on the same input with the new question, and the earlier run as its context', () => {
+      expect(
+        followUpRequest(
+          {
+            id: 'run-1',
+            input: {
+              question: 'Which team scored the most goals?',
+              datasets: ['World Cup Core'],
+              careful: false,
+            },
+          },
+          'question',
+          '  And the fewest?  ',
+        ),
+      ).toEqual({
+        input: { question: 'And the fewest?', datasets: ['World Cup Core'], careful: false },
+        context: { fromRunId: 'run-1' },
+      });
+    });
+  });
+
 });

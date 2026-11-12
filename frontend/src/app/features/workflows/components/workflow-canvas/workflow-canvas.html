@@ -160,13 +160,23 @@
                   class="chip node-badge"
                   [class.chip-success]="s === 'success'"
                   [class.chip-danger]="s === 'failed'"
-                  [class.chip-neutral]="s === 'skipped'"
+                  [class.chip-info]="s === 'running'"
+                  [class.chip-neutral]="s === 'skipped' || s === 'stopped'"
                   data-testid="workflow-node-status"
                 >
                   @if (s === "success") {
                     <lucide-angular [img]="Check" [size]="11" aria-hidden="true" />
                   } @else if (s === "failed") {
                     <lucide-angular [img]="X" [size]="11" aria-hidden="true" />
+                  } @else if (s === "running") {
+                    <lucide-angular
+                      [img]="Loader2"
+                      [size]="11"
+                      class="animate-spin"
+                      aria-hidden="true"
+                    />
+                  } @else if (s === "stopped") {
+                    <lucide-angular [img]="Square" [size]="11" aria-hidden="true" />
                   }
                   <span>{{ statusLabel(s) }}</span>
                 </span>

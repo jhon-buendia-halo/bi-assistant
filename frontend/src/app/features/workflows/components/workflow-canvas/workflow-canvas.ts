@@ -13,13 +13,14 @@ import {
   Check,
   CircleX,
   LucideAngularModule,
+  Loader2,
   Maximize,
   Square,
   X,
   ZoomIn,
   ZoomOut,
 } from 'lucide-angular';
-import { WorkflowDetail, WorkflowRunStepResult } from '../../models/workflow.model';
+import { WorkflowDetail, WorkflowRunStepStatus } from '../../models/workflow.model';
 import {
   MAX_ZOOM,
   MIN_ZOOM,
@@ -50,6 +51,7 @@ const PAN_THRESHOLD = 3;
 export class WorkflowCanvas {
   protected readonly Check = Check;
   protected readonly CircleX = CircleX;
+  protected readonly Loader2 = Loader2;
   protected readonly Maximize = Maximize;
   protected readonly Square = Square;
   protected readonly X = X;
@@ -61,7 +63,7 @@ export class WorkflowCanvas {
   readonly workflow = input.required<WorkflowDetail>();
   readonly selectedId = input<string | null>(null);
   /** Each step's status in the run shown, by step id. */
-  readonly statuses = input<Record<string, WorkflowRunStepResult['status']>>(
+  readonly statuses = input<Record<string, WorkflowRunStepStatus>>(
     {},
   );
   /** A node chosen (its step id), or null for a click on the background. */
@@ -109,7 +111,7 @@ export class WorkflowCanvas {
     });
   }
 
-  protected status(id: string): WorkflowRunStepResult['status'] | null {
+  protected status(id: string): WorkflowRunStepStatus | null {
     const statuses = this.statuses();
     return Object.hasOwn(statuses, id) ? statuses[id] : null;
   }

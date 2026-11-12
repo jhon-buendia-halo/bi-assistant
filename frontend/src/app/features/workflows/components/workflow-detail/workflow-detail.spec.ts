@@ -82,7 +82,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Loading workflow…');
     http
-      .expectOne((r) => r.url.endsWith(`/workflows/${workflow.id}`))
+      .expectOne((r) => r.url.endsWith(`/workflows/${encodeURIComponent(workflow.id)}`))
       .flush(workflow);
     fixture.detectChanges();
   }
@@ -130,6 +130,32 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(events).toEqual(['startChat:qti-v2-turn']);
   });
 
+  it('a chat workflow that runs on its input has Execute beside Start chat (workflows R21)', () => {
+    open({
+      ...V2,
+      input: [
+        { name: 'question', label: 'Question', type: 'textarea', required: true },
+        { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
+      ],
+    });
+    http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+    expect(text('workflow-execute')).toBe('Execute');
+    expect(text('workflow-start-chat')).toBe('Start chat');
+    q('workflow-execute')!.click();
+    expect(designer.tab()).toBe('run');
+    expect(events).toEqual(['openPanel']);
+  });
+
+  it('the Data Readiness Agent and the RFP Builder have no Execute yet', () => {
+    open({
+      ...V2,
+      id: 'agent:rfp',
+      input: [{ name: 'message', label: 'Message', type: 'textarea', required: true }],
+    });
+    expect(q('workflow-execute')).toBeNull();
+    expect(designer.tabs().map((t) => t.id)).toEqual(['workflow', 'step', 'code']);
+  });
+
   it('writes the chat requirement beside a disabled Start chat', () => {
     open({ ...V2, chatRequirement: 'Load the sample first' });
     const start = q('workflow-start-chat') as HTMLButtonElement;
@@ -158,10 +184,15 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
 
   it('shows the run status on the canvas nodes while a run is shown', () => {
     open(SEQ);
-    designer.runResult.set({
+    designer.run.set({
+      id: 'run-1',
       workflowId: 'seq-text-demo',
+      workflowName: 'Sequential test workflow',
+      input: { text: 'a' },
       status: 'success',
-      steps: SEQ.steps.map((s) => ({ id: s.id, title: s.title, status: 'success' })),
+      steps: SEQ.steps.map((s) => ({ id: s.id, title: s.title, status: 'success' as const })),
+      datasets: [],
+      startedAt: '2026-11-11T10:00:00.000Z',
     });
     fixture.detectChanges();
     expect(

@@ -1,6 +1,9 @@
 import {
-  WorkflowRunResult,
-  WorkflowRunStepResult,
+  WorkflowInputField,
+  WorkflowInputValue,
+  WorkflowRun,
+  WorkflowRunRequest,
+  WorkflowRunStepStatus,
   WorkflowSummary,
 } from '../models/workflow.model';
 
@@ -153,32 +156,144 @@ export function composerCreateBody(
   return { workflowId: workflow.id, ...(name ? { name } : {}) };
 }
 
-/** A run's status line (workflows R13): `Run succeeded` or `Run failed: <error>`. */
-export function runStatusLine(result: WorkflowRunResult): string {
-  if (result.status === 'success') return 'Run succeeded';
-  return result.error ? `Run failed: ${result.error}` : 'Run failed';
+/**
+ * A run's status line (workflows R13, R21): `Run succeeded`,
+ * `Run failed: <error>`, `Run stopped`, or `Running…` while it streams.
+ */
+export function runStatusLine(run: {
+  status: WorkflowRun['status'];
+  error?: string;
+}): string {
+  switch (run.status) {
+    case 'success':
+      return 'Run succeeded';
+    case 'stopped':
+      return 'Run stopped';
+    case 'running':
+      return 'Running…';
+    default:
+      return run.error ? `Run failed: ${run.error}` : 'Run failed';
+  }
 }
 
-/** A run step's status chip. */
-export function runStepStatusLabel(
-  status: WorkflowRunStepResult['status'],
-): 'Done' | 'Failed' | 'Skipped' {
-  if (status === 'success') return 'Done';
-  return status === 'failed' ? 'Failed' : 'Skipped';
+const STEP_STATUS_LABELS: Record<WorkflowRunStepStatus, string> = {
+  running: 'Running',
+  success: 'Done',
+  failed: 'Failed',
+  skipped: 'Skipped',
+  stopped: 'Stopped',
+};
+
+/** A run step's status chip (plan 5.6). */
+export function runStepStatusLabel(status: WorkflowRunStepStatus): string {
+  return STEP_STATUS_LABELS[status];
 }
 
-/** One field of a run's final output, as the result shows it. */
+/** One field of a run's or a step's output, as the result shows it. */
 export interface RunOutputEntry {
   key: string;
+  /** A text as it is (quotes unescaped); a list or an object as pretty JSON. */
   value: string;
+  /** A list or an object: shown monospaced, keeping its line breaks. */
+  structured: boolean;
 }
 
-/** The run's final output, field by field: a text as it is, anything else as JSON. */
+/**
+ * An output, field by field: a text as it is, a number, boolean or null as it
+ * reads, a list or an object as pretty JSON.
+ */
 export function runOutputEntries(
   output: Record<string, unknown> | undefined,
 ): RunOutputEntry[] {
-  return Object.entries(output ?? {}).map(([key, value]) => ({
-    key,
-    value: typeof value === 'string' ? value : JSON.stringify(value),
-  }));
+  return Object.entries(output ?? {}).map(([key, value]) => {
+    if (typeof value === 'string') return { key, value, structured: false };
+    if (value !== null && typeof value === 'object') {
+      return { key, value: JSON.stringify(value, null, 2), structured: true };
+    }
+    return { key, value: String(value), structured: false };
+  });
+}
+
+/**
+ * Agent workflows whose page run lands in a later story: the Data Readiness
+ * Agent (1.23.16) and the RFP Builder (1.23.17).
+ */
+const PAGE_RUN_LATER = new Set(['agent:data-readiness', 'agent:rfp']);
+
+/**
+ * Whether the workflow's page offers Execute and the Run tab (workflows R12,
+ * R21): every run workflow, and the agent workflows with an input (the
+ * Assistant, Questions to Insights v2 and each user agent's).
+ */
+export function canRunFromPage(
+  workflow: Pick<WorkflowSummary, 'id' | 'trigger' | 'input'>,
+): boolean {
+  if (workflow.trigger === 'run') return true;
+  return workflow.input.length > 0 && !PAGE_RUN_LATER.has(workflow.id);
+}
+
+/** The values a run form holds, by field name. */
+export type RunFormValues = Record<string, WorkflowInputValue>;
+
+/**
+ * The form's first values: a boolean is its default (unchecked without one);
+ * any other field with a default shows it as text.
+ */
+export function initialInputValues(fields: WorkflowInputField[]): RunFormValues {
+  const values: RunFormValues = {};
+  for (const field of fields) {
+    if (field.hidden) continue;
+    if (field.type === 'boolean') {
+      values[field.name] = field.default === true;
+    } else if (field.default !== undefined && typeof field.default !== 'boolean') {
+      values[field.name] = String(field.default);
+    }
+  }
+  return values;
+}
+
+/**
+ * The `input` a run sends (api.md 118): each visible field in form order, as
+ * its type takes it (a boolean always, a list of datasets, one dataset or a
+ * text); an untouched field is left out, so the server applies its default
+ * or refuses a required one.
+ */
+export function runInput(
+  fields: WorkflowInputField[],
+  values: RunFormValues,
+): Record<string, WorkflowInputValue> {
+  const input: Record<string, WorkflowInputValue> = {};
+  for (const field of fields) {
+    if (field.hidden) continue;
+    const value = Object.hasOwn(values, field.name) ? values[field.name] : undefined;
+    if (field.type === 'boolean') {
+      input[field.name] = value === true;
+    } else if (field.type === 'datasets') {
+      if (Array.isArray(value)) input[field.name] = [...value];
+    } else if (value !== undefined && !Array.isArray(value)) {
+      input[field.name] = typeof value === 'string' ? value : String(value);
+    }
+  }
+  return input;
+}
+
+/** The field a follow-up's question goes into: the first visible text area. */
+export function questionFieldName(fields: WorkflowInputField[]): string | null {
+  const field = fields.find((f) => !f.hidden && f.type === 'textarea');
+  return field ? field.name : null;
+}
+
+/**
+ * A follow-up (plan 5.4; workflows R17, R21): the earlier run's input with
+ * the new question, and the earlier run as the context.
+ */
+export function followUpRequest(
+  run: Pick<WorkflowRun, 'id' | 'input'>,
+  questionField: string,
+  question: string,
+): WorkflowRunRequest {
+  return {
+    input: { ...run.input, [questionField]: question.trim() },
+    context: { fromRunId: run.id },
+  };
 }
