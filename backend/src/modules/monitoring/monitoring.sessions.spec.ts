@@ -43,9 +43,7 @@ function runsWith(
 ): WorkflowRunsRepository {
   return {
     get: (id: string) =>
-      Promise.resolve(
-        docs[id] ? { id, input: {}, ...docs[id] } : null,
-      ),
+      Promise.resolve(docs[id] ? { id, input: {}, ...docs[id] } : null),
   } as unknown as WorkflowRunsRepository;
 }
 

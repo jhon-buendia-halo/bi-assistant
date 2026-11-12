@@ -14,6 +14,44 @@ Entry template:
 
 ---
 
+## 2026-11-12 — M1-23 Workflow-first, chats retired, faster workflow (1.23.1–1.23.33, 1.23.26b)
+
+### What went well
+- **The fan-out pipeline delivered 34 stories in two days.** Each story went through the same loop: builder in its own worktree from a brief → merge → the lead re-verifies → clean up. The re-verification caught real defects that the builders' reports missed:
+  - duplicated v2 phases;
+  - a read-only chat that a test still typed into;
+  - an RFP run offering visuals against rfp R15;
+  - a stale kind-chip test;
+  - TS2783 errors that Jest does not see.
+- **Contracts in `docs/plans/` let independent stories run in parallel.** Two or three builders at a time; the conflicts were small and mechanical (unions of imports and tests, one renumbering of `api.md`).
+- **The speed-up stories paid off immediately.**
+  - Story packs of 4–18 KB replaced exploring a 2 MB spec set.
+  - `roadmap.md` went from 277 to 40 KB.
+  - A wave check of two stories took 14 s.
+  - Playwright with 3 workers took the full suite from 508 to 186 s.
+  - Sonnet builders cost 44–270k tokens per story, against ~280k average for Opus builders.
+- **No change to what any agent receives, proven each time.** Prompt and tool-list hashes, plus request-parity tests (run vs chat turn; eval requests before vs after), so no eval runs were needed for a large refactor of the turn path.
+
+### What went wrong
+- **Direction changed four times in one day:** agent Graph tab → workflow-first with chats → run workflows → chats retired. Stories 1.23.4–1.23.7 were built and then largely superseded. That was about 1.1 M tokens and several hours.
+- **Builders inherited the lead's Opus.** `builder.md` said `model: inherit`, and `/usage` showed builders at 61 % of usage. The 5-hour Opus limit was hit mid-story (1.23.15 paused about an hour).
+- **A `qa.mjs` usage error left a stale `dist`.** `qa.mjs --wave` rejected the id `1.23.26b` and exited before building. The next backend e2e and Playwright runs tested the pre-Phase-C build, and that was only noticed because one e2e returned 201 where 404 was expected.
+- **Merges stopped silently twice.** One merge stopped on a conflict (`MERGE_HEAD` left), and its tests ran on a half-merged tree. Separately, two builders took the same `api.md` number (129).
+- **Visual baselines.** A first Playwright run on macOS writes the missing darwin baseline, and a second run then "passes" against it. The Linux baseline went stale with the new rail item, and no CI runs Playwright to notice.
+- **The lead session itself grew huge.** Every turn re-sent a very long history. The handoff file came late.
+- **Heredocs and `sed` for edits, against lessons.md.** Several regex/heredoc edits slipped through; one non-POSIX `sed` alternation silently did nothing.
+
+### What to do differently
+- **Decide before building.** For a feature whose end state is unclear, show a 10-minute mock and get one confirmation of the end state before any story. Now in `CLAUDE.md`.
+- **Pin `model:` on every subagent definition.** Never `inherit`. `builder.md` is now `sonnet`; pass `opus` only for design or critical stories.
+- **After every merge**, check `git diff --name-only --diff-filter=U` and the absence of `MERGE_HEAD` before running anything.
+- **Treat a non-zero exit before the build as "the build did not happen".** Run `npm --prefix backend run build:all` explicitly before any backend e2e or Playwright run that follows a failed `qa.mjs`.
+- **After every Playwright run on macOS**, delete `*-snapshots/*-darwin.png` that git does not track, before the next run.
+- **A parallel brief that adds `api.md` endpoints names its number range.** For example, "use 130–139".
+- **Write the handoff file at the start of the second wave.** Then continue in a fresh session.
+
+---
+
 ## 2026-11-11 — M0-5 Faster workflow, repo-only planning (0.5.1–0.5.5)
 
 ### What went well

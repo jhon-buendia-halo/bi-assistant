@@ -224,7 +224,7 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
 
 The app becomes workflow-first: a chat runs a **workflow** defined in code, and agents are the building blocks that its steps call (workflows → agents → skills → tools). Every agent without a workflow of its own gets an automatic one-step workflow, so every session runs a workflow and there is one turn path. A **Workflows** area on the rail lists them, shows what each does on every message and starts chats; **Agents** becomes the library. The four showcase agents are removed. The epic started on 2026-11-11 as "Questions to Insights v2: a workflow you can follow" (story 1.23.1) and was widened the same day. Decision: ADR-0040. All stories are built on the branch `feat/M1-23-workflow-first` and ship as one PR. Epic spec: [specs/epics/M1-23/spec.md](specs/epics/M1-23/spec.md). Plan and contract: [docs/plans/m1-23-workflow-first.md](docs/plans/m1-23-workflow-first.md). No Jira key (repo only). Build order: 1.23.1, 1.23.2, 1.23.8, 1.23.3, then 1.23.4 with 1.23.5 in parallel, then 1.23.6 with 1.23.7 in parallel.
 
-#### 1.23.1 — The Graph tab draws a workflow-backed agent's turn  `🚧 In progress`
+#### 1.23.1 — The Graph tab draws a workflow-backed agent's turn  `✅ Done`
 - **Intent:** open Questions to Insights v2 → **Graph** and see, step by step, what happens on each message. Show which steps are code and which is the LLM, what each step receives and returns, the agent's tools and step limit inside the LLM step, and where a turn fails or stops.
 - **Scope:**
   - `GET /agents/:key` (api.md 34) gains `workflow?` for a workflow-backed agent (today only `assistant-v2`). It holds the workflow id and its steps in order, each with:
@@ -265,7 +265,7 @@ The app becomes workflow-first: a chat runs a **workflow** defined in code, and 
   - Builds and check-specs are green.
 - **Notes:** requested on 2026-11-11, after a review of agent-vs-workflow approaches. The user chose the Graph tab over a new tab, the definition only (no run status) for now, and a new epic because Milestone 1.21 has shipped. UI story: its demo is recorded in the fast loop. Built and committed (8fa8b745) before the epic was widened; its drawing is reused by 1.23.5.
 
-#### 1.23.2 — Workflow-first: ADR, epic spec, glossary and roadmap  `🚧 In progress`
+#### 1.23.2 — Workflow-first: ADR, epic spec, glossary and roadmap  `✅ Done`
 - **Intent:** the move to workflow-first is decided and scoped before any code, so each later story can be built and reviewed on its own.
 - **Scope:**
   - ADR-0040 in `specs/system/architecture.md`, with "amended by ADR-0040" on ADR-0004, 0008, 0028, 0029 and 0034;
@@ -275,49 +275,49 @@ The app becomes workflow-first: a chat runs a **workflow** defined in code, and 
 - **Acceptance:** ADR-0040 is `Accepted` and the epic spec `Confirmed (<date>)` by the user; `origin/main` was merged first and the ADR number re-checked; check-specs passes.
 - **Notes:** S-size docs story. Plan: [docs/plans/m1-23-workflow-first.md](docs/plans/m1-23-workflow-first.md).
 
-#### 1.23.8 — Remove the showcase agents  `📋 Planned`
+#### 1.23.8 — Remove the showcase agents  `✅ Done`
 - **Intent:** the four showcase agents (Benchmarking, Survey, LAD COE, Strategy), which never run, are gone from the app.
 - **Scope:** their agent files, registration and shipped prompts; every showcase branch in the backend and the agent hub; a saved pin or prompt override for their keys is ignored, never an error (no migration). Specs: agents-evals R106 retired and the lines naming them, agents.md 2.9, api.md 33, agent-answers R64, ui.md, glossary. Past epic specs stay as history.
 - **Out of scope:** System agents; any other agent.
 - **Acceptance:** no showcase agent in the hub or the new-session picker; `GET /agents/benchmarking` answers 404; with a pin and an override saved for `strategy`, the hub and `GET /agents` still load; `agent-hub` and `session-management` specs updated; the `@demo @story-1.23.8` scenario passes; builds, unit tests, lint and check-specs green.
 - **Notes:** requested on 2026-11-11 (answer to the plan's open question 1). Built right after 1.23.2, so later stories have no showcase case. Detail: plan section 7.
 
-#### 1.23.3 — The workflow catalogue: list, detail, and sessions bound to a workflow  `📋 Planned`
+#### 1.23.3 — The workflow catalogue: list, detail, and sessions bound to a workflow  `✅ Done`
 - **Intent:** the backend knows every workflow a chat can run, says which one a session runs and which workflows use an agent, and starts a session from a workflow id. No UI.
 - **Scope:** the framework-free workflow catalogue and `agent-turn` step catalogue; `GET /workflows`, `GET /workflows/:id`; `POST /sessions { workflowId }`; a new session stores `workflowId`; the session's `workflowRef`; the agent's `usedInWorkflows`; the new `workflows` capability spec, api.md, data-model 3.4, agents.md.
 - **Out of scope:** the turn path (1.23.4); every UI change; editing workflows.
 - **Acceptance:** unit tests for the derivation table, id parsing, drift and the creation invariant; the backend e2e `backend/test/workflows.e2e-spec.ts` (catalogue order, user agents Live-only, 404s, sessions from a workflow, `usedInWorkflows`); existing agent and session e2e specs unchanged; check-specs, lint, builds, unit tests green.
 - **Notes:** API-only: its demo is `evidence/1.23.3/demo.txt`. Detail and contract: plan sections 4, 5 and 7.
 
-#### 1.23.4 — Every streamed turn runs the session's workflow  `📋 Planned`
+#### 1.23.4 — Every streamed turn runs the session's workflow  `✅ Done`
 - **Intent:** one turn path: an assistant, RFP Builder, Data Readiness or user-agent turn is a run of its one-step workflow, with the same answer, events, bar and stored message as before.
 - **Scope:** the `agent-turn` Mastra workflow; `runTurnWorkflow` replaces the v2-only path and the direct agent call; a one-step workflow never writes the bar; one real trace captured and Monitoring kept true (workflow spans classed as Framework only if they appear); agents.md, agent-panel, sessions-chat, monitoring (if needed).
 - **Out of scope:** the non-streamed turn; evals; any change to an agent's prompt, tools or context; UI.
 - **Acceptance:** the existing session unit suites pass with only v2's internal names adapted; new unit tests per agent kind, bar, clarification and error handling; the request-recording Playwright specs unchanged and green; the `getInstructions()` and tool-list hashes equal on base and branch; builds and check-specs green.
 - **Notes:** highest-risk story; trace before theorising. Demo: `evidence/1.23.4/demo.txt`. Parallel with 1.23.5.
 
-#### 1.23.5 — A Workflows area: list, workflow page and Start chat  `📋 Planned`
+#### 1.23.5 — A Workflows area: list, workflow page and Start chat  `✅ Done`
 - **Intent:** open **Workflows** on the rail, see every workflow you can run, open one to see what happens on each message and which agents it uses, and start a chat from it.
 - **Scope:** the rail item; the list (search, Official and Mine sections, cards with Start chat and requirements); the workflow page (the 1.23.1 drawing, its agents, Start chat); app-shell, the `workflows` capability, ui.md.
 - **Out of scope:** the composer's Workflow field (1.23.6); removing Start chat from agents (1.23.7); editing workflows; run status.
 - **Acceptance:** `frontend/e2e/workflows.spec.ts` with `@demo @story-1.23.5` (open v2's workflow, open a user agent's one-step workflow, Start chat); a blocked workflow says why; no editing control exists; search; the axe scan on both pages in both themes; navigation specs green.
 - **Notes:** UI story. Parallel with 1.23.4.
 
-#### 1.23.6 — The New conversation screen picks a workflow; chats name their workflow  `📋 Planned`
+#### 1.23.6 — The New conversation screen picks a workflow; chats name their workflow  `✅ Done`
 - **Intent:** a chat is started by choosing a **Workflow**, and every chat names its workflow in its header and in the Sessions list.
 - **Scope:** the composer's Agent field becomes Workflow (same listbox behaviour, Assistant preselected); Create sends the workflow id; the `Workflow` header chip on every chat and the Sessions list chip; sessions-chat, ui.md.
 - **Out of scope:** the agent pages (1.23.7).
 - **Acceptance:** `session-management.spec.ts` with `@demo @story-1.23.6` (pick v2, create, header and Sessions chip, the bar's four steps); a deleted agent's session and a pre-epic session name their workflow; the axe scan on the composer in both themes; every spec using the old composer test ids updated.
 - **Notes:** UI story. Parallel with 1.23.7 (ownership of `app.ts` regions in the plan).
 
-#### 1.23.7 — Agents are building blocks: no Start chat, and "Used in" workflows  `📋 Planned`
+#### 1.23.7 — Agents are building blocks: no Start chat, and "Used in" workflows  `✅ Done`
 - **Intent:** the Agents area is a library: a chat is never started from an agent, and each agent shows which workflows use it.
 - **Scope:** Start chat removed from hub cards and agent detail; the Official agents' Chat Box tab removed (System Prompt becomes their default tab; user agents keep Chat Box for the preview); the `Used in` line linking to workflow pages; agents-evals, sessions-chat, rfp, data-readiness, ui.md.
 - **Out of scope:** the agent editor and preview chat.
 - **Acceptance:** `agent-hub.spec.ts` with `@demo @story-1.23.7` (no Start chat; `Used in` opens the workflow page; RFP Builder has no Chat Box tab); draft-only and System agents show their empty `Used in` text; the RFP and Data Readiness Start chat scenarios pass through Workflows; the agent editor specs pass unchanged; the axe scan in both themes.
 - **Notes:** UI story. After it, the epic's stories go through the acceptance gate, then one changelog entry and the PR.
 
-#### 1.23.9 — Run a workflow on an input: the sequential test workflow  `🚧 In progress`
+#### 1.23.9 — Run a workflow on an input: the sequential test workflow  `✅ Done`
 - **Intent:** a workflow runs once on a typed input and shows each step's result, with no chat. The first such workflow is a three-step test workflow.
 - **Scope:** run workflows in the catalogue (`trigger`, typed `input` fields defined in code); the `seq-text-demo` workflow (Clean text → Count words → Format result, code only); `POST /workflows/:id/runs` (api.md 118, nothing stored); the run workflow's page with its input form, Run and the per-step result; the list card's Run button; chat-only refusals and pickers. Contract: plan section 9.
 - **Out of scope:** converting the four chat workflows and changing how chats start (1.23.10); storing runs; streaming a run's progress; LLM steps.
@@ -326,87 +326,87 @@ The app becomes workflow-first: a chat runs a **workflow** defined in code, and 
 
 Stories 1.23.10–1.23.27 retire chats: every workflow runs once on a typed input, runs are stored, past chats open read-only (ADR-0041). Plan and contract: [docs/plans/m1-23-retire-chats.md](docs/plans/m1-23-retire-chats.md); its section 11.1 maps the plan's ids (1.24.x, 1.25.x) to these. Phase A is 1.23.11–1.23.22, Phase B 1.23.23–1.23.25, Phase C 1.23.26–1.23.27. Requested on 2026-11-11; the user kept every phase in this epic and branch.
 
-#### 1.23.10 — The workflow page as a designer: graph canvas in the middle, configuration on the right  `🚧 In progress`
+#### 1.23.10 — The workflow page as a designer: graph canvas in the middle, configuration on the right  `✅ Done`
 - **Intent:** a workflow's page looks like a workflow designer: its graph on a central canvas (Start → steps → End, kind badges, zoom), and its configuration, inputs, outputs, run and code in tabs of the right-hand panel.
 - **Scope:** plan section 11.2: header with breadcrumb and Execute; the canvas (pure layout function, HTML nodes over SVG connectors, toolbar, pan, selection); the right panel's Workflow, Step, Run and Code tabs; the 1.23.9 run form and result move into Run, with run status chips on the nodes; workflows spec and ui.md 4.4b.
 - **Out of scope:** editing workflows; forks and parallel branches; the agent detail's Graph tab (unchanged).
 - **Acceptance:** layout unit tests; `@demo @story-1.23.10` (v2 opens as a designer, select Analyse → Step tab, Code tab, run the test workflow from Execute with Done chips on its nodes); the 1.23.5 and 1.23.9 scenarios updated; axe in both themes with the panel open; builds, unit tests and check-specs green.
 - **Notes:** from the user's screenshot of a workflow designer (2026-11-11). Frontend only; built first so the run stories add their inputs to the Run tab.
 
-#### 1.23.11 — Chats retired: ADR-0041, epic spec, glossary and roadmap  `🚧 In progress`
+#### 1.23.11 — Chats retired: ADR-0041, epic spec, glossary and roadmap  `✅ Done`
 - **Intent:** the retirement of chats is decided and scoped before code. **Scope:** ADR-0041 (Accepted) with its status pointers; the epic spec amendment; this roadmap; glossary terms Run, Run workflow, Past chat. **Acceptance:** check-specs green. **Notes:** plan 1.24.1.
 
-#### 1.23.12 — Streamed runs of agent workflows on the backend  `📋 Planned`
+#### 1.23.12 — Streamed runs of agent workflows on the backend  `✅ Done`
 - **Intent:** every agent workflow (Assistant, v2, RFP Builder, Data Readiness, user agents) runs once on a typed input with live progress, through today's turn path on a temporary host. **Acceptance:** a run's model request equals a chat turn's for the same input; per plan 1.24.2.
 
-#### 1.23.13 — The answer view, extracted from the chat  `📋 Planned`
+#### 1.23.13 — The answer view, extracted from the chat  `✅ Done`
 - **Intent:** the chat's answer rendering (text, data, SQL, visuals, files) becomes a component a run can show, with no visible change. **Acceptance:** per plan 1.24.3. Parallel with 1.23.12.
 
-#### 1.23.14 — Stored runs, the run history API and run files  `📋 Planned`
+#### 1.23.14 — Stored runs, the run history API and run files  `✅ Done`
 - **Intent:** runs of agent workflows are stored (`workflow_runs`), listed and downloadable. **Acceptance:** per plan 1.24.4.
 
-#### 1.23.15 — Run the Assistant, Questions to Insights v2 and user agents from their page  `📋 Planned`
+#### 1.23.15 — Run the Assistant, Questions to Insights v2 and user agents from their page  `✅ Done`
 - **Intent:** from the designer's Run tab, ask a question over picked datasets and see the answer, with Follow up carrying one earlier run. **Acceptance:** per plan 1.24.5, with `@demo @story-1.23.15`.
 
-#### 1.23.16 — Run the Data Readiness Agent on a dataset  `📋 Planned`
+#### 1.23.16 — Run the Data Readiness Agent on a dataset  `✅ Done`
 - **Acceptance:** per plan 1.24.6; reports record the run that made them.
 
-#### 1.23.17 — Run the RFP Builder one exchange at a time  `📋 Planned`
+#### 1.23.17 — Run the RFP Builder one exchange at a time  `✅ Done`
 - **Acceptance:** per plan 1.24.7: one run per exchange keyed by the RFP id, with Continue.
 
-#### 1.23.18 — Move the request-recording E2E specs from chats to runs  `📋 Planned`
+#### 1.23.18 — Move the request-recording E2E specs from chats to runs  `✅ Done`
 - **Acceptance:** per plan 1.24.8 (tests only).
 
-#### 1.23.19 — Rate a run's answer: verified queries from runs  `📋 Planned`
+#### 1.23.19 — Rate a run's answer: verified queries from runs  `✅ Done`
 - **Acceptance:** per plan 1.24.9.
 
-#### 1.23.20 — Monitoring shows runs  `📋 Planned`
+#### 1.23.20 — Monitoring shows runs  `✅ Done`
 - **Acceptance:** per plan 1.24.10.
 
-#### 1.23.21 — Runs replace Sessions on the rail; past chats open read-only  `📋 Planned`
+#### 1.23.21 — Runs replace Sessions on the rail; past chats open read-only  `✅ Done`
 - **Acceptance:** per plan 1.24.11; no stored session is lost or migrated. Also carries what 1.23.15 left out of plan 1.24.5: reopening a stored run read-only (`run-detail`), Run again, the agent-phases bar inside the agent step, and the Careful mode "Cross-checked" run scenario; and Monitoring's "Sessions" tab, column and filter renamed for runs (left out of 1.23.20).
 
-#### 1.23.22 — Chats can no longer start  `📋 Planned`
+#### 1.23.22 — Chats can no longer start  `✅ Done`
 - **Acceptance:** per plan 1.24.12, including the desktop readiness probe on `GET /health`. Last story of Phase A.
 
-#### 1.23.23 — Try it: run an agent's draft instead of a preview chat  `📋 Planned`
+#### 1.23.23 — Try it: run an agent's draft instead of a preview chat  `✅ Done`
 - **Acceptance:** per plan 1.25.2.
 
-#### 1.23.24 — Deep analysis as a run workflow  `📋 Planned`
+#### 1.23.24 — Deep analysis as a run workflow  `✅ Done`
 - **Acceptance:** per plan 1.25.3.
 
-#### 1.23.25 — Visual actions on a run's result  `📋 Planned`
+#### 1.23.25 — Visual actions on a run's result  `✅ Done`
 - **Acceptance:** per plan 1.25.4, including the visual card's View in a run's answer (not wired in 1.23.15: the right panel holds the designer).
 
-#### 1.23.26 — Extract the turn engine; evals and dev scripts on run hosts  `🚧 In progress`
+#### 1.23.26 — Extract the turn engine; evals and dev scripts on run hosts  `✅ Done`
 - **Scope now (moved up, wave S2):** only the turn-engine extraction, per [the speed-up contract](docs/plans/m1-23-dev-speedup.md), plan 1.23.26. Evals and dev scripts on run hosts stay for later (plan 1.25.5).
 - **Acceptance:** per the speed-up contract: `sessions.service.ts` shrinks by more than 1,500 lines; backend unit and e2e suites, the request-recording Playwright specs and the agent hashes are unchanged.
 
-#### 1.23.26b — Evals and dev scripts on run hosts  `📋 Planned`
+#### 1.23.26b — Evals and dev scripts on run hosts  `✅ Done`
 - **Intent:** the remainder of plan 1.25.5 left out of 1.23.26: evals and the dev scripts stop creating chat sessions and run on run hosts, so 1.23.27 can remove the chat write paths. Contract: [the retire-chats plan](docs/plans/m1-23-retire-chats.md), plan 1.25.5.
 - **Acceptance:** evals send each agent the same requests as before (prompt and tool-list hashes equal; one eval case per agent kind run against the recording stub, before and after, with identical requests); no eval or dev script calls `POST /sessions` or the chat stream; backend unit and e2e suites green.
 
-#### 1.23.27 — Remove the chat write paths and specs  `📋 Planned`
+#### 1.23.27 — Remove the chat write paths and specs  `✅ Done`
 - **Acceptance:** per plan 1.25.6; past chats stay readable.
 
 Stories 1.23.28–1.23.33 make the development workflow faster and cheaper, and 1.23.26 moves up to run before the rest of Phase A. The user decided on 2026-11-11 to implement every suggestion of the speed-up review on this branch. Contract: [docs/plans/m1-23-dev-speedup.md](docs/plans/m1-23-dev-speedup.md). Waves: S1 = 1.23.28, 1.23.29, 1.23.30, 1.23.31, 1.23.32; S2 = 1.23.26, 1.23.33; then Phase A resumes.
 
-#### 1.23.28 — Lean story lane, model and effort routing, decide-before-build  `🚧 In progress`
+#### 1.23.28 — Lean story lane, model and effort routing, decide-before-build  `✅ Done`
 - **Intent:** a story costs a fraction of today's time and tokens. **Scope:** contract section 1.23.28 (CLAUDE.md, the four workflow skills, builder.md, reviewer.md, delivery.md §10/12/13, lessons.md). **Acceptance:** check-specs green; a reviewer finds no contradiction between the documents.
 
-#### 1.23.29 — `story-pack.mjs` and the spec section index  `📋 Planned`
+#### 1.23.29 — `story-pack.mjs` and the spec section index  `✅ Done`
 - **Intent:** a builder starts from one generated brief instead of exploring. **Acceptance:** contract section 1.23.29.
 
-#### 1.23.30 — Archive finished milestones of the roadmap  `📋 Planned`
+#### 1.23.30 — Archive finished milestones of the roadmap  `✅ Done`
 - **Intent:** `roadmap.md` shrinks from 277 KB to under ~40 KB. **Acceptance:** contract section 1.23.30.
 
-#### 1.23.31 — `qa.mjs --wave`: one verification for several stories  `📋 Planned`
+#### 1.23.31 — `qa.mjs --wave`: one verification for several stories  `✅ Done`
 - **Acceptance:** contract section 1.23.31.
 
-#### 1.23.32 — Playwright in parallel  `📋 Planned`
+#### 1.23.32 — Playwright in parallel  `✅ Done`
 - **Acceptance:** contract section 1.23.32: 3 workers, three green runs in a row, timings before and after.
 
-#### 1.23.33 — Split `app.ts` / `app.html` by area  `🚧 In progress`
+#### 1.23.33 — Split `app.ts` / `app.html` by area  `✅ Done`
 - **Scope:** [the speed-up contract](docs/plans/m1-23-dev-speedup.md), plan 1.23.33.
 - **Acceptance:** `app.ts` under ~500 lines and `app.html` under ~400; no visible or test-id change; the frontend unit suite and the full web Playwright suite pass.
 ---

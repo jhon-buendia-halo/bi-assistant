@@ -50,7 +50,8 @@ describe('a pair from a workflow run (1.23.19)', () => {
       sourceMessageAt: runPair.sourceMessageAt,
     });
 
-    const saved = repository.save.mock.calls[0][0] as VerifiedQueryDoc;
+    const calls = repository.save.mock.calls as unknown as [VerifiedQueryDoc][];
+    const saved = calls[0][0];
     expect(saved.sourceRunId).toBe('run-1');
     expect(saved).not.toHaveProperty('sourceSessionId');
     expect(saved.question).toBe('Which team scored the most goals?');

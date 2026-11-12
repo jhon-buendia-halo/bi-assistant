@@ -2,6 +2,62 @@
 
 Running log of every meaningful change, newest first. One entry per epic, written when its PR opens; see step 10 of the `workflow-gate` skill. Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-12
+
+### Changed
+- **Workflow-first: every workflow runs on an input, chats are retired, and a faster development workflow** (epic M1-23, repo only, roadmap 1.23.1–1.23.33 and 1.23.26b, ADR-0040 and ADR-0041, [specs/epics/M1-23/spec.md](specs/epics/M1-23/spec.md); plans [m1-23-workflow-first.md](docs/plans/m1-23-workflow-first.md), [m1-23-retire-chats.md](docs/plans/m1-23-retire-chats.md), [m1-23-dev-speedup.md](docs/plans/m1-23-dev-speedup.md); new capabilities [workflows](specs/capabilities/workflows/spec.md), [agent-answers](specs/capabilities/agent-answers/spec.md), [past-chats](specs/capabilities/past-chats/spec.md)). Each story's evidence is in `evidence/<id>/`; demos were not published as Claude artifacts (no Artifact tool in the lead session) and play from each `demo-page.html`.
+  - **Workflows.**
+    - 1.23.1: v2's Graph tab draws its turn.
+    - 1.23.2: ADR-0040 makes the app workflow-first.
+    - 1.23.3: the workflow catalogue (`GET /workflows`, `GET /workflows/:id`).
+    - 1.23.4: every turn runs as a workflow run (`agent-turn`), with what reaches the model unchanged.
+    - 1.23.5: a **Workflows** rail area.
+    - 1.23.9: run workflows on a typed input, with the `seq-text-demo` test workflow.
+    - 1.23.10: **the workflow page is a designer.** The graph sits on a canvas (Start → steps → End, zoom, pan, selection), and the right panel holds the Workflow, Step, Run and Code tabs.
+    - Evidence: [1.23.1](evidence/1.23.1/), [1.23.2](evidence/1.23.2/), [1.23.3](evidence/1.23.3/), [1.23.4](evidence/1.23.4/), [1.23.5](evidence/1.23.5/), [1.23.9](evidence/1.23.9/), [1.23.10](evidence/1.23.10/).
+  - **Chats retired (ADR-0041).**
+    - 1.23.11: the decision and plan.
+    - 1.23.12: streamed runs of every agent workflow, sending the same model requests as a chat turn.
+    - 1.23.13: `AnswerView` extracted.
+    - 1.23.14: stored runs and the `/workflow-runs` API.
+    - 1.23.15: run the Assistant, v2 and user agents from the Run tab, with live steps, the answer, Follow up and Stop.
+    - 1.23.16: run the Data Readiness Agent on a dataset.
+    - 1.23.17: run the RFP Builder one exchange at a time, with Continue.
+    - 1.23.19: rating a run's answer saves a verified query.
+    - 1.23.20: Monitoring attributes calls to runs.
+    - 1.23.21: **Runs** replaces Sessions, past chats open read-only, and Run again.
+    - 1.23.22: chats can no longer start; the home page points to workflows, and the desktop probe moves to `GET /health`.
+    - 1.23.23: **Try it** runs an agent's draft.
+    - 1.23.24: deep analysis becomes a four-step workflow.
+    - 1.23.25: visual actions on a run's result.
+    - 1.23.26 and 1.23.26b: the turn engine is extracted (`sessions.service.ts` 3,496 → 1,498 lines), and evals and dev scripts move to run hosts.
+    - 1.23.27: the chat write routes (3, 5–8, 10–13, 46, 47) are removed and now answer 404. Past chats stay readable, and stored sessions are never migrated or lost.
+    - The agents' prompts and tool lists are byte-identical before and after (hashes in [evidence/1.23.4](evidence/1.23.4/), [1.23.12](evidence/1.23.12/), [1.23.26](evidence/1.23.26/), [1.23.26b](evidence/1.23.26b/)), so no eval run was needed.
+    - Evidence: `evidence/1.23.11/`–`evidence/1.23.27/`.
+  - **Agents and sessions on the way there** (later superseded by retiring chats):
+    - 1.23.6: the composer picked a workflow;
+    - 1.23.7: agents became a library with "Used in";
+    - 1.23.8: the four showcase agents were removed.
+    - Evidence: [1.23.6](evidence/1.23.6/), [1.23.7](evidence/1.23.7/), [1.23.8](evidence/1.23.8/).
+  - **A faster, cheaper development workflow.**
+    - 1.23.28: the lean story lane, model and effort routing, decide-before-build and Gherkin once; builders default to Sonnet.
+    - 1.23.29: `story-pack.mjs` and the generated `specs/INDEX.md`.
+    - 1.23.30: `roadmap.md` 277 KB → 40 KB, with `roadmap-archive.md` and `roadmap-backlog.md`.
+    - 1.23.31: `qa.mjs --wave`.
+    - 1.23.32: Playwright with 3 workers (full web suite 508 s → 186 s).
+    - 1.23.33: `app.ts`/`app.html` split by area (1,567 → 270 and 1,091 → 336 lines).
+    - Evidence: [1.23.28](evidence/1.23.28/)–[1.23.33](evidence/1.23.33/), wave reports in [evidence/waves/](evidence/waves/).
+  - **Gate (2026-11-12, macOS, web target).** One `qa.mjs --wave` over all 34 stories against `main`, plus the full suites on the final build:
+    - backend `tsc` clean, unit 3,068/3,068, e2e 84/84;
+    - frontend unit 736/736;
+    - the full web Playwright suite 266 passed, 2 skipped, with the one known failure below;
+    - backend eslint on the changed files; `check-specs` green; initial bundle 935.7 kB (budget 1 MB).
+    - **Desktop not run.**
+  - **Known gaps:**
+    - `layout-accessibility`'s application-shell visual baseline has no darwin web image and its Linux image predates the Workflows rail item (no CI runs Playwright).
+    - An agent creating a visual inside a one-shot run fails as a chat's first turn always did (visuals R1).
+    - A document's PDF download exists only for past chats.
+
 ## 2026-11-11
 
 ### Added

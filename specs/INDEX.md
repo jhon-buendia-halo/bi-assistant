@@ -253,40 +253,40 @@ roadmap.md:217-217  ### Milestone 1.20 — Schema metadata in datasets ([BA-318]
 roadmap.md:219-219  ### Milestone 1.21 — Questions to Insights v2 ([BA-320](https://halo-powered.atlassian.net/browse/BA-320)) — archived, see roadmap-archive.md
 roadmap.md:221-221  ### Milestone 1.22 — Sampled profiling and synthetic data (M1-22) — archived, see roadmap-archive.md
 roadmap.md:223-412  ### Milestone 1.23 — Workflow-first: chats run workflows, agents are building blocks (M1-23)
-roadmap.md:227-266  #### 1.23.1 — The Graph tab draws a workflow-backed agent's turn  `🚧 In progress`
-roadmap.md:268-276  #### 1.23.2 — Workflow-first: ADR, epic spec, glossary and roadmap  `🚧 In progress`
-roadmap.md:278-283  #### 1.23.8 — Remove the showcase agents  `📋 Planned`
-roadmap.md:285-290  #### 1.23.3 — The workflow catalogue: list, detail, and sessions bound to a workflow  `📋 Planned`
-roadmap.md:292-297  #### 1.23.4 — Every streamed turn runs the session's workflow  `📋 Planned`
-roadmap.md:299-304  #### 1.23.5 — A Workflows area: list, workflow page and Start chat  `📋 Planned`
-roadmap.md:306-311  #### 1.23.6 — The New conversation screen picks a workflow; chats name their workflow  `📋 Planned`
-roadmap.md:313-318  #### 1.23.7 — Agents are building blocks: no Start chat, and "Used in" workflows  `📋 Planned`
-roadmap.md:320-327  #### 1.23.9 — Run a workflow on an input: the sequential test workflow  `🚧 In progress`
-roadmap.md:329-334  #### 1.23.10 — The workflow page as a designer: graph canvas in the middle, configuration on the right  `🚧 In progress`
-roadmap.md:336-337  #### 1.23.11 — Chats retired: ADR-0041, epic spec, glossary and roadmap  `🚧 In progress`
-roadmap.md:339-340  #### 1.23.12 — Streamed runs of agent workflows on the backend  `📋 Planned`
-roadmap.md:342-343  #### 1.23.13 — The answer view, extracted from the chat  `📋 Planned`
-roadmap.md:345-346  #### 1.23.14 — Stored runs, the run history API and run files  `📋 Planned`
-roadmap.md:348-349  #### 1.23.15 — Run the Assistant, Questions to Insights v2 and user agents from their page  `📋 Planned`
-roadmap.md:351-352  #### 1.23.16 — Run the Data Readiness Agent on a dataset  `📋 Planned`
-roadmap.md:354-355  #### 1.23.17 — Run the RFP Builder one exchange at a time  `📋 Planned`
-roadmap.md:357-358  #### 1.23.18 — Move the request-recording E2E specs from chats to runs  `📋 Planned`
-roadmap.md:360-361  #### 1.23.19 — Rate a run's answer: verified queries from runs  `📋 Planned`
-roadmap.md:363-364  #### 1.23.20 — Monitoring shows runs  `📋 Planned`
-roadmap.md:366-367  #### 1.23.21 — Runs replace Sessions on the rail; past chats open read-only  `📋 Planned`
-roadmap.md:369-370  #### 1.23.22 — Chats can no longer start  `📋 Planned`
-roadmap.md:372-373  #### 1.23.23 — Try it: run an agent's draft instead of a preview chat  `📋 Planned`
-roadmap.md:375-376  #### 1.23.24 — Deep analysis as a run workflow  `📋 Planned`
-roadmap.md:378-379  #### 1.23.25 — Visual actions on a run's result  `📋 Planned`
-roadmap.md:381-383  #### 1.23.26 — Extract the turn engine; evals and dev scripts on run hosts  `🚧 In progress`
-roadmap.md:385-387  #### 1.23.26b — Evals and dev scripts on run hosts  `📋 Planned`
-roadmap.md:389-392  #### 1.23.27 — Remove the chat write paths and specs  `📋 Planned`
-roadmap.md:394-395  #### 1.23.28 — Lean story lane, model and effort routing, decide-before-build  `🚧 In progress`
-roadmap.md:397-398  #### 1.23.29 — `story-pack.mjs` and the spec section index  `📋 Planned`
-roadmap.md:400-401  #### 1.23.30 — Archive finished milestones of the roadmap  `📋 Planned`
-roadmap.md:403-404  #### 1.23.31 — `qa.mjs --wave`: one verification for several stories  `📋 Planned`
-roadmap.md:406-407  #### 1.23.32 — Playwright in parallel  `📋 Planned`
-roadmap.md:409-412  #### 1.23.33 — Split `app.ts` / `app.html` by area  `🚧 In progress`
+roadmap.md:227-266  #### 1.23.1 — The Graph tab draws a workflow-backed agent's turn  `✅ Done`
+roadmap.md:268-276  #### 1.23.2 — Workflow-first: ADR, epic spec, glossary and roadmap  `✅ Done`
+roadmap.md:278-283  #### 1.23.8 — Remove the showcase agents  `✅ Done`
+roadmap.md:285-290  #### 1.23.3 — The workflow catalogue: list, detail, and sessions bound to a workflow  `✅ Done`
+roadmap.md:292-297  #### 1.23.4 — Every streamed turn runs the session's workflow  `✅ Done`
+roadmap.md:299-304  #### 1.23.5 — A Workflows area: list, workflow page and Start chat  `✅ Done`
+roadmap.md:306-311  #### 1.23.6 — The New conversation screen picks a workflow; chats name their workflow  `✅ Done`
+roadmap.md:313-318  #### 1.23.7 — Agents are building blocks: no Start chat, and "Used in" workflows  `✅ Done`
+roadmap.md:320-327  #### 1.23.9 — Run a workflow on an input: the sequential test workflow  `✅ Done`
+roadmap.md:329-334  #### 1.23.10 — The workflow page as a designer: graph canvas in the middle, configuration on the right  `✅ Done`
+roadmap.md:336-337  #### 1.23.11 — Chats retired: ADR-0041, epic spec, glossary and roadmap  `✅ Done`
+roadmap.md:339-340  #### 1.23.12 — Streamed runs of agent workflows on the backend  `✅ Done`
+roadmap.md:342-343  #### 1.23.13 — The answer view, extracted from the chat  `✅ Done`
+roadmap.md:345-346  #### 1.23.14 — Stored runs, the run history API and run files  `✅ Done`
+roadmap.md:348-349  #### 1.23.15 — Run the Assistant, Questions to Insights v2 and user agents from their page  `✅ Done`
+roadmap.md:351-352  #### 1.23.16 — Run the Data Readiness Agent on a dataset  `✅ Done`
+roadmap.md:354-355  #### 1.23.17 — Run the RFP Builder one exchange at a time  `✅ Done`
+roadmap.md:357-358  #### 1.23.18 — Move the request-recording E2E specs from chats to runs  `✅ Done`
+roadmap.md:360-361  #### 1.23.19 — Rate a run's answer: verified queries from runs  `✅ Done`
+roadmap.md:363-364  #### 1.23.20 — Monitoring shows runs  `✅ Done`
+roadmap.md:366-367  #### 1.23.21 — Runs replace Sessions on the rail; past chats open read-only  `✅ Done`
+roadmap.md:369-370  #### 1.23.22 — Chats can no longer start  `✅ Done`
+roadmap.md:372-373  #### 1.23.23 — Try it: run an agent's draft instead of a preview chat  `✅ Done`
+roadmap.md:375-376  #### 1.23.24 — Deep analysis as a run workflow  `✅ Done`
+roadmap.md:378-379  #### 1.23.25 — Visual actions on a run's result  `✅ Done`
+roadmap.md:381-383  #### 1.23.26 — Extract the turn engine; evals and dev scripts on run hosts  `✅ Done`
+roadmap.md:385-387  #### 1.23.26b — Evals and dev scripts on run hosts  `✅ Done`
+roadmap.md:389-392  #### 1.23.27 — Remove the chat write paths and specs  `✅ Done`
+roadmap.md:394-395  #### 1.23.28 — Lean story lane, model and effort routing, decide-before-build  `✅ Done`
+roadmap.md:397-398  #### 1.23.29 — `story-pack.mjs` and the spec section index  `✅ Done`
+roadmap.md:400-401  #### 1.23.30 — Archive finished milestones of the roadmap  `✅ Done`
+roadmap.md:403-404  #### 1.23.31 — `qa.mjs --wave`: one verification for several stories  `✅ Done`
+roadmap.md:406-407  #### 1.23.32 — Playwright in parallel  `✅ Done`
+roadmap.md:409-412  #### 1.23.33 — Split `app.ts` / `app.html` by area  `✅ Done`
 roadmap.md:414-418  ## Release 2 — Multi-user  (no target date yet)
 roadmap.md:418-418  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
 roadmap.md:420-422  ## Backlog

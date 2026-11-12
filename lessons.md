@@ -17,7 +17,7 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 - Before blaming a change for a failing test, count its flake rate on unchanged code (run it alone 5–10 times); after making test steps concurrent, run the real gate several times.
 
 ## Subagents and parallel units
-- Give parallel units one written contract first (types, routes copied from `specs/system/api.md`, test ids, copy); a helper or Feature file two units might both add belongs to exactly one of them.
+- Give parallel units one written contract first (types, routes copied from `specs/system/api.md`, test ids, copy); a helper or Feature file two units might both add belongs to exactly one of them, and each unit that adds endpoints gets its own `api.md` number range.
 - Brief every subagent: Edit/Write tools only, a private scratch subfolder (never shared `/tmp` names), never kill a process it did not start, and "if a build or budget blocks you, report it; do not change build config".
 - Do not trust a subagent's report: the lead's wave check (`qa.mjs --wave`) re-runs the gates (build, related unit tests, the Features' E2E, `check-specs`) once over the merged wave, especially after a builder was stopped and resumed.
 - On "keep going" with no context, check for another live session on the epic (commits in the last minutes, files changing under you) and ask who owns the work.
@@ -33,7 +33,7 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 ## Builds and the running app
 - Backend `npm run lint` is `eslint --fix` over the whole tree: check with `npx eslint <changed files>`, then `git status` and restore anything outside scope.
 - For browser checks run web mode (`npm --prefix backend run build:all`, then `node backend/dist/cli.js`), never bare `ng serve`.
-- The web target serves `backend/public`: rebuild it (`npm run test:e2e:prepare` or `npm run test:e2e -- <spec>`) before a targeted `npx playwright test`; a bare `nest build` wipes it, so follow with `npm run build:web`. If a build fails, fix it before reading any Playwright failure.
+- The web target serves `backend/public`: rebuild it (`npm run test:e2e:prepare` or `npm run test:e2e -- <spec>`) before a targeted `npx playwright test`; a bare `nest build` wipes it, so follow with `npm run build:web`. If a build fails, fix it before reading any Playwright failure. Backend e2e and Playwright run the compiled `dist`: if `qa.mjs` exits before its build step (a usage error), run `build:all` yourself before trusting any e2e result.
 - Never run a backend build or unit tests while Playwright runs in the same worktree; run the E2E first, then the rest.
 - Before starting an app, check who owns the port (`lsof -iTCP:<port> -sTCP:LISTEN`, `netstat -ano` on Windows) and use a free port if another worktree holds it.
 - Stop any app you started from a worktree before `npm ci`/`npm install` there (Windows locks the native SQLite module).
@@ -73,6 +73,8 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 - Merge `origin/main` into the epic branch at the start of each story and before the last story's fast loop, then run `build:all`; take ADR numbers from `main`'s architecture.md at that moment and grep every ADR id after renumbering.
 - Write every new file under the worktree root; run `git -C <main checkout> status --short` after creating files.
 - Run destructive git commands alone after `git status`; read another ref with `git show <ref>:<path>`, never `git checkout <ref> -- .`.
+- After every merge, check `git diff --name-only --diff-filter=U` and that no `MERGE_HEAD` is left before running any test: a merge can stop on a conflict silently.
+- Confirm the end state with the user (a 10-minute mock) before launching a multi-story build; a direction change after builders start costs whole stories.
 - Call a failure "pre-existing" only after the same suite fails on a `git archive` or detached `main` copy (on Windows, CRLF makes ~10 backend suites fail on `main` too).
 - Create PRs with `GH_TOKEN=$(gh auth token --user jhon-buendia-halo)`; after a push, `gh pr list --head <branch> --state all` and start a new branch from `main` if its PR already merged.
 - `docker compose up` from a worktree recreates the shared Postgres container: never `down` or `--remove-orphans` on it, and check `docker ps` and the data afterwards.
