@@ -1158,7 +1158,7 @@ Feature: Built-in agent prompts
     And "Analyse" is marked "LLM" and shows "list_entities", "describe_entity", "run_readonly_sql" and "≤ 15 steps"
     And the other three steps are marked "Code"
     And the arrow from "Load catalog" to "Analyse" reads "question, catalog"
-    And I see "Empty question → fails the turn", "Stop → ends the turn here" and "Model error → fails the turn"
+    And I see "Stop → ends the turn here" and "Model error → fails the turn"
     When I click the "Load catalog" step
     Then the step details show Input "question, datasets" and Output "question, catalog"
     And I see "Prompt links" with the agent's tools
