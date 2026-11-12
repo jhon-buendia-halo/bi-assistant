@@ -44,9 +44,6 @@ jest.mock('../datasets/repositories/datasets.repository', () => ({
 jest.mock('../datasources/datasources.service', () => ({
   DatasourcesService: class {},
 }));
-jest.mock('../rfp-packages/rfp-packages.service', () => ({
-  RfpPackagesService: class {},
-}));
 jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 jest.mock('../verified-queries/verified-queries.service', () => ({
   VerifiedQueriesService: class {},
@@ -115,7 +112,6 @@ function build() {
   const registry: Record<string, unknown> = {
     assistant: agent('Questions to Insights Assistant'),
     'assistant-v2': agent('Questions to Insights v2'),
-    rfp: agent('RFP Builder'),
     'data-readiness': agent('Data Readiness Agent'),
     'sql-fixer': agent('SQL Fixer'),
   };
@@ -137,10 +133,10 @@ function build() {
     list: jest.fn(() => Promise.resolve([...docs.values()])),
     datasetNames: jest
       .fn()
-      .mockResolvedValue(new Set(['World Cup', 'Intellify RFP API'])),
+      .mockResolvedValue(new Set(['World Cup', 'Orders API'])),
     datasetKinds: jest.fn().mockResolvedValue([
       { name: 'World Cup', datasourceKind: 'postgres' },
-      { name: 'Intellify RFP API', datasourceKind: 'rest' },
+      { name: 'Orders API', datasourceKind: 'rest' },
     ]),
   };
   const service = new SessionsService(
@@ -190,9 +186,28 @@ describe('SessionsService sessions bound to a workflow (ADR-0040)', () => {
         },
       ],
       [
-        'an RFP session',
+        'a session of the removed RFP Builder, read as a plain one',
         { agentKey: 'rfp', agentName: 'RFP Builder', workflowId: 'agent:rfp' },
-        { id: 'agent:rfp', name: 'RFP Builder', kind: 'agent', deleted: false },
+        {
+          id: 'agent:assistant',
+          name: 'Assistant',
+          kind: 'agent',
+          deleted: false,
+        },
+      ],
+      [
+        'a Data Readiness session',
+        {
+          agentKey: 'data-readiness',
+          agentName: 'Data Readiness Agent',
+          workflowId: 'agent:data-readiness',
+        },
+        {
+          id: 'agent:data-readiness',
+          name: 'Data Readiness Agent',
+          kind: 'agent',
+          deleted: false,
+        },
       ],
       [
         "a Live user agent's session",

@@ -41,14 +41,14 @@ describe('Backend for the desktop shell (e2e)', () => {
 
   it('answers with the X-Backend-Instance it was given', async () => {
     backend = await boot(dataDir, {
-      env: { INTELLIFY_API: 'off', BACKEND_INSTANCE_ID: 'instance-1721' },
+      env: { BACKEND_INSTANCE_ID: 'instance-1721' },
     });
     const res = await request(backend.url).get('/health').expect(200);
     expect(res.headers['x-backend-instance']).toBe('instance-1721');
   });
 
   it('sends no X-Backend-Instance without BACKEND_INSTANCE_ID', async () => {
-    backend = await boot(dataDir, { env: { INTELLIFY_API: 'off' } });
+    backend = await boot(dataDir);
     const res = await request(backend.url).get('/health').expect(200);
     expect(res.headers['x-backend-instance']).toBeUndefined();
   });
@@ -58,7 +58,7 @@ describe('Backend for the desktop shell (e2e)', () => {
       stdio: 'ignore',
     });
     backend = await boot(dataDir, {
-      env: { INTELLIFY_API: 'off', DESKTOP_PARENT_PID: String(parent.pid) },
+      env: { DESKTOP_PARENT_PID: String(parent.pid) },
     });
     // Still up while the parent lives (two check intervals).
     await new Promise((r) => setTimeout(r, 4500));

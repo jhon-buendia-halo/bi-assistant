@@ -56,8 +56,6 @@ function fakeAgent(
   };
 }
 
-const RFP_REQUIREMENT =
-  'Load the "Intellify RFP API" sample in Settings → Testing Data first';
 const READINESS_REQUIREMENT = 'Add a PostgreSQL or Databricks dataset first';
 
 /** The saved LLM settings, as `LlmService.getView` answers them. */
@@ -72,7 +70,7 @@ function build(
   datasets: { name: string; datasourceKind?: string }[] = [
     { name: 'World Cup Core', datasourceKind: 'postgres' },
   ],
-  options: { llmView?: typeof ANTHROPIC_VIEW; rfpPrompt?: string } = {},
+  options: { llmView?: typeof ANTHROPIC_VIEW; readinessPrompt?: string } = {},
 ) {
   const db = new BetterSqlite3(':memory:');
   const userAgents = new UserAgentsService(
@@ -94,13 +92,12 @@ function build(
       'describe_entity',
       'run_readonly_sql',
     ]),
-    rfp: fakeAgent(
-      'RFP Builder',
-      ['create_rfp', 'update_rfp'],
+    'data-readiness': fakeAgent(
+      'Data Readiness Agent',
+      ['assess_readiness', 'get_readiness_report'],
       '',
-      options.rfpPrompt ?? 'You build RFPs.',
+      options.readinessPrompt ?? 'You assess readiness.',
     ),
-    'data-readiness': fakeAgent('Data Readiness Agent', ['assess_readiness']),
   };
   const runWorkflow = jest.fn();
   const mastra = {
@@ -151,7 +148,6 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       'seq-text-demo',
       'deep-analysis',
       'agent:data-readiness',
-      'agent:rfp',
       `agent:${alpha.id}`,
       `agent:${zeta.id}`,
     ]);
@@ -262,22 +258,6 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       ],
     });
     expect(workflows[5]).toEqual({
-      id: 'agent:rfp',
-      name: 'RFP Builder',
-      description: 'RFP Builder description',
-      kind: 'agent',
-      owner: 'Official',
-      agents: [{ key: 'rfp', name: 'RFP Builder' }],
-      stepCount: 1,
-      bar: 'agent',
-      trigger: 'run',
-      input: oneStepWorkflowInput('rfp'),
-      datasets: ['Intellify RFP API'],
-      missingDatasets: ['Intellify RFP API'],
-      starterQuestions: [],
-      runRequirement: RFP_REQUIREMENT,
-    });
-    expect(workflows[6]).toEqual({
       id: `agent:${alpha.id}`,
       name: 'Alpha',
       description: 'Alpha description',
@@ -293,7 +273,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       starterQuestions: ['Ask Alpha'],
       runRequirement: "None of this agent's datasets exist",
     });
-    expect(workflows[7]).toMatchObject({
+    expect(workflows[6]).toMatchObject({
       id: `agent:${zeta.id}`,
       owner: 'You',
       trigger: 'run',
@@ -301,7 +281,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       datasets: ['World Cup Core'],
       missingDatasets: [],
     });
-    expect(workflows[7]).not.toHaveProperty('runRequirement');
+    expect(workflows[6]).not.toHaveProperty('runRequirement');
     // Every workflow says how it is started and what it takes.
     for (const workflow of workflows) {
       expect(workflow.trigger).toBe('run');
@@ -312,7 +292,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
   });
 
   it('gives the Data Readiness workflow its requirement while no dataset qualifies, and never lists System agents', async () => {
-    ctx = build([{ name: 'Intellify RFP API', datasourceKind: 'rest' }]);
+    ctx = build([{ name: 'Orders API', datasourceKind: 'rest' }]);
     const workflows = await ctx.service.list();
     expect(workflows.map((w) => w.id)).not.toContain('agent:sql-fixer');
     const readiness = workflows.find((w) => w.id === 'agent:data-readiness');
@@ -320,8 +300,8 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       datasets: [],
       runRequirement: READINESS_REQUIREMENT,
     });
-    const rfp = workflows.find((w) => w.id === 'agent:rfp');
-    expect(rfp).not.toHaveProperty('runRequirement');
+    // The removed RFP Builder has no workflow any more.
+    expect(workflows.map((w) => w.id)).not.toContain('agent:rfp');
   });
 
   describe('get', () => {
@@ -342,20 +322,18 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
 
     it("a one-step workflow's step runs its agent with its tools and budget", async () => {
       ctx = build();
-      const rfp = await ctx.service.get('agent:rfp');
-      expect(rfp.steps).toHaveLength(1);
-      expect(rfp.steps[0]).toMatchObject({
+      const readiness = await ctx.service.get('agent:data-readiness');
+      expect(readiness.steps).toHaveLength(1);
+      expect(readiness.steps[0]).toMatchObject({
         id: 'answer',
         title: 'Answer',
         agent: {
-          name: 'RFP Builder',
-          tools: ['create_rfp', 'update_rfp'],
-          maxSteps: 15,
+          name: 'Data Readiness Agent',
+          tools: ['assess_readiness', 'get_readiness_report'],
+          maxSteps: 10,
         },
       });
-      expect(rfp.steps[0].exits).toHaveLength(2);
-      const readiness = await ctx.service.get('agent:data-readiness');
-      expect(readiness.steps[0].agent?.maxSteps).toBe(10);
+      expect(readiness.steps[0].exits).toHaveLength(2);
       const assistant = await ctx.service.get('agent:assistant');
       expect(assistant.steps[0].agent).toEqual({
         key: 'assistant',
@@ -455,19 +433,19 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
 
     it('details each agent its steps call: its key, name, model and system prompt; no model without an LLM', async () => {
       ctx = build();
-      const rfp = await ctx.service.get('agent:rfp');
-      expect(rfp.agents).toEqual([
+      const readiness = await ctx.service.get('agent:data-readiness');
+      expect(readiness.agents).toEqual([
         {
-          key: 'rfp',
-          name: 'RFP Builder',
+          key: 'data-readiness',
+          name: 'Data Readiness Agent',
           model: null,
-          systemPrompt: 'You build RFPs.',
+          systemPrompt: 'You assess readiness.',
         },
       ]);
-      expect(rfp.steps[0].agent?.key).toBe('rfp');
+      expect(readiness.steps[0].agent?.key).toBe('data-readiness');
       ctx.db.close();
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
-      const withLlm = await ctx.service.get('agent:rfp');
+      const withLlm = await ctx.service.get('agent:data-readiness');
       expect(withLlm.agents[0].model).toBe('anthropic/claude-sonnet-4-6');
       const deep = await ctx.service.get('deep-analysis');
       expect(deep.agents).toEqual([
@@ -481,32 +459,39 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     });
 
     it('shortens a system prompt longer than 20 000 characters, and says so', async () => {
-      ctx = build(undefined, { rfpPrompt: 'p'.repeat(20_001) });
-      const [agent] = (await ctx.service.get('agent:rfp')).agents;
+      ctx = build(undefined, { readinessPrompt: 'p'.repeat(20_001) });
+      const [agent] = (await ctx.service.get('agent:data-readiness')).agents;
       expect(agent.systemPrompt).toHaveLength(20_000);
       expect(agent.systemPromptTruncated).toBe(true);
       ctx.db.close();
-      ctx = build(undefined, { rfpPrompt: 'p'.repeat(20_000) });
-      const [exact] = (await ctx.service.get('agent:rfp')).agents;
+      ctx = build(undefined, { readinessPrompt: 'p'.repeat(20_000) });
+      const [exact] = (await ctx.service.get('agent:data-readiness')).agents;
       expect(exact.systemPrompt).toHaveLength(20_000);
       expect(exact).not.toHaveProperty('systemPromptTruncated');
     });
 
     it('lists the summary agents only, without model or prompt (api.md 116 unchanged)', async () => {
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
-      const rfp = (await ctx.service.list()).find((w) => w.id === 'agent:rfp');
-      expect(rfp?.agents).toEqual([{ key: 'rfp', name: 'RFP Builder' }]);
+      const readiness = (await ctx.service.list()).find(
+        (w) => w.id === 'agent:data-readiness',
+      );
+      expect(readiness?.agents).toEqual([
+        { key: 'data-readiness', name: 'Data Readiness Agent' },
+      ]);
     });
 
-    it.each(['agent:sql-fixer', 'agent:assistant-v2', 'nope', 'agent-turn'])(
-      'answers 404 for %p',
-      async (id) => {
-        ctx = build();
-        await expect(ctx.service.get(id)).rejects.toThrow(
-          new NotFoundException(`Workflow "${id}" not found`),
-        );
-      },
-    );
+    it.each([
+      'agent:sql-fixer',
+      'agent:assistant-v2',
+      'agent:rfp',
+      'nope',
+      'agent-turn',
+    ])('answers 404 for %p', async (id) => {
+      ctx = build();
+      await expect(ctx.service.get(id)).rejects.toThrow(
+        new NotFoundException(`Workflow "${id}" not found`),
+      );
+    });
 
     it('answers 404 for a draft-only user agent', async () => {
       ctx = build();
@@ -533,7 +518,6 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
       ],
     ],
     ['assistant-v2', [{ id: 'qti-v2-turn', name: 'Questions to Insights v2' }]],
-    ['rfp', [{ id: 'agent:rfp', name: 'RFP Builder' }]],
     [
       'data-readiness',
       [{ id: 'agent:data-readiness', name: 'Data Readiness Agent' }],
@@ -558,12 +542,12 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
 });
 
 describe('WorkflowsController (ids contain ":")', () => {
-  it('GET /workflows/agent%3Arfp resolves the decoded id, and an unknown one answers 404', async () => {
+  it('GET /workflows/agent%3Adata-readiness resolves the decoded id, and an unknown one answers 404', async () => {
     const service = {
       list: jest.fn().mockResolvedValue([]),
       get: jest.fn((id: string) =>
-        id === 'agent:rfp'
-          ? Promise.resolve({ id, name: 'RFP Builder', steps: [] })
+        id === 'agent:data-readiness'
+          ? Promise.resolve({ id, name: 'Data Readiness Agent', steps: [] })
           : Promise.reject(new NotFoundException(`Workflow "${id}" not found`)),
       ),
     };
@@ -579,13 +563,16 @@ describe('WorkflowsController (ids contain ":")', () => {
     try {
       const server = app.getHttpServer() as Parameters<typeof request>[0];
       await request(server)
-        .get('/workflows/agent%3Arfp')
+        .get('/workflows/agent%3Adata-readiness')
         .expect(200)
         .expect(({ body }) =>
-          expect(body).toMatchObject({ id: 'agent:rfp', name: 'RFP Builder' }),
+          expect(body).toMatchObject({
+            id: 'agent:data-readiness',
+            name: 'Data Readiness Agent',
+          }),
         );
-      await request(server).get('/workflows/agent:rfp').expect(200);
-      expect(service.get).toHaveBeenCalledWith('agent:rfp');
+      await request(server).get('/workflows/agent:data-readiness').expect(200);
+      expect(service.get).toHaveBeenCalledWith('agent:data-readiness');
       await request(server)
         .get('/workflows/agent%3Anope')
         .expect(404)

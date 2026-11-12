@@ -62,9 +62,6 @@ jest.mock('../datasets/repositories/datasets.repository', () => ({
 jest.mock('../datasources/datasources.service', () => ({
   DatasourcesService: class {},
 }));
-jest.mock('../rfp-packages/rfp-packages.service', () => ({
-  RfpPackagesService: class {},
-}));
 jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 jest.mock('../verified-queries/verified-queries.service', () => ({
   VerifiedQueriesService: class {},
@@ -121,8 +118,6 @@ import type { SessionDoc } from './entities/session.entity';
 import { SessionsService, type StreamEvent } from './sessions.service';
 import { streamStored } from './testing/stream-stored';
 
-const RFP_ID = '7b0c2f0e-1d2a-4c9b-9a51-0f6f1c2d3e4f';
-
 async function* streamOf(chunks: unknown[]): AsyncGenerator<unknown> {
   for (const chunk of chunks) {
     await Promise.resolve();
@@ -138,14 +133,14 @@ const DATASETS = [
     tables: ['wc.public.matches'],
   },
   {
-    name: 'Intellify RFP API',
+    name: 'Orders API',
     datasourceId: 'ds-rest',
     datasourceKind: 'rest',
-    tables: ['rfps'],
+    tables: ['orders'],
   },
 ];
 
-type Workflow = 'assistant' | 'v2' | 'readiness' | 'rfp';
+type Workflow = 'assistant' | 'v2' | 'readiness';
 
 /** The workflow detail the fake catalogue answers for each workflow. */
 const WORKFLOWS: Record<Workflow, Record<string, unknown>> = {
@@ -170,13 +165,6 @@ const WORKFLOWS: Record<Workflow, Record<string, unknown>> = {
     agents: [{ key: 'data-readiness', name: 'Data Readiness Agent' }],
     steps: AGENT_TURN_STEPS,
   },
-  rfp: {
-    id: 'agent:rfp',
-    name: 'RFP Builder',
-    input: oneStepWorkflowInput('rfp'),
-    agents: [{ key: 'rfp', name: 'RFP Builder' }],
-    steps: AGENT_TURN_STEPS,
-  },
 };
 
 /** The chat session that takes the same input as each workflow's run. */
@@ -192,11 +180,6 @@ const SESSIONS: Record<Workflow, Partial<SessionDoc>> = {
     agentKey: 'data-readiness',
     agentName: 'Data Readiness Agent',
   },
-  rfp: {
-    datasets: ['Intellify RFP API'],
-    agentKey: 'rfp',
-    agentName: 'RFP Builder',
-  },
 };
 
 /** The run input that asks what the chat message asks. */
@@ -204,7 +187,6 @@ const INPUTS: Record<Workflow, Record<string, unknown>> = {
   assistant: { question: 'Who won?', datasets: ['World Cup'] },
   v2: { question: 'Who won?', datasets: ['World Cup'] },
   readiness: { dataset: 'World Cup', question: 'Who won?' },
-  rfp: { message: 'Who won?' },
 };
 
 interface StreamCall {
@@ -297,7 +279,6 @@ function build(options: BuildOptions = {}) {
     assistant: agentFor('assistant', 'Questions to Insights Assistant'),
     'assistant-v2': agentFor('assistant-v2', 'Questions to Insights v2'),
     'data-readiness': agentFor('data-readiness', 'Data Readiness Agent'),
-    rfp: agentFor('rfp', 'RFP Builder'),
   };
   const v2Workflow = qtiV2TurnWorkflow as unknown as {
     createRun(): Promise<{
@@ -332,15 +313,6 @@ function build(options: BuildOptions = {}) {
         DATASETS.map(({ name, datasourceKind }) => ({ name, datasourceKind })),
       ),
   };
-  const rfpPackages = {
-    getJson: jest.fn().mockResolvedValue({
-      id: RFP_ID,
-      clientName: 'Acme',
-      planYear: 2027,
-      stage: 2,
-    }),
-    restTarget: jest.fn().mockResolvedValue({ baseUrl: 'u', headers: {} }),
-  };
   const datasetsRepository = {
     getByNames: jest.fn((names: string[]) =>
       Promise.resolve(DATASETS.filter((d) => names.includes(d.name))),
@@ -365,7 +337,6 @@ function build(options: BuildOptions = {}) {
       contextFor: jest.fn().mockResolvedValue({ block: '', used: [] }),
     } as never,
     userAgents as never,
-    rfpPackages as never,
   );
   const workflows = {
     definition: jest.fn((id: string) => {
@@ -398,7 +369,7 @@ function build(options: BuildOptions = {}) {
     sessionStore.set(doc.id, doc);
     return doc;
   };
-  return { sessions, runs, mastra, registry, calls, rfpPackages, chat };
+  return { sessions, runs, mastra, registry, calls, chat };
 }
 
 type Ctx = ReturnType<typeof build>;
@@ -470,7 +441,7 @@ function withoutTime<T extends { at?: string }>(message: T | undefined) {
 }
 
 describe('a run sends the same model request as a chat turn (plan 1.24.2; agents.md 5.14)', () => {
-  it.each(['assistant', 'v2', 'readiness', 'rfp'] as const)(
+  it.each(['assistant', 'v2', 'readiness'] as const)(
     '%s: the same input, options, system blocks and tools context, and the same answer',
     async (workflow) => {
       const ctx = build();
@@ -702,26 +673,6 @@ describe('the run host (agents.md 5.14)', () => {
     expect(ctx.calls['data-readiness'][0].input).toEqual([
       { role: 'user', content: 'Assess the readiness of this dataset' },
     ]);
-  });
-
-  it('an RFP run with rfpId gets the RFP context block for that RFP', async () => {
-    const ctx = build();
-    const { run } = await runOf(ctx, 'rfp', {
-      message: 'Yes, save it',
-      rfpId: RFP_ID,
-    });
-    expect(ctx.rfpPackages.getJson).toHaveBeenCalledWith(
-      'ds-rest',
-      `/v1/rfps/${RFP_ID}`,
-    );
-    const block = ctx.calls['rfp'][0].options.context[0].content;
-    expect(block).toContain(RFP_ID);
-    expect(block).toContain('Acme');
-    expect(run.rfpId).toBe(RFP_ID);
-    // Without one, no RFP is read.
-    ctx.rfpPackages.getJson.mockClear();
-    await runOf(ctx, 'rfp', { message: 'Start an RFP' });
-    expect(ctx.rfpPackages.getJson).not.toHaveBeenCalled();
   });
 });
 

@@ -185,25 +185,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ]);
     });
 
-    it('the RFP Builder takes a message and a hidden RFP id', () => {
-      expect(oneStepWorkflowInput('rfp')).toEqual([
-        {
-          name: 'message',
-          label: 'Message',
-          type: 'textarea',
-          required: true,
-          placeholder: 'Name the client and plan year, or state your decision',
-        },
-        {
-          name: 'rfpId',
-          label: 'RFP',
-          type: 'text',
-          required: false,
-          hidden: true,
-        },
-      ]);
-    });
-
     it("a user agent takes a question and careful; its datasets are the agent's", () => {
       expect(oneStepWorkflowInput('7f1c0a52-agent')).toEqual([
         question,
@@ -246,10 +227,10 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       });
     });
 
-    it("the RFP Builder's message is the question, and the RFP id is carried", () => {
+    it("ignores the removed RFP Builder's message and RFP id", () => {
       expect(
         agentRunTurn({ message: 'Start Acme 2027', rfpId: 'r-1' }),
-      ).toEqual({ question: 'Start Acme 2027', careful: false, rfpId: 'r-1' });
+      ).toEqual({ question: '', careful: false });
     });
   });
 
@@ -327,7 +308,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     const datasets = [
       { name: 'World Cup Core', datasourceKind: 'postgres' },
       { name: 'Claims', datasourceKind: 'databricks' },
-      { name: 'Intellify RFP API', datasourceKind: 'rest' },
+      { name: 'Orders API', datasourceKind: 'rest' },
       { name: 'Unbound' },
     ];
     const fields: WorkflowInputField[] = [
@@ -432,8 +413,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       [{ dataset: '' }, 'Dataset is required'],
       [{ dataset: 'Nope' }, 'Dataset "Nope" not found'],
       [
-        { dataset: 'Intellify RFP API' },
-        'Dataset "Intellify RFP API" is not a PostgreSQL or Databricks dataset',
+        { dataset: 'Orders API' },
+        'Dataset "Orders API" is not a PostgreSQL or Databricks dataset',
       ],
       [
         { dataset: 'Unbound' },
@@ -485,7 +466,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     expect(ASSISTANT_WORKFLOW_DESCRIPTION).toBe(
       'Answers questions over the datasets you pick.',
     );
-    expect(WRAPPED_AGENT_KEYS).toEqual(['assistant', 'rfp', 'data-readiness']);
+    expect(WRAPPED_AGENT_KEYS).toEqual(['assistant', 'data-readiness']);
   });
 
   describe('drift (plan 4.2)', () => {
@@ -493,7 +474,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       const keys = registeredAgentKeys();
       expect(keys).toContain('assistant');
       expect(keys).toContain('assistant-v2');
-      expect(keys).toContain('rfp');
+      // The RFP Builder was removed.
+      expect(keys).not.toContain('rfp');
     });
 
     it('knows every registered agent as Official or System, and nothing else', () => {
@@ -528,7 +510,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
 
   describe('agentWorkflowId and parseWorkflowId (R2)', () => {
     it('prefixes a key or an id with agent:', () => {
-      expect(agentWorkflowId('rfp')).toBe('agent:rfp');
+      expect(agentWorkflowId('data-readiness')).toBe('agent:data-readiness');
       expect(agentWorkflowId('9b1c')).toBe('agent:9b1c');
     });
 
@@ -539,7 +521,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       });
     });
 
-    it.each(['assistant', 'rfp', 'data-readiness'])(
+    it.each(['assistant', 'data-readiness'])(
       'parses agent:%s as a wrapped built-in agent',
       (key) => {
         expect(parseWorkflowId(`agent:${key}`)).toEqual({
@@ -548,6 +530,13 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         });
       },
     );
+
+    it('no longer wraps the removed RFP Builder: agent:rfp is a user agent id the caller will not find', () => {
+      expect(parseWorkflowId('agent:rfp')).toEqual({
+        kind: 'user-agent',
+        agentId: 'rfp',
+      });
+    });
 
     it('parses any other agent: id as a user agent, for the caller to check', () => {
       expect(parseWorkflowId('agent:0b5e-4f')).toEqual({
@@ -561,7 +550,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ['another System key', 'agent:visualization'],
       ["a code workflow's primaryFor key", 'agent:assistant-v2'],
       ['an unknown id', 'nope'],
-      ['an unprefixed agent key', 'rfp'],
+      ['an unprefixed agent key', 'data-readiness'],
       ['an empty agent id', 'agent:'],
       ['the engine id', AGENT_TURN_WORKFLOW_ID],
       ['an empty id', ''],
@@ -590,7 +579,11 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         'agent:u-1',
       ],
       ['agentKey assistant-v2', { agentKey: 'assistant-v2' }, 'qti-v2-turn'],
-      ['agentKey rfp', { agentKey: 'rfp' }, 'agent:rfp'],
+      [
+        'agentKey rfp (the removed RFP Builder)',
+        { agentKey: 'rfp' },
+        'agent:assistant',
+      ],
       [
         'agentKey data-readiness',
         { agentKey: 'data-readiness' },
@@ -604,8 +597,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ['neither', {}, 'agent:assistant'],
       [
         'an unresolvable stored id, falling back to agentKey',
-        { workflowId: 'old-removed-workflow', agentKey: 'rfp' },
-        'agent:rfp',
+        { workflowId: 'old-removed-workflow', agentKey: 'data-readiness' },
+        'agent:data-readiness',
       ],
       [
         'an unresolvable stored id, falling back to agentId',
@@ -627,7 +620,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     it.each([
       ['assistant', ['agent:assistant', 'deep-analysis']],
       ['assistant-v2', ['qti-v2-turn']],
-      ['rfp', ['agent:rfp']],
+      ['rfp', []],
       ['data-readiness', ['agent:data-readiness']],
       ['sql-fixer', []],
       ['visualization', []],
@@ -668,9 +661,9 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     it('gives the step its agent', () => {
       expect(
         oneStepWorkflowSteps({
-          name: 'RFP Builder',
-          tools: ['create_rfp'],
-          maxSteps: 15,
+          name: 'Data Readiness Agent',
+          tools: ['assess_data_readiness'],
+          maxSteps: 10,
         }),
       ).toEqual([
         {
@@ -680,7 +673,11 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
           summary: 'The agent answers with its tools, streamed to the chat.',
           input: ['question', 'datasets'],
           output: ['calls', 'stopped'],
-          agent: { name: 'RFP Builder', tools: ['create_rfp'], maxSteps: 15 },
+          agent: {
+            name: 'Data Readiness Agent',
+            tools: ['assess_data_readiness'],
+            maxSteps: 10,
+          },
           exits: [
             { label: 'Model error', outcome: 'fails' },
             { label: 'Stop', outcome: 'stops' },
@@ -713,7 +710,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
 
     it.each([
       ['assistant', 15],
-      ['rfp', 15],
       ['data-readiness', 10],
     ])("%s's step allows %d tool steps", (key, steps) => {
       expect(wrappedAgentMaxSteps(key)).toBe(steps);

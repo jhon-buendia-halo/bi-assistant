@@ -3,7 +3,7 @@
  * agents.md 5.14; workflows R14-R16): `POST /workflows/:id/runs/stream`
  * runs one agent turn on a run host through the turn engine, so a run asks
  * the model for its input with the agent's tools (the Assistant, Questions
- * to Insights v2, the Data Readiness Agent and the RFP Builder, recorded by
+ * to Insights v2 and the Data Readiness Agent, recorded by
  * the stub model), streams `run`, `step`, the turn's events and
  * `done { run }`, refuses a bad request with its real status before any
  * stream, and stops when the connection closes. The sequential test workflow
@@ -139,7 +139,7 @@ describe('Streamed runs of agent workflows (API)', () => {
 
   beforeAll(async () => {
     stub = await startLlmStub();
-    backend = await boot(dataDir, { env: { INTELLIFY_API: 'off' } });
+    backend = await boot(dataDir);
     const saved = (
       await http().put('/llm/settings').send({
         provider: 'lenai',
@@ -179,15 +179,15 @@ describe('Streamed runs of agent workflows (API)', () => {
       config: {
         baseUrl: 'http://127.0.0.1:1',
         auth: { type: 'none' },
-        endpoints: [{ name: 'rfps', path: '/v1/rfps' }],
+        endpoints: [{ name: 'orders', path: '/v1/orders' }],
       },
     });
     await save('/datasets', {
-      name: 'Intellify RFP API',
-      tables: ['rest.api.rfps'],
+      name: 'Orders API',
+      tables: ['rest.api.orders'],
       entities: [
         {
-          key: 'rest.api.rfps',
+          key: 'rest.api.orders',
           columns: [{ name: 'id', type: 'text', nullable: false }],
         },
       ],
@@ -316,12 +316,6 @@ describe('Streamed runs of agent workflows (API)', () => {
           question: 'What are the worst data-quality problems?',
         },
       ],
-      [
-        'the RFP Builder',
-        'agent:rfp',
-        'Start an RFP for Acme, plan year 2027',
-        { message: 'Start an RFP for Acme, plan year 2027' },
-      ],
     ])(
       '%s asks the model once with the input last and its tools',
       async (_name, id, question, input) => {
@@ -442,9 +436,9 @@ describe('Streamed runs of agent workflows (API)', () => {
       ],
       [
         'agent:data-readiness',
-        { input: { dataset: 'Intellify RFP API' } },
+        { input: { dataset: 'Orders API' } },
         400,
-        'Dataset "Intellify RFP API" is not a PostgreSQL or Databricks dataset',
+        'Dataset "Orders API" is not a PostgreSQL or Databricks dataset',
       ],
       [
         'agent:assistant',
@@ -456,6 +450,13 @@ describe('Streamed runs of agent workflows (API)', () => {
         'Run "nope" not found',
       ],
       ['nope', { input: {} }, 404, 'Workflow "nope" not found'],
+      // The RFP Builder was removed: its workflow is unknown.
+      [
+        'agent:rfp',
+        { input: { message: 'Start', rfpId: 'rfp-1' } },
+        404,
+        'Workflow "agent:rfp" not found',
+      ],
     ])('%s %p answers %d %p', async (id, body, status, message) => {
       const before = stub.requests.length;
       const res = await runStream(id, body);
@@ -464,20 +465,6 @@ describe('Streamed runs of agent workflows (API)', () => {
         message,
       );
       expect(stub.requests.length).toBe(before);
-    });
-
-    it("refuses the RFP Builder with its run requirement while the sample isn't loaded", async () => {
-      const removed = (
-        await http().delete(
-          `/datasets/${encodeURIComponent('Intellify RFP API')}`,
-        )
-      ).body as { ok: boolean };
-      expect(removed).toMatchObject({ ok: true });
-      const res = await runStream('agent:rfp', { input: { message: 'Start' } });
-      expect(res.status).toBe(400);
-      expect((JSON.parse(res.text) as { message: string }).message).toBe(
-        'Load the "Intellify RFP API" sample in Settings → Testing Data first',
-      );
     });
   });
 

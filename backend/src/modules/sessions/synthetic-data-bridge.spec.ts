@@ -34,10 +34,10 @@ const DATASETS = [
     tables: ['main.sales.orders'],
   },
   {
-    name: 'Intellify RFP API',
+    name: 'Orders API',
     datasourceId: 'ds-rest',
     datasourceKind: 'rest' as const,
-    tables: ['api.intellify.clients'],
+    tables: ['api.orders.orders'],
   },
 ];
 
@@ -139,7 +139,7 @@ describe('SyntheticDataBridge: dataset resolution (agents.md 3.13, 3.14)', () =>
   });
 
   it('refuses a dataset that is not PostgreSQL or Databricks', async () => {
-    const ctx = build(['Intellify RFP API']);
+    const ctx = build(['Orders API']);
     expect(await failure(ctx.bridge.profileSample({ sessionId: 's-1' }))).toBe(
       'Synthetic data supports PostgreSQL and Databricks datasets only',
     );

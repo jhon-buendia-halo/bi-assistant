@@ -448,13 +448,6 @@ describe('skill folders', () => {
           'deep-analysis',
           'interactive-visuals',
           'readiness-drilldown',
-          'rfp-carriers',
-          'rfp-client-renewal',
-          'rfp-current-program',
-          'rfp-market-scope',
-          'rfp-package',
-          'rfp-requirements',
-          'rfp-timeline',
         ]);
         expect(
           fresh.catalogSkills('assistant').map((skill) => skill.name),

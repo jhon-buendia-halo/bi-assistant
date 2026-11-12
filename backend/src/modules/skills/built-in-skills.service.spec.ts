@@ -53,13 +53,6 @@ describe('BuiltInSkillsService', () => {
       'deep-analysis',
       'interactive-visuals',
       'readiness-drilldown',
-      'rfp-carriers',
-      'rfp-client-renewal',
-      'rfp-current-program',
-      'rfp-market-scope',
-      'rfp-package',
-      'rfp-requirements',
-      'rfp-timeline',
     ]);
     expect(list[0]).toMatchObject({
       loading: 'on-demand',
@@ -79,15 +72,12 @@ describe('BuiltInSkillsService', () => {
     const { service } = build();
     const list = await service.list();
     const byName = new Map(list.map((skill) => [skill.name, skill]));
-    expect(byName.get('rfp-carriers')).toMatchObject({
-      agents: ['rfp'],
+    expect(byName.get('data-readiness')).toMatchObject({
+      agents: ['data-readiness'],
       tools: [
-        'get_rfp',
-        'list_carriers',
-        'get_client_commercials',
-        'set_rfp_carriers',
-        'update_rfp',
-        'update_workflow',
+        'assess_data_readiness',
+        'get_readiness_report',
+        'list_readiness_reports',
       ],
     });
     for (const name of [

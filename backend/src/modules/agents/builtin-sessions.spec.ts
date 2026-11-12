@@ -10,13 +10,11 @@ jest.mock('../../mastra/evals/eval-sets', () => {
       cases: [{ id: 'champion-2022', question: 'q', intent: 'i', scorers: [] }],
     },
     {
-      id: 'rfp',
-      agentKey: 'rfp',
-      name: 'RFP Builder',
+      id: 'data-readiness',
+      agentKey: 'data-readiness',
+      name: 'Data Readiness',
       description: 'd',
-      cases: [
-        { id: 'rfp-skill-first', question: 'q', intent: 'i', scorers: [] },
-      ],
+      cases: [{ id: 'dr-first', question: 'q', intent: 'i', scorers: [] }],
     },
   ];
   return {
@@ -59,15 +57,16 @@ type Kind = 'postgres' | 'databricks' | 'rest';
 function build(
   datasets: string[],
   kinds: { name: string; datasourceKind?: Kind }[] = [],
+  pins: string[] = [],
 ) {
   const registry = {
     assistant: fakeAgent('assistant'),
-    rfp: fakeAgent('RFP Builder'),
     'data-readiness': fakeAgent('Data Readiness Agent'),
     'sql-fixer': fakeAgent('sql-fixer'),
   };
   const userAgents = {
-    builtinPins: jest.fn().mockResolvedValue([]),
+    builtinPins: jest.fn().mockResolvedValue(pins),
+    get: jest.fn().mockResolvedValue(null),
     list: jest.fn().mockResolvedValue([]),
     datasetNames: jest.fn().mockResolvedValue(new Set(datasets)),
     datasetKinds: jest.fn().mockResolvedValue(kinds),
@@ -78,27 +77,15 @@ function build(
 }
 
 describe('built-in agents with sessions of their own (ADR-0028)', () => {
-  it('declares the RFP Builder and the Data Readiness Agent', () => {
-    expect(Object.keys(BUILTIN_AGENT_SESSIONS)).toEqual([
-      'rfp',
-      'data-readiness',
-    ]);
+  it('declares the Data Readiness Agent only (the RFP Builder was removed)', () => {
+    expect(Object.keys(BUILTIN_AGENT_SESSIONS)).toEqual(['data-readiness']);
     expect(builtinAgentSession('data-readiness')).toEqual({
       datasourceKinds: ['postgres', 'databricks'],
       sessionName: 'Data Readiness',
       requirement: READINESS_REQUIREMENT,
       starterQuestions: READINESS_STARTERS,
     });
-    expect(builtinAgentSession('rfp')).toEqual({
-      datasetName: 'Intellify RFP API',
-      requirement:
-        'Load the "Intellify RFP API" sample in Settings → Testing Data first',
-      starterQuestions: [
-        'Start an RFP for a client',
-        'Which of my clients renew on 1 January 2027?',
-        'Resume my draft RFPs',
-      ],
-    });
+    expect(builtinAgentSession('rfp')).toBeUndefined();
     expect(builtinAgentSession('assistant')).toBeUndefined();
     expect(builtinAgentSession('toString')).toBeUndefined();
     // Questions to Insights v2 declares no dataset: it runs on picked ones.
@@ -108,25 +95,20 @@ describe('built-in agents with sessions of their own (ADR-0028)', () => {
   it('runs Questions to Insights v2 sessions on picked datasets, and only it (BA-320)', () => {
     expect(PICKED_DATASETS_AGENT_KEYS).toEqual(['assistant-v2']);
     expect(runsOnPickedDatasets('assistant-v2')).toBe(true);
-    for (const key of ['assistant', 'rfp', 'data-readiness', 'user-1']) {
+    for (const key of ['assistant', 'data-readiness', 'user-1']) {
       expect(runsOnPickedDatasets(key)).toBe(false);
     }
   });
 
-  it('shows the RFP Builder as Official with its dataset and the chat requirement while it is missing (api.md 2.6 #33)', async () => {
-    const agents = await build([]).list();
-    const rfp = agents.find((agent) => agent.key === 'rfp');
-    expect(rfp).toMatchObject({
-      name: 'RFP Builder',
-      kind: 'official',
-      owner: 'Official',
-      status: 'builtin',
-      datasets: ['Intellify RFP API'],
-      missingDatasets: ['Intellify RFP API'],
-      starterQuestions: [],
-      chatRequirement:
-        'Load the "Intellify RFP API" sample in Settings → Testing Data first',
-    });
+  it('does not list the removed RFP Builder, even with a pin saved for it', async () => {
+    const service = build([], [], ['rfp']);
+    const agents = await service.list();
+    expect(agents.map((agent) => agent.key)).toEqual([
+      'assistant',
+      'data-readiness',
+      'sql-fixer',
+    ]);
+    expect(await service.get('rfp')).toBeNull();
     const assistant = agents.find((agent) => agent.key === 'assistant');
     expect(assistant).toMatchObject({
       kind: 'official',
@@ -134,28 +116,27 @@ describe('built-in agents with sessions of their own (ADR-0028)', () => {
       missingDatasets: [],
     });
     expect(assistant).not.toHaveProperty('chatRequirement');
-    expect(agents.find((agent) => agent.key === 'sql-fixer')).toMatchObject({
-      kind: 'system',
-      owner: 'System',
-    });
   });
 
-  it('drops the requirement once the dataset exists', async () => {
-    const rfp = (await build(['Intellify RFP API']).list()).find(
-      (agent) => agent.key === 'rfp',
-    );
-    expect(rfp).toMatchObject({
-      datasets: ['Intellify RFP API'],
-      missingDatasets: [],
-    });
-    expect(rfp).not.toHaveProperty('chatRequirement');
+  it('resolves a named declaration: listed, and missing until it exists', () => {
+    const session = {
+      datasetName: 'Orders',
+      requirement: 'Load Orders first',
+      starterQuestions: [],
+    };
+    const missing = builtinSessionDatasets(session, [{ name: 'Other' }]);
+    expect(missing).toEqual({ datasets: ['Orders'], missing: ['Orders'] });
+    expect(canStartBuiltinSession(missing)).toBe(false);
+    const found = builtinSessionDatasets(session, [{ name: 'Orders' }]);
+    expect(found).toEqual({ datasets: ['Orders'], missing: [] });
+    expect(canStartBuiltinSession(found)).toBe(true);
   });
 
   it('resolves a kind declaration to every matching dataset, by name', () => {
     const session = builtinAgentSession('data-readiness')!;
     const declared = builtinSessionDatasets(session, [
       { name: 'Zeta', datasourceKind: 'databricks' },
-      { name: 'Intellify RFP API', datasourceKind: 'rest' },
+      { name: 'Orders API', datasourceKind: 'rest' },
       { name: 'Legacy' },
       { name: 'Alpha', datasourceKind: 'postgres' },
     ]);
@@ -172,8 +153,8 @@ describe('built-in agents with sessions of their own (ADR-0028)', () => {
 
   it('shows the Data Readiness Agent as Official, blocked without a PostgreSQL or Databricks dataset (api.md 2.6 #33)', async () => {
     const agents = await build(
-      ['Intellify RFP API'],
-      [{ name: 'Intellify RFP API', datasourceKind: 'rest' }],
+      ['Orders API'],
+      [{ name: 'Orders API', datasourceKind: 'rest' }],
     ).list();
     const readiness = agents.find((agent) => agent.key === 'data-readiness');
     expect(readiness).toMatchObject({
@@ -210,7 +191,10 @@ describe('built-in agents with sessions of their own (ADR-0028)', () => {
     expect(service.evalSets('assistant').map((set) => set.id)).toEqual([
       'world-cup',
     ]);
-    expect(service.evalSets('rfp').map((set) => set.id)).toEqual(['rfp']);
+    expect(service.evalSets('data-readiness').map((set) => set.id)).toEqual([
+      'data-readiness',
+    ]);
+    expect(service.evalSets('rfp')).toEqual([]);
     expect(service.evalSets('sql-fixer')).toEqual([]);
   });
 });

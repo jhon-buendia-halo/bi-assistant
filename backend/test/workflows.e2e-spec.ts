@@ -76,7 +76,7 @@ describe('The workflow catalogue (API)', () => {
     expect(res.body).toEqual({ ok: true });
   });
 
-  it('lists the six Official workflows on a fresh data dir, in catalogue order', async () => {
+  it('lists the five Official workflows on a fresh data dir, in catalogue order', async () => {
     const listed = await workflows();
     expect(listed.map((w) => w.id)).toEqual([
       'agent:assistant',
@@ -84,11 +84,9 @@ describe('The workflow catalogue (API)', () => {
       'seq-text-demo',
       'deep-analysis',
       'agent:data-readiness',
-      'agent:rfp',
     ]);
     // Every workflow runs on its input; the `chat` trigger is gone (1.23.22).
     expect(listed.map((w) => w.trigger)).toEqual([
-      'run',
       'run',
       'run',
       'run',
@@ -142,10 +140,35 @@ describe('The workflow catalogue (API)', () => {
       name: 'Data Readiness Agent',
       runRequirement: 'Add a PostgreSQL or Databricks dataset first',
     });
-    expect(listed[5]).toMatchObject({
-      name: 'RFP Builder',
-      runRequirement:
-        'Load the "Intellify RFP API" sample in Settings → Testing Data first',
+  });
+
+  it('no longer has the RFP Builder, its workflow or the Intellify RFP API sample', async () => {
+    expect((await workflows()).map((w) => w.id)).not.toContain('agent:rfp');
+    const workflow = await http().get('/workflows/agent%3Arfp').expect(404);
+    expect((workflow.body as { message: string }).message).toBe(
+      'Workflow "agent:rfp" not found',
+    );
+    const agent = await http().get('/agents/rfp').expect(404);
+    expect((agent.body as { message: string }).message).toBe(
+      'Agent "rfp" not found',
+    );
+    const agents = (await http().get('/agents').expect(200)).body as {
+      agents: { key: string }[];
+    };
+    expect(agents.agents.map((a) => a.key)).not.toContain('rfp');
+    const samples = (await http().get('/testing-data').expect(200)).body as {
+      fixtures: { id: string }[];
+    };
+    expect(samples.fixtures.map((f) => f.id)).not.toContain('intellify-api');
+    // The Postgres Intellify sample stays.
+    expect(samples.fixtures.map((f) => f.id)).toContain('intellify');
+    const load = await http()
+      .post('/testing-data/intellify-api/load')
+      .send({})
+      .expect(200);
+    expect(load.body).toEqual({
+      ok: false,
+      message: 'Unknown sample fixture "intellify-api"',
     });
   });
 
@@ -208,17 +231,16 @@ describe('The workflow catalogue (API)', () => {
         'seq-text-demo',
         'deep-analysis',
         'agent:data-readiness',
-        'agent:rfp',
         `agent:${liveId}`,
       ]);
-      expect(listed[6]).toMatchObject({
+      expect(listed[5]).toMatchObject({
         name: 'Cup historian',
         kind: 'agent',
         owner: 'You',
         agents: [{ key: liveId, name: 'Cup historian' }],
         datasets: ['World Cup Core'],
       });
-      expect(listed[6]).not.toHaveProperty('chatRequirement');
+      expect(listed[5]).not.toHaveProperty('chatRequirement');
     });
 
     it('GET /workflows/:id answers 404 for a System agent and a draft-only agent', async () => {
@@ -234,10 +256,14 @@ describe('The workflow catalogue (API)', () => {
     });
 
     it('GET /workflows/:id resolves an encoded id with its steps', async () => {
-      const rfp = (await http().get('/workflows/agent%3Arfp').expect(200))
-        .body as WorkflowSummary & { steps: { id: string }[] };
-      expect(rfp).toMatchObject({ id: 'agent:rfp', name: 'RFP Builder' });
-      expect(rfp.steps.map((step) => step.id)).toEqual(['answer']);
+      const readiness = (
+        await http().get('/workflows/agent%3Adata-readiness').expect(200)
+      ).body as WorkflowSummary & { steps: { id: string }[] };
+      expect(readiness).toMatchObject({
+        id: 'agent:data-readiness',
+        name: 'Data Readiness Agent',
+      });
+      expect(readiness.steps.map((step) => step.id)).toEqual(['answer']);
       const v2 = (await http().get('/workflows/qti-v2-turn').expect(200))
         .body as { steps: { id: string }[] };
       expect(v2.steps.map((step) => step.id)).toEqual([
@@ -259,18 +285,19 @@ describe('The workflow catalogue (API)', () => {
         }[];
         steps: { id: string; agent?: { key: string } }[];
       }
-      const rfp = (await http().get('/workflows/agent%3Arfp').expect(200))
-        .body as Detail;
-      expect(rfp.agents).toEqual([
+      const readiness = (
+        await http().get('/workflows/agent%3Adata-readiness').expect(200)
+      ).body as Detail;
+      expect(readiness.agents).toEqual([
         {
-          key: 'rfp',
-          name: 'RFP Builder',
+          key: 'data-readiness',
+          name: 'Data Readiness Agent',
           model: null,
           systemPrompt: expect.any(String) as string,
         },
       ]);
-      expect(rfp.agents[0].systemPrompt.length).toBeGreaterThan(0);
-      expect(rfp.steps[0].agent?.key).toBe('rfp');
+      expect(readiness.agents[0].systemPrompt.length).toBeGreaterThan(0);
+      expect(readiness.steps[0].agent?.key).toBe('data-readiness');
       const v2 = (await http().get('/workflows/qti-v2-turn').expect(200))
         .body as Detail;
       expect(v2.agents.map((agent) => agent.key)).toEqual(['assistant-v2']);
@@ -292,8 +319,12 @@ describe('The workflow catalogue (API)', () => {
         .body as Detail;
       expect(seq.agents).toEqual([]);
       // The list (116) stays the summary: no model or prompt.
-      const listed = (await workflows()).find((w) => w.id === 'agent:rfp');
-      expect(listed?.agents).toEqual([{ key: 'rfp', name: 'RFP Builder' }]);
+      const listed = (await workflows()).find(
+        (w) => w.id === 'agent:data-readiness',
+      );
+      expect(listed?.agents).toEqual([
+        { key: 'data-readiness', name: 'Data Readiness Agent' },
+      ]);
     });
 
     it("an agent's detail says which workflows use it", async () => {
