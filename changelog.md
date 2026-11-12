@@ -51,7 +51,7 @@ Running log of every meaningful change, newest first. One entry per epic, writte
     - backend `tsc` clean, unit 3,068/3,068, e2e 84/84;
     - frontend unit 736/736;
     - the full web Playwright suite 266 passed, 2 skipped, with the one known failure below;
-    - backend eslint on the changed files; `check-specs` green; initial bundle 935.7 kB (budget 1 MB).
+    - backend eslint on the changed files, clean after three test-file errors were fixed at the gate; `check-specs` green; initial bundle 935.7 kB (budget 1 MB).
     - **Desktop not run.**
   - **Known gaps:**
     - `layout-accessibility`'s application-shell visual baseline has no darwin web image and its Linux image predates the Workflows rail item (no CI runs Playwright).
