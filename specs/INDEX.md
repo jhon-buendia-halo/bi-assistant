@@ -210,7 +210,7 @@ roadmap.md:30-30  ### Milestone 0.2 — Delivery process ([BA-89](https://halo-p
 roadmap.md:32-32  ### Milestone 0.3 — Local Development Observability ([BA-111](https://halo-powered.atlassian.net/browse/BA-111)) — archived, see roadmap-archive.md
 roadmap.md:34-34  ### Milestone 0.4 — Harness Adjustments ([BA-119](https://halo-powered.atlassian.net/browse/BA-119)) — archived, see roadmap-archive.md
 roadmap.md:36-36  ### Milestone 0.5 — Faster workflow, repo-only planning (M0-5) — archived, see roadmap-archive.md
-roadmap.md:38-408  ## Release 1 — 1.0 Beta  (target 2026-10-31)
+roadmap.md:38-412  ## Release 1 — 1.0 Beta  (target 2026-10-31)
 roadmap.md:58-58  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9)) — archived, see roadmap-archive.md
 roadmap.md:60-60  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2)) — archived, see roadmap-archive.md
 roadmap.md:62-62  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4)) — archived, see roadmap-archive.md
@@ -252,7 +252,7 @@ roadmap.md:215-215  ### Milestone 1.19 — US Health testing data ([BA-305](http
 roadmap.md:217-217  ### Milestone 1.20 — Schema metadata in datasets ([BA-318](https://halo-powered.atlassian.net/browse/BA-318)) — archived, see roadmap-archive.md
 roadmap.md:219-219  ### Milestone 1.21 — Questions to Insights v2 ([BA-320](https://halo-powered.atlassian.net/browse/BA-320)) — archived, see roadmap-archive.md
 roadmap.md:221-221  ### Milestone 1.22 — Sampled profiling and synthetic data (M1-22) — archived, see roadmap-archive.md
-roadmap.md:223-408  ### Milestone 1.23 — Workflow-first: chats run workflows, agents are building blocks (M1-23)
+roadmap.md:223-412  ### Milestone 1.23 — Workflow-first: chats run workflows, agents are building blocks (M1-23)
 roadmap.md:227-266  #### 1.23.1 — The Graph tab draws a workflow-backed agent's turn  `🚧 In progress`
 roadmap.md:268-276  #### 1.23.2 — Workflow-first: ADR, epic spec, glossary and roadmap  `🚧 In progress`
 roadmap.md:278-283  #### 1.23.8 — Remove the showcase agents  `📋 Planned`
@@ -279,16 +279,17 @@ roadmap.md:372-373  #### 1.23.23 — Try it: run an agent's draft instead of a p
 roadmap.md:375-376  #### 1.23.24 — Deep analysis as a run workflow  `📋 Planned`
 roadmap.md:378-379  #### 1.23.25 — Visual actions on a run's result  `📋 Planned`
 roadmap.md:381-383  #### 1.23.26 — Extract the turn engine; evals and dev scripts on run hosts  `🚧 In progress`
-roadmap.md:385-388  #### 1.23.27 — Remove the chat write paths and specs  `📋 Planned`
-roadmap.md:390-391  #### 1.23.28 — Lean story lane, model and effort routing, decide-before-build  `🚧 In progress`
-roadmap.md:393-394  #### 1.23.29 — `story-pack.mjs` and the spec section index  `📋 Planned`
-roadmap.md:396-397  #### 1.23.30 — Archive finished milestones of the roadmap  `📋 Planned`
-roadmap.md:399-400  #### 1.23.31 — `qa.mjs --wave`: one verification for several stories  `📋 Planned`
-roadmap.md:402-403  #### 1.23.32 — Playwright in parallel  `📋 Planned`
-roadmap.md:405-408  #### 1.23.33 — Split `app.ts` / `app.html` by area  `🚧 In progress`
-roadmap.md:410-414  ## Release 2 — Multi-user  (no target date yet)
-roadmap.md:414-414  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
-roadmap.md:416-418  ## Backlog
+roadmap.md:385-387  #### 1.23.26b — Evals and dev scripts on run hosts  `📋 Planned`
+roadmap.md:389-392  #### 1.23.27 — Remove the chat write paths and specs  `📋 Planned`
+roadmap.md:394-395  #### 1.23.28 — Lean story lane, model and effort routing, decide-before-build  `🚧 In progress`
+roadmap.md:397-398  #### 1.23.29 — `story-pack.mjs` and the spec section index  `📋 Planned`
+roadmap.md:400-401  #### 1.23.30 — Archive finished milestones of the roadmap  `📋 Planned`
+roadmap.md:403-404  #### 1.23.31 — `qa.mjs --wave`: one verification for several stories  `📋 Planned`
+roadmap.md:406-407  #### 1.23.32 — Playwright in parallel  `📋 Planned`
+roadmap.md:409-412  #### 1.23.33 — Split `app.ts` / `app.html` by area  `🚧 In progress`
+roadmap.md:414-418  ## Release 2 — Multi-user  (no target date yet)
+roadmap.md:418-418  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
+roadmap.md:420-422  ## Backlog
 
 specs/README.md:7-88  ## Layout
 specs/README.md:28-55  ### Capabilities

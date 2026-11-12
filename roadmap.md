@@ -382,6 +382,10 @@ Stories 1.23.10–1.23.27 retire chats: every workflow runs once on a typed inpu
 - **Scope now (moved up, wave S2):** only the turn-engine extraction, per [the speed-up contract](docs/plans/m1-23-dev-speedup.md), plan 1.23.26. Evals and dev scripts on run hosts stay for later (plan 1.25.5).
 - **Acceptance:** per the speed-up contract: `sessions.service.ts` shrinks by more than 1,500 lines; backend unit and e2e suites, the request-recording Playwright specs and the agent hashes are unchanged.
 
+#### 1.23.26b — Evals and dev scripts on run hosts  `📋 Planned`
+- **Intent:** the remainder of plan 1.25.5 left out of 1.23.26: evals and the dev scripts stop creating chat sessions and run on run hosts, so 1.23.27 can remove the chat write paths. Contract: [the retire-chats plan](docs/plans/m1-23-retire-chats.md), plan 1.25.5.
+- **Acceptance:** evals send each agent the same requests as before (prompt and tool-list hashes equal; one eval case per agent kind run against the recording stub, before and after, with identical requests); no eval or dev script calls `POST /sessions` or the chat stream; backend unit and e2e suites green.
+
 #### 1.23.27 — Remove the chat write paths and specs  `📋 Planned`
 - **Acceptance:** per plan 1.25.6; past chats stay readable.
 
