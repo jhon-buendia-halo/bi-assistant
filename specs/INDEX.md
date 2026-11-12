@@ -1424,13 +1424,13 @@ specs/capabilities/workflows/spec.md:18-20  R3 Workflows SHALL be defined in cod
 specs/capabilities/workflows/spec.md:21-23  R4 Every session SHALL run one workflow. A session created from this vers
 specs/capabilities/workflows/spec.md:24-24  R5 The **Workflows** area of the navigation rail ([../app-shell/spec.md](
 specs/capabilities/workflows/spec.md:25-25  R6 Retired (1.23.22). **Start chat** is gone from every workflow card and
-specs/capabilities/workflows/spec.md:26-26  R7 Opening a workflow SHALL show its page as a **designer** (since 1.23.1
-specs/capabilities/workflows/spec.md:27-27  R8 A workflow's panel SHALL list, under **Agents** on its Workflow tab, e
+specs/capabilities/workflows/spec.md:26-26  R7 Opening a workflow SHALL show its page as an n8n-style **designer** (s
+specs/capabilities/workflows/spec.md:27-27  R8 A workflow's Start node dialog SHALL list, under **Agents**, each agen
 specs/capabilities/workflows/spec.md:28-28  R9 The Workflows page SHALL read the catalogue each time it opens, so a u
 specs/capabilities/workflows/spec.md:29-31  R10 Retired (1.23.22). The Workflow tab no longer carries the workflow bar
 specs/capabilities/workflows/spec.md:32-32  R11 Every workflow SHALL have the trigger `run` (since 1.23.22; `chat` is
 specs/capabilities/workflows/spec.md:33-33  R12 A workflow's card SHALL show its kind (R5) and **Run**, which opens it
-specs/capabilities/workflows/spec.md:34-36  R13 After a run, the Run tab SHALL show the **Result** under the form: `Ru
+specs/capabilities/workflows/spec.md:34-36  R13 After a run, the Run panel SHALL show the **Result** under the form: `
 specs/capabilities/workflows/spec.md:37-37  R14 The agent workflows SHALL declare their input in code, with the field
 specs/capabilities/workflows/spec.md:38-38  R15 A run of an agent workflow SHALL be one agent turn of that workflow's
 specs/capabilities/workflows/spec.md:39-39  R16 A streamed run SHALL report, in order: that it started (its run id), e
@@ -1439,14 +1439,14 @@ specs/capabilities/workflows/spec.md:43-43  R18 Every run of a workflow on an in
 specs/capabilities/workflows/spec.md:44-44  R19 The Runs page's **Runs** tab (app-shell R46) SHALL show the run histor
 specs/capabilities/workflows/spec.md:45-47  R20 Deleting a run SHALL remove it, its workspace and its files, and its m
 specs/capabilities/workflows/spec.md:48-48  R21 The Assistant, Questions to Insights v2, the Data Readiness Agent, the
-specs/capabilities/workflows/spec.md:49-49  R22 The answer on the Run tab SHALL offer the same rating as a chat answer
+specs/capabilities/workflows/spec.md:49-49  R22 The answer on the Run panel SHALL offer the same rating as a chat answ
 specs/capabilities/workflows/spec.md:51-63  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:65-69  ## Contracts
 specs/capabilities/workflows/spec.md:71-78  ## UI
-specs/capabilities/workflows/spec.md:80-214  ## Flows
-specs/capabilities/workflows/spec.md:82-156  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:158-214  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:216-230  ## Acceptance
+specs/capabilities/workflows/spec.md:80-219  ## Flows
+specs/capabilities/workflows/spec.md:82-161  ### Feature: Workflows
+specs/capabilities/workflows/spec.md:163-219  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:221-235  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope
@@ -2122,65 +2122,65 @@ specs/system/ui.md:183-193  ### 3.3 Toast container
 specs/system/ui.md:195-197  ### 3.4 App logo
 specs/system/ui.md:199-201  ### 3.5 Markdown rendering
 specs/system/ui.md:203-227  ### 3.6 Shared component classes
-specs/system/ui.md:229-820  ## 4. Screens and panels
+specs/system/ui.md:229-824  ## 4. Screens and panels
 specs/system/ui.md:233-241  ### 4.1 Home (welcome)
 specs/system/ui.md:243-249  ### 4.2 Datasets list
 specs/system/ui.md:251-265  ### 4.3 Catalog browser ("New dataset" / "Edit dataset")
 specs/system/ui.md:267-320  ### 4.3a Profile & synthesize tab (dataset editor)
 specs/system/ui.md:322-334  ### 4.4 Agent Hub
 specs/system/ui.md:336-347  ### 4.4a Workflows
-specs/system/ui.md:349-385  ### 4.4b Workflow page
-specs/system/ui.md:387-534  ### 4.5 Agent detail
-specs/system/ui.md:415-425  #### 4.5.1 Agent editor and Try it
-specs/system/ui.md:427-434  #### 4.5.2 Skills library
-specs/system/ui.md:436-443  #### 4.5.3 Skill editor
-specs/system/ui.md:445-452  #### 4.5.4 Built-in skill editor
-specs/system/ui.md:454-462  #### 4.5.5 Link editor and chips
-specs/system/ui.md:464-491  #### 4.5.6 Graph tab
-specs/system/ui.md:493-495  #### 4.5.7 LLM Config tab
-specs/system/ui.md:497-502  #### 4.5.8 Try it tab
-specs/system/ui.md:504-511  #### 4.5.9 System Prompt tab, user agent
-specs/system/ui.md:513-525  #### 4.5.11 System Prompt tab, built-in agent
-specs/system/ui.md:527-534  #### 4.5.10 Skills tab, user agent
-specs/system/ui.md:536-538  ### 4.6 Eval trace (right panel)
-specs/system/ui.md:540-542  ### 4.7 New-session composer
-specs/system/ui.md:544-559  ### 4.7.1 Runs page and Past chats
-specs/system/ui.md:561-567  ### 4.8a Context page
-specs/system/ui.md:569-588  ### 4.8 Ontology tab (dataset editor)
-specs/system/ui.md:590-598  ### 4.8b User personas list and editor
-specs/system/ui.md:600-609  ### 4.8c Visuals library
-specs/system/ui.md:611-621  ### 4.8d Monitoring: tabs and the LLM calls table
-specs/system/ui.md:623-631  ### 4.8e Monitoring: LLM call page
-specs/system/ui.md:633-640  ### 4.8f Monitoring: Runs tab
-specs/system/ui.md:642-654  ### 4.8g Monitoring: session page
-specs/system/ui.md:656-666  ### 4.8h Monitoring: waterfall
-specs/system/ui.md:668-672  ### 4.9 LLM configuration (settings)
-specs/system/ui.md:674-685  ### 4.10 Datasource configuration (settings)
-specs/system/ui.md:687-691  ### 4.11 Testing data (settings)
-specs/system/ui.md:694-706  ### 4.12 Developer (settings)
-specs/system/ui.md:707-743  ### 4.12 Past chat (read-only transcript)
-specs/system/ui.md:730-743  #### 4.12.1 Workflow bar
-specs/system/ui.md:745-803  ### 4.13 Session panel (right panel in a session)
-specs/system/ui.md:758-765  #### 4.13.1 Visual view
-specs/system/ui.md:767-769  #### 4.13.2 Document view
-specs/system/ui.md:771-773  #### 4.13.3 File view
-specs/system/ui.md:775-777  #### 4.13.4 Table view
-specs/system/ui.md:779-803  #### 4.13.5 Readiness scorecard
-specs/system/ui.md:805-807  ### 4.14 Entity details (right panel default)
-specs/system/ui.md:809-811  ### 4.15 Metrics panel (inside the catalog browser)
-specs/system/ui.md:813-820  ### 4.16 Appearance (settings)
-specs/system/ui.md:822-834  ## 5. Cross-cutting behaviour
-specs/system/ui.md:824-826  ### 5.1 State that survives view changes
-specs/system/ui.md:828-830  ### 5.2 Selection state
-specs/system/ui.md:832-834  ### 5.3 Toast policy
-specs/system/ui.md:836-923  ## 6. Design tokens
-specs/system/ui.md:840-882  ### 6.0 Theme tokens
-specs/system/ui.md:884-889  ### 6.1 Colour usage
-specs/system/ui.md:891-895  ### 6.2 Typography
-specs/system/ui.md:897-902  ### 6.3 Spacing, radii, shadows, motion
-specs/system/ui.md:904-911  ### 6.4 Icons
-specs/system/ui.md:913-923  ### 6.5 Theming
-specs/system/ui.md:925-971  ## 7. Copy that tests or users rely on
-specs/system/ui.md:973-984  ## 8. Accessibility
-specs/system/ui.md:986-988  ## 9. Visual baseline
-specs/system/ui.md:991-998  ## 10. Open questions and gaps
+specs/system/ui.md:349-389  ### 4.4b Workflow page
+specs/system/ui.md:391-538  ### 4.5 Agent detail
+specs/system/ui.md:419-429  #### 4.5.1 Agent editor and Try it
+specs/system/ui.md:431-438  #### 4.5.2 Skills library
+specs/system/ui.md:440-447  #### 4.5.3 Skill editor
+specs/system/ui.md:449-456  #### 4.5.4 Built-in skill editor
+specs/system/ui.md:458-466  #### 4.5.5 Link editor and chips
+specs/system/ui.md:468-495  #### 4.5.6 Graph tab
+specs/system/ui.md:497-499  #### 4.5.7 LLM Config tab
+specs/system/ui.md:501-506  #### 4.5.8 Try it tab
+specs/system/ui.md:508-515  #### 4.5.9 System Prompt tab, user agent
+specs/system/ui.md:517-529  #### 4.5.11 System Prompt tab, built-in agent
+specs/system/ui.md:531-538  #### 4.5.10 Skills tab, user agent
+specs/system/ui.md:540-542  ### 4.6 Eval trace (right panel)
+specs/system/ui.md:544-546  ### 4.7 New-session composer
+specs/system/ui.md:548-563  ### 4.7.1 Runs page and Past chats
+specs/system/ui.md:565-571  ### 4.8a Context page
+specs/system/ui.md:573-592  ### 4.8 Ontology tab (dataset editor)
+specs/system/ui.md:594-602  ### 4.8b User personas list and editor
+specs/system/ui.md:604-613  ### 4.8c Visuals library
+specs/system/ui.md:615-625  ### 4.8d Monitoring: tabs and the LLM calls table
+specs/system/ui.md:627-635  ### 4.8e Monitoring: LLM call page
+specs/system/ui.md:637-644  ### 4.8f Monitoring: Runs tab
+specs/system/ui.md:646-658  ### 4.8g Monitoring: session page
+specs/system/ui.md:660-670  ### 4.8h Monitoring: waterfall
+specs/system/ui.md:672-676  ### 4.9 LLM configuration (settings)
+specs/system/ui.md:678-689  ### 4.10 Datasource configuration (settings)
+specs/system/ui.md:691-695  ### 4.11 Testing data (settings)
+specs/system/ui.md:698-710  ### 4.12 Developer (settings)
+specs/system/ui.md:711-747  ### 4.12 Past chat (read-only transcript)
+specs/system/ui.md:734-747  #### 4.12.1 Workflow bar
+specs/system/ui.md:749-807  ### 4.13 Session panel (right panel in a session)
+specs/system/ui.md:762-769  #### 4.13.1 Visual view
+specs/system/ui.md:771-773  #### 4.13.2 Document view
+specs/system/ui.md:775-777  #### 4.13.3 File view
+specs/system/ui.md:779-781  #### 4.13.4 Table view
+specs/system/ui.md:783-807  #### 4.13.5 Readiness scorecard
+specs/system/ui.md:809-811  ### 4.14 Entity details (right panel default)
+specs/system/ui.md:813-815  ### 4.15 Metrics panel (inside the catalog browser)
+specs/system/ui.md:817-824  ### 4.16 Appearance (settings)
+specs/system/ui.md:826-838  ## 5. Cross-cutting behaviour
+specs/system/ui.md:828-830  ### 5.1 State that survives view changes
+specs/system/ui.md:832-834  ### 5.2 Selection state
+specs/system/ui.md:836-838  ### 5.3 Toast policy
+specs/system/ui.md:840-927  ## 6. Design tokens
+specs/system/ui.md:844-886  ### 6.0 Theme tokens
+specs/system/ui.md:888-893  ### 6.1 Colour usage
+specs/system/ui.md:895-899  ### 6.2 Typography
+specs/system/ui.md:901-906  ### 6.3 Spacing, radii, shadows, motion
+specs/system/ui.md:908-915  ### 6.4 Icons
+specs/system/ui.md:917-927  ### 6.5 Theming
+specs/system/ui.md:929-975  ## 7. Copy that tests or users rely on
+specs/system/ui.md:977-988  ## 8. Accessibility
+specs/system/ui.md:990-992  ## 9. Visual baseline
+specs/system/ui.md:995-1002  ## 10. Open questions and gaps
