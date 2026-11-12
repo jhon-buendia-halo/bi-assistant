@@ -140,18 +140,18 @@ test('has no automatically detectable accessibility violations on any screen in 
       },
     ],
     [
-      'Sessions',
+      'Runs',
       async () => {
-        await rail('Sessions').click();
+        await rail('Runs').click();
         await expect(
-          page.getByRole('navigation', { name: 'Sessions', exact: true }),
+          page.getByRole('tablist', { name: 'Runs views' }),
         ).toBeVisible();
       },
     ],
     [
       'New-session composer',
       async () => {
-        await rail('Sessions').click();
+        await rail('Runs').click();
         await page
           .locator('header')
           .getByRole('button', { name: 'Start New Conversation' })

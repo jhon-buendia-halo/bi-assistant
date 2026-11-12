@@ -258,7 +258,7 @@ function detailsStep(page: Page, title: string): Locator {
 /** The button that opens a session from the Sessions list (not its id button). */
 function sessionRow(page: Page, name: string): Locator {
   return page
-    .getByRole('navigation', { name: 'Sessions', exact: true })
+    .getByRole('navigation', { name: 'Past chats', exact: true })
     .getByRole('button', { name: new RegExp(`^${name}`) });
 }
 

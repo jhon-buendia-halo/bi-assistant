@@ -17,6 +17,7 @@ import {
   saveLenaiSettings,
   seedWorldCupDataset,
 } from './helpers/agents-api';
+import { apiFetch, apiJson } from './helpers/api';
 import {
   LlmStub,
   STUB_ANSWER,
@@ -215,19 +216,31 @@ test('editing a Live agent keeps its sessions on the Live version until republis
   const openSession = async () => {
     await openSessions(page);
     await page
-      .getByRole('navigation', { name: 'Sessions', exact: true })
+      .getByRole('navigation', { name: 'Past chats', exact: true })
       .locator('[data-testid^="session-"]')
       .filter({ hasText: HISTORIAN })
       .click();
     await expect(page.getByTestId('session-workflow')).toHaveText(HISTORIAN);
   };
+  // An old chat cannot be continued in the UI (sessions-chat R66): the turn
+  // runs through the API, and the chat is then read as a past chat.
   const send = async (question: string) => {
-    await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-    await page.getByRole('button', { name: 'Send message' }).click();
+    const { sessions } = await apiJson<{
+      sessions: { id: string; name: string }[];
+    }>(page, 'GET', '/sessions');
+    const session = sessions.find((s) => s.name === HISTORIAN)!;
+    const turn = await apiFetch(
+      page,
+      'POST',
+      `/sessions/${session.id}/messages/stream`,
+      { content: question },
+    );
+    expect(turn.ok(), await turn.text()).toBe(true);
   };
 
-  await openSession();
   await send('Who won in 2014?');
+  await page.reload();
+  await openSession();
   await expectAnswers(page, 1);
   expect(systemsFor('Who won in 2014?')).toContain('Answer in one sentence.');
   expect(systemsFor('Who won in 2014?')).not.toContain('Talk like a pirate.');
@@ -238,8 +251,9 @@ test('editing a Live agent keeps its sessions on the Live version until republis
   await expect(editorStatus(page)).toContainText('Live');
   await expect(editorStatus(page)).not.toContainText('Unpublished changes');
 
-  await openSession();
   await send('And in 2010?');
+  await page.reload();
+  await openSession();
   await expectAnswers(page, 2);
   expect(systemsFor('And in 2010?')).toContain('Talk like a pirate.');
 });

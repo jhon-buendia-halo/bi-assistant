@@ -94,6 +94,7 @@ See [ui.md](../../system/ui.md), section 4.13 (Session panel) and 4.12.1 (Workfl
 - **Workflow bar:** under the page header, above the chat: the steps with their statuses, `<n>/<m> done`, `Your next step: <action>`, the note, `To do: <action>` tooltips, `Hide workflow` / `Show workflow`, a `Details` dropdown (`Workflow details`) listing every step and opening on the current one, a step popover (4.12.1).
 - **Header:** the item's title (`Panel` when none), the shown-items menu (title `Shown in this session`, newest first, each with its kind icon, title and time) and the **Download** button (title `Download PDF` for a document or a `.md` file, with a `Download as…` menu offering `PDF (.pdf)` and `Markdown (.md)`; `Download file` for other files; `Download (.csv)` for a table; hidden for a visual).
 - **Body by kind:** the visual panel, a document, a file, a sortable table. There is no workflow view in the panel.
+- **A past chat's panel** (sessions-chat R66) is read-only: visuals are viewable in every version and downloadable, and files, documents and tables viewable and downloadable, but the visual panel offers no Tailor, Refresh data, revert or auto-repair.
 - **Empty state:** `Nothing to show yet` / `The agent can show files, documents, query results and visuals here.`
 - **Loading and errors:** `Loading file…` while a file is read; its error in the file view.
 

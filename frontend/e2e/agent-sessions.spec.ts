@@ -129,7 +129,7 @@ function firstTurnRequest(question: string): StubRequest {
 
 function sessionRow(page: Page, name: string): Locator {
   return page
-    .getByRole('navigation', { name: 'Sessions', exact: true })
+    .getByRole('navigation', { name: 'Past chats', exact: true })
     .locator('[data-testid^="session-"]')
     .filter({ hasText: name });
 }
@@ -316,7 +316,7 @@ test("instructions can't switch off the read-only guard", async ({ page }) => {
   expect(await matchRowCount()).toBe(rowsBefore);
 });
 
-test('deleting the agent keeps its sessions on the plain assistant', async ({
+test('deleting the agent keeps its sessions, readable as past chats', async ({
   page,
 }) => {
   await startChatFromCard(page, HISTORIAN);
@@ -342,14 +342,9 @@ test('deleting the agent keeps its sessions on the plain assistant', async ({
   ).toHaveText(`${HISTORIAN} · agent deleted`);
   await sessionRow(page, HISTORIAN).click();
 
-  await send(page, 'And in 2010?');
-  await expectAnswered(page, 2);
-  const systems = systemTexts(firstTurnRequest('And in 2010?')).join('\n');
-  expect(systems).toContain(BASE_PROMPT_START);
-  expect(systems).not.toContain(AGENT_BLOCK_START);
-  expect(firstTurnRequest('And in 2010?').path).toContain(
-    '/deployments/stub-deployment/',
-  );
+  // The old chat opens read-only (sessions-chat R66): nothing continues it.
+  await expect(page.getByTestId('past-chat-banner')).toBeVisible();
+  await expect(composer(page)).toHaveCount(0);
 });
 
 /** Skill names in the `<available_skills>` catalog of a request. */

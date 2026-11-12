@@ -331,10 +331,10 @@ specs/capabilities/agent-panel/spec.md:57-57  R19 The stream SHALL carry a `work
 specs/capabilities/agent-panel/spec.md:58-58  R20 The RFP stage auto-drive (R9) moves the current step to the stage afte
 specs/capabilities/agent-panel/spec.md:60-81  ## Edge cases and errors
 specs/capabilities/agent-panel/spec.md:83-88  ## Contracts
-specs/capabilities/agent-panel/spec.md:90-98  ## UI
-specs/capabilities/agent-panel/spec.md:100-265  ## Flows
-specs/capabilities/agent-panel/spec.md:102-265  ### Feature: Agent panel
-specs/capabilities/agent-panel/spec.md:267-278  ## Acceptance
+specs/capabilities/agent-panel/spec.md:90-99  ## UI
+specs/capabilities/agent-panel/spec.md:101-266  ## Flows
+specs/capabilities/agent-panel/spec.md:103-266  ### Feature: Agent panel
+specs/capabilities/agent-panel/spec.md:268-279  ## Acceptance
 
 specs/capabilities/agents-evals/spec.md:5-16  ## Concepts
 specs/capabilities/agents-evals/spec.md:18-284  ## Rules
@@ -505,10 +505,10 @@ specs/capabilities/app-shell/spec.md:57-59  R31 Every error toast SHALL also be 
 specs/capabilities/app-shell/spec.md:60-60  R32 The Settings list pane SHALL end with the build identity: the text "Ag
 specs/capabilities/app-shell/spec.md:61-61  R33 The window title and the document title SHALL be "Agentic Hub". The op
 specs/capabilities/app-shell/spec.md:62-64  R34 The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 96
-specs/capabilities/app-shell/spec.md:65-65  R46 In the Sessions area the content shows the open session's chat, the ne
+specs/capabilities/app-shell/spec.md:65-65  R46 In the Runs area the content shows an open run (`run-detail`: its work
 specs/capabilities/app-shell/spec.md:66-66  R47 Removed in roadmap 1.8.8: the separate, collapsible session list pane
 specs/capabilities/app-shell/spec.md:67-67  R48 The rail SHALL start with a menu button, **Expand navigation** (when c
-specs/capabilities/app-shell/spec.md:68-68  R49 In the Sessions area the page SHALL start with a header: an icon, then
+specs/capabilities/app-shell/spec.md:68-68  R49 In the Runs area the page SHALL start with a header: an icon, then the
 specs/capabilities/app-shell/spec.md:69-69  R50 Clicking **Expand navigation** or **Collapse navigation** SHALL rememb
 specs/capabilities/app-shell/spec.md:70-72  R51 The home view (R2) SHALL welcome the user and explain how the product
 specs/capabilities/app-shell/spec.md:73-73  R52 The shell SHALL appear at once on launch, with no sign-in page, and ev
@@ -1014,11 +1014,11 @@ specs/capabilities/monitoring/spec.md:71-73  R23 The call page SHALL show a **St
 specs/capabilities/monitoring/spec.md:74-74  R24 The area is read-only. Nothing the user does here changes a call, an a
 specs/capabilities/monitoring/spec.md:75-77  R25 The Monitoring page SHALL work in the light and dark themes, and its c
 specs/capabilities/monitoring/spec.md:78-80  R26 The Monitoring page SHALL show two tabs under its heading, **LLM calls
-specs/capabilities/monitoring/spec.md:81-81  R27 The **Sessions** tab SHALL list **sessions**: one row per session that
-specs/capabilities/monitoring/spec.md:82-82  R28 Each row SHALL show: **Session** (its name, read from the sessions col
+specs/capabilities/monitoring/spec.md:81-81  R27 The **Runs** tab (named **Sessions** until 2026-11-11, roadmap 1.23.21
+specs/capabilities/monitoring/spec.md:82-82  R28 Each row SHALL show: **Run** (its name, read from the sessions collect
 specs/capabilities/monitoring/spec.md:83-83  R29 A session's **Status** SHALL be **Failed** when it has at least one fa
 specs/capabilities/monitoring/spec.md:84-84  R30 The tab SHALL offer the filters **Agent** (sessions in which that agen
-specs/capabilities/monitoring/spec.md:85-87  R31 With no sessions at all, the tab SHALL show "No sessions yet.". With s
+specs/capabilities/monitoring/spec.md:85-87  R31 With no sessions at all, the tab SHALL show "No runs yet.". With sessi
 specs/capabilities/monitoring/spec.md:88-88  R32 The session page SHALL show a heading with the session's name ("Unname
 specs/capabilities/monitoring/spec.md:89-89  R33 Each turn SHALL show, in this order: the question as a bubble on the r
 specs/capabilities/monitoring/spec.md:90-90  R34 The **path** SHALL list, in time order across all the model calls of t
@@ -1071,7 +1071,7 @@ specs/capabilities/rfp/spec.md:166-218  ### Feature: Intellify RFP API
 specs/capabilities/rfp/spec.md:220-226  ## Acceptance
 
 specs/capabilities/sessions-chat/spec.md:5-7  ## Concepts
-specs/capabilities/sessions-chat/spec.md:9-210  ## Rules
+specs/capabilities/sessions-chat/spec.md:9-211  ## Rules
 specs/capabilities/sessions-chat/spec.md:11-19  ### Session lifecycle
 specs/capabilities/sessions-chat/spec.md:13-13  R1 The system SHALL create a session only when it has a non-blank name an
 specs/capabilities/sessions-chat/spec.md:14-14  R2 The system SHALL give each new session a unique id, an empty transcrip
@@ -1135,7 +1135,7 @@ specs/capabilities/sessions-chat/spec.md:170-170  R49 The full transcript SHALL 
 specs/capabilities/sessions-chat/spec.md:172-182  ### Empty session and navigation aids
 specs/capabilities/sessions-chat/spec.md:174-181  R50 A session with no messages SHALL show a client-only welcome block that
 specs/capabilities/sessions-chat/spec.md:182-182  R51 When a transcript has user messages, the chat SHALL show a history str
-specs/capabilities/sessions-chat/spec.md:184-206  ### Sessions started from an agent
+specs/capabilities/sessions-chat/spec.md:184-207  ### Sessions started from an agent
 specs/capabilities/sessions-chat/spec.md:188-188  R52 **Start chat** lives on a workflow, never on an agent ([workflows](../
 specs/capabilities/sessions-chat/spec.md:189-189  R53 A session started from an agent SHALL keep the datasets it was created
 specs/capabilities/sessions-chat/spec.md:190-196  R54 Every assistant call made for a session bound to a user agent that sti
@@ -1147,20 +1147,21 @@ specs/capabilities/sessions-chat/spec.md:201-201  R59 When the agent is deleted,
 specs/capabilities/sessions-chat/spec.md:202-202  R61 A session bound to a built-in agent (today the RFP Builder, the Data R
 specs/capabilities/sessions-chat/spec.md:203-203  R64 The new-session screen SHALL have a **Workflow** field above the sessi
 specs/capabilities/sessions-chat/spec.md:204-204  R62 While a chat is open, the page header's session context SHALL end with
-specs/capabilities/sessions-chat/spec.md:205-205  R63 With no session open, the **Sessions** page (app-shell R46) SHALL list
-specs/capabilities/sessions-chat/spec.md:206-206  R65 Every session SHALL run exactly one workflow ([workflows](../workflows
-specs/capabilities/sessions-chat/spec.md:208-210  ### Ownership
-specs/capabilities/sessions-chat/spec.md:210-210  R60 A session, with its transcript, visuals, reports, workspace files and
-specs/capabilities/sessions-chat/spec.md:212-242  ## Edge cases and errors
-specs/capabilities/sessions-chat/spec.md:244-252  ## Contracts
-specs/capabilities/sessions-chat/spec.md:254-285  ## UI
-specs/capabilities/sessions-chat/spec.md:287-758  ## Flows
-specs/capabilities/sessions-chat/spec.md:289-326  ### Feature: Chat and visuals
-specs/capabilities/sessions-chat/spec.md:328-500  ### Feature: Session management
-specs/capabilities/sessions-chat/spec.md:502-601  ### Feature: Chat answers and reliability signals
-specs/capabilities/sessions-chat/spec.md:603-699  ### Feature: Sessions started from an agent
-specs/capabilities/sessions-chat/spec.md:701-758  ### Feature: Skills the assistant is given
-specs/capabilities/sessions-chat/spec.md:760-775  ## Acceptance
+specs/capabilities/sessions-chat/spec.md:205-205  R63 In the **Past chats** tab of the Runs page (app-shell R46) the system
+specs/capabilities/sessions-chat/spec.md:206-206  R66 A session opened from the **Past chats** tab SHALL open **read-only**
+specs/capabilities/sessions-chat/spec.md:207-207  R65 Every session SHALL run exactly one workflow ([workflows](../workflows
+specs/capabilities/sessions-chat/spec.md:209-211  ### Ownership
+specs/capabilities/sessions-chat/spec.md:211-211  R60 A session, with its transcript, visuals, reports, workspace files and
+specs/capabilities/sessions-chat/spec.md:213-243  ## Edge cases and errors
+specs/capabilities/sessions-chat/spec.md:245-253  ## Contracts
+specs/capabilities/sessions-chat/spec.md:255-286  ## UI
+specs/capabilities/sessions-chat/spec.md:288-770  ## Flows
+specs/capabilities/sessions-chat/spec.md:290-327  ### Feature: Chat and visuals
+specs/capabilities/sessions-chat/spec.md:329-513  ### Feature: Session management
+specs/capabilities/sessions-chat/spec.md:515-614  ### Feature: Chat answers and reliability signals
+specs/capabilities/sessions-chat/spec.md:616-711  ### Feature: Sessions started from an agent
+specs/capabilities/sessions-chat/spec.md:713-770  ### Feature: Skills the assistant is given
+specs/capabilities/sessions-chat/spec.md:772-787  ## Acceptance
 
 specs/capabilities/synthetic-data/spec.md:7-18  ## Concepts
 specs/capabilities/synthetic-data/spec.md:20-126  ## Rules
@@ -1403,16 +1404,16 @@ specs/capabilities/workflows/spec.md:38-38  R15 A run of an agent workflow SHALL
 specs/capabilities/workflows/spec.md:39-39  R16 A streamed run SHALL report, in order: that it started (its run id), e
 specs/capabilities/workflows/spec.md:40-42  R17 A run MAY name one earlier run as its context: that run's question and
 specs/capabilities/workflows/spec.md:43-43  R18 Every run of a workflow on an input, code-only or agent, streamed (119
-specs/capabilities/workflows/spec.md:44-44  R19 The run history SHALL list every stored run, newest first, optionally
+specs/capabilities/workflows/spec.md:44-44  R19 The Runs page's **Runs** tab (app-shell R46) SHALL show the run histor
 specs/capabilities/workflows/spec.md:45-47  R20 Deleting a run SHALL remove it, its workspace and its files, and its m
 specs/capabilities/workflows/spec.md:48-48  R21 The Assistant, Questions to Insights v2 and each user agent's workflow
 specs/capabilities/workflows/spec.md:50-63  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:65-69  ## Contracts
 specs/capabilities/workflows/spec.md:71-78  ## UI
-specs/capabilities/workflows/spec.md:80-202  ## Flows
+specs/capabilities/workflows/spec.md:80-207  ## Flows
 specs/capabilities/workflows/spec.md:82-156  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:158-202  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:204-218  ## Acceptance
+specs/capabilities/workflows/spec.md:158-207  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:209-223  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope
@@ -2055,80 +2056,80 @@ specs/system/tech-stack.md:138-195  ### Backend: feature-based modules
 specs/system/tech-stack.md:197-220  ## Test layout
 specs/system/tech-stack.md:222-236  ## To rebuild on another stack
 
-specs/system/ui.md:9-139  ## 1. App shell
+specs/system/ui.md:9-140  ## 1. App shell
 specs/system/ui.md:11-17  ### 1.1 Window
 specs/system/ui.md:19-56  ### 1.2 Regions
 specs/system/ui.md:58-90  ### 1.3 Rail and drawer
-specs/system/ui.md:92-123  ### 1.4 Navigation model (no router)
-specs/system/ui.md:125-135  ### 1.5 Right panel
-specs/system/ui.md:137-139  ### 1.6 Startup
-specs/system/ui.md:141-151  ## 2. Loading, empty, error and confirmation conventions
-specs/system/ui.md:153-227  ## 3. Shared components
-specs/system/ui.md:155-165  ### 3.1 Backend status banner
-specs/system/ui.md:167-181  ### 3.2 System logs panel
-specs/system/ui.md:183-193  ### 3.3 Toast container
-specs/system/ui.md:195-197  ### 3.4 App logo
-specs/system/ui.md:199-201  ### 3.5 Markdown rendering
-specs/system/ui.md:203-227  ### 3.6 Shared component classes
-specs/system/ui.md:229-823  ## 4. Screens and panels
-specs/system/ui.md:233-241  ### 4.1 Home (welcome)
-specs/system/ui.md:243-249  ### 4.2 Datasets list
-specs/system/ui.md:251-265  ### 4.3 Catalog browser ("New dataset" / "Edit dataset")
-specs/system/ui.md:267-320  ### 4.3a Profile & synthesize tab (dataset editor)
-specs/system/ui.md:322-334  ### 4.4 Agent Hub
-specs/system/ui.md:336-348  ### 4.4a Workflows
-specs/system/ui.md:350-388  ### 4.4b Workflow page
-specs/system/ui.md:390-537  ### 4.5 Agent detail
-specs/system/ui.md:418-428  #### 4.5.1 Agent editor and preview chat
-specs/system/ui.md:430-437  #### 4.5.2 Skills library
-specs/system/ui.md:439-446  #### 4.5.3 Skill editor
-specs/system/ui.md:448-455  #### 4.5.4 Built-in skill editor
-specs/system/ui.md:457-465  #### 4.5.5 Link editor and chips
-specs/system/ui.md:467-494  #### 4.5.6 Graph tab
-specs/system/ui.md:496-498  #### 4.5.7 LLM Config tab
-specs/system/ui.md:500-505  #### 4.5.8 Chat Box tab
-specs/system/ui.md:507-514  #### 4.5.9 System Prompt tab, user agent
-specs/system/ui.md:516-528  #### 4.5.11 System Prompt tab, built-in agent
-specs/system/ui.md:530-537  #### 4.5.10 Skills tab, user agent
-specs/system/ui.md:539-541  ### 4.6 Eval trace (right panel)
-specs/system/ui.md:543-547  ### 4.7 New-session composer
-specs/system/ui.md:549-558  ### 4.7.1 Sessions list
-specs/system/ui.md:560-566  ### 4.8a Context page
-specs/system/ui.md:568-587  ### 4.8 Ontology tab (dataset editor)
-specs/system/ui.md:589-597  ### 4.8b User personas list and editor
-specs/system/ui.md:599-608  ### 4.8c Visuals library
-specs/system/ui.md:610-620  ### 4.8d Monitoring: tabs and the LLM calls table
-specs/system/ui.md:622-630  ### 4.8e Monitoring: LLM call page
-specs/system/ui.md:632-639  ### 4.8f Monitoring: Sessions tab
-specs/system/ui.md:641-653  ### 4.8g Monitoring: session page
-specs/system/ui.md:655-665  ### 4.8h Monitoring: waterfall
-specs/system/ui.md:667-671  ### 4.9 LLM configuration (settings)
-specs/system/ui.md:673-684  ### 4.10 Datasource configuration (settings)
-specs/system/ui.md:686-690  ### 4.11 Testing data (settings)
-specs/system/ui.md:693-705  ### 4.12 Developer (settings)
-specs/system/ui.md:706-746  ### 4.12 Session chat
-specs/system/ui.md:733-746  #### 4.12.1 Workflow bar
-specs/system/ui.md:748-806  ### 4.13 Session panel (right panel in a session)
-specs/system/ui.md:761-768  #### 4.13.1 Visual view
-specs/system/ui.md:770-772  #### 4.13.2 Document view
-specs/system/ui.md:774-776  #### 4.13.3 File view
-specs/system/ui.md:778-780  #### 4.13.4 Table view
-specs/system/ui.md:782-806  #### 4.13.5 Readiness scorecard
-specs/system/ui.md:808-810  ### 4.14 Entity details (right panel default)
-specs/system/ui.md:812-814  ### 4.15 Metrics panel (inside the catalog browser)
-specs/system/ui.md:816-823  ### 4.16 Appearance (settings)
-specs/system/ui.md:825-837  ## 5. Cross-cutting behaviour
-specs/system/ui.md:827-829  ### 5.1 State that survives view changes
-specs/system/ui.md:831-833  ### 5.2 Selection state
-specs/system/ui.md:835-837  ### 5.3 Toast policy
-specs/system/ui.md:839-926  ## 6. Design tokens
-specs/system/ui.md:843-885  ### 6.0 Theme tokens
-specs/system/ui.md:887-892  ### 6.1 Colour usage
-specs/system/ui.md:894-898  ### 6.2 Typography
-specs/system/ui.md:900-905  ### 6.3 Spacing, radii, shadows, motion
-specs/system/ui.md:907-914  ### 6.4 Icons
-specs/system/ui.md:916-926  ### 6.5 Theming
-specs/system/ui.md:928-974  ## 7. Copy that tests or users rely on
-specs/system/ui.md:976-987  ## 8. Accessibility
-specs/system/ui.md:989-991  ## 9. Visual baseline
-specs/system/ui.md:994-1001  ## 10. Open questions and gaps
+specs/system/ui.md:92-124  ### 1.4 Navigation model (no router)
+specs/system/ui.md:126-136  ### 1.5 Right panel
+specs/system/ui.md:138-140  ### 1.6 Startup
+specs/system/ui.md:142-152  ## 2. Loading, empty, error and confirmation conventions
+specs/system/ui.md:154-228  ## 3. Shared components
+specs/system/ui.md:156-166  ### 3.1 Backend status banner
+specs/system/ui.md:168-182  ### 3.2 System logs panel
+specs/system/ui.md:184-194  ### 3.3 Toast container
+specs/system/ui.md:196-198  ### 3.4 App logo
+specs/system/ui.md:200-202  ### 3.5 Markdown rendering
+specs/system/ui.md:204-228  ### 3.6 Shared component classes
+specs/system/ui.md:230-832  ## 4. Screens and panels
+specs/system/ui.md:234-242  ### 4.1 Home (welcome)
+specs/system/ui.md:244-250  ### 4.2 Datasets list
+specs/system/ui.md:252-266  ### 4.3 Catalog browser ("New dataset" / "Edit dataset")
+specs/system/ui.md:268-321  ### 4.3a Profile & synthesize tab (dataset editor)
+specs/system/ui.md:323-335  ### 4.4 Agent Hub
+specs/system/ui.md:337-349  ### 4.4a Workflows
+specs/system/ui.md:351-389  ### 4.4b Workflow page
+specs/system/ui.md:391-538  ### 4.5 Agent detail
+specs/system/ui.md:419-429  #### 4.5.1 Agent editor and preview chat
+specs/system/ui.md:431-438  #### 4.5.2 Skills library
+specs/system/ui.md:440-447  #### 4.5.3 Skill editor
+specs/system/ui.md:449-456  #### 4.5.4 Built-in skill editor
+specs/system/ui.md:458-466  #### 4.5.5 Link editor and chips
+specs/system/ui.md:468-495  #### 4.5.6 Graph tab
+specs/system/ui.md:497-499  #### 4.5.7 LLM Config tab
+specs/system/ui.md:501-506  #### 4.5.8 Chat Box tab
+specs/system/ui.md:508-515  #### 4.5.9 System Prompt tab, user agent
+specs/system/ui.md:517-529  #### 4.5.11 System Prompt tab, built-in agent
+specs/system/ui.md:531-538  #### 4.5.10 Skills tab, user agent
+specs/system/ui.md:540-542  ### 4.6 Eval trace (right panel)
+specs/system/ui.md:544-548  ### 4.7 New-session composer
+specs/system/ui.md:550-565  ### 4.7.1 Runs page and Past chats
+specs/system/ui.md:567-573  ### 4.8a Context page
+specs/system/ui.md:575-594  ### 4.8 Ontology tab (dataset editor)
+specs/system/ui.md:596-604  ### 4.8b User personas list and editor
+specs/system/ui.md:606-615  ### 4.8c Visuals library
+specs/system/ui.md:617-627  ### 4.8d Monitoring: tabs and the LLM calls table
+specs/system/ui.md:629-637  ### 4.8e Monitoring: LLM call page
+specs/system/ui.md:639-646  ### 4.8f Monitoring: Runs tab
+specs/system/ui.md:648-660  ### 4.8g Monitoring: session page
+specs/system/ui.md:662-672  ### 4.8h Monitoring: waterfall
+specs/system/ui.md:674-678  ### 4.9 LLM configuration (settings)
+specs/system/ui.md:680-691  ### 4.10 Datasource configuration (settings)
+specs/system/ui.md:693-697  ### 4.11 Testing data (settings)
+specs/system/ui.md:700-712  ### 4.12 Developer (settings)
+specs/system/ui.md:713-755  ### 4.12 Session chat
+specs/system/ui.md:742-755  #### 4.12.1 Workflow bar
+specs/system/ui.md:757-815  ### 4.13 Session panel (right panel in a session)
+specs/system/ui.md:770-777  #### 4.13.1 Visual view
+specs/system/ui.md:779-781  #### 4.13.2 Document view
+specs/system/ui.md:783-785  #### 4.13.3 File view
+specs/system/ui.md:787-789  #### 4.13.4 Table view
+specs/system/ui.md:791-815  #### 4.13.5 Readiness scorecard
+specs/system/ui.md:817-819  ### 4.14 Entity details (right panel default)
+specs/system/ui.md:821-823  ### 4.15 Metrics panel (inside the catalog browser)
+specs/system/ui.md:825-832  ### 4.16 Appearance (settings)
+specs/system/ui.md:834-846  ## 5. Cross-cutting behaviour
+specs/system/ui.md:836-838  ### 5.1 State that survives view changes
+specs/system/ui.md:840-842  ### 5.2 Selection state
+specs/system/ui.md:844-846  ### 5.3 Toast policy
+specs/system/ui.md:848-935  ## 6. Design tokens
+specs/system/ui.md:852-894  ### 6.0 Theme tokens
+specs/system/ui.md:896-901  ### 6.1 Colour usage
+specs/system/ui.md:903-907  ### 6.2 Typography
+specs/system/ui.md:909-914  ### 6.3 Spacing, radii, shadows, motion
+specs/system/ui.md:916-923  ### 6.4 Icons
+specs/system/ui.md:925-935  ### 6.5 Theming
+specs/system/ui.md:937-983  ## 7. Copy that tests or users rely on
+specs/system/ui.md:985-996  ## 8. Accessibility
+specs/system/ui.md:998-1000  ## 9. Visual baseline
+specs/system/ui.md:1003-1010  ## 10. Open questions and gaps

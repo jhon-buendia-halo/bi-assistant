@@ -198,7 +198,7 @@ test.describe('Feature: Workflows', () => {
           await expect(
             page.getByRole('heading', { name: HEALTH, exact: true }),
           ).toBeVisible();
-          await expect(railItem(page, 'Sessions')).toHaveAttribute(
+          await expect(railItem(page, 'Runs')).toHaveAttribute(
             'aria-current',
             'page',
           );

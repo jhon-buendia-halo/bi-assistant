@@ -41,7 +41,7 @@ Runs of agent workflows (ADR-0041; backend only in 1.23.12)
 
 Stored runs (1.23.14; the run history UI is 1.23.21)
 - R18. Every run of a workflow on an input, code-only or agent, streamed (119) or not (118), SHALL be stored when it starts, as `running` with its workflow, the workflow's name, its checked input and its context, and updated when it ends with its status (`success`, `failed` or `stopped`), every step's status and output, its output or error and, for an agent workflow, its question, answer, datasets, agent, RFP, panel items, visuals and the agent's saved phases ([../../system/data-model.md](../../system/data-model.md) 3.16). A stopped run SHALL be stored `stopped` with any partial answer; a run that fails while ending SHALL be stored `failed` with that error. `POST /workflows/:id/runs` SHALL answer the stored run's id (`runId`) for a code-only workflow. An agent run's workspace SHALL stay with the stored run, so its files can be downloaded after the run, and after a restart.
-- R19. The run history SHALL list every stored run, newest first, optionally one workflow's, each with its workflow, its status, its start and end, and a title: its question, else the workflow's first text input with a value, else the workflow's name, at most 120 characters ([../../system/api.md](../../system/api.md) 120). A stored run SHALL be readable with its full result, the panel items, workflow view and agent derived as a session's are (121), and its visuals, panel files and RFP packages SHALL download as a session's do (123-127). An unknown run SHALL answer `Run "<id>" not found` (HTTP 404).
+- R19. The Runs page's **Runs** tab (app-shell R46) SHALL show the run history and a row SHALL reopen its stored run read-only (`run-detail`, with **Run again**, which opens the workflow's Run tab with the run's input filled in; roadmap 1.23.21). The run history SHALL list every stored run, newest first, optionally one workflow's, each with its workflow, its status, its start and end, and a title: its question, else the workflow's first text input with a value, else the workflow's name, at most 120 characters ([../../system/api.md](../../system/api.md) 120). A stored run SHALL be readable with its full result, the panel items, workflow view and agent derived as a session's are (121), and its visuals, panel files and RFP packages SHALL download as a session's do (123-127). An unknown run SHALL answer `Run "<id>" not found` (HTTP 404).
 - R20. Deleting a run SHALL remove it, its workspace and its files, and its memory thread (122: `Run deleted`). A run still running SHALL NOT be deleted (`Stop the run before deleting it`). When the app starts, a run left `running` SHALL become `failed` with `The app stopped before the run finished`, keeping its workspace, and a run workspace that no stored run owns SHALL be deleted. The start-up clean-up of the agent editor's previews SHALL NOT touch run workspaces.
 
 Runs from a workflow's page (1.23.15)
@@ -187,6 +187,11 @@ Feature: Workflow runs
     Given the Assistant is running on a question
     When I click Stop
     Then the run reads "Run stopped" and its Answer step "Stopped"
+
+  Scenario: Careful mode cross-checks
+    Given I am on the Assistant's Run tab with a question and a dataset
+    When I turn Careful on and run it
+    Then the answer carries the "Cross-checked" chip
 
   Scenario: A clarifying question becomes options
     Given the Assistant asked "Which measure of best do you mean?" with two options

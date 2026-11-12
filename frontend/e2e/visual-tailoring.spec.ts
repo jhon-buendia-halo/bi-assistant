@@ -227,7 +227,7 @@ test('an older visual opens in the current theme', async ({
   // When I open the visual
   await openSessions(page);
   await page
-    .getByRole('navigation', { name: 'Sessions', exact: true })
+    .getByRole('navigation', { name: 'Past chats', exact: true })
     .getByRole('button', { name: new RegExp(`^${WORLD_CUP_SESSION}`) })
     .click();
   // The details panel starts collapsed after a reload (app-shell R2): open

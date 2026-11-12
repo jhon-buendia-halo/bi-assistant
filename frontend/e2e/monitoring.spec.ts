@@ -87,7 +87,7 @@ async function askInSession(page: Page): Promise<void> {
  */
 async function openMonitoringWithCall(page: Page): Promise<void> {
   await expect(async () => {
-    await railItem(page, 'Sessions').click();
+    await railItem(page, 'Runs').click();
     await railItem(page, 'Monitoring').click();
     await expect(page.getByTestId('monitoring-page')).toBeVisible();
     await expect(assistantRow(page).first()).toBeVisible({ timeout: 2_000 });
@@ -312,7 +312,7 @@ test.describe('Feature: LLM calls', () => {
       );
       await page.getByTestId('monitoring-tab-sessions').click();
       await expect(page.getByTestId('monitoring-sessions-empty')).toHaveText(
-        'No sessions yet.',
+        'No runs yet.',
       );
     },
   );
@@ -462,7 +462,7 @@ const sessionRow = (page: Page): Locator =>
  */
 async function openSessionsWithTwoTurns(page: Page): Promise<void> {
   await expect(async () => {
-    await railItem(page, 'Sessions').click();
+    await railItem(page, 'Runs').click();
     await railItem(page, 'Monitoring').click();
     await page.getByTestId('monitoring-tab-sessions').click();
     await expect(sessionRow(page).first().locator('td').nth(2)).toHaveText(
@@ -489,7 +489,7 @@ test.describe('Feature: Session flow', () => {
       );
       await scenarioStep(
         page,
-        'When I open Monitoring and choose the Sessions tab',
+        'When I open Monitoring and choose the Runs tab',
         async () => {
           await openSessionsWithTwoTurns(page);
         },
@@ -502,7 +502,7 @@ test.describe('Feature: Session flow', () => {
             page.getByTestId('monitoring-tab-sessions'),
           ).toHaveAttribute('aria-selected', 'true');
           await expect(page.getByTestId('monitoring-note')).toHaveText(
-            'Sessions with recorded agent runs, most recent first.',
+            'Runs with recorded agent calls, most recent first.',
           );
           const cells = sessionRow(page).first().locator('td');
           await expect(cells.nth(0)).toHaveText(WORLD_CUP_SESSION);
@@ -658,7 +658,7 @@ test.describe('Feature: Session flow', () => {
       });
       await scenarioStep(
         page,
-        'Then I see the Sessions tab with the session listed',
+        'Then I see the Runs tab with the session listed',
         async () => {
           await expect(
             page.getByTestId('monitoring-tab-sessions'),
@@ -705,7 +705,7 @@ test.describe('Feature: Session flow', () => {
       await page.getByTestId('session-filter-from').fill('2020-01-01T00:00');
       await page.getByTestId('session-filter-to').fill('2020-01-02T00:00');
       await expect(page.getByTestId('monitoring-sessions-empty')).toHaveText(
-        'No sessions match these filters.',
+        'No runs match these filters.',
       );
       await page.getByTestId('session-filters-clear').click();
       await expect(sessionRow(page).first()).toBeVisible();
@@ -825,7 +825,7 @@ test.describe('Feature: Runs in Monitoring', () => {
       );
       await scenarioStep(page, 'When I open Monitoring', async () => {
         await expect(async () => {
-          await railItem(page, 'Sessions').click();
+          await railItem(page, 'Runs').click();
           await railItem(page, 'Monitoring').click();
           await expect(page.getByTestId('monitoring-page')).toBeVisible();
           await expect(

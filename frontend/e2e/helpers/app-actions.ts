@@ -80,10 +80,12 @@ export async function createWorldCupDataset(
 export async function openSessions(page: Page): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Sessions', exact: true })
+    .getByRole('button', { name: 'Runs', exact: true })
     .click();
+  // The old sessions are the Past chats tab of the Runs page.
+  await page.getByRole('tab', { name: 'Past chats', exact: true }).click();
   await expect(
-    page.getByRole('navigation', { name: 'Sessions', exact: true }),
+    page.getByRole('navigation', { name: 'Past chats', exact: true }),
   ).toBeVisible();
 }
 
