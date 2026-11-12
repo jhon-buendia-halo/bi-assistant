@@ -367,12 +367,13 @@ Question to SQL pairs approved with a thumbs-up, retrieved by lexical similarity
 | `sql` | string | yes | The answer's last successful `run_readonly_sql` statement, trimmed. |
 | `datasourceId` | string | no | Datasource when the session's datasets resolved to exactly one; else absent (then the pair matches on any datasource). |
 | `entities` | string[] | yes | Entities the answer drew on (the message's `entities`, else `[]`). |
-| `sourceSessionId` | string | yes | Session the pair came from. Renamed from `sourceProjectId` (section 6). |
+| `sourceSessionId` | string | no | Session the pair came from; absent on a pair from a workflow run's answer. Renamed from `sourceProjectId` (section 6). |
+| `sourceRunId` | string | no | Workflow run whose answer the pair came from (1.23.19); then `sourceSessionId` is absent. |
 | `sourceMessageAt` | ISO | yes | `at` of the source assistant message. |
 | `ownerId` | string | no | Legacy and inert: `local` or absent (section 3.14). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
-Dedupe key `(sourceSessionId, sourceMessageAt)`: saving upserts on it, so re-rating the same message never forks. Thumbs-down deletes all pairs with that key. Exact-match "is this SQL verified" compares normalised SQL text.
+Dedupe key `(sourceSessionId, sourceMessageAt)`, or `sourceRunId` for a pair from a run's answer: saving upserts on it, so re-rating the same message never forks. Thumbs-down deletes all pairs with that key. Exact-match "is this SQL verified" compares normalised SQL text.
 
 ### 3.7 `metrics`
 
@@ -590,7 +591,7 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 | `ontology_items` (relation) | `metricId` | `metrics.id` | By value, may dangle (the relation is then skipped in the block and in `KnowledgeUse`). |
 | `ontology_items` (constraint) | `conceptId` | `ontology_items.id` (a concept) | By value. Deleting the concept clears `conceptId` on the constraints that name it. |
 | `datasource_inventories` | `id` | `connections.id` | 1:1; deleted explicitly with the datasource. |
-| `verified_queries` | `sourceSessionId`+`sourceMessageAt` | `sessions.id` + message `at` | No cascade on session deletion; removed explicitly on thumbs-down. |
+| `verified_queries` | `sourceSessionId`+`sourceMessageAt`, or `sourceRunId` | `sessions.id` + message `at`, or `workflow_runs.id` | No cascade on session or run deletion; removed explicitly on thumbs-down. |
 | `metrics` | `datasourceId`, `sourceVerifiedQueryId` | `connections.id`, `verified_queries.id` | Provenance only, may dangle (a verified query id also rotates on re-approval). |
 | `eval_runs` | `datasourceId`, `datasets[]` | `connections.id`, `datasets.name` | Scope snapshot, may dangle. |
 | `agents` | `draft.datasets[]`, `live.datasets[]` | `datasets.name` | By name, no cascade. May dangle; the hub flags the agent as having a missing dataset. |

@@ -12,8 +12,14 @@ export interface VerifiedQueryDoc {
   datasourceId?: string;
   /** Fully-qualified entities the answer drew on (message provenance). */
   entities: string[];
-  /** Session + assistant-message `at` the pair came from; dedupe key. */
-  sourceSessionId: string;
+  /**
+   * Session + assistant-message `at` the pair came from; dedupe key. Absent
+   * on a pair that came from a workflow run's answer (`sourceRunId`).
+   */
+  sourceSessionId?: string;
+  /** The workflow run whose answer the pair came from; dedupe key. */
+  sourceRunId?: string;
+  /** `at` of the source assistant message. */
   sourceMessageAt: string;
   /** The owning user's id in org server mode (data-model 3.15). */
   ownerId?: string;

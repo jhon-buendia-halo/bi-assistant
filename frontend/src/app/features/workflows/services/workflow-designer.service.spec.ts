@@ -23,6 +23,7 @@ class FakeRunsApi {
     end: () => void;
   }[] = [];
   getRun = jasmine.createSpy('getRun');
+  rateAnswer = jasmine.createSpy('rateAnswer');
 
   streamRun(
     workflowId: string,
@@ -177,6 +178,32 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     ]);
     expect(designer.stepStatuses()).toEqual({ answer: 'success' });
     expect(designer.canFollowUp()).toBe(true);
+  });
+
+  it('rates the shown answer: a thumbs-up stores it on the run and says it was saved (1.23.19)', () => {
+    executeQuestion();
+    runs.last.handlers.onDone!(storedRun());
+    const rated = {
+      ...storedRun().answer!,
+      feedback: 'up' as const,
+      verified: true,
+    };
+    runs.rateAnswer.and.returnValue(
+      of({
+        ok: true,
+        message: 'Answer saved as a verified query',
+        run: storedRun({ answer: rated }),
+      }),
+    );
+
+    designer.rateAnswer('up');
+
+    expect(runs.rateAnswer).toHaveBeenCalledOnceWith('run-1', 'up');
+    expect(designer.run()?.answer).toEqual(rated);
+    expect(designer.ratingPending()).toBe(false);
+    // The same rating again is a no-op.
+    designer.rateAnswer('up');
+    expect(runs.rateAnswer).toHaveBeenCalledTimes(1);
   });
 
   it('a refusal shows the message under Execute and no result', () => {

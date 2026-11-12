@@ -1,9 +1,11 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Delete,
   Get,
   Param,
+  Post,
   Query,
   Res,
 } from '@nestjs/common';
@@ -61,6 +63,23 @@ export class WorkflowRunsController {
   @Get(':id')
   get(@Param('id') id: string): Promise<WorkflowRun> {
     return this.runs.get(id);
+  }
+
+  /** Rate the run's answer: a thumbs-up saves a verified query (api.md 128). */
+  @Post(':id/answer/feedback')
+  async rateAnswer(
+    @Param('id') id: string,
+    @Body() body: { rating?: string },
+  ): Promise<{ ok: true; message: string; run: WorkflowRun }> {
+    const run = await this.runs.rateAnswer(id, body?.rating);
+    return {
+      ok: true,
+      message:
+        body?.rating === 'up'
+          ? 'Answer saved as a verified query'
+          : 'Answer marked as wrong',
+      run,
+    };
   }
 
   /** Delete a run with its workspace (api.md 122). */

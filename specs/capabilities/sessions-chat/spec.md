@@ -122,7 +122,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - Thumbs down removes that answer's stored pair and clears the badge.
   - Repeating the same rating does nothing.
 
-  The rating is persisted on the answer. The library itself is specified in [verified-queries](../verified-queries/spec.md).
+  The rating is persisted on the answer. A workflow run's answer is rated the same way on the Run tab ([../workflows/spec.md](../workflows/spec.md) R22). The library itself is specified in [verified-queries](../verified-queries/spec.md).
 
 ### Careful mode (cross-check)
 

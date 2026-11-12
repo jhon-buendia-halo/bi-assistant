@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
+import { MessageFeedback } from '../../sessions/models/session.model';
 import {
   AgentStreamHandlers,
   StreamFrame,
@@ -70,6 +71,20 @@ export class WorkflowRunsApiService {
   getRun(id: string): Observable<WorkflowRun> {
     return this.http.get<WorkflowRun>(
       `${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}`,
+    );
+  }
+
+  /**
+   * Rate the run's answer (api.md 128): a thumbs-up saves a verified query,
+   * a thumbs-down removes it. Answers the updated run.
+   */
+  rateAnswer(
+    id: string,
+    rating: MessageFeedback,
+  ): Observable<{ ok: boolean; message: string; run: WorkflowRun }> {
+    return this.http.post<{ ok: boolean; message: string; run: WorkflowRun }>(
+      `${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}/answer/feedback`,
+      { rating },
     );
   }
 

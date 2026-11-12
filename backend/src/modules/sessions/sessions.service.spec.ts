@@ -1736,6 +1736,7 @@ describe('SessionsService answer feedback', () => {
     const verifiedQueries = {
       save: jest.fn().mockResolvedValue({}),
       removeForMessage: jest.fn().mockResolvedValue(1),
+      removeForRun: jest.fn().mockResolvedValue(1),
     };
     const service = new SessionsService(
       repository as never,
@@ -1812,6 +1813,40 @@ describe('SessionsService answer feedback', () => {
     });
     expect(updated.messages.at(-1)?.feedback).toBe('up');
     expect(updated.messages.at(-1)?.verified).toBe(true);
+  });
+
+  it('rates a run answer: the pair is keyed by the run, not a session', async () => {
+    const host = answered();
+    const { service, verifiedQueries } = build(host);
+
+    const rated = await service.rateRunAnswer(
+      'run-1',
+      host,
+      '2024-01-01T00:00:03.000Z',
+      'up',
+    );
+
+    expect(verifiedQueries.save).toHaveBeenCalledWith({
+      question: 'How many claims were denied last year?',
+      sql: 'SELECT count(*) FROM main.health.claims',
+      datasourceId: 'ds-1',
+      entities: ['main.health.claims'],
+      sourceRunId: 'run-1',
+      sourceMessageAt: '2024-01-01T00:00:03.000Z',
+    });
+    expect(rated.feedback).toBe('up');
+    expect(rated.verified).toBe(true);
+
+    const down = await service.rateRunAnswer(
+      'run-1',
+      host,
+      '2024-01-01T00:00:03.000Z',
+      'down',
+    );
+
+    expect(verifiedQueries.removeForRun).toHaveBeenCalledWith('run-1');
+    expect(down.feedback).toBe('down');
+    expect(down.verified).toBeUndefined();
   });
 
   it('clears the verified badge on thumbs-down', async () => {
