@@ -1,237 +1,108 @@
-import { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
+import { WORLD_CUP_DATASET } from './helpers/app-actions';
+import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import {
-  WORLD_CUP_SESSION,
-  WORLD_CUP_DATASET,
-  createWorldCupWorkspace,
-} from './helpers/app-actions';
+  LlmStub,
+  StubReply,
+  StubRequest,
+  messageText,
+  startLlmStub,
+} from './helpers/llm-stub';
+import { gate, runAnswer, runAssistantInTab } from './helpers/run-ui';
+import { worldCupKey } from './helpers/world-cup-db';
 
-const assistantMessageAt = '2026-09-15T12:00:01.000Z';
+/**
+ * Mirrors the Feature "Chat and visuals" in
+ * specs/capabilities/sessions-chat/spec.md, now through the Assistant's Run
+ * tab: a run streams its reasoning and tool activity, renders the answer's
+ * Markdown and its SQL, and can be stopped. The model is the recording stub.
+ */
 
-async function installDeterministicChatStream(
-  page: Page,
-  sessionId: string,
-): Promise<void> {
-  await page.evaluate(
-    ({ id, sessionName, datasetName, answerAt }) => {
-      const originalFetch = window.fetch.bind(window);
-      window.fetch = async (input, init) => {
-        const url =
-          typeof input === 'string'
-            ? input
-            : input instanceof URL
-              ? input.href
-              : input.url;
-        if (!url.endsWith(`/sessions/${id}/messages/stream`)) {
-          return originalFetch(input, init);
-        }
+const QUESTION = 'Who won the last two tournaments?';
+const SLOW_QUESTION = 'Start a slow response';
+const ANSWER = '**Argentina** won the 2022 World Cup, while France won in 2018.';
+const SQL = `SELECT stage, COUNT(*) AS matches FROM ${worldCupKey('matches')} GROUP BY stage`;
 
-        const request = JSON.parse(String(init?.body ?? '{}')) as {
-          content?: string;
-        };
-        const question = request.content ?? '';
-        const encoder = new TextEncoder();
-        const timers: ReturnType<typeof setTimeout>[] = [];
-        let closed = false;
-        const stream = new ReadableStream<Uint8Array>({
-          start(controller) {
-            const emit = (delay: number, event: unknown) => {
-              timers.push(
-                setTimeout(() => {
-                  if (closed) return;
-                  controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
-                  );
-                }, delay),
-              );
-            };
-            emit(20, {
-              type: 'reasoning',
-              content: 'Inspecting the tournament and match tables…',
-            });
-            emit(120, { type: 'tool', content: 'run_sql' });
-            emit(220, {
-              type: 'tool-result',
-              content: JSON.stringify({
-                tool: 'run_sql',
-                input:
-                  'SELECT tournament_year, champion FROM world_cup.tournaments',
-                rowCount: 2,
-              }),
-            });
-            emit(320, {
-              type: 'text',
-              content: 'Argentina won the 2022 World Cup',
-            });
+let stub: LlmStub;
 
-            if (question.includes('slow response')) return;
-
-            timers.push(
-              setTimeout(() => {
-                if (closed) return;
-                controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify({
-                      type: 'done',
-                      session: {
-                        id,
-                        name: sessionName,
-                        datasets: [datasetName],
-                        messages: [
-                          {
-                            role: 'user',
-                            content: question,
-                            at: '2026-09-15T12:00:00.000Z',
-                          },
-                          {
-                            role: 'assistant',
-                            content:
-                              '**Argentina** won the 2022 World Cup, while France won in 2018.',
-                            at: answerAt,
-                            data: [
-                              {
-                                tool: 'run_sql',
-                                input:
-                                  'SELECT tournament_year, champion FROM world_cup.tournaments',
-                                rowCount: 2,
-                              },
-                            ],
-                          },
-                        ],
-                        visualizations: [],
-                      },
-                    })}\n\n`,
-                  ),
-                );
-                closed = true;
-                controller.close();
-              }, 1_200),
-            );
-
-            init?.signal?.addEventListener('abort', () => {
-              closed = true;
-              timers.forEach(clearTimeout);
-              try {
-                controller.error(new DOMException('Aborted', 'AbortError'));
-              } catch {
-                // The stream may already have completed.
-              }
-            });
-          },
-          cancel() {
-            closed = true;
-            timers.forEach(clearTimeout);
-          },
-        });
-        return new Response(stream, {
-          status: 200,
-          headers: { 'Content-Type': 'text/event-stream' },
-        });
-      };
-    },
-    {
-      id: sessionId,
-      sessionName: WORLD_CUP_SESSION,
-      datasetName: WORLD_CUP_DATASET,
-      answerAt: assistantMessageAt,
-    },
-  );
-}
-
-test('renders streamed reasoning, tool activity, final Markdown, and supports stopping', async ({
-  page,
-}) => {
-  const sessionId = await createWorldCupWorkspace(page);
-  await installDeterministicChatStream(page, sessionId);
-
-  const input = page.getByPlaceholder('Ask a follow-up question…');
-  await input.fill('Who won the last two tournaments?');
-  await page.getByLabel('Send message').click();
-
-  await expect(page.getByText('Thinking')).toBeVisible();
-  await expect(page.getByText('run_sql')).toBeVisible();
-  await expect(page.getByText('2 rows')).toBeVisible();
-  await expect(
-    page.getByText('Argentina won the 2022 World Cup'),
-  ).toBeVisible();
-  await expect(page.getByText('France won in 2018.')).toBeVisible();
-
-  await page.getByText(/Data used \(1 query\)/).click();
-  await expect(page.getByText(/SELECT tournament_year/)).toBeVisible();
-
-  await input.fill('Start a slow response');
-  await page.getByLabel('Send message').click();
-  await expect(page.getByLabel('Stop response')).toBeVisible();
-  await page.getByLabel('Stop response').click();
-  await expect(page.getByLabel('Send message')).toBeVisible();
-  await expect(page.getByText('Thinking')).toBeHidden();
+test.beforeEach(async ({ page }) => {
+  stub = await startLlmStub();
+  await seedWorldCupDataset(page);
+  await saveLenaiSettings(page, stub.baseUrl);
 });
 
-test('renders a deterministic interactive visualization and its version controls', async ({
+test.afterEach(async () => {
+  await stub.close();
+});
+
+function lastUserText(request: StubRequest): string {
+  const users = request.messages.filter((message) => message.role === 'user');
+  return users.length === 0 ? '' : messageText(users[users.length - 1]);
+}
+
+/** Queries once, then answers the question's Markdown. */
+function queryThenAnswer(request: StubRequest): StubReply {
+  if (request.messages.at(-1)?.role === 'tool') return { text: ANSWER };
+  return {
+    toolCall: {
+      name:
+        request.tools.find((tool) => tool.endsWith('run_readonly_sql')) ??
+        'run_readonly_sql',
+      arguments: { sql: SQL, rationale: 'Counting matches per stage.' },
+    },
+  };
+}
+
+test('renders a streamed run: reasoning, tool activity, final Markdown, and supports stopping', async ({
   page,
 }) => {
-  const sessionId = await createWorldCupWorkspace(page);
-  await installDeterministicChatStream(page, sessionId);
+  const held = gate();
+  const never = gate();
+  stub.reply = queryThenAnswer;
+  stub.hold = (request) => {
+    if (!request.stream) return undefined;
+    if (lastUserText(request) === SLOW_QUESTION) return never.promise;
+    return lastUserText(request) === QUESTION &&
+      request.messages.at(-1)?.role === 'tool'
+      ? held.promise
+      : undefined;
+  };
 
-  await page
-    .getByPlaceholder('Ask a follow-up question…')
-    .fill('Compare champions');
-  await page.getByLabel('Send message').click();
-  await expect(page.getByText('France won in 2018.')).toBeVisible();
+  try {
+    await runAssistantInTab(page, QUESTION, WORLD_CUP_DATASET);
+    await expect(page.getByTestId('workflow-run-live')).toContainText(
+      'Thinking',
+    );
+    await expect(page.getByTestId('workflow-run-tool')).toContainText(
+      'run_readonly_sql',
+    );
+    held.release();
 
-  const visualDocument = `<!doctype html><html><body style="background:#171717;color:white"><h1>World Cup champions</h1><div id="chart">2018 France · 2022 Argentina</div></body></html>`;
-  await page.route(/\/sessions\/[^/]+\/visualizations$/, async (route) => {
-    const createdAt = '2026-09-15T12:01:00.000Z';
-    const metadata = {
-      id: 'champions-visual',
-      title: 'World Cup champions',
-      description: 'Champions by tournament year',
-      path: 'visualizations/champions-visual',
-      sourceMessageAt: assistantMessageAt,
-      createdAt,
-      currentVersion: 1,
-      versions: [
-        {
-          version: 1,
-          createdAt,
-          sourceMessageAt: assistantMessageAt,
-          instruction: 'Initial version',
-        },
-      ],
-    };
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        ok: true,
-        message: 'Interactive visual generated',
-        session: {
-          id: sessionId,
-          name: WORLD_CUP_SESSION,
-          datasets: [WORLD_CUP_DATASET],
-          messages: [],
-          visualizations: [metadata],
-        },
-        visualization: {
-          ...metadata,
-          document: visualDocument,
-          version: 1,
-        },
-      }),
-    });
-  });
+    // The answer's Markdown is rendered, not shown as source.
+    await expect(runAnswer(page).locator('strong')).toHaveText('Argentina');
+    await expect(runAnswer(page)).toContainText('France won in 2018.');
+    await expect(runAnswer(page)).not.toContainText('**');
+    await expect(page.getByTestId('workflow-run-status')).toHaveText(
+      'Run succeeded',
+    );
 
-  await page
-    .getByRole('button', { name: 'Generate interactive visuals' })
-    .click();
-  const visual = page.frameLocator('iframe[title="Interactive visualization"]');
-  await expect(
-    visual.getByRole('heading', { name: 'World Cup champions' }),
-  ).toBeVisible();
-  await expect(visual.getByText('2018 France · 2022 Argentina')).toBeVisible();
-  await expect(page.getByTitle('Download bundle')).toBeVisible();
+    await runAnswer(page)
+      .getByText(/Data used \(1 query\)/)
+      .click();
+    await expect(
+      runAnswer(page).locator('pre', { hasText: SQL }),
+    ).toBeVisible();
 
-  await page.getByTitle('Version history').click();
-  await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
-  await expect(page.getByText('current', { exact: true })).toBeVisible();
+    // A slow run can be stopped.
+    await page.getByTestId('workflow-input-question').fill(SLOW_QUESTION);
+    await page.getByTestId('workflow-run').click();
+    await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
+    await page.getByTestId('workflow-run-stop').click();
+    await expect(page.getByTestId('workflow-run')).toHaveText('Execute');
+    await expect(page.getByTestId('workflow-run-stop')).toHaveCount(0);
+    await expect(page.getByTestId('workflow-run-live')).toHaveCount(0);
+  } finally {
+    held.release();
+    never.release();
+  }
 });

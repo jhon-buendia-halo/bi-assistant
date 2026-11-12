@@ -332,9 +332,9 @@ specs/capabilities/agent-panel/spec.md:58-58  R20 The RFP stage auto-drive (R9) 
 specs/capabilities/agent-panel/spec.md:60-81  ## Edge cases and errors
 specs/capabilities/agent-panel/spec.md:83-88  ## Contracts
 specs/capabilities/agent-panel/spec.md:90-99  ## UI
-specs/capabilities/agent-panel/spec.md:101-266  ## Flows
-specs/capabilities/agent-panel/spec.md:103-266  ### Feature: Agent panel
-specs/capabilities/agent-panel/spec.md:268-279  ## Acceptance
+specs/capabilities/agent-panel/spec.md:101-198  ## Flows
+specs/capabilities/agent-panel/spec.md:103-198  ### Feature: Agent panel
+specs/capabilities/agent-panel/spec.md:200-211  ## Acceptance
 
 specs/capabilities/agents-evals/spec.md:5-16  ## Concepts
 specs/capabilities/agents-evals/spec.md:18-284  ## Rules
@@ -768,9 +768,9 @@ specs/capabilities/datasources/spec.md:110-110  R51 Listing datasources, reading
 specs/capabilities/datasources/spec.md:112-122  ## Edge cases and errors
 specs/capabilities/datasources/spec.md:124-130  ## Contracts
 specs/capabilities/datasources/spec.md:132-161  ## UI
-specs/capabilities/datasources/spec.md:163-219  ## Flows
-specs/capabilities/datasources/spec.md:165-219  ### Feature: Datasources, datasets, and sessions (World Cup database)
-specs/capabilities/datasources/spec.md:221-231  ## Acceptance
+specs/capabilities/datasources/spec.md:163-220  ## Flows
+specs/capabilities/datasources/spec.md:165-220  ### Feature: Datasources, datasets, and sessions (World Cup database)
+specs/capabilities/datasources/spec.md:222-232  ## Acceptance
 
 specs/capabilities/deep-analysis/spec.md:5-9  ## Concepts
 specs/capabilities/deep-analysis/spec.md:11-38  ## Rules
@@ -957,9 +957,9 @@ specs/capabilities/llm-settings/spec.md:116-116  R43 There SHALL be one LLM conf
 specs/capabilities/llm-settings/spec.md:118-141  ## Edge cases and errors
 specs/capabilities/llm-settings/spec.md:143-150  ## Contracts
 specs/capabilities/llm-settings/spec.md:152-154  ## UI
-specs/capabilities/llm-settings/spec.md:156-445  ## Flows
-specs/capabilities/llm-settings/spec.md:447-459  ## Acceptance
-specs/capabilities/llm-settings/spec.md:461-465  ## Open questions
+specs/capabilities/llm-settings/spec.md:156-425  ## Flows
+specs/capabilities/llm-settings/spec.md:427-439  ## Acceptance
+specs/capabilities/llm-settings/spec.md:441-445  ## Open questions
 
 specs/capabilities/metrics/spec.md:7-9  ## Concepts
 specs/capabilities/metrics/spec.md:11-35  ## Rules
@@ -1155,13 +1155,13 @@ specs/capabilities/sessions-chat/spec.md:211-211  R60 A session, with its transc
 specs/capabilities/sessions-chat/spec.md:213-243  ## Edge cases and errors
 specs/capabilities/sessions-chat/spec.md:245-253  ## Contracts
 specs/capabilities/sessions-chat/spec.md:255-286  ## UI
-specs/capabilities/sessions-chat/spec.md:288-770  ## Flows
-specs/capabilities/sessions-chat/spec.md:290-327  ### Feature: Chat and visuals
-specs/capabilities/sessions-chat/spec.md:329-513  ### Feature: Session management
-specs/capabilities/sessions-chat/spec.md:515-614  ### Feature: Chat answers and reliability signals
-specs/capabilities/sessions-chat/spec.md:616-711  ### Feature: Sessions started from an agent
-specs/capabilities/sessions-chat/spec.md:713-770  ### Feature: Skills the assistant is given
-specs/capabilities/sessions-chat/spec.md:772-787  ## Acceptance
+specs/capabilities/sessions-chat/spec.md:288-726  ## Flows
+specs/capabilities/sessions-chat/spec.md:290-313  ### Feature: Chat and visuals
+specs/capabilities/sessions-chat/spec.md:315-499  ### Feature: Session management
+specs/capabilities/sessions-chat/spec.md:501-600  ### Feature: Chat answers and reliability signals
+specs/capabilities/sessions-chat/spec.md:602-672  ### Feature: Sessions started from an agent
+specs/capabilities/sessions-chat/spec.md:674-726  ### Feature: Skills the assistant is given
+specs/capabilities/sessions-chat/spec.md:728-743  ## Acceptance
 
 specs/capabilities/synthetic-data/spec.md:7-18  ## Concepts
 specs/capabilities/synthetic-data/spec.md:20-126  ## Rules
@@ -1379,11 +1379,11 @@ specs/capabilities/visuals/spec.md:193-201  R39 Each version's files SHALL live 
 specs/capabilities/visuals/spec.md:203-224  ## Edge cases and errors
 specs/capabilities/visuals/spec.md:226-239  ## Contracts
 specs/capabilities/visuals/spec.md:241-268  ## UI
-specs/capabilities/visuals/spec.md:270-423  ## Flows
+specs/capabilities/visuals/spec.md:270-420  ## Flows
 specs/capabilities/visuals/spec.md:272-274  ### Covered: Chat and visuals
 specs/capabilities/visuals/spec.md:276-390  ### Feature: Visual tailoring
-specs/capabilities/visuals/spec.md:392-423  ### Feature: Skills the designer is given
-specs/capabilities/visuals/spec.md:425-437  ## Acceptance
+specs/capabilities/visuals/spec.md:392-420  ### Feature: Skills the designer is given
+specs/capabilities/visuals/spec.md:422-434  ## Acceptance
 
 specs/capabilities/workflows/spec.md:7-11  ## Concepts
 specs/capabilities/workflows/spec.md:13-49  ## Rules

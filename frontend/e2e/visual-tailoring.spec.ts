@@ -3,11 +3,12 @@ import path from 'node:path';
 import type { Frame, Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.fixture';
 import {
-  createWorldCupSession,
+  WORLD_CUP_DATASET,
   followOsTheme,
   openSessions,
   WORLD_CUP_SESSION,
 } from './helpers/app-actions';
+import { apiFetch, apiJson } from './helpers/api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import {
   LlmStub,
@@ -18,8 +19,9 @@ import {
 } from './helpers/llm-stub';
 
 /**
- * Mirrors the Feature "Visual tailoring" in specs/capabilities/visuals/spec.md:
- * the scenarios "The visual follows the app's theme" and "An older visual
+ * Mirrors the Feature "Visual tailoring" in specs/capabilities/visuals/spec.md,
+ * against a past chat's read-only panel (the chat composer is retired, plan
+ * 1.24.8; a run's own panel returns with plan 1.25.4): the scenarios "The visual follows the app's theme" and "An older visual
  * opens in the current theme" (visuals R40, BA-230). The visual is designed
  * through the real designer pipeline against the recording LLM stub, so the
  * frame under test is the document the backend builds.
@@ -120,17 +122,52 @@ async function expectFrameTheme(frame: Frame, theme: Theme): Promise<void> {
   );
 }
 
-/** Asks the question and generates the visual from its answer. */
-async function generateVisual(page: Page): Promise<string> {
-  const sessionId = await createWorldCupSession(page);
-  await page.getByPlaceholder('Ask a follow-up question…').fill(QUESTION);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText(ANSWER)).toBeVisible();
+/**
+ * Seeds an old chat with a visual, through the API (internal endpoints kept
+ * for past chats), and opens it from Runs → Past chats. The chat is
+ * read-only, with its visual in the panel.
+ */
+async function openPastChatWithVisual(page: Page): Promise<string> {
+  const { session } = await apiJson<{ session: { id: string } }>(
+    page,
+    'POST',
+    '/sessions',
+    { name: WORLD_CUP_SESSION, datasets: [WORLD_CUP_DATASET] },
+  );
+  const turn = await apiFetch(
+    page,
+    'POST',
+    `/sessions/${session.id}/messages/stream`,
+    { content: QUESTION },
+  );
+  expect(turn.ok(), await turn.text()).toBe(true);
+  const visual = await apiJson<{ ok: boolean; message: string }>(
+    page,
+    'POST',
+    `/sessions/${session.id}/visualizations`,
+    {},
+  );
+  expect(visual.ok, visual.message).toBe(true);
+  await page.reload();
+  await openPastChat(page);
+  return session.id;
+}
+
+/** Opens the past chat from Runs → Past chats and its visual in the panel. */
+async function openPastChat(page: Page): Promise<void> {
+  await openSessions(page);
   await page
-    .getByRole('button', { name: 'Generate interactive visuals' })
+    .getByRole('navigation', { name: 'Past chats', exact: true })
+    .getByRole('button', { name: new RegExp(`^${WORLD_CUP_SESSION}`) })
     .click();
-  await expect(page.getByText('Interactive visual generated')).toBeVisible();
-  return sessionId;
+  await expect(page.getByTestId('past-chat-banner')).toBeVisible();
+  // The details panel starts collapsed after a reload (app-shell R2): open
+  // the visual from its card in the chat.
+  await page
+    .getByText(`Created ${VISUAL_TITLE}`)
+    .locator('xpath=ancestor::*[.//button[normalize-space()="View"]][1]')
+    .getByRole('button', { name: 'View' })
+    .click();
 }
 
 test("the visual follows the app's theme", async ({ page }) => {
@@ -142,7 +179,7 @@ test("the visual follows the app's theme", async ({ page }) => {
   await followOsTheme(page);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
-  await generateVisual(page);
+  await openPastChatWithVisual(page);
   const frame = await visualFrame(page);
   await expectFrameTheme(frame, 'light');
   // A chart label uses the frame's tokens too, not a hardcoded light grey.
@@ -180,7 +217,7 @@ test('an older visual opens in the current theme', async ({
   page,
   appDataDir,
 }) => {
-  const sessionId = await generateVisual(page);
+  const sessionId = await openPastChatWithVisual(page);
   await visualFrame(page);
 
   // Rewrite the stored visual as one made before the themed frame: a legacy
@@ -225,18 +262,7 @@ test('an older visual opens in the current theme', async ({
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
   // When I open the visual
-  await openSessions(page);
-  await page
-    .getByRole('navigation', { name: 'Past chats', exact: true })
-    .getByRole('button', { name: new RegExp(`^${WORLD_CUP_SESSION}`) })
-    .click();
-  // The details panel starts collapsed after a reload (app-shell R2): open
-  // the visual from its card in the chat.
-  await page
-    .getByText(`Created ${VISUAL_TITLE}`)
-    .locator('xpath=ancestor::*[.//button[normalize-space()="View"]][1]')
-    .getByRole('button', { name: 'View' })
-    .click();
+  await openPastChat(page);
   const frame = await visualFrame(page);
   await expect(frame.getByText('Made before the themed frame')).toBeVisible();
   await expectFrameTheme(frame, 'dark');

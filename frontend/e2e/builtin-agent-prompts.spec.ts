@@ -3,11 +3,8 @@ import type { Locator, Page } from '@playwright/test';
 import axe from 'axe-core';
 import { test, expect } from './fixtures/app.fixture';
 import { scenarioStep } from './support/demo-captions';
-import {
-  WORLD_CUP_DATASET,
-  followOsTheme,
-  openSessions,
-} from './helpers/app-actions';
+import { followOsTheme } from './helpers/app-actions';
+import { runAssistantOk } from './helpers/runs-api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import { apiJson } from './helpers/api';
 import {
@@ -49,6 +46,9 @@ test.afterEach(async () => {
 
 /** Opens a built-in agent's page from the hub (System agents sit behind "Show more"). */
 async function openAgent(page: Page, key: string, name: string) {
+  // A run sent through the API leaves the page where it was: go back to the hub first.
+  const back = page.getByRole('button', { name: 'All agents' });
+  if (await back.isVisible()) await back.click();
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
     .getByRole('button', { name: 'Agents', exact: true })
@@ -124,32 +124,11 @@ async function promptView(page: Page, key: string) {
   return agent.prompt!;
 }
 
-/** Creates a World Cup session named `name` from "Start New Conversation". */
-async function newSession(page: Page, name: string): Promise<void> {
-  await openSessions(page);
-  await page
-    .locator('header')
-    .getByRole('button', { name: 'Start New Conversation' })
-    .click();
-  await page.getByPlaceholder('My new session').fill(name);
-  await page
-    .getByRole('button', { name: new RegExp(WORLD_CUP_DATASET) })
-    .click();
-  await page.getByRole('button', { name: /^Create$/ }).click();
-  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
-}
-
-/** Asks `question` in a new session; returns the turn's first model request. */
-async function askInNewSession(
-  page: Page,
-  sessionName: string,
-  question: string,
-): Promise<StubRequest> {
-  await newSession(page, sessionName);
+/** Runs the Assistant on `question`; returns the turn's first model request. */
+async function askInRun(page: Page, question: string): Promise<StubRequest> {
   const from = stub.requests.length;
-  await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText(STUB_ANSWER)).toBeVisible();
+  const result = await runAssistantOk(page, question);
+  expect(result.text).toContain(STUB_ANSWER);
   const request = stub.requests.slice(from).find((r) => r.stream);
   expect(request, `a streamed call for "${question}"`).toBeDefined();
   return request!;
@@ -194,7 +173,7 @@ test("I edit the assistant's prompt, and Reset restores it", async ({
   });
 
   const edited = systemTexts(
-    await askInNewSession(page, 'Prompt override', QUESTION),
+    await askInRun(page, QUESTION),
   )[0];
   expect(edited).toContain(DONE_LINE);
   expect(
@@ -212,7 +191,7 @@ test("I edit the assistant's prompt, and Reset restores it", async ({
   await expect(modifiedChip(page)).toHaveCount(0);
 
   const reset = systemTexts(
-    await askInNewSession(page, 'Prompt reset', QUESTION),
+    await askInRun(page, QUESTION),
   )[0];
   expect(reset).not.toContain(DONE_LINE);
 });
@@ -287,7 +266,7 @@ test('the shipped assistant prompt shows its tools and skill as chips and the mo
     path: path.join(EVIDENCE, 'assistant-system-prompt-chips.png'),
   });
 
-  const request = await askInNewSession(page, 'Plain mentions', QUESTION);
+  const request = await askInRun(page, QUESTION);
   const prompt = systemTexts(request)[0];
   expect(prompt).toContain('Call the "ask_clarification" tool only when');
   for (const text of systemTexts(request)) expect(text).not.toContain('[[');

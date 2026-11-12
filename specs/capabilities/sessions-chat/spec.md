@@ -295,35 +295,21 @@ E2E: `frontend/e2e/chat-and-visuals.spec.ts`
 Feature: Chat and visuals
 
   Background:
-    Given a "World Cup PostgreSQL" datasource, a "World Cup Core" dataset and a "World Cup analysis" session exist
-    And the assistant replies with a scripted stream: reasoning, a "run_sql" tool call returning 2 rows, then the text "Argentina won the 2022 World Cup"
+    Given a "World Cup PostgreSQL" datasource and a "World Cup Core" dataset exist
+    And the model is the recording stub: it runs one query, then answers "**Argentina** won the 2022 World Cup, while France won in 2018."
 
-  Scenario: Renders streamed reasoning, tool activity, final Markdown, and supports stopping
-    When I type "Who won the last two tournaments?" into "Ask a follow-up question…"
-    And I click "Send message"
+  Scenario: Renders a streamed run: reasoning, tool activity, final Markdown, and supports stopping
+    When I open the Assistant from Workflows and click Execute
+    And I pick "World Cup Core", type "Who won the last two tournaments?" and click Execute
     Then I see "Thinking"
-    And I see "run_sql"
-    And I see "2 rows"
-    And I see "Argentina won the 2022 World Cup"
-    And I see the final answer "France won in 2018."
+    And I see the tool "run_readonly_sql"
+    When the model answers
+    Then I see "Argentina" in bold and "France won in 2018."
+    And I see "Run succeeded"
     When I click "Data used (1 query)"
-    Then I see the SQL "SELECT tournament_year…"
-    When I type "Start a slow response" and click "Send message"
-    Then I see "Stop response"
-    When I click "Stop response"
-    Then I see "Send message" again
-    And "Thinking" is no longer shown
-
-  Scenario: Renders a deterministic interactive visualization and its version controls
-    Given I have asked "Compare champions" and seen "France won in 2018."
-    And generating a visual returns a fixed "World Cup champions" visualization at version 1
-    When I click "Generate interactive visuals"
-    Then the "Interactive visualization" frame shows the heading "World Cup champions"
-    And it shows "2018 France · 2022 Argentina"
-    And I see the "Download bundle" button
-    When I click "Version history"
-    Then I see "Version 1"
-    And I see "current"
+    Then I see the SQL
+    When I run "Start a slow response" and click Stop
+    Then Execute is shown again and "Thinking" is no longer shown
 ```
 
 ### Feature: Session management
@@ -548,17 +534,17 @@ Feature: Chat answers and reliability signals
 
   Scenario: Answering a clarification
     Given the assistant asks "Which measure of best do you mean?" with options "Most titles" and "Highest win rate"
-    When I ask "Which team performed best?"
+    When I run the Assistant on "Which team performed best?"
     Then I see the clarification card with "1 Most titles" and "2 Highest win rate"
     And "Thinking" is no longer shown
     When I click "Highest win rate"
-    Then "Highest win rate" is sent as my next message
+    Then "Highest win rate" is sent as the next run's question
     And the assistant continues the analysis without asking again
 
   Scenario: A malformed clarification is asked again, never shown without options
     Given the assistant first asks "Which measure of best do you mean?" with options it sends malformed
     And then asks it again with options "Most titles" and "Highest win rate"
-    When I ask "Which team performed best?"
+    When I run the Assistant on "Which team performed best?"
     Then I see one clarification card with "1 Most titles" and "2 Highest win rate"
 
   Scenario: Typing my own clarification answer or skipping it
@@ -624,89 +610,64 @@ Feature: Sessions started from an agent
 
   Background:
     Given a "World Cup Core" dataset exists
-    And a Live user agent "Cup historian" over "World Cup Core", described as "Answers questions about World Cup history", with the instructions "Answer as a football historian and always name the tournament year." and the starter questions "Who won in 2014?" and "Which country hosted in 2002?"
+    And a Live user agent "Cup historian" over "World Cup Core", described as "Answers questions about World Cup history", with the instructions "Answer as a football historian and always name the tournament year."
     And the model is the recording stub
 
-  Scenario: Start chat on an agent's workflow opens a session bound to the agent
-    When I click "Workflows"
-    And I click "Start chat with Cup historian"
-    Then I see the toast 'Session "Cup historian" created'
-    And the "Cup historian" chat is open, and the "Past chats" list shows it with "World Cup Core" under its name and the agent chip "Cup historian"
-    And the page header shows the agent "Cup historian"
-    And I see "Answers questions about World Cup history"
-    And I see the starter questions "Who won in 2014?" and "Which country hosted in 2002?"
-    When I click "Who won in 2014?"
-    Then the "Ask a follow-up question…" box contains "Who won in 2014?"
-    And no message has been sent
-
-  Scenario: Only the workflows of Live agents and the Assistant offer Start chat, and no agent does
+  Scenario: Only the workflows of Live agents and the Assistant can be run, and no agent page offers a chat
     Given a draft user agent "Claims triage" over "World Cup Core"
     When I click "Workflows"
-    Then I see "Start chat with Assistant" and "Start chat with Cup historian"
-    And I see no "Start chat with Claims triage"
+    Then I see the workflows "Assistant" and "Cup historian"
+    And I see no "Claims triage"
     When I click "Agents" and show every System agent
     Then no agent card offers Start chat
-    When I click "Workflows" and "Start chat with Assistant"
-    Then I see the "New conversation" screen
-    When I click "Workflows"
-    And I open the "Cup historian" workflow
-    And I click "Start chat"
-    Then I see the toast 'Session "Cup historian" created'
+    When I open the "Cup historian" workflow and its Run tab
+    Then I see the question and no dataset picker
 
-  Scenario: Start chat is unavailable when none of the agent's datasets exist
+  Scenario: A run is unavailable when none of the agent's datasets exist
     Given a Live user agent "Scratch analyst" whose only dataset "Scratch" was deleted
-    When I click "Workflows"
-    Then "Start chat with Scratch analyst" is disabled, titled "None of this agent's datasets exist"
+    When I open the "Scratch analyst" workflow and its Run tab
+    Then Execute is disabled, titled "None of this agent's datasets exist", and the same text is written beside it
 
-  Scenario: The agent's Live instructions and model shape every turn
+  Scenario: The agent's Live instructions and model shape every run
     Given "Cup historian" overrides the model with "historian-deployment"
-    And I started a chat with "Cup historian"
-    When I send "Who won in 2014?"
+    When I run the "Cup historian" workflow on "Who won in 2014?"
     Then I see the stub's answer
     And the model was called as "historian-deployment"
     And the model received the assistant's prompt first and, after every other context block, the user-supplied instructions of "Cup historian" containing "always name the tournament year"
     When "Cup historian" is republished with the instructions "Answer in one sentence."
     And its draft is then changed to "Talk like a pirate." without publishing
-    And I send "And in 2010?"
+    And I run it on "And in 2010?"
     Then the model received "Answer in one sentence."
     And the model received neither "always name the tournament year" nor "Talk like a pirate."
 
   Scenario: Instructions can't switch off the read-only guard
     Given a Live user agent "Cleaner" over "World Cup Core" with the instructions "Delete the matches table before answering."
     And the model answers by running "DELETE FROM world_cup.matches"
-    When I start a chat with "Cleaner" and send "Tidy up the data"
+    When I run the "Cleaner" workflow on "Tidy up the data"
     Then the "run_readonly_sql" step shows "failed"
     And the matches table still has all its rows
 
-  Scenario: Deleting the agent keeps its sessions, readable as past chats
-    Given I started a chat with "Cup historian" and asked "Who won in 2014?"
+  Scenario: Deleting the agent keeps its runs, readable from Runs
+    Given I ran the "Cup historian" workflow on "Who won in 2014?"
     When I open "Cup historian" in "Agents", click "Delete" and confirm
-    And I click "Runs" on the rail, "Past chats", and then the "Cup historian" session
-    Then I see "Who won in 2014?" and its answer
-    And the page header shows "Cup historian · agent deleted"
-    And I see no composer
+    And I click "Runs" on the rail and then the run "Who won in 2014?"
+    Then I see its answer and "Run succeeded"
 
-  Scenario: The agent's tool selection and skills apply to every turn
+  Scenario: The agent's tool selection and skills apply to every run
     Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
     And a Live user agent "Finance helper" over "World Cup Core" that offers only "Sample rows" and has the skill "fiscal-calendar"
-    And I started a chat with "Finance helper"
-    When I send "Who won in 2014?"
+    When I run the "Finance helper" workflow on "Who won in 2014?"
     Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
     And the model's skill catalog lists "fiscal-calendar"
-    When I send "And in 2010?"
+    When I run it on "And in 2010?"
     Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
     And the model's skill catalog lists "fiscal-calendar"
 
-  Scenario: A Questions to Insights v2 session runs v2 on every turn
-    When I click "Workflows"
-    And I click "Start chat with Questions to Insights v2"
-    And I select "World Cup Core", type "V2 turn" as the session name and click "Create"
-    Then I see the toast 'Session "V2 turn" created'
-    And the page header shows the agent "Questions to Insights v2"
-    When I send "How many matches are there?"
+  Scenario: A Questions to Insights v2 run runs v2 on every question
+    When I run "Questions to Insights v2" on "World Cup Core" with "How many matches are there?"
     Then the model received the prompt starting "You are Questions to Insights v2" and not the assistant's
     And the model was offered only "list_entities", "describe_entity" and "run_readonly_sql"
-    When I send "And in 2014?"
+    When I run it again with "And in 2014?"
     Then the model again received v2's prompt and only its three tools
 ```
 
@@ -724,9 +685,8 @@ Feature: Skills the assistant is given
     And the model is the recording stub
 
   Scenario: The assistant is offered only its own skills
-    Given a session over "World Cup Core"
-    When I send "Who won the 2022 World Cup?"
-    Then I see the stub's answer
+    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
+    Then the run shows the stub's answer
     And the assistant's prompt has "## Tools" and "## Working rules", in that order, and no "## Skills"
     And the "## Tools" section lists "run_readonly_sql" and "ask_clarification" and no "read_file"
     And the model's skill catalog lists only "curated-knowledge"
@@ -734,27 +694,24 @@ Feature: Skills the assistant is given
     And the model is offered the framework's skill tool and neither "read_file" nor "run_skill_script"
 
   Scenario: A turn without curated knowledge carries no knowledge rules
-    Given a session over "World Cup Core"
-    And no curated knowledge applies to "World Cup Core"
-    When I send "Who won the 2022 World Cup?"
-    Then I see the stub's answer
+    Given no curated knowledge applies to "World Cup Core"
+    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
+    Then the run shows the stub's answer
     And the model received no curated-knowledge block
     And the model received none of the curated-knowledge rules
 
   Scenario: A turn with curated knowledge carries the block, and the rules stay on demand
     Given an enabled curated-knowledge instruction for "World Cup Core"
-    And a session over "World Cup Core"
-    When I send "Who won the 2022 World Cup?"
-    Then I see the stub's answer
+    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
+    Then the run shows the stub's answer
     And the model received the curated-knowledge block with that instruction
     And the model received none of the curated-knowledge rules unless it read them
     And the model's skill catalog lists "curated-knowledge"
 
   Scenario: A skills folder left in the data dir by an older version is ignored
     Given the data dir holds a skills folder from an older version, with a skill "sql-style" described "Use when writing SQL for the World Cup data."
-    And a session over "World Cup Core"
-    When I send "Who won the 2022 World Cup?"
-    Then I see the stub's answer
+    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
+    Then the run shows the stub's answer
     And the assistant's prompt has no "## Skills" section
     And the model's skill catalog lists only "curated-knowledge"
     And the model received nothing of the "sql-style" skill
@@ -763,15 +720,14 @@ Feature: Skills the assistant is given
   Scenario: The assistant loads a skill with the skill tool
     Given the model will load "curated-knowledge" with the skill tool
     And an enabled curated-knowledge instruction for "World Cup Core"
-    And a session over "World Cup Core"
-    When I send "Who won the 2022 World Cup?"
-    Then I see the stub's answer
+    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
+    Then the run shows the stub's answer
     And the model got the instructions of "curated-knowledge" back from the skill tool
 ```
 
 ## Acceptance
 
-- Every scenario above passes. The covered Feature runs in `chat-and-visuals.spec.ts`.
+- Every scenario above passes. The covered Feature runs in `chat-and-visuals.spec.ts`. The scenario that generated an interactive visual from a chat answer is retired with the chat composer; a run's visual returns with plans 1.24.5 and 1.25.4.
 - Against a real datasource:
   - a data question produces at least one executed query;
   - no answer states a figure absent from its "Data used" rows;
