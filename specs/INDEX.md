@@ -2023,7 +2023,7 @@ specs/system/delivery.md:395-443  ### `workflow-steps`
 specs/system/delivery.md:445-460  ## 10. Claude Code project skills (`.claude/skills/`)
 specs/system/delivery.md:462-471  ## 11. Claude Code tools (`.claude/tools/`)
 specs/system/delivery.md:473-492  ## 12. Claude Code agents (`.claude/agents/`)
-specs/system/delivery.md:494-540  ## 13. Deterministic QA (`scripts/qa.mjs`)
+specs/system/delivery.md:494-547  ## 13. Deterministic QA (`scripts/qa.mjs`)
 
 specs/system/tech-stack.md:7-15  ## Languages and runtime
 specs/system/tech-stack.md:17-39  ## Frontend (`frontend/`)
