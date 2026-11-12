@@ -102,7 +102,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(q('workflow-detail-name')?.tagName).toBe('H1');
     expect(text('workflow-detail-name')).toBe('Sequential test workflow');
     expect(text('workflow-detail-id')).toBe('seq-text-demo');
-    expect(text('workflow-detail-kind')).toBe('Runs on an input');
+    expect(text('workflow-detail-kind')).toBe('3 steps');
     expect(q('workflow-canvas')).not.toBeNull();
     expect(
       Array.from(el.querySelectorAll('[data-testid="workflow-node-title"]')).map((n) =>

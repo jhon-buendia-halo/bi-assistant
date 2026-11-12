@@ -652,7 +652,7 @@
                   [showRating]="true"
                   [ratingPending]="designer.ratingPending()"
                   [rfpDownloading]="designer.rfpDownloading()"
-                  [showGenerateVisual]="!designer.running() && designer.run() !== null"
+                  [showGenerateVisual]="!designer.running() && designer.run() !== null && offersVisuals()"
                   [visualGenerating]="visualGenerating()"
                   [reportDownloading]="designer.reportDownloading()"
                   (rate)="designer.rateAnswer($event)"

@@ -793,6 +793,10 @@ test.describe('with the API sample registered', () => {
     await expect(page.getByRole('button', { name: 'Deep analysis' })).toHaveCount(0);
     await runExchange(page, question);
     await expect(page.getByTestId('run-answer')).toContainText(answer);
+    // R15: no Generate interactive visuals under its answer, in a run as in a chat.
+    await expect(
+      page.getByTestId('run-answer').getByRole('button', { name: 'Generate interactive visuals' }),
+    ).toHaveCount(0);
   });
 
   test('the System Prompt tab shows the RFP Builder’s prompt', async ({

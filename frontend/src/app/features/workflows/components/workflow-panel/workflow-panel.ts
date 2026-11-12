@@ -134,6 +134,12 @@ export class WorkflowPanel {
     return steps.length === 0 ? [] : steps[steps.length - 1].output;
   });
 
+  /** The RFP Builder draws no visuals (rfp R15), in a run as in a chat. */
+  protected readonly offersVisuals = computed(() => {
+    const workflow = this.designer.workflow();
+    return workflow === null || workflow.id !== 'agent:rfp';
+  });
+
   protected readonly code = computed(() => {
     const workflow = this.designer.workflow();
     return workflow === null ? '' : JSON.stringify(workflow, null, 2);

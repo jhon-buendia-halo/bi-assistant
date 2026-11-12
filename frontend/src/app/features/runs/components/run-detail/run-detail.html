@@ -126,7 +126,7 @@
             [message]="answer"
             [latest]="false"
             [busy]="false"
-            [showGenerateVisual]="run.status !== 'running'"
+            [showGenerateVisual]="run.status !== 'running' && run.workflowId !== 'agent:rfp'"
             [visualGenerating]="visuals.generating() === run.id"
             (generateVisual)="visuals.generate(run, applyRun)"
             (viewVisual)="visuals.view(run, $event)"
