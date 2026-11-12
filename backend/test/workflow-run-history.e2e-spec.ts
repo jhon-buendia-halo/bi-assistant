@@ -160,7 +160,7 @@ describe('Stored runs: the run history API (API)', () => {
 
   beforeAll(async () => {
     stub = await startLlmStub();
-    backend = await boot(dataDir, { env: { INTELLIFY_API: 'off' } });
+    backend = await boot(dataDir);
     await configure();
   });
 
@@ -432,7 +432,7 @@ describe('Stored runs: the run history API (API)', () => {
     stub.hold = undefined;
     mkdirSync(workspace('run-orphan'), { recursive: true });
 
-    backend = await boot(dataDir, { env: { INTELLIFY_API: 'off' } });
+    backend = await boot(dataDir);
 
     const recovered = (await http().get(`/workflow-runs/${cut.id}`).expect(200))
       .body as WireRun;

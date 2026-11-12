@@ -184,8 +184,8 @@ export class EvalRunsService {
     cases: AssistantEvalCase[],
   ): Promise<void> {
     // The agent the cases run on, with its context and clean-up (agents.md
-    // 8.1); the RFP Builder tags its drafts with this run.
-    const target = evalTargetFor(view.agentKey, view.jobId);
+    // 8.1).
+    const target = evalTargetFor(view.agentKey);
     // A throwaway run host so create_visual/update_visual behave the way they
     // do in a real chat turn (see assistant.evals.ts). Best-effort: a run
     // still measures the agent without one, just with visual-tool support
@@ -235,7 +235,7 @@ export class EvalRunsService {
       view.finishedAt = new Date().toISOString();
       this.active.delete(view.agentKey);
       await this.repository.save(view);
-      // The agent's own clean-up: the RFP Builder's drafts of this run.
+      // The agent's own clean-up of what this run created, if any.
       await target.finish?.(view.datasets);
       await cleanupEvalHost(this.sessions, evalSession);
     }

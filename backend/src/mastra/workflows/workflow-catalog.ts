@@ -10,7 +10,6 @@
 import {
   ASSISTANT_MAX_STEPS,
   DATA_READINESS_MAX_STEPS,
-  RFP_MAX_STEPS,
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
 import {
@@ -73,7 +72,7 @@ export interface WorkflowInputField {
   default?: string | number | boolean;
   /** `dataset` / `datasets`: only datasets bound to these kinds. */
   datasourceKinds?: InputDatasourceKind[];
-  /** Set by the app (the RFP Builder's Continue), never rendered as a control. */
+  /** Set by the app, never rendered as a control. */
   hidden?: boolean;
 }
 
@@ -124,22 +123,6 @@ const BUILTIN_AGENT_INPUTS: Readonly<
       required: false,
       placeholder: READINESS_DEFAULT_QUESTION,
       default: READINESS_DEFAULT_QUESTION,
-    },
-  ],
-  rfp: [
-    {
-      name: 'message',
-      label: 'Message',
-      type: 'textarea',
-      required: true,
-      placeholder: 'Name the client and plan year, or state your decision',
-    },
-    {
-      name: 'rfpId',
-      label: 'RFP',
-      type: 'text',
-      required: false,
-      hidden: true,
     },
   ],
 };
@@ -392,14 +375,12 @@ export function parseWorkflowInput(
 
 /** What one agent turn of a run takes from the run's input (plan 4.2, 5.1). */
 export interface AgentRunTurn {
-  /** The user message: `question`, or the RFP Builder's `message`, trimmed. */
+  /** The user message: `question`, trimmed. */
   question: string;
   /** `datasets`, or the readiness run's one `dataset`; absent otherwise. */
   datasets?: string[];
   /** Careful mode (the Assistant and user agents). */
   careful: boolean;
-  /** The RFP the run continues (the RFP Builder's hidden field). */
-  rfpId?: string;
 }
 
 /** The agent turn a run's checked input asks for (plan 4.2). */
@@ -411,19 +392,16 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
     : text(values['dataset'])
       ? [text(values['dataset'])]
       : undefined;
-  const rfpId = text(values['rfpId']);
   return {
-    question: text(values['question']) || text(values['message']),
+    question: text(values['question']),
     ...(datasets ? { datasets } : {}),
     careful: values['careful'] === true,
-    ...(rfpId ? { rfpId } : {}),
   };
 }
 
 /** The built-in agents that get a one-step workflow. */
 export const WRAPPED_AGENT_KEYS: readonly string[] = [
   'assistant',
-  'rfp',
   'data-readiness',
 ];
 
@@ -532,10 +510,9 @@ export function workflowsUsingAgent(
 
 /**
  * The tool-loop budget of a one-step workflow's agent: 10 for the Data
- * Readiness Agent, 15 for the assistant, the RFP Builder and user agents.
+ * Readiness Agent, 15 for the assistant and user agents.
  */
 export function wrappedAgentMaxSteps(agentKeyOrId: string): number {
-  if (agentKeyOrId === 'rfp') return RFP_MAX_STEPS;
   if (agentKeyOrId === 'data-readiness') return DATA_READINESS_MAX_STEPS;
   return ASSISTANT_MAX_STEPS;
 }

@@ -112,7 +112,6 @@ function build(
       'ask_clarification',
     ]),
     'assistant-v2': fakeAgent('Questions to Insights v2', ['run_readonly_sql']),
-    rfp: fakeAgent('RFP Builder', ['create_rfp']),
     'data-readiness': fakeAgent('Data Readiness Agent', ['assess_readiness']),
   };
   const runWorkflow = jest.fn();
@@ -316,13 +315,6 @@ function build(
         archive: Buffer.from('zip'),
       }),
     ),
-    downloadRfpPackageOf: jest.fn(() =>
-      Promise.resolve({
-        filename: 'rfp-acme.zip',
-        contentType: 'application/zip',
-        body: Buffer.from('zip'),
-      }),
-    ),
   };
   const datasetsRepository = {
     list: jest.fn().mockResolvedValue(datasets),
@@ -373,8 +365,6 @@ async function streamed(
 }
 
 const READINESS_REQUIREMENT = 'Add a PostgreSQL or Databricks dataset first';
-const RFP_REQUIREMENT =
-  'Load the "Intellify RFP API" sample in Settings → Testing Data first';
 
 describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4.1)', () => {
   let ctx: ReturnType<typeof build>;
@@ -422,43 +412,32 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
     [{ input: {} }, 'Dataset is required'],
     [{ input: { dataset: 'Nope' } }, 'Dataset "Nope" not found'],
   ])('the Data Readiness Agent refuses %p with %p', async (body, message) => {
-    ctx = build([
-      ...DATASETS,
-      { name: 'Intellify RFP API', datasourceKind: 'rest' },
-    ]);
+    ctx = build([...DATASETS, { name: 'Orders API', datasourceKind: 'rest' }]);
     await refuse('agent:data-readiness', body, message);
   });
 
   it('the Data Readiness Agent refuses a dataset of another kind', async () => {
-    ctx = build([
-      ...DATASETS,
-      { name: 'Intellify RFP API', datasourceKind: 'rest' },
-    ]);
+    ctx = build([...DATASETS, { name: 'Orders API', datasourceKind: 'rest' }]);
     await refuse(
       'agent:data-readiness',
-      { input: { dataset: 'Intellify RFP API' } },
-      'Dataset "Intellify RFP API" is not a PostgreSQL or Databricks dataset',
+      { input: { dataset: 'Orders API' } },
+      'Dataset "Orders API" is not a PostgreSQL or Databricks dataset',
     );
   });
 
   it('refuses a workflow while its run requirement holds', async () => {
-    ctx = build([{ name: 'Intellify RFP API', datasourceKind: 'rest' }]);
+    ctx = build([{ name: 'Orders API', datasourceKind: 'rest' }]);
     await refuse('agent:data-readiness', { input: {} }, READINESS_REQUIREMENT);
-    ctx.db.close();
-    ctx = build();
-    await refuse('agent:rfp', { input: { message: 'Start' } }, RFP_REQUIREMENT);
   });
 
-  it('the RFP Builder refuses a run without a message', async () => {
-    ctx = build([
-      ...DATASETS,
-      { name: 'Intellify RFP API', datasourceKind: 'rest' },
-    ]);
-    await refuse(
-      'agent:rfp',
-      { input: { rfpId: 'r-1' } },
-      'Message is required',
-    );
+  it("answers the removed RFP Builder's workflow as not found", async () => {
+    ctx = build();
+    const refusal = ctx.service.prepare('agent:rfp', {
+      input: { message: 'Start', rfpId: 'r-1' },
+    });
+    await expect(refusal).rejects.toBeInstanceOf(NotFoundException);
+    await expect(refusal).rejects.toThrow('Workflow "agent:rfp" not found');
+    expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
   });
 
   it('a user agent refuses a run while none of its datasets exist, and one without a question', async () => {
@@ -799,57 +778,12 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
     );
   });
 
-  it("an RFP Continue gives the run the RFP, the last proposal and the earlier run's stages (plan 4.3)", async () => {
-    ctx = build(
-      [...DATASETS, { name: 'Intellify RFP API', datasourceKind: 'rest' }],
-      {
-        answer:
-          'Stage 1: Orchard Manufacturing renews on 1 January 2027. Confirm?',
-      },
-    );
-    const stages = {
-      current: 1,
-      done: [],
-      updatedAt: '2026-11-11T10:00:00.000Z',
-    };
-    const finishView = ctx.sessions.finishRunHost.getMockImplementation()!;
-    ctx.sessions.finishRunHost.mockImplementationOnce(async () => ({
-      ...(await finishView()),
-      rfpId: 'rfp-1',
-      workflowState: stages,
-    }));
-    const first = await streamed(ctx, 'agent:rfp', {
-      input: {
-        message: 'Start an RFP for Orchard Manufacturing, plan year 2027',
-      },
-    });
-    expect(first.run.rfpId).toBe('rfp-1');
-    const second = await streamed(ctx, 'agent:rfp', {
-      input: { message: 'yes', rfpId: 'rfp-1' },
-      context: { fromRunId: first.run.id },
-    });
-    expect(ctx.sessions.createRunHost).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        runId: second.run.id,
-        workflowId: 'agent:rfp',
-        rfpId: 'rfp-1',
-        workflowState: stages,
-        context: {
-          question: 'Start an RFP for Orchard Manufacturing, plan year 2027',
-          answer:
-            'Stage 1: Orchard Manufacturing renews on 1 January 2027. Confirm?',
-        },
-      }),
-    );
-    expect(second.run.question).toBe('yes');
-    expect(second.run.input).toEqual({ message: 'yes', rfpId: 'rfp-1' });
-  });
-
-  it("a context run of another RFP, or none, does not carry the earlier run's stages", async () => {
+  it('a context run carries the earlier question and answer only, never its stages or a legacy RFP id', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
     const finishView = ctx.sessions.finishRunHost.getMockImplementation()!;
     ctx.sessions.finishRunHost.mockImplementationOnce(async () => ({
       ...(await finishView()),
+      rfpId: 'rfp-1',
       workflowState: { current: 2, done: [1], updatedAt: 't' },
     }));
     const first = await streamed(ctx, 'agent:assistant', { input: ASK });
@@ -857,9 +791,12 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
       input: { question: 'And in 2014?', datasets: ['World Cup Core'] },
       context: { fromRunId: first.run.id },
     });
-    expect(ctx.sessions.createRunHost.mock.lastCall?.[0]).not.toHaveProperty(
-      'workflowState',
-    );
+    const spec = ctx.sessions.createRunHost.mock.lastCall?.[0];
+    expect(spec).not.toHaveProperty('workflowState');
+    expect(spec).not.toHaveProperty('rfpId');
+    expect(spec).toMatchObject({
+      context: { question: 'Who won in 2002?', answer: 'Brazil won in 2002.' },
+    });
   });
 
   it('refuses a context run that has no answer', async () => {
@@ -1137,14 +1074,15 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     ctx.sessions.finishRunHost.mockImplementationOnce(() =>
       Promise.resolve({
         id: 'host',
-        name: 'RFP Builder',
-        datasets: ['Intellify RFP API'],
+        name: 'Data Readiness Agent',
+        datasets: ['Claims'],
         messages: [
-          { role: 'user', content: 'Start an RFP', at: 't1' },
+          { role: 'user', content: 'Assess Claims', at: 't1' },
           { role: 'assistant', content: 'Which client?', at: 't2' },
         ],
-        agentKey: 'rfp',
-        agentName: 'RFP Builder',
+        agentKey: 'data-readiness',
+        agentName: 'Data Readiness Agent',
+        // A host shaped by an earlier version: its RFP id is not stored.
         rfpId: 'rfp-1',
         visualizations: [{ id: 'v1', title: 'Goals' }],
         panelItems: [
@@ -1158,10 +1096,14 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         ],
         workflowState: { phases: [], updatedAt: 't' },
         workflow: { phases: [], source: 'agent' },
-        agent: { id: 'rfp', name: 'RFP Builder', deleted: false },
+        agent: {
+          id: 'data-readiness',
+          name: 'Data Readiness Agent',
+          deleted: false,
+        },
         workflowRef: {
-          id: 'agent:rfp',
-          name: 'RFP Builder',
+          id: 'agent:data-readiness',
+          name: 'Data Readiness Agent',
           kind: 'agent',
           deleted: false,
         },
@@ -1177,15 +1119,15 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       output: { calls: [], stopped: false },
       question: 'Who won in 2002?',
       answer: { role: 'assistant', content: 'Which client?', at: 't2' },
-      datasets: ['Intellify RFP API'],
-      agentKey: 'rfp',
-      agentName: 'RFP Builder',
-      rfpId: 'rfp-1',
+      datasets: ['Claims'],
+      agentKey: 'data-readiness',
+      agentName: 'Data Readiness Agent',
       visualizations: [{ id: 'v1', title: 'Goals' }],
       panelItems: [{ id: 'p1', kind: 'document' }],
       workflowState: { phases: [], updatedAt: 't' },
     });
     expect(stored?.finishedAt).toBeDefined();
+    expect(stored).not.toHaveProperty('rfpId');
     expect(stored).not.toHaveProperty('agent');
     expect(stored).not.toHaveProperty('workflow');
     expect(stored).not.toHaveProperty('workflowRef');
@@ -1389,6 +1331,39 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
     expect(fetched).not.toHaveProperty('agent');
   });
 
+  it('reads a stored RFP Builder run as a plain run: its legacy rfpId is dropped', async () => {
+    ctx = build();
+    await ctx.repository.insert({
+      id: 'old-rfp',
+      workflowId: 'agent:rfp',
+      workflowName: 'RFP Builder',
+      input: { message: 'Start an RFP', rfpId: 'rfp-1' },
+      status: 'success',
+      steps: [],
+      startedAt: '2026-11-01T10:00:00.000Z',
+      finishedAt: '2026-11-01T10:01:00.000Z',
+      question: 'Start an RFP',
+      answer: { role: 'assistant', content: 'Which client?', at: 't2' },
+      datasets: ['Intellify RFP API'],
+      agentKey: 'rfp',
+      agentName: 'RFP Builder',
+      rfpId: 'rfp-1',
+      panelItems: [],
+      visualizations: [],
+    } as never);
+    const read = await ctx.service.get('old-rfp');
+    expect(read).toMatchObject({
+      id: 'old-rfp',
+      workflowId: 'agent:rfp',
+      status: 'success',
+      answer: { content: 'Which client?' },
+    });
+    expect(read).not.toHaveProperty('rfpId');
+    expect((await ctx.service.list()).map((run) => run.id)).toContain(
+      'old-rfp',
+    );
+  });
+
   it('deletes a run with its workspace and memory thread; refuses a running one and an unknown one', async () => {
     ctx = build();
     const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
@@ -1449,13 +1424,6 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
       host,
       'v1',
       undefined,
-    );
-    await ctx.service.downloadRfpPackage(run.id, 'rfp-1', 'rfp.md', true);
-    expect(ctx.sessions.downloadRfpPackageOf).toHaveBeenCalledWith(
-      host,
-      'rfp-1',
-      'rfp.md',
-      true,
     );
     await expect(ctx.service.panelItemFile('nope', 'p1')).rejects.toThrow(
       new NotFoundException('Run "nope" not found'),
@@ -1606,11 +1574,6 @@ describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
         contentType: 'text/markdown',
         body: Buffer.from('# Notes'),
       }),
-      downloadRfpPackage: jest.fn().mockResolvedValue({
-        filename: 'rfp-acme.zip',
-        contentType: 'application/zip',
-        body: Buffer.from('zip'),
-      }),
     };
     const moduleRef = await Test.createTestingModule({
       controllers: [WorkflowRunsController],
@@ -1727,20 +1690,12 @@ describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
             message: 'Unknown download format "docx": use pdf, md or csv',
           }),
         );
-      const pkg = await request(server)
+      // The RFP package route of the removed RFP Builder is gone.
+      await request(server)
         .get(
           '/workflow-runs/r1/rfp-packages/rfp-1/download?file=rfp.md&draft=true',
         )
-        .expect(200);
-      expect(runs.downloadRfpPackage).toHaveBeenCalledWith(
-        'r1',
-        'rfp-1',
-        'rfp.md',
-        true,
-      );
-      expect(pkg.headers['content-disposition']).toBe(
-        'attachment; filename="rfp-acme.zip"',
-      );
+        .expect(404);
     } finally {
       await app.close();
     }

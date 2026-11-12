@@ -70,9 +70,6 @@ jest.mock('../datasets/repositories/datasets.repository', () => ({
 jest.mock('../datasources/datasources.service', () => ({
   DatasourcesService: class {},
 }));
-jest.mock('../rfp-packages/rfp-packages.service', () => ({
-  RfpPackagesService: class {},
-}));
 jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 jest.mock('../verified-queries/verified-queries.service', () => ({
   VerifiedQueriesService: class {},

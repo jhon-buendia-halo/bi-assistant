@@ -16,7 +16,6 @@ jest.mock('@mastra/evals/checks', () => ({
 jest.mock('../agents/assistant.agent', () => ({
   assistantAgent: { id: 'assistant' },
 }));
-jest.mock('../agents/rfp.agent', () => ({ rfpAgent: { id: 'rfp-builder' } }));
 jest.mock('../agents/data-readiness.agent', () => ({
   dataReadinessAgent: { id: 'data-readiness' },
 }));
@@ -49,9 +48,9 @@ interface SentConfig {
 const recordings: Record<string, unknown> = {};
 
 describe('the requests an eval case sends each agent', () => {
-  for (const agentKey of ['assistant', 'rfp', 'data-readiness']) {
+  for (const agentKey of ['assistant', 'data-readiness']) {
     it(`${agentKey}: the first case`, async () => {
-      const target = evalTargetFor(agentKey, 'run-1');
+      const target = evalTargetFor(agentKey);
       const evalCase = evalSetsFor(agentKey)[0].cases[0];
       (runEvals as jest.Mock).mockClear();
       await runAssistantEvalCase(

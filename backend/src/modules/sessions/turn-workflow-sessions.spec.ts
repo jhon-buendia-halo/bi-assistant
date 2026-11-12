@@ -5,7 +5,7 @@ jest.mock('../data-readiness/data-readiness.service', () => ({
 }));
 
 // Every streamed turn runs the session's workflow (agents.md 5.1, 5.12;
-// ADR-0040; agent-answers R61): the assistant, the RFP Builder and a user
+// ADR-0040; agent-answers R61): the assistant, the Data Readiness Agent and a user
 // agent each run one `agent-turn` run, whose `answer` step is today's agent
 // turn, with today's error rules; a one-step workflow never writes the bar.
 jest.mock('@mastra/core/request-context', () => ({
@@ -51,9 +51,6 @@ jest.mock('../datasets/repositories/datasets.repository', () => ({
 jest.mock('../datasources/datasources.service', () => ({
   DatasourcesService: class {},
 }));
-jest.mock('../rfp-packages/rfp-packages.service', () => ({
-  RfpPackagesService: class {},
-}));
 jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 jest.mock('../verified-queries/verified-queries.service', () => ({
   VerifiedQueriesService: class {},
@@ -84,12 +81,9 @@ jest.mock('./visualization-document', () => ({
 }));
 
 import { streamTurnWorkflow } from '../../mastra/testing/turn-workflow.stub';
-import { setAgentPromptOverrides } from '../../mastra/agent-prompt-overrides';
 import { SessionsService, type StreamEvent } from './sessions.service';
 import { streamStored } from './testing/stream-stored';
 import type { SessionDoc } from './entities/session.entity';
-
-const RFP_ID = '7b0c2f0e-1d2a-4c9b-9a51-0f6f1c2d3e4f';
 
 async function* streamOf(chunks: unknown[]): AsyncGenerator<unknown> {
   for (const chunk of chunks) {
@@ -124,26 +118,24 @@ const HISTORIAN = {
 };
 
 interface BuildOptions {
-  /** Which session: a plain one, one bound to the RFP Builder, or a user agent's. */
-  kind: 'assistant' | 'rfp' | 'user-agent';
+  /** Which session: a plain one, one bound to the Data Readiness Agent, or a user agent's. */
+  kind: 'assistant' | 'readiness' | 'user-agent';
   chunks?: unknown[];
   /** `agent.stream()` itself throws this. */
   streamThrows?: Error;
   /** The saved LLM settings (llm-settings R50/R51). */
   llmView?: Record<string, unknown>;
-  /** Set on `turn-rfp` as `update_rfp` does: the RFP's last completed stage. */
-  openedStage?: number;
 }
 
 function build(options: BuildOptions) {
   const session: SessionDoc = {
     id: 's-1',
     name: 'Turn',
-    datasets: options.kind === 'rfp' ? ['Intellify RFP API'] : ['World Cup'],
+    datasets: ['World Cup'],
     messages: [],
     visualizations: [],
-    ...(options.kind === 'rfp'
-      ? { agentKey: 'rfp', agentName: 'RFP Builder' }
+    ...(options.kind === 'readiness'
+      ? { agentKey: 'data-readiness', agentName: 'Data Readiness Agent' }
       : {}),
     ...(options.kind === 'user-agent'
       ? { agentId: 'agent-1', agentName: HISTORIAN.name }
@@ -163,37 +155,29 @@ function build(options: BuildOptions) {
     getMemory: jest.fn().mockResolvedValue({
       getThreadById: jest.fn().mockResolvedValue({ id: session.id }),
     }),
-    stream: jest
-      .fn()
-      .mockImplementation(
-        (
-          _input: unknown,
-          opts: { requestContext: { get(key: string): unknown } },
-        ) => {
-          if (options.streamThrows) {
-            return Promise.reject(options.streamThrows);
-          }
-          if (options.openedStage !== undefined) {
-            (opts.requestContext.get('turn-rfp') as { stage?: number }).stage =
-              options.openedStage;
-          }
-          return Promise.resolve({
-            fullStream: streamOf(
-              options.chunks ?? [
-                toolCall('c0', 'list_entities', {}),
-                toolResult('c0', 'list_entities', { entities: [] }),
-                { type: 'text-delta', payload: { text: 'Hello.' } },
-              ],
-            ),
-            text: Promise.resolve(''),
-          });
-        },
-      ),
+    stream: jest.fn().mockImplementation(() => {
+      if (options.streamThrows) {
+        return Promise.reject(options.streamThrows);
+      }
+      return Promise.resolve({
+        fullStream: streamOf(
+          options.chunks ?? [
+            toolCall('c0', 'list_entities', {}),
+            toolResult('c0', 'list_entities', { entities: [] }),
+            { type: 'text-delta', payload: { text: 'Hello.' } },
+          ],
+        ),
+        text: Promise.resolve(''),
+      });
+    }),
     generate: jest.fn().mockResolvedValue({ text: 'Synthesized.' }),
   });
   const assistant = agentFor('Questions to Insights Assistant');
-  const rfp = agentFor('RFP Builder');
-  const registry: Record<string, unknown> = { assistant, rfp };
+  const readiness = agentFor('Data Readiness Agent');
+  const registry: Record<string, unknown> = {
+    assistant,
+    'data-readiness': readiness,
+  };
   const mastra = {
     getAgent: jest.fn((key: string) => registry[key]),
     listAgents: () => registry,
@@ -214,9 +198,7 @@ function build(options: BuildOptions) {
       ),
     list: jest.fn().mockResolvedValue([]),
     skillsFor: jest.fn().mockResolvedValue([]),
-    datasetNames: jest
-      .fn()
-      .mockResolvedValue(new Set(['World Cup', 'Intellify RFP API'])),
+    datasetNames: jest.fn().mockResolvedValue(new Set(['World Cup'])),
   };
   const llm = {
     getView: jest
@@ -231,7 +213,7 @@ function build(options: BuildOptions) {
         {
           name: session.datasets[0],
           datasourceId: 'ds-1',
-          datasourceKind: options.kind === 'rfp' ? 'rest' : 'postgres',
+          datasourceKind: 'postgres',
           tables: [],
         },
       ]),
@@ -248,12 +230,8 @@ function build(options: BuildOptions) {
       contextFor: jest.fn().mockResolvedValue({ block: '', used: [] }),
     } as never,
     userAgents as never,
-    {
-      getJson: jest.fn().mockResolvedValue({}),
-      restTarget: jest.fn().mockResolvedValue({ baseUrl: 'u', headers: {} }),
-    } as never,
   );
-  return { service, session, repository, mastra, assistant, rfp };
+  return { service, session, repository, mastra, assistant, readiness };
 }
 
 /** Run a streamed turn and collect its events. */
@@ -279,7 +257,7 @@ function workflowStateWrites(ctx: ReturnType<typeof build>): unknown[] {
 describe('every streamed turn runs the session workflow (agents.md 5.1, ADR-0040)', () => {
   it.each([
     ['an assistant', 'assistant', 'assistant'],
-    ['an RFP Builder', 'rfp', 'rfp'],
+    ['a Data Readiness', 'readiness', 'data-readiness'],
     ['a user agent', 'user-agent', 'assistant'],
   ] as const)(
     '%s turn starts one agent-turn run with the question and datasets',
@@ -295,7 +273,8 @@ describe('every streamed turn runs the session workflow (agents.md 5.1, ADR-0040
       );
       // The step ran the session's agent, once.
       expect(ctx.mastra.getAgent).toHaveBeenCalledWith(agentKey);
-      const agent = agentKey === 'rfp' ? ctx.rfp : ctx.assistant;
+      const agent =
+        agentKey === 'data-readiness' ? ctx.readiness : ctx.assistant;
       expect(agent.stream).toHaveBeenCalledTimes(1);
       // The same answer, events and stored message as before.
       expect(events.map((event) => event.type)).toEqual(
@@ -311,54 +290,6 @@ describe('every streamed turn runs the session workflow (agents.md 5.1, ADR-0040
       expect(workflowStateWrites(ctx)).toEqual([]);
     },
   );
-
-  describe("an RFP turn's saved stage still drives the bar (ADR-0029)", () => {
-    beforeEach(() => {
-      setAgentPromptOverrides([
-        {
-          key: 'rfp',
-          prompt: '## Workflow\n1. One\n2. Two\n3. Three\n4. Four',
-          baseHash: 'x',
-        },
-      ]);
-    });
-    afterEach(() => setAgentPromptOverrides([]));
-
-    it('moves the bar mid-turn on update_rfp, and the run itself writes no state', async () => {
-      const ctx = build({
-        kind: 'rfp',
-        openedStage: 2,
-        chunks: [
-          toolCall('c0', 'update_rfp', { rfpId: RFP_ID, stage: 2 }),
-          toolResult('c0', 'update_rfp', { id: RFP_ID, stage: 2 }),
-          { type: 'text-delta', payload: { text: 'Saved.' } },
-        ],
-      });
-      const events = await turn(ctx, 'Stage two is done');
-
-      expect(ctx.mastra.streamWorkflow).toHaveBeenCalledTimes(1);
-      const kinds = events.map((event) => event.type);
-      expect(kinds.indexOf('workflow')).toBeLessThan(kinds.indexOf('text'));
-      const workflow = events.filter((event) => event.type === 'workflow');
-      expect(workflow).toHaveLength(1);
-      expect(JSON.parse(workflow[0].content!)).toMatchObject({
-        phases: [
-          { number: 1, title: 'One' },
-          { number: 2, title: 'Two' },
-          { number: 3, title: 'Three' },
-          { number: 4, title: 'Four' },
-        ],
-        source: 'prompt',
-        current: 3,
-        done: [1, 2],
-      });
-      // One write: the stage auto-drive's. No `answer` step state anywhere.
-      const writes = workflowStateWrites(ctx);
-      expect(writes).toHaveLength(1);
-      expect(writes[0]).toMatchObject({ current: 3, done: [1, 2] });
-      expect(JSON.stringify(writes)).not.toContain('answer');
-    });
-  });
 
   it('ends the turn with the card on a clarifying question', async () => {
     const ctx = build({
@@ -417,9 +348,9 @@ describe('every streamed turn runs the session workflow (agents.md 5.1, ADR-0040
 
   it('reports an exception from agent.stream() with its own message', async () => {
     const failure = new Error('No API key configured for provider "openai"');
-    const ctx = build({ kind: 'rfp', streamThrows: failure });
+    const ctx = build({ kind: 'readiness', streamThrows: failure });
 
-    await expect(turn(ctx, 'Start an RFP')).rejects.toBe(failure);
+    await expect(turn(ctx, 'Assess it')).rejects.toBe(failure);
     expect(ctx.mastra.streamWorkflow).toHaveBeenCalledTimes(1);
   });
 });

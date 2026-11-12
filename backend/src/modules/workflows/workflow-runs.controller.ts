@@ -40,8 +40,8 @@ function sendAttachment(res: Response, file: RunAttachment): void {
 
 /**
  * Stored workflow runs (api.md 2.6.3, 120-127; capability workflows): the
- * run history, one run, its deletion, and its visuals, panel files and RFP
- * packages, served from its workspace as a session's are (9, 14, 105-107).
+ * run history, one run, its deletion, and its visuals and panel files,
+ * served from its workspace as a session's are (9, 14, 106-107).
  * Style B: a refusal answers its real status.
  */
 @Controller('workflow-runs')
@@ -240,26 +240,6 @@ export class WorkflowRunsController {
         id,
         itemId,
         format as 'pdf' | 'md' | 'csv' | undefined,
-      ),
-    );
-  }
-
-  /** A run's RFP package, or one file of it (api.md 127). */
-  @Get(':id/rfp-packages/:rfpId/download')
-  async downloadRfpPackage(
-    @Param('id') id: string,
-    @Param('rfpId') rfpId: string,
-    @Res() res: Response,
-    @Query('file') file?: string,
-    @Query('draft') draft?: string,
-  ): Promise<void> {
-    sendAttachment(
-      res,
-      await this.runs.downloadRfpPackage(
-        id,
-        rfpId,
-        typeof file === 'string' ? file : undefined,
-        draft === 'true',
       ),
     );
   }

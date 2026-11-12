@@ -2702,22 +2702,24 @@ describe('SessionsService panel items (ADR-0029)', () => {
 
 describe('toolCallInput (api.md 3.1)', () => {
   it('names the skill a skill tool loads', () => {
-    expect(toolCallInput('skill', { name: 'rfp-client-renewal' })).toBe(
-      'rfp-client-renewal',
+    expect(toolCallInput('skill', { name: 'data-readiness' })).toBe(
+      'data-readiness',
     );
     expect(
       toolCallInput('skill_read', {
-        skillName: 'rfp-carriers',
+        skillName: 'readiness-drilldown',
         path: 'references/carriers.md',
       }),
-    ).toBe('rfp-carriers/references/carriers.md');
+    ).toBe('readiness-drilldown/references/carriers.md');
     expect(toolCallInput('skill_search', { query: 'stop-loss' })).toBe(
       'stop-loss',
     );
   });
 
   it("takes another tool's first text argument, flattened and clipped", () => {
-    expect(toolCallInput('get_rfp', { rfpId: 'e006cebc' })).toBe('e006cebc');
+    expect(toolCallInput('get_order', { orderId: 'e006cebc' })).toBe(
+      'e006cebc',
+    );
     expect(
       toolCallInput('run_readonly_sql', { sql: 'SELECT 1\n  FROM t' }),
     ).toBe('SELECT 1 FROM t');

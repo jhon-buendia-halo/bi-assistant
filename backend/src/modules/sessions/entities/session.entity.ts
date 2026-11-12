@@ -114,12 +114,6 @@ export interface ChatMessage {
    */
   report?: AnalysisReport;
   /**
-   * Present when this turn's `export_rfp_package` or `export_rfp_draft` call stored an RFP package
-   * in the session workspace (`rfp/<rfpId>/`; data-model 3.4.1). RFP Builder
-   * sessions only.
-   */
-  rfpPackage?: RfpPackageRef;
-  /**
    * The last report this turn's `assess_data_readiness` or
    * `get_readiness_report` returned (data-model 3.4.1); drives the readiness
    * card. Data Readiness Agent sessions only.
@@ -134,17 +128,6 @@ export interface ReadinessReportRef {
   overallScore: number;
   maturity: Maturity;
   generatedAt: string;
-}
-
-/** An RFP package stored in the session workspace (data-model 3.4.1). */
-export interface RfpPackageRef {
-  rfpId: string;
-  title: string;
-  /** Paths relative to `rfp/<rfpId>/`, e.g. `exhibits/exhibit-a-census.csv`. */
-  files: { name: string; bytes: number }[];
-  exportedAt: string;
-  /** Present (true) for a draft exported by `export_rfp_draft`, stored under `rfp/<rfpId>/draft/`. */
-  draft?: true;
 }
 
 export interface AnalysisReport {
@@ -321,8 +304,8 @@ export interface SessionDoc {
   /** The agent's Live name, re-stamped by each turn that applies it (R59). */
   agentName?: string;
   /**
-   * The registry key of the built-in agent the session is bound to (today
-   * only `rfp`; ADR-0028). Every turn runs that agent; never set with
+   * The registry key of the built-in agent the session is bound to
+   * (`assistant-v2`, `data-readiness`; ADR-0028). Every turn runs that agent; never set with
    * `agentId`.
    */
   agentKey?: string;
@@ -332,8 +315,6 @@ export interface SessionDoc {
    * derived at read time from `agentKey` / `agentId` (agents.md 5.12).
    */
   workflowId?: string;
-  /** `agentKey: 'rfp'` only: the active RFP, stamped from `turn-rfp`. */
-  rfpId?: string;
   /** An agent editor's preview, held in memory only (agents-evals R60). */
   preview?: boolean;
   /**

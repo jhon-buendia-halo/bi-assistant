@@ -1,18 +1,11 @@
 // Pure helpers of the turn engine (agents.md 5.1): the tool names and agent
 // keys a turn branches on, and what a turn derives from its captured records
 // and its requestContext. No Nest, no Mastra runtime.
-import { rfpTools } from '../../../mastra/tools/rfp.tools';
-import {
-  TURN_RFP_CONTEXT_KEY,
-  type TurnRfpHolder,
-} from '../../../mastra/rfp-context';
 import { resolveLinks } from '../../../mastra/agent-links';
-import type { RfpPackageResult } from '../../../mastra/tool-services';
 import type { KnowledgeUse } from '../../ontology/entities/ontology-item.entity';
 import type { AgentConfig } from '../../user-agents/entities/user-agent.entity';
 import type {
   ReasoningStep,
-  RfpPackageRef,
   SessionDoc,
   ToolDataRecord,
 } from '../entities/session.entity';
@@ -22,26 +15,8 @@ export const VISUAL_TOOLS = new Set(['create_visual', 'update_visual']);
 export const SHOW_IN_PANEL_TOOL = 'show_in_panel';
 /** The workflow status bar's tool (agents.md 3.11); its result becomes a `workflow` event. */
 export const UPDATE_WORKFLOW_TOOL = 'update_workflow';
-export const UPDATE_RFP_TOOL = 'update_rfp';
-/** The RFP Builder's stages: `update_rfp`'s stage drives the workflow tracker. */
-export const RFP_STAGES = 7;
 /** The agent a session without `agentKey` runs (agents.md 5.1). */
 export const ASSISTANT_AGENT_KEY = 'assistant';
-/** The RFP Builder's registry key (agents.md 2.8, ADR-0028). */
-export const RFP_AGENT_KEY = 'rfp';
-/** The RFP tools of agents.md 3.10: each emits a `tool-result` (api.md 3.1). */
-export const RFP_TOOLS = new Set(
-  Object.keys(rfpTools).filter(
-    (name) =>
-      name !== 'ask_clarification' &&
-      name !== SHOW_IN_PANEL_TOOL &&
-      name !== UPDATE_WORKFLOW_TOOL,
-  ),
-);
-export const EXPORT_RFP_PACKAGE_TOOLS = new Set([
-  'export_rfp_package',
-  'export_rfp_draft',
-]);
 /**
  * requestContext key carrying the curated-knowledge snippets this turn's
  * system block was built from, so the persist step can record them on the
@@ -111,29 +86,6 @@ export function reasoningTrail(
   return steps.length ? steps : undefined;
 }
 
-/**
- * The session's new active RFP, from this turn's `turn-rfp` holder (agents.md
- * 4.2, 5.1); nothing when the turn opened none or the same one.
- */
-export function turnRfpPatch(
-  session: SessionDoc,
-  requestContext: { get(key: string): unknown } | undefined,
-): Pick<SessionDoc, 'rfpId'> {
-  const holder = requestContext?.get(TURN_RFP_CONTEXT_KEY) as
-    TurnRfpHolder | undefined;
-  const rfpId = holder?.rfpId;
-  return typeof rfpId === 'string' && rfpId && rfpId !== session.rfpId
-    ? { rfpId }
-    : {};
-}
-
-/** This turn's `turn-rfp` holder, set for the RFP Builder only. */
-export function turnRfpHolder(requestContext: {
-  get(key: string): unknown;
-}): TurnRfpHolder | undefined {
-  return requestContext.get(TURN_RFP_CONTEXT_KEY) as TurnRfpHolder | undefined;
-}
-
 /** The `{ error }` a tool answered with, if any. */
 export function resultError(result: unknown): string | undefined {
   const error = (result as { error?: unknown } | null | undefined)?.error;
@@ -176,29 +128,6 @@ export function toolCallInput(
   return flat.length > TOOL_CALL_INPUT_CHARS
     ? `${flat.slice(0, TOOL_CALL_INPUT_CHARS - 1)}…`
     : flat;
-}
-
-/** `export_rfp_package`'s and `export_rfp_draft`'s result as the answer stores it (data-model 3.4.1). */
-export function rfpPackageRef(result: unknown): RfpPackageRef | undefined {
-  const value = (result ?? {}) as Partial<RfpPackageResult>;
-  if (
-    typeof value.rfpId !== 'string' ||
-    typeof value.title !== 'string' ||
-    !Array.isArray(value.files) ||
-    typeof value.exportedAt !== 'string'
-  ) {
-    return undefined;
-  }
-  return {
-    rfpId: value.rfpId,
-    title: value.title,
-    files: value.files.map((file) => ({
-      name: String(file?.name ?? ''),
-      bytes: Number(file?.bytes ?? 0),
-    })),
-    exportedAt: value.exportedAt,
-    ...(value.draft === true ? { draft: true as const } : {}),
-  };
 }
 
 /** Context Block 5 (agents.md 4.1): a user agent's Live instructions. */

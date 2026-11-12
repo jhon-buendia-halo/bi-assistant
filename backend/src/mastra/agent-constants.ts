@@ -12,9 +12,6 @@
  */
 export const ASSISTANT_MAX_STEPS = 15;
 
-/** The RFP Builder's tool-loop budget per turn (agents.md 2.8). */
-export const RFP_MAX_STEPS = 15;
-
 /** The Data Readiness Agent's tool-loop budget per turn (agents.md 2.10). */
 export const DATA_READINESS_MAX_STEPS = 10;
 
@@ -27,7 +24,6 @@ export const DATA_READINESS_MAX_STEPS = 10;
 export const OFFICIAL_AGENT_KEYS: readonly string[] = [
   'assistant',
   'assistant-v2',
-  'rfp',
   'data-readiness',
 ];
 

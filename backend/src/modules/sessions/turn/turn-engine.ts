@@ -46,13 +46,11 @@ import type {
   ChatMessage,
   CrossCheck,
   ReadinessReportRef,
-  RfpPackageRef,
   SessionDoc,
   SessionView,
   ToolDataRecord,
   VisualEvent,
   WorkflowPhase,
-  WorkflowState,
   WorkflowView,
 } from '../entities/session.entity';
 import {
@@ -62,11 +60,7 @@ import {
 } from './stream-events';
 import {
   ASSISTANT_AGENT_KEY,
-  EXPORT_RFP_PACKAGE_TOOLS,
-  RFP_STAGES,
-  RFP_TOOLS,
   SHOW_IN_PANEL_TOOL,
-  UPDATE_RFP_TOOL,
   UPDATE_WORKFLOW_TOOL,
   VISUAL_TOOLS,
   appendUserMessage,
@@ -75,10 +69,7 @@ import {
   knowledgeUsed,
   reasoningTrail,
   resultError,
-  rfpPackageRef,
   toolCallInput,
-  turnRfpHolder,
-  turnRfpPatch,
 } from './turn-records';
 import {
   analyseOutcomeOf,
@@ -166,13 +157,8 @@ export class TurnEngine {
     // Set inside `consume`, so typed without narrowing to the initial null.
     let clarification = null as ChatMessage['clarification'] | null;
     let visualEvent: VisualEvent | undefined;
-    // The package an `export_rfp_package` call stored this turn (RFP Builder).
-    let rfpPackage: RfpPackageRef | undefined;
     // The last report a readiness tool returned this turn (Data Readiness Agent).
     let readinessReport: ReadinessReportRef | undefined;
-    // The RFP Builder's `turn-rfp` holder, and the stage the tracker last showed.
-    const rfpHolder = turnRfpHolder(options.requestContext);
-    let drivenStage: number | undefined;
     const pendingCalls = new Map<string, Record<string, unknown>>();
     // Every tool name the model actually invoked this turn — the zero-SQL-
     // turn grounding guard below fires only when this stays empty.
@@ -369,43 +355,6 @@ export class TurnEngine {
               });
               continue;
             }
-            if (!isAssistant && RFP_TOOLS.has(toolName)) {
-              // Every RFP tool shows its step (api.md 3.1); a result with
-              // columns and rows is also kept as a data record (agents.md 5.1).
-              const error = resultError(payload.result);
-              if (EXPORT_RFP_PACKAGE_TOOLS.has(toolName) && !error) {
-                const stored = rfpPackageRef(payload.result);
-                if (stored) {
-                  rfpPackage = stored;
-                  emit({
-                    type: 'rfp-package',
-                    content: JSON.stringify(stored),
-                  });
-                }
-              }
-              const record = toolDataRecord(toolName, args, payload.result);
-              if (record) data.push(record);
-              // A saved stage moves the tracker mid-turn (ADR-0029).
-              if (
-                toolName === UPDATE_RFP_TOOL &&
-                !error &&
-                rfpHolder?.stage !== undefined &&
-                rfpHolder.stage !== drivenStage
-              ) {
-                drivenStage = rfpHolder.stage;
-                await this.driveRfpStage(id, drivenStage, emit);
-              }
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: toolName,
-                  input: firstStringArgument(args),
-                  rowCount: record?.rowCount,
-                  error,
-                }),
-              });
-              continue;
-            }
             const record = toolDataRecord(toolName, args, payload.result);
             if (record) {
               data.push(record);
@@ -471,10 +420,6 @@ export class TurnEngine {
       );
     } finally {
       abortSignal?.removeEventListener('abort', forwardAbort);
-    }
-    // The stage `create_rfp` or `get_rfp` reported moves the tracker too.
-    if (rfpHolder?.stage !== undefined && rfpHolder.stage !== drivenStage) {
-      await this.driveRfpStage(id, rfpHolder.stage, emit);
     }
     if (!turn.signal.aborted && !clarification && !text && stream) {
       text = ((await stream.text) ?? '').trim();
@@ -549,7 +494,6 @@ export class TurnEngine {
         ...(entities.length ? { entities } : {}),
         ...(reasoning ? { reasoning } : {}),
         ...(knowledge ? { knowledge } : {}),
-        ...(rfpPackage ? { rfpPackage } : {}),
         ...(readinessReport ? { readinessReport } : {}),
       });
     } else if (text.trim() || visualEvent || readinessReport) {
@@ -578,14 +522,10 @@ export class TurnEngine {
           : {}),
         ...(visualEvent ? { visual: visualEvent } : {}),
         ...(crossChecked ? { crossCheck: crossChecked } : {}),
-        ...(rfpPackage ? { rfpPackage } : {}),
         ...(readinessReport ? { readinessReport } : {}),
       });
     }
-    const updated = await this.deps.updateDoc(id, {
-      messages,
-      ...turnRfpPatch(session, options.requestContext),
-    });
+    const updated = await this.deps.updateDoc(id, { messages });
     if (!turn.signal.aborted || clarification) {
       emit({ type: 'done', session: await this.deps.toView(updated ?? fresh) });
     }
@@ -779,41 +719,5 @@ export class TurnEngine {
     const item = withVisualItems(session).find((i) => i.id === itemId);
     if (!item) return;
     emit({ type: 'panel-item', content: JSON.stringify({ item }) });
-  }
-
-  /**
-   * The RFP Builder's saved stage drives its tracker: the next stage is the
-   * current one, those up to it are done (ADR-0029).
-   */
-  private async driveRfpStage(
-    sessionId: string,
-    stage: number,
-    emit: (event: StreamEvent) => void,
-  ): Promise<void> {
-    const session = await this.deps.get(sessionId);
-    if (!this.deps.effectiveWorkflowFor(session).length) return;
-    const completed = Math.max(0, Math.min(Math.trunc(stage), RFP_STAGES));
-    const now = new Date().toISOString();
-    const current = Math.min(completed + 1, RFP_STAGES);
-    // The card belongs to the phase it was written for: moving on clears it,
-    // waiting included.
-    const previous = session.workflowState;
-    const card =
-      previous?.current === current
-        ? {
-            ...(previous.waiting ? { waiting: true } : {}),
-            ...(previous.note ? { note: previous.note } : {}),
-          }
-        : {};
-    const workflowState: WorkflowState = {
-      current,
-      done: Array.from({ length: completed }, (_, i) => i + 1),
-      ...(previous?.skipped?.length ? { skipped: previous.skipped } : {}),
-      ...(previous?.todos ? { todos: previous.todos } : {}),
-      ...card,
-      updatedAt: now,
-    };
-    await this.deps.updateDoc(sessionId, { workflowState });
-    await this.emitWorkflow(sessionId, emit);
   }
 }

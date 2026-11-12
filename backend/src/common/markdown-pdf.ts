@@ -2,7 +2,7 @@ import { marked, type Token, type Tokens } from 'marked';
 import PDFDocument from 'pdfkit';
 
 /**
- * The RFP document as PDF (api.md 2.16.5 I31, plan 1.4): the Markdown is
+ * A Markdown document as PDF (a panel document's download): the Markdown is
  * tokenised with `marked`'s lexer and drawn with pdfkit's built-in Helvetica
  * (no font files): headings, paragraphs, bullet and numbered lists, and
  * tables with fixed column widths and a shaded header row; a page break
@@ -19,7 +19,7 @@ export interface PdfOptions {
   compress?: boolean;
   /** Print `DRAFT` in each page's header. */
   draft?: boolean;
-  /** Written as author, creator and producer (default "Intellify RFP API"). */
+  /** Written as author, creator and producer (default "Questions to Insights"). */
   author?: string;
 }
 
@@ -331,7 +331,7 @@ export function renderPdf(
   markdown: string,
   options: PdfOptions,
 ): Promise<Buffer> {
-  const author = options.author ?? 'Intellify RFP API';
+  const author = options.author ?? 'Questions to Insights';
   const doc = new PDFDocument({
     size: 'LETTER',
     margin: MARGIN,

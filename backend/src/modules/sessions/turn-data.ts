@@ -34,7 +34,7 @@ export function statedRationale(value: unknown): string | undefined {
 /**
  * Turn a data-bearing tool result into a compact, storable record: a SQL run
  * or a sample, or any other tool's result that carries `columns` and `rows`
- * (the RFP Builder's `get_client_financials`; agents.md 5.1).
+ * (agents.md 5.1).
  */
 export function toolDataRecord(
   tool: string,

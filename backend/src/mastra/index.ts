@@ -6,7 +6,6 @@ import { assistantV2Agent } from './agents/assistant-v2.agent';
 import { dataReadinessAgent } from './agents/data-readiness.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
-import { rfpAgent } from './agents/rfp.agent';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
 import { sqlVerifierAgent } from './agents/sql-verifier.agent';
 import { visualizationAgent } from './agents/visualization.agent';
@@ -35,7 +34,6 @@ export const mastra = new Mastra({
     'sql-verifier': sqlVerifierAgent,
     'assistant-eval-judge': evalJudgeAgent,
     'knowledge-bootstrap': knowledgeBootstrapAgent,
-    rfp: rfpAgent,
     'data-readiness': dataReadinessAgent,
   },
   // The turn workflows (agents.md 1.2, 5.1): the code-defined ones

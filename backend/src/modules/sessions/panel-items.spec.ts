@@ -229,8 +229,8 @@ describe('buildPanelItem', () => {
   describe('files', () => {
     const folder = join(workspaces, 'session-s1');
     beforeAll(() => {
-      mkdirSync(join(folder, 'rfp', 'x'), { recursive: true });
-      writeFileSync(join(folder, 'rfp', 'x', 'rfp.md'), '# RFP');
+      mkdirSync(join(folder, 'notes', 'x'), { recursive: true });
+      writeFileSync(join(folder, 'notes', 'x', 'summary.md'), '# Notes');
       writeFileSync(join(folder, 'pic.png'), 'png');
       writeFileSync(join(folder, 'big.txt'), 'a'.repeat(256 * 1024 + 1));
       writeFileSync(join(workspaces, 'secret.md'), 'secret');
@@ -240,14 +240,14 @@ describe('buildPanelItem', () => {
       buildPanelItem({ kind: 'file', path }, base);
 
     it('shows a text file of the workspace', async () => {
-      const { item, summary } = await show('rfp/x/rfp.md');
+      const { item, summary } = await show('notes/x/summary.md');
       expect(item).toMatchObject({
         kind: 'file',
-        title: 'rfp.md',
-        path: 'rfp/x/rfp.md',
-        bytes: 5,
+        title: 'summary.md',
+        path: 'notes/x/summary.md',
+        bytes: 7,
       });
-      expect(summary.bytes).toBe(5);
+      expect(summary.bytes).toBe(7);
     });
 
     it('refuses with the contract messages', async () => {

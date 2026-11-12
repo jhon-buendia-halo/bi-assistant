@@ -4,7 +4,38 @@ import type {
   EvalRawToolCall,
 } from './assistant.evals';
 import { readinessModelOutput } from '../tools/readiness.tools';
-import { callInput, callsOf, fieldText } from './rfp-eval-checks';
+
+/** A tool call's input as an object (models sometimes send a JSON string). */
+export function callInput(call: EvalRawToolCall): Record<string, unknown> {
+  let input = call.input;
+  if (typeof input === 'string') {
+    try {
+      input = JSON.parse(input);
+    } catch {
+      return {};
+    }
+  }
+  return input && typeof input === 'object'
+    ? (input as Record<string, unknown>)
+    : {};
+}
+
+/** A scalar input field as text; anything else is empty. */
+export function fieldText(value: unknown): string {
+  return typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+    ? String(value)
+    : '';
+}
+
+/** The calls of one tool, in order. */
+export function callsOf(
+  calls: EvalRawToolCall[],
+  name: string,
+): EvalRawToolCall[] {
+  return calls.filter((call) => call.name === name);
+}
 
 /**
  * The custom checks of the `data-readiness` eval set (agents.md 8.1, 2.10):

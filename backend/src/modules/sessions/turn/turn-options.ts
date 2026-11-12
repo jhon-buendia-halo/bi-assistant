@@ -3,14 +3,6 @@
 import type { Logger } from '@nestjs/common';
 import { RequestContext } from '@mastra/core/request-context';
 import {
-  RFP_CREATED_BY_CONTEXT_KEY,
-  TURN_RFP_CONTEXT_KEY,
-  isoToday,
-  rfpOrientationBlock,
-  type RfpOrientationRecord,
-  type TurnRfpHolder,
-} from '../../../mastra/rfp-context';
-import {
   ASSISTANT_V2_AGENT_KEY,
   ASSISTANT_V2_MAX_STEPS,
 } from '../../../mastra/agents/assistant-v2-catalog';
@@ -42,7 +34,6 @@ import {
   entityOrientationLines,
   knowledgeContext,
 } from '../../../mastra/context-blocks';
-import { SUPER_ADMIN } from '../../../common/super-admin';
 import { toSkillCopy } from '../../skills/entities/skill.entity';
 import type { UserAgentsService } from '../../user-agents/user-agents.service';
 import type { AgentConfig } from '../../user-agents/entities/user-agent.entity';
@@ -50,17 +41,16 @@ import type { LlmService } from '../../llm/llm.service';
 import type { VerifiedQueriesService } from '../../verified-queries/verified-queries.service';
 import type { MetricsService } from '../../metrics/metrics.service';
 import type { OntologyService } from '../../ontology/ontology.service';
-import type { RfpPackagesService } from '../../rfp-packages/rfp-packages.service';
 import type { VisualizationService } from '../visualization.service';
 import {
   DATA_READINESS_AGENT_KEY,
   READINESS_MAX_STEPS,
+  isoToday,
   readinessOrientationBlock,
 } from '../readiness-bridge';
 import type { SessionDoc } from '../entities/session.entity';
 import {
   KNOWLEDGE_USED_CONTEXT_KEY,
-  RFP_AGENT_KEY,
   agentInstructionsBlock,
 } from './turn-records';
 import { SessionDatasets, turnProviderOptions } from './session-datasets';
@@ -74,7 +64,6 @@ export interface TurnOptionsDeps {
   metrics: MetricsService;
   knowledge: OntologyService;
   userAgents: UserAgentsService;
-  rfpPackages?: RfpPackagesService;
   datasets: SessionDatasets;
   logger: Logger;
   /** `names` without the datasets that no longer exist, in order. */
@@ -264,10 +253,6 @@ export class TurnOptions {
     abortSignal?: AbortSignal,
     activeVisualId?: string,
   ) {
-    // A session bound to the RFP Builder gets its own context (ADR-0028).
-    if (session.agentKey === RFP_AGENT_KEY) {
-      return this.rfpAgentOptions(session, question, abortSignal);
-    }
     if (session.agentKey === DATA_READINESS_AGENT_KEY) {
       return this.readinessAgentOptions(session, question, abortSignal);
     }
@@ -313,44 +298,6 @@ export class TurnOptions {
           content: entityOrientationLines(session.datasets, datasets, []).join(
             '\n',
           ),
-        },
-      ],
-      requestContext,
-      abortSignal,
-      memory: { thread: session.id, resource: session.id },
-    };
-  }
-
-  /**
-   * A turn of the RFP Builder (agents.md 4.1, 4.2, 5.1): Block R1 only, no
-   * metrics, knowledge, verified-query or agent-instructions block, and the
-   * `rfp` requestContext keys, with a fresh `turn-rfp` holder per turn.
-   */
-  private async rfpAgentOptions(
-    session: SessionDoc,
-    question?: string,
-    abortSignal?: AbortSignal,
-  ) {
-    const requestContext = new RequestContext();
-    requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
-    requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
-    if (question) requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
-    const workspace = await this.deps.mastra.ensureSessionWorkspace(
-      session.id,
-      session.name,
-    );
-    requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
-    requestContext.set(RFP_CREATED_BY_CONTEXT_KEY, SUPER_ADMIN.id);
-    const turnRfp: TurnRfpHolder = {};
-    requestContext.set(TURN_RFP_CONTEXT_KEY, turnRfp);
-    const { reasoningEffort } = await this.deps.llmService.getView();
-    return {
-      maxSteps: ASSISTANT_MAX_STEPS,
-      providerOptions: await turnProviderOptions({ reasoningEffort }),
-      context: [
-        {
-          role: 'system' as const,
-          content: await this.rfpOrientation(session),
         },
       ],
       requestContext,
@@ -412,56 +359,6 @@ export class TurnOptions {
         })),
     );
     return readinessOrientationBlock(rows, isoToday());
-  }
-
-  /**
-   * Block R1 (agents.md 4.1): the REST datasource the RFP tools resolve, the
-   * session's active RFP read from the API when the turn starts, and today.
-   * An RFP that can't be read is reported as none active, never as an error.
-   */
-  private async rfpOrientation(session: SessionDoc): Promise<string> {
-    const datasource = await this.rfpDatasource(session);
-    if (!datasource) {
-      return [
-        'Intellify RFP API for this session: none (no dataset of this session is bound to a REST datasource).',
-        'No RFP is active in this session yet: start at stage 1.',
-        `Today is ${isoToday()}.`,
-      ].join('\n');
-    }
-    let rfp: RfpOrientationRecord | undefined;
-    if (session.rfpId && this.deps.rfpPackages) {
-      try {
-        rfp = (await this.deps.rfpPackages.getJson(
-          datasource.id,
-          `/v1/rfps/${encodeURIComponent(session.rfpId)}`,
-        )) as RfpOrientationRecord;
-      } catch (error) {
-        this.deps.logger.warn(
-          `Could not read the active RFP ${session.rfpId} of session ${session.id}: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    }
-    return rfpOrientationBlock({
-      datasourceId: datasource.id,
-      datasourceName: datasource.name,
-      ...(rfp ? { rfp: { ...rfp, id: rfp.id ?? session.rfpId } } : {}),
-      today: isoToday(),
-    });
-  }
-
-  /** The first of the session's datasets bound to a REST datasource. */
-  private async rfpDatasource(
-    session: SessionDoc,
-  ): Promise<{ id: string; name: string } | undefined> {
-    const datasets = await this.deps.datasets.bound(session.datasets);
-    const rest = session.datasets
-      .map((name) => datasets.find((dataset) => dataset.name === name))
-      .find((dataset) => dataset?.datasourceKind === 'rest');
-    if (!rest?.datasourceId) return undefined;
-    return {
-      id: rest.datasourceId,
-      name: await this.deps.datasets.datasourceName(rest.datasourceId),
-    };
   }
 
   /**

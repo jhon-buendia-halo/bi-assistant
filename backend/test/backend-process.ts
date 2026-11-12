@@ -32,7 +32,7 @@ export interface Backend {
 }
 
 export interface BootOptions {
-  /** Extra environment, e.g. `INTELLIFY_API=off`. */
+  /** Extra environment, e.g. `BACKEND_INSTANCE_ID`. */
   env?: Record<string, string>;
   /** Port to listen on; default a free one. */
   port?: number;

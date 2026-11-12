@@ -12,7 +12,6 @@ export type StreamEvent = {
     | 'visual-updated'
     | 'panel-item'
     | 'workflow'
-    | 'rfp-package'
     | typeof READINESS_REPORT_EVENT
     | 'done';
   content?: string;

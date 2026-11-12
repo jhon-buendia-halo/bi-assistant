@@ -48,29 +48,3 @@ Today is 2026-11-12.",
   ],
 }
 `;
-
-exports[`the requests an eval case sends each agent rfp: the first case 1`] = `
-{
-  "agent": "rfp-builder",
-  "context": [
-    {
-      "content": "Intellify RFP API for this session: datasource unknown ("Intellify RFP API").
-No RFP is active in this session yet: start at stage 1.
-Today is 2026-11-12.",
-      "role": "system",
-    },
-  ],
-  "datasets": [
-    "World Cup Core",
-  ],
-  "input": "Start an RFP for Orchard Manufacturing",
-  "maxSteps": 15,
-  "requestContextKeys": [
-    "datasets",
-    "rfp-created-by",
-    "turn-data-records",
-    "turn-question",
-    "turn-rfp",
-  ],
-}
-`;

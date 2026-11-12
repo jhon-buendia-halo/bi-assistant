@@ -30,7 +30,6 @@ import type {
   InteractiveVisualization,
   VisualEvent,
   SessionDoc,
-  WorkflowState,
 } from '../sessions/entities/session.entity';
 import {
   RUN_HOST_ID_PREFIX,
@@ -101,9 +100,6 @@ export interface PreparedRun {
     fromRunId: string;
     question: string;
     answer: string;
-    /** Its RFP and stage tracker: an RFP Continue starts from them (plan 4.3). */
-    rfpId?: string;
-    workflowState?: WorkflowState;
   };
   /**
    * A draft run (api.md R12; agents-evals R60): the user agent whose saved
@@ -614,21 +610,6 @@ export class WorkflowRunsService implements OnModuleInit {
     );
   }
 
-  /** A run's RFP package or one of its files (api.md 127), as a session's (105). */
-  async downloadRfpPackage(
-    id: string,
-    rfpId: string,
-    file?: string,
-    draft = false,
-  ): Promise<RunAttachment> {
-    return this.sessions.downloadRfpPackageOf(
-      await this.host(id),
-      rfpId,
-      file,
-      draft,
-    );
-  }
-
   /** A stored run, or 404 `Run "<id>" not found` (Style B). */
   private async stored(id: string): Promise<WorkflowRunDoc> {
     const run = await this.repository.get(id);
@@ -646,7 +627,10 @@ export class WorkflowRunsService implements OnModuleInit {
    * an agent run, the derived `panelItems`, `workflow` view and `agent`,
    * computed on its run-backed host as a session's are (2.1).
    */
-  private async wire(run: WorkflowRunDoc): Promise<WorkflowRun> {
+  private async wire(stored: WorkflowRunDoc): Promise<WorkflowRun> {
+    // A run of the removed RFP Builder may still carry its `rfpId`: dropped.
+    const run: WorkflowRunDoc & { rfpId?: unknown } = { ...stored };
+    delete run.rfpId;
     if (run.question === undefined) return run;
     const view = await this.sessions.toView(runHostDoc(run));
     return {
@@ -711,10 +695,6 @@ export class WorkflowRunsService implements OnModuleInit {
       fromRunId: earlier.id,
       question: earlier.question,
       answer: earlier.answer.content,
-      ...(earlier.rfpId ? { rfpId: earlier.rfpId } : {}),
-      ...(earlier.workflowState
-        ? { workflowState: earlier.workflowState }
-        : {}),
     };
   }
 
@@ -736,14 +716,6 @@ export class WorkflowRunsService implements OnModuleInit {
     let status: 'success' | 'failed' | 'stopped' = 'success';
     let error: string | undefined;
     let hostId: string | undefined;
-    // An RFP Continue (plan 4.3): the run on the same RFP starts from the
-    // stages the earlier run left, so its tracker shows them from the start.
-    const stages =
-      turn.rfpId &&
-      prepared.context?.rfpId === turn.rfpId &&
-      prepared.context.workflowState
-        ? prepared.context.workflowState
-        : undefined;
     try {
       const host = await this.sessions.createRunHost({
         runId: base.id,
@@ -751,8 +723,6 @@ export class WorkflowRunsService implements OnModuleInit {
         name: prepared.workflow.name,
         ...(prepared.draft ? { draftAgentId: prepared.draft.agentId } : {}),
         ...(turn.datasets ? { datasets: turn.datasets } : {}),
-        ...(turn.rfpId ? { rfpId: turn.rfpId } : {}),
-        ...(stages ? { workflowState: stages } : {}),
         ...(prepared.context
           ? {
               context: {
@@ -817,7 +787,6 @@ export class WorkflowRunsService implements OnModuleInit {
       ...(view.agentKey ? { agentKey: view.agentKey } : {}),
       ...(view.agentId ? { agentId: view.agentId } : {}),
       ...(view.agentName ? { agentName: view.agentName } : {}),
-      ...(view.rfpId ? { rfpId: view.rfpId } : {}),
       panelItems: view.panelItems,
       visualizations: view.visualizations ?? [],
       ...(view.workflowState ? { workflowState: view.workflowState } : {}),

@@ -518,8 +518,8 @@ export class AgentsService {
     pins: string[],
   ): Promise<AgentSummary> {
     const official = OFFICIAL_AGENT_KEYS.includes(key);
-    // A built-in agent with datasets of its own (the RFP Builder's named
-    // one, the Data Readiness Agent's kind) shows them, and while none
+    // A built-in agent with datasets of its own (a named one, or the Data
+    // Readiness Agent's kind) shows them, and while none
     // qualifies, why Start chat is blocked (api.md 2.6 #33).
     const builtinSession = builtinAgentSession(key);
     const declared = builtinSession
