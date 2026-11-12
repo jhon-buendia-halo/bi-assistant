@@ -57,6 +57,7 @@ import { AgentHub } from './features/agents/components/agent-hub/agent-hub';
 import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
 import { WorkflowsPage } from './features/workflows/components/workflows-page/workflows-page';
 import { WorkflowDetailPage } from './features/workflows/components/workflow-detail/workflow-detail';
+import { WorkflowPanel } from './features/workflows/components/workflow-panel/workflow-panel';
 import { WorkflowSummary } from './features/workflows/models/workflow.model';
 import {
   ASSISTANT_WORKFLOW_DESCRIPTION,
@@ -244,6 +245,7 @@ function urlHost(baseUrl: string): string {
     AgentDetail,
     WorkflowsPage,
     WorkflowDetailPage,
+    WorkflowPanel,
     EvalTrace,
     AgentEditor,
     SkillsLibrary,
@@ -445,13 +447,15 @@ export class App {
 
   /**
    * A workflow card on the Workflows page, or a Used in chip on an agent's
-   * page (agents-evals R109), opens the workflow's page (R7).
+   * page (agents-evals R109), opens the workflow's page (R7) with the right
+   * panel open on its configuration (ui.md 4.4b).
    */
   openWorkflow(id: string): void {
     if (!this.confirmLeaveAgentEditor()) return;
     this.settingsOpen.set(false);
     this.activeWorkflowId.set(id);
     this.mainView.set('workflow-detail');
+    this.rightPanelOpen.set(true);
   }
 
   /** All workflows, from a workflow's page. */

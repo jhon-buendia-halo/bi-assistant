@@ -1,0 +1,416 @@
+@if (designer.workflow(); as w) {
+  <div
+    role="tablist"
+    aria-label="Workflow configuration"
+    class="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-3"
+    (keydown)="onTabKeydown($event)"
+  >
+    @for (tab of designer.tabs(); track tab.id) {
+      <button
+        type="button"
+        role="tab"
+        [id]="tabId(tab.id)"
+        [attr.data-testid]="tabId(tab.id)"
+        [attr.aria-selected]="designer.tab() === tab.id"
+        [attr.aria-controls]="designer.tab() === tab.id ? panelId(tab.id) : null"
+        [attr.tabindex]="designer.tab() === tab.id ? 0 : -1"
+        (click)="designer.setTab(tab.id)"
+        class="-mb-px border-b-2 px-3 py-2 text-[13px] whitespace-nowrap"
+        [class.border-border-selected]="designer.tab() === tab.id"
+        [class.text-fg-strong]="designer.tab() === tab.id"
+        [class.font-medium]="designer.tab() === tab.id"
+        [class.border-transparent]="designer.tab() !== tab.id"
+        [class.text-fg-muted]="designer.tab() !== tab.id"
+      >
+        {{ tab.label }}
+      </button>
+    }
+  </div>
+
+  <div
+    role="tabpanel"
+    tabindex="0"
+    [id]="panelId(designer.tab())"
+    [attr.aria-labelledby]="tabId(designer.tab())"
+    class="min-h-0 flex-1 overflow-y-auto px-5 py-4 focus-visible:outline-2 focus-visible:outline-focus"
+  >
+    @switch (designer.tab()) {
+      @case ("workflow") {
+        <dl
+          class="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]"
+        >
+          <dt class="text-fg-muted">Name</dt>
+          <dd class="m-0 font-medium text-fg-strong" data-testid="workflow-panel-name">
+            {{ w.name }}
+          </dd>
+          <dt class="text-fg-muted">Id</dt>
+          <dd class="m-0 font-mono text-[12px] break-all text-fg">{{ w.id }}</dd>
+          <dt class="text-fg-muted">Description</dt>
+          <dd class="m-0 leading-relaxed text-fg" data-testid="workflow-panel-description">
+            {{ w.description || "None" }}
+          </dd>
+          <dt class="text-fg-muted">Trigger</dt>
+          <dd class="m-0 text-fg">
+            <span data-testid="workflow-panel-trigger">{{ triggerLabels[w.trigger] }}</span>
+            @if (w.trigger === "chat") {
+              <p
+                data-testid="workflow-bar-note"
+                class="m-0 mt-1 text-[12px] text-fg-muted"
+              >
+                {{ barNotes[w.bar] }}
+              </p>
+            }
+          </dd>
+        </dl>
+
+        <section class="mt-6" aria-labelledby="workflow-params-heading">
+          <h2
+            id="workflow-params-heading"
+            class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+          >
+            Input parameters
+          </h2>
+          <ul
+            class="m-0 mt-2 flex list-none flex-col gap-1.5 p-0"
+            data-testid="workflow-panel-inputs"
+          >
+            @for (field of w.input; track field.name) {
+              <li
+                [attr.data-testid]="'workflow-param-' + field.name"
+                class="flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-lg border border-border px-3 py-2"
+              >
+                <span class="font-mono text-[12px] font-medium text-fg-strong">{{
+                  field.name
+                }}</span>
+                <span class="min-w-0 text-[13px] text-fg">{{ field.label }}</span>
+                <span class="ml-auto font-mono text-[12px] text-fg-muted">{{
+                  field.type
+                }}</span>
+                @if (field.required) {
+                  <span class="chip chip-info">required</span>
+                }
+              </li>
+            }
+            @for (key of chatInputKeys(); track key) {
+              <li
+                [attr.data-testid]="'workflow-param-' + key"
+                class="flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-lg border border-border px-3 py-2"
+              >
+                <span class="font-mono text-[12px] font-medium text-fg-strong">{{
+                  key
+                }}</span>
+                <span class="ml-auto text-[12px] text-fg-muted">from each chat message</span>
+              </li>
+            }
+          </ul>
+        </section>
+
+        <section class="mt-6" aria-labelledby="workflow-output-heading">
+          <h2
+            id="workflow-output-heading"
+            class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+          >
+            Output
+          </h2>
+          <ul
+            class="m-0 mt-2 flex list-none flex-wrap gap-1.5 p-0"
+            data-testid="workflow-panel-output"
+          >
+            @for (field of outputFields(); track field) {
+              <li class="chip chip-neutral font-mono">{{ field }}</li>
+            }
+          </ul>
+        </section>
+
+        @if (w.agents.length > 0) {
+          <section class="mt-6" aria-labelledby="workflow-agents-heading">
+            <h2
+              id="workflow-agents-heading"
+              class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+            >
+              Agents
+            </h2>
+            <ul class="m-0 mt-2 flex list-none flex-col gap-2 p-0">
+              @for (agent of w.agents; track agent.key) {
+                <li>
+                  <button
+                    type="button"
+                    [attr.data-testid]="'workflow-agent-' + agent.key"
+                    [attr.aria-label]="'Open agent ' + agent.name"
+                    (click)="openAgent.emit(agent.key)"
+                    class="list-row flex items-center gap-3 text-left"
+                  >
+                    <span
+                      class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-fg-muted"
+                    >
+                      <lucide-angular [img]="Bot" [size]="14" />
+                    </span>
+                    <span
+                      class="min-w-0 flex-1 truncate text-[13px] font-medium text-fg-strong"
+                      >{{ agent.name }}</span
+                    >
+                    <span class="text-[12px] text-fg-muted">{{ w.owner }}</span>
+                    <lucide-angular
+                      [img]="ChevronRight"
+                      [size]="14"
+                      class="text-fg-muted"
+                    />
+                  </button>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+      }
+
+      @case ("step") {
+        @if (designer.selectedStep(); as selected) {
+          <h2
+            class="text-[14px] font-medium text-fg-strong"
+            data-testid="workflow-step-heading"
+          >
+            {{ selected.number }}. {{ selected.step.title }}
+          </h2>
+          <dl
+            class="m-0 mt-3 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]"
+          >
+            <dt class="text-fg-muted">Id</dt>
+            <dd class="m-0 font-mono text-[12px] break-all text-fg" data-testid="workflow-step-field-id">
+              {{ selected.step.id }}
+            </dd>
+            <dt class="text-fg-muted">Kind</dt>
+            <dd class="m-0 text-fg" data-testid="workflow-step-field-kind">
+              {{ selected.step.kind === "agent" ? "LLM" : "Code" }}
+            </dd>
+            <dt class="text-fg-muted">Summary</dt>
+            <dd class="m-0 leading-relaxed text-fg" data-testid="workflow-step-field-summary">
+              {{ selected.step.summary }}
+            </dd>
+            <dt class="text-fg-muted">Input</dt>
+            <dd class="m-0 font-mono text-[12px] break-words text-fg" data-testid="workflow-step-field-input">
+              {{ selected.step.input.join(", ") }}
+            </dd>
+            <dt class="text-fg-muted">Output</dt>
+            <dd class="m-0 font-mono text-[12px] break-words text-fg" data-testid="workflow-step-field-output">
+              {{ selected.step.output.join(", ") }}
+            </dd>
+            <dt class="text-fg-muted">Other exits</dt>
+            <dd class="m-0 text-fg" data-testid="workflow-step-field-exits">
+              @if (selected.step.exits.length === 0) {
+                None
+              } @else {
+                <ul class="m-0 flex list-none flex-col gap-1 p-0">
+                  @for (exit of selected.step.exits; track exit.label) {
+                    <li
+                      class="flex items-center gap-1.5 text-[12px]"
+                      [class.text-on-danger-soft]="exit.outcome === 'fails'"
+                      [class.text-fg-muted]="exit.outcome === 'stops'"
+                    >
+                      <lucide-angular
+                        [img]="exit.outcome === 'fails' ? CircleX : Square"
+                        [size]="12"
+                        aria-hidden="true"
+                      />{{ exit.label }} →
+                      {{ exit.outcome === "fails" ? "fails" : "ends here" }}
+                    </li>
+                  }
+                </ul>
+              }
+            </dd>
+            @if (selected.step.agent; as agent) {
+              <dt class="text-fg-muted">Agent</dt>
+              <dd class="m-0 text-fg" data-testid="workflow-step-field-agent">
+                {{ agent.name }}
+              </dd>
+              <dt class="text-fg-muted">Tools</dt>
+              <dd class="m-0" data-testid="workflow-step-field-tools">
+                <ul class="m-0 flex list-none flex-wrap gap-1 p-0">
+                  @for (tool of agent.tools; track tool) {
+                    <li class="chip chip-neutral font-mono">{{ tool }}</li>
+                  }
+                </ul>
+              </dd>
+              <dt class="text-fg-muted">Max steps</dt>
+              <dd class="m-0 text-fg" data-testid="workflow-step-field-max-steps">
+                {{ agent.maxSteps }}
+              </dd>
+            }
+          </dl>
+        } @else {
+          <p class="m-0 text-[13px] text-fg-muted" data-testid="workflow-step-empty">
+            {{ noStep }}
+          </p>
+        }
+      }
+
+      @case ("run") {
+        <section aria-labelledby="workflow-input-heading">
+          <h2
+            id="workflow-input-heading"
+            class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+          >
+            Input
+          </h2>
+          <form
+            class="mt-3 flex flex-col gap-4"
+            (submit)="$event.preventDefault(); designer.run()"
+          >
+            @for (field of w.input; track field.name) {
+              <div class="flex flex-col gap-1.5">
+                <label [for]="inputId(field.name)" class="field-label">{{
+                  field.label
+                }}</label>
+                @if (field.type === "textarea") {
+                  <textarea
+                    [id]="inputId(field.name)"
+                    [attr.data-testid]="inputId(field.name)"
+                    [attr.placeholder]="field.placeholder ?? null"
+                    [attr.aria-required]="field.required ? 'true' : null"
+                    [value]="designer.inputValue(field.name)"
+                    (input)="onInput(field.name, $event)"
+                    rows="4"
+                    class="field resize-y"
+                  ></textarea>
+                } @else {
+                  <input
+                    [id]="inputId(field.name)"
+                    [attr.data-testid]="inputId(field.name)"
+                    [type]="field.type === 'number' ? 'number' : 'text'"
+                    [attr.placeholder]="field.placeholder ?? null"
+                    [attr.aria-required]="field.required ? 'true' : null"
+                    [value]="designer.inputValue(field.name)"
+                    (input)="onInput(field.name, $event)"
+                    class="field"
+                  />
+                }
+              </div>
+            }
+            <button
+              type="submit"
+              data-testid="workflow-run"
+              [disabled]="designer.running()"
+              class="btn btn-primary w-fit"
+            >
+              @if (designer.running()) {
+                <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+                <span>Executing…</span>
+              } @else {
+                <lucide-angular [img]="Rocket" [size]="14" />
+                <span>Execute</span>
+              }
+            </button>
+            @if (designer.runError(); as message) {
+              <p
+                data-testid="workflow-run-error"
+                role="alert"
+                class="m-0 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+              >
+                {{ message }}
+              </p>
+            }
+          </form>
+        </section>
+
+        @if (designer.runResult(); as result) {
+          <section
+            class="mt-6"
+            data-testid="workflow-run-result"
+            aria-labelledby="workflow-result-heading"
+          >
+            <h2
+              id="workflow-result-heading"
+              class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+            >
+              Result
+            </h2>
+            <p
+              data-testid="workflow-run-status"
+              role="status"
+              class="m-0 mt-3 text-[14px] font-medium text-fg-strong"
+            >
+              {{ runStatus() }}
+            </p>
+            <ol class="m-0 mt-3 flex list-none flex-col gap-2 p-0">
+              @for (step of result.steps; track step.id; let i = $index) {
+                <li
+                  [attr.data-testid]="'workflow-run-step-' + step.id"
+                  class="card flex flex-col gap-2 p-3"
+                >
+                  <div class="flex items-center gap-2.5">
+                    <span
+                      class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-muted text-[12px] font-medium text-fg"
+                      aria-hidden="true"
+                      >{{ i + 1 }}</span
+                    >
+                    <span class="sr-only">Step {{ i + 1 }}:</span>
+                    <span
+                      class="min-w-0 flex-1 truncate text-[13px] font-medium text-fg-strong"
+                      >{{ step.title }}</span
+                    >
+                    <span
+                      class="chip"
+                      [class.chip-success]="step.status === 'success'"
+                      [class.chip-danger]="step.status === 'failed'"
+                      [class.chip-neutral]="step.status === 'skipped'"
+                      >{{ stepStatusLabel(step.status) }}</span
+                    >
+                  </div>
+                  @if (step.error) {
+                    <p
+                      class="m-0 rounded bg-danger-soft px-2 py-1 text-[12px] text-on-danger-soft"
+                    >
+                      {{ step.error }}
+                    </p>
+                  }
+                  @if (step.output; as stepOutput) {
+                    <pre
+                      class="m-0 font-mono text-[11px] break-words whitespace-pre-wrap text-fg-muted"
+                    >{{ pretty(stepOutput) }}</pre>
+                  }
+                </li>
+              }
+            </ol>
+            @if (runOutput().length > 0) {
+              <div class="mt-4" data-testid="workflow-run-output">
+                <h3 class="text-[12px] font-medium text-fg-muted">Output</h3>
+                <dl class="m-0 mt-2 flex flex-col gap-1.5">
+                  @for (entry of runOutput(); track entry.key) {
+                    <div class="flex flex-wrap gap-x-3 gap-y-0.5">
+                      <dt class="font-mono text-[12px] text-fg-muted">{{ entry.key }}</dt>
+                      <dd class="m-0 text-[13px] break-words text-fg-strong">
+                        {{ entry.value }}
+                      </dd>
+                    </div>
+                  }
+                </dl>
+              </div>
+            }
+          </section>
+        }
+      }
+
+      @case ("code") {
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="text-[12px] font-medium tracking-wider text-fg-muted uppercase">
+            Definition
+          </h2>
+          <button
+            type="button"
+            data-testid="workflow-code-copy"
+            (click)="copyCode()"
+            class="btn btn-ghost"
+          >
+            <lucide-angular [img]="copied() ? Check : Copy" [size]="14" />
+            <span>{{ copied() ? "Copied" : "Copy" }}</span>
+          </button>
+        </div>
+        <pre
+          data-testid="workflow-code"
+          tabindex="0"
+          aria-label="Workflow definition as JSON"
+          class="m-0 mt-2 max-w-full overflow-x-auto rounded-lg border border-border bg-surface-muted p-3 font-mono text-[12px] leading-5 text-fg"
+        >{{ code() }}</pre>
+      }
+    }
+  </div>
+}

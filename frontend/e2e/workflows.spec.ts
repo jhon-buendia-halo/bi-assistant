@@ -75,8 +75,24 @@ async function openWorkflow(page: Page, id: string, name: string) {
   await expect(page.getByTestId('workflow-detail-name')).toHaveText(name);
 }
 
+/** The step titles on the designer's canvas, top to bottom. */
 function drawnSteps(page: Page): Locator {
-  return page.getByTestId('agent-workflow').getByTestId('workflow-step-title');
+  return page.getByTestId('workflow-canvas').getByTestId('workflow-node-title');
+}
+
+/** The right panel of the app shell (app-shell R10). */
+function detailsPanel(page: Page): Locator {
+  return page.getByRole('complementary', { name: 'Details panel' });
+}
+
+function panelTab(page: Page, id: 'workflow' | 'step' | 'run' | 'code'): Locator {
+  return page.getByTestId(`workflow-panel-tab-${id}`);
+}
+
+/** Back to the list from a workflow's page. */
+async function backToWorkflows(page: Page): Promise<void> {
+  await page.getByTestId('workflow-breadcrumb').click();
+  await expect(section(page, 'official')).toBeVisible();
 }
 
 test.describe('Feature: Workflows', () => {
@@ -115,13 +131,14 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see its four steps in the drawing and the agent "Questions to Insights v2" under Agents',
+        'Then I see its four steps on the canvas and the agent "Questions to Insights v2" under Agents in the panel',
         async () => {
           await expect(drawnSteps(page)).toHaveText(V2_STEPS);
-          await expect(page.getByTestId('workflow-bar-note')).toHaveText(
+          const panel = detailsPanel(page);
+          await expect(panel.getByTestId('workflow-bar-note')).toHaveText(
             'In a chat, the workflow bar shows these steps as they run.',
           );
-          const agent = page.getByTestId('workflow-agent-assistant-v2');
+          const agent = panel.getByTestId('workflow-agent-assistant-v2');
           await expect(agent).toHaveAccessibleName(`Open agent ${V2}`);
           await expect(agent).toContainText('Official');
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
@@ -130,9 +147,8 @@ test.describe('Feature: Workflows', () => {
           );
         },
       );
-      await scenarioStep(page, 'When I click "All workflows"', async () => {
-        await page.getByTestId('workflow-back').click();
-        await expect(section(page, 'official')).toBeVisible();
+      await scenarioStep(page, 'When I click "Workflows" in the breadcrumb', async () => {
+        await backToWorkflows(page);
       });
       await scenarioStep(
         page,
@@ -159,10 +175,11 @@ test.describe('Feature: Workflows', () => {
             'One step',
           );
           await expect(drawnSteps(page)).toHaveText(['Answer']);
-          await expect(page.getByTestId('workflow-bar-note')).toHaveText(
+          const panel = detailsPanel(page);
+          await expect(panel.getByTestId('workflow-bar-note')).toHaveText(
             "In a chat, the workflow bar shows the agent's own steps as it sets them.",
           );
-          await expect(page.getByTestId(`workflow-agent-${healthId}`)).toContainText(
+          await expect(panel.getByTestId(`workflow-agent-${healthId}`)).toContainText(
             'You',
           );
         },
@@ -237,14 +254,18 @@ test.describe('Feature: Workflows', () => {
       await openWorkflow(page, V2_ID, V2);
     });
     await test.step(
-      'Then I see no Edit, New, Delete or step-reorder control on its page',
+      'Then I see no Edit, New, Delete or step-reorder control on its page or in its panel',
       async () => {
-        const detail = page.getByTestId('workflow-detail-page');
         await expect(drawnSteps(page)).toHaveCount(4);
-        await expect(detail.getByRole('button', { name: editing })).toHaveCount(
-          0,
-        );
-        await expect(detail.locator('[draggable="true"]')).toHaveCount(0);
+        for (const scope of [
+          page.getByTestId('workflow-detail-page'),
+          page.getByTestId('workflow-panel'),
+        ]) {
+          await expect(scope).toBeVisible();
+          await expect(scope.getByRole('button', { name: editing })).toHaveCount(0);
+          await expect(scope.locator('[draggable="true"]')).toHaveCount(0);
+          await expect(scope.locator('[contenteditable="true"]')).toHaveCount(0);
+        }
       },
     );
   });
@@ -319,18 +340,29 @@ test.describe('Feature: Workflows (run workflows)', () => {
       });
       await scenarioStep(
         page,
-        'Then I see its three steps in the drawing and the "Text" input',
+        'Then I see its three steps on the canvas, Execute and no Start chat',
         async () => {
           await expect(drawnSteps(page)).toHaveText(SEQ_STEPS);
           await expect(page.getByTestId('workflow-detail-kind')).toHaveText(
             'Runs on an input',
           );
-          const text = page.getByLabel('Text', { exact: true });
+          await expect(page.getByTestId('workflow-execute')).toHaveText('Execute');
+          await expect(page.getByTestId('workflow-start-chat')).toHaveCount(0);
+          await expect(page.getByTestId('workflow-bar-note')).toHaveCount(0);
+        },
+      );
+      await scenarioStep(page, 'When I click Execute', async () => {
+        await page.getByTestId('workflow-execute').click();
+      });
+      await scenarioStep(
+        page,
+        'Then the panel\'s Run tab shows the "Text" input',
+        async () => {
+          await expect(panelTab(page, 'run')).toHaveAttribute('aria-selected', 'true');
+          const text = detailsPanel(page).getByLabel('Text', { exact: true });
           await expect(text).toBeVisible();
           await expect(text).toHaveAttribute('placeholder', 'Paste or type any text');
           await expect(text).toHaveAttribute('aria-required', 'true');
-          await expect(page.getByTestId('workflow-start-chat')).toHaveCount(0);
-          await expect(page.getByTestId('workflow-bar-note')).toHaveCount(0);
         },
       );
       await scenarioStep(
@@ -340,7 +372,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
           await page.getByTestId('workflow-input-text').fill('  Hello   workflow   world  ');
         },
       );
-      await scenarioStep(page, 'And I click Run', async () => {
+      await scenarioStep(page, 'And I click Execute in the panel', async () => {
         await page.getByTestId('workflow-run').click();
       });
       await scenarioStep(
@@ -358,7 +390,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
             await expect(runStep(page, id)).toContainText(title);
             await expect(runStep(page, id).getByText('Done', { exact: true })).toBeVisible();
           }
-          await expect(page.getByTestId('workflow-run')).toHaveText('Run');
+          await expect(page.getByTestId('workflow-run')).toHaveText('Execute');
           await expect(page.getByTestId('workflow-run')).toBeEnabled();
         },
       );
@@ -380,6 +412,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       await openSeqFromRun(page);
     });
     await test.step('When I run it on a text of only spaces', async () => {
+      await page.getByTestId('workflow-execute').click();
       await page.getByTestId('workflow-input-text').fill('   ');
       await page.getByTestId('workflow-run').click();
     });
@@ -398,7 +431,133 @@ test.describe('Feature: Workflows (run workflows)', () => {
         await expect(page.getByTestId('workflow-run-output')).toHaveCount(0);
       },
     );
+    await test.step('And the canvas shows "Failed" on "Clean text" and "Skipped" on the others', async () => {
+      await expect(nodeStatus(page, 'clean-text')).toHaveText('Failed');
+      await expect(nodeStatus(page, 'count-words')).toHaveText('Skipped');
+      await expect(nodeStatus(page, 'format-result')).toHaveText('Skipped');
+    });
   });
+});
+
+/** A canvas node's run status chip (ui.md 4.4b). */
+function nodeStatus(page: Page, id: string): Locator {
+  return page.getByTestId(`workflow-node-${id}`).getByTestId('workflow-node-status');
+}
+
+test.describe('Feature: Workflows (the designer)', () => {
+  test(
+    'A workflow opens as a designer',
+    { tag: ['@demo', '@story-1.23.10'] },
+    async ({ page }) => {
+      await scenarioStep(page, 'When I open "Questions to Insights v2" from Workflows', async () => {
+        await openWorkflows(page);
+        await openWorkflow(page, V2_ID, V2);
+      });
+      await scenarioStep(
+        page,
+        'Then the canvas shows Start, its four steps in order with their badges, and End',
+        async () => {
+          const canvas = page.getByTestId('workflow-canvas');
+          await expect(canvas.getByTestId('workflow-node-start')).toHaveText('Start');
+          await expect(drawnSteps(page)).toHaveText(V2_STEPS);
+          await expect(canvas.getByTestId('workflow-node-kind')).toHaveText([
+            'CODE',
+            'CODE',
+            'LLM',
+            'CODE',
+          ]);
+          await expect(canvas.getByTestId('workflow-node-end')).toHaveText('End');
+          await expect(page.getByTestId('workflow-zoom-level')).toHaveText('100%');
+          // Start above the first step, End below the last, down one line.
+          const start = await canvas.getByTestId('workflow-node-start').boundingBox();
+          const first = await page.getByTestId('workflow-node-receive-question').boundingBox();
+          const last = await page.getByTestId('workflow-node-wrap-up').boundingBox();
+          const end = await canvas.getByTestId('workflow-node-end').boundingBox();
+          expect(start!.y + start!.height).toBeLessThan(first!.y);
+          expect(last!.y + last!.height).toBeLessThan(end!.y);
+          expect(Math.abs(start!.x + start!.width / 2 - (first!.x + first!.width / 2))).toBeLessThan(2);
+        },
+      );
+      await scenarioStep(
+        page,
+        'And the right panel is open on Workflow with its input parameters and output',
+        async () => {
+          const panel = detailsPanel(page);
+          await expect(panelTab(page, 'workflow')).toHaveAttribute('aria-selected', 'true');
+          await expect(panel.getByTestId('workflow-panel-name')).toHaveText(V2);
+          await expect(panel.getByTestId('workflow-panel-trigger')).toHaveText('Runs in a chat');
+          await expect(panel.getByTestId('workflow-param-question')).toBeVisible();
+          await expect(panel.getByTestId('workflow-param-datasets')).toBeVisible();
+          await expect(panel.getByTestId('workflow-panel-output').getByRole('listitem')).toHaveText([
+            'sqlQueries',
+            'failedQueries',
+            'rows',
+          ]);
+          // The canvas and the panel sit side by side.
+          const canvasBox = await page.getByTestId('workflow-canvas').boundingBox();
+          const panelBox = await panel.boundingBox();
+          expect(canvasBox!.x + canvasBox!.width).toBeLessThanOrEqual(panelBox!.x);
+        },
+      );
+      await scenarioStep(page, 'When I click "Analyse" on the canvas', async () => {
+        await page.getByTestId('workflow-node-analyse').click();
+      });
+      await scenarioStep(
+        page,
+        'Then the panel\'s Step tab shows its tools and "Max steps 15"',
+        async () => {
+          await expect(page.getByTestId('workflow-node-analyse')).toHaveAttribute(
+            'aria-pressed',
+            'true',
+          );
+          await expect(panelTab(page, 'step')).toHaveAttribute('aria-selected', 'true');
+          const panel = detailsPanel(page);
+          await expect(panel.getByTestId('workflow-step-heading')).toHaveText('3. Analyse');
+          await expect(
+            panel.getByTestId('workflow-step-field-tools').getByRole('listitem'),
+          ).toHaveText(['list_entities', 'describe_entity', 'run_readonly_sql']);
+          await expect(panel.getByText('Max steps', { exact: true })).toBeVisible();
+          await expect(panel.getByTestId('workflow-step-field-max-steps')).toHaveText('15');
+        },
+      );
+      await scenarioStep(page, 'When I open the Code tab', async () => {
+        await panelTab(page, 'code').click();
+      });
+      await scenarioStep(page, "Then I see the workflow's definition as JSON", async () => {
+        const code = detailsPanel(page).getByTestId('workflow-code');
+        await expect(code).toContainText(`"id": "${V2_ID}"`);
+        await expect(code).toContainText('"steps": [');
+        await expect(detailsPanel(page).getByTestId('workflow-code-copy')).toHaveText('Copy');
+      });
+      await scenarioStep(
+        page,
+        'When I open "Sequential test workflow" and click Execute',
+        async () => {
+          await backToWorkflows(page);
+          await openSeqFromRun(page);
+          await page.getByTestId('workflow-execute').click();
+        },
+      );
+      await scenarioStep(page, 'Then the panel opens on Run', async () => {
+        await expect(panelTab(page, 'run')).toHaveAttribute('aria-selected', 'true');
+        await expect(page.getByTestId('workflow-input-text')).toBeVisible();
+      });
+      await scenarioStep(page, 'When I type a text and click Execute', async () => {
+        await page.getByTestId('workflow-input-text').fill('Hello workflow world');
+        await page.getByTestId('workflow-run').click();
+      });
+      await scenarioStep(
+        page,
+        'Then I see the result and "Done" on the three canvas nodes',
+        async () => {
+          await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+          for (const id of ['clean-text', 'count-words', 'format-result']) {
+            await expect(nodeStatus(page, id)).toHaveText('Done');
+          }
+        },
+      );
+    },
+  );
 });
 
 test('the Workflows pages have no detectable accessibility violations in either theme', async ({
@@ -424,17 +583,28 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await expect(section(page, 'mine')).toBeVisible();
   await scan('Workflows page');
 
+  // A workflow's page, with the right panel open on each of its tabs.
   await openWorkflow(page, V2_ID, V2);
   await expect(drawnSteps(page)).toHaveCount(4);
-  await scan('Questions to Insights v2 page');
+  await expect(page.getByTestId('workflow-panel')).toBeVisible();
+  await scan('Questions to Insights v2 page, Workflow tab');
 
-  await page.getByTestId('workflow-back').click();
+  await page.getByTestId('workflow-node-analyse').click();
+  await expect(page.getByTestId('workflow-step-heading')).toHaveText('3. Analyse');
+  await scan('Questions to Insights v2 page, Step tab');
+
+  await panelTab(page, 'code').click();
+  await expect(page.getByTestId('workflow-code')).toBeVisible();
+  await scan('Questions to Insights v2 page, Code tab');
+
+  await backToWorkflows(page);
   await openWorkflow(page, 'agent:rfp', 'RFP Builder');
   await expect(page.getByTestId('workflow-chat-requirement')).toBeVisible();
   await scan('RFP Builder page');
 
-  await page.getByTestId('workflow-back').click();
+  await backToWorkflows(page);
   await openSeqFromRun(page);
+  await page.getByTestId('workflow-execute').click();
   await page.getByTestId('workflow-input-text').fill('Hello workflow world');
   await page.getByTestId('workflow-run').click();
   await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');

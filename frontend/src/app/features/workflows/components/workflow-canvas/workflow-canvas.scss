@@ -1,0 +1,122 @@
+// The workflow designer's canvas (ui.md 4.4b). Positions come from
+// workflowCanvasLayout; this file only paints.
+
+.canvas-toolbar {
+  border: 1px solid var(--qti-border);
+  border-radius: 10px;
+  background: var(--qti-surface);
+  box-shadow: var(--qti-shadow-subtle);
+}
+
+// A dotted grid that scrolls with the graph. `border` dots: `surface-muted`
+// ones do not show on `surface` in the light theme.
+.canvas-viewport {
+  background-color: var(--qti-surface);
+  background-image: radial-gradient(
+    circle,
+    var(--qti-border) 1.25px,
+    transparent 1.5px
+  );
+  background-size: 16px 16px;
+  background-attachment: local;
+  cursor: grab;
+  touch-action: none;
+
+  &.panning {
+    cursor: grabbing;
+    user-select: none;
+  }
+}
+
+.canvas-stage {
+  position: relative;
+  transform-origin: 0 0;
+}
+
+.connector-line {
+  fill: none;
+  stroke: var(--qti-border-strong);
+  stroke-width: 1.5;
+}
+
+.connector-arrow {
+  fill: var(--qti-border-strong);
+}
+
+.connector-label {
+  position: absolute;
+  transform: translateY(-50%);
+  border-radius: 4px;
+  background: var(--qti-surface);
+  padding: 0 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--qti-fg-muted);
+  white-space: nowrap;
+}
+
+.canvas-terminal {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--qti-border-strong);
+  border-radius: 9999px;
+  background: var(--qti-surface-muted);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--qti-fg-strong);
+}
+
+// A row of title, id and badges; the agent step adds a full-width line.
+.canvas-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--qti-border-strong);
+  border-radius: 12px;
+  background: var(--qti-surface);
+  padding: 8px 12px 8px 14px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--qti-shadow-subtle);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+
+  &:hover {
+    border-color: var(--qti-border-selected);
+  }
+
+  &[aria-pressed='true'] {
+    border-color: var(--qti-border-selected);
+    box-shadow: 0 0 0 2px var(--qti-border-selected);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--qti-focus);
+    outline-offset: 3px;
+  }
+}
+
+.node-badge {
+  padding: 0 0.5rem;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.exit-note {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--qti-surface);
+  padding: 0 4px;
+  font-size: 11px;
+  white-space: nowrap;
+}
