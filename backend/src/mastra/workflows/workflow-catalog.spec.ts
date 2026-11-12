@@ -18,7 +18,6 @@ import {
   sessionWorkflowId,
   wrappedAgentMaxSteps,
   workflowsUsingAgent,
-  workflowStartsChat,
   WRAPPED_AGENT_KEYS,
   type WorkflowInputField,
 } from './workflow-catalog';
@@ -53,7 +52,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         name: 'Questions to Insights v2',
         primaryFor: 'assistant-v2',
         bar: 'steps',
-        trigger: 'chat',
+        trigger: 'run',
       },
       {
         id: 'seq-text-demo',
@@ -79,7 +78,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'write',
       'assemble',
     ]);
-    expect(workflowStartsChat(CODE_WORKFLOWS[2])).toBe(false);
     expect(CODE_WORKFLOWS[0].steps.map((step) => step.id)).toEqual([
       'receive-question',
       'load-catalog',
@@ -124,12 +122,11 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         kind: 'code',
         source: CODE_WORKFLOWS[1],
       });
-      expect(workflowStartsChat(CODE_WORKFLOWS[1])).toBe(false);
-      expect(workflowStartsChat(CODE_WORKFLOWS[0])).toBe(true);
+      expect(CODE_WORKFLOWS.every((w) => w.trigger === 'run')).toBe(true);
     });
 
-    it('a one-step workflow is a chat workflow', () => {
-      expect(ONE_STEP_WORKFLOW_TRIGGER).toBe('chat');
+    it('a one-step workflow runs on its input', () => {
+      expect(ONE_STEP_WORKFLOW_TRIGGER).toBe('run');
     });
 
     it('every code workflow declares its input: chat workflows too, until chats go (plan 5.2)', () => {

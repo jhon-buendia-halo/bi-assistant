@@ -118,10 +118,8 @@ describe('SessionsList', () => {
     expect(root().textContent).toContain('Loading sessions…');
     fixture.componentRef.setInput('loading', false);
     fixture.detectChanges();
-    expect(root().textContent).toContain(
-      'No sessions yet. Start a new conversation or open an agent.',
-    );
-    expect(root().textContent).toContain('Start New Conversation');
+    expect(root().textContent).toContain('No past chats.');
+    expect(root().textContent).not.toContain('Start New Conversation');
   });
 
   it('opens a session and offers Delete session from the options menu', () => {

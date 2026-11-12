@@ -18,6 +18,7 @@ import {
   seedWorldCupDataset,
 } from './helpers/agents-api';
 import { apiFetch, apiJson } from './helpers/api';
+import { runWorkflow } from './helpers/runs-api';
 import {
   LlmStub,
   STUB_ANSWER,
@@ -198,11 +199,15 @@ test('editing a Live agent keeps its sessions on the Live version until republis
     datasets: [WORLD_CUP_DATASET],
   });
   await publishAgent(page, id);
-  await openWorkflows(page);
-  await page
-    .getByRole('button', { name: `Start chat with ${HISTORIAN}` })
-    .click();
-  await expect(page.getByText(`Session "${HISTORIAN}" created`)).toBeVisible();
+  // Chats can no longer start from the UI (1.23.22): the session is made
+  // through the API, as an old chat of the Live agent would be.
+  const created = await apiJson<{ ok: boolean; message: string }>(
+    page,
+    'POST',
+    '/sessions',
+    { agentId: id },
+  );
+  expect(created.ok, created.message).toBe(true);
 
   await openEditor(page, id, HISTORIAN);
   await instructionsField(page).fill('Talk like a pirate.');
@@ -556,7 +561,7 @@ test('only linked tools are offered to the model', async ({ page }) => {
   await evidence(page, '1.14.2', 'agent-tools-tab-linked.png');
 });
 
-test('a linked skill reaches Try it, and the Live agent keeps its copy', async ({
+test('a linked skill reaches Try it, and the Live agent keeps its copy in a run', async ({
   page,
 }) => {
   await createSkill(page, {
@@ -614,16 +619,14 @@ test('a linked skill reaches Try it, and the Live agent keeps its copy', async (
       ? { toolCall: { name: 'skill', arguments: { name: FISCAL } } }
       : { text: STUB_ANSWER };
   };
-  await openWorkflows(page);
-  await page
-    .getByRole('button', { name: 'Start chat with Finance helper' })
-    .click();
-  await expect(
-    page.getByText('Session "Finance helper" created'),
-  ).toBeVisible();
-  await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText(STUB_ANSWER)).toBeVisible();
+  const { workflows } = await apiJson<{
+    workflows: { id: string; name: string }[];
+  }>(page, 'GET', '/workflows');
+  const financeId = workflows.find((w) => w.name === 'Finance helper')!.id;
+  const result = await runWorkflow(page, financeId, { question });
+  expect(result.status, result.body).toBe(200);
+  expect(result.error, result.body).toBeUndefined();
+  expect(result.text).toContain(STUB_ANSWER);
   const last = turnRequests(stub, question).at(-1)!;
   const results = last.messages
     .filter((message) => message.role === 'tool')

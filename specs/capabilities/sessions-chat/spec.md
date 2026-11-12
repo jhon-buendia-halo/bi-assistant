@@ -10,7 +10,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 ### Session lifecycle
 
-- R1. The system SHALL create a session only when it has a non-blank name and at least one dataset. The name is trimmed and stored truncated to 64 characters.
+- R1. Retired (1.24.12). A session was created only with a non-blank name and at least one dataset (name trimmed, stored truncated to 64 characters). No screen creates a session any more: chats can no longer be started. Stored sessions stay readable as past chats (R66).
 - R2. The system SHALL give each new session a unique id, an empty transcript, an empty visual list and its own session workspace (a private file area for visuals and reports).
 - R3. The system SHALL list sessions most recently written first, where any write to the session counts: a message, a rating, or a visual change.
 - R4. The system SHALL ask for confirmation before deleting a session, then permanently remove its transcript, its agent memory thread and its workspace files (all visual versions included).
@@ -185,7 +185,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decision ADR-0008 in [architecture.md](../../system/architecture.md).
 
-- R52. **Start chat** lives on a workflow, never on an agent ([workflows](../workflows/spec.md) R6, [agents-evals](../agents-evals/spec.md) R53): below, "Start chat on <agent>" means Start chat on that agent's workflow (`agent:<key or id>`, or `qti-v2-turn` for Questions to Insights v2), which creates the session exactly as described. **Start chat** on a Live user agent SHALL create a session at once, with no form: named after the agent's Live name, over the agent's Live datasets that still exist (missing ones are dropped), and bound to the agent. It SHALL show the toast `Session "<name>" created` and open the session on its welcome block. Several sessions may share a name. The system SHALL refuse, creating nothing: an unknown agent with `Agent "<id>" not found`; an agent with no Live version with `Publish "<name>" before starting a chat`; an agent none of whose Live datasets exist with `None of this agent's datasets exist`. **Start chat** on the Official agent (the assistant) SHALL open the new-session screen instead, since the assistant has no datasets of its own. **Start chat** on **Questions to Insights v2** (R61, [agents-evals](../agents-evals/spec.md) R107), which has no datasets of its own either, SHALL open the same screen with the **Agent** field preselected to `Questions to Insights v2` (R64) instead of Assistant, and creates no session by itself. **Start chat** on the RFP Builder (an Official agent that declares the dataset `Intellify RFP API`) SHALL create a session at once, named `RFP Builder`, over that dataset and bound to the agent (R61), with the same toast; while the dataset does not exist it SHALL refuse, creating nothing, with `Load the "Intellify RFP API" sample in Settings → Testing Data first`. **Start chat** on the Data Readiness Agent SHALL create a session at once, named `Data Readiness`, over every dataset bound to a PostgreSQL or Databricks datasource and bound to the agent (R61), with the same toast; while there is none it SHALL refuse, creating nothing, with `Add a PostgreSQL or Databricks dataset first` ([../data-readiness/spec.md](../data-readiness/spec.md) R2).
+- R52. Retired (1.24.12). **Start chat** (on a workflow, never on an agent) created a session from the workflow or its agent. No card, page or button starts a chat now: a workflow runs through its **Run** ([workflows](../workflows/spec.md) R5, R12) and `POST /sessions` with a `workflowId` is refused with `Workflow "<id>" runs on an input` ([api.md](../../system/api.md) 3). Its refusal texts for an agent (`Agent "<id>" not found`, `Publish "<name>" before starting a chat`, `None of this agent's datasets exist`) stay on the `agentId` body until the backend chat code is removed.
 - R53. A session started from an agent SHALL keep the datasets it was created with (R5). Republishing the agent with other datasets SHALL NOT change them.
 - R54. Every assistant call made for a session bound to a user agent that still exists (chat turns, the grounding pass and deep-analysis calls) SHALL apply the agent's **current Live version**:
   - its instructions, when not empty, as a system context block labelled as user-supplied, after every other context block (R24; the block is in [agents.md](../../system/agents.md) section 4.1, and only the grounding pass's own nudge follows it);
@@ -200,7 +200,7 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 - R58. The welcome block (R50) of a session bound to an agent SHALL use the agent's Live description as its one-line description when that is not empty, and the agent's Live starter questions (up to 5, in order) as the starter prompts when there are any. Otherwise R50's text and prompts apply. Clicking a starter question SHALL fill the composer and SHALL NOT send it.
 - R59. When the agent is deleted, its sessions SHALL keep their transcript, memory and datasets and continue with the plain assistant: no instructions block and no overrides. The page header's Workflow chip and the list row's workflow chip SHALL read `<agent name> · agent deleted`, using the name the agent last had for the session, and the welcome block falls back to R50.
 - R61. A session bound to a built-in agent (today the RFP Builder, the Data Readiness Agent and Questions to Insights v2, R52) SHALL run that agent on every turn, not the assistant: its own prompt, tools, skill and per-turn context ([agents.md](../../system/agents.md) 2.8, 4.1, 5.1). The assistant-only passes (the grounding pass R19, careful mode and the result-quality warnings) SHALL NOT apply to it. R54-R56 and R59 do not apply; R57 and R58 do, with the built-in agent's name, description and starter questions. Their behaviour is specified in [../rfp/spec.md](../rfp/spec.md) and [../data-readiness/spec.md](../data-readiness/spec.md). **Questions to Insights v2** (`assistant-v2`, BA-320) is bound the same way but is created from the New conversation screen with the user's own datasets and a required name (R64): the session stores `agentKey: "assistant-v2"` and `agentName: "Questions to Insights v2"`, every turn runs v2 with its three data tools and shipped prompt ([agents.md](../../system/agents.md) 2.11), and a v2 turn runs like the other bound agents' turns: no grounding pass and no careful mode. A streamed v2 turn is a workflow defined in code (ADR-0034, [agents.md](../../system/agents.md) 5.11) whose steps `Receive question`, `Load catalog`, `Analyse` and `Wrap up` show in the workflow bar ([agent-panel](../agent-panel/spec.md) R8a); the answer streams in the Analyse step exactly as above, and a failed step ends the turn with its error. The chat header and the session chip name the agent as for the other built-in agents (R57). A session bound to a built-in agent runs that agent's workflow (R65): Questions to Insights v2's session runs `qti-v2-turn`, the RFP Builder's `agent:rfp` and the Data Readiness Agent's `agent:data-readiness` ([workflows](../workflows/spec.md) R2, R4). Every streamed turn of any session, plain, bound or started from a user agent, is one run of its workflow ([agents.md](../../system/agents.md) 5.1): a one-step workflow's single step runs the turn above, with the same answer, events, workflow bar and stored message, and nothing else changes. The non-streamed turn stays a direct agent call.
-- R64. The new-session screen SHALL have a **Workflow** field above the session name, with **Assistant** preselected on every visit (never remembered); **Start chat** on a workflow that picks datasets opens the screen with that workflow preselected instead ([workflows](../workflows/spec.md) R6). It is a dropdown (a listbox, keyboard-operable) that lists, each with its name and its description, the **chat workflows** of `GET /workflows` (`trigger: 'chat'`) in its order ([workflows](../workflows/spec.md) R1): Assistant, Questions to Insights v2, the other Official workflows by name (today the Data Readiness Agent's and the RFP Builder's), then the workflows of the user's Live agents by name. A run workflow (the Sequential test workflow) runs on its own page and is never listed, nor preselected ([workflows](../workflows/spec.md) R11). System agents, draft-only agents and the showcase agents have no workflow and are not listed. A workflow that cannot start a chat now is listed muted and cannot be chosen, with its `chatRequirement` in place of its description (`Load the "Intellify RFP API" sample in Settings → Testing Data first`, `Add a PostgreSQL or Databricks dataset first`, `None of this agent's datasets exist`). The selected workflow's description shows under the field (Assistant: `Answers questions over the datasets you pick.`; Questions to Insights v2: `A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.`). With a workflow that picks datasets (Assistant, Questions to Insights v2) selected the screen behaves as R1 says (dataset picker, required name), and **Create** sends `POST /sessions { workflowId, name, datasets }` ([api.md](../../system/api.md) 3); v2's session is bound to v2 (R61). With any other workflow selected the dataset picker is replaced by the workflow's datasets as read-only chips, a session name is optional, and **Create** sends `POST /sessions { workflowId, name? }`, starting the session exactly as **Start chat** on that workflow does (R52, R61), named with the typed name when there is one, else the default name. The model and reasoning-effort chips stay (they are global settings).
+- R64. Retired (1.24.12). The new-session screen, with its **Workflow** field and **Create**, is removed together with its route and the **Start New Conversation** buttons.
 - R62. While a chat is open, the page header's session context SHALL end with the session's id: `ID <first 8 characters>` in monospace, with the full id as its tooltip and a copy icon. Clicking it copies the full id and shows the toast "Session ID copied" ("Copy failed" when the browser refuses). A user shares the id so a session can be found and diagnosed in the app's data (BA-231).
 - R63. In the **Past chats** tab of the Runs page (app-shell R46) the system SHALL list every session of the user in the middle of the page card, newest activity first as the backend returns them, under a "Search sessions by name or ID…" field (a `nav` named "Past chats") that filters by name or session id, ignoring case, **ten sessions per page**. A row SHALL show the name, its datasets, the workflow it runs as a chip (the workflow's name, R57, `<agent name> · agent deleted`, R59, or `Assistant` for a plain session; the full label as tooltip `Workflow: <label>`), the session id as `ID <first 8 characters>` (full id as tooltip; a click copies it and toasts "Session ID copied", as R62), the last activity (`updatedAt`, else `createdAt`) as `just now`, `<n> min ago`, `<n> h ago`, `yesterday` or a short date with the full date as tooltip, and an options menu with **Delete session**. Clicking a row SHALL open the session read-only (R66). The list SHALL read "Loading sessions…" until the first answer, "No sessions yet. Start a new conversation or open an agent." when empty (with **Start New Conversation**) and `No sessions match "<query>".` when the search finds none. Under the list SHALL be `<first>–<last> of <total>` and, when there is more than one page, **Previous page** and **Next page** buttons with `Page <n> of <pages>`; a new search returns to page 1, and a deletion that empties the last page moves to the page before.
 - R66. A session opened from the **Past chats** tab SHALL open **read-only** as a past chat (roadmap 1.23.21; no session is lost or migrated): a banner "This is a past chat. You can read it, but not continue it." under the page header, its transcript through the answer view, its workflow bar and its right panel with the visuals viewable (every version) and downloadable and the panel items and files viewable and downloadable. A past chat SHALL show no composer, no starter prompts, no "Careful" or "Deep analysis", no rating or "Save as verified query", no "Generate interactive visuals" and no way to answer a clarification, and its visual panel SHALL offer no Tailor, Refresh data, revert or auto-repair. Deleting it stays on the list (R63). A session just created from New conversation or **Start chat** is still a live chat until chats are removed (1.23.22).
@@ -216,8 +216,6 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 |---|---|
 | Create with blank name | Rejected: "session name is required". The "Create" button is disabled until a name is typed. |
 | Create with no dataset | Rejected: "select at least one dataset". "Create" stays disabled. |
-| No datasets exist | The new-session screen says "No datasets yet — create one in Datasets first." |
-| No LLM configured | The new-session screen shows the model chip as "No model configured". Turns use the fallback model (see [llm-settings](../llm-settings/spec.md)). |
 | Session list fails to load at startup | Retried up to 12 times with growing delay, then the toast "Could not load sessions". Sessions already loaded are kept. |
 | Session id not found | 404 "Session <id> not found". |
 | Delete fails | Error toast with the server message. |
@@ -250,7 +248,7 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 - Data in [data-model.md](../../system/data-model.md): the `sessions` collection (session document, chat message, data record, reasoning step, cross-check, clarification, visual event), the `verified_queries` collection, the agent memory store, and the per-session workspace directory and its legacy migrations.
 - Agents in [agents.md](../../system/agents.md): `assistant` (prompt, tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`, `create_visual`, `update_visual`, and memory), `sql-fixer`, `sql-verifier`. Model resolution is in [llm-settings](../llm-settings/spec.md).
 - Agent sessions: `POST /sessions` with an `agentId`, and the session's derived `agent` field, in [api.md](../../system/api.md); the session's `agentId` and `agentName` in [data-model.md](../../system/data-model.md) section 3.4; the agent instructions block, the `agent-overrides` requestContext key and the model override in [agents.md](../../system/agents.md) sections 1.3, 4.1 and 4.2.
-- Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents and the Agent Hub), [workflows](../workflows/spec.md) (the Workflows pages and their **Start chat**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [dataset-ontology](../dataset-ontology/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
+- Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents and the Agent Hub), [workflows](../workflows/spec.md) (the Workflows pages and their **Run**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [dataset-ontology](../dataset-ontology/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
 
 ## UI
 
@@ -261,14 +259,9 @@ Shell placement and tokens are in [ui.md](../../system/ui.md).
   - One entry per session, newest activity first, showing its name and marked when it is the session last opened. Under the name: its datasets. Beside it, the workflow the session runs as a chip with a workflow icon (`row-session-workflow`, tooltip `Workflow: <label>`): the workflow's name (R57), `<agent name> · agent deleted` (R59, warning style), or `Assistant` for a plain session. At the right, the last activity as a relative time (`2 h ago`, `yesterday`, else a short date), with the full date as tooltip.
   - Each entry has an options button (title "Session options", label "Options for <name>") whose menu holds "Delete session". The confirm dialog reads: `Delete “<name>”?` / `This permanently removes its conversation, agent memory, and workspace files.`
   - An entry is disabled while it is being deleted.
-  - Empty: "No sessions yet. Start a new conversation or open an agent." with a **Start New Conversation** button. No match: `No sessions match "<query>".` Loading: "Loading sessions…".
-- **New-session screen**:
-  - A "Workflow" dropdown (`new-session-workflow`, a listbox showing each workflow's name and description in catalogue order: Assistant, Questions to Insights v2, the other Official workflows, the Live agents' workflows; an unavailable one is disabled and shows its `chatRequirement`; the description of the picked one under it, `new-session-workflow-description`), then a "Session name" field (placeholder "My new session").
-  - A model chip (configured model, or "No model configured") and a reasoning-effort chip (title "Reasoning effort", choices low / medium / high, saved globally).
-  - A "Create" button that shows "Creating…" while saving (title "Name the session and select at least one dataset" for a workflow that picks datasets, else "Start a session with this workflow").
-  - "Select at least one dataset for this session", followed by dataset cards (name, "<N> entities", a check when selected) that toggle selection. With a workflow that brings its own datasets picked (R64) a "Datasets" caption and the workflow's dataset names as chips (`new-session-workflow-datasets`) replace them.
+  - Empty: "No past chats." No match: `No sessions match "<query>".` Loading: "Loading sessions…".
 - **Session header**: "Datasource" followed by one chip per bound datasource (name and kind label, summary tooltip), a loading placeholder, or "Unavailable".
-- **Page header** (app-shell R49): the session's name as the title, the session context under it (for every session, `Workflow` and the workflow chip `session-workflow` first, R57 and R59, then the datasources), and **Start New Conversation**.
+- **Page header** (app-shell R49): the session's name as the title, the session context under it (for every session, `Workflow` and the workflow chip `session-workflow` first, R57 and R59, then the datasources). It has no button that starts a conversation.
 - **Disclaimer** under the chat input: `Responses are generated by AI (Powered by LenAI) and may be inaccurate or incomplete. Please verify against source data before sharing.`
 - **Chat** (main area):
   - transcript;
@@ -314,7 +307,7 @@ Feature: Chat and visuals
 
 ### Feature: Session management
 
-E2E: `frontend/e2e/runs.spec.ts` covers every scenario below except "The conversation and its history survive a restart" (none yet; the "I start an RFP Builder session" test saves a dataset named "Intellify RFP API" in place of loading the sample). Session creation with real data and reopening after a reload are covered by the "Datasources, datasets, and sessions (World Cup database)" Feature in [datasources](../datasources/spec.md).
+E2E: `frontend/e2e/runs.spec.ts` covers every scenario below except "The conversation and its history survive a restart" (none yet). The scenarios that started a chat from the New conversation screen were removed with the screen (1.24.12). Session creation with real data and reopening after a reload are covered by the "Datasources, datasets, and sessions (World Cup database)" Feature in [datasources](../datasources/spec.md).
 
 ```gherkin
 Feature: Session management
@@ -322,105 +315,8 @@ Feature: Session management
   Background:
     Given a "World Cup Core" dataset exists
 
-  Scenario: Create stays disabled until the session has a name and a dataset
-    When I click "Runs" on the rail
-    And I click "Start New Conversation"
-    Then I see the "My new session" field
-    And I see "Select at least one dataset for this session"
-    And "Create" is disabled
-    When I type "World Cup analysis" into "My new session"
-    Then "Create" is still disabled
-    When I click the "World Cup Core" dataset card
-    Then "Create" is enabled
-    When I click the "World Cup Core" dataset card again
-    Then "Create" is disabled
-
-  Scenario: Shows guidance when there are no datasets
-    Given no datasets exist
-    When I click "Runs" on the rail
-    And I click "Start New Conversation"
-    Then I see "No datasets yet — create one in Datasets first."
-
-  Scenario: A new session opens on its welcome block
-    When I click "Runs" on the rail
-    And I click "Start New Conversation"
-    And I type "World Cup analysis" into "My new session"
-    And I click the "World Cup Core" dataset card
-    And I click "Create"
-    Then I see the toast 'Session "World Cup analysis" created'
-    And I see the "World Cup analysis" chat open
-    And I see "World Cup analysis is ready"
-    And I see "Connected to World Cup Core."
-    When I click "What data is available here? Summarise the tables and the key metrics."
-    Then the "Ask a follow-up question…" box contains that question
-    And no message has been sent
-
-  Scenario: I start a chat from the Workflow field
-    Given I have published the agent "Cup historian" over "World Cup Core"
-    When I click "Runs" on the rail
-    And I click "Start New Conversation"
-    Then the "Workflow" field shows "Assistant"
-    When I open the "Workflow" field
-    Then the options are "Assistant", "Questions to Insights v2", "Data Readiness Agent", "RFP Builder" and "Cup historian", in that order
-    When I choose "Questions to Insights v2" in the "Workflow" field
-    And I type "Workflow check" into the session name
-    And I select the "World Cup Core" dataset
-    And I click "Create"
-    Then the page header shows "Workflow" and "Questions to Insights v2"
-    And the workflow bar shows "Receive question", "Load catalog", "Analyse" and "Wrap up"
-    When I click "Runs" on the rail
-    Then the "Workflow check" row's chip reads "Questions to Insights v2" with the tooltip "Workflow: Questions to Insights v2"
-
-  Scenario: I start an RFP Builder session from New conversation
-    Given the "Intellify RFP API" sample is loaded
-    When I click "Runs" on the rail
-    And I click "Start New Conversation"
-    Then the "Workflow" field shows "Assistant" and "Answers questions over the datasets you pick."
-    And I see "Select at least one dataset for this session"
-    When I choose "RFP Builder" in the "Workflow" field
-    Then I see the dataset "Intellify RFP API" as a chip and no dataset cards
-    And "Create" is enabled with the title "Start a session with this workflow"
-    When I click "Create"
-    Then I see the toast 'Session "RFP Builder" created'
-    And the page header shows the workflow "RFP Builder"
-    And the "Past chats" list shows it with "Intellify RFP API" under its name and the workflow chip "RFP Builder"
-
-  Scenario: I start a Questions to Insights v2 session from New conversation
-    When I click "Runs" on the rail
-    And I click "Start New Conversation"
-    And I choose "Questions to Insights v2" in the "Workflow" field
-    Then the "Workflow" field shows "Questions to Insights v2" and its description
-    And I see "Select at least one dataset for this session"
-    And "Create" is disabled
-    When I select the "World Cup Core" dataset
-    And I type "V2 check" into the session name
-    And I click "Create"
-    Then the session is created from the workflow "qti-v2-turn" with the name "V2 check" and the dataset "World Cup Core"
-    And I see the toast 'Session "V2 check" created'
-    And the page header shows the workflow "Questions to Insights v2"
-    And the "Past chats" list shows it with the workflow chip "Questions to Insights v2"
-
-  Scenario: Start chat on Questions to Insights v2 opens New conversation with v2 selected
-    When I click "Workflows"
-    And I click "Start chat with Questions to Insights v2"
-    Then I see the New conversation screen
-    And the "Workflow" field shows "Questions to Insights v2"
-    And no session has been created
-
-  Scenario: The Workflow field disables a workflow that cannot start
-    Given the "Intellify RFP API" sample is not loaded
-    When I click "Runs" on the rail
-    And I click "Start New Conversation"
-    Then "RFP Builder" in the "Workflow" field is disabled and shows 'Load the "Intellify RFP API" sample in Settings → Testing Data first'
-
-  Scenario: The Workflow field lists the workflows in catalogue order
-    When I click "Runs" on the rail
-    And I click "Start New Conversation"
-    And I open the "Workflow" field
-    Then the first options are "Assistant", "Questions to Insights v2", "Data Readiness Agent" and "RFP Builder", in that order
-
   Scenario: A deleted agent's chat names its workflow as deleted
-    Given a chat started from the workflow of my published agent "Cup historian"
+    Given a chat of my published agent "Cup historian"
     And the agent "Cup historian" is deleted
     When I click "Runs" on the rail
     Then the chat's workflow chip reads "Cup historian · agent deleted"
@@ -433,12 +329,6 @@ Feature: Session management
     Then the "Saved RFP chat" row's workflow chip reads "RFP Builder"
     When I click "Saved RFP chat"
     Then the page header shows "Workflow" and "RFP Builder"
-
-  Scenario: The New conversation screen has no detectable accessibility violations in either theme
-    When I click "Runs" on the rail
-    And I click "Start New Conversation"
-    And I open the "Workflow" field
-    Then an accessibility scan finds no violations in the light theme and in the dark theme
 
   Scenario: Deletes a session after confirmation
     Given a "World Cup analysis" session exists and is open

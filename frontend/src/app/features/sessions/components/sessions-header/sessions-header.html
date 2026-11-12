@@ -93,14 +93,6 @@
                   </div>
                 </div>
                 <div class="flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    (click)="composer.openComposer()"
-                    class="btn btn-secondary"
-                  >
-                    <lucide-angular [img]="SquarePen" [size]="18" />
-                    <span>Start New Conversation</span>
-                  </button>
                   @if (!shell.rightPanelOpen()) {
                     <button
                       type="button"

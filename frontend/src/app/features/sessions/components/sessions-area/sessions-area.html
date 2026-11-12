@@ -30,8 +30,6 @@
     (viewVisual)="state.showVisualization($event, $event.version)"
     (sessionUpdated)="state.onSessionUpdated($event)"
   />
-} @else if (shell.mainView() === "conversation-new") {
-  <app-new-conversation />
 } @else if (shell.mainView() === "run-detail") {
   <app-run-detail class="flex min-h-0 flex-1 flex-col" />
 } @else if (shell.mainView() === "runs") {

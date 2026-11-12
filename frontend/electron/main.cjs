@@ -669,7 +669,7 @@ function stopBackend() {
   }
 }
 
-// Readiness probe (api.md 4.3): `GET /sessions` answers 200 once the backend
+// Readiness probe (api.md 4.3): `GET /health` answers 200 once the backend
 // is up; there is no sign-in (ADR-0030).
 function backendIsReady() {
   return new Promise((resolve) => {
@@ -677,7 +677,7 @@ function backendIsReady() {
       {
         hostname: "127.0.0.1",
         port: BACKEND_PORT,
-        path: "/sessions",
+        path: "/health",
         timeout: 500,
       },
       (response) => {

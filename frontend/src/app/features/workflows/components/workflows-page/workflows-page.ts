@@ -3,7 +3,6 @@ import {
   OnInit,
   computed,
   inject,
-  input,
   output,
   signal,
 } from '@angular/core';
@@ -34,10 +33,6 @@ export class WorkflowsPage implements OnInit {
 
   /** A card's open control; the shell opens the workflow page (R7). */
   readonly openWorkflow = output<string>();
-  /** Start chat on a card; the shell composes or creates the session (R6). */
-  readonly startChat = output<WorkflowSummary>();
-  /** Id of the workflow whose session is being created, if any. */
-  readonly startingWorkflowId = input<string | null>(null);
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);

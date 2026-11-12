@@ -51,7 +51,7 @@ const ASSISTANT: WorkflowDetail = {
   agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
   stepCount: 1,
   bar: 'agent',
-  trigger: 'chat',
+  trigger: 'run',
   input: [
     { name: 'question', label: 'Question', type: 'textarea', required: true },
     { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
@@ -63,7 +63,6 @@ const ASSISTANT: WorkflowDetail = {
       default: false,
     },
   ],
-  picksDatasets: true,
   datasets: [],
   missingDatasets: [],
   starterQuestions: [],
@@ -366,7 +365,6 @@ const RFP: WorkflowDetail = {
     },
     { name: 'rfpId', label: 'RFP', type: 'text', required: false, hidden: true },
   ],
-  picksDatasets: false,
   datasets: ['Intellify RFP API'],
   starterQuestions: ['Start an RFP for a client'],
 };

@@ -52,14 +52,6 @@
           <dt class="text-fg-muted">Trigger</dt>
           <dd class="m-0 text-fg">
             <span data-testid="workflow-panel-trigger">{{ triggerLabels[w.trigger] }}</span>
-            @if (w.trigger === "chat") {
-              <p
-                data-testid="workflow-bar-note"
-                class="m-0 mt-1 text-[12px] text-fg-muted"
-              >
-                {{ barNotes[w.bar] }}
-              </p>
-            }
           </dd>
         </dl>
 
@@ -89,17 +81,6 @@
                 @if (field.required) {
                   <span class="chip chip-info">required</span>
                 }
-              </li>
-            }
-            @for (key of chatInputKeys(); track key) {
-              <li
-                [attr.data-testid]="'workflow-param-' + key"
-                class="flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-lg border border-border px-3 py-2"
-              >
-                <span class="font-mono text-[12px] font-medium text-fg-strong">{{
-                  key
-                }}</span>
-                <span class="ml-auto text-[12px] text-fg-muted">from each chat message</span>
               </li>
             }
           </ul>

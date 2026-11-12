@@ -5,10 +5,7 @@ import {
   saveLenaiSettings,
   seedWorldCupDataset,
 } from './helpers/agents-api';
-import {
-  WORLD_CUP_SESSION,
-  createWorldCupSession,
-} from './helpers/app-actions';
+import { runAssistantOk } from './helpers/runs-api';
 import {
   LlmStub,
   STUB_ANSWER,
@@ -25,11 +22,14 @@ import { scenarioStep } from './support/demo-captions';
  * Mirrors `Feature: LLM calls`, `Feature: LLM call detail` and
  * `Feature: Session flow` in specs/capabilities/monitoring/spec.md (roadmap
  * 1.21.14–1.21.16). The
- * calls are real: a chat turn against the recording LLM stub, traced by
- * Mastra into the app's trace store and read back by the Monitoring API.
+ * calls are real: a run's agent turn against the recording LLM stub, traced
+ * by Mastra into the app's trace store and read back by the Monitoring API.
+ * A run's calls are named `Assistant: <the question>` (monitoring R45).
  */
 
 const QUESTION = 'Which team scored the most goals?';
+/** The name Monitoring gives the Assistant's run on `question` (R45). */
+const runName = (question: string) => `Assistant: ${question}`;
 const ASSISTANT = 'Questions to Insights Assistant';
 /** saveLenaiSettings' deployment name, the model the calls are made with. */
 const MODEL = 'stub-deployment';
@@ -49,7 +49,7 @@ let stub: LlmStub;
 let datasourceId: string;
 
 test.beforeEach(async ({ page }) => {
-  // Background: an LLM is configured and a session has asked one question.
+  // Background: an LLM is configured.
   stub = await startLlmStub();
   datasourceId = await seedWorldCupDataset(page);
   await saveLenaiSettings(page, stub.baseUrl);
@@ -67,17 +67,16 @@ const railItem = (page: Page, name: string) =>
 const rows = (page: Page) =>
   page.getByTestId('llm-calls-table').locator('[data-testid^="llm-call-row-"]');
 
-/** The assistant's call of the World Cup session. */
+/** The assistant's call of the run on QUESTION. */
 const assistantRow = (page: Page): Locator =>
   rows(page)
     .filter({ hasText: ASSISTANT })
-    .filter({ hasText: WORLD_CUP_SESSION });
+    .filter({ hasText: runName(QUESTION) });
 
-async function askInSession(page: Page): Promise<void> {
-  await createWorldCupSession(page);
-  await page.getByPlaceholder('Ask a follow-up question…').fill(QUESTION);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText(STUB_ANSWER)).toBeVisible();
+/** Runs the Assistant on QUESTION and waits for its answer. */
+async function askInRun(page: Page): Promise<void> {
+  const result = await runAssistantOk(page, QUESTION);
+  expect(result.text).toContain(STUB_ANSWER);
 }
 
 /**
@@ -101,9 +100,9 @@ test.describe('Feature: LLM calls', () => {
     async ({ page }) => {
       await scenarioStep(
         page,
-        `Given I asked "${QUESTION}" in the session "${WORLD_CUP_SESSION}"`,
+        `Given I ran the Assistant on "${QUESTION}"`,
         async () => {
-          await askInSession(page);
+          await askInRun(page);
         },
       );
       await scenarioStep(
@@ -124,7 +123,7 @@ test.describe('Feature: LLM calls', () => {
           const cells = row.locator('td');
           await expect(cells.nth(1)).toHaveText(ASSISTANT);
           await expect(cells.nth(2)).toContainText(MODEL);
-          await expect(cells.nth(3)).toHaveText(WORLD_CUP_SESSION);
+          await expect(cells.nth(3)).toHaveText(runName(QUESTION));
           await expect(cells.nth(4)).toHaveText(/^\s*[\d,]+ \/ [\d,]+\s*$/);
           await expect(cells.nth(7)).toHaveText('Succeeded');
         },
@@ -248,7 +247,7 @@ test.describe('Feature: LLM calls', () => {
     'Page size, an empty filter result and Clear filters',
     { tag: ['@story-1.21.14'] },
     async ({ page }) => {
-      await askInSession(page);
+      await askInRun(page);
       await openMonitoringWithCall(page);
 
       // Every call fits on the first page: the summary covers them all and
@@ -267,7 +266,7 @@ test.describe('Feature: LLM calls', () => {
         `1–${total} of ${total}`,
       );
 
-      // The facets list the call's model and session.
+      // The facets list the call's model and run.
       await expect(
         page
           .getByTestId('llm-filter-model')
@@ -276,7 +275,7 @@ test.describe('Feature: LLM calls', () => {
       await expect(
         page
           .getByTestId('llm-filter-session')
-          .locator('option', { hasText: WORLD_CUP_SESSION }),
+          .locator('option', { hasText: runName(QUESTION) }),
       ).toHaveCount(1);
 
       // No call failed.
@@ -345,7 +344,7 @@ test.describe('Feature: LLM call detail', () => {
     'The call facts, an empty box, and the rail back to the table',
     { tag: ['@story-1.21.15'] },
     async ({ page }) => {
-      await askInSession(page);
+      await askInRun(page);
       await openMonitoringWithCall(page);
       await page
         .getByTestId('llm-filter-agent')
@@ -373,7 +372,7 @@ test.describe('Feature: LLM call detail', () => {
         detail.getByRole('heading', { name: 'Context window' }),
       ).toBeVisible();
       await expect(page.getByTestId('context-caption')).toHaveText(/tokens/);
-      // The session's first turn: nothing earlier in the chat.
+      // A run's one turn: nothing earlier in the chat.
       await expect(
         page.getByTestId('context-segment-chat-history'),
       ).toContainText('Nothing in this call.');
@@ -439,36 +438,38 @@ function scriptTwoTurns(): void {
   };
 }
 
+/** Runs the Assistant on `question` and checks the answer it streamed. */
 async function ask(
   page: Page,
   question: string,
   answer: string,
-): Promise<void> {
-  await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText(answer)).toBeVisible();
+): Promise<string> {
+  const result = await runAssistantOk(page, question);
+  expect(result.text).toContain(answer);
+  return result.runId!;
 }
 
-/** The World Cup session's row on the Sessions tab. */
-const sessionRow = (page: Page): Locator =>
+/** The run's row on the Runs tab (named after its question, R45). */
+const sessionRow = (page: Page, question = FIRST_QUESTION): Locator =>
   page
     .getByTestId('monitoring-sessions-table')
     .locator('[data-testid^="monitoring-session-row-"]')
-    .filter({ hasText: WORLD_CUP_SESSION });
+    .filter({ hasText: runName(question) });
 
 /**
- * Opens Monitoring → Sessions until the session shows both turns: the
- * trace exporter writes the spans shortly after each turn ends.
+ * Opens Monitoring → Runs until both runs show one turn each: the trace
+ * exporter writes the spans shortly after each turn ends.
  */
-async function openSessionsWithTwoTurns(page: Page): Promise<void> {
+async function openRunsWithTwoRuns(page: Page): Promise<void> {
   await expect(async () => {
     await railItem(page, 'Runs').click();
     await railItem(page, 'Monitoring').click();
     await page.getByTestId('monitoring-tab-sessions').click();
-    await expect(sessionRow(page).first().locator('td').nth(2)).toHaveText(
-      '2',
-      { timeout: 2_000 },
-    );
+    for (const question of [FIRST_QUESTION, SECOND_QUESTION]) {
+      await expect(
+        sessionRow(page, question).first().locator('td').nth(2),
+      ).toHaveText('1', { timeout: 2_000 });
+    }
   }).toPass({ timeout: 45_000 });
 }
 
@@ -480,9 +481,8 @@ test.describe('Feature: Session flow', () => {
       scriptTwoTurns();
       await scenarioStep(
         page,
-        `Given I asked two questions in the session "${WORLD_CUP_SESSION}"`,
+        'Given I ran the Assistant on two questions',
         async () => {
-          await createWorldCupSession(page);
           await ask(page, FIRST_QUESTION, FIRST_ANSWER);
           await ask(page, SECOND_QUESTION, SECOND_ANSWER);
         },
@@ -491,12 +491,12 @@ test.describe('Feature: Session flow', () => {
         page,
         'When I open Monitoring and choose the Runs tab',
         async () => {
-          await openSessionsWithTwoTurns(page);
+          await openRunsWithTwoRuns(page);
         },
       );
       await scenarioStep(
         page,
-        'Then I see the session with its 2 turns, its agent and status',
+        'Then I see each run with its turn, its agent and status',
         async () => {
           await expect(
             page.getByTestId('monitoring-tab-sessions'),
@@ -505,23 +505,24 @@ test.describe('Feature: Session flow', () => {
             'Runs with recorded agent calls, most recent first.',
           );
           const cells = sessionRow(page).first().locator('td');
-          await expect(cells.nth(0)).toHaveText(WORLD_CUP_SESSION);
+          await expect(cells.nth(0)).toHaveText(runName(FIRST_QUESTION));
           await expect(cells.nth(1)).toContainText(ASSISTANT);
-          await expect(cells.nth(2)).toHaveText('2');
+          await expect(cells.nth(2)).toHaveText('1');
+          await expect(sessionRow(page, SECOND_QUESTION)).toHaveCount(1);
           await expect(cells.nth(9)).toHaveText('Succeeded');
         },
       );
-      await scenarioStep(page, 'When I open the session', async () => {
+      await scenarioStep(page, 'When I open the first run', async () => {
         await sessionRow(page).first().click();
       });
       await scenarioStep(
         page,
-        'Then I read both questions, their answers and the steps the agent took',
+        'Then I read the question, its answer and the steps the agent took',
         async () => {
           const detail = page.getByTestId('monitoring-session-detail');
           await expect(detail).toBeVisible();
           await expect(detail.getByRole('heading', { level: 2 })).toHaveText(
-            WORLD_CUP_SESSION,
+            runName(FIRST_QUESTION),
           );
           await expect(page.getByTestId('session-totals')).toContainText(
             'Turns',
@@ -532,12 +533,7 @@ test.describe('Feature: Session flow', () => {
           await expect(page.getByTestId('turn-answer-1')).toHaveText(
             FIRST_ANSWER,
           );
-          await expect(page.getByTestId('turn-question-2')).toHaveText(
-            SECOND_QUESTION,
-          );
-          await expect(page.getByTestId('turn-answer-2')).toHaveText(
-            SECOND_ANSWER,
-          );
+          await expect(page.getByTestId('turn-question-2')).toHaveCount(0);
           // Turn 1: a model request, the describe_entity call, the answer.
           const steps1 = page.getByTestId('turn-steps-1');
           await expect(
@@ -546,12 +542,6 @@ test.describe('Feature: Session flow', () => {
           await expect(steps1.getByTestId('turn-step-tool')).toContainText(
             'describe_entity',
           );
-          // Turn 2: one model request, no tools.
-          const steps2 = page.getByTestId('turn-steps-2');
-          await expect(
-            steps2.locator('[data-testid^="turn-step-model-"]'),
-          ).toHaveCount(1);
-          await expect(steps2.getByTestId('turn-step-tool')).toHaveCount(0);
         },
       );
       await scenarioStep(page, "When I open turn 1's timeline", async () => {
@@ -658,7 +648,7 @@ test.describe('Feature: Session flow', () => {
       });
       await scenarioStep(
         page,
-        'Then I see the Runs tab with the session listed',
+        'Then I see the Runs tab with the run listed',
         async () => {
           await expect(
             page.getByTestId('monitoring-tab-sessions'),
@@ -686,14 +676,9 @@ test.describe('Feature: Session flow', () => {
           ? { text: longAnswer }
           : twoTurns(request);
 
-      await createWorldCupSession(page);
-      await page
-        .getByPlaceholder('Ask a follow-up question…')
-        .fill(FIRST_QUESTION);
-      await page.getByRole('button', { name: 'Send message' }).click();
-      await expect(page.getByText('Answer line 10.').first()).toBeVisible();
+      await ask(page, FIRST_QUESTION, 'Answer line 10.');
       await ask(page, SECOND_QUESTION, SECOND_ANSWER);
-      await openSessionsWithTwoTurns(page);
+      await openRunsWithTwoRuns(page);
 
       // Filters narrow the sessions; no session matches an old date range.
       await page

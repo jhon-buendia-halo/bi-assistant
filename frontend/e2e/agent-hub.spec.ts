@@ -285,7 +285,7 @@ test("a card opens the agent's detail view with its actions", async ({
 }) => {
   await openHub(page);
 
-  // No agent offers Start chat: chats start from a workflow (R53).
+  // No agent offers Start chat: chats can no longer be started (R53).
   await openAgent(page, claimsId, CLAIMS);
   await expect(page.getByTestId('agent-edit')).toBeVisible();
   await expect(button(page, 'Publish')).toBeVisible();

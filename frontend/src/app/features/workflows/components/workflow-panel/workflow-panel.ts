@@ -51,15 +51,8 @@ import {
   runStepStatusLabel,
 } from '../../services/workflows.util';
 
-/** What drives a chat's workflow bar (workflows R10). */
-export const BAR_NOTES: Record<WorkflowSummary['bar'], string> = {
-  steps: 'In a chat, the workflow bar shows these steps as they run.',
-  agent: "In a chat, the workflow bar shows the agent's own steps as it sets them.",
-};
-
 export const TRIGGER_LABELS: Record<WorkflowSummary['trigger'], string> = {
   run: 'Runs on an input',
-  chat: 'Runs in a chat',
 };
 
 export const NO_STEP_SELECTED =
@@ -133,26 +126,12 @@ export class WorkflowPanel {
 
   protected readonly noStep = NO_STEP_SELECTED;
   protected readonly triggerLabels = TRIGGER_LABELS;
-  protected readonly barNotes = BAR_NOTES;
   protected readonly stepStatusLabel = runStepStatusLabel;
 
   /** The last step's output fields: what the workflow returns. */
   protected readonly outputFields = computed(() => {
     const steps = this.designer.workflow()?.steps ?? [];
     return steps.length === 0 ? [] : steps[steps.length - 1].output;
-  });
-
-  /**
-   * A chat workflow has no typed input: what it takes from each chat message
-   * is its first step's input.
-   */
-  protected readonly chatInputKeys = computed(() => {
-    const workflow = this.designer.workflow();
-    // Only a chat workflow without a typed input of its own falls back to its
-    // first step's inputs; once it declares one (1.23.12), that list is it.
-    if (workflow === null || workflow.trigger !== 'chat') return [];
-    if (workflow.input.length > 0) return [];
-    return workflow.steps.length === 0 ? [] : workflow.steps[0].input;
   });
 
   protected readonly code = computed(() => {
@@ -182,7 +161,7 @@ export class WorkflowPanel {
    */
   protected readonly fixedDatasets = computed(() => {
     const workflow = this.designer.workflow();
-    if (workflow === null || workflow.picksDatasets) return [];
+    if (workflow === null) return [];
     if (workflow.input.some((f) => f.type === 'datasets' || f.type === 'dataset')) {
       return [];
     }

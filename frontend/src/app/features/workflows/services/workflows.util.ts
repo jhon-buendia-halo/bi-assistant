@@ -13,13 +13,6 @@ import {
 } from '../../sessions/models/session.model';
 import { slug } from '../../sessions/services/slug';
 
-/** The assistant's one-step workflow (workflows R2). */
-export const ASSISTANT_WORKFLOW_ID = 'agent:assistant';
-/** Its catalogue name and description (plan 5.2), shown before the list loads. */
-export const ASSISTANT_WORKFLOW_NAME = 'Assistant';
-export const ASSISTANT_WORKFLOW_DESCRIPTION =
-  'Answers questions over the datasets you pick.';
-
 export type WorkflowSectionId = 'official' | 'mine';
 
 export interface WorkflowSection {
@@ -75,11 +68,10 @@ export function workflowsEmptyMessage(
 }
 
 /**
- * The kind chip: `Runs on an input` for a run workflow, `<n> steps` for a
- * code-defined chat workflow, else `One step`.
+ * The kind chip: `<n> steps` for a code-defined workflow, else `One step`
+ * (workflows R5).
  */
 export function workflowKindLabel(workflow: WorkflowSummary): string {
-  if (workflow.trigger === 'run') return 'Runs on an input';
   return workflow.kind === 'code' ? `${workflow.stepCount} steps` : 'One step';
 }
 
@@ -90,76 +82,6 @@ export function workflowKindLabel(workflow: WorkflowSummary): string {
 export function workflowUsesLabel(workflow: WorkflowSummary): string {
   if (workflow.agents.length === 0) return '';
   return `Uses ${workflow.agents.map((agent) => agent.name).join(', ')}`;
-}
-
-/**
- * The workflows a chat can run, in catalogue order: the New conversation
- * screen's Workflow field never offers a run workflow (sessions-chat R64).
- */
-export function chatWorkflows(
-  workflows: readonly WorkflowSummary[],
-): WorkflowSummary[] {
-  return workflows.filter((workflow) => workflow.trigger === 'chat');
-}
-
-/** What Start chat on a workflow does (workflows R6). */
-export type WorkflowStartAction =
-  | { kind: 'composer'; workflowId: string }
-  | { kind: 'create' };
-
-/**
- * A workflow that takes the datasets the user picks opens the New
- * conversation screen with that workflow preselected; any other workflow
- * creates its session at once.
- */
-export function workflowStartAction(
-  workflow: WorkflowSummary,
-): WorkflowStartAction {
-  if (!workflow.picksDatasets) return { kind: 'create' };
-  return { kind: 'composer', workflowId: workflow.id };
-}
-
-/**
- * The workflow the New conversation screen's Workflow field shows
- * (sessions-chat R64): the preselected one when it is listed and can start a
- * chat, else Assistant.
- */
-export function composerWorkflowId(
-  workflows: readonly WorkflowSummary[],
-  preselect: string | undefined,
-): string {
-  if (!preselect) return ASSISTANT_WORKFLOW_ID;
-  const workflow = chatWorkflows(workflows).find((w) => w.id === preselect);
-  return workflow && !workflow.chatRequirement
-    ? workflow.id
-    : ASSISTANT_WORKFLOW_ID;
-}
-
-/** `POST /sessions` from the New conversation screen (api.md 3). */
-export interface ComposerCreateBody {
-  workflowId: string;
-  name?: string;
-  datasets?: string[];
-}
-
-/**
- * The body **Create** sends (sessions-chat R64): a workflow that picks
- * datasets (Assistant when the catalogue did not load) sends the name and the
- * picked datasets; any other workflow sends the name only when one is typed.
- */
-export function composerCreateBody(
-  workflow: Pick<WorkflowSummary, 'id' | 'picksDatasets'> | null,
-  name: string,
-  datasets: string[],
-): ComposerCreateBody {
-  if (!workflow || workflow.picksDatasets) {
-    return {
-      workflowId: workflow?.id ?? ASSISTANT_WORKFLOW_ID,
-      name,
-      datasets,
-    };
-  }
-  return { workflowId: workflow.id, ...(name ? { name } : {}) };
 }
 
 /**
@@ -221,22 +143,13 @@ export function runOutputEntries(
 }
 
 /**
- * Agent workflows whose page run lands in a later story: none. Every agent
- * workflow runs from its page: the Data Readiness Agent since 1.23.16 and the
- * RFP Builder since 1.23.17.
- */
-const PAGE_RUN_LATER = new Set<string>();
-
-/**
  * Whether the workflow's page offers Execute and the Run tab (workflows R12,
- * R21): every run workflow, and the agent workflows with an input (the
- * Assistant, Questions to Insights v2 and each user agent's).
+ * R21): every workflow that declares an input.
  */
 export function canRunFromPage(
-  workflow: Pick<WorkflowSummary, 'id' | 'trigger' | 'input'>,
+  workflow: Pick<WorkflowSummary, 'input'>,
 ): boolean {
-  if (workflow.trigger === 'run') return true;
-  return workflow.input.length > 0 && !PAGE_RUN_LATER.has(workflow.id);
+  return workflow.input.length > 0;
 }
 
 /** The values a run form holds, by field name. */

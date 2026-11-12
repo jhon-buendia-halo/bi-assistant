@@ -290,32 +290,29 @@ export class SessionsController {
         typeof body?.workflowId === 'string' && body.workflowId
           ? body.workflowId
           : '';
-      if (workflowId && agentId) {
-        throw new BadRequestException('Send workflowId or agentId, not both');
+      // Chats cannot start from a workflow: it runs on an input
+      // (workflows R5; `POST /workflows/:id/runs`, api.md 118).
+      if (workflowId) {
+        throw new BadRequestException(
+          `Workflow "${workflowId}" runs on an input`,
+        );
       }
-      // With a workflow, the workflow decides as its agent would (api.md 3;
-      // ADR-0040); `preview` is ignored. With an agent, the agent decides the
+      // With an agent, the agent decides the
       // name and datasets (R52), except one that runs on picked datasets
       // (Questions to Insights v2), which takes both from the body; a preview
       // runs its draft (agents-evals R60).
-      const session = workflowId
-        ? await this.sessionsService.createFromWorkflow(
-            workflowId,
-            body?.name,
-            body?.datasets,
+      const session = !agentId
+        ? await this.sessionsService.create(
+            body?.name ?? '',
+            body?.datasets ?? [],
           )
-        : !agentId
-          ? await this.sessionsService.create(
-              body?.name ?? '',
-              body?.datasets ?? [],
-            )
-          : body?.preview === true
-            ? await this.sessionsService.createPreview(agentId)
-            : await this.sessionsService.createFromAgent(
-                agentId,
-                body?.name,
-                body?.datasets,
-              );
+        : body?.preview === true
+          ? await this.sessionsService.createPreview(agentId)
+          : await this.sessionsService.createFromAgent(
+              agentId,
+              body?.name,
+              body?.datasets,
+            );
       return {
         ok: true,
         message: session.preview

@@ -36,22 +36,18 @@ export interface WorkflowSummary {
   agents: { key: string; name: string }[];
   stepCount: number;
   bar: WorkflowBar;
-  /** Runs in a chat, or once on a typed input (`POST /workflows/:id/runs`). */
+  /** Every workflow runs once on a typed input (`POST /workflows/:id/runs`). */
   trigger: WorkflowTrigger;
   /**
    * The typed input a run takes, in form order (api.md 118, 119). The agent
    * workflows have one while they are still chat workflows (plan 5.2).
    */
   input: WorkflowInputField[];
-  /** The session takes the datasets the user picks. */
-  picksDatasets: boolean;
-  /** The datasets a session would take; empty when `picksDatasets`. */
+  /** The datasets the workflow's agent declares; empty when the run picks them. */
   datasets: string[];
   missingDatasets: string[];
   starterQuestions: string[];
-  /** Why a chat can't start now; absent when it can. */
-  chatRequirement?: string;
-  /** Why a run can't start now (the same texts); absent when it can (plan 4.2). */
+  /** Why a run can't start now; absent when it can (plan 4.2). */
   runRequirement?: string;
 }
 
@@ -165,7 +161,6 @@ function assistantEntry(agent: AgentSummary): CatalogueEntry {
       bar: 'agent',
       trigger: ONE_STEP_WORKFLOW_TRIGGER,
       input: oneStepWorkflowInput(agent.key),
-      picksDatasets: true,
       datasets: [],
       missingDatasets: [...agent.missingDatasets],
       starterQuestions: [...agent.starterQuestions],
@@ -174,14 +169,11 @@ function assistantEntry(agent: AgentSummary): CatalogueEntry {
   };
 }
 
-/**
- * Why a chat or a run can't start now: one text for both while chats remain
- * (plan 4.2), absent when it can.
- */
+/** Why a run can't start now (plan 4.2), absent when it can. */
 function requirements(
   text: string | undefined,
-): Pick<WorkflowSummary, 'chatRequirement' | 'runRequirement'> {
-  return text ? { chatRequirement: text, runRequirement: text } : {};
+): Pick<WorkflowSummary, 'runRequirement'> {
+  return text ? { runRequirement: text } : {};
 }
 
 /** The fields of a code workflow's input, copied. */
@@ -208,7 +200,6 @@ function codeEntry(
       bar: source.bar,
       trigger: source.trigger,
       input: inputOf(source),
-      picksDatasets,
       datasets: picksDatasets ? [] : [...agent.datasets],
       missingDatasets: [...agent.missingDatasets],
       starterQuestions: [...agent.starterQuestions],
@@ -235,7 +226,6 @@ function runEntry(source: CodeWorkflowSource): CatalogueEntry {
       bar: source.bar,
       trigger: source.trigger,
       input: inputOf(source),
-      picksDatasets: false,
       datasets: [],
       missingDatasets: [],
       starterQuestions: [],
@@ -268,7 +258,6 @@ function callingRunEntry(
     summary: {
       ...base.summary,
       agents: [{ key: agent.key, name: agent.name }],
-      picksDatasets: true,
       missingDatasets: [...agent.missingDatasets],
       ...requirements(agent.chatRequirement),
     },
@@ -320,7 +309,6 @@ function oneStepEntry(
       bar: 'agent',
       trigger: ONE_STEP_WORKFLOW_TRIGGER,
       input: oneStepWorkflowInput(agent.key),
-      picksDatasets: false,
       datasets,
       missingDatasets: [...agent.missingDatasets],
       starterQuestions: [...agent.starterQuestions],

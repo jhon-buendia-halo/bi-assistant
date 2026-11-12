@@ -84,7 +84,7 @@ describe('RunsState (plan 1.24.11)', () => {
       name: 'Assistant',
       description: '',
       kind: 'agent',
-      trigger: 'chat',
+      trigger: 'run',
       input: [
         { name: 'question', label: 'Question', type: 'textarea', required: true },
         { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },

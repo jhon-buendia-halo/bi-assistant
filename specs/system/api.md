@@ -138,23 +138,23 @@ Preview sessions answer endpoints 2 and 4 to 14 like any session (a turn runs wi
 #### 1. `GET /sessions`
 - Response `200`: `{ sessions: SessionDoc[] }`. Ordering is the repository's (most recently updated first; see data-model). No pagination; full documents including messages are returned.
 - Errors: none expected.
-- Also used by the Electron main process as the **backend readiness probe** (must return 200).
+- Past chats stay readable (read-only). Until 1.23.22 this was also the Electron main process's backend readiness probe; the probe is `GET /health` (135, 4.3).
 
 #### 2. `GET /sessions/:id`
 - Response `200`: `SessionDoc` (bare, not enveloped), with `panelItems` and `workflow` as above.
 - Errors: `404 "Session <id> not found"` (Style B).
 
 #### 3. `POST /sessions`
-- Body: `{ name: string; datasets: string[] }`, `{ agentId: string }` or `{ workflowId: string; name?: string; datasets?: string[] }`. `name` required (trimmed, non-empty, **truncated to 64 chars**); `datasets` must be a non-empty array of dataset **names**.
+- Body: `{ name: string; datasets: string[] }` or `{ agentId: string }`. A body with `workflowId` is refused (below): chats can no longer be started from a workflow. `name` required (trimmed, non-empty, **truncated to 64 chars**); `datasets` must be a non-empty array of dataset **names**.
 - With `agentId` (a user-agent id; sessions-chat R52): `datasets` in the body is ignored, and `name` is optional: a non-blank `name` (trimmed, truncated to 64 chars; sent by the New conversation screen's Agent picker) names the session, else it takes the agent's Live name. The session takes those of its Live datasets that exist, and stores `agentId` and `agentName` (data-model 3.4).
 - With `agentId` set to the registry key of a built-in agent that declares a dataset (today only `rfp`, whose dataset is `Intellify RFP API`; ADR-0028): `datasets` in the body is ignored and an optional non-blank `name` works as above. The session takes the typed name, else the agent's name (`RFP Builder`), and that dataset, and stores `agentKey` (the registry key) and `agentName` instead of `agentId` (data-model 3.4); every turn then runs that agent. When the dataset doesn't exist the call fails with the agent's requirement text, for `rfp` `"Load the \"Intellify RFP API\" sample in Settings → Testing Data first"`. A built-in key that declares no dataset and takes none from the user (e.g. `assistant`) still fails with `"Agent \"<key>\" not found"`.
 - With `agentId` set to `assistant-v2` (Questions to Insights v2; agents.md 2.11, ADR-0028 as amended by BA-320): like the assistant's composer, the agent has no dataset of its own, so `name` and `datasets` are **required and validated exactly as without `agentId`** (`"session name is required"`, `"select at least one dataset"`). The session takes the typed name (trimmed, truncated to 64 chars) and those datasets, and stores `agentKey: "assistant-v2"` and `agentName: "Questions to Insights v2"` instead of `agentId` (data-model 3.4); every turn then runs that agent. A preview (`preview: true`) of this key fails like any built-in key, with `"Agent \"assistant-v2\" not found"`.
 - With `agentId` set to `data-readiness` (agents.md 2.10): `datasets` in the body is ignored and an optional non-blank `name` works as above. The session takes the typed name, else `Data Readiness`, and every dataset bound to a `postgres` or `databricks` datasource, ordered by name, and stores `agentKey` and `agentName`. With no such dataset the call fails with `"Add a PostgreSQL or Databricks dataset first"`.
 - With `{ agentId, preview: true }` (agents-evals R60, R61): starts a **preview session** of the agent's draft. It is held in memory only (data-model 3.12), never listed and never written to the `sessions` collection. Its `id` is `preview-<uuid>`, its `name` `Preview: <draft name>`, its `datasets` those of the draft that exist, and it carries `preview: true` and `agentId`. Its derived `agent` comes from the draft. Success message `Preview started`. Failures: `"Agent \"<id>\" not found"` (also for a built-in key), `"Select at least one dataset to preview"`.
-- With `workflowId` (a workflow of 116; [workflows](../capabilities/workflows/spec.md), ADR-0040): with a workflow that picks datasets (`agent:assistant`, `qti-v2-turn`), `name` and `datasets` are **required and validated exactly as without `agentId`** (`"session name is required"`, `"select at least one dataset"`). With any other workflow, `datasets` is ignored and `name` is optional, as with `agentId`. Resolution: `agent:assistant` creates a plain session; `qti-v2-turn` creates it as `agentId: "assistant-v2"` does; `agent:<key|id>` creates it as `agentId: <key|id>` does, with the same refusals (the built-in agent's requirement text, `"None of this agent's datasets exist"`). An unknown id, a draft-only or missing user agent's id, or the id of a System agent or of a code workflow's own agent (`agent:assistant-v2`) fails with `"Workflow \"<id>\" not found"`. A run workflow (`seq-text-demo`, `trigger: 'run'` in 116) can't start a chat: `"Workflow \"<id>\" can't start a chat"`, creating nothing. `workflowId` together with `agentId` fails with `"Send workflowId or agentId, not both"`. With `workflowId`, `preview` is ignored.
+- With `workflowId` (since 1.23.22; [workflows](../capabilities/workflows/spec.md) R5): refused with `"Workflow \"<id>\" runs on an input"` (Style A), whatever the id and whatever else the body holds, and nothing is created. A workflow runs through `POST /workflows/:id/runs` (118, 119).
 - **Every** session created by this endpoint (any body form, previews included) stores `workflowId`: the id its agent fields derive ([data-model.md](data-model.md) 3.4). `agentId` bodies keep working unchanged.
 - Success: `{ ok:true, message:"Session \"<name>\" created", session: SessionDoc }` with `messages: []`, `visualizations: []`, a generated UUID `id`, and a contained Mastra workspace created and linked (`workspaceId`).
-- Failures (Style A): `"session name is required"`, `"select at least one dataset"`. With `agentId`: `"Agent \"<id>\" not found"` (unknown id, or the key of a built-in agent that declares no dataset), the built-in agent's requirement text (its dataset is missing), `"Publish \"<name>\" before starting a chat"` (no Live version), `"None of this agent's datasets exist"`. With `workflowId`: `"Workflow \"<id>\" not found"`, `"Workflow \"<id>\" can't start a chat"` (a run workflow), `"Send workflowId or agentId, not both"`, and the texts above.
+- Failures (Style A): `"session name is required"`, `"select at least one dataset"`. With `agentId`: `"Agent \"<id>\" not found"` (unknown id, or the key of a built-in agent that declares no dataset), the built-in agent's requirement text (its dataset is missing), `"Publish \"<name>\" before starting a chat"` (no Live version), `"None of this agent's datasets exist"`. With `workflowId`: `"Workflow \"<id>\" runs on an input"`.
 - Side effects: persists the session; creates the workspace directory `workspaces/session-<id>`.
 - Without `agentId`, does not verify the named datasets exist (see G7).
 
@@ -671,15 +671,13 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     owner: 'Official' | 'You';        // 'You' for a user agent's workflow
     agents: { key: string; name: string }[];   // the agents its steps call, in step order, each once
     stepCount: number;
-    bar: 'steps' | 'agent';           // what drives a chat's workflow bar: these steps, or the agent's own phases
-    trigger: 'chat' | 'run';          // runs in a chat, or once on a typed input (118, 119); the agent workflows stay 'chat' until 1.23.22 and also run on their input
+    bar: 'steps' | 'agent';           // what drove a chat's workflow bar (kept for the stored chats): these steps, or the agent's own phases
+    trigger: 'run';                   // every workflow runs once on a typed input (118, 119); since 1.23.22 there is no 'chat' trigger
     input: WorkflowInputField[];      // the typed input a run takes, in form order (every workflow has one since 1.23.12)
-    picksDatasets: boolean;           // the session takes the datasets the user picks (Assistant, Questions to Insights v2)
-    datasets: string[];               // the datasets a session would take; [] when picksDatasets
+    datasets: string[];               // the datasets the workflow's agent declares; [] when the run picks them (Assistant, Questions to Insights v2, Deep analysis)
     missingDatasets: string[];        // named datasets that don't exist (as AgentSummary.missingDatasets)
     starterQuestions: string[];       // the agent's, as AgentSummary.starterQuestions
-    chatRequirement?: string;         // why a chat can't start now; absent when it can
-    runRequirement?: string;          // why a run can't start now (the same text as chatRequirement); absent when it can
+    runRequirement?: string;          // why a run can't start now; absent when it can
   };
   type WorkflowInputField = {
     name: string;                     // the key in 118's and 119's `input`
@@ -698,15 +696,15 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   ```
 - Values:
 
-  | id | name | kind | agents | stepCount | bar | picksDatasets | datasets / requirement |
-  |---|---|---|---|---|---|---|---|
-  | `agent:assistant` | `Assistant` | agent | `assistant` (Questions to Insights Assistant) | 1 | agent | true | none |
-  | `qti-v2-turn` | `Questions to Insights v2` | code | `assistant-v2` | 4 | steps | true | none |
-  | `seq-text-demo` | `Sequential test workflow` | code | none (`[]`) | 3 | steps | false | none |
-  | `deep-analysis` | `Deep analysis` | code | `assistant` (Questions to Insights Assistant) | 4 | steps | true | the assistant's (none today) |
-  | `agent:data-readiness` | `Data Readiness Agent` | agent | `data-readiness` | 1 | agent | false | as its AgentSummary (`Add a PostgreSQL or Databricks dataset first`) |
-  | `agent:rfp` | `RFP Builder` | agent | `rfp` | 1 | agent | false | as its AgentSummary (`Load the "Intellify RFP API" sample in Settings → Testing Data first`) |
-  | `agent:<id>` (each Live user agent) | its Live name | agent | the user agent (`key` = id, `name` = Live name) | 1 | agent | false | its Live datasets that exist; `chatRequirement` `None of this agent's datasets exist` when none do |
+  | id | name | kind | agents | stepCount | bar | datasets / requirement |
+  |---|---|---|---|---|---|---|
+  | `agent:assistant` | `Assistant` | agent | `assistant` (Questions to Insights Assistant) | 1 | agent | none |
+  | `qti-v2-turn` | `Questions to Insights v2` | code | `assistant-v2` | 4 | steps | none |
+  | `seq-text-demo` | `Sequential test workflow` | code | none (`[]`) | 3 | steps | none |
+  | `deep-analysis` | `Deep analysis` | code | `assistant` (Questions to Insights Assistant) | 4 | steps | the assistant's (none today) |
+  | `agent:data-readiness` | `Data Readiness Agent` | agent | `data-readiness` | 1 | agent | as its AgentSummary (`Add a PostgreSQL or Databricks dataset first`) |
+  | `agent:rfp` | `RFP Builder` | agent | `rfp` | 1 | agent | as its AgentSummary (`Load the "Intellify RFP API" sample in Settings → Testing Data first`) |
+  | `agent:<id>` (each Live user agent) | its Live name | agent | the user agent (`key` = id, `name` = Live name) | 1 | agent | its Live datasets that exist; `runRequirement` `None of this agent's datasets exist` when none do |
 
 - Description, starter questions and missing datasets come from the agent's catalogue entry (33). The two exceptions are the Assistant's description, `Answers questions over the datasets you pick.`, and v2's starter questions, which are empty, as in its AgentSummary.
 - **Trigger and input:** `seq-text-demo` is a run workflow: `trigger: 'run'`, `input: [{ name: 'text', label: 'Text', type: 'textarea', required: true, placeholder: 'Paste or type any text' }]`, description `A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.`, owner `Official`, no datasets, missing datasets or starter questions. Since 1.23.24 `deep-analysis` is one too ([agents.md](agents.md) 5.15): `trigger: 'run'`, `input` the Assistant's `question` and `datasets` (below), description `Investigates a broad question from several angles with SQL and writes a downloadable report: executive summary, findings, anomalies and recommendations. Takes a few minutes.`, owner `Official`, agent the assistant (whose missing datasets and requirement it takes), no starter questions. Every other workflow has `trigger: 'chat'` until 1.23.22, and since 1.23.12 also an `input` it runs on (118, 119; [workflows](../capabilities/workflows/spec.md) R14):
@@ -719,7 +717,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   | `agent:rfp` | `message` (`Message`, textarea, required, placeholder `Name the client and plan year, or state your decision`); `rfpId` (`RFP`, text, optional, `hidden: true`) |
   | `agent:<id>` (user agent) | `question` (as the Assistant's); `careful` (as the Assistant's). Its datasets are the agent's Live datasets that exist (`datasets`), not an input. |
 
-- **Run requirement:** `runRequirement` is set exactly when `chatRequirement` is, with the same text (the RFP Builder's, the Data Readiness Agent's, a user agent's `None of this agent's datasets exist`). While it is set, 118 and 119 refuse the run with it.
+- **Run requirement:** `runRequirement` is set with the agent's requirement text (the RFP Builder's, the Data Readiness Agent's, a user agent's `None of this agent's datasets exist`). While it is set, 118 and 119 refuse the run with it.
 - **Order:** `agent:assistant`, `qti-v2-turn`, `seq-text-demo`, `deep-analysis`, then the other Official workflows by name, then the user agents' workflows by name. System agents and draft-only user agents are never listed.
 
 #### 117. `GET /workflows/:id`
@@ -1384,6 +1382,18 @@ Controller prefix `/synthetic-data`. Capability: [synthetic-data](../capabilitie
   - 400 `format must be sql, csv or xlsx`
   - 400 `targetSchema must be a plain identifier (letters, digits, underscores)`; for a Databricks profile `targetSchema must be schema or catalog.schema (letters, digits, underscores)`
 
+### 2.19 Health
+
+Controller prefix `/health`. Capability: [app-shell](../capabilities/app-shell/spec.md). No authentication (ADR-0030).
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 135 | `GET /health` | The cheap readiness probe | no (the Electron main process) |
+
+#### 135. `GET /health`
+- Response `200`: `{ ok: true }`. It reads no store and takes no query, so it answers as soon as the backend listens. It is the desktop readiness probe (4.3) since 1.23.22; before, the probe was `GET /sessions` (1), which returns every session with its transcript.
+- Errors: none. The embedded Intellify RFP API has its own `GET /health` (I1, 2.16.1) on its own port; the two are unrelated.
+
 ## 3. Streaming and long-running work
 
 Three Server-Sent-Events endpoints exist (chat, workflow runs, ontology bootstrap). Both are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. Two background-job patterns use start + poll instead of SSE (deep analysis, eval runs).
@@ -1597,7 +1607,7 @@ Entry `id` is `<epoch ms>-<sequence>`; `timestamp` ISO. Entries are appended as 
 | Item | Value |
 |---|---|
 | Spawn | Electron's own binary with `ELECTRON_RUN_AS_NODE=1` running `backend/dist/main.js` (packaged: `<resources>/backend/dist/main.js`); `stdio` piped; env passes `PORT`, `APP_DATA_DIR`, `APP_SECRET`, and nothing else. Missing entry file records an error diagnostic and does not start. |
-| Readiness probe | `GET http://127.0.0.1:<BACKEND_PORT>/sessions`, **ready iff status 200**; 500 ms request timeout; retried every 100 ms until a **30 s** deadline. |
+| Readiness probe | `GET http://127.0.0.1:<BACKEND_PORT>/health` (135), **ready iff status 200**; 500 ms request timeout; retried every 100 ms until a **30 s** deadline. |
 | Startup | status `starting` → spawn → probe. Ready → `ready`. Deadline missed → error diagnostic, **window opens anyway**, probing continues in the background and pushes `ready` when it succeeds. |
 | Crash handling | Any exit not caused by app quit → status `restarting`, restart after back-off **1 s, 2 s, 4 s** (3 attempts), re-probing after each start. Attempts exhausted → status `down` (error diagnostic, no further restarts). |
 | Stability reset | Backend continuously ready for **60 s** resets the attempt counter. |

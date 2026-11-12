@@ -11,7 +11,6 @@ import {
   Workflow,
 } from 'lucide-angular';
 import { ToastService } from '../../../../core/toast/toast.service';
-import { ComposerState } from '../../../sessions/services/composer-state';
 import { SessionsState } from '../../../sessions/services/sessions-state';
 import { SessionsList, sessionActivityLabel } from '../../../sessions/components/sessions-list/sessions-list';
 import { WorkflowRunSummary } from '../../../workflows/models/workflow.model';
@@ -35,7 +34,6 @@ import { RunsState, RunsTab } from '../../services/runs-state';
 export class RunsPage {
   protected readonly runsState = inject(RunsState);
   protected readonly sessions = inject(SessionsState);
-  protected readonly composer = inject(ComposerState);
   private readonly toast = inject(ToastService);
 
   protected readonly Search = Search;

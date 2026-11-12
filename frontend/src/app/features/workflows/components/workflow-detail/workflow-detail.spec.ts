@@ -31,7 +31,6 @@ const SEQ: WorkflowDetail = {
   input: [
     { name: 'text', label: 'Text', type: 'textarea', required: true },
   ],
-  picksDatasets: false,
   datasets: [],
   missingDatasets: [],
   starterQuestions: [],
@@ -46,10 +45,9 @@ const V2: WorkflowDetail = {
   ...SEQ,
   id: 'qti-v2-turn',
   name: 'Questions to Insights v2',
-  trigger: 'chat',
+  trigger: 'run',
   input: [],
   agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
-  picksDatasets: true,
 };
 
 describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.4b)', () => {
@@ -77,7 +75,6 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     const page = fixture.componentInstance;
     page.back.subscribe(() => events.push('back'));
     page.openPanel.subscribe(() => events.push('openPanel'));
-    page.startChat.subscribe((w) => events.push(`startChat:${w.id}`));
     fixture.detectChanges();
     el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Loading workflow…');
@@ -114,7 +111,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     ).toEqual(['Clean text', 'Count words', 'Format result']);
   });
 
-  it('a run workflow has Execute, which asks for the panel on Run; no Start chat', () => {
+  it('a workflow has Execute, which asks for the panel on Run; no Start chat', () => {
     open(SEQ);
     expect(q('workflow-start-chat')).toBeNull();
     expect(text('workflow-execute')).toBe('Execute');
@@ -123,14 +120,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(events).toEqual(['openPanel']);
   });
 
-  it('a chat workflow keeps Start chat and has no Execute', () => {
-    open(V2);
-    expect(q('workflow-execute')).toBeNull();
-    q('workflow-start-chat')!.click();
-    expect(events).toEqual(['startChat:qti-v2-turn']);
-  });
-
-  it('a chat workflow that runs on its input has Execute beside Start chat (workflows R21)', () => {
+  it('an agent workflow with an input has Execute and no Start chat (workflows R21)', () => {
     open({
       ...V2,
       input: [
@@ -140,7 +130,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     });
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
     expect(text('workflow-execute')).toBe('Execute');
-    expect(text('workflow-start-chat')).toBe('Start chat');
+    expect(q('workflow-start-chat')).toBeNull();
     q('workflow-execute')!.click();
     expect(designer.tab()).toBe('run');
     expect(events).toEqual(['openPanel']);
@@ -167,14 +157,6 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     });
     expect(text('workflow-execute')).toBe('Execute');
     expect(designer.tabs().map((t) => t.id)).toEqual(['workflow', 'step', 'run', 'code']);
-  });
-
-  it('writes the chat requirement beside a disabled Start chat', () => {
-    open({ ...V2, chatRequirement: 'Load the sample first' });
-    const start = q('workflow-start-chat') as HTMLButtonElement;
-    expect(start.disabled).toBe(true);
-    expect(start.title).toBe('Load the sample first');
-    expect(text('workflow-chat-requirement')).toBe('Load the sample first');
   });
 
   it('a node selects its step and asks for the panel on Step; the background clears it', () => {

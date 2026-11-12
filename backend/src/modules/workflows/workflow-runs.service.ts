@@ -204,7 +204,7 @@ export class WorkflowRunsService implements OnModuleInit {
     // A code workflow that runs on its input runs its engine workflow even
     // when its steps call an agent (deep analysis, agents.md 5.15); its
     // question is refused when blank, as an agent run's is.
-    if (workflow.kind === 'code' && workflow.trigger === 'run') {
+    if (workflow.id === DEEP_ANALYSIS_WORKFLOW_ID) {
       const question = parsed.values['question'];
       if (typeof question === 'string' && !question.trim()) {
         throw new BadRequestException('Question is required');
@@ -262,7 +262,6 @@ export class WorkflowRunsService implements OnModuleInit {
         bar: 'agent',
         trigger: 'run',
         input: fields,
-        picksDatasets: false,
         datasets: target.datasets,
         missingDatasets: [],
         starterQuestions: [],

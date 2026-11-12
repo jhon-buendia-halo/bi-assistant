@@ -22,7 +22,6 @@ export type MainView =
   | 'ontologies'
   | 'runs'
   | 'run-detail'
-  | 'conversation-new'
   | 'session-chat'
   | 'monitoring'
   | 'monitoring-session'
@@ -65,7 +64,6 @@ export const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   ontologies: 'context',
   runs: 'runs',
   'run-detail': 'runs',
-  'conversation-new': 'runs',
   'session-chat': 'runs',
   monitoring: 'monitoring',
   'monitoring-session': 'monitoring',

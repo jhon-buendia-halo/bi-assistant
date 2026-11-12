@@ -65,7 +65,6 @@ import {
   ASSISTANT_WORKFLOW_NAME,
   parseWorkflowId,
   sessionWorkflowId,
-  workflowStartsChat,
 } from '../../mastra/workflows/workflow-catalog';
 import { renderPdf } from '../../common/markdown-pdf';
 import {
@@ -494,49 +493,6 @@ export class SessionsService implements OnModuleInit {
       agentId,
       agentName: agent.live.name,
     });
-  }
-
-  /**
-   * Start a chat on a workflow (api.md 3; workflows R4, ADR-0040).
-   * `agent:assistant` creates a plain session; a code workflow creates it as
-   * `agentId: <its primaryFor>` does; `agent:<key|id>` as `agentId: <key|id>`
-   * does, with the same refusals. An unknown id, a draft-only or missing user
-   * agent, a System agent and a code workflow's `primaryFor` agent are "not
-   * found". A run workflow (`seq-text-demo`) can't start a chat (R11).
-   * Resolved from the pure catalogue, never from `WorkflowsService` (its
-   * module imports this one).
-   */
-  async createFromWorkflow(
-    workflowId: string,
-    name?: string,
-    datasets?: string[],
-  ): Promise<SessionDoc> {
-    const notFound = () =>
-      new NotFoundException(`Workflow "${workflowId}" not found`);
-    const parsed = parseWorkflowId(workflowId);
-    if (!parsed) throw notFound();
-    if (parsed.kind === 'code') {
-      // A run workflow runs once on a typed input, never in a chat
-      // (workflows R11; api.md 118).
-      if (!workflowStartsChat(parsed.source)) {
-        throw new BadRequestException(
-          `Workflow "${workflowId}" can't start a chat`,
-        );
-      }
-      const primary = parsed.source.primaryFor;
-      if (!primary || !this.mastra.listAgents()[primary]) throw notFound();
-      return this.createFromAgent(primary, name, datasets);
-    }
-    if (parsed.kind === 'builtin-agent') {
-      if (parsed.agentKey === ASSISTANT_AGENT_KEY) {
-        return this.create(name ?? '', datasets ?? []);
-      }
-      if (!this.mastra.listAgents()[parsed.agentKey]) throw notFound();
-      return this.createFromAgent(parsed.agentKey, name);
-    }
-    const agent = await this.userAgents.get(parsed.agentId);
-    if (!agent?.live) throw notFound();
-    return this.createFromAgent(parsed.agentId, name);
   }
 
   /**

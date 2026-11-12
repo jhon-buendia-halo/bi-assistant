@@ -5,6 +5,7 @@ import type { Download, Locator, Page } from '@playwright/test';
 import { test, expect, type RunningApp } from './fixtures/app.fixture';
 import { apiJson } from './helpers/api';
 import { saveLenaiSettings } from './helpers/agents-api';
+import { runWorkflow } from './helpers/runs-api';
 import { scenarioStep } from './support/demo-captions';
 import {
   LlmStub,
@@ -218,32 +219,6 @@ async function openWorkflows(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
-/** Start chat on the RFP Builder's workflow card (workflows R6). */
-function startChatButton(page: Page): Locator {
-  return page.getByRole('button', { name: `Start chat with ${AGENT}` });
-}
-
-/** Starts a chat from the RFP Builder's workflow card and waits for its session. */
-async function startRfpChat(page: Page): Promise<void> {
-  await openWorkflows(page);
-  await startChatButton(page).click();
-  await expect(page.getByText(`Session "${AGENT}" created`)).toBeVisible();
-  await expect(page.getByTestId('session-welcome')).toBeVisible();
-}
-
-async function send(
-  page: Page,
-  question: string,
-  answer: string,
-): Promise<void> {
-  await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText(answer)).toBeVisible({ timeout: 30_000 });
-  await expect(
-    page.getByRole('button', { name: 'Send message' }),
-  ).toBeVisible();
-}
-
 /** Entries of a zip (stored or deflated), read from its local headers. */
 function unzip(zip: Buffer): Map<string, Buffer> {
   const entries = new Map<string, Buffer>();
@@ -313,16 +288,6 @@ test.afterEach(async ({ app, appDataDir }) => {
 });
 
 test.describe('without the API sample', () => {
-  test('start chat is blocked until the API sample is registered', async ({
-    page,
-  }) => {
-    await openWorkflows(page);
-    const button = startChatButton(page);
-    await expect(button).toBeVisible();
-    await expect(button).toBeDisabled();
-    await expect(button).toHaveAttribute('title', REQUIREMENT);
-  });
-
   test('Run is disabled until the API sample is registered', async ({
     page,
   }) => {
@@ -543,26 +508,7 @@ test.describe('with the API sample registered', () => {
     ).toHaveCount(0);
   });
 
-  test('start chat opens a session bound to the RFP Builder', async ({
-    page,
-  }, testInfo) => {
-    await startRfpChat(page);
-
-    await expect(page.getByTestId('session-workflow')).toHaveText(AGENT);
-    const welcome = page.getByTestId('session-welcome');
-    await expect(welcome).toContainText(DESCRIPTION);
-    for (const starter of STARTERS) {
-      await expect(
-        welcome.getByRole('button', { name: starter, exact: true }),
-      ).toBeVisible();
-    }
-    expect(stub.requests, 'no message has been sent').toHaveLength(0);
-    await page.screenshot({
-      path: testInfo.outputPath('rfp-builder-session-welcome.png'),
-    });
-  });
-
-  test('the first turn loads the stage-1 skill and reads the client', async ({
+  test('the first run loads the stage-1 skill and reads the client', async ({
     page,
   }) => {
     const question = 'Start an RFP for Orchard Manufacturing';
@@ -579,23 +525,20 @@ test.describe('with the API sample registered', () => {
         { text: answer },
       ],
     });
-    // Hold the answer after list_clients, so the step is seen while it streams.
-    let release: () => void = () => undefined;
-    const released = new Promise<void>((resolve) => (release = resolve));
-    stub.hold = (request) =>
-      lastUserText(request) === question &&
-      turnToolResults(request).length === 2
-        ? released
-        : undefined;
 
-    await startRfpChat(page);
-    await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-    await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(page.getByText('list_clients', { exact: true })).toBeVisible({
-      timeout: 30_000,
-    });
-    release();
-    await expect(page.getByText(answer)).toBeVisible({ timeout: 30_000 });
+    const result = await runWorkflow(page, 'agent:rfp', { message: question });
+    expect(result.status, result.body).toBe(200);
+    expect(result.error, result.body).toBeUndefined();
+    expect(result.text).toContain(answer);
+    expect(
+      result.events.some(
+        (e) =>
+          e.type === 'tool' &&
+          (JSON.parse(String(e.content)) as { name?: string }).name ===
+            'list_clients',
+      ),
+      'the list_clients step is reported',
+    ).toBe(true);
 
     const requests = requestsOf(question);
     expect(requests.length).toBeGreaterThanOrEqual(3);
@@ -631,7 +574,7 @@ test.describe('with the API sample registered', () => {
     expect(turnToolResults(requests[2])[1]).toContain(CLIENT.oneCode);
   });
 
-  test('a created RFP becomes the session’s active RFP', async ({
+  test('a created RFP becomes the active RFP of the run that continues it', async ({
     app,
     appDataDir,
     page,
@@ -651,8 +594,9 @@ test.describe('with the API sample registered', () => {
       [next]: [{ text: 'Stage 2 is the current program.' }],
     });
 
-    await startRfpChat(page);
-    await send(page, create, 'The draft RFP is created.');
+    const first = await runWorkflow(page, 'agent:rfp', { message: create });
+    expect(first.status, first.body).toBe(200);
+    expect(first.text).toContain('The draft RFP is created.');
     const result = JSON.parse(turnToolResults(requestsOf(create)[1])[0]) as {
       id: string;
       status: string;
@@ -660,7 +604,14 @@ test.describe('with the API sample registered', () => {
     expect(result.id).toMatch(/^[0-9a-f-]{36}$/);
     rfpIds.push(result.id);
 
-    await send(page, next, 'Stage 2 is the current program.');
+    const second = await runWorkflow(
+      page,
+      'agent:rfp',
+      { message: next, rfpId: result.id },
+      { fromRunId: first.runId! },
+    );
+    expect(second.status, second.body).toBe(200);
+    expect(second.text).toContain('Stage 2 is the current program.');
     const system = systemTexts(requestsOf(next)[0]).join('\n');
     expect(system).toContain(
       `Active RFP in this session: ${result.id} — "${TITLE}" for ${CLIENT.name} (${CLIENT.oneCode}), plan year 2027, status draft`,
@@ -682,7 +633,7 @@ test.describe('with the API sample registered', () => {
     );
   });
 
-  test('the package is downloadable from the chat', async ({
+  test('the package is downloadable from a run', async ({
     app,
     appDataDir,
     page,
@@ -702,8 +653,9 @@ test.describe('with the API sample registered', () => {
       ],
     });
 
-    await startRfpChat(page);
-    await send(page, question, answer);
+    await openRfpRunTab(page);
+    await runExchange(page, question);
+    await expect(page.getByTestId('run-answer')).toContainText(answer);
 
     const card = packageCards(page);
     await expect(card).toHaveCount(1);
@@ -765,7 +717,7 @@ test.describe('with the API sample registered', () => {
     appDataDir,
     page,
   }, testInfo) => {
-    // Given an RFP Builder session at stage 3.
+    // Given an RFP at stage 3.
     const rfp = await seedRfp(app, appDataDir, 3);
     const question = 'Export a draft so I can share it with my manager';
     const answer = 'Here is a draft of the RFP package, marked DRAFT.';
@@ -778,8 +730,9 @@ test.describe('with the API sample registered', () => {
       ],
     });
 
-    await startRfpChat(page);
-    await send(page, question, answer);
+    await openRfpRunTab(page);
+    await runExchange(page, question);
+    await expect(page.getByTestId('run-answer')).toContainText(answer);
 
     const card = packageCards(page);
     await expect(card).toHaveCount(1);
@@ -829,96 +782,17 @@ test.describe('with the API sample registered', () => {
       .toMatch(new RegExp(`^rfp-(draft-)?${TITLE_SLUG}-draft\\.zip$`));
   });
 
-  test('a draft never replaces the final package', async ({
-    app,
-    appDataDir,
-    page,
-  }) => {
-    const rfp = await seedRfp(app, appDataDir, 6);
-    const final = 'Build the final package';
-    const draft = 'Now export a draft too';
-    stub.reply = script({
-      [final]: [
-        {
-          toolCall: {
-            name: 'export_rfp_package',
-            arguments: { rfpId: rfp.id },
-          },
-        },
-        { text: 'The final package is ready.' },
-      ],
-      [draft]: [
-        {
-          toolCall: { name: 'export_rfp_draft', arguments: { rfpId: rfp.id } },
-        },
-        { text: 'The draft is ready, marked DRAFT.' },
-      ],
-    });
-
-    await startRfpChat(page);
-    await send(page, final, 'The final package is ready.');
-    await send(page, draft, 'The draft is ready, marked DRAFT.');
-
-    const cards = packageCards(page);
-    await expect(cards).toHaveCount(2);
-    await expect(cards.nth(0).getByTestId('rfp-package-label')).toHaveText(
-      'RFP package · 7 files',
-    );
-    await expect(cards.nth(1).getByTestId('rfp-package-label')).toHaveText(
-      'RFP package (draft) · 7 files',
-    );
-
-    // The final package still downloads as the final one.
-    const [finalZip] = await Promise.all([
-      page.waitForEvent('download'),
-      cards.nth(0).getByTestId('rfp-package-download').click(),
-    ]);
-    const finalEntries = unzip(await downloaded(finalZip));
-    expect([...finalEntries.keys()].sort()).toEqual([...PACKAGE_FILES].sort());
-    expect(finalEntries.get('rfp.md')!.toString().split('\n')[0]).toBe(
-      `# ${TITLE}`,
-    );
-    expect(
-      JSON.parse(finalEntries.get('manifest.json')!.toString()),
-    ).not.toHaveProperty('draft');
-
-    // And the draft's Markdown is the draft's.
-    await expect(
-      page.getByRole('button', { name: 'Download draft (.zip)' }),
-    ).toBeEnabled();
-    const [draftMd] = await Promise.all([
-      page.waitForEvent('download'),
-      cards
-        .nth(1)
-        .getByTestId('rfp-package-file')
-        .filter({ hasText: /^\s*rfp\.md\s*$/ })
-        .click(),
-    ]);
-    expect((await downloaded(draftMd)).toString().split('\n')[0]).toBe(
-      `# DRAFT — ${TITLE}`,
-    );
-  });
-
-  test('an RFP Builder chat hides the assistant’s controls', async ({
-    page,
-  }) => {
+  test('an RFP Builder run has no assistant controls', async ({ page }) => {
     const question = 'Which of my clients renew on 1 January 2027?';
     const answer = 'Here are the clients renewing on 1 January 2027.';
     stub.reply = script({ [question]: [{ text: answer }] });
 
-    await startRfpChat(page);
-    // R15: no Careful or Deep analysis toggle in the composer.
-    await expect(
-      page.getByRole('button', { name: 'Careful mode' }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole('button', { name: 'Deep analysis' }),
-    ).toHaveCount(0);
-    await send(page, question, answer);
-    // And no Generate interactive visuals under the answer.
-    await expect(
-      page.getByRole('button', { name: 'Generate interactive visuals' }),
-    ).toHaveCount(0);
+    await openRfpRunTab(page);
+    // R15: no Careful or Deep analysis toggle on the form.
+    await expect(page.getByRole('button', { name: 'Careful mode' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Deep analysis' })).toHaveCount(0);
+    await runExchange(page, question);
+    await expect(page.getByTestId('run-answer')).toContainText(answer);
   });
 
   test('the System Prompt tab shows the RFP Builder’s prompt', async ({
