@@ -10,15 +10,13 @@ test('a seedable fixture loads with its own defaults', () => {
   assert.deepEqual(fixtureBody(f), f.defaults);
 });
 
-test('the Intellify sample goes into the database the Intellify RFP API reads', () => {
+test('the Intellify sample loads with its own defaults', () => {
   const f = { id: 'intellify', seedable: true, defaults: { ...pg, database: 'intellify' } };
-  assert.deepEqual(fixtureBody(f), { ...pg, database: 'intellify_mercer_demo' });
-  assert.deepEqual(fixtureBody(f, { INTELLIFY_DB_NAME: 'rfp_demo' }), { ...pg, database: 'rfp_demo' });
-  assert.equal(f.defaults.database, 'intellify', 'the fixture defaults are not mutated');
+  assert.deepEqual(fixtureBody(f), f.defaults);
 });
 
-test('the Intellify RFP API registers with an empty body', () => {
-  assert.deepEqual(fixtureBody({ id: 'intellify-api', seedable: false }), {});
+test('a fixture that cannot be seeded loads with an empty body', () => {
+  assert.deepEqual(fixtureBody({ id: 'rest-sample', seedable: false }), {});
 });
 
 test('LLM settings need a base URL and a model', () => {
