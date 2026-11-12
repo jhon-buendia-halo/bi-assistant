@@ -17,7 +17,33 @@ export const START_NODE_ID = 'start';
 /** The id of the End (output) node; no step may use it. */
 export const END_NODE_ID = 'end';
 
-export type WorkflowNodeKind = 'trigger' | 'code' | 'agent' | 'output';
+/** `tool`: a tool of an agent step, opened from its sub-node on the canvas. */
+export type WorkflowNodeKind = 'trigger' | 'code' | 'agent' | 'output' | 'tool';
+
+/** The id of an agent step's tool sub-node, which opens that tool's details. */
+export function toolNodeId(stepId: string, tool: string): string {
+  return `${stepId}-tool-${tool}`;
+}
+
+/** A tool of an agent step, as its dialog shows it (ui.md 4.4b). */
+export interface NodeToolView {
+  name: string;
+  /** As `GET /workflows/:id` `agents[].toolDetails` gives it; '' when unknown. */
+  description: string;
+  /** Its input parameter names. */
+  inputs: string[];
+  stepId: string;
+  stepTitle: string;
+  /** Null when the step names no agent key and no agent detail matches. */
+  agentKey: string | null;
+  agentName: string;
+  /** Whether its step started in the run shown. */
+  ran: boolean;
+  /** This tool's calls in its step in the run shown, live ones included. */
+  calls: NodeToolCallView[];
+  /** The calls' durations added up; null when none has one. */
+  totalDurationMs: number | null;
+}
 
 /** A tool call shown in a node's Output: stored, or live while the step runs. */
 export interface NodeToolCallView extends WorkflowRunToolCall {
@@ -59,10 +85,10 @@ export interface NodeContext {
 
 /** Everything the node dialog and the Workflow state panel show about one node. */
 export interface NodeInspection {
-  /** START_NODE_ID | a step id | END_NODE_ID. */
+  /** START_NODE_ID | a step id | END_NODE_ID | a `toolNodeId`. */
   nodeId: string;
   kind: WorkflowNodeKind;
-  /** `Start` | the step's title | `End`. */
+  /** `Start` | the step's title | `End` | the tool's name. */
   title: string;
   /** 1-based step number; null for Start and End. */
   number: number | null;
@@ -75,6 +101,8 @@ export interface NodeInspection {
   run: NodeRunView | null;
   /** Steps only. */
   context: NodeContext | null;
+  /** Tools only (`kind: 'tool'`); their `run` and `context` are null. */
+  tool?: NodeToolView;
 }
 
 /** The summary row of the Workflow state panel. */

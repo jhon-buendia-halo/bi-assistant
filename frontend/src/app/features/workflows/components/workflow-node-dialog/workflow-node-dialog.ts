@@ -14,6 +14,7 @@ import {
   Flag,
   LucideAngularModule,
   Sparkles,
+  Wrench,
   X,
   Zap,
 } from 'lucide-angular';
@@ -39,11 +40,15 @@ type DialogTab = 'parameters' | 'settings';
 const NOT_RUN =
   'This node has not run yet. Execute the workflow to see its data.';
 
+const TOOL_NOT_RUN =
+  'This tool has not run yet. Execute the workflow to see its calls.';
+
 const KIND_ICONS = {
   trigger: Zap,
   code: Braces,
   agent: Sparkles,
   output: Flag,
+  tool: Wrench,
 } as const;
 
 const FOCUSABLE =
@@ -71,6 +76,8 @@ export class WorkflowNodeDialog {
 
   readonly close = output<void>();
   readonly openAgent = output<string>();
+  /** A tool's Step link: open its agent step's dialog. */
+  readonly openStep = output<string>();
 
   readonly triggerLabels = TRIGGER_LABELS;
   readonly tab = signal<DialogTab>('parameters');
@@ -87,12 +94,27 @@ export class WorkflowNodeDialog {
   readonly icon = computed(() => KIND_ICONS[this.node().kind]);
   readonly badge = computed(() => {
     const kind: WorkflowNodeKind = this.node().kind;
-    return kind === 'code' ? 'CODE' : kind === 'agent' ? 'LLM' : null;
+    return kind === 'code'
+      ? 'CODE'
+      : kind === 'agent'
+        ? 'LLM'
+        : kind === 'tool'
+          ? 'TOOL'
+          : null;
   });
   readonly agentLine = computed(() => {
+    const tool = this.tool();
+    if (tool !== null) return `Tool of ${tool.agentName} · ${tool.stepTitle}`;
     const agent = this.node().step?.agent;
     return agent ? `${agent.name} · ≤ ${agent.maxSteps} steps` : null;
   });
+
+  /** A tool opened from its sub-node; null for any other node. */
+  readonly tool = computed(() => this.node().tool ?? null);
+  readonly toolNotRun = TOOL_NOT_RUN;
+  readonly toolDuration = computed(() =>
+    formatNodeDuration(this.tool()?.totalDurationMs),
+  );
 
   readonly run = computed(() => this.node().run);
   readonly statusLabel = computed(() => {
@@ -153,6 +175,23 @@ export class WorkflowNodeDialog {
       parts.push(formatNodeDuration(call.durationMs));
     }
     if (call.rowCount !== undefined) parts.push(`${call.rowCount} rows`);
+    return parts.join(' · ');
+  }
+
+  /** A tool call's result row: `Done`, `Failed`, `Running…`. */
+  callStatus(call: NodeToolCallView): string {
+    if (!call.finished) return 'Running…';
+    return runStepStatusLabel(call.error ? 'failed' : 'success');
+  }
+
+  /** `<n> rows · <duration>` of a finished call; '' when it has neither. */
+  callMeta(call: NodeToolCallView): string {
+    if (!call.finished) return '';
+    const parts: string[] = [];
+    if (call.rowCount !== undefined) parts.push(`${call.rowCount} rows`);
+    if (call.durationMs !== undefined) {
+      parts.push(formatNodeDuration(call.durationMs));
+    }
     return parts.join(' · ');
   }
 

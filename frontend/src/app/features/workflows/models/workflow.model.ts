@@ -88,6 +88,16 @@ export interface WorkflowAgentDetail {
   systemPrompt?: string;
   /** The prompt was longer than 20 000 characters and was shortened. */
   systemPromptTruncated?: true;
+  /** The agent's tools, as `GET /agents/:key` lists them (api.md 34). */
+  toolDetails?: WorkflowAgentToolDetail[];
+}
+
+/** One tool of a workflow's agent (api.md 117 `agents[].toolDetails`). */
+export interface WorkflowAgentToolDetail {
+  name: string;
+  description: string;
+  /** Top-level input parameter names. */
+  inputs: string[];
 }
 
 /** One step of a workflow detail: an agent step also names its agent's key (api.md 117). */

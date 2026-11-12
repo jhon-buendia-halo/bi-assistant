@@ -680,12 +680,13 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     model: string | null;             // `${llm.provider}/${llm.model}` of 34's AgentDetail.llm; null when no LLM is set (never the environment's fallback)
     systemPrompt: string;             // 34's AgentDetail.instructions, at most 20 000 characters; each run adds its own context
     systemPromptTruncated?: true;     // the prompt was longer than 20 000 characters and was shortened
+    toolDetails: { name: string; description: string; inputs: string[] }[];   // 34's AgentDetail.toolDetails, as is (sorted by name; inputs: top-level input param names)
   };
   type WorkflowDetailStep = Omit<AgentWorkflowStep, 'agent'> & {
     agent?: { key: string; name: string; tools: string[]; maxSteps: number };   // `key`: the agent's registry key or user-agent id
   };
   ```
-- Each agent step's `agent` also names its agent's `key`: the agent the code workflow runs for (`assistant-v2` for `qti-v2-turn`). `agents` is 116's list with each agent's `model` and `systemPrompt` read from 34; 116 itself is unchanged.
+- Each agent step's `agent` also names its agent's `key`: the agent the code workflow runs for (`assistant-v2` for `qti-v2-turn`). `agents` is 116's list with each agent's `model`, `systemPrompt` and `toolDetails` read from 34 (the workflow page's tool dialog, [ui.md](ui.md) 4.4b); 116 itself is unchanged.
 - For `qti-v2-turn`, `steps` equals `agentWorkflow('assistant-v2').steps`, the `workflow` of 34, with `key` on its agent step's `agent`.
 - Errors (Style B): `404 "Workflow \"<id>\" not found"` for any id 116 does not list: unknown, a removed one (`agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>`, `seq-text-demo`, `deep-analysis`), a System agent (`agent:sql-fixer`), or the workflow's own agent (`agent:assistant-v2`).
 

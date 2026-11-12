@@ -2,6 +2,7 @@ import {
   END_NODE_ID,
   START_NODE_ID,
   WorkflowNodeKind,
+  toolNodeId,
 } from '../models/workflow-node.model';
 import { WorkflowDetail, WorkflowDetailStep } from '../models/workflow.model';
 
@@ -49,7 +50,8 @@ const EDGE_LABEL_RISE = 12;
 /** The ports' places along the agent's bottom edge, as a fraction of its width. */
 const PORT_AT = { model: 0.25, tool: 0.75 } as const;
 
-export type CanvasNodeKind = WorkflowNodeKind;
+/** A tool is a sub-node on the canvas, never a node of its own. */
+export type CanvasNodeKind = Exclude<WorkflowNodeKind, 'tool'>;
 
 export interface CanvasPort {
   kind: 'model' | 'tool';
@@ -175,7 +177,7 @@ function subNodesOf(
   const shown = agent.tools.slice(0, CANVAS.maxToolSubNodes);
   for (const tool of shown) {
     specs.push({
-      id: `${step.id}-tool-${tool}`,
+      id: toolNodeId(step.id, tool),
       kind: 'tool',
       label: tool,
       subtitle: 'tool',

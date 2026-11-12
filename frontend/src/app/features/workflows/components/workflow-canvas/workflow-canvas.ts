@@ -229,9 +229,13 @@ export class WorkflowCanvas {
     this.openNode.emit(id);
   }
 
-  /** A sub-node opens its agent step's details (Enter clicks the button too). */
-  protected onSubNodeClick(stepId: string): void {
-    this.openNode.emit(stepId);
+  /**
+   * A tool sub-node opens that tool's details (its own id); the Model and
+   * `+<n> tools` sub-nodes open their agent step's. Enter and a double click
+   * click the button too.
+   */
+  protected onSubNodeClick(stepId: string, sub: CanvasSubNode): void {
+    this.openNode.emit(sub.kind === 'tool' ? sub.id : stepId);
   }
 
   protected onPointerDown(event: PointerEvent): void {

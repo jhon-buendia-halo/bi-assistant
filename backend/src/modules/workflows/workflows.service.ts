@@ -11,7 +11,11 @@ import {
   type WorkflowInputField,
   type WorkflowTrigger,
 } from '../../mastra/workflows/workflow-catalog';
-import { AgentsService, type AgentSummary } from '../agents/agents.service';
+import {
+  AgentsService,
+  type AgentSummary,
+  type AgentToolDetail,
+} from '../agents/agents.service';
 import { runsOnPickedDatasets } from '../agents/builtin-sessions';
 
 /** One workflow of the catalogue, as `GET /workflows` lists it (api.md 116). */
@@ -57,6 +61,8 @@ export interface WorkflowAgentDetail {
   systemPrompt: string;
   /** Set when the prompt was longer than the cap and was shortened. */
   systemPromptTruncated?: true;
+  /** The agent's tools, as `GET /agents/:key` lists them (api.md 34). */
+  toolDetails: AgentToolDetail[];
 }
 
 /** A workflow step as the detail shows it: an agent step names its key. */
@@ -125,7 +131,7 @@ export class WorkflowsService {
   /**
    * An agent of a workflow in detail (api.md 34 `AgentDetail`): its LLM as
    * `<provider>/<model>` (null when none is set, never the environment's
-   * fallback) and its prompt, shortened to `SYSTEM_PROMPT_CAP`.
+   * fallback), its prompt, shortened to `SYSTEM_PROMPT_CAP`, and its tools.
    */
   private async agentDetail(agent: {
     key: string;
@@ -142,6 +148,11 @@ export class WorkflowsService {
       ...(prompt.length > SYSTEM_PROMPT_CAP
         ? { systemPromptTruncated: true as const }
         : {}),
+      toolDetails: (detail?.toolDetails ?? []).map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputs: [...tool.inputs],
+      })),
     };
   }
 

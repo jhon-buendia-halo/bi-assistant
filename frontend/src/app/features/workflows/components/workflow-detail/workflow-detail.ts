@@ -84,15 +84,16 @@ export class WorkflowDetailPage {
     this.designer.requestRunForm();
   }
 
-  /** The dialog closes; the focus goes back to the node it was opened from. */
+  /** The dialog closes; the focus goes back to the node or sub-node it was opened from. */
   closeNode(): void {
     const id = this.designer.openNodeId();
     this.designer.closeNode();
     if (id === null) return;
+    const key = CSS.escape(id);
     setTimeout(() =>
       this.host.nativeElement
         .querySelector<HTMLElement>(
-          `[data-testid="workflow-node-${CSS.escape(id)}"]`,
+          `[data-testid="workflow-node-${key}"], [data-testid="workflow-subnode-${key}"]`,
         )
         ?.focus(),
     );

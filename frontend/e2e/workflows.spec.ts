@@ -117,6 +117,14 @@ async function openNode(page: Page, id: string, title: string): Promise<Locator>
   return dialog;
 }
 
+/** Double-click a tool sub-node under an agent step: the tool's dialog opens. */
+async function openTool(page: Page, stepId: string, tool: string): Promise<Locator> {
+  await page.getByTestId(`workflow-subnode-${stepId}-tool-${tool}`).dblclick();
+  const dialog = nodeDialog(page);
+  await expect(dialog.getByTestId('workflow-ndv-title')).toHaveText(tool);
+  return dialog;
+}
+
 async function closeNode(page: Page): Promise<void> {
   await nodeDialog(page).getByTestId('workflow-ndv-close').click();
   await expect(nodeDialog(page)).toHaveCount(0);
@@ -622,6 +630,52 @@ test.describe('Feature: Workflows (the designer)', () => {
       });
     },
   );
+
+  test("A tool sub-node opens the tool's own details", { tag: ['@demo'] }, async ({ page }) => {
+    await test.step('Given I am on the "Questions to Insights v2" page', async () => {
+      await openWorkflows(page);
+      await openWorkflow(page, V2_ID, V2);
+    });
+    await test.step('When I double-click the "run_readonly_sql" tool under "Analyse"', async () => {
+      await openTool(page, 'analyse', 'run_readonly_sql');
+    });
+    await test.step(
+      "Then its dialog shows the tool's description and inputs, not the agent's prompt",
+      async () => {
+        const dialog = nodeDialog(page);
+        await expect(dialog.getByText('TOOL', { exact: true })).toBeVisible();
+        await expect(dialog.getByText('Tool of Questions to Insights v2 · Analyse')).toBeVisible();
+        await expect(dialog.getByTestId('workflow-tool-field-name')).toHaveText('run_readonly_sql');
+        await expect(dialog.getByTestId('workflow-tool-field-description')).toBeVisible();
+        await expect(dialog.getByTestId('workflow-tool-field-description')).not.toHaveText('None');
+        await expect(dialog.getByTestId('workflow-tool-field-inputs')).toContainText('sql');
+        await expect(dialog.getByTestId('workflow-tool-field-step')).toHaveText('Analyse');
+        await expect(dialog.getByTestId('workflow-step-field-system-prompt')).toHaveCount(0);
+        await expect(dialog.getByTestId('workflow-ndv-input')).toContainText(
+          'This tool has not run yet. Execute the workflow to see its calls.',
+        );
+        await closeNode(page);
+        await expect(
+          page.getByTestId('workflow-subnode-analyse-tool-run_readonly_sql'),
+        ).toBeFocused();
+      },
+    );
+    await test.step(`When I run it on "${QUESTION}" and open the tool again`, async () => {
+      await page.getByTestId('workflow-execute').click();
+      await runOnQuestion(page, QUESTION);
+      await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+      await openTool(page, 'analyse', 'run_readonly_sql');
+    });
+    await test.step('Then its Input shows the SQL the agent ran and its Output the call done', async () => {
+      const dialog = nodeDialog(page);
+      await expect(dialog.getByTestId('workflow-ndv-tool-input')).toHaveText([SQL]);
+      await expect(dialog.getByTestId('workflow-ndv-tool-result')).toHaveCount(1);
+      await expect(dialog.getByTestId('workflow-ndv-tool-result')).toContainText(/^\s*Done/);
+      await dialog.getByTestId('workflow-ndv-tab-settings').click();
+      await expect(dialog.getByTestId('workflow-ndv-setting-calls')).toHaveText('1');
+      await closeNode(page);
+    });
+  });
 });
 
 test('the Workflows pages have no detectable accessibility violations in either theme', async ({
@@ -655,6 +709,11 @@ test('the Workflows pages have no detectable accessibility violations in either 
 
   await openNode(page, 'analyse', 'Analyse');
   await scan('Questions to Insights v2 page, Analyse dialog');
+  await page.keyboard.press('Escape');
+  await expect(nodeDialog(page)).toHaveCount(0);
+
+  await openTool(page, 'analyse', 'run_readonly_sql');
+  await scan('Questions to Insights v2 page, run_readonly_sql tool dialog');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
 
