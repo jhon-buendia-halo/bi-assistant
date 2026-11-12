@@ -170,6 +170,20 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(el.querySelector('#workflow-agents-heading')).toBeNull();
     });
 
+    it('a chat workflow with a typed input lists that input once, not its first step', () => {
+      open({
+        ...V2,
+        input: [
+          { name: 'question', label: 'Question', type: 'textarea', required: true },
+          { name: 'datasets', label: 'Datasets', type: 'text', required: true },
+        ],
+      });
+      const params = el.querySelectorAll('[data-testid="workflow-param-question"]');
+      expect(params.length).toBe(1);
+      expect(params[0].textContent).not.toContain('from each chat message');
+      expect(el.querySelectorAll('[data-testid="workflow-param-datasets"]').length).toBe(1);
+    });
+
     it('a chat workflow: its trigger, bar note, what it takes from each message, and its agents', () => {
       open(V2);
       expect(text('workflow-panel-trigger')).toBe('Runs in a chat');

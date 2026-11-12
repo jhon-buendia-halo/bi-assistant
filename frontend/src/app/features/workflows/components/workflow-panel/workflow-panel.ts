@@ -82,7 +82,10 @@ export class WorkflowPanel {
    */
   protected readonly chatInputKeys = computed(() => {
     const workflow = this.designer.workflow();
+    // Only a chat workflow without a typed input of its own falls back to its
+    // first step's inputs; once it declares one (1.23.12), that list is it.
     if (workflow === null || workflow.trigger !== 'chat') return [];
+    if (workflow.input.length > 0) return [];
     return workflow.steps.length === 0 ? [] : workflow.steps[0].input;
   });
 
