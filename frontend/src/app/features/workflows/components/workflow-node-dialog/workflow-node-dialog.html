@@ -368,7 +368,7 @@
               <span class="text-[12px] text-fg-muted">
                 @if (hasError(call)) {
                   · <span class="text-on-danger-soft">{{ call.error }}</span>
-                } @else {
+                } @else if (toolMeta(call)) {
                   · {{ toolMeta(call) }}
                 }
               </span>
