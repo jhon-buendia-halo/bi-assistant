@@ -278,7 +278,11 @@ test.describe('Feature: Workflow runs', () => {
       await page.getByTestId('workflow-run').click();
     });
     await test.step('Then I see "Select at least one dataset" and no result', async () => {
-      await expect(page.getByTestId('workflow-run-error')).toHaveText('Select at least one dataset');
+      // The run form refuses it on the field, before any request (ui.md 4.4b).
+      await expect(page.getByTestId('workflow-input-error-datasets')).toHaveText(
+        'Select at least one dataset',
+      );
+      await expect(page.getByTestId('workflow-run-error')).toHaveCount(0);
       await expect(page.getByTestId('workflow-run-result')).toHaveCount(0);
       expect(stub.requests.filter((request) => request.stream)).toHaveLength(0);
     });

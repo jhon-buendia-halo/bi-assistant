@@ -389,10 +389,10 @@ test(
     );
     await scenarioStep(
       page,
-      'And I see "Empty question → fails the turn", "Stop → ends the turn here" and "Model error → fails the turn"',
+      'And I see "Stop → ends the turn here" and "Model error → fails the turn"',
       async () => {
+        // "Receive question" has no exit: the input is checked before the run.
         await expect(page.getByTestId('workflow-step-exit')).toHaveText([
-          'Empty question → fails the turn',
           'Model error → fails the turn',
           'Stop → ends the turn here',
         ]);

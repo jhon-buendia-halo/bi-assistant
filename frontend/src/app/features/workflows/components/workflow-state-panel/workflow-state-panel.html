@@ -21,6 +21,11 @@
         pill.label
       }}</span>
     }
+    @if (invalidLine(); as line) {
+      <span class="chip chip-danger" data-testid="workflow-state-invalid">{{
+        line
+      }}</span>
+    }
     <span
       class="text-[12px] text-fg-muted"
       data-testid="workflow-state-progress"

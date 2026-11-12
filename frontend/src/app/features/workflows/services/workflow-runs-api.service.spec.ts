@@ -145,6 +145,24 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
     expect(onRun).not.toHaveBeenCalled();
   });
 
+  it("passes on a refusal's field errors (api.md 119 `errors[]`)", async () => {
+    const errors = [
+      { field: 'question', message: 'Question is required' },
+      { field: 'datasets', message: 'Select at least one dataset' },
+      { field: null, message: 'Run "x" not found' },
+      { field: 3, message: 'dropped' },
+    ];
+    fetchSpy.and.resolveTo(
+      new Response(
+        JSON.stringify({ statusCode: 400, message: 'Question is required', errors }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const onError = jasmine.createSpy('onError');
+    await service.streamRun('qti-v2-turn', { input: {} }, { onError });
+    expect(onError).toHaveBeenCalledOnceWith('Question is required', errors.slice(0, 3));
+  });
+
   it("reports the agent turn's error event", async () => {
     fetchSpy.and.resolveTo(
       sseResponse(

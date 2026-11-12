@@ -13,6 +13,7 @@ import {
   readEventStream,
 } from '../../sessions/services/sessions-api.service';
 import {
+  WorkflowInputError,
   WorkflowRun,
   WorkflowRunRequest,
   WorkflowRunSummary,
@@ -40,23 +41,43 @@ export interface RunStreamHandlers extends AgentStreamHandlers {
    * the agent turn's error, or the client's own (`Backend unreachable`,
    * `Stream disconnected`, `Stream ended before completion`).
    */
-  onError?: (message: string) => void;
+  onError?: (message: string, errors?: WorkflowInputError[]) => void;
 }
 
-/** The server's text of a refusal: Style B `{ message }`, else the status. */
-async function refusalMessage(res: Response): Promise<string> {
+/** A refusal's `errors[]` (api.md 118, 119): the well-formed entries; undefined without any. */
+function refusalErrors(raw: unknown): WorkflowInputError[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const errors = raw.flatMap((entry): WorkflowInputError[] => {
+    const e = entry as { field?: unknown; message?: unknown } | null;
+    if (typeof e?.message !== 'string') return [];
+    if (e.field !== null && typeof e.field !== 'string') return [];
+    return [{ field: e.field, message: e.message }];
+  });
+  return errors.length ? errors : undefined;
+}
+
+/**
+ * A refusal (api.md 119, plain JSON before any frame): Style B `{ message }`
+ * with the input's `errors[]` when it has them, else the status.
+ */
+async function refusal(
+  res: Response,
+): Promise<{ message: string; errors?: WorkflowInputError[] }> {
   try {
-    const body = (await res.json()) as { message?: unknown };
+    const body = (await res.json()) as { message?: unknown; errors?: unknown };
+    const errors = refusalErrors(body?.errors);
+    const extra = errors ? { errors } : {};
     if (typeof body?.message === 'string' && body.message.trim()) {
-      return body.message;
+      return { message: body.message, ...extra };
     }
     if (Array.isArray(body?.message) && typeof body.message[0] === 'string') {
-      return body.message[0];
+      return { message: body.message[0], ...extra };
     }
+    if (errors) return { message: errors[0].message, errors };
   } catch {
     // Not JSON — fall back to the status.
   }
-  return `Stream failed (${res.status})`;
+  return { message: `Stream failed (${res.status})` };
 }
 
 /** A `step` frame without its `type`. */
@@ -271,7 +292,9 @@ export class WorkflowRunsApiService {
       return;
     }
     if (!res.ok) {
-      handlers.onError?.(await refusalMessage(res));
+      const { message, errors } = await refusal(res);
+      if (errors) handlers.onError?.(message, errors);
+      else handlers.onError?.(message);
       return;
     }
     if (!res.body) {

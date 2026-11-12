@@ -21,6 +21,7 @@ import {
 import {
   TRIGGER_LABELS,
   WorkflowDetail,
+  WorkflowInputField,
   WorkflowRunToolCall,
 } from '../../models/workflow.model';
 import {
@@ -29,6 +30,11 @@ import {
   WorkflowNodeKind,
 } from '../../models/workflow-node.model';
 import {
+  fieldRulesLabel,
+  usedByTitles,
+} from '../../services/workflow-input-validation';
+import {
+  nodeStatusLabel,
   runStatusLine,
   runStepStatusLabel,
 } from '../../services/workflows.util';
@@ -117,12 +123,17 @@ export class WorkflowNodeDialog {
   );
 
   readonly run = computed(() => this.node().run);
+  /** Start: the errors that refused the last Execute; empty otherwise. */
+  readonly inputErrors = computed(() => this.node().inputErrors ?? []);
   readonly statusLabel = computed(() => {
+    if (this.inputErrors().length) return nodeStatusLabel('invalid');
     const run = this.run();
     return run ? runStepStatusLabel(run.status) : null;
   });
   readonly statusChip = computed(() =>
-    nodeStatusChip(this.run()?.status ?? null),
+    this.inputErrors().length
+      ? nodeStatusChip('failed')
+      : nodeStatusChip(this.run()?.status ?? null),
   );
   readonly duration = computed(() =>
     formatNodeDuration(this.run()?.durationMs),
@@ -166,6 +177,16 @@ export class WorkflowNodeDialog {
 
   list(names: string[] | undefined): string {
     return names?.length ? names.join(', ') : 'None';
+  }
+
+  /** A Start input field's rules (`Max 4000 characters`); '' when none. */
+  fieldRules(field: WorkflowInputField): string {
+    return fieldRulesLabel(field);
+  }
+
+  /** The titles of the steps that read a Start input field, or `None`. */
+  fieldUsedBy(field: WorkflowInputField): string {
+    return this.list(usedByTitles(field, this.workflow().steps));
   }
 
   toolMeta(call: NodeToolCallView): string {

@@ -6,6 +6,7 @@ import {
   WorkflowRunStepStatus,
   WorkflowSummary,
 } from '../models/workflow.model';
+import { WorkflowNodeStatus } from '../models/workflow-node.model';
 
 export type WorkflowSectionId = 'official';
 
@@ -99,6 +100,11 @@ const STEP_STATUS_LABELS: Record<WorkflowRunStepStatus, string> = {
 /** A run step's status chip (plan 5.6). */
 export function runStepStatusLabel(status: WorkflowRunStepStatus): string {
   return STEP_STATUS_LABELS[status];
+}
+
+/** A canvas node's status: a run step's, or `Invalid input` for a refused Start (ui.md 4.4b). */
+export function nodeStatusLabel(status: WorkflowNodeStatus): string {
+  return status === 'invalid' ? 'Invalid input' : STEP_STATUS_LABELS[status];
 }
 
 /** One field of a run's or a step's output, as the result shows it. */

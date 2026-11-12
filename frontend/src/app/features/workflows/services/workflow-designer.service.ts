@@ -11,14 +11,15 @@ import {
   RunStepView,
   RunView,
   WorkflowDetail,
+  WorkflowInputError,
   WorkflowInputValue,
   WorkflowRun,
   WorkflowRunRequest,
   WorkflowRunStep,
-  WorkflowRunStepStatus,
 } from '../models/workflow.model';
 import {
   NodeInspection,
+  WorkflowNodeStatus,
   WorkflowStateSummary,
 } from '../models/workflow-node.model';
 import {
@@ -28,6 +29,10 @@ import {
   nodeStatuses,
   workflowStateSummary,
 } from './workflow-node-inspection';
+import {
+  inputErrorsByField,
+  validateRunForm,
+} from './workflow-input-validation';
 import { WorkflowRunsApiService } from './workflow-runs-api.service';
 import { WorkflowsApiService } from './workflows-api.service';
 import {
@@ -51,6 +56,7 @@ const NO_RUN_SUMMARY: WorkflowStateSummary = {
   total: 0,
   durationMs: null,
   runId: null,
+  invalidFields: 0,
 };
 
 /**
@@ -86,6 +92,8 @@ export class WorkflowDesigner {
 
   /** The datasets a `datasets` or `dataset` field picks from. */
   readonly datasets = signal<Dataset[]>([]);
+  /** The datasets list answered; until then a picked dataset is not checked. */
+  private readonly datasetsLoaded = signal(false);
   /** The run form's values, by field name. */
   readonly inputValues = signal<RunFormValues>({});
   /** The follow-up field under an answer. */
@@ -94,6 +102,15 @@ export class WorkflowDesigner {
   readonly running = signal(false);
   /** The server's refusal of the last Execute (before anything ran), or `Backend unreachable`. */
   readonly runError = signal<string | null>(null);
+  /**
+   * The errors that refused the last Execute, by the run form or the server
+   * (api.md 119 `errors[]`; ui.md 4.4b); empty when it was not refused.
+   */
+  readonly inputErrors = signal<WorkflowInputError[]>([]);
+  /** Each field's message, shown under its control. */
+  readonly fieldErrors = computed(() => inputErrorsByField(this.inputErrors()));
+  /** Bumped by a refusal with field errors: the run form focuses the first one. */
+  readonly invalidFocusRequest = signal(0);
 
   /** The run streaming or shown: its id once the stream said it started. */
   readonly runId = signal<string | null>(null);
@@ -213,6 +230,7 @@ export class WorkflowDesigner {
       run: this.runResult(),
       liveToolCalls: this.toolCalls(),
       running: this.running(),
+      inputErrors: this.inputErrors(),
     };
   });
 
@@ -231,7 +249,7 @@ export class WorkflowDesigner {
   });
 
   /** Each node's status in the run shown (Start and End included); empty with no run. */
-  readonly nodeStatuses = computed<Record<string, WorkflowRunStepStatus>>(() =>
+  readonly nodeStatuses = computed<Record<string, WorkflowNodeStatus>>(() =>
     nodeStatuses(this.nodes()),
   );
 
@@ -303,7 +321,10 @@ export class WorkflowDesigner {
 
   private loadDatasets(): void {
     this.datasetsSubscription = this.datasetsApi.getDatasets().subscribe({
-      next: (response) => this.datasets.set(response.datasets ?? []),
+      next: (response) => {
+        this.datasets.set(response.datasets ?? []);
+        this.datasetsLoaded.set(true);
+      },
       error: () => this.datasets.set([]),
     });
   }
@@ -322,9 +343,11 @@ export class WorkflowDesigner {
     this.openNodeId.set(null);
     this.runFormRequest.set(0);
     this.datasets.set([]);
+    this.datasetsLoaded.set(false);
     this.inputValues.set({});
     this.followUpText.set('');
     this.runError.set(null);
+    this.inputErrors.set([]);
     this.resetRun();
   }
 
@@ -355,8 +378,14 @@ export class WorkflowDesigner {
     this.runFormRequest.update((n) => n + 1);
   }
 
+  /** A field's new value; editing a field clears its error. */
   setInput(name: string, value: WorkflowInputValue): void {
     this.inputValues.update((values) => ({ ...values, [name]: value }));
+    if (this.inputErrors().some((error) => error.field === name)) {
+      this.inputErrors.update((errors) =>
+        errors.filter((error) => error.field !== name),
+      );
+    }
   }
 
   /** A text, text area or number field's value; empty until typed. */
@@ -392,12 +421,35 @@ export class WorkflowDesigner {
   }
 
   /**
-   * Run the workflow once on the form's values (api.md 119).
+   * Run the workflow once on the form's values (api.md 119), once the form
+   * has checked them: an invalid input sends nothing, each field shows its
+   * error and Start is invalid (ui.md 4.4b).
    */
   execute(): void {
     const workflow = this.workflow();
     if (workflow === null || this.running()) return;
-    this.start(workflow, { input: runInput(workflow.input, this.inputValues()) }, null);
+    const values = this.inputValues();
+    const errors = validateRunForm(
+      workflow.input,
+      values,
+      this.datasetsLoaded() ? this.datasets() : null,
+    );
+    if (errors.length > 0) {
+      this.cancelStream();
+      this.resetRun();
+      this.runError.set(null);
+      this.refuse(errors);
+      return;
+    }
+    this.start(workflow, { input: runInput(workflow.input, values) }, null);
+  }
+
+  /** The input was refused: errors on the fields, focus on the first one. */
+  private refuse(errors: WorkflowInputError[]): void {
+    this.inputErrors.set(errors);
+    if (Object.keys(this.fieldErrors()).length > 0) {
+      this.invalidFocusRequest.update((n) => n + 1);
+    }
   }
 
   /**
@@ -520,6 +572,7 @@ export class WorkflowDesigner {
     this.liveInput.set(request.input);
     this.liveStartedAt.set(new Date().toISOString());
     this.runError.set(null);
+    this.inputErrors.set([]);
     this.running.set(true);
     const controller = new AbortController();
     this.abort = controller;
@@ -576,11 +629,14 @@ export class WorkflowDesigner {
             this.running.set(false);
             this.showStored(run);
           },
-          onError: (message) => {
+          onError: (message, errors) => {
             if (!live()) return;
             if (this.runId() === null) {
               // Refused (or unreachable) before the run started: no result.
-              this.runError.set(message);
+              this.runError.set(
+                errors ? this.unshownError(workflow, errors) : message,
+              );
+              if (errors) this.refuse(errors);
               this.resetRun();
             } else {
               this.streamError.set(message);
@@ -596,6 +652,23 @@ export class WorkflowDesigner {
         this.running.set(false);
         this.abort = null;
       });
+  }
+
+  /**
+   * The first refusal no form control shows (not about a field, or about a
+   * hidden one): it stays under Execute; null when every error has a field.
+   */
+  private unshownError(
+    workflow: WorkflowDetail,
+    errors: WorkflowInputError[],
+  ): string | null {
+    const shown = new Set(
+      workflow.input.filter((f) => !f.hidden).map((f) => f.name),
+    );
+    const other = errors.find(
+      (error) => error.field === null || !shown.has(error.field),
+    );
+    return other?.message ?? null;
   }
 
   /** Update the latest unfinished call of `tool`. */

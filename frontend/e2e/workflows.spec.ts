@@ -4,6 +4,7 @@ import { test, expect } from './fixtures/app.fixture';
 import { scenarioStep } from './support/demo-captions';
 import { WORLD_CUP_DATASET, followOsTheme } from './helpers/app-actions';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
+import { apiJson } from './helpers/api';
 import { LlmStub, StubRequest, StubReply, startLlmStub } from './helpers/llm-stub';
 import { fillRun } from './helpers/run-ui';
 import { worldCupKey } from './helpers/world-cup-db';
@@ -413,7 +414,128 @@ test.describe('Feature: Workflows (run workflows)', () => {
       await expect(nodeStatus(page, 'wrap-up')).toHaveText('Skipped');
     });
   });
+
+  test(
+    'An invalid input is refused before the workflow runs',
+    { tag: ['@demo'] },
+    async ({ page }) => {
+      const runRequests: string[] = [];
+      page.on('request', (request) => {
+        if (request.method() === 'POST' && request.url().includes('/runs/stream')) {
+          runRequests.push(request.url());
+        }
+      });
+      const question = page.getByTestId('workflow-input-question');
+      const picker = page.getByTestId('workflow-input-datasets');
+
+      let storedBefore = 0;
+
+      await scenarioStep(page, 'Given I am on the "Questions to Insights v2" page', async () => {
+        await openWorkflows(page);
+        await openV2FromRun(page);
+        storedBefore = (await storedRuns(page)).length;
+      });
+      await scenarioStep(page, 'When I click Execute workflow', async () => {
+        await page.getByTestId('workflow-execute').click();
+        await expectRunPanel(page);
+      });
+      await scenarioStep(
+        page,
+        'And I leave the question blank (only spaces), pick no dataset and click Execute',
+        async () => {
+          await question.fill('   ');
+          await expect(
+            picker.getByRole('button', { name: WORLD_CUP_DATASET }),
+          ).toHaveAttribute('aria-pressed', 'false');
+          await page.getByTestId('workflow-run').click();
+        },
+      );
+      await scenarioStep(
+        page,
+        'Then I see "Question is required" and "Select at least one dataset" on their fields',
+        async () => {
+          await expect(page.getByTestId('workflow-input-error-question')).toHaveText(
+            'Question is required',
+          );
+          await expect(page.getByTestId('workflow-input-error-datasets')).toHaveText(
+            'Select at least one dataset',
+          );
+          await expect(question).toHaveAttribute('aria-invalid', 'true');
+          await expect(question).toHaveAccessibleDescription('Question is required');
+          await expect(question).toBeFocused();
+          await expect(picker).toHaveAttribute('aria-invalid', 'true');
+        },
+      );
+      await scenarioStep(
+        page,
+        'And the Start node shows "Invalid input" and the Workflow state says "Input invalid: 2 fields"',
+        async () => {
+          await expect(nodeStatus(page, 'start')).toHaveText('Invalid input');
+          await expect(nodeStatus(page, 'start')).toHaveAttribute('data-status', 'invalid');
+          await expect(page.getByTestId('workflow-state-invalid')).toHaveText(
+            'Input invalid: 2 fields',
+          );
+        },
+      );
+      await scenarioStep(page, 'And no run was started', async () => {
+        await expect(page.getByTestId('workflow-run-status')).toHaveCount(0);
+        await expect(page.getByTestId('workflow-run-error')).toHaveCount(0);
+        expect(runRequests).toEqual([]);
+        expect(await storedRuns(page)).toHaveLength(storedBefore);
+      });
+      await scenarioStep(
+        page,
+        'When I double-click Start',
+        async () => {
+          await openNode(page, 'start', 'Start');
+        },
+      );
+      await scenarioStep(
+        page,
+        'Then its Output lists the refused errors and its parameters say what each field needs',
+        async () => {
+          const dialog = nodeDialog(page);
+          await expect(dialog.getByTestId('workflow-ndv-input-errors').getByRole('listitem')).toHaveText([
+            'Question is required',
+            'Select at least one dataset',
+          ]);
+          await expect(dialog.getByTestId('workflow-ndv-output-status')).toHaveText(
+            'Invalid input',
+          );
+          await expect(dialog.getByTestId('workflow-param-rules-question')).toHaveText(
+            'Rules: Max 4000 characters',
+          );
+          await expect(dialog.getByTestId('workflow-param-usedby-question')).toHaveText(
+            'Used by: Receive question',
+          );
+          await closeNode(page);
+        },
+      );
+      await scenarioStep(
+        page,
+        `When I pick "${WORLD_CUP_DATASET}", type "${QUESTION}" and click Execute`,
+        async () => {
+          await fillRun(page, QUESTION, WORLD_CUP_DATASET);
+          await expect(page.getByTestId('workflow-input-error-question')).toHaveCount(0);
+          await expect(page.getByTestId('workflow-input-error-datasets')).toHaveCount(0);
+          await page.getByTestId('workflow-run').click();
+        },
+      );
+      await scenarioStep(page, 'Then the run starts and succeeds', async () => {
+        await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+        await expect(nodeStatus(page, 'start')).toHaveText('Done');
+        await expect(page.getByTestId('workflow-state-invalid')).toHaveCount(0);
+        expect(runRequests).toHaveLength(1);
+      });
+    },
+  );
 });
+
+/** The stored runs (api.md 120). */
+async function storedRuns(page: Page): Promise<unknown[]> {
+  const { runs } = await apiJson<{ runs: unknown[] }>(page, 'GET', '/workflow-runs');
+  return runs;
+}
 
 /** A canvas node's run status chip (ui.md 4.4b). */
 function nodeStatus(page: Page, id: string): Locator {
@@ -725,6 +847,20 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await backToWorkflows(page);
   await openV2FromRun(page);
   await page.getByTestId('workflow-execute').click();
+
+  // A refused Execute: the field errors, Start invalid, the state summary.
+  await page.getByTestId('workflow-run').click();
+  await expect(page.getByTestId('workflow-input-error-question')).toBeVisible();
+  await expect(page.getByTestId('workflow-input-error-datasets')).toBeVisible();
+  await expect(nodeStatus(page, 'start')).toHaveText('Invalid input');
+  await scan('Questions to Insights v2 page, input refused');
+
+  await openNode(page, 'start', 'Start');
+  await expect(nodeDialog(page).getByTestId('workflow-ndv-input-errors')).toBeVisible();
+  await scan('Questions to Insights v2 page, Start dialog with the refused input');
+  await page.keyboard.press('Escape');
+  await expect(nodeDialog(page)).toHaveCount(0);
+
   await runOnQuestion(page, QUESTION);
   await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
   await expect(page.getByTestId('run-answer')).toContainText(ANSWER);

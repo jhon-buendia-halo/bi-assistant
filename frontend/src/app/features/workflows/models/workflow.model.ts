@@ -32,6 +32,26 @@ export interface WorkflowInputField {
   datasourceKinds?: ('postgres' | 'databricks' | 'rest')[];
   /** Set by the app, never rendered as a control. */
   hidden?: boolean;
+  /**
+   * The ids of the steps that read this field straight from the workflow
+   * input, in step order (api.md 116, 117).
+   */
+  usedBy?: string[];
+  /** 'text' / 'textarea': the longest value accepted, trimmed. */
+  maxLength?: number;
+  /** 'number': the smallest value accepted. */
+  min?: number;
+  /** 'number': the largest value accepted. */
+  max?: number;
+}
+
+/**
+ * One refusal of a run's input (api.md 118, 119 `errors[]`); `field` is null
+ * for an error that is not about one field (`context.fromRunId`).
+ */
+export interface WorkflowInputError {
+  field: string | null;
+  message: string;
 }
 
 /** One value of a run's input (api.md 118). */

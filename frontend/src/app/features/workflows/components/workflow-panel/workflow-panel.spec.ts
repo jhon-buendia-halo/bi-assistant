@@ -329,7 +329,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
 
     it('shows a failed run: the failing step with its error, the others skipped', () => {
       openRun();
-      type('   ');
+      type('!!!');
       execute();
       done({
         status: 'failed',
@@ -350,13 +350,13 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
 
     it("shows the server's refusal and keeps no result; running again replaces the result", () => {
       openRun();
-      execute().handlers.onError!('Text is required');
+      type('a');
+      execute().handlers.onError!('Backend unreachable');
       fixture.detectChanges();
-      expect(text('workflow-run-error')).toBe('Text is required');
+      expect(text('workflow-run-error')).toBe('Backend unreachable');
       expect(q('workflow-run-error')?.getAttribute('role')).toBe('alert');
       expect(q('workflow-run-result')).toBeNull();
 
-      type('a');
       execute();
       done({ output: { summary: 'first' } });
       expect(q('workflow-run-error')).toBeNull();
@@ -387,6 +387,68 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       field.dispatchEvent(new Event('input'));
       fixture.detectChanges();
     }
+
+    function pickDataset(): void {
+      q('workflow-input-datasets')!.querySelector('button')!.click();
+      fixture.detectChanges();
+    }
+
+    it('refuses an invalid input before any request: each field shows its error and the first is focused', fakeAsync(() => {
+      openAssistant();
+      typeQuestion('   ');
+      click('workflow-run');
+      tick();
+      expect(runs.calls.length).toBe(0);
+      expect(q('workflow-run-error')).toBeNull();
+      expect(text('workflow-input-error-question')).toBe('Question is required');
+      expect(text('workflow-input-error-datasets')).toBe('Select at least one dataset');
+      const question = q('workflow-input-question')!;
+      expect(question.getAttribute('aria-invalid')).toBe('true');
+      expect(question.getAttribute('aria-describedby')).toBe('workflow-input-error-question');
+      expect(q('workflow-input-error-question')!.id).toBe('workflow-input-error-question');
+      const picker = q('workflow-input-datasets')!;
+      expect(picker.getAttribute('aria-invalid')).toBe('true');
+      expect(picker.getAttribute('aria-describedby')).toBe('workflow-input-error-datasets');
+      expect(q('workflow-input-verbose')!.hasAttribute('aria-invalid')).toBe(false);
+      expect(document.activeElement).toBe(question);
+
+      typeQuestion('Which team?');
+      expect(q('workflow-input-error-question')).toBeNull();
+      expect(question.hasAttribute('aria-invalid')).toBe(false);
+      expect(question.hasAttribute('aria-describedby')).toBe(false);
+      expect(q('workflow-input-error-datasets')).not.toBeNull();
+
+      pickDataset();
+      expect(q('workflow-input-error-datasets')).toBeNull();
+      click('workflow-run');
+      expect(runs.calls.length).toBe(1);
+    }));
+
+    it('focuses the first dataset when the datasets field is the first invalid one', fakeAsync(() => {
+      openAssistant();
+      typeQuestion('Which team?');
+      click('workflow-run');
+      tick();
+      expect(document.activeElement).toBe(
+        q('workflow-input-datasets')!.querySelector('button'),
+      );
+    }));
+
+    it("shows a server refusal's field errors on the fields", () => {
+      openAssistant();
+      typeQuestion('Which team?');
+      pickDataset();
+      click('workflow-run');
+      runs.last.handlers.onError!('Question must be at most 4000 characters', [
+        { field: 'question', message: 'Question must be at most 4000 characters' },
+      ]);
+      fixture.detectChanges();
+      expect(text('workflow-input-error-question')).toBe(
+        'Question must be at most 4000 characters',
+      );
+      expect(q('workflow-run-error')).toBeNull();
+      expect(q('workflow-run-result')).toBeNull();
+    });
 
     it('generates a control per field type: a text area, a datasets picker and a checkbox', () => {
       openAssistant();
@@ -475,6 +537,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
     it('shows the agent step live (Thinking, tool rows, the answer forming), then the answer and Follow up', () => {
       openAssistant();
       typeQuestion('Which team scored the most goals?');
+      pickDataset();
       click('workflow-run');
       const h = runs.last.handlers;
       h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
@@ -529,6 +592,8 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
 
     it('Stop ends the run: the run reads "Run stopped"', () => {
       openAssistant();
+      typeQuestion('Which team scored the most goals?');
+      pickDataset();
       click('workflow-run');
       const h = runs.last.handlers;
       h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
@@ -543,6 +608,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
     it('an old run that carries an rfpId, a deep-analysis report or files shows as a plain answer', () => {
       openAssistant();
       typeQuestion('Export a draft');
+      pickDataset();
       click('workflow-run');
       const h = runs.last.handlers;
       h.onRun!({ runId: 'run-3', workflowId: 'qti-v2-turn' });

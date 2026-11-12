@@ -73,6 +73,27 @@ export class WorkflowPanel {
         setTimeout(() => this.focusRunForm());
       });
     });
+    // A refused Execute: focus the first field with an error.
+    effect(() => {
+      if (this.designer.invalidFocusRequest() === 0) return;
+      untracked(() => {
+        this.designer.invalidFocusRequest.set(0);
+        setTimeout(() => this.focusFirstInvalid());
+      });
+    });
+  }
+
+  /** The first invalid control; a dataset group focuses its first choice, else itself. */
+  private focusFirstInvalid(): void {
+    const invalid = this.host.nativeElement.querySelector<HTMLElement>(
+      'form [aria-invalid="true"]',
+    );
+    if (invalid === null) return;
+    const target =
+      invalid.getAttribute('role') === 'group'
+        ? (invalid.querySelector<HTMLElement>('button') ?? invalid)
+        : invalid;
+    target.focus();
   }
 
   /** The first visible, enabled control of the run form, else its Execute. */
@@ -137,6 +158,22 @@ export class WorkflowPanel {
 
   protected inputId(name: string): string {
     return `workflow-input-${name}`;
+  }
+
+  /** The id (and test id) of a field's error message. */
+  protected errorId(name: string): string {
+    return `workflow-input-error-${name}`;
+  }
+
+  /** A field's error from the last refused Execute; null when it has none. */
+  protected fieldError(name: string): string | null {
+    const errors = this.designer.fieldErrors();
+    return Object.hasOwn(errors, name) ? errors[name] : null;
+  }
+
+  /** `aria-describedby` of a field's control: its error, while it has one. */
+  protected describedBy(name: string): string | null {
+    return this.fieldError(name) !== null ? this.errorId(name) : null;
   }
 
   protected onInput(name: string, event: Event): void {

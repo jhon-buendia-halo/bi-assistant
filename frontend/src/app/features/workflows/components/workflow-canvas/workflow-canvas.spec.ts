@@ -32,7 +32,7 @@ const V2: WorkflowDetail = {
       summary: 's',
       input: ['question', 'datasets'],
       output: ['question', 'datasets'],
-      exits: [{ label: 'Empty question', outcome: 'fails' }],
+      exits: [],
     },
     {
       id: 'load-catalog',
@@ -175,7 +175,7 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       'sqlQueries, failedQueries, rows',
     ]);
     expect(all('workflow-node-exit').map(text)).toEqual([
-      'Empty question → fails',
+      'Invalid input → not started',
       'Model error → fails',
       'Stop → ends here',
     ]);
@@ -184,10 +184,15 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       '[data-testid="workflow-node-exit"]',
     )!;
     expect(parseFloat(agentExit.style.top)).toBeLessThan(0);
-    const codeExit = q(
-      'workflow-node-receive-question',
-    )!.querySelector<HTMLElement>('[data-testid="workflow-node-exit"]')!;
-    expect(parseFloat(codeExit.style.top)).toBe(88 + 52);
+    const startExit = q('workflow-node-start')!.querySelector<HTMLElement>(
+      '[data-testid="workflow-node-exit"]',
+    )!;
+    expect(parseFloat(startExit.style.top)).toBe(88 + 52);
+    expect(
+      q('workflow-node-receive-question')!.querySelector(
+        '[data-testid="workflow-node-exit"]',
+      ),
+    ).toBeNull();
   });
 
   it("hangs the agent's model and tools below it, behind Model* and Tools ports", () => {
@@ -447,6 +452,16 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     expect(q('workflow-node-load-catalog')?.getAttribute('data-status')).toBe(
       'failed',
     );
+  });
+
+  it('shows Start invalid when the input was refused, with "Invalid input" for screen readers', () => {
+    fixture.componentRef.setInput('statuses', { start: 'invalid' });
+    fixture.detectChanges();
+    const badges = all('workflow-node-status');
+    expect(badges.map(text)).toEqual(['Invalid input']);
+    expect(badges[0].getAttribute('data-status')).toBe('invalid');
+    expect(text(badges[0].querySelector('.sr-only'))).toBe('Invalid input');
+    expect(q('workflow-node-start')?.getAttribute('data-status')).toBe('invalid');
   });
 
   it('shows a step running live', () => {
