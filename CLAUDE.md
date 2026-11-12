@@ -57,7 +57,7 @@ When in doubt between two sizes, take the larger and say so. The user can always
 - **Acceptance gate, once the user accepts the change by hand:** steps 6, 7, 9 and 10 per story; then, when the epic's last story is through, the epic's changelog entry, PR and retrospective (step 11). Steps 6, 7, 9, 10 and 11 wait until then. Several accepted stories may go through the gate together.
 - **No epic PR opens** while one of its stories has not passed the acceptance gate.
 - **Gherkin once.** A flow's steps live in its Playwright test. The capability spec keeps the Feature heading, its `E2E:` line and one `Scenario: <title>` line per scenario. Skill: `workflow-start`.
-- **Read and output rules, every agent.** Never read a file over 500 lines whole: `grep -n` or use the section index `specs/INDEX.md`, then read the range. Keep output quiet: Playwright `--reporter=dot`, Jest `--silent`, builds and test runs to a log file, and read back only the summary or the failure block.
+- **Read and output rules, every agent.** Never read a file over 500 lines whole: `grep -n` or use the section index [specs/INDEX.md](specs/INDEX.md), then read the range. Keep output quiet: Playwright `--reporter=dot`, Jest `--silent`, builds and test runs to a log file, and read back only the summary or the failure block.
 - **Session hygiene.** One lead session per epic wave. Before starting a new session, write `.context/handoff.md` (template in `workflow-gate`).
 
 Versioning stays automatic: the changelog is the human-readable record of what shipped; Conventional Commit subjects drive the version bump. Never edit `version` by hand; installers and the npm package are built manually. See [delivery.md](specs/system/delivery.md).

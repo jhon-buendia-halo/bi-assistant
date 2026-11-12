@@ -461,7 +461,7 @@ Developer tooling for people who work on this repository in Claude Code, not par
 
 **Model and effort routing** is the table in `CLAUDE.md` "Model usage" (Opus for plans, ADRs and risky paths; Sonnet for UI on an existing pattern, tests, deletions and docs; Haiku `Explore` for searches). With two or more builders in parallel, at most two use Opus.
 
-**Read and output rules, for every agent.** Never read a file over 500 lines whole: `grep -n` or the generated section index `specs/INDEX.md` (`path:start-end heading`), then read the range. Run Playwright with `--reporter=dot` (or `line`) and Jest with `--silent`, send builds and test runs to a log file, and read back only the summary or the failure block.
+**Read and output rules, for every agent.** Never read a file over 500 lines whole: `grep -n` or the generated section index [specs/INDEX.md](../INDEX.md) (`path:start-end heading`), then read the range. Run Playwright with `--reporter=dot` (or `line`) and Jest with `--silent`, send builds and test runs to a log file, and read back only the summary or the failure block.
 
 **Session hygiene.** One lead session per epic wave; before a new session, write `.context/handoff.md` (template in `workflow-gate`).
 
