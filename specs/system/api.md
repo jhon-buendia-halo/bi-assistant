@@ -637,7 +637,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     stepCount: number;
     bar: 'steps' | 'agent';           // what drove a chat's workflow bar (kept for the stored chats): these steps, or the agent's own phases
     trigger: 'run';                   // every workflow runs once on a typed input (118, 119); since 1.23.22 there is no 'chat' trigger
-    input: WorkflowInputField[];      // the typed input a run takes, in form order (every workflow has one since 1.23.12)
+    input: WorkflowInputField[];      // the Start (input) node: the typed input a run takes, in form order (every workflow has one since 1.23.12)
     datasets: string[];               // the datasets the workflow's agent declares; [] when the run picks them (Questions to Insights v2)
     missingDatasets: string[];        // named datasets that don't exist (as AgentSummary.missingDatasets)
     starterQuestions: string[];       // the agent's, as AgentSummary.starterQuestions
@@ -655,8 +655,13 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     default?: string | number | boolean;  // the value of a field that is missing or empty
     datasourceKinds?: ('postgres' | 'databricks' | 'rest')[];  // 'dataset' / 'datasets': only datasets bound to these kinds
     hidden?: boolean;                 // set by the app, never rendered as a control
+    maxLength?: number;               // 'text' / 'textarea': the most characters of the trimmed text (118's rules)
+    min?: number;                     // 'number': the smallest value
+    max?: number;                     // 'number': the largest value
+    usedBy: string[];                 // the ids of the steps that read the field straight from the input (a step whose `input` names it while no earlier step's `output` does), in step order; [] when none does
   };
   ```
+- **The input node covers every step.** Every name a step's `input` lists is a field of the workflow's `input` or an `output` of an earlier step; the catalogue refuses (throws when it loads) a workflow that breaks this, and a unit test checks every catalogued workflow (`checkWorkflowInputCoverage`, `backend/src/mastra/workflows/workflow-input.ts`). A rule field (`maxLength`, `min`, `max`) is sent only where the field has one.
 - Values:
 
   | id | name | kind | agents | stepCount | bar | datasets |
@@ -668,7 +673,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 
   | id | `input` (in order) |
   |---|---|
-  | `qti-v2-turn` | `question` (`Question`, textarea, required, placeholder `Ask a question about your data`); `datasets` (`Datasets`, datasets, required) |
+  | `qti-v2-turn` | `question` (`Question`, textarea, required, placeholder `Ask a question about your data`, `maxLength` 4000, `usedBy` `['receive-question']`); `datasets` (`Datasets`, datasets, required, `usedBy` `['receive-question']`) |
 
 - **Order:** `qti-v2-turn` only. No agent (System, Official or user) is listed.
 
@@ -686,6 +691,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     agent?: { key: string; name: string; tools: string[]; maxSteps: number };   // `key`: the agent's registry key or user-agent id
   };
   ```
+- `input` is 116's, each field with its rules and `usedBy` (the Start node's Parameters, [ui.md](ui.md) 4.4b).
 - Each agent step's `agent` also names its agent's `key`: the agent the code workflow runs for (`assistant-v2` for `qti-v2-turn`). `agents` is 116's list with each agent's `model`, `systemPrompt` and `toolDetails` read from 34 (the workflow page's tool dialog, [ui.md](ui.md) 4.4b); 116 itself is unchanged.
 - For `qti-v2-turn`, `steps` equals `agentWorkflow('assistant-v2').steps`, the `workflow` of 34, with `key` on its agent step's `agent`.
 - Errors (Style B): `404 "Workflow \"<id>\" not found"` for any id 116 does not list: unknown, a removed one (`agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>`, `seq-text-demo`, `deep-analysis`), a System agent (`agent:sql-fixer`), or the workflow's own agent (`agent:assistant-v2`).
@@ -694,13 +700,23 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 - Body: `{ input: Record<string, string | number | boolean | string[]>, context?: { fromRunId: string } }`. Runs the workflow once on `input` and answers when the run ends (no streaming). Capability: [workflows](../capabilities/workflows/spec.md) R11, R14; engine: [agents.md](agents.md) 5.14. The UI uses 119.
 - Response `200`: the `WorkflowRun` 119 ends with (`done.run`), whatever its status. It is always the stored run, as 121 reads it; the separate result shape with a `runId` is gone.
 - A failing step makes the run `failed`, with its error as the run's `error`; the steps after it are `skipped`.
-- Input: only the workflow's declared fields are read, in field order; a number field's value is converted to a number; a `datasets` value is a list of names, trimmed, without repeats; any other key is ignored. A whitespace-only text is accepted (the run decides what it means; an agent run refuses a blank question). A field that is missing or empty takes its `default` (a boolean `false`); an optional one without a default is left out.
-- Errors (Style B, 400), checked before anything runs, the first one winning: `"Workflow \"<id>\" can't run on an input"` for a workflow with no input fields; `"<label> is required"` for a required field that is missing or `""` (`"Question is required"`), and for a run whose question is blank; `"Select at least one dataset"` for a required `datasets` field with none; `"<label> must be a number"`; `"<label> must be true or false"`; `"Dataset \"<name>\" not found"`; `"Dataset \"<name>\" is not a <kinds> dataset"` (the field's `datasourceKinds` named, e.g. `PostgreSQL or Databricks`); `"Run \"<id>\" not found"` for a `context.fromRunId` that names no stored run, and `"Run \"<id>\" has no answer to continue from"` for a stored run without a question and answer. `404 "Workflow \"<id>\" not found"` for any id 116 does not list.
+- Input: the input node validates the **whole** input before the run (`validateWorkflowInput`, `backend/src/mastra/workflows/workflow-input.ts`). Only the workflow's declared fields are read, in field order; a number field's value is converted to a number; a `datasets` value is a list of names, trimmed, without repeats; any other key is ignored; a text value is kept as sent. A field that is missing, `""` or **whitespace-only** is missing: it takes its `default` (a boolean `false`); a required one without a default is refused; an optional one without a default is left out.
+- Errors (Style B, 400), checked before anything runs; **every** error is collected, at most one per field, in field order, then the `context` error:
+  ```ts
+  type RunInputRefusal = {
+    statusCode: 400;
+    error: 'Bad Request';
+    message: string;                                   // the first error's message (what a client that reads only `message` shows)
+    errors: { field: string | null; message: string }[];   // all of them; `field` is the input field's `name`, null for a non-field error
+  };
+  ```
+  Field errors (`field` = the field's name): `"<label> is required"` for a required field that is missing, `""` or whitespace-only (`"Question is required"`); `"Select at least one dataset"` for a required `datasets` field with none; `"<label> must be a number"`; `"<label> must be at least <min>"` / `"<label> must be at most <max>"` for a number outside `min` / `max`; `"<label> must be at most <maxLength> characters"` for a text whose trimmed length is over `maxLength` (`"Question must be at most 4000 characters"`); `"<label> must be true or false"`; `"Dataset \"<name>\" not found"`; `"Dataset \"<name>\" is not a <kinds> dataset"` (the field's `datasourceKinds` named, e.g. `PostgreSQL or Databricks`). Non-field errors (`field: null`): `"Run \"<id>\" not found"` for a `context.fromRunId` that names no stored run, and `"Run \"<id>\" has no answer to continue from"` for a stored run without a question and answer, listed after the field errors; `"Workflow \"<id>\" can't run on an input"` alone, for a workflow with no input fields. Example: `{ input: { question: "  ", datasets: [] } }` answers `{ statusCode: 400, error: "Bad Request", message: "Question is required", errors: [{ field: "question", message: "Question is required" }, { field: "datasets", message: "Select at least one dataset" }] }`. `404 "Workflow \"<id>\" not found"` for any id 116 does not list (plain Style B, no `errors`).
+- A refused run is never stored and no step runs.
 - Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before it starts and updated when it ends, with its steps, output or error; an engine failure is stored as `failed` and answered as the error it is. A run is 119's, without the stream.
 
 #### 119. `POST /workflows/:id/runs/stream`
 - Body: as 118. Runs the workflow once on `input`, streamed: `qti-v2-turn` streams its step events, its analyse step running one agent turn on a run host through the chat turn path ([agents.md](agents.md) 5.14), so its model request equals a chat turn's for the same input. Capability: [workflows](../capabilities/workflows/spec.md) R14-R17.
-- Refusals: 118's, answered with their real status (Style B) **before** the stream starts; nothing runs.
+- Refusals: 118's, the same body (`message` and `errors[]`), answered as plain JSON (`application/json`) with their real status (Style B) **before** the stream starts: no SSE frame is sent, no run is stored, no step runs.
 - Response `200`, SSE (section 3.6).
 - Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before the `run` event is sent, and updated when it ends (`success`, `failed` or `stopped`, a stop included); a run that throws while it ends is stored `failed` with that error. A run creates the run host `run-<run id>` (in memory, never listed) and its workspace `workspaces/session-run-<run id>/` (a session workspace's layout, [data-model.md](data-model.md) 4.1); after the turn the host's memory thread is deleted and the host leaves memory. The workspace stays with the stored run, so its files download through 123-127, until the run is deleted (122).
 

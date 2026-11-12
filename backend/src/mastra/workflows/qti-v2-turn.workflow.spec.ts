@@ -155,16 +155,17 @@ describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
     });
   });
 
-  it('fails Receive question on an empty question, before the agent runs', async () => {
-    const analyse = jest.fn();
+  it('no longer fails Receive question on a blank question: the input node refuses it before the run', async () => {
+    const analyse = jest.fn(() =>
+      Promise.resolve({ calls: [], stopped: false }),
+    );
     const { events, result } = await run('   ', analyse);
-    expect(events).toEqual([
+    expect(events.slice(0, 2)).toEqual([
       'receive-question:running',
-      'receive-question:failed',
+      'receive-question:success',
     ]);
-    expect(analyse).not.toHaveBeenCalled();
-    expect(result.status).toBe('failed');
-    expect((result.error as Error).message).toBe('The question is empty');
+    expect(events).not.toContain('receive-question:failed');
+    expect(result.status).toBe('success');
   });
 
   it('fails Analyse with the agent error and never wraps up', async () => {

@@ -502,5 +502,39 @@ describe('Streamed runs of agent workflows (API)', () => {
       );
       expect(stub.requests.length).toBe(before);
     });
+
+    it('a blank question and no datasets answer one JSON 400 with both errors, before any SSE frame; nothing is stored', async () => {
+      const history = async () =>
+        (
+          (await http().get('/workflow-runs').expect(200)).body as {
+            runs: { id: string }[];
+          }
+        ).runs.map((run) => run.id);
+      const stored = await history();
+      const before = stub.requests.length;
+      const res = await fetch(
+        `${backend!.url}/workflows/qti-v2-turn/runs/stream`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input: { question: '   ', datasets: [] } }),
+        },
+      );
+      expect(res.status).toBe(400);
+      expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+      const text = await res.text();
+      expect(text).not.toContain('data:');
+      expect(JSON.parse(text)).toEqual({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'Question is required',
+        errors: [
+          { field: 'question', message: 'Question is required' },
+          { field: 'datasets', message: 'Select at least one dataset' },
+        ],
+      });
+      expect(stub.requests.length).toBe(before);
+      expect(await history()).toEqual(stored);
+    });
   });
 });

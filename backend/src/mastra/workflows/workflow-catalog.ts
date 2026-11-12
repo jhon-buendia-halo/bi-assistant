@@ -26,6 +26,22 @@ import {
   QTI_V2_TURN_WORKFLOW_ID,
   type WorkflowStepEntry,
 } from './qti-v2-turn.steps';
+import {
+  assertWorkflowInputCoverage,
+  type WorkflowInputField,
+  type WorkflowInputValue,
+  type WorkflowInputValues,
+} from './workflow-input';
+
+export type {
+  InputDatasourceKind,
+  InputDataset,
+  WorkflowInputField,
+  WorkflowInputFieldDetail,
+  WorkflowInputFieldType,
+  WorkflowInputValue,
+  WorkflowInputValues,
+} from './workflow-input';
 
 /** What drives a chat's workflow bar: the workflow's steps, or the agent's own phases. */
 export type WorkflowBar = 'steps' | 'agent';
@@ -36,38 +52,6 @@ export type WorkflowBar = 'steps' | 'agent';
  * and its result is shown on its page.
  */
 export type WorkflowTrigger = 'run';
-
-/** The type of one input field (plan 4.1). */
-export type WorkflowInputFieldType =
-  | 'text'
-  | 'textarea'
-  | 'number'
-  /** A checkbox; absent means false (or the field's default). */
-  | 'boolean'
-  /** One or more dataset names. */
-  | 'datasets'
-  /** Exactly one dataset name. */
-  | 'dataset';
-
-/** The datasource kinds a `dataset` or `datasets` field can be limited to. */
-export type InputDatasourceKind = 'postgres' | 'databricks' | 'rest';
-
-/** One field of a workflow's input, defined in code (api.md 116). */
-export interface WorkflowInputField {
-  name: string;
-  label: string;
-  type: WorkflowInputFieldType;
-  required: boolean;
-  placeholder?: string;
-  /** One line under the control. */
-  help?: string;
-  /** The value of a field that is missing or empty. */
-  default?: string | number | boolean;
-  /** `dataset` / `datasets`: only datasets bound to these kinds. */
-  datasourceKinds?: InputDatasourceKind[];
-  /** Set by the app, never rendered as a control. */
-  hidden?: boolean;
-}
 
 /** The placeholder of a run's question. */
 const QUESTION_PLACEHOLDER = 'Ask a question about your data';
@@ -116,163 +100,30 @@ export interface CodeWorkflowSource {
   bar: WorkflowBar;
 }
 
-/** The workflows defined in code, in catalogue order. */
-export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] = [
-  {
-    id: QTI_V2_TURN_WORKFLOW_ID,
-    name: ASSISTANT_V2_NAME,
-    description: ASSISTANT_V2_DESCRIPTION,
-    primaryFor: ASSISTANT_V2_AGENT_KEY,
-    trigger: 'run',
-    input: [QUESTION_FIELD, DATASETS_FIELD],
-    steps: QTI_V2_TURN_STEPS,
-    bar: 'steps',
-  },
-];
-
-/** One value of a run's input. */
-export type WorkflowInputValue = string | number | boolean | string[];
-
-/** A run's input values, by field name. */
-export type WorkflowInputValues = Record<string, WorkflowInputValue>;
-
-/** A dataset a `dataset` or `datasets` field is checked against. */
-export interface InputDataset {
-  name: string;
-  datasourceKind?: string;
-}
-
-/** How a refusal names a datasource kind. */
-const KIND_LABELS: Record<InputDatasourceKind, string> = {
-  postgres: 'PostgreSQL',
-  databricks: 'Databricks',
-  rest: 'REST',
-};
-
-/** `A`, `A or B`, `A, B or C`. */
-function orList(items: readonly string[]): string {
-  if (items.length <= 1) return items.join('');
-  return `${items.slice(0, -1).join(', ')} or ${items.at(-1)}`;
-}
-
-type FieldCheck =
-  { ok: true; value?: WorkflowInputValue } | { ok: false; error: string };
-
-/** One dataset name checked against the store and the field's kinds. */
-function datasetError(
-  field: WorkflowInputField,
-  name: string,
-  datasets: readonly InputDataset[],
-): string | undefined {
-  const found = datasets.find((dataset) => dataset.name === name);
-  if (!found) return `Dataset "${name}" not found`;
-  const kinds = field.datasourceKinds;
-  if (
-    kinds?.length &&
-    !kinds.includes(found.datasourceKind as InputDatasourceKind)
-  ) {
-    return `Dataset "${name}" is not a ${orList(kinds.map((kind) => KIND_LABELS[kind]))} dataset`;
-  }
-  return undefined;
-}
-
-/** A field that is missing or empty: its default, a refusal, or nothing. */
-function missingField(field: WorkflowInputField): FieldCheck {
-  if (field.default !== undefined) return { ok: true, value: field.default };
-  if (field.type === 'boolean') return { ok: true, value: false };
-  if (!field.required) return { ok: true };
-  return {
-    ok: false,
-    error:
-      field.type === 'datasets'
-        ? 'Select at least one dataset'
-        : `${field.label} is required`,
-  };
-}
-
-/** One field's value checked against its type (plan 4.1). */
-function checkField(
-  field: WorkflowInputField,
-  value: unknown,
-  datasets: readonly InputDataset[],
-): FieldCheck {
-  if (field.type === 'boolean') {
-    if (value === undefined || value === null || value === '') {
-      return missingField(field);
-    }
-    return typeof value === 'boolean'
-      ? { ok: true, value }
-      : { ok: false, error: `${field.label} must be true or false` };
-  }
-  if (field.type === 'datasets') {
-    const names = Array.isArray(value)
-      ? [
-          ...new Set(
-            value
-              .filter((name): name is string => typeof name === 'string')
-              .map((name) => name.trim())
-              .filter(Boolean),
-          ),
-        ]
-      : [];
-    if (!names.length) return missingField(field);
-    for (const name of names) {
-      const error = datasetError(field, name, datasets);
-      if (error) return { ok: false, error };
-    }
-    return { ok: true, value: names };
-  }
-  const usable =
-    (typeof value === 'string' && value !== '') || typeof value === 'number';
-  if (!usable) return missingField(field);
-  if (field.type === 'number') {
-    const typed = typeof value === 'string' ? value.trim() : '';
-    const number =
-      typeof value === 'number' ? value : typed ? Number(typed) : NaN;
-    return Number.isFinite(number)
-      ? { ok: true, value: number }
-      : { ok: false, error: `${field.label} must be a number` };
-  }
-  if (field.type === 'dataset') {
-    const name = String(value).trim();
-    if (!name) return missingField(field);
-    const error = datasetError(field, name, datasets);
-    return error ? { ok: false, error } : { ok: true, value: name };
-  }
-  return { ok: true, value: String(value) };
-}
+/** The longest question a run takes, in characters (trimmed). */
+export const QUESTION_MAX_LENGTH = 4000;
 
 /**
- * A run's input checked against the workflow's fields (api.md 118, 119;
- * plan 4.1), in field order, the first refusal winning: the declared fields
- * only, a number field as a number, a boolean as a boolean, datasets as
- * trimmed names in order without repeats. A field that is missing or empty
- * takes its `default` (a boolean `false`); a required one without a default
- * is refused with `<label> is required` (`Select at least one dataset` for
- * `datasets`). `<label> must be a number`, `<label> must be true or false`,
- * `Dataset "<name>" not found` and `Dataset "<name>" is not a <kinds>
- * dataset` refuse a value of the wrong kind. A whitespace-only text passes:
- * the run decides what it means. An optional field that is missing or empty
- * and has no default is left out.
+ * The workflows defined in code, in catalogue order. Built through the
+ * input-coverage check: a workflow whose steps read a field that neither
+ * its input nor an earlier step gives throws here, so it never loads.
  */
-export function parseWorkflowInput(
-  fields: readonly WorkflowInputField[],
-  raw: unknown,
-  datasets: readonly InputDataset[] = [],
-): { ok: true; values: WorkflowInputValues } | { ok: false; error: string } {
-  const body =
-    raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const values: WorkflowInputValues = {};
-  for (const field of fields) {
-    const value = Object.hasOwn(body, field.name)
-      ? body[field.name]
-      : undefined;
-    const checked = checkField(field, value, datasets);
-    if (!checked.ok) return checked;
-    if (checked.value !== undefined) values[field.name] = checked.value;
-  }
-  return { ok: true, values };
-}
+export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
+  assertWorkflowInputCoverage<CodeWorkflowSource>([
+    {
+      id: QTI_V2_TURN_WORKFLOW_ID,
+      name: ASSISTANT_V2_NAME,
+      description: ASSISTANT_V2_DESCRIPTION,
+      primaryFor: ASSISTANT_V2_AGENT_KEY,
+      trigger: 'run',
+      input: [
+        { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
+        DATASETS_FIELD,
+      ],
+      steps: QTI_V2_TURN_STEPS,
+      bar: 'steps',
+    },
+  ]);
 
 /** What one agent turn of a run takes from the run's input (plan 4.2, 5.1). */
 export interface AgentRunTurn {

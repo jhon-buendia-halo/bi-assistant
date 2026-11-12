@@ -116,12 +116,15 @@ describe('The workflow catalogue (API)', () => {
             type: 'textarea',
             required: true,
             placeholder: 'Ask a question about your data',
+            maxLength: 4000,
+            usedBy: ['receive-question'],
           },
           {
             name: 'datasets',
             label: 'Datasets',
             type: 'datasets',
             required: true,
+            usedBy: ['receive-question'],
           },
         ],
         datasets: [],
@@ -230,7 +233,12 @@ describe('The workflow catalogue (API)', () => {
     it('GET /workflows/qti-v2-turn details its steps and the agent they call', async () => {
       const v2 = (await http().get('/workflows/qti-v2-turn').expect(200))
         .body as {
-        steps: { id: string; agent?: { key: string } }[];
+        input: Record<string, unknown>[];
+        steps: {
+          id: string;
+          agent?: { key: string };
+          exits: { label: string; outcome: string }[];
+        }[];
         agents: { key: string; name: string; model: string | null }[];
       };
       expect(v2.steps.map((step) => step.id)).toEqual([
@@ -239,6 +247,34 @@ describe('The workflow catalogue (API)', () => {
         'analyse',
         'wrap-up',
       ]);
+      // The Start node: each field with its rules and the steps reading it.
+      expect(
+        v2.input.map(({ name, required, maxLength, usedBy }) => ({
+          name,
+          required,
+          maxLength,
+          usedBy,
+        })),
+      ).toEqual([
+        {
+          name: 'question',
+          required: true,
+          maxLength: 4000,
+          usedBy: ['receive-question'],
+        },
+        {
+          name: 'datasets',
+          required: true,
+          maxLength: undefined,
+          usedBy: ['receive-question'],
+        },
+      ]);
+      // Receive question no longer fails on an empty question: the input
+      // node refuses it before the run.
+      expect(v2.steps[0].exits).toEqual([]);
+      expect(v2.steps.flatMap((step) => step.exits)).not.toContainEqual(
+        expect.objectContaining({ label: 'Empty question' }),
+      );
       expect(
         v2.steps.filter((step) => step.agent).map((step) => step.agent?.key),
       ).toEqual(['assistant-v2']);
@@ -296,14 +332,37 @@ describe('The workflow catalogue (API)', () => {
 
     it.each([
       [{ input: { datasets: ['World Cup Core'] } }, 'Question is required'],
+      [
+        { input: { question: '   ', datasets: ['World Cup Core'] } },
+        'Question is required',
+      ],
       [{ input: { question: 'Hi' } }, 'Select at least one dataset'],
       [
         { input: { question: 'Hi', datasets: ['Nope'] } },
         'Dataset "Nope" not found',
       ],
+      [
+        { input: { question: 'x'.repeat(4001), datasets: ['World Cup Core'] } },
+        'Question must be at most 4000 characters',
+      ],
     ])('qti-v2-turn refuses %p with 400 %p', async (body, message) => {
       const res = await runs('qti-v2-turn').send(body).expect(400);
       expect((res.body as { message: string }).message).toBe(message);
+    });
+
+    it('refuses a blank question and no datasets with both errors (the whole input at once)', async () => {
+      const res = await runs('qti-v2-turn')
+        .send({ input: { question: ' \n ', datasets: [] } })
+        .expect(400);
+      expect(res.body).toEqual({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'Question is required',
+        errors: [
+          { field: 'question', message: 'Question is required' },
+          { field: 'datasets', message: 'Select at least one dataset' },
+        ],
+      });
     });
 
     it.each(NOT_WORKFLOWS)('%s answers 404', async (id) => {

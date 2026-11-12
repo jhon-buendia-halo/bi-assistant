@@ -12,12 +12,10 @@ import {
   draftRunInput,
   oneStepWorkflowSteps,
   parseWorkflowId,
-  parseWorkflowInput,
   sessionWorkflowId,
   wrappedAgentMaxSteps,
   workflowsUsingAgent,
   WRAPPED_AGENT_KEYS,
-  type WorkflowInputField,
 } from './workflow-catalog';
 
 /**
@@ -67,6 +65,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         type: 'textarea',
         required: true,
         placeholder: 'Ask a question about your data',
+        maxLength: 4000,
       },
       { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
     ]);
@@ -143,232 +142,6 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       expect(
         agentRunTurn({ message: 'Start Acme 2027', rfpId: 'r-1' }),
       ).toEqual({ question: '', careful: false });
-    });
-  });
-
-  describe('parseWorkflowInput (api.md 118)', () => {
-    const fields: WorkflowInputField[] = [
-      { name: 'text', label: 'Text', type: 'textarea', required: true },
-      { name: 'title', label: 'Title', type: 'text', required: false },
-      { name: 'limit', label: 'Limit', type: 'number', required: false },
-      { name: 'count', label: 'Count', type: 'number', required: true },
-    ];
-
-    it('keeps the declared fields, numbers as numbers, and drops anything else', () => {
-      expect(
-        parseWorkflowInput(fields, {
-          text: '  Hello  ',
-          title: 'T',
-          limit: '12.5',
-          count: 3,
-          extra: 'x',
-        }),
-      ).toEqual({
-        ok: true,
-        values: { text: '  Hello  ', title: 'T', limit: 12.5, count: 3 },
-      });
-    });
-
-    it('accepts a whitespace-only text: the run decides what it means', () => {
-      expect(parseWorkflowInput(fields, { text: '   ', count: 1 })).toEqual({
-        ok: true,
-        values: { text: '   ', count: 1 },
-      });
-    });
-
-    it('leaves out an optional field that is missing or empty', () => {
-      expect(
-        parseWorkflowInput(fields, {
-          text: 'a',
-          count: 1,
-          limit: '',
-          title: '',
-        }),
-      ).toEqual({ ok: true, values: { text: 'a', count: 1 } });
-    });
-
-    it.each([
-      [{ count: 1 }, 'Text is required'],
-      [{ text: '', count: 1 }, 'Text is required'],
-      [{ text: null, count: 1 }, 'Text is required'],
-      [{ text: 'a' }, 'Count is required'],
-      [{ text: 'a', count: '' }, 'Count is required'],
-      [{ text: 'a', count: 'many' }, 'Count must be a number'],
-      [{ text: 'a', count: 1, limit: 'ten' }, 'Limit must be a number'],
-      [{ text: 'a', count: Number.NaN }, 'Count must be a number'],
-    ])('refuses %p with %p', (input, error) => {
-      expect(parseWorkflowInput(fields, input)).toEqual({ ok: false, error });
-    });
-
-    it('refuses a text field that is not a string or a number', () => {
-      expect(parseWorkflowInput(fields, { text: { a: 1 }, count: 1 })).toEqual({
-        ok: false,
-        error: 'Text is required',
-      });
-    });
-
-    it('treats a missing or non-object input as empty', () => {
-      expect(parseWorkflowInput(fields, undefined)).toEqual({
-        ok: false,
-        error: 'Text is required',
-      });
-      expect(parseWorkflowInput([], 'nope')).toEqual({ ok: true, values: {} });
-    });
-  });
-
-  describe('parseWorkflowInput: boolean, datasets and dataset (plan 4.1)', () => {
-    const datasets = [
-      { name: 'World Cup Core', datasourceKind: 'postgres' },
-      { name: 'Claims', datasourceKind: 'databricks' },
-      { name: 'Orders API', datasourceKind: 'rest' },
-      { name: 'Unbound' },
-    ];
-    const fields: WorkflowInputField[] = [
-      { name: 'question', label: 'Question', type: 'textarea', required: true },
-      { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
-      {
-        name: 'careful',
-        label: 'Careful',
-        type: 'boolean',
-        required: false,
-        default: false,
-      },
-    ];
-    const readiness: WorkflowInputField[] = [
-      {
-        name: 'dataset',
-        label: 'Dataset',
-        type: 'dataset',
-        required: true,
-        datasourceKinds: ['postgres', 'databricks'],
-      },
-      {
-        name: 'question',
-        label: 'Question',
-        type: 'textarea',
-        required: false,
-        default: 'Assess the readiness of this dataset',
-      },
-    ];
-
-    it('keeps the datasets in order without repeats, and a boolean as is', () => {
-      expect(
-        parseWorkflowInput(
-          fields,
-          {
-            question: 'Who won?',
-            datasets: ['Claims', ' World Cup Core ', 'Claims'],
-            careful: true,
-          },
-          datasets,
-        ),
-      ).toEqual({
-        ok: true,
-        values: {
-          question: 'Who won?',
-          datasets: ['Claims', 'World Cup Core'],
-          careful: true,
-        },
-      });
-    });
-
-    it('gives a missing field its default: false for careful, the text for an empty question', () => {
-      expect(
-        parseWorkflowInput(
-          fields,
-          { question: 'q', datasets: ['Claims'] },
-          datasets,
-        ),
-      ).toEqual({
-        ok: true,
-        values: { question: 'q', datasets: ['Claims'], careful: false },
-      });
-      expect(
-        parseWorkflowInput(
-          readiness,
-          { dataset: 'Claims', question: '' },
-          datasets,
-        ),
-      ).toEqual({
-        ok: true,
-        values: {
-          dataset: 'Claims',
-          question: 'Assess the readiness of this dataset',
-        },
-      });
-    });
-
-    it.each([
-      [{ question: 'q' }, 'Select at least one dataset'],
-      [{ question: 'q', datasets: [] }, 'Select at least one dataset'],
-      [{ question: 'q', datasets: 'Claims' }, 'Select at least one dataset'],
-      [{ question: 'q', datasets: ['', ' '] }, 'Select at least one dataset'],
-      [{ question: 'q', datasets: ['Nope'] }, 'Dataset "Nope" not found'],
-      [
-        { question: 'q', datasets: ['Claims'], careful: 'yes' },
-        'Careful must be true or false',
-      ],
-      [
-        { question: 'q', datasets: ['Claims'], careful: 1 },
-        'Careful must be true or false',
-      ],
-      [{ datasets: ['Claims'] }, 'Question is required'],
-    ])('refuses %p with %p', (input, error) => {
-      expect(parseWorkflowInput(fields, input, datasets)).toEqual({
-        ok: false,
-        error,
-      });
-    });
-
-    it.each([
-      [{}, 'Dataset is required'],
-      [{ dataset: '' }, 'Dataset is required'],
-      [{ dataset: 'Nope' }, 'Dataset "Nope" not found'],
-      [
-        { dataset: 'Orders API' },
-        'Dataset "Orders API" is not a PostgreSQL or Databricks dataset',
-      ],
-      [
-        { dataset: 'Unbound' },
-        'Dataset "Unbound" is not a PostgreSQL or Databricks dataset',
-      ],
-    ])('refuses the readiness input %p with %p', (input, error) => {
-      expect(parseWorkflowInput(readiness, input, datasets)).toEqual({
-        ok: false,
-        error,
-      });
-    });
-
-    it('checks the fields in order: the first refusal wins', () => {
-      expect(
-        parseWorkflowInput(fields, { datasets: ['Nope'] }, datasets),
-      ).toEqual({ ok: false, error: 'Question is required' });
-    });
-
-    it('names one, two or three kinds in the kind refusal', () => {
-      const of = (kinds: ('postgres' | 'databricks' | 'rest')[]) =>
-        parseWorkflowInput(
-          [
-            {
-              name: 'dataset',
-              label: 'Dataset',
-              type: 'dataset',
-              required: true,
-              datasourceKinds: kinds,
-            },
-          ],
-          { dataset: 'Unbound' },
-          datasets,
-        );
-      expect(of(['postgres'])).toEqual({
-        ok: false,
-        error: 'Dataset "Unbound" is not a PostgreSQL dataset',
-      });
-      expect(of(['postgres', 'databricks', 'rest'])).toEqual({
-        ok: false,
-        error:
-          'Dataset "Unbound" is not a PostgreSQL, Databricks or REST dataset',
-      });
     });
   });
 

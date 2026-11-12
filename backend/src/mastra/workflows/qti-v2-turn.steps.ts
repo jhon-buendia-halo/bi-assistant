@@ -41,10 +41,11 @@ export const QTI_V2_TURN_STEPS = [
     id: 'receive-question',
     title: 'Receive question',
     kind: 'code',
-    summary: 'Trims the question. An empty one fails the step.',
+    summary:
+      'Trims the question. The input node has checked it before the run.',
     input: ['question', 'datasets'],
     output: ['question', 'datasets'],
-    exits: [{ label: 'Empty question', outcome: 'fails' }],
+    exits: [],
   },
   {
     id: 'load-catalog',
@@ -132,11 +133,13 @@ export interface QtiV2TurnRuntime {
   }): Promise<AnalyseOutcome>;
 }
 
-/** Step 1: the trimmed question; an empty one fails the step. */
+/**
+ * Step 1: the trimmed question. It never fails: the run's input was checked
+ * as a whole before the run (api.md 118, 119), so a blank question never
+ * reaches it.
+ */
 export function receiveQuestion(question: string): string {
-  const trimmed = (question ?? '').trim();
-  if (!trimmed) throw new Error('The question is empty');
-  return trimmed;
+  return (question ?? '').trim();
 }
 
 /**

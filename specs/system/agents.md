@@ -1229,7 +1229,7 @@ A streamed turn of a session bound to `assistant-v2` (2.11) is one run of a work
 
 | # | Step id | Title | Kind | Does |
 |---|---|---|---|---|
-| 1 | `receive-question` | Receive question | deterministic | Trims the question; an empty one fails the step with `The question is empty`. |
+| 1 | `receive-question` | Receive question | deterministic | Trims the question. It never fails: the input node has validated the whole input before the run ([api.md](api.md) 118, 119), so a blank question never reaches it. |
 | 2 | `load-catalog` | Load catalog | deterministic | Reads the session's datasets through the dataset tools' own services (3.1) and lists their entities as `{ entity, dataset, datasourceId, datasourceKind, columnCount }` (null when unknown), in dataset then table order. No LLM. |
 | 3 | `analyse` | Analyse | LLM | Streams the `assistant-v2` agent with its three tools, its memory thread and the turn's options (2.11, 4.1, 4.2), plus the **catalog block** below as the last system message. Every chunk is handled as in 5.1 step 3, so the chat, the stop button, the transcript and memory behave as for any bound agent. A model error reported in the stream fails the step, whatever the provider (an assistant turn keeps 5.1's handling). Returns the turn's tool calls (`{ tool, rowCount?, failed }`) and whether the user stopped the turn. |
 | 4 | `wrap-up` | Wrap up | deterministic | Counts the turn's `run_readonly_sql` calls: `{ sqlQueries, failedQueries, rows }` (rows summed over the successful calls). This summary is the run's result, and the orchestrator logs it. No UI. |
@@ -1264,7 +1264,7 @@ The agent detail returns it as `workflow` ([api.md](api.md) 34). For the agent s
 
 | Step | Summary | Input | Output | Other exits |
 |---|---|---|---|---|
-| Receive question | `Trims the question. An empty one fails the step.` | question, datasets | question, datasets | `Empty question` fails |
+| Receive question | `Trims the question. The input node has checked it before the run.` | question, datasets | question, datasets | — |
 | Load catalog | `Lists the entities of the session's datasets. No LLM.` | question, datasets | question, catalog | — |
 | Analyse | `The agent answers with its tools and the catalog as context, streamed to the chat.` | question, catalog | calls, stopped | `Model error` fails; `Stop` stops |
 | Wrap up | `Counts the turn's SQL queries, failed queries and rows, and logs the summary.` | calls, stopped | sqlQueries, failedQueries, rows | — |
@@ -1277,7 +1277,9 @@ A **workflow** is a fixed sequence of steps defined in code, each deterministic 
 
 **The catalogue.** One code-defined workflow, `qti-v2-turn`, *Questions to Insights v2*, a run workflow (`trigger: 'run'`) whose agent is `assistant-v2` (its `primaryFor` agent) and whose steps are those of 5.11. It drives the workflow bar's view from its steps (`bar: 'steps'`). The one-step workflows of ADR-0040 (one per agent, id `agent:<registry key>` or `agent:<user-agent id>`), `seq-text-demo` (5.13) and `deep-analysis` (5.15) are removed from the catalogue and the API. The `agent-turn` Mastra workflow stays as an internal turn only: Try it (agents-evals R60), the eval runner (`createRunHost({ agentKey })`) and stored sessions use it; its `agent:<key>` ids never reach `GET /workflows`. A user agent's only run is its draft preview, Try it.
 
-**Triggers.** Every workflow is a run workflow: `trigger: 'run'`, once on a typed input declared in code with its catalogue entry (`input`: fields `{ name, label, type: 'text' | 'textarea' | 'number' | 'boolean' | 'datasets' | 'dataset', required, placeholder?, help?, default?, datasourceKinds?, hidden? }`; [api.md](api.md) 116, 118). No chat starts (ADR-0041). `qti-v2-turn` declares `question` and `datasets` and runs one agent turn in its analyse step (5.14).
+**Triggers.** Every workflow is a run workflow: `trigger: 'run'`, once on a typed input declared in code with its catalogue entry (`input`: fields `{ name, label, type: 'text' | 'textarea' | 'number' | 'boolean' | 'datasets' | 'dataset', required, placeholder?, help?, default?, datasourceKinds?, hidden?, maxLength?, min?, max? }`; [api.md](api.md) 116, 118). No chat starts (ADR-0041). `qti-v2-turn` declares `question` (at most 4000 characters) and `datasets` and runs one agent turn in its analyse step (5.14).
+
+**The input node.** A workflow's `input` is its Start node: it holds everything its steps read. Every name in a step's `input` must be an input field or an `output` of an earlier step; the catalogue is built through `assertWorkflowInputCoverage` (`mastra/workflows/workflow-input.ts`), so a workflow that breaks this throws when the module loads, and a unit test checks every catalogued workflow. Each field's `usedBy` (116) lists the steps that read it straight from the input. A run's whole input is validated before the run (`validateWorkflowInput`; api.md 118, 119): a refused input stores no run and runs no step, so no step has an "invalid input" exit.
 
 **Ids.** `qti-v2-turn` is the only workflow id. Any other id, including a former one-step id (`agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>`, `agent:rfp`), `seq-text-demo` and `deep-analysis`, is not a workflow and answers `Workflow "<id>" not found` ([api.md](api.md) 117).
 

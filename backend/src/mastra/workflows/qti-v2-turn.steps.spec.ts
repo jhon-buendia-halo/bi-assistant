@@ -40,8 +40,21 @@ describe('qti-v2-turn steps (agents.md 5.11)', () => {
       expect(receiveQuestion('  How many goals?\n')).toBe('How many goals?');
     });
 
-    it.each(['', '   ', '\n\t'])('refuses %p', (question) => {
-      expect(() => receiveQuestion(question)).toThrow('The question is empty');
+    it.each(['', '   ', '\n\t'])(
+      'no longer fails on %p: the input node refuses a blank question before the run',
+      (question) => {
+        expect(receiveQuestion(question)).toBe('');
+      },
+    );
+
+    it('has no exit: Receive question cannot fail', () => {
+      const receive = QTI_V2_TURN_STEPS.find(
+        (step) => step.id === 'receive-question',
+      );
+      expect(receive?.exits).toEqual([]);
+      expect(receive?.summary).toBe(
+        'Trims the question. The input node has checked it before the run.',
+      );
     });
   });
 
