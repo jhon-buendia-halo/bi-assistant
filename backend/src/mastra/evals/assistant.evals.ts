@@ -1171,7 +1171,7 @@ function evalRequestContext(
 }
 
 /**
- * Mirrors `toolRecords()` in `SessionsService` (the non-streaming turn path)
+ * Mirrors `toolRecords()` in `TurnEngine.generateTurn` (the non-streaming turn path)
  * but incrementally, per step, via `targetOptions.onStepFinish` — so a
  * `create_visual`/`update_visual` call later in the *same* run sees the SQL
  * earlier steps already captured, the same way production threads a live
@@ -1254,7 +1254,7 @@ export async function cleanupEvalSession(
 }
 
 /** Parse a model's JSON reply, tolerating a markdown fence around it —
- * mirrors `parseJsonObject` in `SessionsService`/`DeepAnalysisService`,
+ * mirrors `parseJsonObject` in `SqlChecks`/`DeepAnalysisService`,
  * duplicated here rather than imported so this module's judge check stays
  * usable without pulling in either of those heavier services. */
 function parseJsonObject(text: string | undefined): unknown {
@@ -1378,7 +1378,7 @@ export async function runAssistantEvalCase(
   /**
    * The curated-knowledge system block (`OntologyService.definitionBlock`)
    * for these datasets — same block a real chat turn gets from
-   * `SessionsService.agentContext`. Both callers (`EvalRunsService`, the CLI
+   * `TurnOptions.agentContext`. Both callers (`EvalRunsService`, the CLI
    * in `run-assistant-evals.ts`) populate this from `OntologyService`;
    * omitted (or empty) when neither wires one in.
    */
@@ -1445,7 +1445,7 @@ export async function runAssistantEvalCase(
       scorers: evalCase.scorers,
       target: target.agent,
       // Same step budget and dataset/entity + join-hint grounding a real chat
-      // turn gets from SessionsService.agentContext — without this the model
+      // turn gets from TurnOptions.agentContext — without this the model
       // used to run out of steps mid-analysis (the AI-SDK default cap is 5)
       // and every case died with empty answer text.
       targetOptions: {

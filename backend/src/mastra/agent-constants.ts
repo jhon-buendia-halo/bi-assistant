@@ -1,6 +1,6 @@
 /**
  * Step budget for one assistant turn — analysis often chains several schema +
- * SQL tool calls. Shared by `SessionsService.agentContext` (a real chat turn)
+ * SQL tool calls. Shared by `TurnOptions.agentContext` (a real chat turn)
  * and the assistant eval harness (`assistant.evals.ts`), so an eval measures
  * the agent under the same constraints production runs it with.
  *

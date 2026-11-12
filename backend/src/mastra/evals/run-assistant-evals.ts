@@ -93,7 +93,7 @@ async function runEvals(
   // degrade needed.
   const sessions = app.get(SessionsService);
   // Same curated-knowledge block a real chat turn gets from
-  // SessionsService.agentContext.
+  // TurnOptions.agentContext.
   const knowledgeBlock = await app
     .get(OntologyService)
     .definitionBlock(datasets);

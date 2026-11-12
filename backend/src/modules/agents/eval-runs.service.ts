@@ -205,7 +205,7 @@ export class EvalRunsService {
       );
     }
     // Same curated-knowledge block a real chat turn gets from
-    // SessionsService.agentContext, computed once per run — every case in
+    // TurnOptions.agentContext, computed once per run — every case in
     // the run shares the same datasets.
     const knowledgeBlock = await this.knowledge.definitionBlock(view.datasets);
     try {

@@ -8,21 +8,10 @@ import {
   Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { RequestContext } from '@mastra/core/request-context';
-import { parseClarification } from '../../mastra/tools/clarification.tool';
-import { rfpTools } from '../../mastra/tools/rfp.tools';
 import { parseWorkflow } from '../../mastra/workflow-section';
 import { agentPromptOverrideFor } from '../../mastra/agent-prompt-overrides';
 import { assistantShippedPrompt } from '../../mastra/agents/assistant-prompt';
 import { RFP_PROMPT } from '../../mastra/agents/system-prompts';
-import {
-  RFP_CREATED_BY_CONTEXT_KEY,
-  TURN_RFP_CONTEXT_KEY,
-  isoToday,
-  rfpOrientationBlock,
-  type RfpOrientationRecord,
-  type TurnRfpHolder,
-} from '../../mastra/rfp-context';
 import {
   builtinAgentSession,
   builtinSessionDatasets,
@@ -30,104 +19,37 @@ import {
   existingDatasetsFor,
   runsOnPickedDatasets,
 } from '../agents/builtin-sessions';
-import {
-  ASSISTANT_V2_AGENT_KEY,
-  ASSISTANT_V2_MAX_STEPS,
-} from '../../mastra/agents/assistant-v2-catalog';
+import { ASSISTANT_V2_AGENT_KEY } from '../../mastra/agents/assistant-v2-catalog';
 import { DataReadinessService } from '../data-readiness/data-readiness.service';
-import {
-  READINESS_REPORT_EVENT,
-  setReadinessToolServices,
-} from '../../mastra/readiness-tool-services';
-import {
-  DATA_READINESS_AGENT_KEY,
-  READINESS_MAX_STEPS,
-  READINESS_REPORT_TOOLS,
-  READINESS_TOOLS,
-  ReadinessBridge,
-  readinessOrientationBlock,
-  readinessPanelItem,
-  readinessAnswerFallback,
-  readinessReportIdOf,
-  readinessReportOf,
-  readinessReportRef,
-} from './readiness-bridge';
+import { setReadinessToolServices } from '../../mastra/readiness-tool-services';
+import { ReadinessBridge } from './readiness-bridge';
 import { setSyntheticDataToolServices } from '../../mastra/synthetic-data-tool-services';
 import {
-  SYNTHETIC_DATA_TOOLS,
   SyntheticDataBridge,
-  syntheticPanelItemId,
   type SyntheticDataBridgeDeps,
 } from './synthetic-data-bridge';
 import { SYNTHETIC_DATA_SERVICE } from '../synthetic-data/synthetic-data.token';
 import { RfpPackagesService } from '../rfp-packages/rfp-packages.service';
 import { MastraService } from '../../mastra/mastra.service';
-import {
-  AGENT_OVERRIDES_CONTEXT_KEY,
-  type AgentOverrides,
-  resolveAgentModelConfig,
-} from '../../mastra/model-resolver';
-import {
-  AGENT_TOOLS_CONTEXT_KEY,
-  isFullSelection,
-  selects,
-  toolSelectionFrom,
-} from '../../mastra/agent-tools';
-import {
-  AGENT_SKILLS_CONTEXT_KEY,
-  type AgentSkill,
-} from '../../mastra/agent-skills';
-import { effectiveOptionalTools, resolveLinks } from '../../mastra/agent-links';
-import { toSkillCopy } from '../skills/entities/skill.entity';
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import type { AgentConfig } from '../user-agents/entities/user-agent.entity';
-import {
-  providerOptionsFor,
-  type ProviderOptionValue,
-  type ProviderOptions,
-} from '../../mastra/model-compat';
 import { setDatasetToolServices } from '../../mastra/tool-services';
 import type {
-  DatasetSnapshot,
   PanelToolInput,
   PanelToolResult,
   DatasetToolTurnRecord,
-  RfpPackageResult,
-  SqlRunResult,
   WorkflowToolInput,
   WorkflowToolResult,
 } from '../../mastra/tool-services';
-import { ASSISTANT_MAX_STEPS } from '../../mastra/agent-constants';
-import { sqlFixOutputSchema } from '../../mastra/agents/sql-fixer.agent';
-import { sqlVerifyOutputSchema } from '../../mastra/agents/sql-verifier.agent';
-import { DATASETS_CONTEXT_KEY } from '../../mastra/tools/dataset.tools';
-import {
-  ACTIVE_VISUAL_CONTEXT_KEY,
-  SESSION_ID_CONTEXT_KEY,
-  TURN_QUESTION_CONTEXT_KEY,
-  TURN_RECORDS_CONTEXT_KEY,
-} from '../../mastra/tools/visual.tools';
-import {
-  SESSION_WORKSPACE_CONTEXT_KEY,
-  listSessionWorkspaceIds,
-} from '../../mastra/session-workspaces';
-import type { KnowledgeUse } from '../ontology/entities/ontology-item.entity';
-import {
-  entityOrientationLines,
-  knowledgeContext,
-  schemaSnapshotBlock,
-} from '../../mastra/context-blocks';
+import { listSessionWorkspaceIds } from '../../mastra/session-workspaces';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
 import { LlmService } from '../llm/llm.service';
-import { chatTurnError } from './llm-error-message';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { OntologyService } from '../ontology/ontology.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
-import { SUPER_ADMIN } from '../../common/super-admin';
-import { sourceEntities } from './visualization-document';
 import {
   buildPanelItem,
   tableCsv,
@@ -137,30 +59,13 @@ import {
   withVisualItems,
 } from './panel-items';
 import { applyWorkflowUpdate, workflowViewOf } from './workflow-update';
-import {
-  stepEventOf,
-  workflowRunState,
-  workflowStepPhases,
-} from './workflow-run-state';
-import {
-  QTI_V2_TURN_RUNTIME_KEY,
-  QTI_V2_TURN_STEPS,
-  type AnalyseOutcome,
-  type QtiV2TurnInput,
-  type QtiV2TurnRuntime,
-} from '../../mastra/workflows/qti-v2-turn.steps';
-import {
-  AGENT_TURN_RUNTIME_KEY,
-  AGENT_TURN_STEPS,
-  AGENT_TURN_WORKFLOW_ID,
-  type AgentTurnRuntime,
-} from '../../mastra/workflows/agent-turn.steps';
+import { workflowStepPhases } from './workflow-run-state';
+import { QTI_V2_TURN_STEPS } from '../../mastra/workflows/qti-v2-turn.steps';
 import {
   ASSISTANT_WORKFLOW_NAME,
   parseWorkflowId,
   sessionWorkflowId,
   workflowStartsChat,
-  type WorkflowBar,
 } from '../../mastra/workflows/workflow-catalog';
 import { renderPdf } from '../../common/markdown-pdf';
 import {
@@ -168,15 +73,6 @@ import {
   readWorkspaceFile,
   writeWorkspaceFile,
 } from './workspace-files';
-import { compareResults } from './result-compare';
-import {
-  STORED_ROWS_CAP,
-  groundingNudge,
-  statedRationale,
-  synthesizeToolOnlyTurn,
-  toolDataRecord,
-  toolRecords,
-} from './turn-data';
 import {
   ChatMessage,
   CrossCheck,
@@ -189,125 +85,25 @@ import {
   SessionView,
   SessionVisualization,
   SessionWorkflowRef,
-  ReasoningStep,
-  ReadinessReportRef,
-  RfpPackageRef,
   ToolDataRecord,
   VisualEvent,
   WorkflowPhase,
-  WorkflowState,
   WorkflowView,
 } from './entities/session.entity';
+import { SessionDatasets } from './turn/session-datasets';
+import { SqlChecks } from './turn/sql-checks';
+import { TurnEngine } from './turn/turn-engine';
+import { TurnOptions } from './turn/turn-options';
+import type { RunStepEvent, StreamEvent } from './turn/stream-events';
+import {
+  ASSISTANT_AGENT_KEY,
+  RFP_AGENT_KEY,
+  lastSuccessfulSql,
+} from './turn/turn-records';
+import { workflowSourceOf } from './turn/turn-workflow';
 
-const VISUAL_TOOLS = new Set(['create_visual', 'update_visual']);
-/** The built-in panel tool (agents.md 3.11); its result becomes a `panel-item` event. */
-const SHOW_IN_PANEL_TOOL = 'show_in_panel';
-/** The workflow status bar's tool (agents.md 3.11); its result becomes a `workflow` event. */
-const UPDATE_WORKFLOW_TOOL = 'update_workflow';
-const UPDATE_RFP_TOOL = 'update_rfp';
-/** The RFP Builder's stages: `update_rfp`'s stage drives the workflow tracker. */
-const RFP_STAGES = 7;
-/** The agent a session without `agentKey` runs (agents.md 5.1). */
-const ASSISTANT_AGENT_KEY = 'assistant';
-/** The RFP Builder's registry key (agents.md 2.8, ADR-0028). */
-const RFP_AGENT_KEY = 'rfp';
-/** The RFP tools of agents.md 3.10: each emits a `tool-result` (api.md 3.1). */
-const RFP_TOOLS = new Set(
-  Object.keys(rfpTools).filter(
-    (name) =>
-      name !== 'ask_clarification' &&
-      name !== SHOW_IN_PANEL_TOOL &&
-      name !== UPDATE_WORKFLOW_TOOL,
-  ),
-);
-const EXPORT_RFP_PACKAGE_TOOLS = new Set([
-  'export_rfp_package',
-  'export_rfp_draft',
-]);
-/**
- * requestContext key carrying the curated-knowledge snippets this turn's
- * system block was built from, so the persist step can record them on the
- * answer without re-reading (and possibly disagreeing with) the store.
- */
-const KNOWLEDGE_USED_CONTEXT_KEY = 'knowledge-used';
-/** Repair attempts allowed per failed statement (3 executions at most). */
-const SQL_REPAIR_ATTEMPTS = 2;
-const SQL_REPAIRED_NOTE =
-  'original query failed and was auto-corrected — cite the corrected SQL';
-const EMPTY_ROWS_NOTE =
-  'query returned 0 rows — verify filters/values before concluding';
-const limitReachedNote = (limit: number) =>
-  `row limit ${limit} reached — results may be incomplete; aggregate or narrow the query for exact totals`;
-/** Character budget for the schema block handed to the fixer. */
-const FIXER_SCHEMA_CHARS = 4_000;
-/** Character budget for a failed statement written into the warn log (ships in diagnostics reports). */
-const SQL_LOG_CHARS = 500;
-/** Character budget for the richer (sample-value bearing) verifier schema. */
-const VERIFIER_SCHEMA_CHARS = 6_000;
-/** Sample values shown per column to the verifier — value matching, not data. */
-const VERIFIER_SAMPLE_VALUES = 3;
-/** Longest cross-check note persisted on a message (tooltip-sized). */
-const CROSS_CHECK_NOTE_CHARS = 220;
-const CROSS_CHECK_AGREE_NOTE =
-  'independent re-derivation returned the same results';
-/** Agreement on the figures where the two queries projected different columns. */
-const CROSS_CHECK_AGREE_SHAPE_NOTE =
-  'independent re-derivation returned the same figures, over different columns';
-const CROSS_CHECK_DISAGREE_NOTE = 'results differ — treat with care';
-/** Rows the cross-check query may return — matches what the answer stored. */
-const CROSS_CHECK_ROW_LIMIT = STORED_ROWS_CAP;
-
-export type StreamEvent = {
-  type:
-    | 'reasoning'
-    | 'text'
-    | 'tool'
-    | 'tool-result'
-    | 'tool-progress'
-    | 'visual-updated'
-    | 'panel-item'
-    | 'workflow'
-    | 'rfp-package'
-    | typeof READINESS_REPORT_EVENT
-    | 'done';
-  content?: string;
-  session?: SessionDoc;
-};
-
-/**
- * A Data Readiness progress chunk as a `tool-progress` event (api.md 3.1), or
- * undefined for any other chunk. The tool writes `{ type:
- * 'data-readiness-progress', data }`; Mastra forwards it verbatim, or wrapped
- * in a `tool-output` chunk's `payload.output`. Both are accepted; a malformed
- * one is ignored. Progress goes to the browser only, never to the model.
- */
-function readinessProgressEvent(chunk: unknown): StreamEvent | undefined {
-  const outer = chunk as { type?: unknown; payload?: { output?: unknown } };
-  let candidate: unknown;
-  if (outer?.type === 'data-readiness-progress') candidate = chunk;
-  else if (outer?.type === 'tool-output') candidate = outer.payload?.output;
-  const part = candidate as { type?: unknown; data?: unknown } | undefined;
-  if (part?.type !== 'data-readiness-progress') return undefined;
-  const data = part.data as Record<string, unknown> | undefined;
-  if (!data || typeof data !== 'object') return undefined;
-  if (typeof data['phase'] !== 'string' || typeof data['message'] !== 'string')
-    return undefined;
-  const num = (v: unknown) =>
-    typeof v === 'number' && Number.isFinite(v) ? v : undefined;
-  const done = num(data['done']);
-  const total = num(data['total']);
-  return {
-    type: 'tool-progress',
-    content: JSON.stringify({
-      tool: 'assess_data_readiness',
-      phase: data['phase'],
-      message: data['message'],
-      ...(done !== undefined ? { done } : {}),
-      ...(total !== undefined ? { total } : {}),
-      ...(typeof data['entity'] === 'string' ? { entity: data['entity'] } : {}),
-    }),
-  };
-}
+export type { RunStepEvent, StreamEvent } from './turn/stream-events';
+export { toolCallInput } from './turn/turn-records';
 
 /** Id prefix of an agent editor's preview session (agents-evals R60). */
 const PREVIEW_ID_PREFIX = 'preview-';
@@ -332,12 +128,6 @@ export interface RunHostSpec {
   context?: { question: string; answer: string };
 }
 
-/** A run step event as the run's turn streams it (agents.md 5.14). */
-export type RunStepEvent = {
-  type: string;
-  payload?: { id?: string; status?: string; output?: unknown; error?: unknown };
-};
-
 @Injectable()
 export class SessionsService implements OnModuleInit {
   private readonly logger = new Logger(SessionsService.name);
@@ -348,23 +138,6 @@ export class SessionsService implements OnModuleInit {
    * hosts (agents.md 5.14).
    */
   private readonly memoryHosts = new Map<string, SessionDoc>();
-
-  /**
-   * Provider options filed under the bucket the configured model actually
-   * reads. Mastra names an OpenAI-compatible client's bucket after the
-   * provider id, so a hardcoded `openai` key is silently discarded for every
-   * `lenai/…` deployment — which is how the reasoning-effort chip came to be
-   * a no-op there.
-   */
-  private async providerOptions(
-    bucket: Record<string, ProviderOptionValue>,
-    modelOverride?: string,
-  ): Promise<ProviderOptions> {
-    return providerOptionsFor(
-      await resolveAgentModelConfig(modelOverride),
-      bucket,
-    );
-  }
 
   constructor(
     private readonly repository: SessionsRepository,
@@ -386,7 +159,60 @@ export class SessionsService implements OnModuleInit {
     @Optional()
     @Inject(SYNTHETIC_DATA_SERVICE)
     private readonly syntheticData?: SyntheticDataBridgeDeps['synthetic'],
-  ) {}
+  ) {
+    // The turn engine (agents.md 5.1) lives in `./turn/`, built on this
+    // service's own dependencies and its session reads and writes.
+    this.turnDatasets = new SessionDatasets(
+      datasetsRepository,
+      datasourcesService,
+    );
+    this.sqlChecks = new SqlChecks({
+      mastra,
+      datasourcesService,
+      llmService,
+      verifiedQueries,
+      datasets: this.turnDatasets,
+      logger: this.logger,
+    });
+    this.turnOptions = new TurnOptions({
+      mastra,
+      llmService,
+      visuals,
+      verifiedQueries,
+      metrics,
+      knowledge,
+      userAgents,
+      rfpPackages,
+      datasets: this.turnDatasets,
+      logger: this.logger,
+      existingDatasets: (names) => this.existingDatasets(names),
+      updateDoc: (id, patch) => this.updateDoc(id, patch),
+    });
+    this.turns = new TurnEngine({
+      mastra,
+      llmService,
+      logger: this.logger,
+      options: this.turnOptions,
+      sql: this.sqlChecks,
+      get: (id) => this.get(id),
+      updateDoc: (id, patch) => this.updateDoc(id, patch),
+      toView: (session) => this.toView(session),
+      workflowOf: (session) => this.workflowOf(session),
+      effectiveWorkflowFor: (session) => this.effectiveWorkflowFor(session),
+      crossCheckAnswer: (session, question, data) =>
+        this.crossCheckAnswer(session, question, data),
+      readinessBridge: () => this.readinessBridge,
+    });
+  }
+
+  /** The session's datasets, bound to their datasources. */
+  private readonly turnDatasets: SessionDatasets;
+  /** SQL repair, careful mode's cross-check and the Verified badge. */
+  private readonly sqlChecks: SqlChecks;
+  /** What reaches the model on a turn. */
+  private readonly turnOptions: TurnOptions;
+  /** The streamed and non-streamed turn. */
+  private readonly turns: TurnEngine;
 
   /** The readiness tools' bridge, once installed (agents.md 3.13). */
   private readinessBridge?: ReadinessBridge;
@@ -394,11 +220,11 @@ export class SessionsService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     // Install the DI bridge the Mastra tools use (they load with no Nest DI).
     setDatasetToolServices({
-      getDatasets: (names) => this.boundDatasets(names),
+      getDatasets: (names) => this.turnDatasets.bound(names),
       sampleRows: (datasourceId, entity, limit) =>
         this.datasourcesService.sampleRows(datasourceId, entity, limit),
       runReadOnlySql: (datasourceId, sql, limit, datasets) =>
-        this.runSqlWithRepair(datasourceId, sql, limit, datasets),
+        this.sqlChecks.runSqlWithRepair(datasourceId, sql, limit, datasets),
       createVisual: async (
         sessionId,
         sourceMessageAt,
@@ -445,8 +271,9 @@ export class SessionsService implements OnModuleInit {
       this.readinessBridge = new ReadinessBridge({
         sessionDatasetNames: async (sessionId) =>
           (await this.get(sessionId)).datasets,
-        datasets: (names) => this.boundDatasets(names),
-        datasourceName: (datasourceId) => this.datasourceName(datasourceId),
+        datasets: (names) => this.turnDatasets.bound(names),
+        datasourceName: (datasourceId) =>
+          this.turnDatasets.datasourceName(datasourceId),
         readiness: this.readiness,
       });
       setReadinessToolServices(this.readinessBridge);
@@ -457,7 +284,7 @@ export class SessionsService implements OnModuleInit {
         new SyntheticDataBridge({
           sessionDatasetNames: async (sessionId) =>
             (await this.get(sessionId)).datasets,
-          datasets: (names) => this.boundDatasets(names),
+          datasets: (names) => this.turnDatasets.bound(names),
           synthetic: this.syntheticData,
           writeFile: (sessionId, path, text) =>
             writeWorkspaceFile(sessionId, path, text),
@@ -487,393 +314,6 @@ export class SessionsService implements OnModuleInit {
     );
   }
 
-  /**
-   * Hybrid context: a cheap orientation block (dataset names + entity keys,
-   * the session's visuals and which one is open), the curated metric
-   * definitions covering those entities, the curated knowledge-store
-   * snippets covering this session's datasets, plus any user-approved
-   * question → SQL pairs resembling `question`, in the system context, and
-   * requestContext scoping the tools to this session.
-   *
-   * Memory-free on purpose — `agentOptions` adds the session's conversation
-   * thread, `backgroundAgentOptions` deliberately does not.
-   */
-  private async agentContext(
-    session: SessionDoc,
-    question?: string,
-    abortSignal?: AbortSignal,
-    activeVisualId?: string,
-  ) {
-    // A session started from a user agent runs with the agent's current Live
-    // version (sessions-chat R54), a preview with its draft (agents-evals
-    // R60); once the agent is gone it is the plain assistant (R59).
-    const agent = await this.agentConfigFor(session);
-    const datasets = await this.boundDatasets(session.datasets);
-    const visualLines = (session.visualizations ?? []).map(
-      (v) =>
-        `- ${v.id} — "${v.title}" v${this.visuals.currentVersion(v)} (from the answer at ${v.sourceMessageAt})`,
-    );
-    const requestContext = new RequestContext();
-    requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
-    requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
-    if (question) requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
-    if (activeVisualId) {
-      requestContext.set(ACTIVE_VISUAL_CONTEXT_KEY, activeVisualId);
-    }
-    const workspace = await this.mastra.ensureSessionWorkspace(
-      session.id,
-      session.name,
-    );
-    requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
-    const { reasoningEffort } = await this.llmService.getView();
-    const verified = question
-      ? await this.verifiedQueries.referenceBlock(question)
-      : undefined;
-    // Curated semantics for the entities this session can see — the one
-    // definition of each business number, never re-derived per turn.
-    const metrics = await this.metrics.definitionBlock(
-      datasets.flatMap((s) => s.tables ?? []),
-    );
-    // Curated, user-authored knowledge (glossary/instructions/default
-    // filters) for this session's datasets — authoritative over anything
-    // the model would otherwise infer from schema alone.
-    const knowledge = await this.knowledge.contextFor(session.datasets);
-    // Threaded on requestContext rather than returned alongside the options,
-    // because the options object is spread straight into the agent call.
-    requestContext.set(KNOWLEDGE_USED_CONTEXT_KEY, knowledge.used);
-    const overrides: AgentOverrides = {
-      ...(agent?.model ? { model: agent.model } : {}),
-      ...(agent?.reasoningEffort
-        ? { reasoningEffort: agent.reasoningEffort }
-        : {}),
-    };
-    if (overrides.model || overrides.reasoningEffort) {
-      requestContext.set(AGENT_OVERRIDES_CONTEXT_KEY, overrides);
-    }
-    // The agent's tool selection (ADR-0022): only a list without all three
-    // optional tools goes on the context; otherwise every tool is offered.
-    // The agent's in-app skills join the assistant's catalog (ADR-0022): the
-    // copies its Live version runs on, or for a preview the current skills.
-    const agentSkills = agent ? await this.agentSkillsFor(session) : [];
-    // The tools offered are those the instructions link plus those its
-    // skills link (ADR-0024); a config without `tools` keeps every tool.
-    if (agent?.tools) {
-      const tools = effectiveOptionalTools(agent.tools, agentSkills);
-      if (!isFullSelection(tools)) {
-        requestContext.set(AGENT_TOOLS_CONTEXT_KEY, tools);
-      }
-    }
-    if (agentSkills.length) {
-      requestContext.set(AGENT_SKILLS_CONTEXT_KEY, agentSkills);
-    }
-    const selection = toolSelectionFrom(requestContext);
-    const visualsBlock = selects(selection, 'visuals')
-      ? [
-          '',
-          'Interactive visuals in this session (id — title, current version):',
-          ...(visualLines.length ? visualLines : ['(none yet)']),
-          activeVisualId
-            ? `Visual currently open in the right panel: ${activeVisualId}.`
-            : 'No visual is open in the right panel.',
-        ]
-      : [];
-    return {
-      // Analysis often chains several schema + SQL tool calls per turn.
-      maxSteps: ASSISTANT_MAX_STEPS,
-      // The user-configured reasoning effort (Low/Medium/High chip), unless
-      // the session's agent overrides it.
-      providerOptions: await this.providerOptions(
-        { reasoningEffort: overrides.reasoningEffort ?? reasoningEffort },
-        overrides.model,
-      ),
-      context: [
-        {
-          role: 'system' as const,
-          content: [
-            ...entityOrientationLines(session.datasets, datasets, selection),
-            ...visualsBlock,
-          ].join('\n'),
-        },
-        ...(metrics ? [{ role: 'system' as const, content: metrics }] : []),
-        // The knowledge block; its rules are the on-demand curated-knowledge
-        // skill (ADR-0025).
-        ...knowledgeContext(knowledge.block),
-        ...(verified ? [{ role: 'system' as const, content: verified }] : []),
-        // Last, so the base prompt and every curated block come first.
-        ...(agent?.instructions.trim()
-          ? [
-              {
-                role: 'system' as const,
-                content: agentInstructionsBlock(agent),
-              },
-            ]
-          : []),
-      ],
-      requestContext,
-      abortSignal,
-    };
-  }
-
-  /**
-   * The configuration a session's turns apply: the Live version of the agent
-   * it was started from, or the draft for a preview; undefined for a plain
-   * session or a deleted agent. A preview's datasets follow its draft. A
-   * session re-stamps `agentName` when the agent was renamed, so a later
-   * deletion still names it (R59).
-   */
-  private async agentConfigFor(
-    session: SessionDoc,
-  ): Promise<AgentConfig | undefined> {
-    if (!session.agentId) return undefined;
-    const doc = await this.userAgents.get(session.agentId);
-    if (session.preview) {
-      if (!doc) return undefined;
-      session.datasets = await this.existingDatasets(doc.draft.datasets);
-      await this.updateDoc(session.id, { datasets: session.datasets });
-      return doc.draft;
-    }
-    const live = doc?.live;
-    if (live && session.agentName !== live.name) {
-      await this.updateDoc(session.id, { agentName: live.name });
-      session.agentName = live.name;
-    }
-    return live;
-  }
-
-  /**
-   * The skills a session's turns carry (agents.md 4.2): the `liveSkills`
-   * copies of the agent it was started from, or for a preview the current
-   * skills its draft names; none once the agent is gone.
-   */
-  private async agentSkillsFor(session: SessionDoc): Promise<AgentSkill[]> {
-    const doc = session.agentId
-      ? await this.userAgents.get(session.agentId)
-      : null;
-    if (!doc) return [];
-    if (session.preview) {
-      return (await this.userAgents.skillsFor(doc.draft.skills)).map(
-        toSkillCopy,
-      );
-    }
-    return doc.live ? (doc.liveSkills ?? []) : [];
-  }
-
-  /** Chat turns: the shared grounding plus this session's memory thread. */
-  private async agentOptions(
-    session: SessionDoc,
-    question?: string,
-    abortSignal?: AbortSignal,
-    activeVisualId?: string,
-  ) {
-    // A session bound to the RFP Builder gets its own context (ADR-0028).
-    if (session.agentKey === RFP_AGENT_KEY) {
-      return this.rfpAgentOptions(session, question, abortSignal);
-    }
-    if (session.agentKey === DATA_READINESS_AGENT_KEY) {
-      return this.readinessAgentOptions(session, question, abortSignal);
-    }
-    if (session.agentKey === ASSISTANT_V2_AGENT_KEY) {
-      return this.assistantV2AgentOptions(session, question, abortSignal);
-    }
-    return {
-      ...(await this.agentContext(
-        session,
-        question,
-        abortSignal,
-        activeVisualId,
-      )),
-      // Each session is an isolated, persistent Mastra conversation.
-      memory: { thread: session.id, resource: session.id },
-    };
-  }
-
-  /**
-   * A turn of Questions to Insights v2 (agents.md 2.11, 4.1, 4.2): Block 1's
-   * dataset half only, with the hint of a call without `sample_rows` (no
-   * visuals, metrics, knowledge, verified-query or agent-instructions
-   * block), and only the `datasets`, `session-id` and `turn-question` keys.
-   */
-  private async assistantV2AgentOptions(
-    session: SessionDoc,
-    question?: string,
-    abortSignal?: AbortSignal,
-  ) {
-    const requestContext = new RequestContext();
-    requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
-    requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
-    if (question) requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
-    const datasets = await this.boundDatasets(session.datasets);
-    const { reasoningEffort } = await this.llmService.getView();
-    return {
-      maxSteps: ASSISTANT_V2_MAX_STEPS,
-      providerOptions: await this.providerOptions({ reasoningEffort }),
-      context: [
-        {
-          role: 'system' as const,
-          // An empty selection: neither `sample_rows` nor the visuals.
-          content: entityOrientationLines(session.datasets, datasets, []).join(
-            '\n',
-          ),
-        },
-      ],
-      requestContext,
-      abortSignal,
-      memory: { thread: session.id, resource: session.id },
-    };
-  }
-
-  /**
-   * A turn of the RFP Builder (agents.md 4.1, 4.2, 5.1): Block R1 only, no
-   * metrics, knowledge, verified-query or agent-instructions block, and the
-   * `rfp` requestContext keys, with a fresh `turn-rfp` holder per turn.
-   */
-  private async rfpAgentOptions(
-    session: SessionDoc,
-    question?: string,
-    abortSignal?: AbortSignal,
-  ) {
-    const requestContext = new RequestContext();
-    requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
-    requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
-    if (question) requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
-    const workspace = await this.mastra.ensureSessionWorkspace(
-      session.id,
-      session.name,
-    );
-    requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
-    requestContext.set(RFP_CREATED_BY_CONTEXT_KEY, SUPER_ADMIN.id);
-    const turnRfp: TurnRfpHolder = {};
-    requestContext.set(TURN_RFP_CONTEXT_KEY, turnRfp);
-    const { reasoningEffort } = await this.llmService.getView();
-    return {
-      maxSteps: ASSISTANT_MAX_STEPS,
-      providerOptions: await this.providerOptions({ reasoningEffort }),
-      context: [
-        {
-          role: 'system' as const,
-          content: await this.rfpOrientation(session),
-        },
-      ],
-      requestContext,
-      abortSignal,
-      memory: { thread: session.id, resource: session.id },
-    };
-  }
-
-  /**
-   * A turn of the Data Readiness Agent (agents.md 2.10, 4.1, 4.2): Block D1
-   * only, its requestContext keys and no workflow (ADR-0031).
-   */
-  private async readinessAgentOptions(
-    session: SessionDoc,
-    question?: string,
-    abortSignal?: AbortSignal,
-  ) {
-    const requestContext = new RequestContext();
-    requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
-    requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
-    if (question) requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
-    const workspace = await this.mastra.ensureSessionWorkspace(
-      session.id,
-      session.name,
-    );
-    requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
-    const { reasoningEffort } = await this.llmService.getView();
-    return {
-      maxSteps: READINESS_MAX_STEPS,
-      providerOptions: await this.providerOptions({ reasoningEffort }),
-      context: [
-        {
-          role: 'system' as const,
-          content: await this.readinessOrientation(session),
-        },
-      ],
-      requestContext,
-      abortSignal,
-      memory: { thread: session.id, resource: session.id },
-    };
-  }
-
-  /** Block D1 (agents.md 4.1): each session dataset, its datasource and size. */
-  private async readinessOrientation(session: SessionDoc): Promise<string> {
-    const datasets = await this.boundDatasets(session.datasets);
-    const rows = await Promise.all(
-      session.datasets
-        .map((name) => datasets.find((dataset) => dataset.name === name))
-        .filter((dataset) => dataset !== undefined)
-        .map(async (dataset) => ({
-          name: dataset.name,
-          datasourceKind: dataset.datasourceKind,
-          datasourceName: dataset.datasourceId
-            ? await this.datasourceName(dataset.datasourceId)
-            : 'none',
-          datasourceId: dataset.datasourceId,
-          entityCount: dataset.tables.length,
-          exampleEntity: dataset.tables[0],
-        })),
-    );
-    return readinessOrientationBlock(rows, isoToday());
-  }
-
-  /** A datasource's name, or its id when it cannot be read. */
-  private async datasourceName(datasourceId: string): Promise<string> {
-    try {
-      return (await this.datasourcesService.get(datasourceId)).name;
-    } catch {
-      return datasourceId;
-    }
-  }
-
-  /**
-   * Block R1 (agents.md 4.1): the REST datasource the RFP tools resolve, the
-   * session's active RFP read from the API when the turn starts, and today.
-   * An RFP that can't be read is reported as none active, never as an error.
-   */
-  private async rfpOrientation(session: SessionDoc): Promise<string> {
-    const datasource = await this.rfpDatasource(session);
-    if (!datasource) {
-      return [
-        'Intellify RFP API for this session: none (no dataset of this session is bound to a REST datasource).',
-        'No RFP is active in this session yet: start at stage 1.',
-        `Today is ${isoToday()}.`,
-      ].join('\n');
-    }
-    let rfp: RfpOrientationRecord | undefined;
-    if (session.rfpId && this.rfpPackages) {
-      try {
-        rfp = (await this.rfpPackages.getJson(
-          datasource.id,
-          `/v1/rfps/${encodeURIComponent(session.rfpId)}`,
-        )) as RfpOrientationRecord;
-      } catch (error) {
-        this.logger.warn(
-          `Could not read the active RFP ${session.rfpId} of session ${session.id}: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    }
-    return rfpOrientationBlock({
-      datasourceId: datasource.id,
-      datasourceName: datasource.name,
-      ...(rfp ? { rfp: { ...rfp, id: rfp.id ?? session.rfpId } } : {}),
-      today: isoToday(),
-    });
-  }
-
-  /** The first of the session's datasets bound to a REST datasource. */
-  private async rfpDatasource(
-    session: SessionDoc,
-  ): Promise<{ id: string; name: string } | undefined> {
-    const datasets = await this.boundDatasets(session.datasets);
-    const rest = session.datasets
-      .map((name) => datasets.find((dataset) => dataset.name === name))
-      .find((dataset) => dataset?.datasourceKind === 'rest');
-    if (!rest?.datasourceId) return undefined;
-    return {
-      id: rest.datasourceId,
-      name: await this.datasourceName(rest.datasourceId),
-    };
-  }
-
   /** The RFP package service, which only a unit test leaves out. */
   private requireRfpPackages(): RfpPackagesService {
     if (!this.rfpPackages) {
@@ -893,7 +333,7 @@ export class SessionsService implements OnModuleInit {
     question?: string,
     abortSignal?: AbortSignal,
   ) {
-    return this.agentContext(session, question, abortSignal);
+    return this.turnOptions.agentContext(session, question, abortSignal);
   }
 
   /**
@@ -914,361 +354,15 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * Datasets created before datasources existed carry no binding — attach
-   * the preferred saved datasource so tools can still run.
+   * Careful mode's cross-check (agents.md 5.4), the seam the turn engine
+   * reaches it through.
    */
-  private async boundDatasets(names: string[]) {
-    const datasets = await this.datasetsRepository.getByNames(names);
-    if (datasets.every((s) => s.datasourceId)) return datasets;
-    const fallback = await this.datasourcesService.defaultDatasource();
-    return datasets.map((s) =>
-      s.datasourceId || !fallback
-        ? s
-        : {
-            ...s,
-            datasourceId: fallback.id,
-            datasourceKind: fallback.kind,
-          },
-    );
-  }
-
-  // ----------------------------------------------------- SQL self-correction
-
-  /**
-   * Execution-guided repair: when a statement fails to execute, hand it plus
-   * the engine error and the schema in scope to the `sql-fixer` agent and
-   * re-run, up to `SQL_REPAIR_ATTEMPTS` times. Empty result sets are not
-   * errors — they get a note, never an LLM call. The last error propagates so
-   * the tool reports it to the agent as before.
-   */
-  private async runSqlWithRepair(
-    datasourceId: string,
-    sql: string,
-    limit: number,
-    datasetNames: string[],
-  ): Promise<SqlRunResult> {
-    let statement = sql;
-    let fixerContext: { dialect: string; schema: string } | undefined;
-    for (let attempt = 0; ; attempt++) {
-      try {
-        const result = await this.datasourcesService.runReadOnlySql(
-          datasourceId,
-          statement,
-          limit,
-        );
-        const repaired = statement !== sql;
-        // A full page of rows means the connector clipped the result set —
-        // the model must aggregate or caveat rather than treat it as total.
-        const truncated = result.rows.length >= limit;
-        const notes = [
-          ...(repaired ? [SQL_REPAIRED_NOTE] : []),
-          ...(result.rows.length ? [] : [EMPTY_ROWS_NOTE]),
-          ...(truncated ? [limitReachedNote(limit)] : []),
-        ];
-        return {
-          ...result,
-          ...(repaired ? { correctedSql: statement } : {}),
-          ...(truncated ? { truncated: true } : {}),
-          ...(notes.length ? { note: notes.join('; ') } : {}),
-        };
-      } catch (error) {
-        if (attempt >= SQL_REPAIR_ATTEMPTS) throw error;
-        // Guard rejections (statement never reached the engine) and
-        // transport/auth failures aren't a formatting problem a rewrite can
-        // fix — skip the fixer round trip and let the real error surface.
-        if (!isRepairableSqlError(error)) throw error;
-        const message = error instanceof Error ? error.message : String(error);
-        fixerContext ??= await this.sqlFixerContext(datasetNames, datasourceId);
-        const corrected = await this.repairSql(
-          statement,
-          message,
-          fixerContext,
-        );
-        if (!corrected || corrected === statement) throw error;
-        // `statement`, not `sql`: attempt 2 is repairing the fixer's own
-        // rewrite from attempt 1. Flattened/capped — this ships in
-        // diagnostics reports and must stay one line per failure.
-        this.logger.warn(
-          `Repairing failed SQL (attempt ${attempt + 1}): ${message} — SQL: ${logSql(statement)}`,
-        );
-        statement = corrected;
-      }
-    }
-  }
-
-  /** Dialect + a capped `entity(column type, …)` block for the fixer prompt. */
-  private async sqlFixerContext(
-    datasetNames: string[],
-    datasourceId: string,
-  ): Promise<{ dialect: string; schema: string }> {
-    const datasets = await this.boundDatasets(datasetNames);
-    const onDatasource = datasets.filter(
-      (s) => s.datasourceId === datasourceId,
-    );
-    const inScope: DatasetSnapshot[] = onDatasource.length
-      ? onDatasource
-      : datasets;
-    const dialect = sqlDialectOf(inScope);
-    const lines: string[] = [];
-    let budget = FIXER_SCHEMA_CHARS;
-    for (const dataset of inScope) {
-      for (const key of dataset.tables) {
-        const columns =
-          dataset.entities?.find((e) => e.key === key)?.columns ?? [];
-        const line = `${key}(${columns.map((c) => `${c.name} ${c.type}`).join(', ')})`;
-        if (line.length > budget) return { dialect, schema: lines.join('\n') };
-        budget -= line.length;
-        lines.push(line);
-      }
-    }
-    return { dialect, schema: lines.join('\n') };
-  }
-
-  /** One fixer pass; returns undefined when it produced nothing usable. */
-  private async repairSql(
-    sql: string,
-    error: string,
-    context: { dialect: string; schema: string },
-  ): Promise<string | undefined> {
-    try {
-      const result = await this.mastra
-        .getAgent('sql-fixer')
-        .generate(
-          [
-            `Dialect: ${context.dialect}`,
-            '',
-            '<available-entities>',
-            context.schema || '(no schema snapshot stored for this session)',
-            '</available-entities>',
-            '',
-            '<failed-sql>',
-            sql,
-            '</failed-sql>',
-            '',
-            '<error>',
-            error,
-            '</error>',
-          ].join('\n'),
-          {
-            maxSteps: 1,
-            toolChoice: 'none',
-            // A syntax/column fix does not benefit from hidden reasoning tokens.
-            providerOptions: await this.providerOptions({
-              reasoningEffort: 'low',
-            }),
-            structuredOutput: {
-              schema: sqlFixOutputSchema,
-              jsonPromptInjection: 'inline',
-            },
-          },
-        );
-      const parsed = sqlFixOutputSchema.safeParse(
-        result.object ?? parseJsonObject(result.text),
-      );
-      // The connector rejects anything but a read-only statement anyway — keep
-      // the original error instead of burning another round-trip on it.
-      return parsed.success ? readOnlyStatement(parsed.data.sql) : undefined;
-    } catch (err) {
-      this.logger.warn(
-        `SQL repair attempt failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      return undefined;
-    }
-  }
-
-  // ------------------------------------------------------- careful mode
-
-  /**
-   * Careful mode's cross-check: a second agent re-derives the question's SQL
-   * without ever seeing the statement the analysis agent ran, that statement is
-   * executed once, and the two result sets are compared as multisets. Agreement
-   * is therefore corroboration, not an echo of the first answer.
-   *
-   * Never throws — a check that cannot run reports `error`, because failing to
-   * verify must not lose the answer it was verifying.
-   */
-  private async crossCheckAnswer(
+  private crossCheckAnswer(
     session: SessionDoc,
     question: string,
     data: ToolDataRecord[],
   ): Promise<CrossCheck | undefined> {
-    const record = successfulSqlRuns(data).at(-1);
-    // Nothing was executed — there is no result set to corroborate.
-    if (!record?.input?.trim()) return undefined;
-    try {
-      if (record.truncated) {
-        this.logger.warn('Cross-check skipped: answer hit the row cap');
-        return crossCheck(
-          'error',
-          "the answer's result set hit the row cap — a partial result cannot be compared",
-        );
-      }
-      const context = await this.verifierContext(session);
-      if (!context) {
-        this.logger.warn('Cross-check skipped: no datasource bound');
-        return crossCheck(
-          'error',
-          'no datasource is bound to this session, so the query could not be re-run',
-        );
-      }
-      const sql = await this.deriveIndependentSql(question, context);
-      if (!sql) {
-        this.logger.warn(
-          'Cross-check skipped: verifier produced no usable query',
-        );
-        return crossCheck(
-          'error',
-          'the independent check did not produce a usable query',
-        );
-      }
-      const result = await this.datasourcesService.runReadOnlySql(
-        context.datasourceId,
-        sql,
-        CROSS_CHECK_ROW_LIMIT,
-      );
-      // Width tolerance matters here: the verifier is told to project nothing
-      // beyond the question while the analysis agent selects the figures its
-      // answer needs, so equal facts routinely arrive at different widths.
-      const { match, reason, shapeDiffers } = compareResults(
-        record.rows ?? [],
-        result.rows,
-        { widthTolerant: true },
-      );
-      // Logged so the agree / shape / disagree / error split is measurable
-      // rather than anecdotal — `npm run eval` reports the same verdicts.
-      this.logger.log(
-        `Cross-check ${match ? (shapeDiffers ? 'agree (shape differs)' : 'agree') : 'disagree'}${
-          match ? '' : `: ${reason}`
-        }`,
-      );
-      if (match) {
-        return crossCheck(
-          'agree',
-          shapeDiffers ? CROSS_CHECK_AGREE_SHAPE_NOTE : CROSS_CHECK_AGREE_NOTE,
-        );
-      }
-      return crossCheck(
-        'disagree',
-        `${CROSS_CHECK_DISAGREE_NOTE} — ${reason || 'the independent query returned something else'}`,
-      );
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Cross-check failed: ${detail}`);
-      return crossCheck('error', `the check could not complete — ${detail}`);
-    }
-  }
-
-  /** Dialect, datasource and a sample-value bearing schema for the verifier. */
-  private async verifierContext(session: SessionDoc): Promise<
-    | {
-        dialect: string;
-        schema: string;
-        datasourceId: string;
-      }
-    | undefined
-  > {
-    const datasets = await this.boundDatasets(session.datasets);
-    const datasourceId =
-      (await this.soleDatasourceId(session)) ??
-      datasets.find((s) => s.datasourceId)?.datasourceId;
-    if (!datasourceId) return undefined;
-    const inScope = datasets.filter((s) => s.datasourceId === datasourceId);
-    return {
-      dialect: sqlDialectOf(inScope),
-      datasourceId,
-      schema: schemaSnapshotBlock(inScope, {
-        budgetChars: VERIFIER_SCHEMA_CHARS,
-        sampleValues: VERIFIER_SAMPLE_VALUES,
-      }),
-    };
-  }
-
-  /**
-   * One verifier pass. It gets the question, the schema with sample values and
-   * the user-approved reference pairs — deliberately not the original SQL.
-   */
-  private async deriveIndependentSql(
-    question: string,
-    context: { dialect: string; schema: string },
-  ): Promise<string | undefined> {
-    let verified: string | undefined;
-    try {
-      verified = await this.verifiedQueries.referenceBlock(question);
-    } catch {
-      verified = undefined;
-    }
-    // A second opinion should think as hard as the answer it is checking.
-    const { reasoningEffort } = await this.llmService.getView();
-    const result = await this.mastra
-      .getAgent('sql-verifier')
-      .generate(
-        [
-          `Dialect: ${context.dialect}`,
-          '',
-          '<available-entities>',
-          context.schema || '(no schema snapshot stored for this session)',
-          '</available-entities>',
-          ...(verified
-            ? [
-                '',
-                '<verified-reference-queries>',
-                verified,
-                '</verified-reference-queries>',
-              ]
-            : []),
-          '',
-          '<question>',
-          question,
-          '</question>',
-        ].join('\n'),
-        {
-          maxSteps: 1,
-          toolChoice: 'none',
-          providerOptions: await this.providerOptions({ reasoningEffort }),
-          structuredOutput: {
-            schema: sqlVerifyOutputSchema,
-            jsonPromptInjection: 'inline',
-          },
-        },
-      );
-    const parsed = sqlVerifyOutputSchema.safeParse(
-      result.object ?? parseJsonObject(result.text),
-    );
-    return parsed.success ? readOnlyStatement(parsed.data.sql) : undefined;
-  }
-
-  // --------------------------------------------------------------- internals
-
-  /**
-   * Mastra stores new turns itself once a session thread exists. For sessions
-   * created before memory was enabled, bootstrap the thread once from the
-   * already-persisted session transcript.
-   */
-  private async agentInput(
-    agent: ReturnType<MastraService['getAgent']>,
-    session: SessionDoc,
-  ) {
-    const memory = await agent.getMemory();
-    const thread = await memory?.getThreadById({ threadId: session.id });
-    const latest = session.messages.at(-1);
-    const previous = session.messages.at(-2);
-    if (thread && latest?.role === 'user') {
-      // A clarification ends its turn before memory sees the question, so
-      // replay it alongside the user's answer.
-      if (previous?.role === 'assistant' && previous.clarification) {
-        return [
-          { role: 'assistant' as const, content: previous.content },
-          { role: 'user' as const, content: latest.content },
-        ];
-      }
-      return latest.content;
-    }
-
-    return session.messages.map((message) =>
-      message.role === 'user'
-        ? { role: 'user' as const, content: message.content }
-        : { role: 'assistant' as const, content: message.content },
-    );
+    return this.sqlChecks.crossCheckAnswer(session, question, data);
   }
 
   list(): Promise<SessionDoc[]> {
@@ -1570,7 +664,7 @@ export class SessionsService implements OnModuleInit {
     if (!host?.run) throw new NotFoundException(`Session ${hostId} not found`);
     const trimmed = (question ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
-    await this.streamTurn(
+    await this.turns.streamTurn(
       { ...host },
       trimmed,
       emit,
@@ -1904,98 +998,6 @@ export class SessionsService implements OnModuleInit {
       session.workflowState,
       workflowSourceOf(session),
     );
-  }
-
-  /** Emit the `workflow` event: the session's current workflow view (api.md 3.1). */
-  private async emitWorkflow(
-    sessionId: string,
-    emit: (event: StreamEvent) => void,
-  ): Promise<void> {
-    const workflow = await this.workflowOf(await this.get(sessionId));
-    if (workflow) {
-      emit({ type: 'workflow', content: JSON.stringify(workflow) });
-    }
-  }
-
-  /**
-   * A readiness tool's report reaches the client (agents.md 2.10, api.md
-   * 3.1): its `readiness` panel item is stored on the session (upserted) and
-   * the `readiness-report` event carries the full report with that item. The
-   * model only saw the summary; the full report is the one the bridge
-   * resolved for the same id. Returns the answer's reference.
-   */
-  private async showReadinessReport(
-    sessionId: string,
-    result: unknown,
-    emit: (event: StreamEvent) => void,
-  ): Promise<ReadinessReportRef | undefined> {
-    // The tool's raw result carries the full report (only its summary
-    // reaches the model); the bridge's copy covers any other shape.
-    const reportId = readinessReportIdOf(result);
-    const report =
-      readinessReportOf(result) ??
-      (reportId && this.readinessBridge
-        ? await this.readinessBridge.reportFor(reportId)
-        : undefined);
-    if (!report) return undefined;
-    const panelItem = readinessPanelItem(report);
-    const session = await this.get(sessionId);
-    await this.updateDoc(sessionId, {
-      panelItems: upsertPanelItem(session.panelItems ?? [], panelItem),
-    });
-    emit({
-      type: READINESS_REPORT_EVENT,
-      content: JSON.stringify({ report, panelItem }),
-    });
-    return readinessReportRef(report);
-  }
-
-  /** Emit the `panel-item` event for a stored item (api.md 3.1). */
-  private async emitPanelItem(
-    sessionId: string,
-    itemId: string,
-    emit: (event: StreamEvent) => void,
-  ): Promise<void> {
-    const session = await this.get(sessionId);
-    const item = withVisualItems(session).find((i) => i.id === itemId);
-    if (!item) return;
-    emit({ type: 'panel-item', content: JSON.stringify({ item }) });
-  }
-
-  /**
-   * The RFP Builder's saved stage drives its tracker: the next stage is the
-   * current one, those up to it are done (ADR-0029).
-   */
-  private async driveRfpStage(
-    sessionId: string,
-    stage: number,
-    emit: (event: StreamEvent) => void,
-  ): Promise<void> {
-    const session = await this.get(sessionId);
-    if (!this.effectiveWorkflowFor(session).length) return;
-    const completed = Math.max(0, Math.min(Math.trunc(stage), RFP_STAGES));
-    const now = new Date().toISOString();
-    const current = Math.min(completed + 1, RFP_STAGES);
-    // The card belongs to the phase it was written for: moving on clears it,
-    // waiting included.
-    const previous = session.workflowState;
-    const card =
-      previous?.current === current
-        ? {
-            ...(previous.waiting ? { waiting: true } : {}),
-            ...(previous.note ? { note: previous.note } : {}),
-          }
-        : {};
-    const workflowState: WorkflowState = {
-      current,
-      done: Array.from({ length: completed }, (_, i) => i + 1),
-      ...(previous?.skipped?.length ? { skipped: previous.skipped } : {}),
-      ...(previous?.todos ? { todos: previous.todos } : {}),
-      ...card,
-      updatedAt: now,
-    };
-    await this.updateDoc(sessionId, { workflowState });
-    await this.emitWorkflow(sessionId, emit);
   }
 
   private requirePanelItem(session: SessionDoc, itemId: string): PanelItem {
@@ -2373,25 +1375,7 @@ export class SessionsService implements OnModuleInit {
     const trimmed = (content ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
     const session = await this.get(id);
-    this.appendUserMessage(session, trimmed);
-    const agent = this.mastra.getAgent(session.agentKey ?? ASSISTANT_AGENT_KEY);
-    const input = await this.agentInput(agent, session);
-    const options = await this.agentOptions(session, trimmed);
-    const result = await agent.generate(input, options);
-    const reasoning = reasoningTrail(toolRecords(result));
-    const knowledge = knowledgeUsed(options.requestContext);
-    session.messages.push({
-      role: 'assistant',
-      content: (result.text ?? '').trim(),
-      at: new Date().toISOString(),
-      ...(reasoning ? { reasoning } : {}),
-      ...(knowledge ? { knowledge } : {}),
-    });
-    const updated = await this.updateDoc(id, {
-      messages: session.messages,
-      ...turnRfpPatch(session, options.requestContext),
-    });
-    return updated ?? session;
+    return this.turns.generateTurn(session, trimmed);
   }
 
   /**
@@ -2413,7 +1397,7 @@ export class SessionsService implements OnModuleInit {
     const trimmed = (content ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
     const session = await this.get(id);
-    await this.streamTurn(
+    await this.turns.streamTurn(
       session,
       trimmed,
       emit,
@@ -2421,637 +1405,6 @@ export class SessionsService implements OnModuleInit {
       activeVisualId,
       careful,
     );
-  }
-
-  /** The streamed turn itself, once the request reached the assistant. */
-  private async streamTurn(
-    session: SessionDoc,
-    trimmed: string,
-    emit: (event: StreamEvent) => void,
-    abortSignal: AbortSignal | undefined,
-    activeVisualId: string | undefined,
-    careful: boolean,
-    onStepEvent?: (event: RunStepEvent) => void,
-  ): Promise<void> {
-    const id = session.id;
-    this.appendUserMessage(session, trimmed);
-    // Persist the prompt before model startup. A user can stop while the
-    // provider is still connecting, and that turn should survive a reload.
-    await this.updateDoc(id, { messages: session.messages });
-
-    // The session's agent: the assistant, or the built-in agent it is bound
-    // to (agents.md 5.1, ADR-0028).
-    const agentKey = session.agentKey ?? ASSISTANT_AGENT_KEY;
-    const isAssistant = agentKey === ASSISTANT_AGENT_KEY;
-    const agent = this.mastra.getAgent(agentKey);
-    const input = await this.agentInput(agent, session);
-    // Own controller so a clarification can end the model turn without the
-    // client having disconnected.
-    const turn = new AbortController();
-    const forwardAbort = () => turn.abort();
-    abortSignal?.addEventListener('abort', forwardAbort, { once: true });
-    const options = await this.agentOptions(
-      session,
-      trimmed,
-      turn.signal,
-      activeVisualId,
-    );
-    // A live reference to this turn's captured records, handed to the visual
-    // tools via requestContext so create_visual/update_visual called later in
-    // the same turn can see SQL the turn already ran (drill-down queries a
-    // tailored visual needs but that never touched the source answer). Fresh
-    // RequestContext + array per call — no leakage across turns or sessions.
-    const data: ToolDataRecord[] = [];
-    // The visual tools and `show_in_panel` read them, for every agent (agents.md 4.2).
-    options.requestContext.set(TURN_RECORDS_CONTEXT_KEY, data);
-    let stream: Awaited<ReturnType<typeof agent.stream>> | undefined;
-
-    let text = '';
-    // Set inside `consume`, so typed without narrowing to the initial null.
-    let clarification = null as ChatMessage['clarification'] | null;
-    let visualEvent: VisualEvent | undefined;
-    // The package an `export_rfp_package` call stored this turn (RFP Builder).
-    let rfpPackage: RfpPackageRef | undefined;
-    // The last report a readiness tool returned this turn (Data Readiness Agent).
-    let readinessReport: ReadinessReportRef | undefined;
-    // The RFP Builder's `turn-rfp` holder, and the stage the tracker last showed.
-    const rfpHolder = turnRfpHolder(options.requestContext);
-    let drivenStage: number | undefined;
-    const pendingCalls = new Map<string, Record<string, unknown>>();
-    // Every tool name the model actually invoked this turn — the zero-SQL-
-    // turn grounding guard below fires only when this stays empty.
-    const calledTools = new Set<string>();
-    // The model call's own failure: Mastra reports it as a chunk, not a throw.
-    let streamError: unknown;
-    // Consume one agent stream (agents.md 5.1 step 3).
-    const consume = async (
-      agentStream: Awaited<ReturnType<typeof agent.stream>>,
-    ): Promise<void> => {
-      stream = agentStream;
-      try {
-        for await (const chunk of agentStream.fullStream) {
-          const progress = readinessProgressEvent(chunk);
-          if (progress) {
-            emit(progress);
-            continue;
-          }
-          if (chunk.type === 'error') {
-            streamError ??= (chunk.payload as { error?: unknown }).error;
-          } else if (chunk.type === 'reasoning-delta') {
-            const delta = (chunk.payload as { text?: string }).text ?? '';
-            if (delta) emit({ type: 'reasoning', content: delta });
-          } else if (chunk.type === 'text-delta') {
-            const delta = (chunk.payload as { text?: string }).text ?? '';
-            if (delta) {
-              text += delta;
-              emit({ type: 'text', content: delta });
-            }
-          } else if (chunk.type === 'tool-call') {
-            const payload = chunk.payload as {
-              toolCallId?: string;
-              toolName?: string;
-              args?: Record<string, unknown>;
-            };
-            if (payload.toolName) calledTools.add(payload.toolName);
-            // A valid clarification ends the turn — the card renders in the UI
-            // and the user's pick arrives as the next message. Abort so the
-            // model does not keep analysing (and spending) behind the card. A
-            // malformed one runs like any tool: the model gets the validation
-            // error and asks again (agents.md 3.5, 5.1).
-            const asked =
-              payload.toolName === 'ask_clarification'
-                ? parseClarification(payload.args)
-                : undefined;
-            if (asked) {
-              clarification = asked;
-              turn.abort();
-              break;
-            }
-            if (payload.toolCallId) {
-              pendingCalls.set(payload.toolCallId, payload.args ?? {});
-            }
-            // The client shows the reason before the result arrives, so the
-            // rationale travels with the call, not with its rows.
-            const rationale = statedRationale(
-              (payload.args ?? {})['rationale'],
-            );
-            // What the call is about, shown while it runs: the skill a skill
-            // tool loads, else the call's first text argument (api.md 3.1).
-            const input = toolCallInput(
-              payload.toolName ?? 'tool',
-              payload.args ?? {},
-            );
-            emit({
-              type: 'tool',
-              content: JSON.stringify({
-                name: payload.toolName ?? 'tool',
-                ...(rationale ? { rationale } : {}),
-                ...(input ? { input } : {}),
-              }),
-            });
-          } else if (chunk.type === 'tool-result') {
-            const payload = chunk.payload as {
-              toolCallId?: string;
-              toolName?: string;
-              result?: unknown;
-              args?: Record<string, unknown>;
-            };
-            const toolName = payload.toolName ?? 'tool';
-            const args =
-              payload.args ??
-              (payload.toolCallId
-                ? pendingCalls.get(payload.toolCallId)
-                : {}) ??
-              {};
-            if (VISUAL_TOOLS.has(toolName)) {
-              const result = (payload.result ?? {}) as {
-                visualId?: string;
-                version?: number;
-                title?: string;
-                error?: string;
-              };
-              if (result.visualId && result.version) {
-                visualEvent = {
-                  visualId: result.visualId,
-                  version: result.version,
-                  title: result.title ?? 'Interactive visual',
-                  action: toolName === 'create_visual' ? 'created' : 'updated',
-                };
-                emit({
-                  type: 'visual-updated',
-                  content: JSON.stringify(visualEvent),
-                });
-              }
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: toolName,
-                  input:
-                    typeof args['instruction'] === 'string'
-                      ? args['instruction']
-                      : undefined,
-                  error: result.error,
-                }),
-              });
-              continue;
-            }
-            if (toolName === SHOW_IN_PANEL_TOOL) {
-              const result = (payload.result ?? {}) as {
-                id?: string;
-                kind?: string;
-                title?: string;
-                error?: string;
-              };
-              if (!result.error && result.id) {
-                await this.emitPanelItem(id, result.id, emit);
-              }
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: toolName,
-                  input:
-                    result.title ??
-                    (typeof args['title'] === 'string'
-                      ? args['title']
-                      : undefined),
-                  error: result.error,
-                }),
-              });
-              continue;
-            }
-            if (toolName === UPDATE_WORKFLOW_TOOL) {
-              const error = resultError(payload.result);
-              if (!error) await this.emitWorkflow(id, emit);
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: toolName,
-                  input:
-                    typeof args['note'] === 'string'
-                      ? args['note'].slice(0, 80)
-                      : undefined,
-                  error,
-                }),
-              });
-              continue;
-            }
-            if (!isAssistant && READINESS_TOOLS.has(toolName)) {
-              // Each readiness tool shows its step; a report shows the
-              // scorecard first (api.md 3.1, data-readiness R5).
-              const error = resultError(payload.result);
-              if (!error && READINESS_REPORT_TOOLS.has(toolName)) {
-                const shown = await this.showReadinessReport(
-                  id,
-                  payload.result,
-                  emit,
-                );
-                if (shown) readinessReport = shown;
-              }
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: toolName,
-                  input: firstStringArgument(args),
-                  error,
-                }),
-              });
-              continue;
-            }
-            if (!isAssistant && SYNTHETIC_DATA_TOOLS.has(toolName)) {
-              // Each synthetic-data tool shows its step; a script opens in
-              // the panel as `show_in_panel` does (agents.md 3.14).
-              const error = resultError(payload.result);
-              const itemId = syntheticPanelItemId(payload.result);
-              if (!error && itemId) await this.emitPanelItem(id, itemId, emit);
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: toolName,
-                  input: firstStringArgument(args),
-                  error,
-                }),
-              });
-              continue;
-            }
-            if (!isAssistant && RFP_TOOLS.has(toolName)) {
-              // Every RFP tool shows its step (api.md 3.1); a result with
-              // columns and rows is also kept as a data record (agents.md 5.1).
-              const error = resultError(payload.result);
-              if (EXPORT_RFP_PACKAGE_TOOLS.has(toolName) && !error) {
-                const stored = rfpPackageRef(payload.result);
-                if (stored) {
-                  rfpPackage = stored;
-                  emit({
-                    type: 'rfp-package',
-                    content: JSON.stringify(stored),
-                  });
-                }
-              }
-              const record = toolDataRecord(toolName, args, payload.result);
-              if (record) data.push(record);
-              // A saved stage moves the tracker mid-turn (ADR-0029).
-              if (
-                toolName === UPDATE_RFP_TOOL &&
-                !error &&
-                rfpHolder?.stage !== undefined &&
-                rfpHolder.stage !== drivenStage
-              ) {
-                drivenStage = rfpHolder.stage;
-                await this.driveRfpStage(id, drivenStage, emit);
-              }
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: toolName,
-                  input: firstStringArgument(args),
-                  rowCount: record?.rowCount,
-                  error,
-                }),
-              });
-              continue;
-            }
-            const record = toolDataRecord(toolName, args, payload.result);
-            if (record) {
-              data.push(record);
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: record.tool,
-                  input: record.input,
-                  rowCount: record.rowCount,
-                  error: record.error,
-                  rationale: record.rationale,
-                }),
-              });
-            }
-          }
-        }
-      } catch (error) {
-        if (!turn.signal.aborted) throw error;
-      }
-    };
-    try {
-      // Every streamed turn is one run of the session's workflow (agents.md
-      // 5.1, ADR-0040). Its agent step streams the agent through `consume`:
-      // v2's Analyse step (5.11, ADR-0034) or a one-step workflow's Answer.
-      await this.runTurnWorkflow(
-        session,
-        turnWorkflowOf(session),
-        trimmed,
-        emit,
-        {
-          analyse: async ({ catalogBlock }) => {
-            await consume(
-              await agent.stream(input, {
-                ...options,
-                context: [
-                  ...options.context,
-                  { role: 'system' as const, content: catalogBlock },
-                ],
-              }),
-            );
-            // Any model error fails the step (agents.md 5.11).
-            if (streamError !== undefined && !turn.signal.aborted) {
-              throw await chatTurnError(streamError, () =>
-                this.llmService.getView(),
-              );
-            }
-            return analyseOutcomeOf(data, turn.signal.aborted);
-          },
-          answer: async () => {
-            await consume(await agent.stream(input, options));
-            if (streamError !== undefined && !turn.signal.aborted) {
-              // A custom endpoint's failure fails the turn in R50's words
-              // (R51); any other keeps today's handling.
-              const failure = await chatTurnError(streamError, () =>
-                this.llmService.getView(),
-              );
-              if (failure !== streamError) throw failure;
-            }
-            return analyseOutcomeOf(data, turn.signal.aborted);
-          },
-        },
-        onStepEvent,
-      );
-    } finally {
-      abortSignal?.removeEventListener('abort', forwardAbort);
-    }
-    // The stage `create_rfp` or `get_rfp` reported moves the tracker too.
-    if (rfpHolder?.stage !== undefined && rfpHolder.stage !== drivenStage) {
-      await this.driveRfpStage(id, rfpHolder.stage, emit);
-    }
-    if (!turn.signal.aborted && !clarification && !text && stream) {
-      text = ((await stream.text) ?? '').trim();
-    }
-    if (
-      !turn.signal.aborted &&
-      !clarification &&
-      !text.trim() &&
-      !visualEvent &&
-      !readinessReport
-    ) {
-      // A model can spend every allowed step on tools and finish without a
-      // user-facing answer. Give it one tool-disabled pass to turn the data it
-      // already collected into prose; never let a completed turn disappear.
-      text = await synthesizeToolOnlyTurn(
-        agent,
-        trimmed,
-        data,
-        turn.signal,
-        options.providerOptions,
-        this.logger,
-        options.requestContext,
-      );
-      if (turn.signal.aborted) return;
-      if (text) emit({ type: 'text', content: text });
-    }
-
-    // Zero-SQL-turn grounding guard: the system prompt already forbids
-    // answering data questions from parametric memory, but prompt-only
-    // enforcement missed cases in evals (e.g. "Who won the 2022 World Cup?"
-    // answered with no tool calls at all). This is the runtime backstop —
-    // one corrective pass, tools allowed, at most once per turn. Text is
-    // streamed to the client incrementally above, before this guard can
-    // even run, so there is nothing to "un-stream"; the client's source of
-    // truth is the persisted message delivered with `done` below (see
-    // `SessionChat` — it replaces its whole message list from that event,
-    // it does not keep the streamed deltas), so overwriting `text` here is
-    // enough to make the corrected answer the one the user ends up seeing.
-    if (
-      isAssistant &&
-      !turn.signal.aborted &&
-      !clarification &&
-      text.trim() &&
-      calledTools.size === 0
-    ) {
-      const corrected = await this.runGroundingGuard(
-        agent,
-        trimmed,
-        text,
-        options,
-        data,
-        turn.signal,
-      );
-      if (corrected) text = corrected;
-    }
-
-    // Visual tools persist metadata mid-turn; reload so this write keeps it.
-    const fresh = await this.get(id);
-    const messages = fresh.messages;
-    const entities = sourceEntities(data);
-    const reasoning = reasoningTrail(data);
-    const knowledge = knowledgeUsed(options.requestContext);
-    if (clarification) {
-      // The turn stops here, but the schema/sample work done before the
-      // question is real work — keep it on the card instead of dropping it.
-      messages.push({
-        role: 'assistant',
-        content: clarification.question,
-        at: new Date().toISOString(),
-        clarification,
-        ...(data.length ? { data } : {}),
-        ...(entities.length ? { entities } : {}),
-        ...(reasoning ? { reasoning } : {}),
-        ...(knowledge ? { knowledge } : {}),
-        ...(rfpPackage ? { rfpPackage } : {}),
-        ...(readinessReport ? { readinessReport } : {}),
-      });
-    } else if (text.trim() || visualEvent || readinessReport) {
-      const interpretation = interpretationLine(data, entities);
-      // Careful mode only, and only when there is a result set to corroborate.
-      // The assistant's only: another agent runs no SQL to cross-check.
-      const crossChecked =
-        careful && isAssistant && !turn.signal.aborted
-          ? await this.crossCheckAnswer(session, trimmed, data)
-          : undefined;
-      messages.push({
-        role: 'assistant',
-        content:
-          text.trim() ||
-          (visualEvent
-            ? `${visualEvent.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent.title}" (v${visualEvent.version}).`
-            : readinessAnswerFallback(readinessReport!)),
-        at: new Date().toISOString(),
-        ...(data.length ? { data } : {}),
-        ...(entities.length ? { entities } : {}),
-        ...(interpretation ? { interpretation } : {}),
-        ...(reasoning ? { reasoning } : {}),
-        ...(knowledge ? { knowledge } : {}),
-        ...((await this.matchesVerifiedQuery(session, data))
-          ? { verified: true }
-          : {}),
-        ...(visualEvent ? { visual: visualEvent } : {}),
-        ...(crossChecked ? { crossCheck: crossChecked } : {}),
-        ...(rfpPackage ? { rfpPackage } : {}),
-        ...(readinessReport ? { readinessReport } : {}),
-      });
-    }
-    const updated = await this.updateDoc(id, {
-      messages,
-      ...turnRfpPatch(session, options.requestContext),
-    });
-    if (!turn.signal.aborted || clarification) {
-      emit({ type: 'done', session: await this.toView(updated ?? fresh) });
-    }
-  }
-
-  /**
-   * Run one turn as a run of the session's workflow (agents.md 5.1, 5.11,
-   * 5.12; ADR-0034, ADR-0040): `qti-v2-turn` hands its Analyse step
-   * `runtime.analyse`, `agent-turn` hands its Answer step `runtime.answer`.
-   * Only a workflow whose steps drive the bar (`bar: 'steps'`) writes the
-   * session's workflow state from the run's step events and emits each
-   * change as `workflow`; a one-step workflow never does (agent-panel R15).
-   * A failed step throws its own error, so the `error` event reads as the
-   * agent's; a stopped turn ends at its agent step. A run host's turn also
-   * hands every step event to `onStepEvent`, whatever the bar (agents.md
-   * 5.14).
-   */
-  private async runTurnWorkflow(
-    session: SessionDoc,
-    workflow: TurnWorkflow,
-    question: string,
-    emit: (event: StreamEvent) => void,
-    runtime: QtiV2TurnRuntime & AgentTurnRuntime,
-    onStepEvent?: (event: RunStepEvent) => void,
-  ): Promise<void> {
-    // The agent step's own failure, kept so the turn reports it as is.
-    let stepError: unknown;
-    const captured = async <T>(step: () => Promise<T>): Promise<T> => {
-      try {
-        return await step();
-      } catch (error) {
-        stepError = error;
-        throw error;
-      }
-    };
-    const requestContext = new RequestContext();
-    if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
-      requestContext.set(AGENT_TURN_RUNTIME_KEY, {
-        answer: () => captured(() => runtime.answer()),
-      } satisfies AgentTurnRuntime);
-    } else {
-      requestContext.set(QTI_V2_TURN_RUNTIME_KEY, {
-        analyse: (input) => captured(() => runtime.analyse(input)),
-      } satisfies QtiV2TurnRuntime);
-    }
-    const turnInput: QtiV2TurnInput = {
-      question,
-      datasets: session.datasets,
-    };
-    const run = await this.mastra.streamWorkflow(
-      workflow.engineId,
-      turnInput,
-      requestContext,
-    );
-    let state = session.workflowState;
-    for await (const event of run.fullStream) {
-      if (onStepEvent && stepEventOf(event)) onStepEvent(event);
-      if (workflow.bar !== 'steps') continue;
-      const stepEvent = stepEventOf(event);
-      if (!stepEvent) continue;
-      const next = workflowRunState(state, stepEvent, workflow.stepIds);
-      if (!next) continue;
-      state = next;
-      await this.updateDoc(session.id, { workflowState: state });
-      session.workflowState = state;
-      await this.emitWorkflow(session.id, emit);
-    }
-    const result = await run.result;
-    if (result.status === 'failed') {
-      const failure: unknown =
-        stepError ?? result.error ?? new Error('The turn failed');
-      throw failure;
-    }
-    if (result.status === 'success' && isTurnSummary(result.result)) {
-      this.logger.log(
-        `Questions to Insights v2 turn in session ${session.id}: ${JSON.stringify(result.result)}`,
-      );
-    }
-  }
-
-  /**
-   * Runtime backstop for the grounding rule in the system prompt: a turn
-   * that produced a non-empty answer without calling a single tool gets one
-   * corrective pass, tools allowed, before it is accepted. Called at most
-   * once per turn by `streamMessage`.
-   *
-   * Deliberately memory-free. `agentInput` shows that once a session has a
-   * memory thread, the turn's `input` is just the latest user message —
-   * memory itself replays the rest of the history. Calling `agent.generate`
-   * again with that same question string and the same `{ thread, resource }`
-   * would hand memory a second "new" user turn with identical content,
-   * duplicating the question in the persisted conversation. So this pass
-   * gets its own compact, self-contained context instead: the same per-turn
-   * system blocks already built for the turn (dataset orientation, curated
-   * metrics, verified-query references) plus the nudge below, which carries
-   * the model's own ungrounded answer so it has something concrete to keep,
-   * correct or retract — never the full thread.
-   *
-   * Tool calls made during the corrective pass are extracted from the
-   * `generate()` result (there is no stream to read chunks off of) and
-   * pushed onto the same live `data` array the turn already collects into,
-   * so a corrected answer's SQL still ends up in the persisted `data`,
-   * `entities`, `interpretation` and verified-badge logic below.
-   */
-  private async runGroundingGuard(
-    agent: ReturnType<MastraService['getAgent']>,
-    question: string,
-    originalAnswer: string,
-    turnOptions: {
-      context?: { role: 'system'; content: string }[];
-      memory?: unknown;
-      [key: string]: unknown;
-    },
-    data: ToolDataRecord[],
-    abortSignal: AbortSignal,
-  ): Promise<string | undefined> {
-    const correctiveOptions: Record<string, unknown> = { ...turnOptions };
-    delete correctiveOptions['memory'];
-    correctiveOptions['context'] = [
-      ...(turnOptions.context ?? []),
-      {
-        role: 'system' as const,
-        content: groundingNudge(originalAnswer),
-      },
-    ];
-    try {
-      const result = await agent.generate(question, correctiveOptions);
-      const corrected = ((result as { text?: string }).text ?? '').trim();
-      if (!corrected) return undefined;
-      data.push(...toolRecords(result));
-      return corrected;
-    } catch (error) {
-      if (abortSignal.aborted) return undefined;
-      this.logger.warn(
-        `Grounding guard corrective pass failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return undefined;
-    }
-  }
-
-  /**
-   * Does this turn's final statement reproduce a query the user already
-   * approved? Drives the "Verified" badge — a library miss is not an error,
-   * so a failing lookup just leaves the answer unbadged.
-   */
-  private async matchesVerifiedQuery(
-    session: SessionDoc,
-    data: ToolDataRecord[],
-  ): Promise<boolean> {
-    const sql = lastSuccessfulSql(data);
-    if (!sql) return false;
-    try {
-      return await this.verifiedQueries.isVerifiedSql(
-        sql,
-        await this.soleDatasourceId(session),
-      );
-    } catch (error) {
-      this.logger.warn(
-        `Verified query lookup failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return false;
-    }
   }
 
   // ------------------------------------------------------------- feedback
@@ -3099,7 +1452,7 @@ export class SessionsService implements OnModuleInit {
         await this.verifiedQueries.save({
           question: question.content,
           sql,
-          datasourceId: await this.soleDatasourceId(session),
+          datasourceId: await this.turnDatasets.soleDatasourceId(session),
           entities: answer.entities ?? [],
           sourceSessionId: id,
           sourceMessageAt: messageAt,
@@ -3109,124 +1462,6 @@ export class SessionsService implements OnModuleInit {
     const updated = await this.updateDoc(id, { messages });
     return updated ?? { ...session, messages };
   }
-
-  /** The session's datasource when it is unambiguous — provenance only. */
-  private async soleDatasourceId(
-    session: SessionDoc,
-  ): Promise<string | undefined> {
-    const datasets = await this.boundDatasets(session.datasets);
-    const ids = new Set(
-      datasets.map((s) => s.datasourceId).filter((id): id is string => !!id),
-    );
-    return ids.size === 1 ? Array.from(ids)[0] : undefined;
-  }
-
-  /**
-   * Append the user's prompt — unless the transcript already ends with that
-   * exact unanswered prompt (a retry after a failed turn), in which case reuse
-   * it instead of duplicating the bubble.
-   */
-  private appendUserMessage(session: SessionDoc, content: string): void {
-    const latest = session.messages.at(-1);
-    if (latest?.role === 'user' && latest.content === content) return;
-    session.messages.push({
-      role: 'user',
-      content,
-      at: new Date().toISOString(),
-    });
-  }
-}
-
-/** Successful SQL runs behind an answer, oldest first. */
-/** SQL dialect for prompts: REST datasources are queried as SQLite. */
-function sqlDialectOf(datasets: DatasetSnapshot[]): string {
-  const kind = datasets.find((s) => s.datasourceKind)?.datasourceKind;
-  if (kind === 'rest') return 'sqlite';
-  return kind ?? 'databricks';
-}
-
-function successfulSqlRuns(data: ToolDataRecord[] | undefined) {
-  return (data ?? []).filter(
-    (record) =>
-      record.tool === 'run_readonly_sql' &&
-      !record.error &&
-      record.input?.trim(),
-  );
-}
-
-/** The SQL behind an answer: its last `run_readonly_sql` that did not fail. */
-function lastSuccessfulSql(
-  data: ToolDataRecord[] | undefined,
-): string | undefined {
-  return successfulSqlRuns(data).at(-1)?.input?.trim();
-}
-
-/**
- * Deterministic one-line provenance summary shown above an answer's data
- * expandables. Built from the captured records only — no model involved, so
- * the claim can never drift from what actually ran.
- */
-function interpretationLine(
-  data: ToolDataRecord[] | undefined,
-  entities: string[],
-): string | undefined {
-  const runs = successfulSqlRuns(data);
-  if (!runs.length) return undefined;
-  const rows = runs.reduce(
-    (total, record) => total + (record.rowCount ?? record.rows?.length ?? 0),
-    0,
-  );
-  const queries = `${runs.length} quer${runs.length === 1 ? 'y' : 'ies'}`;
-  const over = entities.length ? ` over ${entities.join(', ')}` : '';
-  return `Computed from ${queries}${over} — ${rows} row${rows === 1 ? '' : 's'} analyzed.`;
-}
-
-/**
- * The assistant's plain-language route from the question to the answer: one
- * step per captured call that said why it ran, in the order they ran. Built
- * at persist time like `interpretationLine` — the prose is the model's, the
- * ordering and the outcomes are ours, so a step can never claim a query that
- * never happened.
- */
-function reasoningTrail(
-  data: ToolDataRecord[] | undefined,
-): ReasoningStep[] | undefined {
-  const steps: ReasoningStep[] = [];
-  for (const record of data ?? []) {
-    if (!record.rationale) continue;
-    steps.push({
-      step: steps.length + 1,
-      rationale: record.rationale,
-      tool: record.tool,
-      ...(record.input ? { input: record.input } : {}),
-      ...(record.rowCount === undefined ? {} : { rowCount: record.rowCount }),
-      ...(record.error ? { error: record.error } : {}),
-    });
-  }
-  return steps.length ? steps : undefined;
-}
-
-/**
- * The session's new active RFP, from this turn's `turn-rfp` holder (agents.md
- * 4.2, 5.1); nothing when the turn opened none or the same one.
- */
-function turnRfpPatch(
-  session: SessionDoc,
-  requestContext: { get(key: string): unknown } | undefined,
-): Pick<SessionDoc, 'rfpId'> {
-  const holder = requestContext?.get(TURN_RFP_CONTEXT_KEY) as
-    TurnRfpHolder | undefined;
-  const rfpId = holder?.rfpId;
-  return typeof rfpId === 'string' && rfpId && rfpId !== session.rfpId
-    ? { rfpId }
-    : {};
-}
-
-/** This turn's `turn-rfp` holder, set for the RFP Builder only. */
-function turnRfpHolder(requestContext: {
-  get(key: string): unknown;
-}): TurnRfpHolder | undefined {
-  return requestContext.get(TURN_RFP_CONTEXT_KEY) as TurnRfpHolder | undefined;
 }
 
 /** A workspace file error as the API answers it: 404 for a missing file, else 400. */
@@ -3237,73 +1472,6 @@ function panelFileException(error: unknown): Error {
       : new BadRequestException(error.message);
   }
   return error instanceof Error ? error : new Error(String(error));
-}
-
-/** The `{ error }` a tool answered with, if any. */
-function resultError(result: unknown): string | undefined {
-  const error = (result as { error?: unknown } | null | undefined)?.error;
-  return typeof error === 'string' ? error : undefined;
-}
-
-/** A tool call's first string argument: the step's input (api.md 3.1). */
-function firstStringArgument(
-  args: Record<string, unknown>,
-): string | undefined {
-  return Object.values(args).find(
-    (value): value is string => typeof value === 'string',
-  );
-}
-
-/** Longest `input` a `tool` event carries. */
-const TOOL_CALL_INPUT_CHARS = 200;
-
-/**
- * The `input` of a `tool` event: for the framework's skill tools the skill
- * (and file) they load or the search query, else the first text argument,
- * flattened and clipped (api.md 3.1).
- */
-export function toolCallInput(
-  toolName: string,
-  args: Record<string, unknown>,
-): string | undefined {
-  const text = (value: unknown) =>
-    typeof value === 'string' && value.trim() ? value.trim() : undefined;
-  let input: string | undefined;
-  if (toolName === 'skill') input = text(args['name']);
-  else if (toolName === 'skill_read') {
-    const skill = text(args['skillName']);
-    const path = text(args['path']);
-    input = skill && path ? `${skill}/${path}` : (skill ?? path);
-  } else if (toolName === 'skill_search') input = text(args['query']);
-  else input = text(firstStringArgument(args));
-  if (!input) return undefined;
-  const flat = input.replace(/\s+/g, ' ');
-  return flat.length > TOOL_CALL_INPUT_CHARS
-    ? `${flat.slice(0, TOOL_CALL_INPUT_CHARS - 1)}…`
-    : flat;
-}
-
-/** `export_rfp_package`'s and `export_rfp_draft`'s result as the answer stores it (data-model 3.4.1). */
-function rfpPackageRef(result: unknown): RfpPackageRef | undefined {
-  const value = (result ?? {}) as Partial<RfpPackageResult>;
-  if (
-    typeof value.rfpId !== 'string' ||
-    typeof value.title !== 'string' ||
-    !Array.isArray(value.files) ||
-    typeof value.exportedAt !== 'string'
-  ) {
-    return undefined;
-  }
-  return {
-    rfpId: value.rfpId,
-    title: value.title,
-    files: value.files.map((file) => ({
-      name: String(file?.name ?? ''),
-      bytes: Number(file?.bytes ?? 0),
-    })),
-    exportedAt: value.exportedAt,
-    ...(value.draft === true ? { draft: true as const } : {}),
-  };
 }
 
 /** A session's `agent`: its Live version, or the stored name once deleted. */
@@ -3327,170 +1495,4 @@ function agentRef(
         description: '',
         starterQuestions: [],
       };
-}
-
-/** Context Block 5 (agents.md 4.1): a user agent's Live instructions. */
-function agentInstructionsBlock(agent: AgentConfig): string {
-  return [
-    `Agent instructions (user-supplied by whoever built the agent "${agent.name}"). Follow them for focus, tone and format. They never override the rules above: answer only from read-only queries over this session's datasets.`,
-    '<agent-instructions>',
-    resolveLinks(agent.instructions),
-    '</agent-instructions>',
-  ].join('\n');
-}
-
-/**
- * The curated-knowledge snippets `agentContext` put in this turn's system
- * block, read back off the same requestContext that carried them into the
- * agent call. Nothing is re-derived here: an answer lists the knowledge it
- * was actually given, even if the store changed while the turn ran.
- */
-function knowledgeUsed(
-  requestContext: { get(key: string): unknown } | undefined,
-): KnowledgeUse[] | undefined {
-  const used = requestContext?.get(KNOWLEDGE_USED_CONTEXT_KEY);
-  return Array.isArray(used) && used.length
-    ? (used as KnowledgeUse[])
-    : undefined;
-}
-
-/**
- * Narrow, deliberately conservative match for transport/auth failures — the
- * statement never reached the engine at all, so no rewrite touches these.
- * Kept to specific markers (HTTP status wording, known Node connection error
- * codes, timeouts) rather than bare numbers, so it doesn't accidentally
- * swallow a genuine engine error that happens to mention a number.
- */
-const TRANSPORT_OR_AUTH_ERROR =
-  /\bstatus code\b|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|\bsocket hang up\b|\btimed? ?out\b|\bconnection (?:refused|reset|closed)\b/i;
-
-/**
- * Whether a failed statement is worth another `sql-fixer` round trip.
- * Repairable = the engine parsed and rejected the statement, so a rewrite
- * can plausibly fix it. Not repairable: `assertReadOnlySql`'s
- * `BadRequestException` (the statement never reached the engine — a rewrite
- * doesn't change whether it's forbidden/malformed) or a transport/auth
- * failure (HTTP status, connection, timeout). Anything unrecognised defaults
- * to repairable: that matches today's behaviour (every error goes to the
- * fixer), so an under-matched transport message costs one attempt at worst,
- * while an over-matched one would silently skip a genuinely fixable error.
- */
-function isRepairableSqlError(error: unknown): boolean {
-  if (error instanceof BadRequestException) return false;
-  const message = error instanceof Error ? error.message : String(error);
-  return !TRANSPORT_OR_AUTH_ERROR.test(message);
-}
-
-/** One-line, length-capped rendering of a SQL statement for warn-level logs. */
-function logSql(sql: string): string {
-  const flat = sql.replace(/\s+/g, ' ').trim();
-  return flat.length > SQL_LOG_CHARS
-    ? `${flat.slice(0, SQL_LOG_CHARS - 1)}…`
-    : flat;
-}
-
-/**
- * Strip fences/semicolons off a model-authored statement and keep it only if
- * it is a read-only query. Shared by the fixer and the verifier.
- */
-function readOnlyStatement(sql: string): string | undefined {
-  const cleaned = sql
-    .trim()
-    .replace(/^```(?:sql)?\s*/i, '')
-    .replace(/\s*```$/, '')
-    .replace(/;+\s*$/, '')
-    .trim();
-  return /^(select|with)\b/i.test(cleaned) ? cleaned : undefined;
-}
-
-/** A cross-check verdict with its note clipped to tooltip length. */
-function crossCheck(status: CrossCheck['status'], note: string): CrossCheck {
-  const flat = note.replace(/\s+/g, ' ').trim();
-  return {
-    status,
-    note:
-      flat.length > CROSS_CHECK_NOTE_CHARS
-        ? `${flat.slice(0, CROSS_CHECK_NOTE_CHARS - 1)}…`
-        : flat,
-  };
-}
-
-/** Parse a model's JSON reply, tolerating a markdown fence around it. */
-function parseJsonObject(text: string | undefined): unknown {
-  const trimmed = (text ?? '').trim();
-  if (!trimmed) return undefined;
-  try {
-    return JSON.parse(
-      trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''),
-    );
-  } catch {
-    return undefined;
-  }
-}
-
-/** A session's workflow as its turn runs it (agents.md 5.12, ADR-0040). */
-interface TurnWorkflow {
-  /** The catalogue id: `qti-v2-turn`, `agent:<key>` or `agent:<user-agent id>`. */
-  id: string;
-  /** The registered Mastra workflow the turn runs. */
-  engineId: string;
-  /** What drives the bar: the run's step events, or the agent's own phases. */
-  bar: WorkflowBar;
-  stepIds: string[];
-}
-
-/**
- * The workflow a session's turn runs: its code-defined workflow, else its
- * one-step workflow on the `agent-turn` engine.
- */
-function turnWorkflowOf(session: SessionDoc): TurnWorkflow {
-  const id = sessionWorkflowId(session);
-  const parsed = parseWorkflowId(id);
-  if (parsed?.kind === 'code') {
-    return {
-      id,
-      engineId: parsed.source.id,
-      bar: parsed.source.bar,
-      stepIds: parsed.source.steps.map((step) => step.id),
-    };
-  }
-  return {
-    id,
-    engineId: AGENT_TURN_WORKFLOW_ID,
-    bar: 'agent',
-    stepIds: AGENT_TURN_STEPS.map((step) => step.id),
-  };
-}
-
-/**
- * Where a session's fixed workflow steps come from (agents.md 5.11, 5.12):
- * a workflow whose steps drive the bar, else the agent's prompt.
- */
-function workflowSourceOf(session: SessionDoc): 'prompt' | 'workflow' {
-  return turnWorkflowOf(session).bar === 'steps' ? 'workflow' : 'prompt';
-}
-
-/** The Analyse step's outcome from the turn's data records (agents.md 5.11). */
-function analyseOutcomeOf(
-  data: readonly ToolDataRecord[],
-  stopped: boolean,
-): AnalyseOutcome {
-  return {
-    calls: data.map((record) => ({
-      tool: record.tool,
-      ...(record.rowCount !== undefined ? { rowCount: record.rowCount } : {}),
-      failed: !!record.error,
-    })),
-    stopped,
-  };
-}
-
-/** A Wrap up summary, as the v2 turn workflow returns it. */
-function isTurnSummary(value: unknown): value is Record<string, number> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'sqlQueries' in value &&
-    'rows' in value
-  );
 }
