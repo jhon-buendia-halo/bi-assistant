@@ -67,9 +67,14 @@ function stepOf(event: StreamFrame): WorkflowRunStep {
     id: e.id,
     title: e.title,
     status: e.status,
+    ...(e.input !== undefined ? { input: e.input } : {}),
+    ...(e.inputTruncated ? { inputTruncated: true as const } : {}),
     ...(e.output !== undefined ? { output: e.output } : {}),
     ...(e.outputTruncated ? { outputTruncated: true as const } : {}),
     ...(e.error !== undefined ? { error: e.error } : {}),
+    ...(e.startedAt !== undefined ? { startedAt: e.startedAt } : {}),
+    ...(e.endedAt !== undefined ? { endedAt: e.endedAt } : {}),
+    ...(e.toolCalls !== undefined ? { toolCalls: e.toolCalls } : {}),
   };
 }
 

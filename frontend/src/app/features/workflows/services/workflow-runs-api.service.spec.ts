@@ -114,6 +114,26 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
     });
   });
 
+  it('copies the input, timestamps and tool calls of a step event', async () => {
+    const full = {
+      id: 'answer',
+      title: 'Answer',
+      status: 'success',
+      input: { question: 'Q' },
+      inputTruncated: true,
+      output: { stopped: false },
+      startedAt: '2026-11-11T10:00:00.000Z',
+      endedAt: '2026-11-11T10:00:02.000Z',
+      toolCalls: [{ tool: 'run_readonly_sql', input: 'select 1', rowCount: 1, durationMs: 40 }],
+    };
+    fetchSpy.and.resolveTo(sseResponse({ type: 'step', ...full }, { type: 'done', run: RUN }));
+    const steps: WorkflowRunStep[] = [];
+    await service.streamRun('agent:assistant', { input: { question: 'Q' } }, {
+      onStep: (s) => steps.push(s),
+    });
+    expect(steps[0]).toEqual(full as WorkflowRunStep);
+  });
+
   it("reports a refusal with the server's message, before anything streams", async () => {
     fetchSpy.and.resolveTo(
       new Response(
