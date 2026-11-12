@@ -1421,11 +1421,53 @@ export class SessionsService implements OnModuleInit {
     messageAt: string,
     rating: MessageFeedback,
   ): Promise<SessionDoc> {
+    const session = await this.get(id);
+    const messages = await this.rateAnswer(
+      session,
+      messageAt,
+      rating,
+      { sourceSessionId: id },
+      () => this.verifiedQueries.removeForMessage(id, messageAt),
+    );
+    const updated = await this.updateDoc(id, { messages });
+    return updated ?? { ...session, messages };
+  }
+
+  /**
+   * The same rating on a stored workflow run's answer (verified-queries R1-R7;
+   * api.md 128): `host` is the run's run-backed host. Returns the rated answer
+   * for the caller to store; the pair is keyed by `runId`, not by a session.
+   */
+  async rateRunAnswer(
+    runId: string,
+    host: SessionDoc,
+    messageAt: string,
+    rating: MessageFeedback,
+  ): Promise<ChatMessage> {
+    const messages = await this.rateAnswer(
+      host,
+      messageAt,
+      rating,
+      { sourceRunId: runId },
+      () => this.verifiedQueries.removeForRun(runId),
+    );
+    return messages.find(
+      (m) => m.role === 'assistant' && m.at === messageAt,
+    ) as ChatMessage;
+  }
+
+  /** Rate one answer of `session`: the new messages, the library updated. */
+  private async rateAnswer(
+    session: SessionDoc,
+    messageAt: string,
+    rating: MessageFeedback,
+    source: { sourceSessionId: string } | { sourceRunId: string },
+    removePair: () => Promise<unknown>,
+  ): Promise<ChatMessage[]> {
     if (rating !== 'up' && rating !== 'down') {
       throw new BadRequestException("rating must be 'up' or 'down'");
     }
     if (!messageAt) throw new BadRequestException('messageAt is required');
-    const session = await this.get(id);
     const index = session.messages.findIndex(
       (m) => m.role === 'assistant' && m.at === messageAt,
     );
@@ -1441,7 +1483,7 @@ export class SessionsService implements OnModuleInit {
     messages[index] = answer;
 
     if (rating === 'down') {
-      await this.verifiedQueries.removeForMessage(id, messageAt);
+      await removePair();
     } else {
       const sql = lastSuccessfulSql(answer.data);
       const question = messages
@@ -1454,13 +1496,12 @@ export class SessionsService implements OnModuleInit {
           sql,
           datasourceId: await this.turnDatasets.soleDatasourceId(session),
           entities: answer.entities ?? [],
-          sourceSessionId: id,
+          ...source,
           sourceMessageAt: messageAt,
         });
       }
     }
-    const updated = await this.updateDoc(id, { messages });
-    return updated ?? { ...session, messages };
+    return messages;
   }
 }
 

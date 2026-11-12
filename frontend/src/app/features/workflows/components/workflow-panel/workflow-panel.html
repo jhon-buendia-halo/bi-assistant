@@ -608,6 +608,9 @@
                   [message]="answer"
                   [latest]="true"
                   [busy]="designer.running()"
+                  [showRating]="true"
+                  [ratingPending]="designer.ratingPending()"
+                  (rate)="designer.rateAnswer($event)"
                   (optionPicked)="designer.followUp($event)"
                 />
               </div>

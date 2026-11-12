@@ -287,6 +287,25 @@ export class WorkflowRunsService implements OnModuleInit {
   }
 
   /**
+   * Rate the run's answer (api.md 128; verified-queries R1-R7): the stored
+   * answer takes the rating and the `verified` mark, and a thumbs-up saves
+   * the question and SQL as a verified query keyed by the run. 404 when the
+   * run has no answer.
+   */
+  async rateAnswer(id: string, rating?: string): Promise<WorkflowRun> {
+    const run = await this.stored(id);
+    if (!run.answer) throw new NotFoundException(`Run "${id}" has no answer`);
+    const answer = await this.sessions.rateRunAnswer(
+      id,
+      runHostDoc(run),
+      run.answer.at,
+      rating as 'up' | 'down',
+    );
+    const updated = await this.repository.update(id, { answer });
+    return this.wire(updated ?? { ...run, answer });
+  }
+
+  /**
    * Delete a run (api.md 122): its document and, for an agent run, its
    * workspace and memory thread. A running run is refused.
    */

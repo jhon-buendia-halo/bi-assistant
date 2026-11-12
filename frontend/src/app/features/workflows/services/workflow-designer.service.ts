@@ -4,7 +4,8 @@ import {
   Dataset,
   DatasetsApiService,
 } from '../../datasets/services/datasets-api.service';
-import { ChatMessage } from '../../sessions/models/session.model';
+import { ToastService } from '../../../core/toast/toast.service';
+import { ChatMessage, MessageFeedback } from '../../sessions/models/session.model';
 import {
   WorkflowDetail,
   WorkflowInputValue,
@@ -87,6 +88,7 @@ const STOPPED_POLL_TRIES = 10;
 export class WorkflowDesigner {
   private readonly api = inject(WorkflowsApiService);
   private readonly runsApi = inject(WorkflowRunsApiService);
+  private readonly toast = inject(ToastService);
   private readonly datasetsApi = inject(DatasetsApiService);
 
   readonly loading = signal(true);
@@ -111,6 +113,8 @@ export class WorkflowDesigner {
   readonly runId = signal<string | null>(null);
   /** The run as stored (`done.run`, or read back after a stop). */
   readonly run = signal<WorkflowRun | null>(null);
+  /** The shown answer's rating is being saved. */
+  readonly ratingPending = signal(false);
   /** The earlier run this one follows up (its context), if any. */
   readonly contextRun = signal<{ id: string; question: string } | null>(null);
 
@@ -351,6 +355,32 @@ export class WorkflowDesigner {
     this.start(workflow, followUpRequest(run, field, text), {
       id: run.id,
       question: run.question ?? '',
+    });
+  }
+
+  /**
+   * Rate the answer shown (api.md 128): a thumbs-up saves a verified query,
+   * a thumbs-down removes it. The same rating twice is a no-op.
+   */
+  rateAnswer(rating: MessageFeedback): void {
+    const run = this.run();
+    if (run === null || !run.answer || this.ratingPending()) return;
+    if (run.answer.feedback === rating) return;
+    this.ratingPending.set(true);
+    this.runsApi.rateAnswer(run.id, rating).subscribe({
+      next: (result) => {
+        this.ratingPending.set(false);
+        if (this.run()?.id === run.id) {
+          this.run.update((shown) =>
+            shown ? { ...shown, answer: result.run.answer } : shown,
+          );
+        }
+        this.toast.success(result.message || 'Feedback saved');
+      },
+      error: (err) => {
+        this.ratingPending.set(false);
+        this.toast.error(err?.error?.message ?? 'Backend unreachable');
+      },
     });
   }
 

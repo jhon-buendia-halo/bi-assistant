@@ -255,6 +255,43 @@ test.describe('Feature: Workflow runs', () => {
     },
   );
 
+  test(
+    "I rate a run's answer and it becomes a verified query",
+    { tag: ['@demo', '@story-1.23.19'] },
+    async ({ page }) => {
+      stub.reply = answerWithSql({ [QUESTION]: ANSWER });
+
+      await scenarioStep(page, `Given I ran the Assistant on "${QUESTION}"`, async () => {
+        await openWorkflowPage(page, 'agent:assistant', 'Assistant');
+        await openRunTab(page);
+        await fillRun(page, QUESTION, WORLD_CUP_DATASET);
+        await page.getByTestId('workflow-run').click();
+        await expect(runAnswer(page)).toContainText(ANSWER);
+        await expect(runAnswer(page).getByText('Verified', { exact: true })).toHaveCount(0);
+      });
+      await scenarioStep(page, "When I give the run's answer a thumbs-up", async () => {
+        await runAnswer(page).getByRole('button', { name: 'Save as verified query' }).click();
+      });
+      await scenarioStep(
+        page,
+        'Then I see "Answer saved as a verified query" and the Verified badge',
+        async () => {
+          await expect(page.getByText('Answer saved as a verified query')).toBeVisible();
+          await expect(runAnswer(page).getByText('Verified', { exact: true })).toBeVisible();
+        },
+      );
+      await scenarioStep(
+        page,
+        'When I run the same question again, then its answer shows Verified',
+        async () => {
+          await page.getByTestId('workflow-run').click();
+          await expect(runAnswer(page)).toContainText(ANSWER);
+          await expect(runAnswer(page).getByText('Verified', { exact: true })).toBeVisible();
+        },
+      );
+    },
+  );
+
   test('A run needs its datasets', async ({ page }) => {
     await test.step('Given I am on the Assistant\'s Run tab', async () => {
       await openWorkflowPage(page, 'agent:assistant', 'Assistant');

@@ -46,6 +46,7 @@ Stored runs (1.23.14; the run history UI is 1.23.21)
 
 Runs from a workflow's page (1.23.15)
 - R21. The Assistant, Questions to Insights v2 and each user agent's workflow SHALL offer **Execute** and the **Run** tab on their page beside Start chat (which stays until 1.23.22); the Data Readiness Agent and the RFP Builder SHALL get them with their own stories (1.23.16, 1.23.17). The Run tab's form SHALL have one control per input field the app does not set itself, by type: a text area (under the question, the workflow's starter questions as example chips, which fill it and do not run), a text or number input, a checkbox for `boolean` (checked when its default is true), a datasets picker for `datasets` and a list for `dataset` (the datasets of the field's datasource kinds); a workflow over its own datasets (a user agent's) SHALL show them read-only instead. While the workflow has a run requirement, Execute SHALL be disabled with it, and the requirement written. Every run from the page SHALL stream ([../../system/api.md](../../system/api.md) 119), the Sequential test workflow's included: the status `Running…` and each step's status live in the Run tab and on its canvas node (`Running`, then `Done`, `Failed`, `Skipped` or `Stopped`), and inside a running agent step the agent's Thinking, each tool call with its rows and the answer forming; when it ends, the run as stored: its status line, each step's output field by field (a text as it is, quotes unescaped) and, for an agent workflow, its answer as a chat shows one (text, reasoning, interpretation, data with its SQL, badges, visual and report cards, the clarification card). **Stop** SHALL abort the stream; the run reads `Run stopped`, its running step `Stopped`, and is then shown as stored, with any partial answer. **Follow up** SHALL start a run on the shown run's input with the new question and the shown run as its context (R17), saying `Follows up on “<earlier question>”`; picking a clarification option (or `Something else`, or Skip) SHALL do the same with the pick as the question. A refusal before the run starts SHALL show the server's message under Execute (`Select at least one dataset`) and no result; a failure after it started SHALL read `Run failed: <error>`.
+- R22. The answer on the Run tab SHALL offer the same rating as a chat answer ([../verified-queries/spec.md](../verified-queries/spec.md) R1-R7, R18; [../../system/api.md](../../system/api.md) 128): a thumbs-up saves the run's question and last successful SQL as a verified query, keyed by the run, and shows the toast `Answer saved as a verified query` and the `Verified` badge; a thumbs-down removes it. The rating is stored on the run's answer.
 
 ## Edge cases and errors
 
@@ -177,6 +178,13 @@ Feature: Workflow runs
     And the follow-up reached the model after the earlier question and answer
     When I run "Questions to Insights v2" on "How many matches were played in each stage?" over "World Cup Core"
     Then its four canvas nodes go Done and I see its answer
+
+  @demo @story-1.23.19
+  Scenario: I rate a run's answer and it becomes a verified query
+    Given I ran the Assistant on "Which team scored the most goals?"
+    When I give the run's answer a thumbs-up
+    Then I see "Answer saved as a verified query" and the Verified badge
+    When I run the same question again, then its answer shows Verified
 
   Scenario: A run needs its datasets
     Given I am on the Assistant's Run tab

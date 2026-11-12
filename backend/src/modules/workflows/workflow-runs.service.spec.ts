@@ -195,6 +195,22 @@ function build(
       }),
     ),
     deleteRunHostResources: jest.fn().mockResolvedValue(undefined),
+    // The rating itself is the sessions service's (its own spec proves it).
+    rateRunAnswer: jest.fn(
+      (
+        _runId: string,
+        host: { messages: { role: string; at: string }[] },
+        messageAt: string,
+        rating: string,
+      ) =>
+        Promise.resolve({
+          ...host.messages.find(
+            (m) => m.at === messageAt && m.role === 'assistant',
+          ),
+          feedback: rating,
+          ...(rating === 'up' ? { verified: true } : {}),
+        }),
+    ),
     runHostWorkspaceIds: jest.fn((): string[] => []),
     // A run-backed host as the API shows it (api.md 2.1): derived fields.
     toView: jest.fn((host: { id: string; panelItems?: unknown[] }) =>
@@ -592,6 +608,36 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
     // The answer is this run's, never the context's.
     expect(second.run.answer?.content).toBe('Brazil won in 2002.');
     expect(second.run.question).toBe('And in 2014?');
+  });
+
+  it('rates the stored answer of a run (api.md 128)', async () => {
+    ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
+    const first = await streamed(ctx, 'agent:assistant', { input: ASK });
+
+    const up = await ctx.service.rateAnswer(first.run.id, 'up');
+    expect(ctx.sessions.rateRunAnswer).toHaveBeenCalledWith(
+      first.run.id,
+      expect.objectContaining({ id: `run-${first.run.id}` }),
+      first.run.answer?.at,
+      'up',
+    );
+    expect(up.answer).toMatchObject({ feedback: 'up', verified: true });
+    // Stored: a later read still shows the rating.
+    expect((await ctx.service.get(first.run.id)).answer?.feedback).toBe('up');
+  });
+
+  it('refuses to rate a run without an answer', async () => {
+    const abort = new AbortController();
+    ctx = build(DATASETS, { abort });
+    const stopped = await streamed(
+      ctx,
+      'agent:assistant',
+      { input: ASK },
+      abort.signal,
+    );
+    await expect(ctx.service.rateAnswer(stopped.run.id, 'up')).rejects.toThrow(
+      'has no answer',
+    );
   });
 
   it('refuses a context run that has no answer', async () => {

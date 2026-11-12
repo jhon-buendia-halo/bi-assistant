@@ -769,6 +769,7 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 | 125 | `GET /workflow-runs/:id/panel-items/:itemId/file` | Read the text of a run's file panel item | no |
 | 126 | `GET /workflow-runs/:id/panel-items/:itemId/download` | Download a run's file, document or table panel item | no |
 | 127 | `GET /workflow-runs/:id/rfp-packages/:rfpId/download` | Download a run's RFP package (zip) or one of its files | no |
+| 128 | `POST /workflow-runs/:id/answer/feedback` | Thumbs up/down on a run's answer | yes |
 
 #### 120. `GET /workflow-runs`
 - Query: `workflowId` (optional): only that workflow's runs.
@@ -815,6 +816,11 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 #### 127. `GET /workflow-runs/:id/rfp-packages/:rfpId/download`
 - As 105: query `file` and `draft`, over the run's workspace folder `rfp/<rfpId>/`.
 - Errors (Style B): `404 "Run \"<id>\" not found"`; then 105's.
+
+#### 128. `POST /workflow-runs/:id/answer/feedback`
+- Body: `{ rating: "up" | "down" }`. As 7 on the run's answer: sets `feedback` and `verified` on the stored answer; `up` saves a verified query keyed by `sourceRunId` (question = the run's question; same SQL, datasource and entity rules as 7), `down` deletes it.
+- Success `200`: `{ ok: true, message, run }` (`message` as 7, `run` as 121).
+- Errors (Style B): `400 "rating must be 'up' or 'down'"`; `404 "Run \"<id>\" not found"`; `404 "Run \"<id>\" has no answer"`.
 
 ### 2.7 Deep analysis
 

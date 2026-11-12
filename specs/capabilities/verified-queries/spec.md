@@ -12,7 +12,7 @@ Creation and removal
 - R1. When the user gives an assistant answer a thumbs-up, the system SHALL record that answer's rating and mark the answer "verified".
 - R2. On a thumbs-up the system SHALL save a verified query holding: the user question (the closest user message before the answer, trimmed), the SQL (the answer's last successful read-only SQL statement, trimmed), the session's datasource when exactly one datasource is involved, the answer's source entities (empty when none), and the source session and answer timestamp.
 - R3. The system SHALL NOT save a verified query when the answer ran no successful SQL, or when no preceding user question with text exists. The rating itself SHALL still be recorded and the answer still marked verified.
-- R4. A verified query SHALL be unique per source answer (session id plus answer timestamp). Saving again for the same answer SHALL replace the stored pair, not create a second one.
+- R4. A verified query SHALL be unique per source answer (session id plus answer timestamp, or, for a workflow run's answer, the run id). Saving again for the same answer SHALL replace the stored pair, not create a second one.
 - R5. On a thumbs-down the system SHALL delete the verified query that came from that answer (if any), record the rating, and remove the "verified" mark from the answer, even if its SQL is still stored in the library from elsewhere.
 - R6. The system SHALL reject a rating other than up or down (`rating must be 'up' or 'down'`), a missing answer timestamp (`messageAt is required`), and an answer that does not exist (`No assistant message at <timestamp>`).
 - R7. Deleting a session SHALL NOT delete the verified queries that came from it (see Open questions).
@@ -36,6 +36,7 @@ Migration
 
 Ownership
 - R17. Verified queries SHALL be kept for the one user (the built-in super admin; the stored `ownerId` is a legacy attribute, [data-model.md](../../system/data-model.md)): every verified query SHALL be retrieved into turns, mark answers as Verified and be offered as metric drafts.
+- R18. A workflow run's answer SHALL be rated as a chat answer is (R1-R7): the question is the run's question, the datasource is the one its datasets share, and the pair is stored with `sourceRunId` and no `sourceSessionId`, unique per run (R4). A run is never a session, so deleting a run, like deleting a session, SHALL NOT delete its verified queries (R7). Retrieval (R8-R10) and the metrics candidates (R15) SHALL include these pairs.
 
 ## Edge cases and errors
 
@@ -50,7 +51,7 @@ Ownership
 
 ## Contracts
 
-- Rating endpoint on a session's messages (feedback): see [../../system/api.md](../../system/api.md). There is no list/delete endpoint for verified queries; they are internal to the backend. The metrics candidates endpoint exposes them indirectly.
+- Rating endpoint on a session's messages (feedback) and on a run's answer (api.md 128): see [../../system/api.md](../../system/api.md). There is no list/delete endpoint for verified queries; they are internal to the backend. The metrics candidates endpoint exposes them indirectly.
 - Collection `verified_queries` and the answer's `verified` / `feedback` fields: see [../../system/data-model.md](../../system/data-model.md).
 - Agents using the reference block: the assistant (chat and deep analysis) and the SQL verifier: see [../../system/agents.md](../../system/agents.md).
 - Related capabilities: [../sessions-chat/spec.md](../sessions-chat/spec.md) (rating UI and verification), [../metrics/spec.md](../metrics/spec.md), [../dataset-ontology/spec.md](../dataset-ontology/spec.md), [../deep-analysis/spec.md](../deep-analysis/spec.md).
