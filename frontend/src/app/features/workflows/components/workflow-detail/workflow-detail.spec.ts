@@ -114,7 +114,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
   it('a workflow has Execute, which asks for the panel on Run; no Start chat', () => {
     open(SEQ);
     expect(q('workflow-start-chat')).toBeNull();
-    expect(text('workflow-execute')).toBe('Execute');
+    expect(text('workflow-execute')).toBe('Execute workflow');
     q('workflow-execute')!.click();
     expect(designer.tab()).toBe('run');
     expect(events).toEqual(['openPanel']);
@@ -129,7 +129,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       ],
     });
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
-    expect(text('workflow-execute')).toBe('Execute');
+    expect(text('workflow-execute')).toBe('Execute workflow');
     expect(q('workflow-start-chat')).toBeNull();
     q('workflow-execute')!.click();
     expect(designer.tab()).toBe('run');
@@ -142,7 +142,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       id: 'agent:data-readiness',
       input: [{ name: 'question', label: 'Question', type: 'textarea', required: false }],
     });
-    expect(text('workflow-execute')).toBe('Execute');
+    expect(text('workflow-execute')).toBe('Execute workflow');
     expect(designer.tabs().map((t) => t.id)).toEqual(['workflow', 'step', 'run', 'code']);
   });
 
@@ -155,7 +155,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
         { name: 'rfpId', label: 'RFP', type: 'text', required: false, hidden: true },
       ],
     });
-    expect(text('workflow-execute')).toBe('Execute');
+    expect(text('workflow-execute')).toBe('Execute workflow');
     expect(designer.tabs().map((t) => t.id)).toEqual(['workflow', 'step', 'run', 'code']);
   });
 

@@ -8,21 +8,15 @@ import {
   output,
   untracked,
 } from '@angular/core';
-import {
-  Loader2,
-  LucideAngularModule,
-  Rocket,
-  TriangleAlert,
-} from 'lucide-angular';
+import { Loader2, LucideAngularModule, TriangleAlert } from 'lucide-angular';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { workflowKindLabel } from '../../services/workflows.util';
 import { WorkflowCanvas } from '../workflow-canvas/workflow-canvas';
 
 /**
  * A workflow's page, laid out as a designer (workflows R6, R7, R12; ui.md
- * 4.4b): a header with the breadcrumb, the name, id and kind and the primary
- * action (Execute), and
- * the graph on a canvas filling the rest. Its configuration, run and code are
+ * 4.4b): a header with the breadcrumb, the name, id and kind, and the graph
+ * on a canvas filling the rest, with Execute workflow at its top-right. Its configuration, run and code are
  * in the right panel (`WorkflowPanel`), which shares this page's state
  * through the designer. Read-only (R3).
  */
@@ -34,7 +28,6 @@ import { WorkflowCanvas } from '../workflow-canvas/workflow-canvas';
 })
 export class WorkflowDetailPage {
   readonly Loader2 = Loader2;
-  readonly Rocket = Rocket;
   readonly TriangleAlert = TriangleAlert;
 
   protected readonly designer = inject(WorkflowDesigner);
