@@ -48,15 +48,17 @@ import {
 import {
   RunStepTracker,
   interruptedRunPatch,
+  noteToolFrame,
   runAnswerOf,
   runHostDoc,
   runOfResult,
   runSummaryOf,
   type WorkflowRun,
   type WorkflowRunDoc,
+  type WorkflowRunStep,
   type WorkflowRunSummary,
 } from './workflow-run-steps';
-import { WorkflowsService, type WorkflowDetail } from './workflows.service';
+import { WorkflowsService, type WorkflowDefinition } from './workflows.service';
 
 /** What a visual action on a run answers (api.md 130-134). */
 export interface RunVisualResult {
@@ -90,7 +92,7 @@ export type RunStreamEvent =
 
 /** A run whose request passed every check, ready to start (api.md 119). */
 export interface PreparedRun {
-  workflow: WorkflowDetail;
+  workflow: WorkflowDefinition;
   values: WorkflowInputValues;
   /** Agent workflows: the agent turn the input asks for. */
   turn?: AgentRunTurn;
@@ -178,7 +180,7 @@ export class WorkflowRunsService implements OnModuleInit {
    * `context.fromRunId` naming no stored run with an answer.
    */
   async prepare(id: string, body: unknown): Promise<PreparedRun> {
-    const workflow = await this.workflows.get(id);
+    const workflow = await this.workflows.definition(id);
     if (!workflow.input.length) {
       throw new BadRequestException(`Workflow "${id}" can't run on an input`);
     }
@@ -293,7 +295,11 @@ export class WorkflowRunsService implements OnModuleInit {
   ): Promise<WorkflowRun> {
     const { workflow } = prepared;
     const tracker = new RunStepTracker(
-      workflow.steps.map((step) => ({ id: step.id, title: step.title })),
+      workflow.steps.map((step) => ({
+        id: step.id,
+        title: step.title,
+        kind: step.kind,
+      })),
     );
     const live = (event: RunStreamEvent) => {
       if (!abortSignal?.aborted) emit(event);
@@ -760,8 +766,10 @@ export class WorkflowRunsService implements OnModuleInit {
       await this.sessions.streamRunTurn(
         host.id,
         turn.question,
-        // The turn's `done` carries the host; the run sends its own.
+        // The turn's `done` carries the host; the run sends its own. Its
+        // tool events are the running agent step's tool calls too.
         (event) => {
+          noteToolFrame(tracker, event);
           if (event.type !== 'done') live(event);
         },
         abortSignal,
@@ -946,14 +954,16 @@ export class WorkflowRunsService implements OnModuleInit {
     const ended = tracker.finish(status, error);
     for (const step of ended.changed) live({ type: 'step', ...step });
     const failedStep = ended.steps.find((step) => step.status === 'failed');
-    // A stopped run's step was cut off, not failed.
+    // A stopped run's step was cut off, not failed: it keeps what it
+    // received, its times and calls, but no error.
     const steps =
       status === 'stopped'
-        ? ended.steps.map((step) =>
-            step.status === 'failed'
-              ? { id: step.id, title: step.title, status: 'stopped' as const }
-              : step,
-          )
+        ? ended.steps.map((step) => {
+            if (step.status !== 'failed') return step;
+            const cutOff: WorkflowRunStep = { ...step, status: 'stopped' };
+            delete cutOff.error;
+            return cutOff;
+          })
         : ended.steps;
     return {
       ...base,

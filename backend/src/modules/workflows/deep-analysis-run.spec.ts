@@ -158,7 +158,7 @@ function build(
     deleteRunHostResources: jest.fn().mockResolvedValue(undefined),
   };
   const workflows = {
-    get: jest.fn((id: string) =>
+    definition: jest.fn((id: string) =>
       id === 'deep-analysis'
         ? Promise.resolve(structuredClone(DETAIL))
         : Promise.reject(new Error(`no workflow ${id}`)),
@@ -361,6 +361,12 @@ describe('a deep-analysis run (agents.md 5.15; plan 1.25.3)', () => {
       ['write', 'skipped'],
       ['assemble', 'skipped'],
     ]);
+    // The cut-off step keeps what it received and its times, with no error.
+    const cutOff = run.steps[1];
+    expect(cutOff.input).toBeDefined();
+    expect(cutOff.startedAt).toEqual(expect.any(String));
+    expect(cutOff.endedAt).toEqual(expect.any(String));
+    expect(cutOff).not.toHaveProperty('error');
     expect(run.answer).toBeUndefined();
     // Nothing is sent once the run stopped.
     expect(events.some((event) => event.type === 'done')).toBe(false);

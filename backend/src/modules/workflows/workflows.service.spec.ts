@@ -31,18 +31,24 @@ import { BuiltinAgentPinsRepository } from '../user-agents/repositories/builtin-
 import { UserAgentsRepository } from '../user-agents/repositories/user-agents.repository';
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import { AgentsService } from '../agents/agents.service';
+import type { LlmService } from '../llm/llm.service';
 import { WorkflowRunsService } from './workflow-runs.service';
 import { WorkflowsController } from './workflows.controller';
 import { WorkflowsService } from './workflows.service';
 
-function fakeAgent(name: string, tools: string[], description = '') {
+function fakeAgent(
+  name: string,
+  tools: string[],
+  description = '',
+  instructions = '',
+) {
   return {
     id: name,
     name,
     getDescription: () => description || `${name} description`,
     listTools: () =>
       Object.fromEntries(tools.map((tool) => [tool, { description: tool }])),
-    getInstructions: () => '',
+    getInstructions: () => instructions,
     getMemory: () => undefined,
     getModel: () => {
       throw new Error('no LLM settings');
@@ -54,10 +60,19 @@ const RFP_REQUIREMENT =
   'Load the "Intellify RFP API" sample in Settings → Testing Data first';
 const READINESS_REQUIREMENT = 'Add a PostgreSQL or Databricks dataset first';
 
+/** The saved LLM settings, as `LlmService.getView` answers them. */
+const ANTHROPIC_VIEW = {
+  provider: 'anthropic',
+  model: 'claude-sonnet-4-6',
+  configured: true,
+  reasoningEffort: null,
+};
+
 function build(
   datasets: { name: string; datasourceKind?: string }[] = [
     { name: 'World Cup Core', datasourceKind: 'postgres' },
   ],
+  options: { llmView?: typeof ANTHROPIC_VIEW; rfpPrompt?: string } = {},
 ) {
   const db = new BetterSqlite3(':memory:');
   const userAgents = new UserAgentsService(
@@ -79,7 +94,12 @@ function build(
       'describe_entity',
       'run_readonly_sql',
     ]),
-    rfp: fakeAgent('RFP Builder', ['create_rfp', 'update_rfp']),
+    rfp: fakeAgent(
+      'RFP Builder',
+      ['create_rfp', 'update_rfp'],
+      '',
+      options.rfpPrompt ?? 'You build RFPs.',
+    ),
     'data-readiness': fakeAgent('Data Readiness Agent', ['assess_readiness']),
   };
   const runWorkflow = jest.fn();
@@ -87,7 +107,12 @@ function build(
     listAgents: () => registry,
     runWorkflow,
   } as unknown as MastraService;
-  const agents = new AgentsService(mastra, userAgents);
+  const llm = options.llmView
+    ? ({
+        getView: () => Promise.resolve(options.llmView),
+      } as unknown as LlmService)
+    : undefined;
+  const agents = new AgentsService(mastra, userAgents, llm);
   return {
     db,
     userAgents,
@@ -303,7 +328,15 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     it("qti-v2-turn's steps are agentWorkflow('assistant-v2')'s", async () => {
       ctx = build();
       const detail = await ctx.service.get('qti-v2-turn');
-      expect(detail.steps).toEqual(agentWorkflow('assistant-v2')!.steps);
+      // Its agent steps also name their agent's key (api.md 117).
+      expect(detail.steps).toEqual(
+        agentWorkflow('assistant-v2')!.steps.map((step) =>
+          step.agent
+            ? { ...step, agent: { ...step.agent, key: 'assistant-v2' } }
+            : step,
+        ),
+      );
+      expect(detail.steps.some((step) => step.agent)).toBe(true);
       expect(detail).toMatchObject({ id: 'qti-v2-turn', stepCount: 4 });
     });
 
@@ -325,6 +358,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(readiness.steps[0].agent?.maxSteps).toBe(10);
       const assistant = await ctx.service.get('agent:assistant');
       expect(assistant.steps[0].agent).toEqual({
+        key: 'assistant',
         name: 'Questions to Insights Assistant',
         tools: ['ask_clarification', 'run_readonly_sql'],
         maxSteps: 15,
@@ -347,9 +381,18 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         name: 'Historian',
       });
       expect(detail.steps[0].agent).toMatchObject({
+        key: doc.id,
         name: 'Historian',
         maxSteps: 15,
       });
+      expect(detail.agents).toEqual([
+        {
+          key: doc.id,
+          name: 'Historian',
+          model: null,
+          systemPrompt: expect.any(String) as string,
+        },
+      ]);
     });
 
     it("seq-text-demo's steps are its catalogue's, with no agent", async () => {
@@ -372,6 +415,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         })),
       );
       expect(detail.steps.some((step) => step.agent)).toBe(false);
+      expect(detail.agents).toEqual([]);
     });
 
     it("deep-analysis's steps are its catalogue's, its agent steps running the assistant", async () => {
@@ -382,22 +426,76 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(
         detail.steps.map((step) => [step.id, step.kind, step.agent]),
       ).toEqual([
-        ['plan', 'agent', { name: assistant, tools: [], maxSteps: 1 }],
+        [
+          'plan',
+          'agent',
+          { key: 'assistant', name: assistant, tools: [], maxSteps: 1 },
+        ],
         [
           'investigate',
           'agent',
           {
+            key: 'assistant',
             name: assistant,
             tools: ['ask_clarification', 'run_readonly_sql'],
             maxSteps: 15,
           },
         ],
-        ['write', 'agent', { name: assistant, tools: [], maxSteps: 1 }],
+        [
+          'write',
+          'agent',
+          { key: 'assistant', name: assistant, tools: [], maxSteps: 1 },
+        ],
         ['assemble', 'code', undefined],
       ]);
       expect(detail.steps.map((step) => step.summary)).toEqual(
         DEEP_ANALYSIS_STEPS.map((step) => step.summary),
       );
+    });
+
+    it('details each agent its steps call: its key, name, model and system prompt; no model without an LLM', async () => {
+      ctx = build();
+      const rfp = await ctx.service.get('agent:rfp');
+      expect(rfp.agents).toEqual([
+        {
+          key: 'rfp',
+          name: 'RFP Builder',
+          model: null,
+          systemPrompt: 'You build RFPs.',
+        },
+      ]);
+      expect(rfp.steps[0].agent?.key).toBe('rfp');
+      ctx.db.close();
+      ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
+      const withLlm = await ctx.service.get('agent:rfp');
+      expect(withLlm.agents[0].model).toBe('anthropic/claude-sonnet-4-6');
+      const deep = await ctx.service.get('deep-analysis');
+      expect(deep.agents).toEqual([
+        {
+          key: 'assistant',
+          name: 'Questions to Insights Assistant',
+          model: 'anthropic/claude-sonnet-4-6',
+          systemPrompt: '',
+        },
+      ]);
+    });
+
+    it('shortens a system prompt longer than 20 000 characters, and says so', async () => {
+      ctx = build(undefined, { rfpPrompt: 'p'.repeat(20_001) });
+      const [agent] = (await ctx.service.get('agent:rfp')).agents;
+      expect(agent.systemPrompt).toHaveLength(20_000);
+      expect(agent.systemPromptTruncated).toBe(true);
+      ctx.db.close();
+      ctx = build(undefined, { rfpPrompt: 'p'.repeat(20_000) });
+      const [exact] = (await ctx.service.get('agent:rfp')).agents;
+      expect(exact.systemPrompt).toHaveLength(20_000);
+      expect(exact).not.toHaveProperty('systemPromptTruncated');
+    });
+
+    it('lists the summary agents only, without model or prompt (api.md 116 unchanged)', async () => {
+      ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
+      const rfp = (await ctx.service.list()).find((w) => w.id === 'agent:rfp');
+      expect(rfp?.agents).toEqual([{ key: 'rfp', name: 'RFP Builder' }]);
     });
 
     it.each(['agent:sql-fixer', 'agent:assistant-v2', 'nope', 'agent-turn'])(

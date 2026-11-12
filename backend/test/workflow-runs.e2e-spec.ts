@@ -38,13 +38,22 @@ interface Frame {
   id?: string;
   title?: string;
   status?: string;
+  input?: Record<string, unknown>;
   output?: Record<string, unknown>;
   error?: string;
+  startedAt?: string;
+  endedAt?: string;
   run?: {
     id: string;
     workflowId: string;
     status: string;
-    steps: { id: string; status: string }[];
+    steps: {
+      id: string;
+      status: string;
+      input?: Record<string, unknown>;
+      startedAt?: string;
+      endedAt?: string;
+    }[];
     question?: string;
     answer?: { role: string; content: string };
     datasets: string[];
@@ -254,6 +263,17 @@ describe('Streamed runs of agent workflows (API)', () => {
       'wrap-up:running',
       'wrap-up:success',
     ]);
+    // Each step frame carries what the step received (Mastra's step-start
+    // `payload.payload`): the first the turn's input, the agent step what
+    // the catalogue step passed on.
+    expect(steps[0].input).toMatchObject({
+      question,
+      datasets: ['World Cup Core'],
+    });
+    for (const step of steps) {
+      expect(step.input).toBeDefined();
+      expect(step.startedAt).toEqual(expect.any(String));
+    }
     const run = res.frames.at(-1)!.run!;
     expect(run).toMatchObject({
       workflowId: 'qti-v2-turn',
@@ -459,6 +479,52 @@ describe('Streamed runs of agent workflows (API)', () => {
         'Load the "Intellify RFP API" sample in Settings → Testing Data first',
       );
     });
+  });
+
+  it('streams the sequential test workflow with what each step received and its times, as the stored run keeps them', async () => {
+    const text = '  Hello   workflow   world  ';
+    const res = await runStream('seq-text-demo', { input: { text } });
+    expect(res.status).toBe(200);
+    const steps = res.frames.filter((frame) => frame.type === 'step');
+    expect(steps.map((step) => `${step.id}:${step.status}`)).toEqual([
+      'clean-text:running',
+      'clean-text:success',
+      'count-words:running',
+      'count-words:success',
+      'format-result:running',
+      'format-result:success',
+    ]);
+    expect(steps[0]).toMatchObject({
+      id: 'clean-text',
+      input: { text },
+      startedAt: expect.any(String) as string,
+    });
+    expect(steps[1]).toMatchObject({
+      id: 'clean-text',
+      input: { text },
+      output: { text: 'Hello workflow world' },
+      startedAt: steps[0].startedAt,
+      endedAt: expect.any(String) as string,
+    });
+    // A later step received the one before it's output.
+    expect(steps[2].input).toEqual({ text: 'Hello workflow world' });
+    const done = res.frames.at(-1)!;
+    expect(done.type).toBe('done');
+    const stored = (
+      await http().get(`/workflow-runs/${done.run!.id}`).expect(200)
+    ).body as NonNullable<Frame['run']>;
+    expect(stored.steps).toEqual(done.run!.steps);
+    expect(stored.steps[0]).toMatchObject({
+      id: 'clean-text',
+      input: { text },
+      startedAt: steps[0].startedAt,
+      endedAt: steps[1].endedAt,
+    });
+    for (const step of stored.steps) {
+      expect(Date.parse(step.endedAt!)).toBeGreaterThanOrEqual(
+        Date.parse(step.startedAt!),
+      );
+    }
   });
 
   it('the sequential test workflow still runs through POST /runs (118)', async () => {

@@ -93,7 +93,8 @@ jest.mock('../../common/markdown-pdf', () => ({ renderPdf: jest.fn() }));
 jest.mock('./visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
-// The catalogue service reads the agent catalogue; a fake answers `get`.
+// The catalogue service reads the agent catalogue; a fake answers
+// `definition`.
 jest.mock('../workflows/workflows.service', () => ({
   WorkflowsService: class {},
 }));
@@ -367,7 +368,7 @@ function build(options: BuildOptions = {}) {
     rfpPackages as never,
   );
   const workflows = {
-    get: jest.fn((id: string) => {
+    definition: jest.fn((id: string) => {
       const found = Object.values(WORKFLOWS).find((w) => w.id === id);
       return found
         ? Promise.resolve(found)
@@ -512,9 +513,10 @@ describe('a run sends the same model request as a chat turn (plan 1.24.2; agents
       draft: historian,
       live: historian,
     });
-    const workflows = (ctx.runs as unknown as { workflows: { get: jest.Mock } })
-      .workflows;
-    workflows.get.mockResolvedValueOnce({
+    const workflows = (
+      ctx.runs as unknown as { workflows: { definition: jest.Mock } }
+    ).workflows;
+    workflows.definition.mockResolvedValueOnce({
       id: 'agent:agent-1',
       name: 'Cup historian',
       input: oneStepWorkflowInput('agent-1'),
