@@ -51,7 +51,7 @@ export async function streamPrepared(
  * The workflow catalogue (api.md 2.6.2; capability workflows). Workflows
  * are defined in code, so there is no write route (workflows R3); a
  * workflow with input fields can be run (118) and run streamed (119).
- * Ids contain `:` (`agent:rfp`); clients send them URL-encoded and NestJS
+ * Ids contain `:` (`agent:assistant`); clients send them URL-encoded and NestJS
  * decodes `:id`.
  */
 @Controller('workflows')

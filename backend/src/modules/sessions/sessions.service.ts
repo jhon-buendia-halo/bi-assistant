@@ -10,7 +10,6 @@ import {
 import { parseWorkflow } from '../../mastra/workflow-section';
 import { agentPromptOverrideFor } from '../../mastra/agent-prompt-overrides';
 import { assistantShippedPrompt } from '../../mastra/agents/assistant-prompt';
-import { RFP_PROMPT } from '../../mastra/agents/system-prompts';
 import {
   builtinAgentSession,
   builtinSessionDatasets,
@@ -27,7 +26,6 @@ import {
   type SyntheticDataBridgeDeps,
 } from './synthetic-data-bridge';
 import { SYNTHETIC_DATA_SERVICE } from '../synthetic-data/synthetic-data.token';
-import { RfpPackagesService } from '../rfp-packages/rfp-packages.service';
 import { MastraService } from '../../mastra/mastra.service';
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import type { AgentConfig } from '../user-agents/entities/user-agent.entity';
@@ -85,7 +83,6 @@ import {
   ToolDataRecord,
   VisualEvent,
   WorkflowPhase,
-  WorkflowState,
   WorkflowView,
 } from './entities/session.entity';
 import { SessionDatasets } from './turn/session-datasets';
@@ -93,11 +90,7 @@ import { SqlChecks } from './turn/sql-checks';
 import { TurnEngine } from './turn/turn-engine';
 import { TurnOptions } from './turn/turn-options';
 import type { RunStepEvent, StreamEvent } from './turn/stream-events';
-import {
-  ASSISTANT_AGENT_KEY,
-  RFP_AGENT_KEY,
-  lastSuccessfulSql,
-} from './turn/turn-records';
+import { ASSISTANT_AGENT_KEY, lastSuccessfulSql } from './turn/turn-records';
 import { workflowSourceOf } from './turn/turn-workflow';
 
 export type { RunStepEvent, StreamEvent } from './turn/stream-events';
@@ -110,7 +103,7 @@ export const RUN_HOST_ID_PREFIX = 'run-';
 
 /**
  * What a run host is created from (agents.md 5.14): the run, the workflow it
- * runs, the input's datasets and RFP, and the one earlier run given as
+ * runs, the input's datasets, and the one earlier run given as
  * context (plan 5.4).
  */
 /** A visual action on a run-backed host (api.md 130-134). */
@@ -136,11 +129,8 @@ export interface RunHostSpec {
   workflowId: string;
   /** The workflow's name: the host's name. */
   name: string;
-  /** The input's datasets; absent for the RFP Builder and user agents. */
+  /** The input's datasets; absent for an agent with its own datasets and user agents. */
   datasets?: string[];
-  rfpId?: string;
-  /** The stage tracker an RFP Continue starts from: the earlier run's (plan 4.3). */
-  workflowState?: WorkflowState;
   /** The earlier run's question and answer, put before this run's question. */
   context?: { question: string; answer: string };
   /**
@@ -173,8 +163,6 @@ export class SessionsService implements OnModuleInit {
     // The dataset ontology, rendered as the curated-knowledge block.
     private readonly knowledge: OntologyService,
     private readonly userAgents: UserAgentsService,
-    // The RFP Builder's REST target and package export (agents.md 3.10).
-    @Optional() private readonly rfpPackages?: RfpPackagesService,
     // The Data Readiness Agent's assessments (agents.md 3.13).
     @Optional() private readonly readiness?: DataReadinessService,
     // Sampled profiles and synthetic scripts for the same agent (agents.md 3.14).
@@ -204,7 +192,6 @@ export class SessionsService implements OnModuleInit {
       metrics,
       knowledge,
       userAgents,
-      rfpPackages,
       datasets: this.turnDatasets,
       logger: this.logger,
       existingDatasets: (names) => this.existingDatasets(names),
@@ -278,15 +265,6 @@ export class SessionsService implements OnModuleInit {
         this.showPanelItem(sessionId, input, turnRecords),
       updateWorkflow: (sessionId, input) =>
         this.updateWorkflow(sessionId, input),
-      restTarget: (datasourceId) =>
-        this.requireRfpPackages().restTarget(datasourceId),
-      exportRfpPackage: (sessionId, datasourceId, rfpId, options) =>
-        this.requireRfpPackages().exportRfpPackage(
-          sessionId,
-          datasourceId,
-          rfpId,
-          options,
-        ),
     });
 
     if (this.readiness) {
@@ -334,14 +312,6 @@ export class SessionsService implements OnModuleInit {
         }
       }),
     );
-  }
-
-  /** The RFP package service, which only a unit test leaves out. */
-  private requireRfpPackages(): RfpPackagesService {
-    if (!this.rfpPackages) {
-      throw new Error('RFP packages are not available in this process');
-    }
-    return this.rfpPackages;
   }
 
   /**
@@ -404,9 +374,8 @@ export class SessionsService implements OnModuleInit {
    * A run host (ADR-0041; agents.md 5.14): the in-memory session one run of
    * an agent workflow executes its agent turn on, shaped as `POST /sessions`
    * would shape a session of that workflow: bound to the workflow's agent,
-   * over the input's datasets (the RFP Builder's declared dataset; a user
-   * agent's Live datasets that exist), with the input's RFP and, as its
-   * transcript, the earlier run's question and answer (plan 5.4). Its
+   * over the input's datasets (a built-in agent's declared datasets; a user
+   * agent's Live datasets that exist), with, as its transcript, the earlier run's question and answer (plan 5.4). Its
    * workspace is `session-run-<run id>`, created as a session's. Never
    * stored or listed.
    */
@@ -467,10 +436,6 @@ export class SessionsService implements OnModuleInit {
       datasets,
       ...binding,
       workflowId: sessionWorkflowId(binding),
-      ...(spec.rfpId ? { rfpId: spec.rfpId } : {}),
-      ...(spec.workflowState
-        ? { workflowState: { ...spec.workflowState } }
-        : {}),
       run: true,
       messages: spec.context
         ? [
@@ -674,7 +639,8 @@ export class SessionsService implements OnModuleInit {
    * `agent`, `workflow` and the full `panelItems` list (api.md 2.1). Computed
    * on every read, never stored.
    */
-  async toView(session: SessionDoc): Promise<SessionView> {
+  async toView(stored: SessionDoc): Promise<SessionView> {
+    const session = this.readable(stored);
     if (session.agentKey) {
       return this.viewOf(session, this.builtinAgentRef(session));
     }
@@ -690,7 +656,8 @@ export class SessionsService implements OnModuleInit {
     const agents = sessions.some((session) => session.agentId)
       ? new Map((await this.userAgents.list()).map((doc) => [doc.id, doc.live]))
       : new Map<string, AgentConfig | undefined>();
-    return sessions.map((session) => {
+    return sessions.map((stored) => {
+      const session = this.readable(stored);
       if (session.agentKey) {
         return this.viewOf(session, this.builtinAgentRef(session));
       }
@@ -698,6 +665,28 @@ export class SessionsService implements OnModuleInit {
       const config = agents.get(session.agentId);
       return this.viewOf(session, agentRef(session, config), config);
     });
+  }
+
+  /**
+   * A stored session as this version reads it: a built-in agent key that is
+   * no longer registered (the removed RFP Builder, `rfp`) is ignored with its
+   * name and its one-step workflow id, and a legacy `rfpId` is dropped, so the
+   * session reads as a plain Assistant session. Nothing is rewritten in the
+   * store.
+   */
+  private readable(session: SessionDoc): SessionDoc {
+    const legacy = session as SessionDoc & { rfpId?: unknown };
+    const key = session.agentKey;
+    const orphan = !!key && !this.mastra.listAgents()[key];
+    if (!orphan && legacy.rfpId === undefined) return session;
+    const copy: SessionDoc & { rfpId?: unknown } = { ...session };
+    delete copy.rfpId;
+    if (orphan) {
+      delete copy.agentKey;
+      delete copy.agentName;
+      if (copy.workflowId === `agent:${key}`) delete copy.workflowId;
+    }
+    return copy;
   }
 
   private viewOf(
@@ -751,7 +740,7 @@ export class SessionsService implements OnModuleInit {
 
   /**
    * The phases of the `## Workflow` section of the prompt the session runs
-   * (ADR-0029): the RFP Builder's prompt (override or shipped), a user
+   * (ADR-0029): none for a built-in agent bound by key, a user
    * agent's Live instructions when they have the section, else the
    * assistant's prompt. `config` is the running agent version, when any.
    */
@@ -764,13 +753,7 @@ export class SessionsService implements OnModuleInit {
     if (session.agentKey === ASSISTANT_V2_AGENT_KEY) {
       return workflowStepPhases(QTI_V2_TURN_STEPS);
     }
-    if (session.agentKey) {
-      return session.agentKey === RFP_AGENT_KEY
-        ? parseWorkflow(
-            agentPromptOverrideFor(RFP_AGENT_KEY)?.prompt ?? RFP_PROMPT,
-          )
-        : [];
-    }
+    if (session.agentKey) return [];
     const own = config ? parseWorkflow(config.instructions) : [];
     if (own.length) return own;
     return parseWorkflow(
@@ -1034,29 +1017,6 @@ export class SessionsService implements OnModuleInit {
     version?: number,
   ): Promise<{ filename: string; archive: Buffer }> {
     return this.visuals.download(session, visualizationId, version);
-  }
-
-  /**
-   * An RFP package stored in the session workspace, or one of its files
-   * (api.md #105). Owner-scoped: another user's session is not found.
-   */
-  async downloadRfpPackage(
-    id: string,
-    rfpId: string,
-    file?: string,
-    draft = false,
-  ): Promise<{ filename: string; contentType: string; body: Buffer }> {
-    return this.downloadRfpPackageOf(await this.get(id), rfpId, file, draft);
-  }
-
-  /** `downloadRfpPackage` over a given session or run-backed host (api.md 127). */
-  downloadRfpPackageOf(
-    session: SessionDoc,
-    rfpId: string,
-    file?: string,
-    draft = false,
-  ): Promise<{ filename: string; contentType: string; body: Buffer }> {
-    return this.requireRfpPackages().download(session.id, rfpId, file, draft);
   }
 
   /**

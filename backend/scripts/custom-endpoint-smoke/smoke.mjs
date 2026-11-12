@@ -111,7 +111,7 @@ let logFlushed = Promise.resolve();
 let cleanedUp = false;
 
 function startApp() {
-  const childEnv = { ...env, INTELLIFY_API_PORT: '0' };
+  const childEnv = { ...env };
   // Keep the instance isolated from the developer's own data and secret.
   delete childEnv.APP_SECRET;
   delete childEnv.APP_DATA_DIR;

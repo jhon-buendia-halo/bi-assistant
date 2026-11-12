@@ -104,8 +104,6 @@ export interface WorkflowRun {
   agentName?: string;
   /** The agent its agent step ran, as a session's `agent` (api.md 2.1). */
   agent?: SessionAgentRef;
-  /** RFP Builder runs: the RFP the run worked on. */
-  rfpId?: string;
   panelItems?: PanelItem[];
   visualizations?: SessionVisualization[];
   /**
@@ -190,7 +188,7 @@ export function runSummaryOf(
 /**
  * The run-backed host of a stored run (plan 5.2): a `SessionDoc` shaped as
  * the run's host was, so the services that serve a session's visuals, panel
- * files and RFP packages (api.md 9, 14, 105-107) and derive its views (2.1)
+ * files (api.md 9, 14, 106-107) and derive its views (2.1)
  * serve the run's from its workspace `session-run-<id>`. Its transcript is
  * the run's question and answer, so a visual finds its source answer.
  * Never held, stored or listed.
@@ -207,7 +205,6 @@ export function runHostDoc(run: WorkflowRunDoc): SessionDoc {
     ...(run.agentId ? { agentId: run.agentId } : {}),
     ...(run.agentName ? { agentName: run.agentName } : {}),
     workflowId: run.workflowId,
-    ...(run.rfpId ? { rfpId: run.rfpId } : {}),
     messages: [
       ...(run.question !== undefined
         ? [{ role: 'user' as const, content: run.question, at: run.startedAt }]

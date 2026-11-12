@@ -11,7 +11,6 @@ import {
   builtInOnDemandSkillNames,
 } from '../../mastra/app-skills';
 import { readinessTools } from '../../mastra/tools/readiness.tools';
-import { rfpTools } from '../../mastra/tools/rfp.tools';
 import {
   ASSISTANT_V2_AGENT_KEY,
   ASSISTANT_V2_IDENTITY_START,
@@ -37,23 +36,6 @@ export const PROMPT_MAX_CHARS = 20000;
 const ASSISTANT_IDENTITY_START = 'You are the Questions to Insights assistant';
 
 const ASSISTANT_KEY = 'assistant';
-
-/** Where the RFP Builder's prompt must start (agents.md 2.8, rfp R1). */
-const RFP_IDENTITY_START = 'You are the RFP Builder';
-
-const RFP_KEY = 'rfp';
-
-/**
- * What the RFP Builder's prompt may link (agents.md 2.8, BA-228): its own
- * tools and its own on-demand skills, one per stage. Links are mentions; it
- * keeps every tool.
- */
-function rfpLinkTargets(): { tools: string[]; skills: string[] } {
-  return {
-    tools: Object.keys(rfpTools),
-    skills: [...(AGENT_SKILLS[RFP_KEY] ?? [])],
-  };
-}
 
 /** Where the Data Readiness Agent's prompt must start (agents.md 2.10, D1). */
 const DATA_READINESS_IDENTITY_START = 'You are the Data Readiness Agent';
@@ -160,7 +142,6 @@ export class AgentPromptsService implements OnModuleInit {
       linksAllowed:
         key === ASSISTANT_KEY ||
         key === ASSISTANT_V2_AGENT_KEY ||
-        key === RFP_KEY ||
         key === DATA_READINESS_KEY,
       updatedAt: override?.updatedAt ?? null,
     };
@@ -188,21 +169,6 @@ function validatePrompt(key: string, value: unknown): string {
       );
     }
     const unknown = links.tools.find((name) => !isLibraryTool(name));
-    if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
-  } else if (key === RFP_KEY) {
-    if (!prompt.startsWith(RFP_IDENTITY_START)) {
-      throw new BadRequestException(
-        `The RFP Builder's prompt must start with "${RFP_IDENTITY_START}"`,
-      );
-    }
-    const links = parseLinks(prompt);
-    const allowed = rfpLinkTargets();
-    if (links.skills.some((name) => !allowed.skills.includes(name))) {
-      throw new BadRequestException(
-        "Only the RFP Builder's own skills can be linked here: this prompt is shared by every user",
-      );
-    }
-    const unknown = links.tools.find((name) => !allowed.tools.includes(name));
     if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
   } else if (key === DATA_READINESS_KEY) {
     if (!prompt.startsWith(DATA_READINESS_IDENTITY_START)) {

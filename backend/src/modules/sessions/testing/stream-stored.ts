@@ -5,7 +5,7 @@ import type { SessionsService, StreamEvent } from '../sessions.service';
  * Test seam (1.23.27): a streamed agent turn over a stored session. Nothing in
  * the app starts a chat any more, but the turn engine still streams the same
  * turn for a run host, so the sessions unit suites keep proving the turn
- * behaviour (guards, workflow moves, cross-check, readiness, RFP context)
+ * behaviour (guards, workflow moves, cross-check, readiness)
  * against a stored session through the engine directly.
  */
 export async function streamStored(

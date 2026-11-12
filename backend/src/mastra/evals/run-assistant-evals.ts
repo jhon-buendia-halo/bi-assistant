@@ -2,7 +2,6 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
 import { SessionsService } from '../../modules/sessions/sessions.service';
 import { OntologyService } from '../../modules/ontology/ontology.service';
-import { randomUUID } from 'crypto';
 import { writeFileSync } from 'fs';
 import { runAssistantEvals } from './assistant.evals';
 import { selectCliEvalCases } from './eval-cli-selection';
@@ -47,8 +46,8 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  // The agent the questions run on: the assistant, or the RFP Builder for
-  // EVAL_SET=rfp (agents.md 8.1).
+  // The agent the questions run on: the assistant, or the Data Readiness
+  // Agent for EVAL_SET=data-readiness (agents.md 8.1).
   const agent = agentForCases(selection.caseIds);
   if ('error' in agent) {
     console.error(agent.error);
@@ -115,7 +114,7 @@ async function runEvals(
     caseIds,
     sessions,
     knowledgeBlock,
-    evalTargetFor(agentKey, randomUUID()),
+    evalTargetFor(agentKey),
   );
   // The whole run (answers and tool calls included) for reading failures.
   const resultsFile = process.env['EVAL_RESULTS_FILE'];

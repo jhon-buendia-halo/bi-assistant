@@ -814,8 +814,8 @@ export interface EvalOrientationInput {
 
 /**
  * The agent a set's cases run on and what each case sends it (agents.md
- * 8.1, `agentKey`): the assistant by default, the RFP Builder for the `rfp`
- * set (`rfp.evals.ts`).
+ * 8.1, `agentKey`): the assistant by default, the Data Readiness Agent for
+ * the `data-readiness` set (`data-readiness.evals.ts`).
  */
 export interface EvalTarget {
   /** Registry key of the agent. */
@@ -823,7 +823,7 @@ export interface EvalTarget {
   agent: Agent;
   /** The sets that run on this agent. */
   sets: AssistantEvalSet[];
-  /** The orientation system message of a case (Block 1's dataset half, or Block R1). */
+  /** The orientation system message of a case (Block 1's dataset half, or Block D1). */
   orientation(input: EvalOrientationInput): string | Promise<string>;
   /** Whether the curated-knowledge block (Block 3) is sent. */
   sendsKnowledge: boolean;
@@ -847,8 +847,8 @@ export interface EvalTarget {
   sessionAgentKey?: string;
   /**
    * How much of each tool input and output the LLM judge reads; the
-   * report's 2,000 characters when unset. The RFP Builder's tools answer
-   * whole records, so its judge reads more of them.
+   * report's 2,000 characters when unset. An agent whose tools answer
+   * whole reports (Data Readiness) has its judge read more of them.
    */
   judgeTraceChars?: number;
   /**
@@ -1232,7 +1232,7 @@ export async function createEvalHost(
   /** Bind the host to this built-in agent (`EvalTarget.sessionAgentKey`). */
   agentKey?: string,
 ): Promise<EvalHost> {
-  // An agent that declares its own datasets (RFP Builder, Data Readiness)
+  // An agent that declares its own datasets (Data Readiness)
   // takes them; the assistant runs over the run's.
   const host = await sessions.createRunHost({
     runId: `eval-${randomUUID()}`,
