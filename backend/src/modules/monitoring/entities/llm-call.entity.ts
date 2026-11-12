@@ -20,7 +20,7 @@ export interface LlmCallRow {
   model: string;
   provider: string;
   /** The thread (= app session); name null when no such session exists. */
-  session: { id: string; name: string | null } | null;
+  session: { id: string; name: string | null; runId?: string } | null;
   inputTokens: number | null;
   outputTokens: number | null;
   cacheReadTokens: number | null;
@@ -35,7 +35,7 @@ export interface LlmCallFacets {
   agents: { id: string; name: string }[];
   models: string[];
   providers: string[];
-  sessions: { id: string; name: string | null }[];
+  sessions: { id: string; name: string | null; runId?: string }[];
 }
 
 export interface LlmCallsPage {

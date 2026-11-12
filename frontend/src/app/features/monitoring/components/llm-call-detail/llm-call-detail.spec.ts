@@ -179,6 +179,27 @@ describe('LlmCallDetailPage', () => {
     expect(opened).toEqual(['session-1']);
   });
 
+  it("links a run's call to the run's flow, not to a chat", async () => {
+    await render(
+      detail({
+        session: {
+          id: 'run-r1',
+          name: 'Assistant: Top scorers?',
+          runId: 'r1',
+        },
+      }),
+    );
+    const chats: string[] = [];
+    const runs: string[] = [];
+    fixture.componentInstance.openSession.subscribe((id) => chats.push(id));
+    fixture.componentInstance.openRun.subscribe((id) => runs.push(id));
+    const link = byId('llm-call-session-link')!;
+    expect(text(link)).toBe('Assistant: Top scorers?');
+    link.click();
+    expect(runs).toEqual(['run-r1']);
+    expect(chats).toEqual([]);
+  });
+
   it('shows an unnamed session as its short id, without a link', async () => {
     await render(detail({ session: { id: 'abcdef1234567890', name: null } }));
     expect(byId('llm-call-session-link')).toBeNull();

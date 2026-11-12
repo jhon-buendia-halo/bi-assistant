@@ -23,6 +23,12 @@
         <span class="font-mono text-[12px] text-fg-muted">{{
           s.id.slice(0, 8)
         }}</span>
+      } @else if (s.runId) {
+        <span
+          class="chip px-2 py-0.5 text-[11px]"
+          data-testid="session-run-chip"
+          >Run</span
+        >
       } @else {
         <button
           type="button"

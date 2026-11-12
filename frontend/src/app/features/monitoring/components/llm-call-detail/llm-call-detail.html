@@ -59,8 +59,15 @@
               type="button"
               data-testid="llm-call-session-link"
               class="max-w-full truncate text-left text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-focus"
-              [title]="'Open the session ' + c.session.name"
-              (click)="openSession.emit(c.session.id)"
+              [title]="
+                (c.session.runId ? 'Open the run ' : 'Open the session ') +
+                c.session.name
+              "
+              (click)="
+                c.session.runId
+                  ? openRun.emit(c.session.id)
+                  : openSession.emit(c.session.id)
+              "
             >
               {{ c.session.name }}
             </button>

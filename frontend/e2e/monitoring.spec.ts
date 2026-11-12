@@ -795,3 +795,84 @@ test.describe('Feature: Session flow', () => {
     },
   );
 });
+
+const RUN_QUESTION = 'Which team scored the most goals in a run?';
+
+test.describe('Feature: Runs in Monitoring', () => {
+  test(
+    "A workflow run's call is attributed to the run",
+    { tag: ['@demo', '@story-1.23.20'] },
+    async ({ page }) => {
+      const runName = `Assistant: ${RUN_QUESTION}`;
+      await scenarioStep(
+        page,
+        'Given I ran the Assistant workflow on a question',
+        async () => {
+          const res = await page.request.post(
+            `${apiBase(page)}/workflows/${encodeURIComponent('agent:assistant')}/runs/stream`,
+            {
+              data: {
+                input: {
+                  question: RUN_QUESTION,
+                  datasets: ['World Cup Core'],
+                },
+              },
+            },
+          );
+          expect(res.status()).toBe(200);
+          expect(await res.text()).toContain('"type":"done"');
+        },
+      );
+      await scenarioStep(page, 'When I open Monitoring', async () => {
+        await expect(async () => {
+          await railItem(page, 'Sessions').click();
+          await railItem(page, 'Monitoring').click();
+          await expect(page.getByTestId('monitoring-page')).toBeVisible();
+          await expect(
+            rows(page).filter({ hasText: runName }).first(),
+          ).toBeVisible({ timeout: 2_000 });
+        }).toPass({ timeout: 45_000 });
+      });
+      await scenarioStep(
+        page,
+        'Then the call is listed under the run "Assistant: <title>"',
+        async () => {
+          await expect(
+            rows(page).filter({ hasText: runName }).first(),
+          ).toContainText(ASSISTANT);
+          await expect(
+            page
+              .getByTestId('llm-filter-session')
+              .locator('option', { hasText: runName }),
+          ).toHaveCount(1);
+        },
+      );
+      await scenarioStep(
+        page,
+        'When I open the call and follow its run link',
+        async () => {
+          await rows(page).filter({ hasText: runName }).first().click();
+          await page.getByTestId('llm-call-session-link').click();
+        },
+      );
+      await scenarioStep(
+        page,
+        'Then I see the run with one turn, its path and its waterfall',
+        async () => {
+          const detail = page.getByTestId('monitoring-session-detail');
+          await expect(detail.getByRole('heading', { level: 2 })).toHaveText(
+            runName,
+          );
+          await expect(page.getByTestId('session-run-chip')).toBeVisible();
+          await expect(page.getByTestId('session-open-chat')).toHaveCount(0);
+          await expect(page.getByTestId('turn-question-1')).toHaveText(
+            RUN_QUESTION,
+          );
+          await expect(page.getByTestId('turn-question-2')).toHaveCount(0);
+          await page.getByTestId('turn-timeline-toggle-1').click();
+          await expect(page.getByTestId('trace-waterfall')).toBeVisible();
+        },
+      );
+    },
+  );
+});

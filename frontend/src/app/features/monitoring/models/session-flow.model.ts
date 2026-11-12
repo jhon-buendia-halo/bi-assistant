@@ -17,6 +17,8 @@ export interface SessionRow {
   id: string;
   /** null when the session no longer exists (deleted, preview, eval). */
   name: string | null;
+  /** Set when the thread is a stored run's host `run-<id>` (ADR-0041). */
+  runId?: string;
   agents: { id: string; name: string }[];
   turns: number;
   firstAt: string;

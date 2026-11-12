@@ -7,6 +7,8 @@ export interface SessionRow {
   id: string;
   /** From the sessions collection; null when absent (deleted, preview, eval). */
   name: string | null;
+  /** Set when the thread is a stored run's host `run-<id>` (ADR-0041). */
+  runId?: string;
   /** Distinct, by first appearance. */
   agents: { id: string; name: string }[];
   turns: number;

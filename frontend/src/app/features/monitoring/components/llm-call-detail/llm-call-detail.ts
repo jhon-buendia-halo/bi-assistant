@@ -47,6 +47,8 @@ export class LlmCallDetailPage {
   readonly callId = input.required<string>();
   /** The session id, when its chat should open. */
   readonly openSession = output<string>();
+  /** A run's call: opens the run's session flow, there is no chat (1.23.20). */
+  readonly openRun = output<string>();
 
   private readonly api = inject(MonitoringApiService);
 

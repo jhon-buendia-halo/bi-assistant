@@ -103,9 +103,13 @@ Navigation
 - R43. The back control of the call page SHALL return to where the call was opened. Opened from the table, it reads **Monitoring** and returns to the table (R13). Opened from a session page (an **Open call** link of a step or of the waterfall), it reads **Session** and returns to that session page, with its open timelines as they were left. The session page's own back control reads **Monitoring** and returns to the Sessions tab with its filters, page and page size as they were left. Choosing **Monitoring** on the rail from a call page or a session page SHALL return to the Monitoring page with the tab that was chosen.
 - R44. Viewing a session page or a waterfall SHALL NOT start any model call and SHALL change nothing (R24).
 
+Workflow runs
+- R45. A workflow run's agent turn runs on a temporary host `run-<runId>` (ADR-0041, amending ADR-0038), so its calls carry that id as their thread. Monitoring SHALL treat such a thread like a session: it SHALL read the run `<runId>` from `workflow_runs` and name the thread `<workflow name>: <run title>` (the run's question, else its workflow's name, as the history titles it). The calls table (R3), the Session filter (R6), the call page (R14), the Sessions tab (R28) and the session page (R32) use that name. The call page's Session link for a run SHALL open the run's session page (its execution flow), not a chat, and the session page of a run SHALL show a **Run** chip instead of **Open chat**. A run that was deleted, or an unknown `run-` id, has no name and no link, like a deleted chat. Sessions already listed are unchanged.
+
 ## Edge cases and errors
 
 - Fresh data dir, or a trace store with no table yet: "No LLM calls yet." (R12).
+- A call of a run that was deleted: its session shows the short id of the host, with no link (R45).
 - A call from a preview, an eval or a deleted session: its session shows a dash, and the Session filter still offers its id.
 - A model with no price: Cost is a dash and the context caption has no limit (R5, R17).
 - A call still running: Status Running, no duration, tokens and cost as far as known, and no end time (R4, R15).
@@ -295,6 +299,15 @@ Feature: Session flow
   Scenario: A session that does not exist
     When I open the page of a session id that does not exist
     Then I see "Session not found"
+
+Feature: Runs in Monitoring
+
+  Scenario: A workflow run's call is attributed to the run
+    Given I ran the Assistant workflow on a question
+    When I open Monitoring
+    Then the call is listed under the run "Assistant: <title>"
+    When I open the call and follow its run link
+    Then I see the run with one turn, its path and its waterfall
 ```
 
 ## Acceptance
@@ -305,6 +318,7 @@ Feature: Session flow
 - Back keeps the filters and page (R13).
 - After two chat turns in one session the Sessions tab lists it with 2 turns and totals (tokens, cost, tool calls) equal to the sum of its LLM calls (R27–R29).
 - The session page shows both questions, each model request and tool group in order, and both answers (R32–R34). **Open timeline** shows the waterfall with bars to scale, and the framework switch adds the housekeeping spans (R37–R40).
+- A run's call is listed under `<workflow>: <title>`, offered in the Session filter, and its link opens the run's session page with one turn, its path and its waterfall (R45).
 - Back keeps the tab, filters and page, and a call opened from a session returns to it (R26, R43). Backend unit tests cover R27–R30, R33, R34, R36 and R38–R41 at service and controller level, pinned to the same real-shape fixture.
 
 <!-- sources: backend/src/modules/monitoring/**, backend/src/mastra/storage.ts, frontend/src/app/features/monitoring/**, frontend/src/app/app.html (monitoring and llm-call views) -->

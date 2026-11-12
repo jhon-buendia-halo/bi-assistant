@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { SessionsRepository } from '../sessions/repositories/sessions.repository';
+import { WorkflowRunsRepository } from '../workflows/repositories/workflow-runs.repository';
+import { runTitle } from '../workflows/workflow-run-steps';
 import { buildContextSegments, type ToolDefinition } from './context-segments';
 import { parseLlmCallsQuery, type LlmCallsQuery } from './dto/llm-calls-query';
 import {
@@ -59,6 +61,7 @@ export class MonitoringService {
   constructor(
     private readonly spans: SpanEventsRepository,
     private readonly sessions: SessionsRepository,
+    private readonly runs: WorkflowRunsRepository,
   ) {}
 
   /** `GET /monitoring/llm-calls`. */
@@ -72,7 +75,7 @@ export class MonitoringService {
       this.spans.countCalls(filter),
       this.spans.facetValues(),
     ]);
-    const names = await this.sessionNames([
+    const names = await this.threadNames([
       ...facetValues.sessionIds,
       ...records.map((r) => r.sessionId),
     ]);
@@ -88,7 +91,7 @@ export class MonitoringService {
         models: [...facetValues.models].sort(byLabel((m) => m)),
         providers: [...facetValues.providers].sort(byLabel((p) => p)),
         sessions: facetValues.sessionIds
-          .map((id) => ({ id, name: names.get(id) ?? null }))
+          .map((id) => threadRef(id, names))
           .sort(byLabel((s) => s.name ?? s.id)),
       },
     };
@@ -100,7 +103,7 @@ export class MonitoringService {
       ? (await this.spans.findCalls({ id }, 1, 0))[0]
       : undefined;
     if (!record) throw new NotFoundException('LLM call not found');
-    const names = await this.sessionNames([record.sessionId]);
+    const names = await this.threadNames([record.sessionId]);
     const row = this.toRow(record, names);
 
     const spans = collapseSpans(await this.spans.traceSpanRows(record.traceId));
@@ -181,7 +184,7 @@ export class MonitoringService {
     const ids = records.map((r) => r.id);
     const [flows, names] = await Promise.all([
       this.sessionFlows(ids),
-      this.sessionNames(ids),
+      this.threadNames(ids),
     ]);
     return {
       items: records.map((r) => toSessionRow(r, flows.get(r.id), names)),
@@ -204,7 +207,7 @@ export class MonitoringService {
     if (!record) throw new NotFoundException('Session not found');
     const [flows, names] = await Promise.all([
       this.sessionFlows([id]),
-      this.sessionNames([id]),
+      this.threadNames([id]),
     ]);
     const flow = flows.get(id);
     return {
@@ -231,20 +234,39 @@ export class MonitoringService {
     return buildSessionFlows([...collapseSpans(rows).values()]);
   }
 
-  /** Session names of the given thread ids; absent ids have no entry. */
-  private async sessionNames(
+  /**
+   * Names of the given thread ids; absent ids have no entry. A thread is a
+   * chat session, or a run's temporary host `run-<id>` (ADR-0041): a run
+   * is named `<workflow>: <title>` from its stored document, and a run
+   * that was deleted or never existed has no entry, like a deleted chat.
+   */
+  private async threadNames(
     ids: (string | null)[],
-  ): Promise<Map<string, string>> {
+  ): Promise<Map<string, ThreadName>> {
     const unique = [...new Set(ids.filter((id): id is string => !!id))];
-    const found = await Promise.all(unique.map((id) => this.sessions.get(id)));
-    const names = new Map<string, string>();
-    found.forEach((session, i) => {
-      if (session) names.set(unique[i], session.name);
+    const found = await Promise.all(
+      unique.map(async (id): Promise<ThreadName | null> => {
+        if (id.startsWith(RUN_HOST_ID_PREFIX)) {
+          const run = await this.runs.get(id.slice(RUN_HOST_ID_PREFIX.length));
+          return run
+            ? {
+                name: `${run.workflowName}: ${runTitle(run, [])}`,
+                runId: run.id,
+              }
+            : null;
+        }
+        const session = await this.sessions.get(id);
+        return session ? { name: session.name } : null;
+      }),
+    );
+    const names = new Map<string, ThreadName>();
+    found.forEach((thread, i) => {
+      if (thread) names.set(unique[i], thread);
     });
     return names;
   }
 
-  private toRow(r: LlmCallRecord, names: Map<string, string>): LlmCallRow {
+  private toRow(r: LlmCallRecord, names: Map<string, ThreadName>): LlmCallRow {
     const startedAt = new Date(r.startedAt);
     const endedAt = r.endedAt ? new Date(r.endedAt) : null;
     const tokens = {
@@ -264,9 +286,7 @@ export class MonitoringService {
         : null,
       model: r.model,
       provider: r.provider,
-      session: r.sessionId
-        ? { id: r.sessionId, name: names.get(r.sessionId) ?? null }
-        : null,
+      session: r.sessionId ? threadRef(r.sessionId, names) : null,
       ...tokens,
       reasoningTokens: num(r.reasoningTokens),
       costUsd: estimateCostUsd(r.model, tokens),
@@ -275,15 +295,35 @@ export class MonitoringService {
   }
 }
 
+/** A run's temporary host id prefix (`RUN_HOST_ID_PREFIX`, sessions.service). */
+const RUN_HOST_ID_PREFIX = 'run-';
+
+/** What a thread id resolves to: a chat's name, or a run's name and id. */
+interface ThreadName {
+  name: string;
+  runId?: string;
+}
+
+function threadRef(
+  id: string,
+  names: Map<string, ThreadName>,
+): { id: string; name: string | null; runId?: string } {
+  const thread = names.get(id);
+  return {
+    id,
+    name: thread?.name ?? null,
+    ...(thread?.runId ? { runId: thread.runId } : {}),
+  };
+}
+
 /** A sessions-query record with the totals of its spans. */
 function toSessionRow(
   record: SessionRecord,
   flow: SessionFlow | undefined,
-  names: Map<string, string>,
+  names: Map<string, ThreadName>,
 ): SessionRow {
   return {
-    id: record.id,
-    name: names.get(record.id) ?? null,
+    ...threadRef(record.id, names),
     agents: flow?.agents ?? [],
     turns: flow?.turns ?? 0,
     firstAt: new Date(record.firstAt).toISOString(),
