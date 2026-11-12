@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { MastraService } from '../../mastra/mastra.service';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   agentWorkflow,
   type AgentWorkflow,
@@ -15,8 +10,8 @@ import {
   ASSISTANT_WORKFLOW_NAME,
   CODE_WORKFLOWS,
   ONE_STEP_WORKFLOW_TRIGGER,
+  oneStepWorkflowInput,
   oneStepWorkflowSteps,
-  parseWorkflowInput,
   wrappedAgentMaxSteps,
   WRAPPED_AGENT_KEYS,
   type CodeWorkflowSource,
@@ -24,7 +19,6 @@ import {
   type WorkflowInputField,
   type WorkflowTrigger,
 } from '../../mastra/workflows/workflow-catalog';
-import type { WorkflowRunResult } from '../../mastra/workflows/workflow-run';
 import { AgentsService, type AgentSummary } from '../agents/agents.service';
 import { runsOnPickedDatasets } from '../agents/builtin-sessions';
 
@@ -44,7 +38,10 @@ export interface WorkflowSummary {
   bar: WorkflowBar;
   /** Runs in a chat, or once on a typed input (`POST /workflows/:id/runs`). */
   trigger: WorkflowTrigger;
-  /** The typed input of a run workflow, in form order; `[]` for a chat workflow. */
+  /**
+   * The typed input a run takes, in form order (api.md 118, 119). The agent
+   * workflows have one while they are still chat workflows (plan 5.2).
+   */
   input: WorkflowInputField[];
   /** The session takes the datasets the user picks. */
   picksDatasets: boolean;
@@ -54,6 +51,8 @@ export interface WorkflowSummary {
   starterQuestions: string[];
   /** Why a chat can't start now; absent when it can. */
   chatRequirement?: string;
+  /** Why a run can't start now (the same texts); absent when it can (plan 4.2). */
+  runRequirement?: string;
 }
 
 /** One workflow in detail (api.md 117): an `AgentWorkflow` too. */
@@ -75,15 +74,11 @@ const NO_DATASETS_REQUIREMENT = "None of this agent's datasets exist";
  * code-defined workflows and the one-step workflow of every agent a chat can
  * run that has none of its own, built at read time from the pure catalogue
  * (workflow-catalog.ts) and the agent catalogue. Nothing is stored or
- * registered per workflow. A run workflow runs once on its typed input
- * through the Mastra instance, and its result is never stored (R11).
+ * registered per workflow. Runs are `WorkflowRunsService`'s (R11, R14).
  */
 @Injectable()
 export class WorkflowsService {
-  constructor(
-    private readonly agents: AgentsService,
-    private readonly mastra: MastraService,
-  ) {}
+  constructor(private readonly agents: AgentsService) {}
 
   /**
    * Every workflow, in catalogue order: the assistant's, the code-defined
@@ -98,26 +93,6 @@ export class WorkflowsService {
   async get(id: string): Promise<WorkflowDetail> {
     const entry = await this.find(id);
     return { ...entry.summary, steps: entry.steps() };
-  }
-
-  /**
-   * Run a run workflow once on `body.input` and answer its result (api.md
-   * 118; workflows R11): 404 for anything `list` does not hold, 400 for a
-   * chat workflow and for an input its fields refuse. A failed step still
-   * answers the result. Nothing is stored.
-   */
-  async run(id: string, body: unknown): Promise<WorkflowRunResult> {
-    const { summary } = await this.find(id);
-    if (summary.trigger !== 'run') {
-      throw new BadRequestException(`Workflow "${id}" runs in a chat`);
-    }
-    const raw =
-      body && typeof body === 'object'
-        ? (body as { input?: unknown }).input
-        : undefined;
-    const parsed = parseWorkflowInput(summary.input, raw);
-    if (!parsed.ok) throw new BadRequestException(parsed.error);
-    return this.mastra.runWorkflow(id, parsed.values);
   }
 
   private async find(id: string): Promise<CatalogueEntry> {
@@ -185,7 +160,7 @@ function assistantEntry(agent: AgentSummary): CatalogueEntry {
       stepCount: 1,
       bar: 'agent',
       trigger: ONE_STEP_WORKFLOW_TRIGGER,
-      input: [],
+      input: oneStepWorkflowInput(agent.key),
       picksDatasets: true,
       datasets: [],
       missingDatasets: [...agent.missingDatasets],
@@ -193,6 +168,16 @@ function assistantEntry(agent: AgentSummary): CatalogueEntry {
     },
     steps: oneStepOf(agent),
   };
+}
+
+/**
+ * Why a chat or a run can't start now: one text for both while chats remain
+ * (plan 4.2), absent when it can.
+ */
+function requirements(
+  text: string | undefined,
+): Pick<WorkflowSummary, 'chatRequirement' | 'runRequirement'> {
+  return text ? { chatRequirement: text, runRequirement: text } : {};
 }
 
 /** The fields of a code workflow's input, copied. */
@@ -223,9 +208,7 @@ function codeEntry(
       datasets: picksDatasets ? [] : [...agent.datasets],
       missingDatasets: [...agent.missingDatasets],
       starterQuestions: [...agent.starterQuestions],
-      ...(agent.chatRequirement
-        ? { chatRequirement: agent.chatRequirement }
-        : {}),
+      ...requirements(agent.chatRequirement),
     },
     steps: () => agentWorkflow(primaryFor)?.steps ?? [],
   };
@@ -296,12 +279,12 @@ function oneStepEntry(
       stepCount: 1,
       bar: 'agent',
       trigger: ONE_STEP_WORKFLOW_TRIGGER,
-      input: [],
+      input: oneStepWorkflowInput(agent.key),
       picksDatasets: false,
       datasets,
       missingDatasets: [...agent.missingDatasets],
       starterQuestions: [...agent.starterQuestions],
-      ...(chatRequirement ? { chatRequirement } : {}),
+      ...requirements(chatRequirement),
     },
     steps: oneStepOf(agent),
   };

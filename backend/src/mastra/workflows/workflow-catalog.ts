@@ -36,17 +36,140 @@ export type WorkflowBar = 'steps' | 'agent';
 /**
  * How a workflow is started (ADR-0040 amendment; plan 9.1): `chat` runs it
  * on every message of a chat; `run` runs it once on a typed input, and its
- * result is shown on its page and never stored.
+ * result is shown on its page. Until chats go (1.23.22), the agent workflows
+ * keep `chat` and also run on their input (ADR-0041; plan 5.2).
  */
 export type WorkflowTrigger = 'chat' | 'run';
 
-/** One field of a run workflow's input, defined in code (api.md 116). */
+/** The type of one input field (plan 4.1). */
+export type WorkflowInputFieldType =
+  | 'text'
+  | 'textarea'
+  | 'number'
+  /** A checkbox; absent means false (or the field's default). */
+  | 'boolean'
+  /** One or more dataset names. */
+  | 'datasets'
+  /** Exactly one dataset name. */
+  | 'dataset';
+
+/** The datasource kinds a `dataset` or `datasets` field can be limited to. */
+export type InputDatasourceKind = 'postgres' | 'databricks' | 'rest';
+
+/** One field of a workflow's input, defined in code (api.md 116). */
 export interface WorkflowInputField {
   name: string;
   label: string;
-  type: 'text' | 'textarea' | 'number';
+  type: WorkflowInputFieldType;
   required: boolean;
   placeholder?: string;
+  /** One line under the control. */
+  help?: string;
+  /** The value of a field that is missing or empty. */
+  default?: string | number | boolean;
+  /** `dataset` / `datasets`: only datasets bound to these kinds. */
+  datasourceKinds?: InputDatasourceKind[];
+  /** Set by the app (the RFP Builder's Continue), never rendered as a control. */
+  hidden?: boolean;
+}
+
+/** The placeholder of an agent workflow's question. */
+const QUESTION_PLACEHOLDER = 'Ask a question about your data';
+/** What a Data Readiness run asks when its question is left empty. */
+export const READINESS_DEFAULT_QUESTION =
+  'Assess the readiness of this dataset';
+
+const QUESTION_FIELD: WorkflowInputField = {
+  name: 'question',
+  label: 'Question',
+  type: 'textarea',
+  required: true,
+  placeholder: QUESTION_PLACEHOLDER,
+};
+const DATASETS_FIELD: WorkflowInputField = {
+  name: 'datasets',
+  label: 'Datasets',
+  type: 'datasets',
+  required: true,
+};
+const CAREFUL_FIELD: WorkflowInputField = {
+  name: 'careful',
+  label: 'Careful: cross-check the result with an independent query',
+  type: 'boolean',
+  required: false,
+  default: false,
+};
+
+/** The input of each wrapped built-in agent's one-step workflow (plan 4.2). */
+const BUILTIN_AGENT_INPUTS: Readonly<
+  Record<string, readonly WorkflowInputField[]>
+> = {
+  assistant: [QUESTION_FIELD, DATASETS_FIELD, CAREFUL_FIELD],
+  'data-readiness': [
+    {
+      name: 'dataset',
+      label: 'Dataset',
+      type: 'dataset',
+      required: true,
+      datasourceKinds: ['postgres', 'databricks'],
+    },
+    {
+      name: 'question',
+      label: 'Question',
+      type: 'textarea',
+      required: false,
+      placeholder: READINESS_DEFAULT_QUESTION,
+      default: READINESS_DEFAULT_QUESTION,
+    },
+  ],
+  rfp: [
+    {
+      name: 'message',
+      label: 'Message',
+      type: 'textarea',
+      required: true,
+      placeholder: 'Name the client and plan year, or state your decision',
+    },
+    {
+      name: 'rfpId',
+      label: 'RFP',
+      type: 'text',
+      required: false,
+      hidden: true,
+    },
+  ],
+};
+
+/** A user agent's one-step workflow: its datasets are the agent's (plan 4.2). */
+const USER_AGENT_INPUT: readonly WorkflowInputField[] = [
+  QUESTION_FIELD,
+  CAREFUL_FIELD,
+];
+
+/** Copies of fields, so a caller can change them safely. */
+function copyFields(
+  fields: readonly WorkflowInputField[],
+): WorkflowInputField[] {
+  return fields.map((field) => ({
+    ...field,
+    ...(field.datasourceKinds
+      ? { datasourceKinds: [...field.datasourceKinds] }
+      : {}),
+  }));
+}
+
+/**
+ * The input of an agent's one-step workflow (plan 4.2): a wrapped built-in
+ * agent's own fields, else a user agent's (question and careful).
+ */
+export function oneStepWorkflowInput(
+  agentKeyOrId: string,
+): WorkflowInputField[] {
+  return copyFields(
+    Object.hasOwn(BUILTIN_AGENT_INPUTS, agentKeyOrId)
+      ? BUILTIN_AGENT_INPUTS[agentKeyOrId]
+      : USER_AGENT_INPUT,
+  );
 }
 
 /** One workflow defined in code. */
@@ -75,6 +198,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] = [
     description: ASSISTANT_V2_DESCRIPTION,
     primaryFor: ASSISTANT_V2_AGENT_KEY,
     trigger: 'chat',
+    input: [QUESTION_FIELD, DATASETS_FIELD],
     steps: QTI_V2_TURN_STEPS,
     bar: 'steps',
   },
@@ -106,20 +230,135 @@ export function workflowStartsChat(source: CodeWorkflowSource): boolean {
   return source.trigger === 'chat';
 }
 
+/** One value of a run's input. */
+export type WorkflowInputValue = string | number | boolean | string[];
+
 /** A run's input values, by field name. */
-export type WorkflowInputValues = Record<string, string | number>;
+export type WorkflowInputValues = Record<string, WorkflowInputValue>;
+
+/** A dataset a `dataset` or `datasets` field is checked against. */
+export interface InputDataset {
+  name: string;
+  datasourceKind?: string;
+}
+
+/** How a refusal names a datasource kind. */
+const KIND_LABELS: Record<InputDatasourceKind, string> = {
+  postgres: 'PostgreSQL',
+  databricks: 'Databricks',
+  rest: 'REST',
+};
+
+/** `A`, `A or B`, `A, B or C`. */
+function orList(items: readonly string[]): string {
+  if (items.length <= 1) return items.join('');
+  return `${items.slice(0, -1).join(', ')} or ${items.at(-1)}`;
+}
+
+type FieldCheck =
+  { ok: true; value?: WorkflowInputValue } | { ok: false; error: string };
+
+/** One dataset name checked against the store and the field's kinds. */
+function datasetError(
+  field: WorkflowInputField,
+  name: string,
+  datasets: readonly InputDataset[],
+): string | undefined {
+  const found = datasets.find((dataset) => dataset.name === name);
+  if (!found) return `Dataset "${name}" not found`;
+  const kinds = field.datasourceKinds;
+  if (
+    kinds?.length &&
+    !kinds.includes(found.datasourceKind as InputDatasourceKind)
+  ) {
+    return `Dataset "${name}" is not a ${orList(kinds.map((kind) => KIND_LABELS[kind]))} dataset`;
+  }
+  return undefined;
+}
+
+/** A field that is missing or empty: its default, a refusal, or nothing. */
+function missingField(field: WorkflowInputField): FieldCheck {
+  if (field.default !== undefined) return { ok: true, value: field.default };
+  if (field.type === 'boolean') return { ok: true, value: false };
+  if (!field.required) return { ok: true };
+  return {
+    ok: false,
+    error:
+      field.type === 'datasets'
+        ? 'Select at least one dataset'
+        : `${field.label} is required`,
+  };
+}
+
+/** One field's value checked against its type (plan 4.1). */
+function checkField(
+  field: WorkflowInputField,
+  value: unknown,
+  datasets: readonly InputDataset[],
+): FieldCheck {
+  if (field.type === 'boolean') {
+    if (value === undefined || value === null || value === '') {
+      return missingField(field);
+    }
+    return typeof value === 'boolean'
+      ? { ok: true, value }
+      : { ok: false, error: `${field.label} must be true or false` };
+  }
+  if (field.type === 'datasets') {
+    const names = Array.isArray(value)
+      ? [
+          ...new Set(
+            value
+              .filter((name): name is string => typeof name === 'string')
+              .map((name) => name.trim())
+              .filter(Boolean),
+          ),
+        ]
+      : [];
+    if (!names.length) return missingField(field);
+    for (const name of names) {
+      const error = datasetError(field, name, datasets);
+      if (error) return { ok: false, error };
+    }
+    return { ok: true, value: names };
+  }
+  const usable =
+    (typeof value === 'string' && value !== '') || typeof value === 'number';
+  if (!usable) return missingField(field);
+  if (field.type === 'number') {
+    const typed = typeof value === 'string' ? value.trim() : '';
+    const number =
+      typeof value === 'number' ? value : typed ? Number(typed) : NaN;
+    return Number.isFinite(number)
+      ? { ok: true, value: number }
+      : { ok: false, error: `${field.label} must be a number` };
+  }
+  if (field.type === 'dataset') {
+    const name = String(value).trim();
+    if (!name) return missingField(field);
+    const error = datasetError(field, name, datasets);
+    return error ? { ok: false, error } : { ok: true, value: name };
+  }
+  return { ok: true, value: String(value) };
+}
 
 /**
- * A run's input checked against the workflow's fields (api.md 118): the
- * declared fields only, a number field as a number. A required field that is
- * missing or empty is refused with `<label> is required`, a number field
- * that is not a number with `<label> must be a number`. A whitespace-only
- * text passes: the run decides what it means. An optional field that is
- * missing or empty is left out.
+ * A run's input checked against the workflow's fields (api.md 118, 119;
+ * plan 4.1), in field order, the first refusal winning: the declared fields
+ * only, a number field as a number, a boolean as a boolean, datasets as
+ * trimmed names in order without repeats. A field that is missing or empty
+ * takes its `default` (a boolean `false`); a required one without a default
+ * is refused with `<label> is required` (`Select at least one dataset` for
+ * `datasets`). `<label> must be a number`, `<label> must be true or false`,
+ * `Dataset "<name>" not found` and `Dataset "<name>" is not a <kinds>
+ * dataset` refuse a value of the wrong kind. A whitespace-only text passes:
+ * the run decides what it means. An optional field that is missing or empty
+ * and has no default is left out.
  */
 export function parseWorkflowInput(
   fields: readonly WorkflowInputField[],
   raw: unknown,
+  datasets: readonly InputDataset[] = [],
 ): { ok: true; values: WorkflowInputValues } | { ok: false; error: string } {
   const body =
     raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
@@ -128,27 +367,41 @@ export function parseWorkflowInput(
     const value = Object.hasOwn(body, field.name)
       ? body[field.name]
       : undefined;
-    const usable =
-      (typeof value === 'string' && value !== '') || typeof value === 'number';
-    if (!usable) {
-      if (field.required) {
-        return { ok: false, error: `${field.label} is required` };
-      }
-      continue;
-    }
-    if (field.type === 'number') {
-      const typed = typeof value === 'string' ? value.trim() : '';
-      const number =
-        typeof value === 'number' ? value : typed ? Number(typed) : NaN;
-      if (!Number.isFinite(number)) {
-        return { ok: false, error: `${field.label} must be a number` };
-      }
-      values[field.name] = number;
-    } else {
-      values[field.name] = String(value);
-    }
+    const checked = checkField(field, value, datasets);
+    if (!checked.ok) return checked;
+    if (checked.value !== undefined) values[field.name] = checked.value;
   }
   return { ok: true, values };
+}
+
+/** What one agent turn of a run takes from the run's input (plan 4.2, 5.1). */
+export interface AgentRunTurn {
+  /** The user message: `question`, or the RFP Builder's `message`, trimmed. */
+  question: string;
+  /** `datasets`, or the readiness run's one `dataset`; absent otherwise. */
+  datasets?: string[];
+  /** Careful mode (the Assistant and user agents). */
+  careful: boolean;
+  /** The RFP the run continues (the RFP Builder's hidden field). */
+  rfpId?: string;
+}
+
+/** The agent turn a run's checked input asks for (plan 4.2). */
+export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
+  const text = (value: WorkflowInputValue | undefined) =>
+    typeof value === 'string' ? value.trim() : '';
+  const datasets = Array.isArray(values['datasets'])
+    ? values['datasets']
+    : text(values['dataset'])
+      ? [text(values['dataset'])]
+      : undefined;
+  const rfpId = text(values['rfpId']);
+  return {
+    question: text(values['question']) || text(values['message']),
+    ...(datasets ? { datasets } : {}),
+    careful: values['careful'] === true,
+    ...(rfpId ? { rfpId } : {}),
+  };
 }
 
 /** The built-in agents that get a one-step workflow. */

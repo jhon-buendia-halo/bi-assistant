@@ -651,13 +651,14 @@ The `built-in` routes are declared before `/skills/:id`.
 
 ### 2.6.2 Workflows
 
-Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflows/spec.md) (R1-R4, R11). Workflows are defined in code (ADR-0040), and there is no write route; a run workflow can be run (118), and the run is never stored. `:id` is a workflow id (`qti-v2-turn`, `seq-text-demo`, `agent:<registry key>`, `agent:<user-agent id>`; [agents.md](agents.md) 5.12). Ids contain `:`; clients send them URL-encoded (`agent%3Arfp`) and the server decodes them.
+Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflows/spec.md) (R1-R4, R11, R14-R17). Workflows are defined in code (ADR-0040), and there is no write route. A workflow with input fields can be run once (118) or run streamed (119) (ADR-0041); runs are held in memory and not stored yet (1.23.14 stores them). `:id` is a workflow id (`qti-v2-turn`, `seq-text-demo`, `agent:<registry key>`, `agent:<user-agent id>`; [agents.md](agents.md) 5.12). Ids contain `:`; clients send them URL-encoded (`agent%3Arfp`) and the server decodes them.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
 | 116 | `GET /workflows` | The workflow catalogue | no |
 | 117 | `GET /workflows/:id` | One workflow with its steps | no |
-| 118 | `POST /workflows/:id/runs` | Run a run workflow once on an input; nothing stored | yes |
+| 118 | `POST /workflows/:id/runs` | Run a workflow once on an input and answer when it ends | yes |
+| 119 | `POST /workflows/:id/runs/stream` | Run a workflow once on an input, streamed (SSE) | no |
 
 #### 116. `GET /workflows`
 - Response `200`: `{ workflows: WorkflowSummary[] }`.
@@ -671,20 +672,28 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     agents: { key: string; name: string }[];   // the agents its steps call, in step order, each once
     stepCount: number;
     bar: 'steps' | 'agent';           // what drives a chat's workflow bar: these steps, or the agent's own phases
-    trigger: 'chat' | 'run';          // runs in a chat, or once on a typed input (118)
-    input: WorkflowInputField[];      // a run workflow's typed input, in form order; [] for a chat workflow
+    trigger: 'chat' | 'run';          // runs in a chat, or once on a typed input (118, 119); the agent workflows stay 'chat' until 1.23.22 and also run on their input
+    input: WorkflowInputField[];      // the typed input a run takes, in form order (every workflow has one since 1.23.12)
     picksDatasets: boolean;           // the session takes the datasets the user picks (Assistant, Questions to Insights v2)
     datasets: string[];               // the datasets a session would take; [] when picksDatasets
     missingDatasets: string[];        // named datasets that don't exist (as AgentSummary.missingDatasets)
     starterQuestions: string[];       // the agent's, as AgentSummary.starterQuestions
     chatRequirement?: string;         // why a chat can't start now; absent when it can
+    runRequirement?: string;          // why a run can't start now (the same text as chatRequirement); absent when it can
   };
   type WorkflowInputField = {
-    name: string;                     // the key in 118's `input`
+    name: string;                     // the key in 118's and 119's `input`
     label: string;
-    type: 'text' | 'textarea' | 'number';
+    type: 'text' | 'textarea' | 'number'
+        | 'boolean'                   // a checkbox; absent means false (or `default`)
+        | 'datasets'                  // one or more dataset names
+        | 'dataset';                  // exactly one dataset name
     required: boolean;
     placeholder?: string;
+    help?: string;                    // one line under the control
+    default?: string | number | boolean;  // the value of a field that is missing or empty
+    datasourceKinds?: ('postgres' | 'databricks' | 'rest')[];  // 'dataset' / 'datasets': only datasets bound to these kinds
+    hidden?: boolean;                 // set by the app (the RFP Builder's Continue), never rendered as a control
   };
   ```
 - Values:
@@ -699,7 +708,17 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   | `agent:<id>` (each Live user agent) | its Live name | agent | the user agent (`key` = id, `name` = Live name) | 1 | agent | false | its Live datasets that exist; `chatRequirement` `None of this agent's datasets exist` when none do |
 
 - Description, starter questions and missing datasets come from the agent's catalogue entry (33). The two exceptions are the Assistant's description, `Answers questions over the datasets you pick.`, and v2's starter questions, which are empty, as in its AgentSummary.
-- **Trigger and input:** `seq-text-demo` is the one run workflow: `trigger: 'run'`, `input: [{ name: 'text', label: 'Text', type: 'textarea', required: true, placeholder: 'Paste or type any text' }]`, description `A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.`, owner `Official`, no datasets, missing datasets or starter questions. Every other workflow has `trigger: 'chat'` and `input: []`.
+- **Trigger and input:** `seq-text-demo` is the one run workflow: `trigger: 'run'`, `input: [{ name: 'text', label: 'Text', type: 'textarea', required: true, placeholder: 'Paste or type any text' }]`, description `A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.`, owner `Official`, no datasets, missing datasets or starter questions. Every other workflow has `trigger: 'chat'` until 1.23.22, and since 1.23.12 also an `input` it runs on (118, 119; [workflows](../capabilities/workflows/spec.md) R14):
+
+  | id | `input` (in order) |
+  |---|---|
+  | `agent:assistant` | `question` (`Question`, textarea, required, placeholder `Ask a question about your data`); `datasets` (`Datasets`, datasets, required); `careful` (`Careful: cross-check the result with an independent query`, boolean, `default: false`) |
+  | `qti-v2-turn` | `question` (as the Assistant's); `datasets` (as the Assistant's) |
+  | `agent:data-readiness` | `dataset` (`Dataset`, dataset, required, `datasourceKinds: ['postgres', 'databricks']`); `question` (`Question`, textarea, optional, placeholder and `default` `Assess the readiness of this dataset`) |
+  | `agent:rfp` | `message` (`Message`, textarea, required, placeholder `Name the client and plan year, or state your decision`); `rfpId` (`RFP`, text, optional, `hidden: true`) |
+  | `agent:<id>` (user agent) | `question` (as the Assistant's); `careful` (as the Assistant's). Its datasets are the agent's Live datasets that exist (`datasets`), not an input. |
+
+- **Run requirement:** `runRequirement` is set exactly when `chatRequirement` is, with the same text (the RFP Builder's, the Data Readiness Agent's, a user agent's `None of this agent's datasets exist`). While it is set, 118 and 119 refuse the run with it.
 - **Order:** `agent:assistant`, `qti-v2-turn`, `seq-text-demo`, then the other Official workflows by name, then the user agents' workflows by name. System agents and draft-only user agents are never listed.
 
 #### 117. `GET /workflows/:id`
@@ -708,8 +727,8 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 - Errors (Style B): `404 "Workflow \"<id>\" not found"` for any id 116 does not list: unknown, a draft-only user agent, a System agent (`agent:sql-fixer`), or a code workflow's own agent (`agent:assistant-v2`).
 
 #### 118. `POST /workflows/:id/runs`
-- Body: `{ input: Record<string, string | number> }`. Runs the workflow once on `input` and answers when the run ends (no streaming; runs are short). Capability: [workflows](../capabilities/workflows/spec.md) R11; engine: [agents.md](agents.md) 5.13.
-- Response `200`: `WorkflowRunResult`, whether the run succeeded or a step failed (the run happened).
+- Body: `{ input: Record<string, string | number | boolean | string[]>, context?: { fromRunId: string } }`. Runs the workflow once on `input` and answers when the run ends (no streaming). Capability: [workflows](../capabilities/workflows/spec.md) R11, R14; engine: [agents.md](agents.md) 5.13, 5.14. The UI uses 119.
+- Response `200` for a code-only workflow (`seq-text-demo`): `WorkflowRunResult`, whether the run succeeded or a step failed (the run happened). For a workflow whose steps call an agent: the `WorkflowRun` 119 ends with (`done.run`), whatever its status.
   ```ts
   type WorkflowRunResult = {
     workflowId: string;
@@ -726,9 +745,15 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   };
   ```
 - A failing step makes the run `failed`, with its error as the run's `error`; the steps after it are `skipped`. For `seq-text-demo` with `{ text: '  Hello   workflow   world  ' }`: `success`, three `success` steps and `output: { summary: '3 words, 20 characters: "Hello workflow world"' }`; with `{ text: '   ' }`: `failed`, `clean-text` failed with `The text is empty`, the other two `skipped`, `error: 'The text is empty'`.
-- Input: only the workflow's declared fields are read; a number field's value is converted to a number; any other key is ignored. A whitespace-only text is accepted (the run decides what it means). An optional field that is missing or empty is left out.
-- Errors (Style B, 400): `"Workflow \"<id>\" runs in a chat"` for a chat workflow (any `trigger: 'chat'` id of 116); `"<label> is required"` for a required field that is missing or `""` (`"Text is required"`); `"<label> must be a number"` for a number field that is not a number. `404 "Workflow \"<id>\" not found"` for any id 116 does not list.
-- Side effects: none. Nothing is stored; the run is not a session, writes no workflow bar and persists no engine snapshot.
+- Input: only the workflow's declared fields are read, in field order; a number field's value is converted to a number; a `datasets` value is a list of names, trimmed, without repeats; any other key is ignored. A whitespace-only text is accepted (the run decides what it means; an agent run refuses a blank question). A field that is missing or empty takes its `default` (a boolean `false`); an optional one without a default is left out.
+- Errors (Style B, 400), checked before anything runs, the first one winning: `"Workflow \"<id>\" can't run on an input"` for a workflow with no input fields; the workflow's `runRequirement`; `"<label> is required"` for a required field that is missing or `""` (`"Text is required"`, `"Question is required"`, `"Dataset is required"`), and for an agent run whose question or message is blank; `"Select at least one dataset"` for a required `datasets` field with none; `"<label> must be a number"`; `"<label> must be true or false"`; `"Dataset \"<name>\" not found"`; `"Dataset \"<name>\" is not a <kinds> dataset"` (the field's `datasourceKinds` named, e.g. `PostgreSQL or Databricks`); `"Run \"<id>\" not found"` for a `context.fromRunId` the server does not hold, and `"Run \"<id>\" has no answer to continue from"` for a held run without a question and answer. `404 "Workflow \"<id>\" not found"` for any id 116 does not list.
+- Side effects: a code-only run stores nothing, writes no workflow bar and persists no engine snapshot. An agent run is 119's, without the stream.
+
+#### 119. `POST /workflows/:id/runs/stream`
+- Body: as 118. Runs the workflow once on `input`, streamed. Any workflow with input fields: a code-only one streams its step events; an agent workflow runs one agent turn on a run host through the chat turn path ([agents.md](agents.md) 5.14), so its model request equals a chat turn's for the same input. Capability: [workflows](../capabilities/workflows/spec.md) R14-R17.
+- Refusals: 118's, answered with their real status (Style B) **before** the stream starts; nothing runs.
+- Response `200`, SSE (section 3.6).
+- Side effects: an agent run creates the run host `run-<run id>` (in memory, never listed) and its workspace `workspaces/session-run-<run id>/` (a session workspace's layout, [data-model.md](data-model.md) 4.1); after the turn the host's memory thread is deleted and the host leaves memory. The run (`WorkflowRun`) is held in memory, the last 50 runs, so a later run can take it as context; forgetting a run deletes its workspace, and the app deletes every `session-run-*` workspace at start-up. Runs are stored from 1.23.14.
 
 ### 2.7 Deep analysis
 
@@ -1255,7 +1280,7 @@ Controller prefix `/synthetic-data`. Capability: [synthetic-data](../capabilitie
 
 ## 3. Streaming and long-running work
 
-Two Server-Sent-Events endpoints exist (chat, ontology bootstrap). Both are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. Two background-job patterns use start + poll instead of SSE (deep analysis, eval runs).
+Three Server-Sent-Events endpoints exist (chat, workflow runs, ontology bootstrap). Both are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. Two background-job patterns use start + poll instead of SSE (deep analysis, eval runs).
 
 ### 3.1 Chat stream: `POST /sessions/:id/messages/stream`
 
@@ -1365,6 +1390,53 @@ Note the error text is in **`message`** here but in **`content`** for the chat s
 | `PUT /llm/settings`, `POST /llm/test-connection` | Synchronous; 30 s provider timeout. |
 | `POST /llm/models` | Synchronous; 15 s timeout (custom endpoint or Copilot runtime). |
 | `GET /llm/copilot/status` | Synchronous; the first call starts the local Copilot runtime (a few seconds). |
+
+### 3.6 Workflow run stream: `POST /workflows/:id/runs/stream`
+
+**Request.** As 118: `{ input, context?: { fromRunId } }`. Every refusal (118's list) is answered with its real status before the stream starts, unlike the chat stream.
+
+**Response headers and framing.** As 3.1: `text/event-stream; charset=utf-8`, flushed at once; one `data: <JSON>\n\n` frame per event.
+
+**Events, in order.**
+
+| `type` | Payload (beside `type`) | Meaning |
+|---|---|---|
+| `run` | `runId: string`, `workflowId: string` | First frame: the run started. |
+| `step` | `id`, `title`, `status: 'running' \| 'success' \| 'failed' \| 'skipped' \| 'stopped'`, `output?`, `outputTruncated?: true`, `error?` | A step of the workflow started (`running`) or ended. `success` carries the step's output (`outputTruncated` instead when it is larger than 20 000 JSON characters); `failed` its error; `stopped` a step that ended the run early (an agent step stopped by the user or ended on a clarifying question; v2's Analyse after a stop). When the run ends, a step that never started is sent as `skipped`, and one still running as `stopped` (the run stopped) or `failed` (the run failed). Every step event of the run is sent, whatever the workflow's `bar`. |
+| `reasoning`, `text`, `tool`, `tool-result`, `tool-progress`, `visual-updated`, `panel-item`, `workflow`, `rfp-package`, `readiness-report` | as 3.1 (`content`) | Agent workflows: the agent turn's events, unchanged, interleaved with the `step` events. 3.1's `done { session }` is never sent. |
+| `done` | `run: WorkflowRun` | **Terminal, success** (also for a code-only run whose step failed, and for a turn that ended on a clarifying question). |
+| `error` | `content: string` | **Terminal, failure** of an agent turn: the chat stream's message for the same failure (a custom endpoint's R50 text, a provider error, `No API key configured…`). |
+
+```ts
+type WorkflowRun = {
+  id: string;                      // the run id; the host is `run-<id>`, the workspace `session-run-<id>`
+  workflowId: string;
+  workflowName: string;            // the workflow's name when the run started
+  input: Record<string, string | number | boolean | string[]>;   // the checked input (defaults filled)
+  context?: { fromRunId: string };
+  status: 'success' | 'failed' | 'stopped';
+  steps: { id: string; title: string; status: 'success' | 'failed' | 'skipped' | 'stopped'; output?: Record<string, unknown>; outputTruncated?: true; error?: string }[];
+  output?: Record<string, unknown>;   // success: the last step's output (Wrap up's for v2; `{ calls, stopped }` for a one-step workflow; the engine's result for a code-only run)
+  error?: string;                  // failed
+  // Agent workflows only:
+  question?: string;               // the user message the agent received (`question`, or the RFP Builder's `message`), trimmed
+  answer?: ChatMessage;            // the assistant message the turn persisted on the host (data-model 3.4.1); absent when it stopped or failed before answering
+  datasets: string[];              // the host's datasets ([] for a code-only run)
+  agentKey?: string; agentId?: string; agentName?: string;
+  agent?: SessionAgentRef;         // as a session's (2.1)
+  rfpId?: string;                  // RFP Builder: the RFP the run worked on (`turn-rfp`, or the input's)
+  panelItems?: PanelItem[];        // as a session's derived list (2.1)
+  visualizations?: SessionVisualization[];
+  workflowState?: WorkflowState;
+  workflow?: WorkflowView;         // as a session's derived view (2.1)
+  startedAt: string;
+  finishedAt?: string;
+};
+```
+
+**Stop.** The client aborts the fetch; the server aborts the agent turn (a readiness assessment is cancelled, ADR-0033) and sends nothing more, as 3.1. The run is held as `stopped`, with the partial answer the host persisted, if any.
+
+**Context.** `context.fromRunId` names a held run; its `question` and `answer.content` go before this run's question as a `user` and an `assistant` message ([agents.md](agents.md) 5.14).
 
 ---
 

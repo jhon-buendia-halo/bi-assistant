@@ -4,12 +4,14 @@ import { OFFICIAL_AGENT_KEYS, SYSTEM_AGENT_KEYS } from '../agent-constants';
 import { AGENT_TURN_STEPS, AGENT_TURN_WORKFLOW_ID } from './agent-turn.steps';
 import { agentWorkflow } from './agent-workflows';
 import {
+  agentRunTurn,
   agentWorkflowId,
   ASSISTANT_WORKFLOW_DESCRIPTION,
   ASSISTANT_WORKFLOW_ID,
   ASSISTANT_WORKFLOW_NAME,
   CODE_WORKFLOWS,
   ONE_STEP_WORKFLOW_TRIGGER,
+  oneStepWorkflowInput,
   oneStepWorkflowSteps,
   parseWorkflowId,
   parseWorkflowInput,
@@ -69,7 +71,16 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     expect(CODE_WORKFLOWS[0].description).toBe(
       'A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.',
     );
-    expect(CODE_WORKFLOWS[0].input).toBeUndefined();
+    expect(CODE_WORKFLOWS[0].input).toEqual([
+      {
+        name: 'question',
+        label: 'Question',
+        type: 'textarea',
+        required: true,
+        placeholder: 'Ask a question about your data',
+      },
+      { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
+    ]);
   });
 
   describe('run workflows (plan 9.1; workflows R11)', () => {
@@ -103,11 +114,127 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       expect(ONE_STEP_WORKFLOW_TRIGGER).toBe('chat');
     });
 
-    it('every run workflow declares its input; no chat workflow does', () => {
+    it('every code workflow declares its input: chat workflows too, until chats go (plan 5.2)', () => {
       for (const source of CODE_WORKFLOWS) {
-        if (source.trigger === 'chat') expect(source.input).toBeUndefined();
-        else expect(source.input?.length).toBeGreaterThan(0);
+        expect(source.input?.length).toBeGreaterThan(0);
       }
+    });
+  });
+
+  describe('the inputs of the agent workflows (plan 4.2)', () => {
+    const question = {
+      name: 'question',
+      label: 'Question',
+      type: 'textarea',
+      required: true,
+      placeholder: 'Ask a question about your data',
+    };
+    const careful = {
+      name: 'careful',
+      label: 'Careful: cross-check the result with an independent query',
+      type: 'boolean',
+      required: false,
+      default: false,
+    };
+
+    it('the Assistant takes a question, datasets and careful', () => {
+      expect(oneStepWorkflowInput('assistant')).toEqual([
+        question,
+        {
+          name: 'datasets',
+          label: 'Datasets',
+          type: 'datasets',
+          required: true,
+        },
+        careful,
+      ]);
+    });
+
+    it('the Data Readiness Agent takes one PostgreSQL or Databricks dataset and an optional question', () => {
+      expect(oneStepWorkflowInput('data-readiness')).toEqual([
+        {
+          name: 'dataset',
+          label: 'Dataset',
+          type: 'dataset',
+          required: true,
+          datasourceKinds: ['postgres', 'databricks'],
+        },
+        {
+          name: 'question',
+          label: 'Question',
+          type: 'textarea',
+          required: false,
+          placeholder: 'Assess the readiness of this dataset',
+          default: 'Assess the readiness of this dataset',
+        },
+      ]);
+    });
+
+    it('the RFP Builder takes a message and a hidden RFP id', () => {
+      expect(oneStepWorkflowInput('rfp')).toEqual([
+        {
+          name: 'message',
+          label: 'Message',
+          type: 'textarea',
+          required: true,
+          placeholder: 'Name the client and plan year, or state your decision',
+        },
+        {
+          name: 'rfpId',
+          label: 'RFP',
+          type: 'text',
+          required: false,
+          hidden: true,
+        },
+      ]);
+    });
+
+    it("a user agent takes a question and careful; its datasets are the agent's", () => {
+      expect(oneStepWorkflowInput('7f1c0a52-agent')).toEqual([
+        question,
+        careful,
+      ]);
+    });
+
+    it('returns a copy the caller can change safely', () => {
+      const first = oneStepWorkflowInput('assistant');
+      first[0].label = 'Changed';
+      expect(oneStepWorkflowInput('assistant')[0].label).toBe('Question');
+    });
+  });
+
+  describe('agentRunTurn (plan 4.2, 5.1)', () => {
+    it('reads the question, the datasets, careful and nothing else', () => {
+      expect(
+        agentRunTurn({
+          question: '  Who won?  ',
+          datasets: ['World Cup Core'],
+          careful: true,
+        }),
+      ).toEqual({
+        question: 'Who won?',
+        datasets: ['World Cup Core'],
+        careful: true,
+      });
+    });
+
+    it("the readiness run's dataset is its only dataset", () => {
+      expect(
+        agentRunTurn({
+          dataset: 'Claims',
+          question: 'Assess the readiness of this dataset',
+        }),
+      ).toEqual({
+        question: 'Assess the readiness of this dataset',
+        datasets: ['Claims'],
+        careful: false,
+      });
+    });
+
+    it("the RFP Builder's message is the question, and the RFP id is carried", () => {
+      expect(
+        agentRunTurn({ message: 'Start Acme 2027', rfpId: 'r-1' }),
+      ).toEqual({ question: 'Start Acme 2027', careful: false, rfpId: 'r-1' });
     });
   });
 
@@ -178,6 +305,162 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         error: 'Text is required',
       });
       expect(parseWorkflowInput([], 'nope')).toEqual({ ok: true, values: {} });
+    });
+  });
+
+  describe('parseWorkflowInput: boolean, datasets and dataset (plan 4.1)', () => {
+    const datasets = [
+      { name: 'World Cup Core', datasourceKind: 'postgres' },
+      { name: 'Claims', datasourceKind: 'databricks' },
+      { name: 'Intellify RFP API', datasourceKind: 'rest' },
+      { name: 'Unbound' },
+    ];
+    const fields: WorkflowInputField[] = [
+      { name: 'question', label: 'Question', type: 'textarea', required: true },
+      { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
+      {
+        name: 'careful',
+        label: 'Careful',
+        type: 'boolean',
+        required: false,
+        default: false,
+      },
+    ];
+    const readiness: WorkflowInputField[] = [
+      {
+        name: 'dataset',
+        label: 'Dataset',
+        type: 'dataset',
+        required: true,
+        datasourceKinds: ['postgres', 'databricks'],
+      },
+      {
+        name: 'question',
+        label: 'Question',
+        type: 'textarea',
+        required: false,
+        default: 'Assess the readiness of this dataset',
+      },
+    ];
+
+    it('keeps the datasets in order without repeats, and a boolean as is', () => {
+      expect(
+        parseWorkflowInput(
+          fields,
+          {
+            question: 'Who won?',
+            datasets: ['Claims', ' World Cup Core ', 'Claims'],
+            careful: true,
+          },
+          datasets,
+        ),
+      ).toEqual({
+        ok: true,
+        values: {
+          question: 'Who won?',
+          datasets: ['Claims', 'World Cup Core'],
+          careful: true,
+        },
+      });
+    });
+
+    it('gives a missing field its default: false for careful, the text for an empty question', () => {
+      expect(
+        parseWorkflowInput(
+          fields,
+          { question: 'q', datasets: ['Claims'] },
+          datasets,
+        ),
+      ).toEqual({
+        ok: true,
+        values: { question: 'q', datasets: ['Claims'], careful: false },
+      });
+      expect(
+        parseWorkflowInput(
+          readiness,
+          { dataset: 'Claims', question: '' },
+          datasets,
+        ),
+      ).toEqual({
+        ok: true,
+        values: {
+          dataset: 'Claims',
+          question: 'Assess the readiness of this dataset',
+        },
+      });
+    });
+
+    it.each([
+      [{ question: 'q' }, 'Select at least one dataset'],
+      [{ question: 'q', datasets: [] }, 'Select at least one dataset'],
+      [{ question: 'q', datasets: 'Claims' }, 'Select at least one dataset'],
+      [{ question: 'q', datasets: ['', ' '] }, 'Select at least one dataset'],
+      [{ question: 'q', datasets: ['Nope'] }, 'Dataset "Nope" not found'],
+      [
+        { question: 'q', datasets: ['Claims'], careful: 'yes' },
+        'Careful must be true or false',
+      ],
+      [
+        { question: 'q', datasets: ['Claims'], careful: 1 },
+        'Careful must be true or false',
+      ],
+      [{ datasets: ['Claims'] }, 'Question is required'],
+    ])('refuses %p with %p', (input, error) => {
+      expect(parseWorkflowInput(fields, input, datasets)).toEqual({
+        ok: false,
+        error,
+      });
+    });
+
+    it.each([
+      [{}, 'Dataset is required'],
+      [{ dataset: '' }, 'Dataset is required'],
+      [{ dataset: 'Nope' }, 'Dataset "Nope" not found'],
+      [
+        { dataset: 'Intellify RFP API' },
+        'Dataset "Intellify RFP API" is not a PostgreSQL or Databricks dataset',
+      ],
+      [
+        { dataset: 'Unbound' },
+        'Dataset "Unbound" is not a PostgreSQL or Databricks dataset',
+      ],
+    ])('refuses the readiness input %p with %p', (input, error) => {
+      expect(parseWorkflowInput(readiness, input, datasets)).toEqual({
+        ok: false,
+        error,
+      });
+    });
+
+    it('checks the fields in order: the first refusal wins', () => {
+      expect(
+        parseWorkflowInput(fields, { datasets: ['Nope'] }, datasets),
+      ).toEqual({ ok: false, error: 'Question is required' });
+    });
+
+    it('names one, two or three kinds in the kind refusal', () => {
+      const of = (kinds: ('postgres' | 'databricks' | 'rest')[]) =>
+        parseWorkflowInput(
+          [
+            {
+              name: 'dataset',
+              label: 'Dataset',
+              type: 'dataset',
+              required: true,
+              datasourceKinds: kinds,
+            },
+          ],
+          { dataset: 'Unbound' },
+          datasets,
+        );
+      expect(of(['postgres'])).toEqual({
+        ok: false,
+        error: 'Dataset "Unbound" is not a PostgreSQL dataset',
+      });
+      expect(of(['postgres', 'databricks', 'rest'])).toEqual({
+        ok: false,
+        error:
+          'Dataset "Unbound" is not a PostgreSQL, Databricks or REST dataset',
+      });
     });
   });
 

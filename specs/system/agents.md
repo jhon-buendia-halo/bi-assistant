@@ -1465,7 +1465,7 @@ Every session runs a **workflow** (ADR-0040; [workflows](../capabilities/workflo
 - **Code-defined workflows**, each with its own id, name, description, steps, trigger and, when its agent step runs one, its agent (its `primaryFor` agent). Today two: `qti-v2-turn`, *Questions to Insights v2*, a chat workflow whose agent is `assistant-v2` and whose steps are those of 5.11; and `seq-text-demo`, the *Sequential test workflow*, a run workflow that calls no agent (5.13). A code workflow drives the workflow bar from its steps (`bar: 'steps'`).
 - **One-step workflows**: one for each agent a chat can run that has no code-defined workflow of its own: the `assistant`, the RFP Builder (`rfp`), the Data Readiness Agent (`data-readiness`) and every **Live** user agent. A `primaryFor` agent (`assistant-v2`) gets none, and neither do the System agents. A one-step workflow is computed at read time from the agent registry and the `agents` collection; nothing is registered per agent. It never writes the workflow bar (`bar: 'agent'`): the agent's own workflow phases, `update_workflow` and the RFP stage keep driving it (ADR-0029).
 
-**Triggers** (ADR-0040 amendment). Every workflow is started one of two ways: a **chat** workflow (`trigger: 'chat'`) runs on every message of a chat; a **run** workflow (`trigger: 'run'`) runs once on a typed input declared in code with its catalogue entry (`input`: fields `{ name, label, type: 'text' | 'textarea' | 'number', required, placeholder? }`), and its result is never stored (5.13; [api.md](api.md) 118). Every one-step workflow and `qti-v2-turn` are chat workflows. A chat workflow can't be run, and a run workflow can't start a chat.
+**Triggers** (ADR-0040 amendment; ADR-0041). Every workflow is started one of two ways: a **chat** workflow (`trigger: 'chat'`) runs on every message of a chat; a **run** workflow (`trigger: 'run'`) runs once on a typed input declared in code with its catalogue entry (`input`: fields `{ name, label, type: 'text' | 'textarea' | 'number' | 'boolean' | 'datasets' | 'dataset', required, placeholder?, help?, default?, datasourceKinds?, hidden? }`; 5.13; [api.md](api.md) 116, 118). Every one-step workflow and `qti-v2-turn` are chat workflows until 1.23.22, and since 1.23.12 they also declare an input and run on it, one agent turn per run (5.14). A run workflow can't start a chat; any workflow with input fields can be run.
 
 **Ids.** A code workflow keeps its own id (`qti-v2-turn`, `seq-text-demo`). A one-step workflow's id is `agent:<registry key>` for a built-in agent (`agent:assistant`, `agent:rfp`, `agent:data-readiness`) and `agent:<user-agent id>` for a user agent. An `agent:` id naming a System agent, a `primaryFor` agent or nothing at all is not a workflow. Ids contain `:`; clients send them URL-encoded.
 
@@ -1513,7 +1513,41 @@ The first run workflow is `seq-text-demo`, *Sequential test workflow*, described
 
 The workflow page draws these steps with the 1.23.1 drawing (GET /workflows/seq-text-demo, [api.md](api.md) 117: no step has an `agent`). A unit test checks the steps' schema fields against the catalogue, as for 5.11.
 
-> Implementation note: `mastra/workflows/seq-text-demo.steps.ts` (framework-free: `SEQ_TEXT_DEMO_STEPS`, `cleanText`, `countWords`, `formatResult`) and `seq-text-demo.workflow.ts` (the Mastra workflow, registered in `mastra/index.ts` as `seq-text-demo`, snapshot persistence off). The catalogue entry, `trigger`, `input` and `parseWorkflowInput` are in `workflow-catalog.ts`. `MastraService.runWorkflow(key, inputData)` creates a run, `start()`s it and maps the engine's result with `workflowRunResult` (`workflow-run.ts`): the steps in the workflow's step-graph order, with the step description as the title. `WorkflowsService.run` checks the trigger and the input first.
+> Implementation note: `mastra/workflows/seq-text-demo.steps.ts` (framework-free: `SEQ_TEXT_DEMO_STEPS`, `cleanText`, `countWords`, `formatResult`) and `seq-text-demo.workflow.ts` (the Mastra workflow, registered in `mastra/index.ts` as `seq-text-demo`, snapshot persistence off). The catalogue entry, `trigger`, `input` and `parseWorkflowInput` are in `workflow-catalog.ts`. `MastraService.runWorkflow(key, inputData)` creates a run, `start()`s it and maps the engine's result with `workflowRunResult` (`workflow-run.ts`): the steps in the workflow's step-graph order, with the step description as the title. `WorkflowRunsService` (`modules/workflows/workflow-runs.service.ts`) checks the input first (`prepare`), then runs it through `MastraService.runWorkflow` (118) or streams it through `MastraService.streamWorkflow` (119, 5.14).
+
+### 5.14 Runs of agent workflows
+
+A run of an agent workflow (the Assistant, Questions to Insights v2, the Data Readiness Agent, the RFP Builder, a user agent's one-step workflow) is **one agent turn** (ADR-0041; [workflows](../capabilities/workflows/spec.md) R14-R17; [api.md](api.md) 118, 119). It runs on a **run host** through the turn path of 5.1 unchanged, so its model request equals a chat turn's for the same input: the same agent, input messages, system and context blocks, tools, options and requestContext keys. Only what names the host differs: `session-id` is the host id, `session-workspace-id` and the workspace's `Local filesystem at …` line name the run's workspace, and the memory thread is the host's.
+
+**Inputs** ([api.md](api.md) 116). In code, with the catalogue (`workflow-catalog.ts`):
+
+| Workflow | Input | The turn |
+|---|---|---|
+| `agent:assistant` | `question`, `datasets`, `careful` | the user message `question` over `datasets`; careful mode from `careful` (5.8) |
+| `qti-v2-turn` | `question`, `datasets` | as a v2 chat turn (5.11) |
+| `agent:data-readiness` | `dataset` (PostgreSQL or Databricks), `question` (default `Assess the readiness of this dataset`) | over the one dataset |
+| `agent:rfp` | `message`, `rfpId` (hidden) | the user message `message`; the host's `rfpId` makes Block R1 name that RFP and its stage |
+| `agent:<user-agent id>` | `question`, `careful` | over the agent's Live datasets that exist, with its Live instructions, overrides, tools and skills (4.2) |
+
+**The run host.** An in-memory session (`SessionDoc` with `run: true`), held in the sessions service's map with the agent editor's previews, never stored or listed:
+- id `run-<run id>`; name the workflow's; workspace `workspaces/session-run-<run id>/`, created as a session's (7);
+- bound as `POST /sessions` would bind a session of the workflow: `agentKey` for v2, the Data Readiness Agent and the RFP Builder, `agentId` for a user agent, none for the Assistant; `workflowId` derived as a session's (5.12);
+- datasets: the input's (`datasets`, or `[dataset]`), the RFP Builder's declared dataset, or a user agent's Live datasets that exist;
+- `rfpId` from the input;
+- messages: empty, or the context of one earlier run (below).
+
+**One run.**
+1. `WorkflowRunsService.prepare` checks the input ([api.md](api.md) 118 refusals) before anything runs.
+2. It creates the host and sends `run`.
+3. `SessionsService.streamRunTurn` runs the host's turn through `streamTurn` (5.1): the workflow run (`agent-turn` or `qti-v2-turn`), the agent step, tool-only synthesis (5.5), the grounding guard (5.6), careful mode (5.8), clarification, visuals, panel items, the RFP stage drive and readiness progress, persisted into the host. A step-event listener hands every `workflow-step-start` and `workflow-step-result` of the run to the run, which sends it as a `step` event whatever the workflow's `bar`; the turn's other events are forwarded unchanged, except its `done`.
+4. When the turn ends, `finishRunHost` reads the host as the API shows a session (its derived panel items and workflow view), deletes its memory thread `run-<run id>` and drops it from memory. The run takes the host's last message as its `answer` (when it is an assistant message after this run's question), its datasets, agent binding, `rfpId`, panel items, visuals and workflow state, and ends with `done { run }`, or `error { content }` when the turn threw (the chat stream's message).
+5. **Stop** is a client abort, as for a chat: the turn aborts (which cancels a readiness assessment, ADR-0033), the run ends `stopped` with any partial answer, and nothing more is sent.
+
+**Context from one earlier run** (a follow-up, an answer to a clarifying question, the RFP Builder's Continue). A run with `context.fromRunId` gets, as the host's first two messages, the earlier run's `question` (user) and `answer.content` (assistant; the clarifying question when the earlier run ended on one). The host has no memory thread, so the turn's input is the whole transcript (4.3): those two messages and this run's question. No new agent-input code. One level only: the earlier run's own context is not carried.
+
+**Held, not stored (this version).** The last 50 runs are held in memory, so a later run can take one as context; forgetting a run deletes its workspace, and at start-up every `run-*` workspace and memory thread is deleted with the previews' (agents-evals R61). Stored runs, their routes and the start-up recovery of stored runs are 1.23.14.
+
+> Implementation note: `modules/workflows/workflow-runs.service.ts` (`WorkflowRunsService`: `prepare`, `stream`, `run`, the held runs) and `workflow-run-steps.ts` (framework-free: `WorkflowRun`, `RunStepTracker`, `runAnswerOf`). `SessionsService` (`createRunHost`, `streamRunTurn`, `finishRunHost`, `deleteRunHostResources`) never depends on `WorkflowsService` or `WorkflowRunsService` (module cycle); `WorkflowsModule` imports `SessionsModule`. The pure `parseWorkflowInput`, `agentRunTurn` and `oneStepWorkflowInput` are in `workflow-catalog.ts`. Parity is proven by `modules/sessions/run-host-sessions.spec.ts` (stubbed agents, the four workflows and a user agent) and `test/workflow-runs.e2e-spec.ts` (the recording stub model).
 
 ---
 

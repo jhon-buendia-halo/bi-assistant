@@ -116,7 +116,11 @@ describe('The workflow catalogue (API)', () => {
       agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
     });
     expect(listed[1]).not.toHaveProperty('chatRequirement');
-    expect(listed[1].input).toEqual([]);
+    // A chat workflow that also runs on an input until chats go (1.23.12).
+    expect(listed[1].input.map((field) => field.name)).toEqual([
+      'question',
+      'datasets',
+    ]);
     expect(listed[2]).toMatchObject({
       name: 'Sequential test workflow',
       kind: 'code',
@@ -392,18 +396,19 @@ describe('The workflow catalogue (API)', () => {
       });
     });
 
-    it('refuses a missing text (400), a chat workflow (400) and an unknown id (404)', async () => {
+    it('refuses a missing text (400), an agent run without its question (400) and an unknown id (404)', async () => {
       const missing = await runs('seq-text-demo')
         .send({ input: {} })
         .expect(400);
       expect((missing.body as { message: string }).message).toBe(
         'Text is required',
       );
+      // An agent workflow runs on its own input since 1.23.12.
       const chat = await runs('agent:assistant')
         .send({ input: { text: 'Hi' } })
         .expect(400);
       expect((chat.body as { message: string }).message).toBe(
-        'Workflow "agent:assistant" runs in a chat',
+        'Question is required',
       );
       const unknown = await runs('nope').send({ input: {} }).expect(404);
       expect((unknown.body as { message: string }).message).toBe(
