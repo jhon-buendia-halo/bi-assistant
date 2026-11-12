@@ -18,6 +18,14 @@ test('creates a PostgreSQL datasource, dataset, and session using the real World
 }) => {
   await createWorldCupWorkspace(page);
 
+  // The chat just created is live: it takes a follow-up question (a chat
+  // opened from Past chats is read-only until 1.23.22).
+  await expect(page.locator('header')).toContainText(WORLD_CUP_DATASOURCE);
+  await expect(page.locator('header')).toContainText('PostgreSQL');
+  await expect(
+    page.getByPlaceholder('Ask a follow-up question…'),
+  ).toBeVisible();
+
   // Reload the application: the desktop shell loads its built entry file,
   // the browser reloads the app URL.
   if (app.target === 'desktop') {
@@ -36,9 +44,6 @@ test('creates a PostgreSQL datasource, dataset, and session using the real World
   await page.getByText(WORLD_CUP_SESSION, { exact: true }).click();
   await expect(page.locator('header')).toContainText(WORLD_CUP_DATASOURCE);
   await expect(page.locator('header')).toContainText('PostgreSQL');
-  await expect(
-    page.getByPlaceholder('Ask a follow-up question…'),
-  ).toBeVisible();
 });
 
 test('preserves masked credentials when editing and supports datasource deletion', async ({

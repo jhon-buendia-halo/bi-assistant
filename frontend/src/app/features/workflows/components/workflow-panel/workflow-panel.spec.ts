@@ -947,6 +947,18 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       });
     });
 
+    it('a code workflow (bar: steps) shows no phases list, even when the run carries phases', () => {
+      openRfp({ ...RFP, bar: 'steps' });
+      typeMessage(START);
+      click('workflow-run');
+      const h = runs.last.handlers;
+      h.onRun!({ runId: 'run-1', workflowId: 'agent:rfp' });
+      h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
+      h.onWorkflow!({ phases: STAGES, current: 1, done: [], source: 'prompt', skipped: [] });
+      fixture.detectChanges();
+      expect(q('workflow-run-phases')).toBeNull();
+    });
+
     it("the package card downloads from the run's route, and the RFP document shows in the panel", () => {
       openRfp();
       typeMessage('Export a draft');

@@ -153,9 +153,11 @@ export class WorkflowDesigner {
   /** Live: the agent's phases (`workflow` event; the RFP Builder's stages), for the phases bar. */
   private readonly livePhases = signal<WorkflowView | null>(null);
   /** The agent's phases bar: live while it streams, then as stored. */
-  readonly phases = computed<WorkflowView | null>(
-    () => this.run()?.workflow ?? this.livePhases(),
-  );
+  readonly phases = computed<WorkflowView | null>(() => {
+    // A code workflow's steps already drive the canvas: no phases list inside them.
+    if (this.workflow()?.bar === 'steps') return null;
+    return this.run()?.workflow ?? this.livePhases();
+  });
   /** The run started, then the stream failed (`error` event, a dropped stream). */
   private readonly streamError = signal<string | null>(null);
   /** The user stopped the run shown. */
