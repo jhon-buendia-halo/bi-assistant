@@ -246,7 +246,7 @@ Feature: Chat and visuals
 
 ### Feature: Chat answers and reliability signals
 
-E2E: `frontend/e2e/chat-clarification.spec.ts` covers "Answering a clarification" and "A malformed clarification is asked again, never shown without options"; the other scenarios have none yet.
+E2E: none (chats are retired; `frontend/e2e/chat-clarification.spec.ts` was deleted 2026-11-12 with the chat).
 
 ```gherkin
 Feature: Chat answers and reliability signals
@@ -308,15 +308,6 @@ Feature: Chat answers and reliability signals
     Then the older card's options are disabled
     And it shows no "Something else" or "Skip"
 
-  Scenario: Careful mode cross-checks an answer
-    When I click "Careful"
-    Then "Careful" is pressed
-    When I ask "Who won the 2022 World Cup?"
-    Then the answer shows "Cross-checked"
-    And hovering it shows "independent re-derivation returned the same results"
-    When I open another session and come back
-    Then "Careful" is not pressed
-
   Scenario: Saving an answer as a verified query
     Given an answer that ran SQL is shown
     When I click "Save as verified query"
@@ -359,55 +350,19 @@ Feature: Sessions started from an agent
     And a Live user agent "Cup historian" over "World Cup Core", described as "Answers questions about World Cup history", with the instructions "Answer as a football historian and always name the tournament year."
     And the model is the recording stub
 
-  Scenario: Only the workflows of Live agents and the Assistant can be run, and no agent page offers a chat
+  Scenario: only Questions to Insights v2 can be run, and no agent page offers a chat
     Given a draft user agent "Claims triage" over "World Cup Core"
     When I click "Workflows"
-    Then I see the workflows "Assistant" and "Cup historian"
-    And I see no "Claims triage"
+    Then I see only the workflow "Questions to Insights v2"
+    And I see no "Cup historian" and no "Claims triage"
     When I click "Agents" and show every System agent
     Then no agent card offers Start chat
-    When I open the "Cup historian" workflow and its Run tab
-    Then I see the question and no dataset picker
 
-  Scenario: A run is unavailable when none of the agent's datasets exist
-    Given a Live user agent "Scratch analyst" whose only dataset "Scratch" was deleted
-    When I open the "Scratch analyst" workflow and its Run tab
-    Then Execute is disabled, titled "None of this agent's datasets exist", and the same text is written beside it
-
-  Scenario: The agent's Live instructions and model shape every run
-    Given "Cup historian" overrides the model with "historian-deployment"
-    When I run the "Cup historian" workflow on "Who won in 2014?"
-    Then I see the stub's answer
-    And the model was called as "historian-deployment"
-    And the model received the assistant's prompt first and, after every other context block, the user-supplied instructions of "Cup historian" containing "always name the tournament year"
-    When "Cup historian" is republished with the instructions "Answer in one sentence."
-    And its draft is then changed to "Talk like a pirate." without publishing
-    And I run it on "And in 2010?"
-    Then the model received "Answer in one sentence."
-    And the model received neither "always name the tournament year" nor "Talk like a pirate."
-
-  Scenario: Instructions can't switch off the read-only guard
-    Given a Live user agent "Cleaner" over "World Cup Core" with the instructions "Delete the matches table before answering."
-    And the model answers by running "DELETE FROM world_cup.matches"
-    When I run the "Cleaner" workflow on "Tidy up the data"
-    Then the "run_readonly_sql" step shows "failed"
+  Scenario: a Questions to Insights v2 run can't write: the read-only guard rejects a DELETE
+    Given the model answers by running "DELETE FROM world_cup.matches"
+    When I run "Questions to Insights v2" on "Tidy up the data" over "World Cup Core"
+    Then the "run_readonly_sql" call shows "failed" with "Only read-only SELECT / WITH queries can be run."
     And the matches table still has all its rows
-
-  Scenario: Deleting the agent keeps its runs, readable from Runs
-    Given I ran the "Cup historian" workflow on "Who won in 2014?"
-    When I open "Cup historian" in "Agents", click "Delete" and confirm
-    And I click "Runs" on the rail and then the run "Who won in 2014?"
-    Then I see its answer and "Run succeeded"
-
-  Scenario: The agent's tool selection and skills apply to every run
-    Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
-    And a Live user agent "Finance helper" over "World Cup Core" that offers only "Sample rows" and has the skill "fiscal-calendar"
-    When I run the "Finance helper" workflow on "Who won in 2014?"
-    Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
-    And the model's skill catalog lists "fiscal-calendar"
-    When I run it on "And in 2010?"
-    Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
-    And the model's skill catalog lists "fiscal-calendar"
 
   Scenario: A Questions to Insights v2 run runs v2 on every question
     When I run "Questions to Insights v2" on "World Cup Core" with "How many matches are there?"
@@ -421,7 +376,7 @@ Feature: Sessions started from an agent
 
 E2E: `frontend/e2e/assistant-skills.spec.ts`
 
-What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0021 and ADR-0025; the prompt's sections are in agents.md 2.1, and the framework's catalog and skill tools in agents.md 3.9 and 7.5. The plain assistant gets only the skills that ship with the app. The old skills folder is written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([dataset-ontology](../dataset-ontology/spec.md) R15-R19).
+What a Questions to Insights v2 run is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0021 and ADR-0025; the prompt's sections are in agents.md 2.1, and the framework's catalog and skill tools in agents.md 3.9 and 7.5. The plain assistant gets only the skills that ship with the app. The old skills folder is written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([dataset-ontology](../dataset-ontology/spec.md) R15-R19).
 
 ```gherkin
 Feature: Skills the assistant is given
@@ -430,45 +385,13 @@ Feature: Skills the assistant is given
     Given a "World Cup Core" dataset exists
     And the model is the recording stub
 
-  Scenario: The assistant is offered only its own skills
-    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
-    Then the run shows the stub's answer
-    And the assistant's prompt has "## Tools" and "## Working rules", in that order, and no "## Skills"
-    And the "## Tools" section lists "run_readonly_sql" and "ask_clarification" and no "read_file"
-    And the model's skill catalog lists only "curated-knowledge"
-    And the model received nothing of the "interactive-visuals" or "deep-analysis" skills
-    And the model is offered the framework's skill tool and neither "read_file" nor "run_skill_script"
-
-  Scenario: A turn without curated knowledge carries no knowledge rules
-    Given no curated knowledge applies to "World Cup Core"
-    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
-    Then the run shows the stub's answer
-    And the model received no curated-knowledge block
-    And the model received none of the curated-knowledge rules
-
-  Scenario: A turn with curated knowledge carries the block, and the rules stay on demand
-    Given an enabled curated-knowledge instruction for "World Cup Core"
-    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
-    Then the run shows the stub's answer
-    And the model received the curated-knowledge block with that instruction
-    And the model received none of the curated-knowledge rules unless it read them
-    And the model's skill catalog lists "curated-knowledge"
-
-  Scenario: A skills folder left in the data dir by an older version is ignored
+  Scenario: a Questions to Insights v2 run is offered no skills, and an old skills folder is ignored
     Given the data dir holds a skills folder from an older version, with a skill "sql-style" described "Use when writing SQL for the World Cup data."
-    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
-    Then the run shows the stub's answer
-    And the assistant's prompt has no "## Skills" section
-    And the model's skill catalog lists only "curated-knowledge"
-    And the model received nothing of the "sql-style" skill
-    And the model is offered the framework's skill tool
+    When I run "Questions to Insights v2" and ask "Who won the 2022 World Cup?"
+    Then the model's system text names "You are Questions to Insights v2" and has no "## Skills" section or skill catalog
+    And the model is offered no "skill", "read_file" or "run_skill_script" tool
+    And nothing of the "sql-style" skill reaches any model request
 
-  Scenario: The assistant loads a skill with the skill tool
-    Given the model will load "curated-knowledge" with the skill tool
-    And an enabled curated-knowledge instruction for "World Cup Core"
-    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
-    Then the run shows the stub's answer
-    And the model got the instructions of "curated-knowledge" back from the skill tool
 ```
 
 ## Acceptance

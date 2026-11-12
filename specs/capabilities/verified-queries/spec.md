@@ -53,7 +53,7 @@ Ownership
 
 - Rating endpoint on a session's messages (feedback) and on a run's answer (api.md 128): see [../../system/api.md](../../system/api.md). There is no list/delete endpoint for verified queries; they are internal to the backend. The metrics candidates endpoint exposes them indirectly.
 - Collection `verified_queries` and the answer's `verified` / `feedback` fields: see [../../system/data-model.md](../../system/data-model.md).
-- Agents using the reference block: the assistant (chat and deep analysis) and the SQL verifier: see [../../system/agents.md](../../system/agents.md).
+- Agents using the reference block: the assistant (chat turns) and the SQL verifier: see [../../system/agents.md](../../system/agents.md).
 - Related capabilities: [../agent-answers/spec.md](../agent-answers/spec.md) (rating UI and verification), [../metrics/spec.md](../metrics/spec.md), [../dataset-ontology/spec.md](../dataset-ontology/spec.md).
 
 ## UI
