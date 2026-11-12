@@ -1074,7 +1074,7 @@ Feature: Skill library
     And I click "Save"
     Then I see the toast 'Built-in skill "curated-knowledge" saved'
     And the row "curated-knowledge" shows "Modified"
-    When I ask the assistant "Who won in 2022?" in a new session
+    When I run the Assistant on "Who won in 2022?"
     Then the model's catalog lists "curated-knowledge" with "Use when the turn carries curated knowledge: glossary, rules and filters."
     When I open "curated-knowledge" in the skills library and click "Reset to built-in" and confirm
     Then I see the toast 'Built-in skill "curated-knowledge" reset'
@@ -1110,13 +1110,13 @@ Feature: Built-in agent prompts
     And I click "Save prompt"
     Then I see the toast 'System prompt of "Questions to Insights Assistant" saved'
     And I see the chip "Modified"
-    When I ask the assistant "Who won in 2022?" in a new session
+    When I run the Assistant on "Who won in 2022?"
     Then the system prompt of the model's request contains "Always end an answer with the word Done."
     And it still contains "## Tools"
     When I open the System Prompt tab of the assistant, click "Reset to built-in" and confirm
     Then I see the toast 'System prompt of "Questions to Insights Assistant" reset'
     And I no longer see the chip "Modified"
-    When I ask the assistant "Who won in 2022?" in a new session
+    When I run the Assistant on "Who won in 2022?"
     Then the system prompt of the model's request does not contain "Always end an answer with the word Done."
 
   Scenario: A System agent's prompt is edited in a text area, with no link menu
@@ -1143,7 +1143,7 @@ Feature: Built-in agent prompts
     Then I see tool chips such as "ask_clarification" and "run_readonly_sql" and a "curated-knowledge" chip
     And I see "## Tools — generated from the tools the assistant gets"
     And I see no "[[" in the prompt view
-    When I ask the assistant "Who won in 2022?" in a new session
+    When I run the Assistant on "Who won in 2022?"
     Then the system prompt of the model's request contains 'Call the "ask_clarification" tool only when'
     And it does not contain "[["
 

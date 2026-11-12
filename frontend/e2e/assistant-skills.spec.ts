@@ -2,10 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
-import {
-  WORLD_CUP_DATASET,
-  createWorldCupSession,
-} from './helpers/app-actions';
+import { WORLD_CUP_DATASET } from './helpers/app-actions';
+import { runAssistantOk } from './helpers/runs-api';
 import {
   createOntologyItem,
   saveLenaiSettings,
@@ -23,7 +21,8 @@ import {
 
 /**
  * Mirrors the Feature "Skills the assistant is given" in
- * specs/capabilities/sessions-chat/spec.md. The model is the recording
+ * specs/capabilities/sessions-chat/spec.md, run through the Assistant's
+ * workflow (a run's model request equals a chat turn's). The model is the recording
  * OpenAI-compatible stub, so the scenarios check what the backend sent.
  */
 
@@ -53,9 +52,8 @@ test.afterEach(async () => {
 });
 
 async function ask(page: Page, question: string): Promise<StubRequest> {
-  await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText(STUB_ANSWER)).toBeVisible();
+  const result = await runAssistantOk(page, question);
+  expect(result.text).toContain(STUB_ANSWER);
   const requests = turnRequests(stub, question);
   expect(requests.length, `a streamed call for "${question}"`).toBeGreaterThan(
     0,
@@ -92,7 +90,6 @@ function catalogSkills(request: StubRequest): string[] {
 }
 
 test('the assistant is offered only its own skills', async ({ page }) => {
-  await createWorldCupSession(page);
   const request = await ask(page, 'Who won the 2022 World Cup?');
 
   const prompt = systemTexts(request)[0];
@@ -126,7 +123,6 @@ test('the assistant is offered only its own skills', async ({ page }) => {
 test('a turn without curated knowledge carries no knowledge rules', async ({
   page,
 }) => {
-  await createWorldCupSession(page);
   const request = await ask(page, QUESTION);
 
   const systems = systemTexts(request);
@@ -146,7 +142,6 @@ test('a turn with curated knowledge carries the block, and the rules stay on dem
     name: 'Coverage',
     description: instruction,
   });
-  await createWorldCupSession(page);
   const request = await ask(page, QUESTION);
 
   const systems = systemTexts(request);
@@ -240,7 +235,6 @@ test('a skills folder left in the data dir by an older version is ignored', asyn
     description,
     body,
   );
-  await createWorldCupSession(page);
   const request = await ask(page, QUESTION);
 
   expect(systemTexts(request)[0]).not.toContain('\n## Skills\n');
@@ -271,7 +265,6 @@ test('the assistant loads a skill with the skill tool', async ({ page }) => {
     name: 'Coverage',
     description: 'Only the 2018 and 2022 tournaments are in this data.',
   });
-  await createWorldCupSession(page);
   await ask(page, QUESTION);
 
   const results = toolResults(turnRequests(stub, QUESTION).at(-1)!);

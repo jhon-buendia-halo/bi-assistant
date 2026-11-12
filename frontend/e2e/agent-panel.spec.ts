@@ -1,13 +1,9 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
-import {
-  WORLD_CUP_DATASET,
-  createWorldCupSession,
-  openSessions,
-} from './helpers/app-actions';
+import { WORLD_CUP_DATASET } from './helpers/app-actions';
 import { apiFetch, apiJson } from './helpers/api';
+import { RunResult, runWorkflow } from './helpers/runs-api';
+import { fillRun, openRunTab, openWorkflowPage, runAnswer } from './helpers/run-ui';
 import {
   createUserAgent,
   publishAgent,
@@ -28,13 +24,12 @@ import { worldCupKey, worldCupScalar } from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "Agent panel" in specs/capabilities/agent-panel/spec.md
- * (roadmap 1.14.18, BA-231). The model is the recording OpenAI-compatible
- * stub: each scenario scripts the tool calls of its turn (`show_in_panel`,
- * `update_workflow`, `run_readonly_sql`) and, where the Gherkin says "while
- * the turn streams", holds the turn's last reply open with `stub.hold`.
+ * (roadmap 1.14.18, BA-231), through workflow runs: a run's panel items,
+ * phases and files are read from the stream and the stored run (api.md 119,
+ * 121, 125-126), and its phases from the Run tab. The model is the recording
+ * OpenAI-compatible stub: each scenario scripts the tool calls of its turn
+ * (`show_in_panel`, `update_workflow`, `run_readonly_sql`).
  */
-
-const EVIDENCE = path.resolve(__dirname, '../../evidence/1.14.18');
 
 /** Marks the designer's (non-streamed) request: it carries its skill. */
 const DESIGNER_SKILL_TAG = '<interactive-visuals-skill>';
@@ -194,82 +189,9 @@ function toolResultsOf(question: string): string[] {
     .map(messageText);
 }
 
-// ------------------------------------------------------------------ the UI
+// ------------------------------------------------------------------ runs
 
-function composer(page: Page): Locator {
-  return page.getByPlaceholder('Ask a follow-up question…');
-}
-
-async function send(page: Page, question: string): Promise<void> {
-  await composer(page).fill(question);
-  await page.getByRole('button', { name: 'Send message' }).click();
-}
-
-/** Sends `question` and waits for `answer` and the composer to come back. */
-async function ask(page: Page, question: string, answer: string): Promise<void> {
-  await send(page, question);
-  await expect(page.getByText(answer).last()).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
-}
-
-function rightPanel(page: Page): Locator {
-  return page.getByRole('complementary', { name: 'Details panel' });
-}
-
-function historyButton(page: Page): Locator {
-  return rightPanel(page).locator('button[title="Shown in this session"]');
-}
-
-async function historyTitles(page: Page): Promise<string[]> {
-  await historyButton(page).click();
-  const items = rightPanel(page).locator('.menu-item');
-  await expect(items.first()).toBeVisible();
-  const titles = (await items.allTextContents()).map((text) => text.trim());
-  // Close the menu without choosing anything.
-  await page.getByRole('button', { name: 'Close panel menu' }).click();
-  return titles;
-}
-
-function bar(page: Page): Locator {
-  return page.getByTestId('workflow-bar');
-}
-
-function step(page: Page, title: string): Locator {
-  return bar(page)
-    .getByRole('list', { name: 'Workflow' })
-    .getByRole('listitem')
-    .filter({ hasText: title });
-}
-
-function details(page: Page): Locator {
-  return page.getByRole('region', { name: 'Workflow details' });
-}
-
-function detailsToggle(page: Page): Locator {
-  return page.getByTestId('workflow-details-toggle');
-}
-
-function detailsStep(page: Page, title: string): Locator {
-  return details(page)
-    .getByTestId('workflow-details-step')
-    .filter({ hasText: title });
-}
-
-/** The button that opens a session from the Sessions list (not its id button). */
-function sessionRow(page: Page, name: string): Locator {
-  return page
-    .getByRole('navigation', { name: 'Past chats', exact: true })
-    .getByRole('button', { name: new RegExp(`^${name}`) });
-}
-
-async function sessionIdFromHeader(page: Page): Promise<string> {
-  const label = await page.getByTestId('session-id').getAttribute('aria-label');
-  const id = /^Copy session ID (.+)$/.exec(label ?? '')?.[1];
-  if (!id) throw new Error('The open session did not expose its id');
-  return id;
-}
-
-interface SessionJson {
+interface RunDoc {
   id: string;
   panelItems: { id: string; kind: string; title: string; visualId?: string }[];
   visualizations?: { id: string; title: string }[];
@@ -280,16 +202,48 @@ interface SessionJson {
     source: string;
     note?: string;
     waiting?: boolean;
+    failed?: number;
   };
 }
 
-function getSession(page: Page, id: string): Promise<SessionJson> {
-  return apiJson<SessionJson>(page, 'GET', `/sessions/${id}`);
+/** Runs the workflow `workflowId` and returns its stored run, expecting `done`. */
+async function runOk(
+  page: Page,
+  workflowId: string,
+  input: Record<string, string | number | boolean | string[]>,
+  fromRunId?: string,
+): Promise<{ result: RunResult; run: RunDoc }> {
+  const result = await runWorkflow(
+    page,
+    workflowId,
+    input,
+    fromRunId ? { fromRunId } : undefined,
+  );
+  expect(result.status, result.body).toBe(200);
+  expect(result.error, result.body).toBeUndefined();
+  expect(result.run, result.body).toBeDefined();
+  return { result, run: result.run as unknown as RunDoc };
 }
 
-async function screenshot(page: Page, name: string): Promise<void> {
-  fs.mkdirSync(EVIDENCE, { recursive: true });
-  await page.screenshot({ path: path.join(EVIDENCE, name) });
+/** The Assistant's run on `question` over the World Cup dataset. */
+function runAssistantOn(page: Page, question: string, fromRunId?: string) {
+  return runOk(
+    page,
+    'agent:assistant',
+    { question, datasets: [WORLD_CUP_DATASET] },
+    fromRunId,
+  );
+}
+
+function runRoute(runId: string, rest: string): string {
+  return `/workflow-runs/${runId}/${rest}`;
+}
+
+/** The step events the stream sent for one step, in order. */
+function stepStatuses(result: RunResult, id: string): string[] {
+  return result.events
+    .filter((event) => event.type === 'step' && event.id === id)
+    .map((event) => String(event.status));
 }
 
 /** Creates and publishes a user agent over the World Cup dataset. */
@@ -308,33 +262,9 @@ async function liveAgent(
   return id;
 }
 
-/** Starts a chat from the agent's workflow card and waits for its session. */
-async function startChatWith(page: Page, name: string): Promise<string> {
-  await page
-    .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Workflows', exact: true })
-    .click();
-  await page.getByRole('button', { name: `Start chat with ${name}` }).click();
-  await expect(page.getByText(`Session "${name}" created`)).toBeVisible();
-  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
-  return sessionIdFromHeader(page);
-}
-
-/** The turn that moves the workflow to "Analyse" (current 2, step 1 done). */
-const GO_ON: TurnScript = {
-  question: 'Go on',
-  calls: [{ name: 'update_workflow', arguments: { current: 2, done: '1' } }],
-  answer: 'We are analysing now.',
-};
-
-/** A workflow agent's session whose bar shows "Analyse" as the current step. */
-async function sessionAtAnalyse(page: Page): Promise<string> {
-  script([GO_ON]);
-  await liveAgent(page, WORKFLOW_AGENT, WORKFLOW_INSTRUCTIONS);
-  const id = await startChatWith(page, WORKFLOW_AGENT);
-  await ask(page, GO_ON.question, GO_ON.answer);
-  await expect(step(page, 'Analyse')).toHaveAttribute('data-status', 'current');
-  return id;
+/** Runs a user agent's workflow on `question`. */
+function runAgentOn(page: Page, id: string, question: string) {
+  return runOk(page, `agent:${id}`, { question });
 }
 
 const SHOW_FINDINGS: TurnScript = {
@@ -360,133 +290,77 @@ const SHOW_TABLE: TurnScript = {
   answer: 'The table is in the panel.',
 };
 
+const GO_ON: TurnScript = {
+  question: 'Go on',
+  calls: [{ name: 'update_workflow', arguments: { current: 2, done: '1' } }],
+  answer: 'We are analysing now.',
+};
+
 // --------------------------------------------------------------- scenarios
 
-test('a composed document opens in the panel and downloads as PDF', async ({
+test('a composed document is a run panel item and downloads as Markdown', async ({
   page,
 }) => {
   script([SHOW_FINDINGS]);
-  const sessionId = await createWorldCupSession(page);
-  await expect(rightPanel(page)).toHaveCount(0);
+  const { result, run } = await runAssistantOn(page, SHOW_FINDINGS.question);
 
-  // The panel opens while the turn still streams (R12).
-  const release = holdFinalAnswer([SHOW_FINDINGS], SHOW_FINDINGS.question);
-  await send(page, SHOW_FINDINGS.question);
-  await expect(
-    rightPanel(page).getByRole('heading', { name: 'Findings' }),
-  ).toBeVisible();
-  await expect(rightPanel(page)).toContainText('Brazil scored most.');
-  await expect(page.getByText('Thinking', { exact: true })).toBeVisible();
-  await expect(page.getByText('show_in_panel', { exact: true })).toBeVisible();
-  release();
-  await expect(page.getByText(SHOW_FINDINGS.answer)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
-  await screenshot(page, 'panel-document.png');
+  // The item is announced while the run streams, before it ends (R12).
+  const types = result.events.map((event) => event.type);
+  expect(types.indexOf('panel-item')).toBeGreaterThan(-1);
+  expect(types.indexOf('panel-item')).toBeLessThan(types.indexOf('done'));
+  expect(result.text).toContain(SHOW_FINDINGS.answer);
 
-  // R11: a document downloads as PDF by default…
-  const download = rightPanel(page).getByRole('button', { name: 'Download PDF' });
-  await expect(download).toHaveAttribute('title', 'Download PDF');
-  const [pdf] = await Promise.all([
-    page.waitForEvent('download'),
-    download.click(),
-  ]);
-  expect(pdf.suggestedFilename()).toBe('findings.pdf');
-  const pdfBytes = fs.readFileSync((await pdf.path())!);
-  expect(pdfBytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
-  await expect(page.getByText('Downloaded findings.pdf')).toBeVisible();
-
-  // …with Markdown as the alternative.
-  await rightPanel(page).getByRole('button', { name: 'Download as…' }).click();
-  const [md] = await Promise.all([
-    page.waitForEvent('download'),
-    page.getByRole('menuitem', { name: 'Markdown (.md)' }).click(),
-  ]);
-  expect(md.suggestedFilename()).toBe('findings.md');
-  expect(fs.readFileSync((await md.path())!, 'utf8')).toContain(
-    'Brazil scored most.',
-  );
-  await expect(page.getByText('Downloaded findings.md')).toBeVisible();
-
-  // The item is kept with the session (R10) and the API serves it (api.md 107).
-  const session = await getSession(page, sessionId);
-  expect(session.panelItems.map((item) => [item.kind, item.title])).toEqual([
+  // The item is kept with the run (R10).
+  expect(run.panelItems.map((item) => [item.kind, item.title])).toEqual([
     ['document', 'Findings'],
   ]);
-  const res = await apiFetch(
+  const itemId = run.panelItems[0].id;
+
+  // R11, api.md 126: a document downloads as Markdown (the PDF is made by
+  // the panel in the browser, which the run page has not got yet).
+  const md = await apiFetch(
     page,
     'GET',
-    `/sessions/${sessionId}/panel-items/${session.panelItems[0].id}/download?format=md`,
+    runRoute(run.id, `panel-items/${itemId}/download?format=md`),
   );
-  expect(res.status()).toBe(200);
-  expect(res.headers()['content-disposition']).toContain('filename="findings.md"');
-  expect(await res.text()).toBe(FINDINGS_MD);
+  expect(md.status()).toBe(200);
+  expect(md.headers()['content-disposition']).toContain('filename="findings.md"');
+  expect(await md.text()).toBe(FINDINGS_MD);
 });
 
-test('a query result shows as a sortable table', async ({ page }) => {
+test('a query result is a run table panel item and downloads as CSV', async ({
+  page,
+}) => {
   script([SHOW_TABLE]);
-  const sessionId = await createWorldCupSession(page);
   const stages = Number(
     await worldCupScalar('select count(distinct stage) from world_cup.matches'),
   );
   expect(stages).toBeGreaterThan(1);
 
-  await ask(page, SHOW_TABLE.question, SHOW_TABLE.answer);
-  const panel = rightPanel(page);
-  const table = panel.locator('table');
-  await expect(table).toBeVisible();
-  await expect(table.locator('thead th')).toHaveText(['stage', 'matches']);
-  await expect(table.locator('tbody tr')).toHaveCount(stages);
-  await expect(panel).toContainText(`${stages} rows`);
-  // The panel shows the SQL of the query.
-  await panel.getByRole('button', { name: 'Query' }).click();
-  await expect(panel.locator('pre')).toContainText('GROUP BY stage');
+  const { run } = await runAssistantOn(page, SHOW_TABLE.question);
+  expect(run.panelItems).toHaveLength(1);
+  expect(run.panelItems[0]).toMatchObject({ kind: 'table', title: STAGE_TITLE });
 
-  const header = table.locator('thead th').nth(1);
-  const counts = async () =>
-    (await table.locator('tbody tr td:nth-child(2)').allTextContents()).map(
-      (text) => Number(text.trim()),
-    );
-  await header.getByRole('button').click();
-  await expect(header).toHaveAttribute('aria-sort', 'ascending');
-  const ascending = await counts();
-  expect(ascending).toEqual([...ascending].sort((a, b) => a - b));
-  await header.getByRole('button').click();
-  await expect(header).toHaveAttribute('aria-sort', 'descending');
-  const descending = await counts();
-  expect(descending).toEqual([...ascending].sort((a, b) => b - a));
-  await screenshot(page, 'panel-table.png');
-
-  const download = panel.getByRole('button', { name: 'Download (.csv)' });
-  const [csv] = await Promise.all([
-    page.waitForEvent('download'),
-    download.click(),
-  ]);
-  expect(csv.suggestedFilename()).toMatch(/\.csv$/);
-  const lines = fs
-    .readFileSync((await csv.path())!, 'utf8')
-    .trim()
-    .split(/\r?\n/);
+  const csv = await apiFetch(
+    page,
+    'GET',
+    runRoute(run.id, `panel-items/${run.panelItems[0].id}/download`),
+  );
+  expect(csv.status()).toBe(200);
+  expect(csv.headers()['content-disposition']).toMatch(/filename="[^"]+\.csv"/);
+  const lines = (await csv.text()).trim().split(/\r?\n/);
   expect(lines[0]).toBe('stage,matches');
   expect(lines).toHaveLength(stages + 1);
-  await expect(
-    page.getByText(`Downloaded ${csv.suggestedFilename()}`),
-  ).toBeVisible();
-
-  const session = await getSession(page, sessionId);
-  expect(session.panelItems).toHaveLength(1);
-  expect(session.panelItems[0]).toMatchObject({
-    kind: 'table',
-    title: STAGE_TITLE,
-  });
 });
 
-test('a workspace file opens in the panel with a download', async ({
-  page,
-  appDataDir,
-}) => {
+test('a workspace file is a run panel item with a download', async ({ page }) => {
   const turn: TurnScript = {
     question: 'Show me the summary notes',
     calls: [
+      {
+        name: 'mastra_workspace_write_file',
+        arguments: { path: 'notes/summary.md', content: SUMMARY_MD },
+      },
       {
         name: 'show_in_panel',
         arguments: { kind: 'file', path: 'notes/summary.md' },
@@ -495,56 +369,38 @@ test('a workspace file opens in the panel with a download', async ({
     answer: 'The notes are in the panel.',
   };
   script([turn]);
-  const sessionId = await createWorldCupSession(page);
-  const notes = path.join(
-    appDataDir,
-    'workspaces',
-    `session-${sessionId}`,
-    'notes',
-  );
-  fs.mkdirSync(notes, { recursive: true });
-  fs.writeFileSync(path.join(notes, 'summary.md'), SUMMARY_MD);
+  const { run } = await runAssistantOn(page, turn.question);
 
-  await ask(page, turn.question, turn.answer);
-  const panel = rightPanel(page);
-  // A `.md` file renders as a document (R3), under its base name.
-  await expect(panel.getByRole('heading', { name: 'Summary notes' })).toBeVisible();
-  await expect(panel).toContainText('Germany reached the final.');
-  await expect(panel).toContainText('summary.md');
-  await screenshot(page, 'panel-file.png');
-
-  // R11 and ui.md 4.13: a `.md` file downloads as PDF by default, with
-  // Markdown (its own bytes) offered beside it.
-  await expect(
-    panel.getByRole('button', { name: 'Download PDF' }),
-  ).toHaveAttribute('title', 'Download PDF');
-  await panel.getByRole('button', { name: 'Download as…' }).click();
-  const [md] = await Promise.all([
-    page.waitForEvent('download'),
-    page.getByRole('menuitem', { name: 'Markdown (.md)' }).click(),
-  ]);
-  expect(md.suggestedFilename()).toBe('summary.md');
-  expect(fs.readFileSync((await md.path())!, 'utf8')).toBe(SUMMARY_MD);
-
-  // api.md 106: the file's text as it is now in the workspace.
-  const session = await getSession(page, sessionId);
-  const item = session.panelItems.find((entry) => entry.kind === 'file')!;
+  // A `.md` file is shown under its base name (R3).
+  const item = run.panelItems.find((entry) => entry.kind === 'file')!;
   expect(item).toMatchObject({ title: 'summary.md' });
+
+  // api.md 125: the file's text as it is now in the run's workspace.
   const file = await apiJson<{ text: string; contentType: string }>(
     page,
     'GET',
-    `/sessions/${sessionId}/panel-items/${item.id}/file`,
+    runRoute(run.id, `panel-items/${item.id}/file`),
   );
   expect(file.text).toBe(SUMMARY_MD);
   expect(file.contentType).toBe('text/markdown');
+
+  // R11: a `.md` file downloads as its own bytes.
+  const md = await apiFetch(
+    page,
+    'GET',
+    runRoute(run.id, `panel-items/${item.id}/download?format=md`),
+  );
+  expect(md.headers()['content-disposition']).toContain('filename="summary.md"');
+  expect(await md.text()).toBe(SUMMARY_MD);
 });
 
-test('an invalid path is refused and the panel does not change', async ({
+test('an invalid path is refused and the run items do not change', async ({
   page,
 }) => {
   const secrets: TurnScript = {
-    question: 'Show me the secrets',
+    question: 'Show me the findings and the secrets',
     calls: [
+      ...SHOW_FINDINGS.calls,
       {
         name: 'show_in_panel',
         arguments: { kind: 'file', path: '../secrets.md' },
@@ -552,36 +408,24 @@ test('an invalid path is refused and the panel does not change', async ({
     ],
     answer: 'I could not show that file.',
   };
-  script([SHOW_FINDINGS, secrets]);
-  const sessionId = await createWorldCupSession(page);
-  await ask(page, SHOW_FINDINGS.question, SHOW_FINDINGS.answer);
-  await expect(
-    rightPanel(page).getByRole('heading', { name: 'Findings' }),
-  ).toBeVisible();
+  script([secrets]);
+  const { result, run } = await runAssistantOn(page, secrets.question);
 
-  const release = holdFinalAnswer([SHOW_FINDINGS, secrets], secrets.question);
-  await send(page, secrets.question);
-  // The chat shows the failed step while the turn streams…
-  const stepRow = page
-    .locator('div')
-    .filter({ has: page.getByText('show_in_panel', { exact: true }) })
-    .filter({ has: page.getByText('failed', { exact: true }) })
-    .last();
-  await expect(stepRow).toBeVisible();
+  // The run shows the failed step as it streams…
+  expect(
+    result.events.some(
+      (event) =>
+        event.type === 'tool-result' &&
+        String(event.content).includes('Invalid file path'),
+    ),
+  ).toBe(true);
   // …the model receives the tool's exact error…
-  await expect
-    .poll(() => toolResultsOf(secrets.question).join('\n'))
-    .toContain('Invalid file path \\"../secrets.md\\"');
-  release();
-  await expect(page.getByText(secrets.answer)).toBeVisible();
-
-  // …and the panel still shows the document, with nothing added.
-  await expect(
-    rightPanel(page).getByRole('heading', { name: 'Findings' }),
-  ).toBeVisible();
-  expect(await historyTitles(page)).toHaveLength(1);
-  const session = await getSession(page, sessionId);
-  expect(session.panelItems.map((item) => item.title)).toEqual(['Findings']);
+  expect(toolResultsOf(secrets.question).join('\n')).toContain(
+    'Invalid file path \\"../secrets.md\\"',
+  );
+  expect(result.text).toContain(secrets.answer);
+  // …and the run still holds the document, with nothing added.
+  expect(run.panelItems.map((item) => item.title)).toEqual(['Findings']);
 });
 
 test('the agent brings an existing visual back', async ({ page }) => {
@@ -595,227 +439,91 @@ test('the agent brings an existing visual back', async ({ page }) => {
     ],
     answer: 'The group stage holds most of the matches.',
   };
-  const bringBack = (visualId: string): TurnScript => ({
-    question: 'Bring the chart back',
-    calls: [{ name: 'show_in_panel', arguments: { kind: 'visual', visualId } }],
-    answer: 'The chart is back in the panel.',
-  });
-  script([stageTurn, SHOW_FINDINGS]);
-  const sessionId = await createWorldCupSession(page);
-  await ask(page, stageTurn.question, stageTurn.answer);
-  await page.getByRole('button', { name: 'Generate interactive visuals' }).click();
-  await expect(page.getByText('Interactive visual generated')).toBeVisible();
-  const visual = (await getSession(page, sessionId)).visualizations?.[0];
+  script([stageTurn]);
+  const first = await runAssistantOn(page, stageTurn.question);
+
+  // A follow-up run makes the visual (it needs an earlier answer), shows a
+  // document over it and brings the visual back by its id.
+  const chartQuestion = 'Chart it, then bring the chart back';
+  const scripted = stub.reply;
+  stub.reply = (request): StubReply => {
+    if (systemTexts(request).some((text) => text.includes(DESIGNER_SKILL_TAG))) {
+      return { text: JSON.stringify(VISUAL_SPEC) };
+    }
+    const { question, step } = position(request);
+    if (!request.stream || !question.includes(chartQuestion)) return scripted(request);
+    const tool = (name: string) =>
+      request.tools.find((entry) => entry === name || entry.endsWith(name)) ?? name;
+    if (step === 0) {
+      return {
+        toolCall: {
+          name: tool('run_readonly_sql'),
+          arguments: { sql: STAGE_SQL, rationale: STAGE_RATIONALE },
+        },
+      };
+    }
+    if (step === 1) return { toolCall: { name: tool('create_visual'), arguments: {} } };
+    if (step === 2) return { toolCall: { name: tool('show_in_panel'), arguments: SHOW_FINDINGS.calls[0].arguments } };
+    if (step === 3) {
+      const created = request.messages.filter((message) => message.role === 'tool').map(messageText)[1] ?? '';
+      const visualId = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/.exec(created)?.[0];
+      return {
+        toolCall: {
+          name: tool('show_in_panel'),
+          arguments: { kind: 'visual', visualId: visualId ?? 'missing' },
+        },
+      };
+    }
+    return { text: 'The chart is back in the panel.' };
+  };
+  const second = await runAssistantOn(page, chartQuestion, first.run.id);
+  const visual = second.run.visualizations?.[0];
   expect(visual?.title).toBe(VISUAL_TITLE);
-
-  // The panel shows a document over the visual.
-  await ask(page, SHOW_FINDINGS.question, SHOW_FINDINGS.answer);
-  await expect(
-    rightPanel(page).getByRole('heading', { name: 'Findings' }),
-  ).toBeVisible();
-  await expect(
-    rightPanel(page).locator('iframe[title="Interactive visualization"]'),
-  ).toHaveCount(0);
-
-  script([stageTurn, SHOW_FINDINGS, bringBack(visual!.id)]);
-  await ask(page, 'Bring the chart back', 'The chart is back in the panel.');
-  await expect(
-    rightPanel(page).locator('iframe[title="Interactive visualization"]'),
-  ).toBeVisible();
-  await expect(rightPanel(page)).toContainText(VISUAL_TITLE);
-  await screenshot(page, 'panel-visual.png');
-  const titles = await historyTitles(page);
-  expect(titles[0]).toContain(VISUAL_TITLE);
   // One item per visual (R10): showing it again moves it, never adds one.
-  expect(titles.filter((title) => title.includes(VISUAL_TITLE))).toHaveLength(1);
-  expect(titles[1]).toContain('Findings');
+  expect(second.run.panelItems.map((item) => item.title)).toEqual([
+    VISUAL_TITLE,
+    'Findings',
+  ]);
 
-  // A visual downloads through its own route, never as a panel item (api.md 107).
+  // A visual downloads through its own route, never as a panel item (api.md 126).
   const res = await apiFetch(
     page,
     'GET',
-    `/sessions/${sessionId}/panel-items/visual:${visual!.id}/download`,
+    runRoute(second.run.id, `panel-items/visual:${visual!.id}/download`),
   );
   expect(res.status()).toBe(400);
   expect(await res.text()).toContain(
     `Panel item \\"visual:${visual!.id}\\" can't be downloaded`,
   );
+  const zip = await apiFetch(
+    page,
+    'GET',
+    runRoute(second.run.id, `visualizations/${visual!.id}/download`),
+  );
+  expect(zip.status()).toBe(200);
 });
 
-test('the workflow never appears in the right panel', async ({ page }) => {
+test('the workflow never appears among a run\'s panel items', async ({ page }) => {
   script([GO_ON]);
-  await liveAgent(page, WORKFLOW_AGENT, WORKFLOW_INSTRUCTIONS);
-  const sessionId = await startChatWith(page, WORKFLOW_AGENT);
-  for (const title of STEPS) await expect(step(page, title)).toBeVisible();
+  const id = await liveAgent(page, WORKFLOW_AGENT, WORKFLOW_INSTRUCTIONS);
+  const { run } = await runAgentOn(page, id, GO_ON.question);
 
-  await page.getByTitle('Expand right panel').click();
-  await expect(rightPanel(page)).toContainText('Nothing to show yet');
-  await expect(historyButton(page)).toHaveCount(0);
-  await expect(rightPanel(page)).not.toContainText('Workflow');
-  await rightPanel(page).getByTitle('Collapse right panel').click();
-  await expect(rightPanel(page)).toHaveCount(0);
-
-  await ask(page, GO_ON.question, GO_ON.answer);
-  await expect(step(page, 'Understand')).toHaveAttribute('data-status', 'done');
-  await expect(step(page, 'Analyse')).toHaveAttribute('data-status', 'current');
-  // update_workflow never opens the panel or adds an item (R13, R19).
-  await expect(rightPanel(page)).toHaveCount(0);
-  expect((await getSession(page, sessionId)).panelItems).toEqual([]);
-  await page.getByTitle('Expand right panel').click();
-  await expect(rightPanel(page)).toContainText('Nothing to show yet');
-  await expect(historyButton(page)).toHaveCount(0);
+  // update_workflow never adds an item (R13, R19).
+  expect(run.panelItems).toEqual([]);
+  expect(run.workflow?.phases.map((phase) => phase.title)).toEqual(STEPS);
   // A stored workflow is never a panel item (R10).
   const res = await apiFetch(
     page,
     'GET',
-    `/sessions/${sessionId}/panel-items/phases/file`,
+    runRoute(run.id, 'panel-items/phases/file'),
   );
   expect(res.status()).toBe(404);
   expect(await res.text()).toContain('Panel item \\"phases\\" not found');
 });
 
-test('the agent guides me through the current phase', async ({ page }) => {
-  const turn: TurnScript = {
-    question: 'Go on',
-    calls: [
-      {
-        name: 'update_workflow',
-        arguments: {
-          current: 2,
-          done: '1',
-          todo: '2: Choose the lines to market',
-          note: 'Pick the lines to market.',
-        },
-      },
-    ],
-    answer: 'Tell me which lines to market.',
-  };
-  script([turn]);
-  await liveAgent(page, WORKFLOW_AGENT, WORKFLOW_INSTRUCTIONS);
-  await startChatWith(page, WORKFLOW_AGENT);
-  await ask(page, turn.question, turn.answer);
-
-  const next = bar(page).getByTestId('workflow-bar-action');
-  await expect(next).toHaveText('Your next step: Choose the lines to market');
-  // One line (R17): the row is no taller than its line height.
-  const { height, lineHeight } = await next.evaluate((el) => ({
-    height: el.getBoundingClientRect().height,
-    lineHeight: parseFloat(getComputedStyle(el).lineHeight),
-  }));
-  expect(height).toBeLessThanOrEqual(lineHeight + 1);
-  await expect(bar(page)).not.toContainText('Pick the lines to market.');
-
-  await detailsToggle(page).click();
-  await expect(details(page)).toBeVisible();
-  const current = details(page).locator('[data-current="true"]');
-  await expect(current).toContainText('Analyse');
-  await expect(current).toBeInViewport();
-  await expect(current.getByTestId('workflow-details-note')).toHaveText(
-    'Pick the lines to market.',
-  );
-  await expect(details(page).getByTestId('workflow-details-note')).toHaveCount(1);
-});
-
-test('details lists every step and closes on Escape, outside click and its button', async ({
+test('the run shows the agent\'s phases and moves them as it goes', async ({
   page,
 }) => {
-  await sessionAtAnalyse(page);
-  const toggle = detailsToggle(page);
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  await expect(details(page).getByTestId('workflow-details-step')).toHaveText(
-    STEPS.map((title) => new RegExp(title)),
-  );
-  await expect(details(page)).toContainText('Workflow · 1/3 done');
-  await expect(detailsStep(page, 'Understand')).toHaveAttribute('data-status', 'done');
-  await expect(detailsStep(page, 'Understand')).toContainText('Done');
-  await expect(detailsStep(page, 'Analyse')).toHaveAttribute('data-status', 'current');
-  await expect(detailsStep(page, 'Analyse')).toContainText('Current');
-  await expect(detailsStep(page, 'Report')).toHaveAttribute('data-status', 'upcoming');
-  // Open steps say what to do; done steps don't. The skill is a caption.
-  await expect(detailsStep(page, 'Understand')).not.toContainText('To do:');
-  await expect(detailsStep(page, 'Analyse')).toContainText(
-    'To do: Review the queries I run.',
-  );
-  await expect(detailsStep(page, 'Report')).toContainText(
-    'To do: Review the report and approve it.',
-  );
-  await expect(detailsStep(page, 'Analyse')).toContainText('curated-knowledge');
-  // It overlays the chat and leaves the right panel alone.
-  await expect(rightPanel(page)).toHaveCount(0);
-  await screenshot(page, 'workflow-bar-details.png');
-
-  await page.keyboard.press('Escape');
-  await expect(details(page)).toHaveCount(0);
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-
-  await toggle.click();
-  await expect(details(page)).toBeVisible();
-  await composer(page).click();
-  await expect(details(page)).toHaveCount(0);
-
-  await toggle.click();
-  await expect(details(page)).toBeVisible();
-  await toggle.click();
-  await expect(details(page)).toHaveCount(0);
-});
-
-test('every session shows the workflow bar, empty until there is a workflow', async ({
-  page,
-}) => {
-  await createWorldCupSession(page);
-  await expect(bar(page)).toBeVisible();
-  await expect(bar(page).getByTestId('workflow-bar-empty')).toHaveText(
-    /Workflow · No workflow yet · The agent shows its steps here when it guides you through a process\./,
-  );
-  await expect(bar(page).getByRole('button', { name: 'Hide workflow' })).toHaveCount(0);
-  await expect(detailsToggle(page)).toHaveCount(0);
-  await screenshot(page, 'workflow-bar-empty.png');
-});
-
-test('the workflow bar shows my agent\'s steps from the first turn', async ({
-  page,
-}) => {
-  await liveAgent(page, WORKFLOW_AGENT, WORKFLOW_INSTRUCTIONS);
-  const sessionId = await startChatWith(page, WORKFLOW_AGENT);
-  expect(stub.requests, 'no message has been sent').toHaveLength(0);
-
-  // Under the page header, above the chat.
-  const header = page
-    .locator('header')
-    .filter({ has: page.getByTestId('session-id') });
-  const headerBox = (await header.boundingBox())!;
-  const barBox = (await bar(page).boundingBox())!;
-  const welcomeBox = (await page.getByTestId('session-welcome').boundingBox())!;
-  expect(barBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height - 1);
-  expect(barBox.y + barBox.height).toBeLessThanOrEqual(welcomeBox.y + 1);
-
-  const items = bar(page).getByRole('list', { name: 'Workflow' }).getByRole('listitem');
-  await expect(items).toHaveText(STEPS.map((title) => new RegExp(title)));
-  // The Gherkin reads "with Understand as current"; R17, ui.md 4.12.1 and
-  // data-model 3.4.4 (`current: null` until the agent marks a step) say no
-  // step is current before the agent's first update_workflow, and the next
-  // step is the first open one. The test follows the system specs (see the
-  // evidence's e2e-impact.md).
-  await expect(items.and(page.locator('[data-status="upcoming"]'))).toHaveCount(3);
-  await expect(items.and(page.locator('[aria-current="step"]'))).toHaveCount(0);
-  await expect(bar(page).getByTestId('workflow-bar-action')).toHaveText(
-    'Your next step: Tell me what you want to find out.',
-  );
-  await expect(bar(page)).toContainText('0/3 done');
-  await expect(items.and(page.locator('[data-status="done"]'))).toHaveCount(0);
-  await screenshot(page, 'workflow-bar-steps.png');
-
-  const { workflow } = await getSession(page, sessionId);
-  expect(workflow?.source).toBe('prompt');
-  expect(workflow?.phases.map((phase) => phase.title)).toEqual(STEPS);
-  expect(workflow?.phases[1].skill).toBe('curated-knowledge');
-  expect(workflow?.current).toBeNull();
-});
-
-test('the agent moves the workflow bar as we go', async ({ page }) => {
   const turn: TurnScript = {
     question: 'Go on',
     calls: [
@@ -833,77 +541,72 @@ test('the agent moves the workflow bar as we go', async ({ page }) => {
     answer: 'Tell me which lines to market.',
   };
   script([turn]);
-  await liveAgent(page, WORKFLOW_AGENT, WORKFLOW_INSTRUCTIONS);
-  const sessionId = await startChatWith(page, WORKFLOW_AGENT);
-  await expect(bar(page)).toContainText('0/3 done');
+  const id = await liveAgent(page, WORKFLOW_AGENT, WORKFLOW_INSTRUCTIONS);
 
-  // The bar moves while the turn still streams (R19).
-  const release = holdFinalAnswer([turn], turn.question);
-  await send(page, turn.question);
-  await expect(step(page, 'Understand')).toHaveAttribute('data-status', 'done');
-  await expect(step(page, 'Analyse')).toHaveAttribute('data-status', 'waiting');
-  await expect(page.getByText('Thinking', { exact: true })).toBeVisible();
-  release();
-  await expect(page.getByText(turn.answer)).toBeVisible();
+  await openWorkflowPage(page, `agent:${id}`, WORKFLOW_AGENT);
+  await openRunTab(page);
+  await fillRun(page, turn.question);
+  await page.getByTestId('workflow-run').click();
+  await expect(runAnswer(page)).toContainText(turn.answer);
 
-  await expect(
-    step(page, 'Understand').getByRole('button', { name: 'Step 1: Understand, Done' }),
-  ).toBeVisible();
-  const analyse = step(page, 'Analyse').getByRole('button', {
-    name: 'Step 2: Analyse, Waiting for you',
-  });
-  await expect(analyse).toHaveAttribute('title', 'Waiting for you');
-  await expect(step(page, 'Analyse')).toHaveAttribute('aria-current', 'step');
-  await expect(bar(page)).toContainText('1/3 done');
-  await expect(bar(page).getByTestId('workflow-bar-action')).toHaveText(
-    'Your next step: Choose the lines to market',
+  // The phases sit inside the agent's step, Understand done, Analyse current.
+  const phases = page.getByTestId('workflow-run-phases');
+  await expect(phases.getByRole('listitem')).toHaveText(
+    STEPS.map((title) => new RegExp(title)),
   );
-  await detailsToggle(page).click();
-  const current = details(page).locator('[data-current="true"]');
-  await expect(current).toContainText('Analyse');
-  await expect(current).toContainText('Waiting for you');
-  await expect(current.getByTestId('workflow-details-note')).toHaveText(
-    'Pick the lines to market.',
+  await expect(page.getByTestId('workflow-run-phase-1')).toContainText('Done');
+  await expect(page.getByTestId('workflow-run-phase-2')).toHaveAttribute(
+    'aria-current',
+    'step',
   );
-  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('workflow-run-phase-2')).toContainText('Current');
+  await expect(page.getByTestId('workflow-run-phase-3')).not.toContainText('Done');
+});
 
-  // The persisted view comes back with the session (R19).
-  const { workflow } = await getSession(page, sessionId);
-  expect(workflow).toMatchObject({
+test('the run keeps the moved workflow with its next step and note', async ({
+  page,
+}) => {
+  const turn: TurnScript = {
+    question: 'Go on',
+    calls: [
+      {
+        name: 'update_workflow',
+        arguments: {
+          current: 2,
+          done: '1',
+          waiting: true,
+          todo: '2: Choose the lines to market',
+          note: 'Pick the lines to market.',
+        },
+      },
+    ],
+    answer: 'Tell me which lines to market.',
+  };
+  script([turn]);
+  const id = await liveAgent(page, WORKFLOW_AGENT, WORKFLOW_INSTRUCTIONS);
+  const { result, run } = await runAgentOn(page, id, turn.question);
+
+  // The prompt's steps show from the first run, the agent moves them (R19).
+  expect(run.workflow?.source).toBe('prompt');
+  expect(run.workflow?.phases.map((phase) => phase.title)).toEqual(STEPS);
+  expect(run.workflow?.phases[1].skill).toBe('curated-knowledge');
+  // "Every open step says what needs to be done."
+  expect(run.workflow?.phases[2].action).toBe('Review the report and approve it.');
+  expect(run.workflow).toMatchObject({
     current: 2,
     done: [1],
     waiting: true,
     note: 'Pick the lines to market.',
   });
-  expect(workflow?.phases[1].action).toBe('Choose the lines to market');
-});
+  expect(run.workflow?.phases[1].action).toBe('Choose the lines to market');
+  expect(
+    result.events.some((event) => event.type === 'workflow'),
+    'the workflow moved while the run streamed',
+  ).toBe(true);
 
-test('every open step says what needs to be done', async ({ page }) => {
-  await liveAgent(page, WORKFLOW_AGENT, WORKFLOW_INSTRUCTIONS);
-  await startChatWith(page, WORKFLOW_AGENT);
-
-  const report = step(page, 'Report').getByRole('button');
-  await expect(report).toHaveAttribute(
-    'title',
-    'To do: Review the report and approve it.',
-  );
-  await report.click();
-  const popover = page.getByRole('dialog', { name: 'Step details' });
-  await expect(popover).toContainText('Step 3');
-  await expect(popover).toContainText('Report');
-  await expect(popover).toContainText('To do Review the report and approve it.');
-  await page.keyboard.press('Escape');
-  await expect(popover).toHaveCount(0);
-
-  await detailsToggle(page).click();
-  await expect(detailsStep(page, 'Report')).toContainText(
-    'To do: Review the report and approve it.',
-  );
-  // Before the agent marks a step, the next step is the first open one (R17).
-  await page.keyboard.press('Escape');
-  await expect(bar(page).getByTestId('workflow-bar-action')).toHaveText(
-    'Your next step: Tell me what you want to find out.',
-  );
+  // The stored run reads back the same view.
+  const stored = await apiJson<RunDoc>(page, 'GET', `/workflow-runs/${run.id}`);
+  expect(stored.workflow).toMatchObject({ current: 2, done: [1], waiting: true });
 });
 
 test('an agent without a Workflow section creates its own steps', async ({
@@ -920,17 +623,17 @@ test('an agent without a Workflow section creates its own steps', async ({
     answer: 'Let us start with the scope.',
   };
   script([turn]);
-  await liveAgent(page, FREE_AGENT, 'Help the user review the World Cup data.');
-  const sessionId = await startChatWith(page, FREE_AGENT);
-  await expect(bar(page).getByTestId('workflow-bar-empty')).toBeVisible();
+  const id = await liveAgent(page, FREE_AGENT, 'Help the user review the World Cup data.');
+  const { run } = await runAgentOn(page, id, turn.question);
 
-  await ask(page, turn.question, turn.answer);
-  const items = bar(page).getByRole('list', { name: 'Workflow' }).getByRole('listitem');
-  await expect(items).toHaveText([/Scope/, /Analyse/, /Report/]);
-  await expect(step(page, 'Scope')).toHaveAttribute('data-status', 'current');
-  await expect(bar(page)).toContainText('0/3 done');
-  const { workflow } = await getSession(page, sessionId);
-  expect(workflow?.source).toBe('agent');
+  expect(run.workflow?.phases.map((phase) => phase.title)).toEqual([
+    'Scope',
+    'Analyse',
+    'Report',
+  ]);
+  expect(run.workflow?.current).toBe(1);
+  expect(run.workflow?.done).toEqual([]);
+  expect(run.workflow?.source).toBe('agent');
 });
 
 test("the agent can't rename prompt-defined steps", async ({ page }) => {
@@ -940,114 +643,39 @@ test("the agent can't rename prompt-defined steps", async ({ page }) => {
     answer: 'The steps stay as they are.',
   };
   script([turn]);
-  await liveAgent(page, WORKFLOW_AGENT, WORKFLOW_INSTRUCTIONS);
-  await startChatWith(page, WORKFLOW_AGENT);
-  await ask(page, turn.question, turn.answer);
+  const id = await liveAgent(page, WORKFLOW_AGENT, WORKFLOW_INSTRUCTIONS);
+  const { run } = await runAgentOn(page, id, turn.question);
 
   const results = toolResultsOf(turn.question);
   expect(results).toHaveLength(1);
   expect(results[0]).toContain(ERR_RENAME);
-  const items = bar(page).getByRole('list', { name: 'Workflow' }).getByRole('listitem');
-  await expect(items).toHaveText(STEPS.map((title) => new RegExp(title)));
-  await expect(bar(page)).not.toContainText('One');
+  expect(run.workflow?.phases.map((phase) => phase.title)).toEqual(STEPS);
 });
 
-test('I can fold the workflow bar', async ({ page }) => {
-  await sessionAtAnalyse(page);
-  const list = bar(page).getByRole('list', { name: 'Workflow' });
-
-  await bar(page).getByRole('button', { name: 'Hide workflow' }).click();
-  await expect(list).toHaveCount(0);
-  await expect(bar(page)).toContainText('Workflow · Analyse · 1/3');
-  await expect(bar(page).getByTestId('workflow-bar-action')).toHaveCount(0);
-  await expect(detailsToggle(page)).toBeVisible();
-  await screenshot(page, 'workflow-bar-folded.png');
-
-  // Reopen the app: the fold is remembered per browser (R18).
-  await page.reload();
-  await openSessions(page);
-  await sessionRow(page, WORKFLOW_AGENT).click();
-  await expect(bar(page)).toContainText('Workflow · Analyse · 1/3');
-  await expect(list).toHaveCount(0);
-
-  await bar(page).getByRole('button', { name: 'Show workflow' }).click();
-  await expect(list.getByRole('listitem')).toHaveText(
-    STEPS.map((title) => new RegExp(title)),
-  );
-});
-
-test('shown items survive reopening the session', async ({ page }) => {
+test('shown items survive reopening the run', async ({ page }) => {
   script([SHOW_FINDINGS, SHOW_TABLE]);
-  const sessionId = await createWorldCupSession(page);
-  await ask(page, SHOW_FINDINGS.question, SHOW_FINDINGS.answer);
-  await ask(page, SHOW_TABLE.question, SHOW_TABLE.answer);
-  await expect(rightPanel(page).locator('table')).toBeVisible();
+  const first = await runAssistantOn(page, SHOW_FINDINGS.question);
+  const second = await runAssistantOn(page, SHOW_TABLE.question, first.run.id);
+  expect(second.run.panelItems.map((item) => item.title)).toEqual([
+    STAGE_TITLE,
+  ]);
 
-  const other = await apiJson<{ session: { id: string } }>(page, 'POST', '/sessions', {
-    name: 'Other analysis',
-    datasets: [WORLD_CUP_DATASET],
-  });
-  expect(other.session.id).not.toBe(sessionId);
-  const row = (name: string) => sessionRow(page, name);
-
-  // Another session, then back: the panel opens on the latest item (R12).
+  // Each stored run reads back its own items, most recently shown first.
   await page.reload();
-  await openSessions(page);
-  await row('Other analysis').click();
-  await expect(page.getByRole('heading', { name: 'Other analysis' })).toBeVisible();
-  await page.getByTitle('Expand right panel').click();
-  await expect(rightPanel(page)).toContainText('Nothing to show yet');
-  await openSessions(page);
-  await row('World Cup analysis').click();
-  await expect(rightPanel(page).locator('table')).toBeVisible();
-  await expect(rightPanel(page)).toContainText(STAGE_TITLE);
-
-  const titles = await historyTitles(page);
-  expect(titles).toHaveLength(2);
-  expect(titles[0]).toContain(STAGE_TITLE);
-  expect(titles[1]).toContain('Findings');
-
-  await historyButton(page).click();
-  await rightPanel(page).locator('.menu-item').filter({ hasText: 'Findings' }).click();
-  await expect(
-    rightPanel(page).getByRole('heading', { name: 'Findings' }),
-  ).toBeVisible();
-  await expect(rightPanel(page).locator('table')).toHaveCount(0);
+  const firstStored = await apiJson<RunDoc>(page, 'GET', `/workflow-runs/${first.run.id}`);
+  const secondStored = await apiJson<RunDoc>(page, 'GET', `/workflow-runs/${second.run.id}`);
+  expect(firstStored.panelItems.map((item) => item.title)).toEqual(['Findings']);
+  expect(secondStored.panelItems.map((item) => [item.kind, item.title])).toEqual([
+    ['table', STAGE_TITLE],
+  ]);
 });
 
 // ------------------------------------------- Questions to Insights v2 (R8a)
 
-const V2 = 'Questions to Insights v2';
-const V2_STEPS = ['Receive question', 'Load catalog', 'Analyse', 'Wrap up'];
+const V2_STEPS = ['receive-question', 'load-catalog', 'analyse', 'wrap-up'];
 const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
 const V2_QUESTION = 'How many matches were played in 2018?';
 const V2_ANSWER = 'There were 64 matches.';
-
-/** Creates a session bound to v2 over World Cup Core from New conversation. */
-async function v2Session(page: Page): Promise<string> {
-  await openSessions(page);
-  await page
-    .locator('header')
-    .getByRole('button', { name: 'Start New Conversation' })
-    .click();
-  await page.getByTestId('new-session-workflow').click();
-  await page
-    .getByRole('listbox', { name: 'Workflow' })
-    .getByRole('option')
-    .filter({ hasText: V2 })
-    .click();
-  await page.getByPlaceholder('My new session').fill('V2 workflow');
-  await page
-    .getByRole('button', { name: new RegExp(`^${WORLD_CUP_DATASET}`) })
-    .click();
-  await page.getByRole('button', { name: /^Create$/ }).click();
-  await expect(page.getByTestId('session-workflow')).toHaveText(V2);
-  return sessionIdFromHeader(page);
-}
-
-function v2Items(page: Page): Locator {
-  return bar(page).getByRole('list', { name: 'Workflow' }).getByRole('listitem');
-}
 
 test('Questions to Insights v2 shows its code-defined steps advancing', async ({
   page,
@@ -1066,96 +694,57 @@ test('Questions to Insights v2 shows its code-defined steps advancing', async ({
     answer: V2_ANSWER,
   };
   script([turn]);
-  const sessionId = await v2Session(page);
+  const { result, run } = await runOk(page, 'qti-v2-turn', {
+    question: V2_QUESTION,
+    datasets: [WORLD_CUP_DATASET],
+  });
 
-  // The four steps show from the session's first view, all upcoming (R8a).
-  await expect(v2Items(page)).toHaveText(V2_STEPS.map((t) => new RegExp(t)));
-  await expect(
-    v2Items(page).and(page.locator('[data-status="upcoming"]')),
-  ).toHaveCount(4);
-  await expect(bar(page)).toContainText('0/4 done');
-  expect(stub.requests, 'no message has been sent').toHaveLength(0);
+  // Every step runs, in order, and ends done (R19).
+  for (const id of V2_STEPS) {
+    expect(stepStatuses(result, id), id).toEqual(['running', 'success']);
+  }
+  const startOrder = result.events
+    .filter((event) => event.type === 'step' && event.status === 'running')
+    .map((event) => String(event.id));
+  expect(startOrder).toEqual(V2_STEPS);
+  expect(result.text).toContain(V2_ANSWER);
 
-  // While the answer streams, Analyse is the current step (R19).
-  const release = holdFinalAnswer([turn], turn.question);
-  await send(page, turn.question);
-  await expect(step(page, 'Receive question')).toHaveAttribute(
-    'data-status',
-    'done',
-  );
-  await expect(step(page, 'Load catalog')).toHaveAttribute('data-status', 'done');
-  await expect(step(page, 'Analyse')).toHaveAttribute('data-status', 'current');
-  await expect(step(page, 'Analyse')).toHaveAttribute('aria-current', 'step');
-  await expect(step(page, 'Wrap up')).toHaveAttribute('data-status', 'upcoming');
-  release();
-
-  await expect(page.getByText(V2_ANSWER)).toBeVisible();
-  await expect(bar(page).getByTestId('workflow-bar-done')).toHaveText(
-    /All steps done/,
-  );
-  await expect(bar(page)).toContainText('4/4 done');
-  await expect(
-    v2Items(page).and(page.locator('[data-status="done"]')),
-  ).toHaveCount(4);
-
-  // The turn ran v2 with its three tools, never update_workflow (R8a), and
+  // The run ran v2 with its three tools, never update_workflow (R8a), and
   // the SQL ran for real.
   const request = turnRequests(stub, V2_QUESTION)[0];
   expect([...request.tools].sort()).toEqual([...V2_TOOLS].sort());
   expect(toolResultsOf(V2_QUESTION).join('\n')).toContain('matches');
 
-  const { workflow } = await getSession(page, sessionId);
-  expect(workflow?.source).toBe('workflow');
-  expect(workflow?.phases.map((phase) => phase.title)).toEqual(V2_STEPS);
-  expect(workflow?.done).toEqual([1, 2, 3, 4]);
+  expect(run.workflow?.source).toBe('workflow');
+  expect(run.workflow?.phases.map((phase) => phase.title)).toEqual([
+    'Receive question',
+    'Load catalog',
+    'Analyse',
+    'Wrap up',
+  ]);
+  expect(run.workflow?.done).toEqual([1, 2, 3, 4]);
 });
 
 test('a failing step of the v2 workflow is marked failed', async ({ page }) => {
-  const sessionId = await v2Session(page);
   // The stub fails every model call: the connection drops before a reply.
   stub.hold = (request) =>
     request.stream ? Promise.reject(new Error('model down')) : undefined;
 
-  // The streamed turn's frames, to check it ended with the step's error.
-  const streamed = page.waitForResponse((r) =>
-    r.url().endsWith('/messages/stream'),
-  );
-  await send(page, V2_QUESTION);
   // The provider retries a dropped connection before the step fails.
-  await expect(step(page, 'Analyse')).toHaveAttribute('data-status', 'failed', {
-    timeout: 45_000,
+  const result = await runWorkflow(page, 'qti-v2-turn', {
+    question: V2_QUESTION,
+    datasets: [WORLD_CUP_DATASET],
   });
-  await expect(step(page, 'Receive question')).toHaveAttribute(
-    'data-status',
-    'done',
-  );
-  await expect(step(page, 'Load catalog')).toHaveAttribute('data-status', 'done');
-  await expect(step(page, 'Analyse')).toHaveAttribute('aria-current', 'step');
-  await expect(
-    step(page, 'Analyse').getByRole('button', {
-      name: 'Step 3: Analyse, Failed',
-    }),
-  ).toHaveAttribute('title', 'Failed');
-  await expect(step(page, 'Wrap up')).toHaveAttribute('data-status', 'upcoming');
-  await expect(bar(page)).toContainText('2/4 done');
-  await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+  expect(result.status).toBe(200);
+  expect(stepStatuses(result, 'receive-question').at(-1)).toBe('success');
+  expect(stepStatuses(result, 'load-catalog').at(-1)).toBe('success');
+  expect(stepStatuses(result, 'analyse').at(-1)).toBe('failed');
+  expect(stepStatuses(result, 'wrap-up').at(-1)).toBe('skipped');
   expect(turnRequests(stub, V2_QUESTION).length).toBeGreaterThan(0);
 
-  const session = await getSession(page, sessionId);
-  expect(session.workflow).toMatchObject({ current: 3, done: [1, 2] });
-  expect((session.workflow as { failed?: number }).failed).toBe(3);
-
-  // The turn ends with its error (R8a, sessions-chat R61): the stream's last
-  // frame is the error, and the chat keeps the question and shows the error.
-  const frames = (await (await streamed).text())
-    .split(/\r?\n\r?\n/)
-    .map((block) => block.replace(/^data: ?/, '').trim())
-    .filter((json) => json.startsWith('{'))
-    .map((json) => JSON.parse(json) as { type: string; content?: string });
-  const last = frames[frames.length - 1];
+  // The run ends with the step's error (R8a, sessions-chat R61).
+  const last = result.events[result.events.length - 1];
   expect(last.type).toBe('error');
-  expect(last.content).toBeTruthy();
-  await expect(page.getByText(V2_QUESTION).first()).toBeVisible();
-  await expect(page.getByText('Something went wrong')).toBeVisible();
-  await expect(page.getByText(last.content!).first()).toBeVisible();
+  expect(String(last.content)).toBeTruthy();
+  expect(result.error).toBe(String(last.content));
 });

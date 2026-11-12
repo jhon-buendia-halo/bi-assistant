@@ -271,7 +271,7 @@ Placement in the shell's right "Details panel" is in [ui.md](../../system/ui.md)
 
 ### Covered: Chat and visuals
 
-The scenario "Renders a deterministic interactive visualization and its version controls" belongs to the Feature "Chat and visuals" in [sessions-chat](../sessions-chat/spec.md#feature-chat-and-visuals) (E2E: `frontend/e2e/chat-and-visuals.spec.ts`). It covers generating a visual from an answer, the frame title, "Download bundle", and the "Version history" list with "Version 1" and "current".
+The scenario "Renders a deterministic interactive visualization and its version controls" (generate a visual from a chat answer, the frame title, "Download bundle", the "Version history" list) is retired with the chat composer's **Generate interactive visuals** (workflows-first roadmap, plan 1.24.8). A visual the agent makes in a run is covered by "Skills the designer is given" below; the run page's panel and its versions return with plans 1.24.5 and 1.25.4.
 
 ### Feature: Visual tailoring
 
@@ -376,16 +376,16 @@ Feature: Visual tailoring
 
   Scenario: The visual follows the app's theme
     Given the app is in the Light theme
-    And a visual is open in the panel
+    And a visual is open in a past chat's read-only panel
     Then the frame and its chart are light
     When I switch Appearance to Dark
     Then the open visual turns dark without reloading
     And its state, hover and filters are kept
 
   Scenario: An older visual opens in the current theme
-    Given a visual made before the themed frame existed
+    Given a visual made before the themed frame existed, in a past chat
     And the app is in the Dark theme
-    When I open the visual
+    When I open the past chat's visual
     Then the frame and its chart are dark
 ```
 
@@ -403,28 +403,25 @@ Feature: Skills the designer is given
     And the model is the recording stub
 
   Scenario: A spec visual is designed with the spec-mode instructions only
-    Given a session over "World Cup Core"
-    When I send "How many matches were played at each stage?"
-    And the model runs a query counting the matches per stage, then answers
-    Then I see the answer with "Data used (1 query)"
-    When I click "Generate interactive visuals"
-    Then I see the toast "Interactive visual generated"
-    And the panel shows the visual "Matches by stage"
+    Given I ran the Assistant on "World Cup Core" with "How many matches were played at each stage?"
+    And the model ran a query counting the matches per stage, then answered
+    When I run the Assistant again as a follow-up of that run with "Chart the matches per stage as bars."
+    And the model calls create_visual with no instruction, then answers
+    Then the run holds the visual "Matches by stage"
     And the designer received the interactive-visuals router and its spec-mode reference
     And the designer received nothing of the freeform reference
 
-  Scenario: A chart asked for in the chat is designed from my request when the model gives no instruction
-    Given a session over "World Cup Core"
-    And I sent "How many matches were played at each stage?" and the model answered from one query
-    When I send "Chart the matches per stage as bars."
+  Scenario: A chart asked for in a run is designed from my request when the model gives no instruction
+    Given I ran the Assistant on "World Cup Core" with "How many matches were played at each stage?" and the model answered from one query
+    When I run the Assistant again as a follow-up of that run with "Chart the matches per stage as bars."
     And the model calls create_visual with no instruction, then answers
-    Then the panel shows the visual "Matches by stage"
+    Then the run holds the visual "Matches by stage"
     And the designer received "Chart the matches per stage as bars." as its instruction
 ```
 
 ## Acceptance
 
-- Every scenario above passes. The covered scenario runs in `chat-and-visuals.spec.ts`.
+- Every scenario above passes. They run through the Assistant's workflow, as follow-up runs (`create_visual` needs an earlier answer).
 - A visual generated against real data renders a chart whose values match its "Data used" rows. Its exported `index.html` renders identically when opened offline straight from the zip.
 - No designer output can reach the frame outside the visual area. A visual with hostile markup or script can neither change the frame, reach the network nor reach the host app.
 - A broken visual is repaired at most once per version. An auto-repaired version is never repaired again.

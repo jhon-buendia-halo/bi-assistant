@@ -110,159 +110,91 @@ Feature: Agent panel
   Background:
     Given the app runs with the LLM stub as its provider
     And the World Cup sample dataset is loaded
-    And a session is open on that dataset
 
-  Scenario: A composed document opens in the panel and downloads as PDF
+  Scenario: A composed document is a run panel item and downloads as Markdown
     Given the stub answers by calling "show_in_panel" with kind "document", title "Findings" and markdown "# Findings\n\nBrazil scored most."
     And the stub then answers with text "The findings are in the panel."
-    When I send "Write up the findings"
-    Then the right panel opens and shows the heading "Findings"
-    And the chat shows the step "show_in_panel"
-    When I click "Download PDF"
-    Then a PDF file named "findings.pdf" downloads
-    And I see the toast "Downloaded findings.pdf"
-    When I open "Download as…" and click "Markdown (.md)"
-    Then a file named "findings.md" downloads containing "Brazil scored most."
+    When I run the Assistant on "Write up the findings"
+    Then the stream announces the panel item before the run ends
+    And the run holds the document "Findings"
+    And its download is "findings.md" containing "Brazil scored most."
 
-  Scenario: A query result shows as a sortable table
+  Scenario: A query result is a run table panel item and downloads as CSV
     Given the stub answers by calling "run_readonly_sql" for the top scorers
     And the stub then calls "show_in_panel" with kind "table" and no record
-    When I send "Show me the top scorers as a table"
-    Then the panel shows a table with the query's columns and rows
-    And the footer shows the row count
-    When I click the header of the numeric column
-    Then the rows are sorted ascending and the header is marked "ascending"
-    When I click it again
-    Then the rows are sorted descending
-    When I click "Download (.csv)"
-    Then a file ending in ".csv" downloads with the header row first
+    When I run the Assistant on "Show me the top scorers as a table"
+    Then the run holds one table item titled by the query's rationale
+    And its download is a CSV with the header row first and one row per stage
 
-  Scenario: A workspace file opens in the panel with a download
-    Given the session workspace holds the file "notes/summary.md"
-    And the stub answers by calling "show_in_panel" with kind "file" and path "notes/summary.md"
-    When I send "Show me the summary notes"
-    Then the panel shows the content of "summary.md" rendered as a document
-    And its Download button has the title "Download PDF", with "Download as…" offering Markdown
+  Scenario: A workspace file is a run panel item with a download
+    Given the stub writes "notes/summary.md" to the run's workspace
+    And then answers by calling "show_in_panel" with kind "file" and path "notes/summary.md"
+    When I run the Assistant on "Show me the summary notes"
+    Then the run holds the file "summary.md", read as "text/markdown"
+    And its download is the file's own bytes
 
-  Scenario: An invalid path is refused and the panel does not change
-    Given the panel shows the document "Findings"
-    And the stub answers by calling "show_in_panel" with kind "file" and path "../secrets.md"
-    When I send "Show me the secrets"
-    Then the chat shows the step "show_in_panel" with the error "Invalid file path \"../secrets.md\""
-    And the panel still shows "Findings"
+  Scenario: An invalid path is refused and the run items do not change
+    Given the stub shows the document "Findings"
+    And then answers by calling "show_in_panel" with kind "file" and path "../secrets.md"
+    When I run the Assistant on "Show me the findings and the secrets"
+    Then the step "show_in_panel" shows the error "Invalid file path \"../secrets.md\""
+    And the run still holds only "Findings"
 
   Scenario: The agent brings an existing visual back
-    Given the session has a visual "Goals per team" and the panel shows a document
-    And the stub answers by calling "show_in_panel" with kind "visual" and the visual's id
-    When I send "Bring the chart back"
-    Then the panel shows the visual "Goals per team"
-    And the shown-items menu lists "Goals per team" first
+    Given I ran the Assistant on "How many matches were played at each stage?"
+    When I run it again as a follow-up that makes a visual, shows a document and shows the visual by its id
+    Then the run lists the visual "Goals per team" first and "Findings" second, once each
+    And the visual downloads through its own route, never as a panel item
 
-  Scenario: The workflow never appears in the right panel
+  Scenario: The workflow never appears among a run's panel items
     Given an agent whose instructions have a "## Workflow" section with the phases "Understand", "Analyse" and "Report"
-    When I start a chat with that agent
-    Then the workflow bar shows the three phases
-    And the right panel shows "Nothing to show yet" and has no "Workflow" view
     When the stub answers by calling "update_workflow" with current 2 and done "1"
-    And I send "Go on"
-    Then the bar shows "Understand" as Done and "Analyse" as Current
-    And the right panel does not open and its shown-items menu has no "Workflow" entry
+    And I run that agent on "Go on"
+    Then the run holds no panel item and its workflow has the three phases
 
-  Scenario: The agent guides me through the current phase
+  Scenario: The run shows the agent's phases and moves them as it goes
     Given an agent whose instructions have a "## Workflow" section with the phases "Understand", "Analyse" and "Report"
-    When the stub answers by calling "update_workflow" with current 2, done "1", todo "2: Choose the lines to market" and note "Pick the lines to market."
-    And I send "Go on"
-    Then the bar shows the one-line "Your next step: Choose the lines to market"
-    And the bar does not show the note itself
-    When I click "Details"
-    Then the "Workflow details" dropdown opens scrolled to "Analyse"
-    And it shows "Pick the lines to market." under "Analyse"
+    And the stub answers by calling "update_workflow" with current 2, done "1", waiting true, todo "2: Choose the lines to market" and note "Pick the lines to market."
+    When I open the agent's workflow, its Run tab, type "Go on" and click Execute
+    Then the agent's step lists the three phases with "Understand" as Done and "Analyse" as Current
 
-  Scenario: Details lists every step and closes on Escape, outside click and its button
-    Given a session whose workflow bar shows three steps with "Analyse" as current
-    When I click "Details"
-    Then the "Workflow details" dropdown opens over the chat listing "Understand", "Analyse" and "Report" with their statuses
-    And the open steps show "To do: <action>" and the skills show as captions
-    When I press Escape
-    Then the dropdown closes
-    When I click "Details" and then click on the chat
-    Then the dropdown closes
-    When I click "Details" and then click "Details" again
-    Then the dropdown closes
-
-  Scenario: Every session shows the workflow bar, empty until there is a workflow
-    Given a session over "World Cup Core" with no agent
-    Then the workflow bar shows "No workflow yet"
-    And it has no "Hide workflow" button
-
-  Scenario: The workflow bar shows my agent's steps from the first turn
-    Given an agent whose instructions have a "## Workflow" section with the steps "Understand", "Analyse" and "Report"
-    When I start a chat with that agent
-    Then the workflow bar is shown under the page header, above the chat
-    And it shows the three steps as upcoming, none as current, and "0/3 done"
-    And "Your next step:" shows the action of "Understand"
-    And no step shows as "Done"
-
-  Scenario: The agent moves the workflow bar as we go
-    Given an agent whose instructions have a "## Workflow" section with the steps "Understand", "Analyse" and "Report"
-    And the stub answers by calling "update_workflow" with current 2, done "1", waiting true, todo "2: Choose the lines to market", note "Pick the lines to market."
-    When I send "Go on"
-    Then the bar shows step 1 "Understand" as Done and step 2 "Analyse" as Current, waiting for me
-    And it shows "1/3 done"
-    And the bar shows "Your next step: Choose the lines to market"
-    And "Details" opens on "Analyse" with the note "Pick the lines to market."
-
-  Scenario: Every open step says what needs to be done
-    Given an agent whose instructions have a "## Workflow" section whose steps end with ": <action>", such as "3. Report: Review the report and approve it."
-    When I open a session with that agent
-    Then the bar's step "Report" has the tooltip "To do: Review the report and approve it."
-    And the step's popover and the Details dropdown show "To do" with that action
+  Scenario: The run keeps the moved workflow with its next step and note
+    Given the same agent and the same stub
+    When I run that agent on "Go on"
+    Then the run's workflow has the prompt's three steps, "Analyse" current and waiting, "Understand" done, and the note "Pick the lines to market."
+    And "Report" says "Review the report and approve it."
+    And the stored run reads back the same workflow
 
   Scenario: An agent without a Workflow section creates its own steps
     Given an agent whose instructions have no "## Workflow" section
     And the stub answers by calling "update_workflow" with steps "Scope | Analyse | Report" and current 1
-    When I send "Guide me through a review"
-    Then the bar shows the three steps "Scope", "Analyse" and "Report" with "Scope" as current
+    When I run that agent on "Guide me through a review"
+    Then the run's workflow has the three steps "Scope", "Analyse" and "Report" with "Scope" as current
 
   Scenario: The agent can't rename prompt-defined steps
     Given an agent whose instructions have a "## Workflow" section with the steps "Understand", "Analyse" and "Report"
     And the stub answers by calling "update_workflow" with steps "One | Two"
-    When I send "Rename the steps"
+    When I run that agent on "Rename the steps"
     Then the next model request carries the tool message "Your ## Workflow section defines the steps; set their status instead"
-    And the bar still shows "Understand", "Analyse" and "Report"
+    And the run's workflow still has "Understand", "Analyse" and "Report"
+
+  Scenario: Shown items survive reopening the run
+    Given I ran the Assistant to show a document "Findings", then followed up to show a table
+    When I reload the app
+    Then each stored run reads back its own items
 
   Scenario: Questions to Insights v2 shows its code-defined steps advancing
-    Given a session bound to "Questions to Insights v2" over the World Cup dataset
-    Then the workflow bar shows "Receive question", "Load catalog", "Analyse" and "Wrap up" as upcoming and "0/4 done"
     When the stub answers by running "run_readonly_sql" and then "There were 64 matches."
-    And I send "How many matches were played in 2018?"
-    Then while the answer streams the bar shows "Analyse" as Current
-    And when the turn ends the bar shows "All steps done" and "4/4 done"
-    And the answer shows "There were 64 matches."
+    And I run "Questions to Insights v2" on "How many matches were played in 2018?"
+    Then its four steps "Receive question", "Load catalog", "Analyse" and "Wrap up" each report running, then success, in order
+    And the model was offered only "list_entities", "describe_entity" and "run_readonly_sql"
+    And the run's workflow shows 4 of 4 steps done
 
   Scenario: A failing step of the v2 workflow is marked failed
-    Given a session bound to "Questions to Insights v2" over the World Cup dataset
-    And the stub fails the model call with an error
-    When I send "How many matches were played in 2018?"
-    Then the bar shows "Receive question" and "Load catalog" as Done and "Analyse" as Failed
-    And the chat shows the turn's error
-
-  Scenario: I can fold the workflow bar
-    Given a session whose workflow bar shows three steps with "Analyse" as current
-    When I click "Hide workflow"
-    Then the bar shows one line "Workflow · Analyse · 1/3"
-    When I reopen the app
-    Then the bar is still folded
-    When I click "Show workflow"
-    Then the bar shows the three steps again
-
-  Scenario: Shown items survive reopening the session
-    Given I showed a document "Findings" and then a table
-    When I open another session and then reopen this one
-    Then the panel opens on the table
-    And the shown-items menu lists the table and "Findings"
-    When I choose "Findings" in the menu
-    Then the panel shows the document
+    Given the stub fails the model call with an error
+    When I run "Questions to Insights v2" on "How many matches were played in 2018?"
+    Then "Receive question" and "Load catalog" succeed, "Analyse" fails and "Wrap up" is skipped
+    And the run ends with the turn's error
 ```
 
 ## Acceptance
@@ -272,7 +204,7 @@ Feature: Agent panel
 3. The workflow lives only in the bar: an agent with a `## Workflow` section shows it before its first answer, the RFP Builder's bar moves when it saves a stage, and neither creates a panel item or opens the right panel; `show_in_panel` has no `phases` kind.
 4. The shown items, in order, survive reopening the session, and visuals made before this capability appear in the menu.
 5. An agent with a `## Workflow` section shows the workflow bar from its first turn, and each open step says what the user must do (the prompt's default action or the agent's `todo`); an `update_workflow` call moves it live (statuses, `n/m done` and the note in Details), and an agent without a section can create its own steps but cannot rename the prompt's.
-6. The bar folds, and stays folded across a reload.
+6. The chat's workflow bar (its fold, details and popover scenarios) is retired with the chat composer; a run shows the agent's phases inside its step.
 6a. A Questions to Insights v2 session shows its four code-defined steps before the first turn; a turn moves them to all done live, and a failing step shows as Failed while the turn ends with its error (R8a).
 7. The assistant's and the RFP Builder's eval sets (`world-cup`, `formula-1`, `rfp`) pass at 100% over 3 runs on the branch.
 

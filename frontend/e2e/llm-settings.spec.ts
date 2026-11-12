@@ -2,13 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
-import {
-  WORLD_CUP_SESSION,
-  createWorldCupSession,
-  openSessions,
-} from './helpers/app-actions';
-import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
+import { seedWorldCupDataset } from './helpers/agents-api';
 import { LlmStub, startLlmStub, turnRequests } from './helpers/llm-stub';
+import { runAssistantOk } from './helpers/runs-api';
 
 // Mirrors the "LLM settings" Feature in specs/capabilities/llm-settings/spec.md
 // (the scenarios that need no real provider), against a local stub of the
@@ -262,48 +258,8 @@ test('saves the chosen effort and uses it on the next turn', async ({
     path: testInfo.outputPath('llm-effort-picker-gpt-5.png'),
   });
 
-  await createWorldCupSession(page);
-  await expect(
-    page.getByRole('heading', { name: WORLD_CUP_SESSION }),
-  ).toBeVisible();
   const question = 'How many matches were played in 2022?';
-  await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-  await page.getByLabel('Send message').click();
-  await expect
-    .poll(() => turnRequests(stub, question).length)
-    .toBeGreaterThan(0);
+  await runAssistantOk(page, question);
+  expect(turnRequests(stub, question).length).toBeGreaterThan(0);
   expect(turnRequests(stub, question)[0].reasoningEffort).toBe('medium');
-});
-
-/** Opens the New conversation screen from the Sessions page. */
-async function openComposer(page: Page): Promise<void> {
-  await openSessions(page);
-  await page
-    .locator('header')
-    .getByRole('button', { name: 'Start New Conversation' })
-    .click();
-  await expect(page.getByPlaceholder('My new session')).toBeVisible();
-}
-
-test('sets the reasoning effort from the new-session composer', async ({
-  page,
-}) => {
-  await saveLenaiSettings(page, stub.baseUrl, DEPLOYMENT);
-  await page.reload();
-  await openComposer(page);
-
-  // The model and the effort chip are always shown (R8, R43; BA-232).
-  await expect(page.getByText(DEPLOYMENT, { exact: true })).toBeVisible();
-  const effortChip = page.getByTitle('Reasoning effort');
-  await expect(effortChip).toHaveText('high');
-
-  await effortChip.click();
-  await page.getByRole('button', { name: 'low', exact: true }).click();
-  await expect(page.getByText('Reasoning effort set to low')).toBeVisible();
-  await expect(effortChip).toHaveText('low');
-});
-
-test('shows that no model is configured', async ({ page }) => {
-  await openComposer(page);
-  await expect(page.getByText('No model configured')).toBeVisible();
 });
