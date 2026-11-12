@@ -65,10 +65,8 @@ test('moves between areas from the rail', async ({ page }) => {
   await expectCurrent(page, 'Runs');
   await expect(sessionsList(page)).toBeVisible();
   await expect(
-    page
-      .locator('header')
-      .getByRole('button', { name: 'Start New Conversation' }),
-  ).toBeVisible();
+    page.getByRole('button', { name: 'Start New Conversation' }),
+  ).toHaveCount(0);
   // The drawer does not list sessions.
   await expect(
     page.getByRole('navigation', { name: 'Sessions navigation' }),
@@ -120,8 +118,8 @@ test('the start page explains how the product works', async ({ page }) => {
   ).toBeVisible();
   const steps = [
     'Pick your data',
-    'Ask a question',
-    'Work with an agent',
+    'Run a workflow',
+    'Agents are the building blocks',
     'Read, refine, download',
   ];
   for (const [index, step] of steps.entries()) {
@@ -142,9 +140,11 @@ test('the start page explains how the product works', async ({ page }) => {
   await expectCurrent(page, 'Datasets');
 
   await page.goto(page.url());
-  await step(2).getByRole('button', { name: 'Start a conversation' }).click();
-  await expect(page.getByPlaceholder('My new session')).toBeVisible();
-  await expectCurrent(page, 'Runs');
+  await step(2).getByRole('button', { name: 'Workflows' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
+  ).toBeVisible();
+  await expectCurrent(page, 'Workflows');
 
   await page.goto(page.url());
   await step(3).getByRole('button', { name: 'Agents' }).click();
@@ -155,6 +155,85 @@ test('the start page explains how the product works', async ({ page }) => {
   await page.getByRole('button', { name: 'Explore agents' }).click();
   await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
   await expectCurrent(page, 'Agents');
+});
+
+test(
+  'Chats can no longer be started: home points to workflows, and nothing offers a chat',
+  { tag: ['@demo', '@story-1.23.22'] },
+  async ({ page }) => {
+    await scenarioStep(page, 'Given I open the app on its home page', async () => {
+      await expect(page.getByTestId('welcome')).toBeVisible();
+    });
+    await scenarioStep(page, 'Then home shows "Run a workflow"', async () => {
+      await expect(page.getByTestId('welcome-step-2')).toContainText(
+        'Run a workflow',
+      );
+    });
+    await scenarioStep(page, 'When I open Workflows', async () => {
+      await railItem(page, 'Workflows').click();
+      await expect(
+        page.getByRole('heading', { name: 'Workflows', exact: true }),
+      ).toBeVisible();
+    });
+    await scenarioStep(
+      page,
+      'Then every workflow has "Run" and none has "Start chat"',
+      async () => {
+        const cards = page.locator('[data-testid^="workflow-card-"]');
+        await expect(cards.first()).toBeVisible();
+        const count = await cards.count();
+        expect(count).toBeGreaterThan(0);
+        await expect(
+          page.locator('[data-testid^="workflow-run-open-"]'),
+        ).toHaveCount(count);
+        await expect(
+          page.getByRole('button', { name: /Start chat/ }),
+        ).toHaveCount(0);
+      },
+    );
+    await scenarioStep(
+      page,
+      'When I open Runs, then there is no "Start New Conversation"',
+      async () => {
+        await railItem(page, 'Runs').click();
+        await expect(sessionsList(page)).toBeVisible();
+        await expect(
+          page.getByRole('button', { name: 'Start New Conversation' }),
+        ).toHaveCount(0);
+      },
+    );
+  },
+);
+
+test('no Start chat, New conversation or Send message control exists outside the agent editor', async ({
+  page,
+}) => {
+  const chatControls = page.getByRole('button', {
+    name: /Start chat|New conversation|Start New Conversation|Send message/,
+  });
+  const chatHeadings = page.getByRole('heading', {
+    name: 'New conversation',
+  });
+  const noChatControl = async () => {
+    await expect(chatControls).toHaveCount(0);
+    await expect(chatHeadings).toHaveCount(0);
+  };
+
+  await noChatControl(); // home
+  await railItem(page, 'Workflows').click();
+  await expect(page.getByTestId('workflows-page')).toBeVisible();
+  await noChatControl();
+  await page.locator('[data-testid^="workflow-card-"]').first().click();
+  await expect(page.getByTestId('workflow-detail-name')).toBeVisible();
+  await noChatControl();
+  await railItem(page, 'Agents').click();
+  await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
+  await noChatControl();
+  await railItem(page, 'Runs').click();
+  await expect(sessionsList(page)).toBeVisible();
+  await noChatControl();
+  await page.getByRole('tab', { name: 'Past chats', exact: true }).click();
+  await noChatControl();
 });
 
 test('opens with the navigation drawer expanded', async ({ page }) => {

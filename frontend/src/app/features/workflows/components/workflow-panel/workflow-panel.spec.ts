@@ -50,7 +50,6 @@ const SEQ: WorkflowDetail = {
       placeholder: 'Paste or type any text',
     },
   ],
-  picksDatasets: false,
   datasets: [],
   missingDatasets: [],
   starterQuestions: [],
@@ -66,10 +65,9 @@ const V2: WorkflowDetail = {
   id: 'qti-v2-turn',
   name: 'Questions to Insights v2',
   description: 'Answers a question in four steps.',
-  trigger: 'chat',
+  trigger: 'run',
   input: [],
   agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
-  picksDatasets: true,
   steps: [
     STEP('receive-question', 'Receive question', ['question', 'datasets'], ['question', 'datasets']),
     {
@@ -130,11 +128,10 @@ const ASSISTANT: WorkflowDetail = {
   id: 'agent:assistant',
   name: 'Assistant',
   kind: 'agent',
-  trigger: 'chat',
+  trigger: 'run',
   bar: 'agent',
   stepCount: 1,
   agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
-  picksDatasets: true,
   input: [
     {
       name: 'question',
@@ -236,7 +233,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
   }
 
   describe('tabs', () => {
-    it('a run workflow has Workflow, Step, Run and Code; a chat workflow no Run', () => {
+    it('a workflow with an input has Workflow, Step, Run and Code; one without no Run', () => {
       open(SEQ);
       expect(tabs()).toEqual(['Workflow', 'Step', 'Run', 'Code']);
       fixture.destroy();
@@ -276,7 +273,6 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(text('workflow-panel-name')).toBe('Sequential test workflow');
       expect(text('workflow-panel-description')).toBe('A three-step example.');
       expect(text('workflow-panel-trigger')).toBe('Runs on an input');
-      expect(q('workflow-bar-note')).toBeNull();
       const param = q('workflow-param-text')!;
       expect(param.textContent).toContain('text');
       expect(param.textContent).toContain('Text');
@@ -286,7 +282,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(el.querySelector('#workflow-agents-heading')).toBeNull();
     });
 
-    it('a chat workflow with a typed input lists that input once, not its first step', () => {
+    it('a workflow with a typed input lists that input once, and its agents', () => {
       open({
         ...V2,
         input: [
@@ -294,20 +290,10 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
           { name: 'datasets', label: 'Datasets', type: 'text', required: true },
         ],
       });
-      const params = el.querySelectorAll('[data-testid="workflow-param-question"]');
-      expect(params.length).toBe(1);
-      expect(params[0].textContent).not.toContain('from each chat message');
+      expect(el.querySelectorAll('[data-testid="workflow-param-question"]').length).toBe(1);
       expect(el.querySelectorAll('[data-testid="workflow-param-datasets"]').length).toBe(1);
-    });
-
-    it('a chat workflow: its trigger, bar note, what it takes from each message, and its agents', () => {
-      open(V2);
-      expect(text('workflow-panel-trigger')).toBe('Runs in a chat');
-      expect(text('workflow-bar-note')).toBe(
-        'In a chat, the workflow bar shows these steps as they run.',
-      );
-      expect(q('workflow-param-question')?.textContent).toContain('from each chat message');
-      expect(q('workflow-param-datasets')).not.toBeNull();
+      expect(text('workflow-panel-trigger')).toBe('Runs on an input');
+      expect(q('workflow-bar-note')).toBeNull();
       expect(
         Array.from(q('workflow-panel-output')!.querySelectorAll('li')).map((li) =>
           li.textContent?.trim(),
@@ -318,13 +304,6 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(agent.textContent).toContain('Official');
       agent.click();
       expect(openedAgents).toEqual(['assistant-v2']);
-    });
-
-    it("says the agent's own steps drive the bar for a one-step workflow", () => {
-      open({ ...V2, bar: 'agent' });
-      expect(text('workflow-bar-note')).toBe(
-        "In a chat, the workflow bar shows the agent's own steps as it sets them.",
-      );
     });
   });
 
@@ -615,7 +594,6 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
         ...ASSISTANT,
         id: 'agent:u1',
         owner: 'You',
-        picksDatasets: false,
         datasets: ['World Cup Core'],
         input: ASSISTANT.input.filter((f) => f.type !== 'datasets'),
       });
@@ -848,7 +826,6 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       id: 'agent:rfp',
       name: 'RFP Builder',
       agents: [{ key: 'rfp', name: 'RFP Builder' }],
-      picksDatasets: false,
       datasets: ['Intellify RFP API'],
       input: [
         {

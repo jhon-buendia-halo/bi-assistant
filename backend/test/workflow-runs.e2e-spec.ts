@@ -305,7 +305,7 @@ describe('Streamed runs of agent workflows (API)', () => {
     it('Questions to Insights v2', async () => {
       const question = 'Which stadium hosted the final?';
       const session = await createSession({
-        workflowId: 'qti-v2-turn',
+        agentId: 'assistant-v2',
         name: 'Parity v2',
         datasets: ['World Cup Core'],
       });
@@ -321,9 +321,7 @@ describe('Streamed runs of agent workflows (API)', () => {
 
     it('the Data Readiness Agent', async () => {
       const question = 'What are the worst data-quality problems?';
-      const session = await createSession({
-        workflowId: 'agent:data-readiness',
-      });
+      const session = await createSession({ agentId: 'data-readiness' });
       expect(session.datasets).toEqual(['World Cup Core']);
       const chat = await recorded(() => chatTurn(session.id, question));
       const run = await recorded(() =>
@@ -337,7 +335,7 @@ describe('Streamed runs of agent workflows (API)', () => {
 
     it('the RFP Builder', async () => {
       const message = 'Start an RFP for Acme, plan year 2027';
-      const session = await createSession({ workflowId: 'agent:rfp' });
+      const session = await createSession({ agentId: 'rfp' });
       const chat = await recorded(() => chatTurn(session.id, message));
       const run = await recorded(() =>
         runStream('agent:rfp', { input: { message } }),

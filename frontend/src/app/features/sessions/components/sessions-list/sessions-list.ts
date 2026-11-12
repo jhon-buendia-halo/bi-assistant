@@ -15,7 +15,6 @@ import {
   Loader2,
   LucideAngularModule,
   Search,
-  SquarePen,
   Trash2,
   Workflow,
 } from 'lucide-angular';
@@ -82,11 +81,9 @@ export class SessionsList {
 
   readonly openSession = output<Session>();
   readonly deleteSession = output<Session>();
-  readonly newConversation = output<void>();
 
   protected readonly Search = Search;
   protected readonly Loader2 = Loader2;
-  protected readonly SquarePen = SquarePen;
   protected readonly Trash2 = Trash2;
   protected readonly EllipsisVertical = EllipsisVertical;
   protected readonly Copy = Copy;

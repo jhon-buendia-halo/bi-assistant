@@ -52,10 +52,9 @@ export class SessionsState {
   /** Title of the Runs area's page header (app-shell R49). */
   readonly pageTitle = computed(() => {
     const view = this.shell.mainView();
-    if (view === 'session-chat') {
-      return this.activeSession()?.name ?? 'Runs';
-    }
-    return view === 'conversation-new' ? 'New conversation' : 'Runs';
+    return view === 'session-chat'
+      ? (this.activeSession()?.name ?? 'Runs')
+      : 'Runs';
   });
 
   /** The page header shows the session's datasources while a chat is open. */

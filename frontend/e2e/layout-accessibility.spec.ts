@@ -149,17 +149,6 @@ test('has no automatically detectable accessibility violations on any screen in 
       },
     ],
     [
-      'New-session composer',
-      async () => {
-        await rail('Runs').click();
-        await page
-          .locator('header')
-          .getByRole('button', { name: 'Start New Conversation' })
-          .click();
-        await expect(page.getByPlaceholder('My new session')).toBeVisible();
-      },
-    ],
-    [
       'Datasource Configuration',
       () => settingsSection('Datasource Configuration'),
     ],

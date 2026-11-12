@@ -39,12 +39,11 @@ import {
 export type WorkflowBar = 'steps' | 'agent';
 
 /**
- * How a workflow is started (ADR-0040 amendment; plan 9.1): `chat` runs it
- * on every message of a chat; `run` runs it once on a typed input, and its
- * result is shown on its page. Until chats go (1.23.22), the agent workflows
- * keep `chat` and also run on their input (ADR-0041; plan 5.2).
+ * How a workflow is started: every workflow runs once on a typed input
+ * (`POST /workflows/:id/runs`, ADR-0040 amendment; chats retired in 1.23.22),
+ * and its result is shown on its page.
  */
-export type WorkflowTrigger = 'chat' | 'run';
+export type WorkflowTrigger = 'run';
 
 /** The type of one input field (plan 4.1). */
 export type WorkflowInputFieldType =
@@ -208,7 +207,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] = [
     name: ASSISTANT_V2_NAME,
     description: ASSISTANT_V2_DESCRIPTION,
     primaryFor: ASSISTANT_V2_AGENT_KEY,
-    trigger: 'chat',
+    trigger: 'run',
     input: [QUESTION_FIELD, DATASETS_FIELD],
     steps: QTI_V2_TURN_STEPS,
     bar: 'steps',
@@ -244,13 +243,8 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] = [
   },
 ];
 
-/** Every one-step workflow (`agent:*`) runs in a chat. */
-export const ONE_STEP_WORKFLOW_TRIGGER: WorkflowTrigger = 'chat';
-
-/** Whether a code workflow can start a chat (`POST /sessions { workflowId }`). */
-export function workflowStartsChat(source: CodeWorkflowSource): boolean {
-  return source.trigger === 'chat';
-}
+/** Every one-step workflow (`agent:*`) runs on its input. */
+export const ONE_STEP_WORKFLOW_TRIGGER: WorkflowTrigger = 'run';
 
 /** One value of a run's input. */
 export type WorkflowInputValue = string | number | boolean | string[];

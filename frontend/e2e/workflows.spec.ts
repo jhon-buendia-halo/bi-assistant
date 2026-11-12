@@ -98,7 +98,7 @@ async function backToWorkflows(page: Page): Promise<void> {
 
 test.describe('Feature: Workflows', () => {
   test(
-    'Open a workflow and start a chat from it',
+    'Open a workflow and run it from its page',
     { tag: ['@demo', '@story-1.23.5'] },
     async ({ page }) => {
       await scenarioStep(page, 'When I click "Workflows" on the rail', async () => {
@@ -136,9 +136,7 @@ test.describe('Feature: Workflows', () => {
         async () => {
           await expect(drawnSteps(page)).toHaveText(V2_STEPS);
           const panel = detailsPanel(page);
-          await expect(panel.getByTestId('workflow-bar-note')).toHaveText(
-            'In a chat, the workflow bar shows these steps as they run.',
-          );
+          await expect(panel.getByTestId('workflow-bar-note')).toHaveCount(0);
           const agent = panel.getByTestId('workflow-agent-assistant-v2');
           await expect(agent).toHaveAccessibleName(`Open agent ${V2}`);
           await expect(agent).toContainText('Official');
@@ -177,29 +175,24 @@ test.describe('Feature: Workflows', () => {
           );
           await expect(drawnSteps(page)).toHaveText(['Answer']);
           const panel = detailsPanel(page);
-          await expect(panel.getByTestId('workflow-bar-note')).toHaveText(
-            "In a chat, the workflow bar shows the agent's own steps as it sets them.",
-          );
           await expect(panel.getByTestId(`workflow-agent-${healthId}`)).toContainText(
             'You',
           );
         },
       );
-      await scenarioStep(page, 'When I click "Start chat"', async () => {
-        await page.getByTestId('workflow-start-chat').click();
+      await scenarioStep(page, 'When I click "Execute"', async () => {
+        await page.getByTestId('workflow-execute').click();
       });
       await scenarioStep(
         page,
-        `Then I see "Session "${HEALTH}" created" and the chat opens`,
+        'Then the panel opens on its Run tab and no chat is started',
         async () => {
-          await expect(
-            page.getByText(`Session "${HEALTH}" created`, { exact: true }),
-          ).toBeVisible();
-          await expect(page.getByPlaceholder('Ask a follow-up question…')).toBeVisible();
-          await expect(
-            page.getByRole('heading', { name: HEALTH, exact: true }),
-          ).toBeVisible();
-          await expect(railItem(page, 'Runs')).toHaveAttribute(
+          await expect(panelTab(page, 'run')).toHaveAttribute(
+            'aria-selected',
+            'true',
+          );
+          await expect(page.getByTestId('workflow-start-chat')).toHaveCount(0);
+          await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
             'page',
           );
@@ -208,31 +201,31 @@ test.describe('Feature: Workflows', () => {
     },
   );
 
-  test('A workflow that cannot start says why', async ({ page }) => {
+  test('A workflow that cannot run says why', async ({ page }) => {
     await test.step('When I open Workflows', async () => {
       await openWorkflows(page);
     });
     await test.step(
-      'Then the "RFP Builder" card\'s Start chat is disabled with its requirement as the title',
+      'Then the "RFP Builder" card has Run and no Start chat',
       async () => {
-        const start = page.getByTestId('workflow-start-chat-agent:rfp');
-        await expect(start).toBeDisabled();
-        await expect(start).toHaveAttribute('title', RFP_REQUIREMENT);
-        await expect(start).toHaveAccessibleName('Start chat with RFP Builder');
+        const card = page.getByTestId('workflow-card-agent:rfp');
+        await expect(
+          card.getByRole('button', { name: 'Run RFP Builder' }),
+        ).toBeVisible();
+        await expect(card.getByRole('button', { name: /Start chat/ })).toHaveCount(0);
       },
     );
-    await test.step('When I open "RFP Builder"', async () => {
+    await test.step('When I open "RFP Builder" and click Execute', async () => {
       await openWorkflow(page, 'agent:rfp', 'RFP Builder');
+      await page.getByTestId('workflow-execute').click();
     });
     await test.step(
-      'Then its Start chat is disabled and the requirement is written beside it',
+      'Then its Run tab writes the requirement and its Execute is disabled',
       async () => {
-        const start = page.getByTestId('workflow-start-chat');
-        await expect(start).toBeDisabled();
-        await expect(start).toHaveAttribute('title', RFP_REQUIREMENT);
-        await expect(page.getByTestId('workflow-chat-requirement')).toHaveText(
+        await expect(page.getByTestId('workflow-run-requirement')).toHaveText(
           RFP_REQUIREMENT,
         );
+        await expect(page.getByTestId('workflow-run')).toBeDisabled();
       },
     );
   });
@@ -321,13 +314,13 @@ test.describe('Feature: Workflows (run workflows)', () => {
       });
       await scenarioStep(
         page,
-        'Then I see "Sequential test workflow" with "Runs on an input" and no Start chat',
+        'Then I see "Sequential test workflow" with "3 steps" and no Start chat',
         async () => {
           const card = page.getByTestId(`workflow-card-${SEQ_ID}`);
           await expect(card).toBeVisible();
           await expect(page.getByTestId(`workflow-${SEQ_ID}`)).toContainText(SEQ);
           await expect(page.getByTestId(`workflow-kind-${SEQ_ID}`)).toHaveText(
-            'Runs on an input',
+            '3 steps',
           );
           await expect(page.getByTestId(`workflow-start-chat-${SEQ_ID}`)).toHaveCount(0);
           await expect(card.getByRole('button', { name: /start chat/i })).toHaveCount(0);
@@ -345,7 +338,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
         async () => {
           await expect(drawnSteps(page)).toHaveText(SEQ_STEPS);
           await expect(page.getByTestId('workflow-detail-kind')).toHaveText(
-            'Runs on an input',
+            '3 steps',
           );
           await expect(page.getByTestId('workflow-execute')).toHaveText('Execute');
           await expect(page.getByTestId('workflow-start-chat')).toHaveCount(0);
@@ -486,7 +479,7 @@ test.describe('Feature: Workflows (the designer)', () => {
           const panel = detailsPanel(page);
           await expect(panelTab(page, 'workflow')).toHaveAttribute('aria-selected', 'true');
           await expect(panel.getByTestId('workflow-panel-name')).toHaveText(V2);
-          await expect(panel.getByTestId('workflow-panel-trigger')).toHaveText('Runs in a chat');
+          await expect(panel.getByTestId('workflow-panel-trigger')).toHaveText('Runs on an input');
           await expect(panel.getByTestId('workflow-param-question')).toBeVisible();
           await expect(panel.getByTestId('workflow-param-datasets')).toBeVisible();
           await expect(panel.getByTestId('workflow-panel-output').getByRole('listitem')).toHaveText([
@@ -600,7 +593,7 @@ test('the Workflows pages have no detectable accessibility violations in either 
 
   await backToWorkflows(page);
   await openWorkflow(page, 'agent:rfp', 'RFP Builder');
-  await expect(page.getByTestId('workflow-chat-requirement')).toBeVisible();
+  await expect(page.getByTestId('workflow-execute')).toBeVisible();
   await scan('RFP Builder page');
 
   await backToWorkflows(page);

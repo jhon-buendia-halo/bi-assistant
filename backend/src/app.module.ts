@@ -21,6 +21,7 @@ import { DataReadinessModule } from './modules/data-readiness/data-readiness.mod
 import { SyntheticDataModule } from './modules/synthetic-data/synthetic-data.module';
 import { MonitoringModule } from './modules/monitoring/monitoring.module';
 import { WorkflowsModule } from './modules/workflows/workflows.module';
+import { HealthController } from './modules/health/health.controller';
 
 @Module({
   imports: [
@@ -47,7 +48,7 @@ import { WorkflowsModule } from './modules/workflows/workflows.module';
     SyntheticDataModule,
     MonitoringModule,
   ],
-  controllers: [],
+  controllers: [HealthController],
   providers: [],
 })
 export class AppModule {}

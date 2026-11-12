@@ -3,11 +3,12 @@
  * R1-R4; api.md 116, 117, 3, 2.1 and 34; ADR-0040): `GET /workflows` lists
  * the assistant's, Questions to Insights v2's and the Official agents'
  * workflows and one per Live user agent, `GET /workflows/:id` answers 404
- * for System and draft-only agents, `POST /sessions { workflowId }` starts a
- * session bound to that workflow, every session read carries `workflowRef`,
+ * for System and draft-only agents, `POST /sessions { workflowId }` is
+ * refused (a workflow runs on an input, 1.23.22), every session read carries
+ * `workflowRef`,
  * and an agent's detail says which workflows use it. The sequential test
  * workflow runs once on a text (`POST /workflows/:id/runs`, api.md 118;
- * workflows R11), and neither kind of workflow starts the other's way.
+ * workflows R11); no workflow starts a chat.
  *
  * Needs no Postgres: the datasource points at a closed port, and saving a
  * dataset only samples it on a best-effort basis.
@@ -29,11 +30,10 @@ interface WorkflowSummary {
   owner: 'Official' | 'You';
   agents: { key: string; name: string }[];
   stepCount: number;
-  trigger: 'chat' | 'run';
+  trigger: 'run';
   input: { name: string; label: string; type: string; required: boolean }[];
-  picksDatasets: boolean;
   datasets: string[];
-  chatRequirement?: string;
+  runRequirement?: string;
 }
 
 interface SessionView {
@@ -86,6 +86,11 @@ describe('The workflow catalogue (API)', () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
+  it('GET /health answers { ok: true }: the desktop readiness probe (api.md 135)', async () => {
+    const res = await http().get('/health').expect(200);
+    expect(res.body).toEqual({ ok: true });
+  });
+
   it('lists the six Official workflows on a fresh data dir, in catalogue order', async () => {
     const listed = await workflows();
     expect(listed.map((w) => w.id)).toEqual([
@@ -96,29 +101,32 @@ describe('The workflow catalogue (API)', () => {
       'agent:data-readiness',
       'agent:rfp',
     ]);
+    // Every workflow runs on its input; the `chat` trigger is gone (1.23.22).
     expect(listed.map((w) => w.trigger)).toEqual([
-      'chat',
-      'chat',
       'run',
       'run',
-      'chat',
-      'chat',
+      'run',
+      'run',
+      'run',
+      'run',
     ]);
+    for (const workflow of listed) {
+      expect(workflow).not.toHaveProperty('picksDatasets');
+      expect(workflow).not.toHaveProperty('chatRequirement');
+    }
     expect(listed[0]).toMatchObject({
       name: 'Assistant',
       kind: 'agent',
-      picksDatasets: true,
       stepCount: 1,
     });
-    expect(listed[0]).not.toHaveProperty('chatRequirement');
+    expect(listed[0]).not.toHaveProperty('runRequirement');
     expect(listed[1]).toMatchObject({
       name: 'Questions to Insights v2',
       kind: 'code',
       stepCount: 4,
       agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
     });
-    expect(listed[1]).not.toHaveProperty('chatRequirement');
-    // A chat workflow that also runs on an input until chats go (1.23.12).
+    expect(listed[1]).not.toHaveProperty('runRequirement');
     expect(listed[1].input.map((field) => field.name)).toEqual([
       'question',
       'datasets',
@@ -143,16 +151,15 @@ describe('The workflow catalogue (API)', () => {
       name: 'Deep analysis',
       kind: 'code',
       stepCount: 4,
-      picksDatasets: true,
       agents: [{ key: 'assistant' }],
     });
     expect(listed[4]).toMatchObject({
       name: 'Data Readiness Agent',
-      chatRequirement: 'Add a PostgreSQL or Databricks dataset first',
+      runRequirement: 'Add a PostgreSQL or Databricks dataset first',
     });
     expect(listed[5]).toMatchObject({
       name: 'RFP Builder',
-      chatRequirement:
+      runRequirement:
         'Load the "Intellify RFP API" sample in Settings → Testing Data first',
     });
   });
@@ -256,9 +263,9 @@ describe('The workflow catalogue (API)', () => {
       ]);
     });
 
-    it('POST /sessions { workflowId: qti-v2-turn } binds the session to v2 and its workflow', async () => {
+    it('POST /sessions { agentId: assistant-v2 } binds the session to v2 and its workflow', async () => {
       const answer = await createSession({
-        workflowId: 'qti-v2-turn',
+        agentId: 'assistant-v2',
         name: 'v2 chat',
         datasets: ['World Cup Core'],
       });
@@ -284,18 +291,42 @@ describe('The workflow catalogue (API)', () => {
       expect(read.workflowRef?.name).toBe('Questions to Insights v2');
     });
 
-    it('refuses workflowId with agentId, and an unknown workflow id', async () => {
+    it('refuses any workflowId: a workflow runs on an input, and nothing is created', async () => {
+      const before = (
+        (await http().get('/sessions').expect(200)).body as {
+          sessions: SessionView[];
+        }
+      ).sessions.length;
+      for (const workflowId of [
+        'qti-v2-turn',
+        'agent:assistant',
+        'seq-text-demo',
+        'nope',
+        `agent:${draftId}`,
+      ]) {
+        expect(
+          await createSession({
+            workflowId,
+            name: 'Chat',
+            datasets: ['World Cup Core'],
+          }),
+        ).toEqual({
+          ok: false,
+          message: `Workflow "${workflowId}" runs on an input`,
+        });
+      }
       expect(
         await createSession({ workflowId: 'qti-v2-turn', agentId: liveId }),
-      ).toEqual({ ok: false, message: 'Send workflowId or agentId, not both' });
-      expect(await createSession({ workflowId: 'nope' })).toEqual({
+      ).toEqual({
         ok: false,
-        message: 'Workflow "nope" not found',
+        message: 'Workflow "qti-v2-turn" runs on an input',
       });
-      expect(await createSession({ workflowId: `agent:${draftId}` })).toEqual({
-        ok: false,
-        message: `Workflow "agent:${draftId}" not found`,
-      });
+      const after = (
+        (await http().get('/sessions').expect(200)).body as {
+          sessions: SessionView[];
+        }
+      ).sessions.length;
+      expect(after).toBe(before);
     });
 
     it('a session created with a plain body runs agent:assistant', async () => {
@@ -428,24 +459,6 @@ describe('The workflow catalogue (API)', () => {
       expect((unknown.body as { message: string }).message).toBe(
         'Workflow "nope" not found',
       );
-    });
-
-    it("POST /sessions refuses a run workflow: it can't start a chat", async () => {
-      const before = (
-        (await http().get('/sessions').expect(200)).body as {
-          sessions: SessionView[];
-        }
-      ).sessions.length;
-      expect(await createSession({ workflowId: 'seq-text-demo' })).toEqual({
-        ok: false,
-        message: 'Workflow "seq-text-demo" can\'t start a chat',
-      });
-      const after = (
-        (await http().get('/sessions').expect(200)).body as {
-          sessions: SessionView[];
-        }
-      ).sessions.length;
-      expect(after).toBe(before);
     });
   });
 });

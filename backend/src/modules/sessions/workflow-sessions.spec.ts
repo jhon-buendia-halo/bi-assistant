@@ -76,7 +76,6 @@ jest.mock('./visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
 
-import { BadRequestException } from '@nestjs/common';
 import { sessionWorkflowId } from '../../mastra/workflows/workflow-catalog';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
@@ -185,135 +184,10 @@ describe('SessionsService sessions bound to a workflow (ADR-0040)', () => {
       ],
       ['a Live user agent', (s) => s.createFromAgent('u-live'), 'agent:u-live'],
       ['a preview', (s) => s.createPreview('u-draft'), 'agent:u-draft'],
-      [
-        'workflowId qti-v2-turn',
-        (s) => s.createFromWorkflow('qti-v2-turn', 'v2 chat', ['World Cup']),
-        'qti-v2-turn',
-      ],
-      [
-        'workflowId agent:assistant',
-        (s) => s.createFromWorkflow('agent:assistant', 'Chat', ['World Cup']),
-        'agent:assistant',
-      ],
-      [
-        'workflowId agent:rfp',
-        (s) => s.createFromWorkflow('agent:rfp'),
-        'agent:rfp',
-      ],
-      [
-        'workflowId agent:<Live user agent>',
-        (s) => s.createFromWorkflow('agent:u-live'),
-        'agent:u-live',
-      ],
     ])('%s', async (_label, create, expected) => {
       const session = await create(build().service);
       expect(session.workflowId).toBe(expected);
       expect(session.workflowId).toBe(derived(session));
-    });
-  });
-
-  describe('createFromWorkflow (api.md 3)', () => {
-    it('qti-v2-turn creates the session as agentId assistant-v2 does', async () => {
-      const ctx = build();
-      const session = await ctx.service.createFromWorkflow(
-        'qti-v2-turn',
-        ' v2 chat ',
-        ['World Cup'],
-      );
-      expect(session).toMatchObject({
-        name: 'v2 chat',
-        datasets: ['World Cup'],
-        agentKey: 'assistant-v2',
-        agentName: 'Questions to Insights v2',
-        workflowId: 'qti-v2-turn',
-      });
-    });
-
-    it('agent:assistant creates a plain session, no agent fields', async () => {
-      const session = await build().service.createFromWorkflow(
-        'agent:assistant',
-        'Chat',
-        ['World Cup'],
-      );
-      expect(session).toMatchObject({ name: 'Chat', datasets: ['World Cup'] });
-      expect(session).not.toHaveProperty('agentKey');
-      expect(session).not.toHaveProperty('agentId');
-    });
-
-    it.each(['qti-v2-turn', 'agent:assistant'])(
-      '%s validates name and datasets as a plain body does',
-      async (id) => {
-        const { service } = build();
-        await expect(
-          service.createFromWorkflow(id, '  ', ['World Cup']),
-        ).rejects.toThrow('session name is required');
-        await expect(
-          service.createFromWorkflow(id, 'Chat', []),
-        ).rejects.toThrow('select at least one dataset');
-        await expect(service.createFromWorkflow(id, 'Chat')).rejects.toThrow(
-          'select at least one dataset',
-        );
-      },
-    );
-
-    it("a one-step workflow ignores the body's datasets and takes an optional name", async () => {
-      const { service } = build();
-      const rfp = await service.createFromWorkflow('agent:rfp', undefined, [
-        'World Cup',
-      ]);
-      expect(rfp).toMatchObject({
-        name: 'RFP Builder',
-        datasets: ['Intellify RFP API'],
-        agentKey: 'rfp',
-      });
-      const user = await service.createFromWorkflow('agent:u-live', 'Kickoff', [
-        'Other',
-      ]);
-      expect(user).toMatchObject({
-        name: 'Kickoff',
-        datasets: ['World Cup'],
-        agentId: 'u-live',
-        agentName: 'Historian',
-      });
-    });
-
-    it.each([
-      'nope',
-      'agent:no-such-agent',
-      'agent:u-draft',
-      'agent:sql-fixer',
-      'agent:assistant-v2',
-      'agent-turn',
-    ])('refuses %p with "Workflow not found", creating nothing', async (id) => {
-      const ctx = build();
-      await expect(
-        ctx.service.createFromWorkflow(id, 'Chat', ['World Cup']),
-      ).rejects.toThrow(`Workflow "${id}" not found`);
-      expect(ctx.repository.insert).not.toHaveBeenCalled();
-    });
-
-    it("refuses a run workflow: it can't start a chat, creating nothing (workflows R11)", async () => {
-      const ctx = build();
-      const refusal = ctx.service.createFromWorkflow('seq-text-demo', 'Chat', [
-        'World Cup',
-      ]);
-      await expect(refusal).rejects.toBeInstanceOf(BadRequestException);
-      await expect(refusal).rejects.toThrow(
-        `Workflow "seq-text-demo" can't start a chat`,
-      );
-      expect(ctx.repository.insert).not.toHaveBeenCalled();
-    });
-
-    it("refuses a Live user agent with no dataset left, with the agentId path's text", async () => {
-      const ctx = build();
-      ctx.docs.set('u-empty', {
-        id: 'u-empty',
-        draft: config('Empty', ['Gone']),
-        live: config('Empty', ['Gone']),
-      } as unknown as UserAgentDoc);
-      await expect(
-        ctx.service.createFromWorkflow('agent:u-empty'),
-      ).rejects.toThrow("None of this agent's datasets exist");
     });
   });
 
@@ -419,9 +293,6 @@ describe('SessionsController POST /sessions with workflowId (api.md 3)', () => {
       create: jest.fn(),
       createFromAgent: jest.fn(),
       createPreview: jest.fn(),
-      createFromWorkflow: jest
-        .fn()
-        .mockResolvedValue({ id: 's', name: 'Chat', datasets: [] }),
       toView: jest.fn((s: SessionDoc) => Promise.resolve(s)),
     };
     return {
@@ -430,32 +301,18 @@ describe('SessionsController POST /sessions with workflowId (api.md 3)', () => {
     };
   };
 
-  it('refuses workflowId together with agentId', async () => {
+  it('refuses a workflowId: a workflow runs on an input, creating nothing', async () => {
     const { controller, service } = controllerWith();
-    expect(
-      await controller.create({ workflowId: 'qti-v2-turn', agentId: 'rfp' }),
-    ).toEqual({ ok: false, message: 'Send workflowId or agentId, not both' });
-    expect(service.createFromWorkflow).not.toHaveBeenCalled();
+    for (const workflowId of ['qti-v2-turn', 'agent:assistant', 'agent:rfp']) {
+      expect(
+        await controller.create({ workflowId, name: 'Chat', preview: true }),
+      ).toEqual({
+        ok: false,
+        message: `Workflow "${workflowId}" runs on an input`,
+      });
+    }
+    expect(service.create).not.toHaveBeenCalled();
     expect(service.createFromAgent).not.toHaveBeenCalled();
-  });
-
-  it('passes workflowId, name and datasets on, ignoring preview', async () => {
-    const { controller, service } = controllerWith();
-    const answer = await controller.create({
-      workflowId: 'qti-v2-turn',
-      name: 'Chat',
-      datasets: ['World Cup'],
-      preview: true,
-    });
-    expect(service.createFromWorkflow).toHaveBeenCalledWith(
-      'qti-v2-turn',
-      'Chat',
-      ['World Cup'],
-    );
     expect(service.createPreview).not.toHaveBeenCalled();
-    expect(answer).toMatchObject({
-      ok: true,
-      message: 'Session "Chat" created',
-    });
   });
 });

@@ -139,9 +139,8 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
       stepCount: 1,
       bar: 'agent',
-      trigger: 'chat',
+      trigger: 'run',
       input: oneStepWorkflowInput('assistant'),
-      picksDatasets: true,
       datasets: [],
       missingDatasets: [],
       starterQuestions: [],
@@ -156,7 +155,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
       stepCount: 4,
       bar: 'steps',
-      trigger: 'chat',
+      trigger: 'run',
       input: [
         {
           name: 'question',
@@ -172,7 +171,6 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
           required: true,
         },
       ],
-      picksDatasets: true,
       datasets: [],
       missingDatasets: [],
       starterQuestions: [],
@@ -197,7 +195,6 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
           placeholder: 'Paste or type any text',
         },
       ],
-      picksDatasets: false,
       datasets: [],
       missingDatasets: [],
       starterQuestions: [],
@@ -216,7 +213,6 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       bar: 'steps',
       trigger: 'run',
       input: workflows[1].input,
-      picksDatasets: true,
       datasets: [],
       missingDatasets: [],
       starterQuestions: [],
@@ -230,9 +226,8 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       agents: [{ key: 'data-readiness', name: 'Data Readiness Agent' }],
       stepCount: 1,
       bar: 'agent',
-      trigger: 'chat',
+      trigger: 'run',
       input: oneStepWorkflowInput('data-readiness'),
-      picksDatasets: false,
       datasets: ['World Cup Core'],
       missingDatasets: [],
       starterQuestions: [
@@ -250,13 +245,11 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       agents: [{ key: 'rfp', name: 'RFP Builder' }],
       stepCount: 1,
       bar: 'agent',
-      trigger: 'chat',
+      trigger: 'run',
       input: oneStepWorkflowInput('rfp'),
-      picksDatasets: false,
       datasets: ['Intellify RFP API'],
       missingDatasets: ['Intellify RFP API'],
       starterQuestions: [],
-      chatRequirement: RFP_REQUIREMENT,
       runRequirement: RFP_REQUIREMENT,
     });
     expect(workflows[6]).toEqual({
@@ -268,28 +261,27 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       agents: [{ key: alpha.id, name: 'Alpha' }],
       stepCount: 1,
       bar: 'agent',
-      trigger: 'chat',
+      trigger: 'run',
       input: oneStepWorkflowInput(alpha.id),
-      picksDatasets: false,
       datasets: [],
       missingDatasets: ['Gone'],
       starterQuestions: ['Ask Alpha'],
-      chatRequirement: "None of this agent's datasets exist",
       runRequirement: "None of this agent's datasets exist",
     });
     expect(workflows[7]).toMatchObject({
       id: `agent:${zeta.id}`,
       owner: 'You',
-      trigger: 'chat',
+      trigger: 'run',
       input: oneStepWorkflowInput(zeta.id),
       datasets: ['World Cup Core'],
       missingDatasets: [],
     });
-    expect(workflows[7]).not.toHaveProperty('chatRequirement');
     expect(workflows[7]).not.toHaveProperty('runRequirement');
     // Every workflow says how it is started and what it takes.
     for (const workflow of workflows) {
-      expect(['chat', 'run']).toContain(workflow.trigger);
+      expect(workflow.trigger).toBe('run');
+      expect(workflow).not.toHaveProperty('picksDatasets');
+      expect(workflow).not.toHaveProperty('chatRequirement');
       expect(Array.isArray(workflow.input)).toBe(true);
     }
   });
@@ -301,11 +293,10 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     const readiness = workflows.find((w) => w.id === 'agent:data-readiness');
     expect(readiness).toMatchObject({
       datasets: [],
-      chatRequirement: READINESS_REQUIREMENT,
       runRequirement: READINESS_REQUIREMENT,
     });
     const rfp = workflows.find((w) => w.id === 'agent:rfp');
-    expect(rfp).not.toHaveProperty('chatRequirement');
+    expect(rfp).not.toHaveProperty('runRequirement');
   });
 
   describe('get', () => {

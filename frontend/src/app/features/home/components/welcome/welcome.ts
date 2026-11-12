@@ -8,7 +8,7 @@ import {
   type LucideIconData,
 } from 'lucide-angular';
 
-type WelcomeAction = 'datasets' | 'conversation' | 'agents';
+type WelcomeAction = 'datasets' | 'workflows' | 'agents';
 
 interface WelcomeStep {
   title: string;
@@ -39,8 +39,8 @@ interface WelcomeStep {
             Welcome to Agentic Hub
           </h2>
           <p class="mt-1 text-[14px] leading-5 text-fg-muted">
-            Ask questions about your data in plain English, or let an agent walk
-            you through a process step by step.
+            Run a workflow on your data and read the result, with the steps and
+            agents behind it.
           </p>
         </header>
 
@@ -97,31 +97,31 @@ export class Welcome {
   readonly Bot = Bot;
 
   readonly openDatasets = output<void>();
-  readonly startConversation = output<void>();
+  readonly openWorkflows = output<void>();
   readonly openAgents = output<void>();
 
   readonly steps: WelcomeStep[] = [
     {
       title: 'Pick your data',
-      text: 'A dataset is the set of tables a conversation can use. Create one from a datasource, or use an existing one.',
+      text: 'A dataset is the set of tables a workflow can use. Create one from a datasource, or use an existing one.',
       icon: FlaskConical,
       action: { label: 'Datasets', target: 'datasets' },
     },
     {
-      title: 'Ask a question',
-      text: 'The assistant explores the data, runs read-only queries and shows how it worked the answer out, with the data it used.',
+      title: 'Run a workflow',
+      text: 'Each workflow runs on an input. Its steps call agents, which explore the data with read-only queries and show how they worked the answer out.',
       icon: SquarePen,
-      action: { label: 'Start a conversation', target: 'conversation' },
+      action: { label: 'Workflows', target: 'workflows' },
     },
     {
-      title: 'Work with an agent',
-      text: 'Agents such as the RFP Builder guide you through a process; the workflow bar above the chat shows where you are.',
+      title: 'Agents are the building blocks',
+      text: 'Agents use skills and tools. Open one to read how it works, or build your own.',
       icon: Bot,
       action: { label: 'Agents', target: 'agents' },
     },
     {
       title: 'Read, refine, download',
-      text: 'Tables, documents and visuals open in the right panel beside the chat; download them as PDF or CSV.',
+      text: 'Tables, documents and visuals open in the right panel beside a run; download them as PDF or CSV.',
       icon: PanelRight,
     },
   ];
@@ -129,6 +129,6 @@ export class Welcome {
   act(target: WelcomeAction): void {
     if (target === 'datasets') this.openDatasets.emit();
     else if (target === 'agents') this.openAgents.emit();
-    else this.startConversation.emit();
+    else this.openWorkflows.emit();
   }
 }

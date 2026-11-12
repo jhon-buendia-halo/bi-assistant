@@ -58,19 +58,15 @@ export interface WorkflowSummary {
   stepCount: number;
   /** What drives a chat's workflow bar: these steps, or the agent's own phases. */
   bar: 'steps' | 'agent';
-  /** Runs in a chat, or once on a typed input (api.md 118). */
-  trigger: 'chat' | 'run';
-  /** The typed input of a run workflow, in form order; `[]` for a chat workflow. */
+  /** Every workflow runs once on a typed input (api.md 118). */
+  trigger: 'run';
+  /** The typed input of a run workflow, in form order. */
   input: WorkflowInputField[];
-  /** The session takes the datasets the user picks. */
-  picksDatasets: boolean;
-  /** The datasets a session would take; empty when `picksDatasets`. */
+  /** The datasets the workflow's agent declares; empty when the run picks them. */
   datasets: string[];
   /** Named datasets that don't exist. */
   missingDatasets: string[];
   starterQuestions: string[];
-  /** Why a chat can't start now; absent when it can. */
-  chatRequirement?: string;
   /** Why a run can't start now; absent when it can (api.md 116). */
   runRequirement?: string;
 }

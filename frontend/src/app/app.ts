@@ -39,7 +39,6 @@ import { MonitoringArea } from './features/monitoring/components/monitoring-area
 import { SessionsArea } from './features/sessions/components/sessions-area/sessions-area';
 import { SessionsHeader } from './features/sessions/components/sessions-header/sessions-header';
 import { SessionsPanel } from './features/sessions/components/sessions-panel/sessions-panel';
-import { ComposerState } from './features/sessions/services/composer-state';
 import { SessionsState } from './features/sessions/services/sessions-state';
 import { SettingsContent } from './features/settings/components/settings-content/settings-content';
 import { SettingsNav } from './features/settings/components/settings-nav/settings-nav';
@@ -91,7 +90,6 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
 export class App {
   readonly shell = inject(ShellState);
   readonly sessions = inject(SessionsState);
-  readonly composer = inject(ComposerState);
   readonly agents = inject(AgentsNavState);
   readonly agentEditor = inject(AgentEditorService);
   readonly diagnostics = inject(DiagnosticsService);

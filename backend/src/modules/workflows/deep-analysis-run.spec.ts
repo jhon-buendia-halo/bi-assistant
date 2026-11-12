@@ -79,7 +79,6 @@ const DETAIL = {
   bar: 'steps',
   trigger: 'run',
   input: source.input,
-  picksDatasets: true,
   datasets: [],
   missingDatasets: [],
   starterQuestions: [],

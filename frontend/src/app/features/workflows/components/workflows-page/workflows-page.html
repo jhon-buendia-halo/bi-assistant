@@ -5,8 +5,8 @@
     Workflows
   </h2>
   <p class="mt-1 text-[13px] text-fg-muted">
-    Each chat runs a workflow. Its steps call agents, and agents use skills and
-    tools.
+    Each workflow runs on an input. Its steps call agents, and agents use skills
+    and tools.
   </p>
 
   <!-- Search: a full-width row under the header -->
@@ -57,9 +57,7 @@
             @for (workflow of section.workflows; track workflow.id) {
               <app-workflow-card
                 [workflow]="workflow"
-                [starting]="startingWorkflowId() === workflow.id"
                 (open)="openWorkflow.emit(workflow.id)"
-                (startChat)="startChat.emit(workflow)"
               />
             }
           </div>

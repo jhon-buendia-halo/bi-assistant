@@ -56,53 +56,15 @@
           </div>
         </div>
         <div class="ml-auto flex max-w-full shrink-0 items-center gap-3">
-          @if (w.trigger === "run") {
-            <button
-              type="button"
-              data-testid="workflow-execute"
-              (click)="execute()"
-              class="btn btn-primary shrink-0"
-            >
-              <lucide-angular [img]="Rocket" [size]="14" />
-              <span>Execute</span>
-            </button>
-          } @else {
-            @if (runnable()) {
-              <!-- A chat workflow that also runs on its input (1.23.15) -->
-              <button
-                type="button"
-                data-testid="workflow-execute"
-                (click)="execute()"
-                class="btn btn-secondary shrink-0"
-              >
-                <lucide-angular [img]="Rocket" [size]="14" />
-                <span>Execute</span>
-              </button>
-            }
-            @if (w.chatRequirement) {
-              <span
-                data-testid="workflow-chat-requirement"
-                class="max-w-[320px] text-right text-[12px] text-fg-muted"
-                >{{ w.chatRequirement }}</span
-              >
-            }
-            <button
-              type="button"
-              data-testid="workflow-start-chat"
-              (click)="startChat.emit(w)"
-              [disabled]="starting() || !!w.chatRequirement"
-              [attr.title]="w.chatRequirement ?? null"
-              class="btn btn-primary shrink-0"
-            >
-              @if (starting()) {
-                <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
-                <span>Starting…</span>
-              } @else {
-                <lucide-angular [img]="MessageSquarePlus" [size]="14" />
-                <span>Start chat</span>
-              }
-            </button>
-          }
+          <button
+            type="button"
+            data-testid="workflow-execute"
+            (click)="execute()"
+            class="btn btn-primary shrink-0"
+          >
+            <lucide-angular [img]="Rocket" [size]="14" />
+            <span>Execute</span>
+          </button>
         </div>
       </div>
     }
