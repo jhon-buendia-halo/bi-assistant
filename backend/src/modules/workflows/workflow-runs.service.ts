@@ -9,7 +9,11 @@ import { randomUUID } from 'crypto';
 import { MastraService } from '../../mastra/mastra.service';
 import {
   agentRunTurn,
+  agentWorkflowId,
+  oneStepWorkflowInput,
+  oneStepWorkflowSteps,
   parseWorkflowInput,
+  wrappedAgentMaxSteps,
   type AgentRunTurn,
   type WorkflowInputValues,
 } from '../../mastra/workflows/workflow-catalog';
@@ -65,6 +69,12 @@ export interface PreparedRun {
     rfpId?: string;
     workflowState?: WorkflowState;
   };
+  /**
+   * A draft run (api.md R12; agents-evals R60): the user agent whose saved
+   * draft the agent turn runs. Nothing about it is stored, and its host and
+   * workspace are discarded when it ends.
+   */
+  draft?: { agentId: string };
 }
 
 /** A file a run's route sends as an attachment (api.md 124, 126, 127). */
@@ -177,6 +187,54 @@ export class WorkflowRunsService implements OnModuleInit {
   }
 
   /**
+   * Check a draft run request before anything runs (api.md R12): 404 for an
+   * unknown agent, 400 `Select at least one dataset to preview` when none of
+   * the draft's datasets exists, and `Question is required` for a blank
+   * question. The workflow it runs is the agent's one-step workflow, with the
+   * draft's name.
+   */
+  async prepareDraft(agentId: string, body: unknown): Promise<PreparedRun> {
+    const target = await this.sessions.draftRunTarget(agentId);
+    const input =
+      body && typeof body === 'object'
+        ? (body as { input?: unknown }).input
+        : undefined;
+    const raw =
+      input && typeof input === 'object'
+        ? (input as { question?: unknown }).question
+        : undefined;
+    const question = typeof raw === 'string' ? raw.trim() : '';
+    if (!question) throw new BadRequestException('Question is required');
+    const fields = oneStepWorkflowInput(agentId);
+    return {
+      workflow: {
+        id: agentWorkflowId(agentId),
+        name: target.name,
+        description: '',
+        kind: 'agent',
+        owner: 'You',
+        agents: [{ key: agentId, name: target.name }],
+        stepCount: 1,
+        bar: 'agent',
+        trigger: 'run',
+        input: fields,
+        picksDatasets: false,
+        datasets: target.datasets,
+        missingDatasets: [],
+        starterQuestions: [],
+        steps: oneStepWorkflowSteps({
+          name: target.name,
+          tools: [],
+          maxSteps: wrappedAgentMaxSteps(agentId),
+        }),
+      },
+      values: { question },
+      turn: { question, careful: false },
+      draft: { agentId },
+    };
+  }
+
+  /**
    * Run a prepared run and report it on `emit` (api.md 119): `run`, then
    * the `step` events and, for an agent workflow, its turn's events as the
    * chat stream sends them, then `done { run }`, or `error { content }` when
@@ -217,15 +275,20 @@ export class WorkflowRunsService implements OnModuleInit {
           )
         : await this.runCode(prepared, base, tracker, live, onStep);
     } catch (failure) {
-      await this.end(base.id, {
-        status: 'failed',
-        error: runErrorMessage(failure),
-        finishedAt: new Date().toISOString(),
-      });
+      if (!prepared.draft) {
+        await this.end(base.id, {
+          status: 'failed',
+          error: runErrorMessage(failure),
+          finishedAt: new Date().toISOString(),
+        });
+      }
       throw failure;
     }
     const { id, ...patch } = ended;
-    const run = await this.wire((await this.end(id, patch)) ?? ended);
+    // A draft run is never stored: the run is the doc it ended with.
+    const run: WorkflowRun = prepared.draft
+      ? ended
+      : await this.wire((await this.end(id, patch)) ?? ended);
     if (run.status === 'failed' && prepared.turn) {
       live({ type: 'error', content: run.error ?? 'The run failed' });
     } else {
@@ -433,7 +496,7 @@ export class WorkflowRunsService implements OnModuleInit {
       datasets: [],
       startedAt: new Date().toISOString(),
     };
-    await this.repository.insert(base);
+    if (!prepared.draft) await this.repository.insert(base);
     return base;
   }
 
@@ -510,6 +573,7 @@ export class WorkflowRunsService implements OnModuleInit {
         runId: base.id,
         workflowId: prepared.workflow.id,
         name: prepared.workflow.name,
+        ...(prepared.draft ? { draftAgentId: prepared.draft.agentId } : {}),
         ...(turn.datasets ? { datasets: turn.datasets } : {}),
         ...(turn.rfpId ? { rfpId: turn.rfpId } : {}),
         ...(stages ? { workflowState: stages } : {}),
@@ -555,6 +619,12 @@ export class WorkflowRunsService implements OnModuleInit {
       };
     }
     const view = await this.sessions.finishRunHost(hostId);
+    // A draft run keeps nothing: its workspace goes with its host.
+    if (prepared.draft) {
+      await this.quietly(`delete the workspace of draft run ${base.id}`, () =>
+        this.sessions.deleteRunHostResources(hostId),
+      );
+    }
     const answer = runAnswerOf(view.messages, prepared.context ? 2 : 0);
     const output = status === 'success' ? tracker.lastOutput() : undefined;
     return {

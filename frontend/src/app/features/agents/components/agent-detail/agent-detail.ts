@@ -53,7 +53,7 @@ import { AgentGraph } from '../agent-graph/agent-graph';
 import { AgentWorkflowView } from '../agent-workflow/agent-workflow';
 import { AgentLlmConfig } from '../agent-llm-config/agent-llm-config';
 import { AgentToolLinks } from '../agent-tool-links/agent-tool-links';
-import { AgentChatBox } from '../agent-chat-box/agent-chat-box';
+import { AgentTryIt } from '../agent-try-it/agent-try-it';
 import { AgentSkillsInline } from '../agent-skills-inline/agent-skills-inline';
 import { AgentSystemPrompt } from '../agent-system-prompt/agent-system-prompt';
 import { AgentPageState } from '../../services/agent-page-state.service';
@@ -88,7 +88,7 @@ type EvalTab = 'questions' | 'runs';
     AgentWorkflowView,
     AgentLlmConfig,
     AgentToolLinks,
-    AgentChatBox,
+    AgentTryIt,
     AgentSkillsInline,
     AgentSystemPrompt,
   ],
@@ -155,7 +155,7 @@ export class AgentDetail implements OnDestroy {
   readonly error = signal<string | null>(null);
   readonly agent = signal<AgentDetailModel | null>(null);
   readonly activeTab = signal<AgentTab>('prompt');
-  /** The Chat Box mounts the first time it is shown, then stays. */
+  /** Try it mounts the first time it is shown, then stays. */
   readonly chatMounted = signal(false);
 
   /** The skills tab's content, loaded with the agent (R63). */
@@ -217,7 +217,7 @@ export class AgentDetail implements OnDestroy {
       this.loadDatasources();
     });
 
-    // The Chat Box mounts when first shown.
+    // Try it mounts when first shown.
     effect(() => {
       if (this.activeTab() === 'chat') this.chatMounted.set(true);
     });
@@ -361,6 +361,18 @@ export class AgentDetail implements OnDestroy {
         this.loading.set(false);
       },
     });
+  }
+
+  /**
+   * Why Try it can't run a user agent's draft: none of its draft's datasets
+   * exists (R90). The backend refuses the same way.
+   */
+  protected tryBlocked(agent: AgentDetailModel): string | null {
+    const missing = agent.missingDatasets ?? [];
+    const datasets = agent.draft?.datasets ?? agent.datasets ?? [];
+    return datasets.some((name) => !missing.includes(name))
+      ? null
+      : 'Add a dataset to this agent to try it.';
   }
 
   /** User agents only; built-in agents offer neither Publish nor Delete (R5). */

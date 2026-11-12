@@ -195,6 +195,23 @@ function build(
       }),
     ),
     deleteRunHostResources: jest.fn().mockResolvedValue(undefined),
+    // The draft's name and existing datasets are the sessions service's.
+    draftRunTarget: jest.fn((agentId: string) => {
+      if (agentId === 'missing') {
+        return Promise.reject(
+          new NotFoundException('Agent "missing" not found'),
+        );
+      }
+      if (agentId === 'no-data') {
+        return Promise.reject(
+          new BadRequestException('Select at least one dataset to preview'),
+        );
+      }
+      return Promise.resolve({
+        name: 'Sales helper',
+        datasets: ['World Cup Core'],
+      });
+    }),
     // The rating itself is the sessions service's (its own spec proves it).
     rateRunAnswer: jest.fn(
       (
@@ -643,7 +660,10 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
   it("an RFP Continue gives the run the RFP, the last proposal and the earlier run's stages (plan 4.3)", async () => {
     ctx = build(
       [...DATASETS, { name: 'Intellify RFP API', datasourceKind: 'rest' }],
-      { answer: 'Stage 1: Orchard Manufacturing renews on 1 January 2027. Confirm?' },
+      {
+        answer:
+          'Stage 1: Orchard Manufacturing renews on 1 January 2027. Confirm?',
+      },
     );
     const stages = {
       current: 1,
@@ -657,7 +677,9 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
       workflowState: stages,
     }));
     const first = await streamed(ctx, 'agent:rfp', {
-      input: { message: 'Start an RFP for Orchard Manufacturing, plan year 2027' },
+      input: {
+        message: 'Start an RFP for Orchard Manufacturing, plan year 2027',
+      },
     });
     expect(first.run.rfpId).toBe('rfp-1');
     const second = await streamed(ctx, 'agent:rfp', {
@@ -1394,5 +1416,87 @@ describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
     } finally {
       await app.close();
     }
+  });
+});
+
+describe('WorkflowRunsService: a draft run (api.md R12; agents-evals R60)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+
+  it('runs the draft on a draft host, stores nothing and discards the host and workspace', async () => {
+    ctx = build(DATASETS, {
+      events: [{ type: 'text', content: 'Brazil won.' }],
+    });
+    const events: RunStreamEvent[] = [];
+    const prepared = await ctx.service.prepareDraft('agent-1', {
+      input: { question: '  Who won?  ' },
+    });
+    const run = await ctx.service.stream(prepared, (e) => events.push(e));
+
+    expect(ctx.sessions.createRunHost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: run.id,
+        draftAgentId: 'agent-1',
+        name: 'Sales helper',
+      }),
+    );
+    expect(ctx.sessions.streamRunTurn).toHaveBeenCalledWith(
+      `run-${run.id}`,
+      'Who won?',
+      expect.any(Function),
+      undefined,
+      false,
+      expect.any(Function),
+    );
+    expect(ctx.sessions.finishRunHost).toHaveBeenCalledWith(`run-${run.id}`);
+    expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledWith(
+      `run-${run.id}`,
+    );
+    expect(events.map((e) => e.type)).toEqual([
+      'run',
+      'step',
+      'text',
+      'step',
+      'done',
+    ]);
+    expect(events[0]).toMatchObject({
+      type: 'run',
+      workflowId: 'agent:agent-1',
+    });
+    expect(run.status).toBe('success');
+    expect(run.answer?.content).toBe('Brazil won.');
+    // Not stored: neither the history nor the run's own route knows it.
+    expect(await ctx.repository.get(run.id)).toBeNull();
+    expect(await ctx.service.list()).toEqual([]);
+  });
+
+  it('refuses before anything runs: unknown agent, no existing dataset, blank question', async () => {
+    ctx = build();
+    await expect(
+      ctx.service.prepareDraft('missing', { input: { question: 'hi' } }),
+    ).rejects.toThrow('Agent "missing" not found');
+    await expect(
+      ctx.service.prepareDraft('no-data', { input: { question: 'hi' } }),
+    ).rejects.toThrow('Select at least one dataset to preview');
+    await expect(
+      ctx.service.prepareDraft('agent-1', { input: { question: '   ' } }),
+    ).rejects.toThrow('Question is required');
+    await expect(ctx.service.prepareDraft('agent-1', {})).rejects.toThrow(
+      'Question is required',
+    );
+    expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
+  });
+
+  it('a failing turn sends the error and still discards the host and workspace', async () => {
+    ctx = build(DATASETS, { throws: new Error('provider down') });
+    const events: RunStreamEvent[] = [];
+    const prepared = await ctx.service.prepareDraft('agent-1', {
+      input: { question: 'Who won?' },
+    });
+    const run = await ctx.service.stream(prepared, (e) => events.push(e));
+    expect(run.status).toBe('failed');
+    expect(events.at(-1)).toEqual({ type: 'error', content: 'provider down' });
+    expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledTimes(1);
+    expect(await ctx.repository.get(run.id)).toBeNull();
   });
 });

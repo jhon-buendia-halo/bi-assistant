@@ -104,14 +104,13 @@ const datasetBox = (page: Page, label: string) =>
 const editorStatus = (page: Page) => page.getByTestId('agent-editor-status');
 const detailsPanel = (page: Page) =>
   page.getByRole('complementary', { name: 'Details panel' });
-const previewComposer = (page: Page) =>
-  detailsPanel(page).getByPlaceholder('Ask a follow-up question…');
+const tryQuestion = (page: Page) =>
+  detailsPanel(page).getByTestId('agent-tryit-question');
 
-async function sendInPreview(page: Page, question: string): Promise<void> {
-  await previewComposer(page).fill(question);
-  await detailsPanel(page)
-    .getByRole('button', { name: 'Send message' })
-    .click();
+/** Try it in the Details panel: ask the draft once (agents-evals R60). */
+async function tryInPanel(page: Page, question: string): Promise<void> {
+  await tryQuestion(page).fill(question);
+  await detailsPanel(page).getByTestId('agent-tryit-run').click();
 }
 
 /** Waits for the stub's answer `count` times in `scope`. */
@@ -134,15 +133,20 @@ async function listedSessions(page: Page): Promise<string[]> {
   return body.sessions.map((session) => session.name);
 }
 
-function previewWorkspaces(appDataDir: string): string[] {
+/** The workspaces of draft runs: a stored run keeps its own, a draft run none. */
+function draftRunWorkspaces(appDataDir: string): string[] {
   const dir = path.join(appDataDir, 'workspaces');
   if (!fs.existsSync(dir)) return [];
-  return fs
-    .readdirSync(dir)
-    .filter((name) => name.startsWith('session-preview-'));
+  return fs.readdirSync(dir).filter((name) => name.startsWith('session-run-'));
 }
 
-test('creates an agent, previews it, publishes it and deletes it', async ({
+async function storedRuns(page: Page): Promise<string[]> {
+  const response = await page.request.get(`${apiBase(page)}/workflow-runs`);
+  const body = (await response.json()) as { runs: { id: string }[] };
+  return body.runs.map((run) => run.id);
+}
+
+test('creates an agent, tries it, publishes it and deletes it', async ({
   page,
 }) => {
   await openNewAgent(page);
@@ -159,15 +163,9 @@ test('creates an agent, previews it, publishes it and deletes it', async ({
   ).toBeVisible();
   await expect(editorStatus(page)).toContainText('Draft');
 
-  await page.getByTestId('agent-preview').click();
-  await expect(detailsPanel(page)).toContainText('Preview');
-  await expect(
-    detailsPanel(page).getByRole('button', {
-      name: 'Who won in 2014?',
-      exact: true,
-    }),
-  ).toBeVisible();
-  await sendInPreview(page, 'Who won in 2014?');
+  await page.getByTestId('agent-try-it').click();
+  await expect(detailsPanel(page)).toContainText('Try it');
+  await tryInPanel(page, 'Who won in 2014?');
   await expectAnswers(detailsPanel(page), 1);
   const systems = systemsFor('Who won in 2014?');
   expect(systems).toContain(AGENT_BLOCK_START);
@@ -258,18 +256,18 @@ test('editing a Live agent keeps its sessions on the Live version until republis
   expect(systemsFor('And in 2010?')).toContain('Talk like a pirate.');
 });
 
-test('sending in the preview saves the form first', async ({ page }) => {
+test('Try it saves the form first', async ({ page }) => {
   const id = await createUserAgent(page, {
     name: HISTORIAN,
     instructions: 'Answer in one sentence.',
     datasets: [WORLD_CUP_DATASET],
   });
   await openEditor(page, id, HISTORIAN);
-  await page.getByTestId('agent-preview').click();
-  await expect(previewComposer(page)).toBeVisible();
+  await page.getByTestId('agent-try-it').click();
+  await expect(tryQuestion(page)).toBeVisible();
 
   await instructionsField(page).fill('Talk like a pirate.');
-  await sendInPreview(page, 'Who won in 2014?');
+  await tryInPanel(page, 'Who won in 2014?');
   await expect(page.getByText('Draft saved')).toBeVisible();
   await expectAnswers(detailsPanel(page), 1);
   const systems = systemsFor('Who won in 2014?');
@@ -277,7 +275,7 @@ test('sending in the preview saves the form first', async ({ page }) => {
   expect(systems).not.toContain('Answer in one sentence.');
 });
 
-test('reset and leaving the editor discard the preview', async ({
+test('Try it stores nothing: the run leaves no workspace, and Reset clears the result', async ({
   page,
   appDataDir,
 }) => {
@@ -286,30 +284,31 @@ test('reset and leaving the editor discard the preview', async ({
     datasets: [WORLD_CUP_DATASET],
   });
   await openEditor(page, id, HISTORIAN);
-  await page.getByTestId('agent-preview').click();
-  await sendInPreview(page, 'Who won in 2014?');
+  await page.getByTestId('agent-try-it').click();
+  await tryInPanel(page, 'Who won in 2014?');
   await expectAnswers(detailsPanel(page), 1);
-  expect(previewWorkspaces(appDataDir)).toHaveLength(1);
+  // The draft run's host and workspace are gone once it ends (R61), and it
+  // is neither a session nor a stored run.
+  await expect.poll(() => draftRunWorkspaces(appDataDir)).toEqual([]);
+  expect(await listedSessions(page)).toEqual([]);
+  expect(await storedRuns(page)).toEqual([]);
 
-  await page.getByTestId('agent-preview-reset').click();
-  await expect(detailsPanel(page).getByText('Who won in 2014?')).toHaveCount(0);
+  await detailsPanel(page).getByTestId('agent-tryit-reset').click();
+  await expect(tryQuestion(page)).toHaveValue('');
   await expect(detailsPanel(page).getByText(STUB_ANSWER)).toHaveCount(0);
-  await expect.poll(() => previewWorkspaces(appDataDir)).toHaveLength(1);
 
-  await sendInPreview(page, 'And in 2010?');
+  await tryInPanel(page, 'And in 2010?');
   await expectAnswers(detailsPanel(page), 1);
   await button(page, 'Back').click();
   await expect(
     page.getByRole('heading', { name: HISTORIAN, exact: true }),
   ).toBeVisible();
-  // The agent page's Chat Box holds a preview of its own (R90); leaving the
-  // agent page discards it too.
   await button(page, 'All agents').click();
-  await expect.poll(() => previewWorkspaces(appDataDir)).toEqual([]);
-  expect(await listedSessions(page)).toEqual([]);
+  await expect.poll(() => draftRunWorkspaces(appDataDir)).toEqual([]);
+  expect(await storedRuns(page)).toEqual([]);
 });
 
-test('preview needs a dataset, and names must be unique', async ({ page }) => {
+test('Try it needs a dataset, and names must be unique', async ({ page }) => {
   const id = await createUserAgent(page, {
     name: 'Health plan analyst',
     datasets: [WORLD_CUP_DATASET],
@@ -318,11 +317,11 @@ test('preview needs a dataset, and names must be unique', async ({ page }) => {
 
   await openNewAgent(page);
   await nameField(page).fill(HISTORIAN);
-  await page.getByTestId('agent-preview').click();
+  await page.getByTestId('agent-try-it').click();
   await expect(detailsPanel(page)).toContainText(
     'Select at least one dataset to preview',
   );
-  await expect(previewComposer(page)).toHaveCount(0);
+  await expect(tryQuestion(page)).toHaveCount(0);
 
   await nameField(page).fill('Health plan analyst');
   await page.getByTestId('agent-save').click();
@@ -381,7 +380,7 @@ test('the editor has no detectable accessibility violations in either theme', as
 }) => {
   await followOsTheme(page);
   await openNewAgent(page);
-  await page.getByTestId('agent-preview').click();
+  await page.getByTestId('agent-try-it').click();
   await expect(detailsPanel(page)).toContainText(
     'Select at least one dataset to preview',
   );
@@ -402,7 +401,7 @@ test('the editor has no detectable accessibility violations in either theme', as
 // ---------------------------------------------------------------------------
 // Links in the instructions decide the tools and skills (BA-217, BA-216,
 // BA-219, BA-220), the Tools, Graph and LLM Config tabs (BA-221), and the
-// agent page's Chat Box, System Prompt and Skills tabs (BA-222).
+// agent page's Try it, System Prompt and Skills tabs (BA-222).
 // ---------------------------------------------------------------------------
 
 const FISCAL = 'fiscal-calendar';
@@ -532,8 +531,8 @@ test('only linked tools are offered to the model', async ({ page }) => {
     page.getByText('Agent "KPI lookup" saved as draft'),
   ).toBeVisible();
 
-  await page.getByTestId('agent-preview').click();
-  await sendInPreview(page, 'Who won in 2014?');
+  await page.getByTestId('agent-try-it').click();
+  await tryInPanel(page, 'Who won in 2014?');
   await expectAnswers(detailsPanel(page), 1);
   const request = firstRequest('Who won in 2014?');
   expect(request.tools).toContain('sample_rows');
@@ -557,7 +556,7 @@ test('only linked tools are offered to the model', async ({ page }) => {
   await evidence(page, '1.14.2', 'agent-tools-tab-linked.png');
 });
 
-test('a linked skill reaches the preview, and the Live agent keeps its copy', async ({
+test('a linked skill reaches Try it, and the Live agent keeps its copy', async ({
   page,
 }) => {
   await createSkill(page, {
@@ -575,8 +574,8 @@ test('a linked skill reaches the preview, and the Live agent keeps its copy', as
   ).toBeVisible();
   await evidence(page, '1.14.6', 'agent-editor-skill-chip.png');
 
-  await page.getByTestId('agent-preview').click();
-  await sendInPreview(page, 'What happened in fiscal 2018?');
+  await page.getByTestId('agent-try-it').click();
+  await tryInPanel(page, 'What happened in fiscal 2018?');
   await expectAnswers(detailsPanel(page), 1);
   const preview = firstRequest('What happened in fiscal 2018?');
   expect(catalogSkills(preview)).toContain(FISCAL);
@@ -649,8 +648,8 @@ test("a linked skill's tools come with it", async ({ page }) => {
     page.getByText('Agent "Chart helper" saved as draft'),
   ).toBeVisible();
 
-  await page.getByTestId('agent-preview').click();
-  await sendInPreview(page, 'Chart the goals per year.');
+  await page.getByTestId('agent-try-it').click();
+  await tryInPanel(page, 'Chart the goals per year.');
   await expectAnswers(detailsPanel(page), 1);
   const request = firstRequest('Chart the goals per year.');
   expect(request.tools).toContain('create_visual');
@@ -821,7 +820,7 @@ test('editing the System Prompt in place saves a draft with the link', async ({
   await openAgentPage(page, id, HISTORIAN);
   await expect(page.getByTestId('agent-panel-chat')).toBeVisible();
   await expect(page.getByTestId('agent-panel-chat')).toContainText(
-    'Chat with the draft',
+    'Try the draft',
   );
 
   await page.getByTestId('agent-tab-prompt').click();
@@ -911,7 +910,51 @@ test('leaving an unsaved System Prompt edit asks first', async ({ page }) => {
   await expect(editor).toHaveText('Answer in one sentence. Be brief.');
 });
 
-test('the Chat Box tab chats with the draft, and New chat starts over', async ({
+test('@demo @story-1.23.23 Try it runs the draft, not the Live version', async ({
+  page,
+}) => {
+  const id = await createUserAgent(page, {
+    name: HISTORIAN,
+    instructions: 'Answer in one sentence.',
+    datasets: [WORLD_CUP_DATASET],
+  });
+  await publishAgent(page, id);
+
+  await test.step('Given the Live agent "Cup historian" answers in one sentence', async () => {
+    const agent = await apiJson<{ live: { instructions: string } }>(
+      page,
+      'GET',
+      `/agents/${id}`,
+    );
+    expect(agent.live.instructions).toBe('Answer in one sentence.');
+  });
+  await test.step("When I edit the draft's instructions in the agent editor", async () => {
+    await openEditor(page, id, HISTORIAN);
+    await instructionsField(page).fill('Talk like a pirate.');
+  });
+  await test.step('And I click Try it and run "Who won in 2014?"', async () => {
+    await page.getByTestId('agent-try-it').click();
+    await tryInPanel(page, 'Who won in 2014?');
+    await expectAnswers(detailsPanel(page), 1);
+  });
+  await test.step("Then the recorded request carries the draft's instructions block", async () => {
+    const systems = systemsFor('Who won in 2014?');
+    expect(systems).toContain(AGENT_BLOCK_START);
+    expect(systems).toContain('Talk like a pirate.');
+    expect(systems).not.toContain('Answer in one sentence.');
+  });
+  await test.step('And the Live version is unchanged', async () => {
+    const agent = await apiJson<{ live: { instructions: string } }>(
+      page,
+      'GET',
+      `/agents/${id}`,
+    );
+    expect(agent.live.instructions).toBe('Answer in one sentence.');
+    expect(await storedRuns(page)).toEqual([]);
+  });
+});
+
+test('the Try it tab runs the draft, and Reset starts over', async ({
   page,
 }) => {
   const id = await createUserAgent(page, {
@@ -921,46 +964,40 @@ test('the Chat Box tab chats with the draft, and New chat starts over', async ({
   });
   await publishAgent(page, id);
   await openAgentPage(page, id, HISTORIAN);
-  const chat = page.getByTestId('agent-panel-chat');
-  await expect(chat).toContainText('Chat with the draft');
-  await expect(chat.getByTestId('agent-chat-new')).toHaveText('New chat');
+  const tab = page.getByTestId('agent-panel-chat');
+  await expect(tab).toContainText('Try the draft');
+  await expect(tab.getByTestId('agent-tryit-reset')).toHaveText('Reset');
 
-  await chat
-    .getByPlaceholder('Ask a follow-up question…')
-    .fill('Who won in 2014?');
-  await chat.getByRole('button', { name: 'Send message' }).click();
-  await expectAnswers(chat, 1);
+  await tab.getByTestId('agent-tryit-question').fill('Who won in 2014?');
+  await tab.getByTestId('agent-tryit-run').click();
+  await expectAnswers(tab, 1);
   const systems = systemsFor('Who won in 2014?');
   expect(systems).toContain(AGENT_BLOCK_START);
   expect(systems).toContain('Answer in one sentence.');
   expect(await listedSessions(page)).not.toContain(HISTORIAN);
-  await evidence(page, '1.14.9', 'agent-chat-box-answer.png');
+  expect(await storedRuns(page)).toEqual([]);
+  await evidence(page, '1.14.9', 'agent-try-it-answer.png');
 
-  await chat.getByTestId('agent-chat-new').click();
-  await expect(
-    chat.getByPlaceholder('Ask a follow-up question…'),
-  ).toBeVisible();
-  await expect(chat.getByText(STUB_ANSWER)).toHaveCount(0);
-  await expect(chat.getByText('Who won in 2014?')).toHaveCount(0);
+  await tab.getByTestId('agent-tryit-reset').click();
+  await expect(tab.getByTestId('agent-tryit-question')).toHaveValue('');
+  await expect(tab.getByText(STUB_ANSWER)).toHaveCount(0);
 
   await button(page, 'All agents').click();
   await openAgentPage(page, id, HISTORIAN);
-  await expect(
-    chat.getByPlaceholder('Ask a follow-up question…'),
-  ).toBeVisible();
-  await expect(chat.getByText(STUB_ANSWER)).toHaveCount(0);
+  await expect(tab.getByTestId('agent-tryit-question')).toHaveValue('');
+  await expect(tab.getByText(STUB_ANSWER)).toHaveCount(0);
 });
 
-test('the Chat Box needs a dataset', async ({ page }) => {
+test('Try it needs a dataset', async ({ page }) => {
   const id = await createUserAgent(page, { name: 'Empty historian' });
   await openAgentPage(page, id, 'Empty historian');
-  await expect(page.getByTestId('agent-chat-no-dataset')).toContainText(
-    'Add a dataset to this agent to chat with it.',
+  await expect(page.getByTestId('agent-tryit-no-dataset')).toContainText(
+    'Add a dataset to this agent to try it.',
   );
-  await expect(page.getByTestId('agent-chat-edit')).toHaveText('Edit');
+  await expect(page.getByTestId('agent-tryit-edit')).toHaveText('Edit');
 });
 
-test('an Official agent has no Chat Box and opens on System Prompt', async ({
+test('an Official agent has no Try it tab and opens on System Prompt', async ({
   page,
 }) => {
   await openAgentPage(page, 'assistant', 'Questions to Insights Assistant');

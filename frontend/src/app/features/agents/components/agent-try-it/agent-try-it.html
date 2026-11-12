@@ -1,0 +1,100 @@
+<div class="flex items-center gap-3 px-6 pt-4 pb-3">
+  <h3 class="text-[12px] font-medium tracking-wider text-fg-muted uppercase">
+    Try the draft
+  </h3>
+  <button
+    type="button"
+    data-testid="agent-tryit-reset"
+    (click)="reset()"
+    class="btn btn-ghost ml-auto"
+  >
+    <lucide-angular [img]="RotateCcw" [size]="14" />
+    <span>Reset</span>
+  </button>
+</div>
+<div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pb-6">
+  @if (noDataset(); as message) {
+    <p data-testid="agent-tryit-no-dataset" class="text-[13px] text-fg-muted">
+      {{ message }}
+      @if (editable()) {
+        <button
+          type="button"
+          data-testid="agent-tryit-edit"
+          (click)="edit.emit()"
+          class="underline hover:text-fg"
+        >
+          Edit
+        </button>
+      }
+    </p>
+  } @else {
+    <form
+      class="flex flex-col gap-2"
+      (submit)="$event.preventDefault(); run()"
+    >
+      <label for="agent-tryit-question" class="text-[13px] text-fg-muted">
+        Question
+      </label>
+      <textarea
+        id="agent-tryit-question"
+        data-testid="agent-tryit-question"
+        rows="3"
+        class="input"
+        placeholder="Ask the draft something"
+        [value]="question()"
+        (input)="onInput($event)"
+        (keydown)="onKeydown($event)"
+      ></textarea>
+      <div class="flex items-center gap-2">
+        @if (running()) {
+          <button
+            type="button"
+            data-testid="agent-tryit-stop"
+            (click)="stop()"
+            class="btn btn-secondary"
+          >
+            <lucide-angular [img]="Square" [size]="14" />
+            <span>Stop</span>
+          </button>
+          <span class="flex items-center gap-2 text-[13px] text-fg-muted">
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+            Running…
+          </span>
+        } @else {
+          <button
+            type="submit"
+            data-testid="agent-tryit-run"
+            [disabled]="!canRun()"
+            class="btn btn-primary"
+          >
+            <lucide-angular [img]="Play" [size]="14" />
+            <span>Run</span>
+          </button>
+        }
+      </div>
+    </form>
+    @if (reasoning(); as thinking) {
+      <p class="text-[12px] text-fg-muted" data-testid="agent-tryit-thinking">
+        {{ thinking }}
+      </p>
+    }
+    @if (answer(); as message) {
+      <div data-testid="agent-tryit-answer">
+        <app-answer-view [message]="message" [latest]="true" />
+      </div>
+    }
+    @if (errorMessage(); as message) {
+      <p
+        data-testid="agent-tryit-error"
+        class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+      >
+        {{ message }}
+      </p>
+    }
+    @if (state().kind === "stopped") {
+      <p data-testid="agent-tryit-stopped" class="text-[13px] text-fg-muted">
+        Stopped.
+      </p>
+    }
+  }
+</div>

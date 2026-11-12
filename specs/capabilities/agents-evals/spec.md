@@ -22,7 +22,7 @@ Agent Hub and agent detail
 - R2. Search SHALL match the trimmed query, case-insensitively, as a substring of the agent's name or description, and SHALL apply as the user types. The filters SHALL show: All, the sections of R1; Pinned, a single **Pinned** section holding every pinned agent of any kind, ordered by kind (Official, Mine, System) and then by name; Official, only the Official agents (the assistant, the RFP Builder, the Data Readiness Agent and Questions to Insights v2), in the Official section; Mine, only user agents, pinned or not, in the Mine section (pinned first, R1). The System section SHALL show only under All. Search and filter combine. States: while loading, "Loading agents…"; on failure, the backend's message or "Backend unreachable"; a non-empty query that matches nothing, `No agents match "<query>"`; otherwise the Pinned filter with nothing pinned shows `No pinned agents yet.` and the Mine filter with no user agents shows `No agents of yours yet.`. Under All with no user agents, the Mine section is omitted.
 - R3. Each section SHALL show its first row of 3 cards, except the **Official** section, which SHALL always show every card and never offer `Show more` (since 2026-10-15, BA-235). When more of a Mine, System or Pinned section's agents match the search and filter, a `Show more (<n>)` control SHALL follow, where n is the number of hidden cards. Clicking it SHALL show every card of the section and turn the control into `Show less`, which collapses the section to its first row again. Each section expands on its own. The search text, the filter and the expanded sections SHALL reset each time the hub opens, including on return from a detail view.
 - R4. Each card's pin toggle SHALL read `Pin`, with the accessible name `Pin <name>`, or `Pinned`, with the accessible name `Unpin <name>`, and SHALL expose its pressed state. Clicking it SHALL NOT open the agent. The change SHALL show on the hub at once: the toggle flips and the card re-orders within its own section (pinned cards first, R1). It SHALL NOT move the card to another section or hide a section. Under the Pinned filter, unpinning removes the card from the Pinned section. The change is then saved (R47), so it survives a restart. If saving fails, the card SHALL return to its previous state and an error toast SHALL show the backend's message or "Backend unreachable". A successful pin or unpin raises no toast.
-- R5. Clicking a card anywhere but its pin toggle SHALL open the agent's detail view. The view SHALL show an **All agents** back button to the hub, the name as heading, the id, the line **Used in** (R109), the description and, for a user agent, its `Draft` or `Live` chip and `Unpublished changes` badge; then these tabs, in this order: **Chat Box** (user agents only), **System Prompt**, **Skills (N)**, **Tools (N)**, **Graph** (user agents only), **Memory**, **Evals** and **LLM Config**. The first tab shown is Chat Box for a user agent, and System Prompt for an Official or System agent (R90, R91). Opening a different agent SHALL reset all tab, selection and run state. No agent's detail SHALL offer **Start chat** (R53). A user agent's detail SHALL offer **Edit**, which opens the agent editor on its draft (R54), and two more actions:
+- R5. Clicking a card anywhere but its pin toggle SHALL open the agent's detail view. The view SHALL show an **All agents** back button to the hub, the name as heading, the id, the line **Used in** (R109), the description and, for a user agent, its `Draft` or `Live` chip and `Unpublished changes` badge; then these tabs, in this order: **Try it** (user agents only), **System Prompt**, **Skills (N)**, **Tools (N)**, **Graph** (user agents only), **Memory**, **Evals** and **LLM Config**. The first tab shown is Try it for a user agent, and System Prompt for an Official or System agent (R90, R91). Opening a different agent SHALL reset all tab, selection and run state. No agent's detail SHALL offer **Start chat** (R53). A user agent's detail SHALL offer **Edit**, which opens the agent editor on its draft (R54), and two more actions:
   - **Publish**, shown only when the agent has no Live version or has unpublished changes. It publishes the draft (R44, R45) and shows the backend's message as a toast: `Agent "<name>" is Live`, or the refusal, such as `Select at least one dataset to publish`. On success the detail reloads, so the button disappears and the chip reads `Live`.
   - **Delete**, which first asks `Delete "<name>"?` with the explanation `Its sessions keep their transcripts and continue with the assistant.`. Cancelling changes nothing. Confirming deletes the agent (R50), shows the toast `Agent "<name>" deleted` and returns to the hub, which no longer lists it. A failure shows the backend's message as a toast and stays on the detail.
 
@@ -154,14 +154,12 @@ User agents (definitions)
 - R57. **Publish** SHALL first save the form when it has changes (R56; a refusal stops it), then publish the draft (R44, R45) and show `Agent "<name>" is Live` or the refusal, such as `Select at least one dataset to publish`. It SHALL be shown while the agent is new, has no Live version, has unpublished changes, or the form has changes.
 - R58. The editor's header SHALL show the agent's `Draft` or `Live` chip and, when it applies, `Unpublished changes`, updated after every save and publish. Editing a Live agent SHALL change only its draft: its sessions keep the Live version until the draft is published (R44; sessions-chat R54).
 - R59. **Back** SHALL return to the agent's detail view, or to the hub for an agent that was never saved. Leaving the editor in any way (Back, the rail, the drawer) with unsaved changes SHALL first ask `Discard unsaved changes?`. Cancelling SHALL keep the editor open with its changes.
-- R60. The agent page's **Chat Box** tab (R90) SHALL reuse this mechanism for a user agent: the same preview session over the saved draft, in the page instead of the Details panel. **Preview** SHALL open the **preview chat** in the right Details panel, beside the form (app-shell R10). While the editor is open, the Details panel SHALL always hold the preview chat, however it is opened. The preview SHALL behave like a session started from the agent (sessions-chat R54, R55, R58), titled `Preview`, except that it runs the saved **draft**:
-  - sending a preview message SHALL first save the form when it has changes (R56; a refusal stops the send), so the preview always runs what Save stored;
-  - each preview turn SHALL use the draft's current instructions, model and effort overrides, the tools and skills its links select (R43, R82) with the current content of the linked skills, and those of its datasets that exist;
-  - with no existing dataset in the draft, the panel SHALL say `Select at least one dataset to preview` and the composer SHALL be disabled.
-- R61. A preview conversation SHALL NOT be listed with the sessions or stored in the sessions collection. **Reset preview** SHALL discard it and start an empty one. Leaving the editor, or closing the Details panel, SHALL discard it together with its agent memory and workspace files. Preview conversations left behind when the app stopped SHALL be discarded at the next backend start. The same holds for the Chat Box tab's conversation: **New chat** discards it and leaving the agent page discards it (R90).
-
-### Ownership (single user)
-
+- R60. **Try it** tests a user agent's **draft** by running it once, the way a workflow runs (since 1.23.23; ADR-0041). **Try it** in the editor's header SHALL open the right Details panel (app-shell R10) on the **Try it** panel, beside the form; while the editor is open, the Details panel SHALL always hold it, however it is opened. The agent page's **Try it** tab (R90) holds the same panel in the page. The panel SHALL hold a **Question** box, **Run**, which reads **Stop** while the run goes, the result shown as a run's answer is (sessions-chat R12-R44 as a run's agent step applies them), and **Reset**. **Run** SHALL send the question to `POST /agents/:id/draft-runs/stream` (api.md R12; the stream is a workflow run's, api.md 3.6), and the run SHALL use what Save stored:
+  - running SHALL first save the form when it has changes (R56; a refusal stops the run), and a new agent once it has a name and a dataset;
+  - the run SHALL use the draft's current instructions, model and effort overrides, the tools and skills its links select (R43, R82) with the current content of the linked skills, and those of its datasets that exist; its model request SHALL equal a chat turn's of the same agent for the same question;
+  - with no existing dataset in the draft, the panel SHALL say `Select at least one dataset to preview` and the question box SHALL be hidden;
+  - **Stop** SHALL end the run and show `Stopped.`, with no result.
+- R61. A draft run SHALL NOT be listed with the runs or the sessions and SHALL NOT be stored: its host, its agent memory and its workspace files SHALL be discarded when the run ends, however it ends. **Reset** SHALL drop the question and the result. Leaving the editor, closing the Details panel, or leaving the agent page SHALL drop them too, and stop a run still going. A host or workspace left behind when the app stopped SHALL be discarded at the next backend start. The preview session of earlier versions (`POST /sessions { preview }`) is no longer used by the app and is removed in M1-25.
 - R62. User agents, their pins, pins of built-in agents and eval runs SHALL belong to the one user (the built-in super admin; a stored `ownerId` is a legacy attribute, [data-model.md](../../system/data-model.md)): the user sees every user agent (the Mine section), pin and eval run, and agent names are unique. Every agent action is available: viewing the hub and an agent's detail, pinning, New agent, Edit, Save, Publish, Delete and running, listing, downloading or deleting eval runs. Agent cards show `Owner: You`; nothing is shared and ownership cannot be transferred.
 
 ### Skills tab
@@ -220,11 +218,11 @@ The agent detail's tabs for tools, their links and the model settings ([../../sy
 
 ### Agent page tabs
 
-The Chat Box, System Prompt and Skills tabs of the agent detail, which work as in the agent-poc reference (ADR-0025; [../../system/ui.md](../../system/ui.md) 4.5, 4.5.8-4.5.10). The other tabs are R6, R7, R87-R89.
+The Try it, System Prompt and Skills tabs of the agent detail, which work as in the agent-poc reference (ADR-0025; [../../system/ui.md](../../system/ui.md) 4.5, 4.5.8-4.5.10). The other tabs are R6, R7, R87-R89.
 
-- R90. **Chat Box** SHALL be the first tab of a user agent, and SHALL exist for user agents only. Official and System agents SHALL NOT have it (since 1.23.7): a chat with an Official agent starts from its workflow (R53).
-  - **User agent:** the tab SHALL hold a chat with the agent's **draft**, built on the preview mechanism of R60 and R61: an in-memory session that is not listed with the sessions, discarded when the user leaves the agent page and swept at the next backend start. The header SHALL read `Chat with the draft` and offer **New chat**, which discards the conversation and starts an empty one. It SHALL run what the draft stores: edits saved from the System Prompt tab (R93) apply to the next message of a new chat. When the draft has no existing dataset the tab SHALL say `Add a dataset to this agent to chat with it.` with an **Edit** link to the agent editor and no composer.
-- R91. The tabs SHALL open on their defaults: **Chat Box** for user agents, **System Prompt** for Official and System agents. The **System Prompt** tab for the Official and System agents SHALL show the prompt as served (R6), editable (R97-R105).
+- R90. **Try it** SHALL be the first tab of a user agent (its id stays `chat`), and SHALL exist for user agents only. Official and System agents SHALL NOT have it: a chat with an Official agent starts from its workflow (R53); a run of one starts from its page. (It replaced **Chat Box** in 1.23.23.)
+  - **User agent:** the tab SHALL hold the Try it panel of R60 over the agent's **draft**, with the heading `Try the draft` and **Reset**. It SHALL run what the draft stores: edits saved from the System Prompt tab (R93) apply to the next run. When the draft has no existing dataset the tab SHALL say `Add a dataset to this agent to try it.` with an **Edit** link to the agent editor and no question box.
+- R91. The tabs SHALL open on their defaults: **Try it** for user agents, **System Prompt** for Official and System agents. The **System Prompt** tab for the Official and System agents SHALL show the prompt as served (R6), editable (R97-R105).
 - R92. On a user agent, the **System Prompt** tab SHALL show the assistant's core prompt read-only and collapsed, titled `Assistant core prompt (fixed)`, under the agent's own section, **Agent instructions**: the instructions with their links as chips (R86) and an **Edit** button. Only the agent's instructions are editable here; the core prompt is the Official agent's, edited on its own page (R97).
 - R93. **Edit** SHALL turn the section into the link editor of R81 over the draft's instructions, with:
   - a toolbar with **+ Link skill or tool**, which opens the menu of R81 with both groups, and the hint `Type / to link a skill or tool. The agent only gets the skills and tools its instructions link.`;
@@ -314,7 +312,7 @@ The System Prompt tab of the Official and System agents, edited in the app as ov
 
 ## UI
 
-Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Hub cards and the agent detail carry no **Start chat** (R53); the agent detail's header carries the **Used in** line (R109); a user agent's detail carries **Edit**. Agent editor (R54-R61, R81-R86): new and edit titles, the form with the link editor and its menu, saving, publishing, the unsaved-changes confirmation, and the preview chat in the Details panel (empty, no-dataset, running, reset). Agent detail: loading, error, its tabs (the Chat Box tab, the System Prompt tab in its read and edit states, the inline Skills tab of a user agent (R90-R96); the Graph tab for user agents; the LLM Config tab; the read-only Skills tab: loading, error, no skills, skill list, an expanded skill, a file that isn't shown), and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
+Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Hub cards and the agent detail carry no **Start chat** (R53); the agent detail's header carries the **Used in** line (R109); a user agent's detail carries **Edit**. Agent editor (R54-R61, R81-R86): new and edit titles, the form with the link editor and its menu, saving, publishing, the unsaved-changes confirmation, and the Try it panel in the Details panel (empty, no-dataset, running, result, stopped, reset). Agent detail: loading, error, its tabs (the Try it tab, the System Prompt tab in its read and edit states, the inline Skills tab of a user agent (R90-R96); the Graph tab for user agents; the LLM Config tab; the read-only Skills tab: loading, error, no skills, skill list, an expanded skill, a file that isn't shown), and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
 
 ## Flows
 
@@ -330,7 +328,7 @@ Feature: Agents
     Then I see the "sql-fixer" agent in the System section
     When I open the "Questions to Insights Assistant" agent
     Then I see the heading "Questions to Insights Assistant"
-    And there is no Chat Box tab, and the System Prompt tab is shown
+    And there is no Try it tab, and the System Prompt tab is shown
     When I open the System Prompt tab
     Then I see "You are the Questions to Insights assistant"
     When I open the Tools tab
@@ -570,7 +568,7 @@ Feature: Agent Hub
     And I open "Questions to Insights v2"
     Then I see the heading "Questions to Insights v2"
     And I see "A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools."
-    And there is no Chat Box tab, and the System Prompt tab is shown
+    And there is no Try it tab, and the System Prompt tab is shown
     When I open the System Prompt tab
     Then I see the chip "Built-in" and the prompt starting "You are Questions to Insights v2"
     When I open the Tools tab
@@ -604,13 +602,13 @@ Feature: Agent Hub
     When I click the "Questions to Insights v2" chip
     Then I see the "Questions to Insights v2" workflow page and "Workflows" is the current rail item
     When I open the "RFP Builder" agent
-    Then I see no "Chat Box" tab, and "System Prompt" is open
+    Then I see no "Try it" tab, and "System Prompt" is open
 
   Scenario: A draft-only agent is used in no workflow until it is published
     When I click "Agents"
     And I open "Claims triage"
     Then the "Used in" line says "Not used in any workflow yet. Publish it to get its one-step workflow."
-    And the Chat Box tab is shown
+    And the Try it tab is shown
     Given the draft of "Claims triage" uses the dataset "World Cup Core"
     When I click "All agents"
     And I open "Claims triage" and click "Publish"
@@ -623,7 +621,7 @@ Feature: Agent Hub
     And I click "Show more (2)" in the System section
     And I open "SQL Fixer"
     Then the "Used in" line says "Not used in any workflow. The app calls this agent itself."
-    And there is no Chat Box tab and no "Start chat"
+    And there is no Try it tab and no "Start chat"
 
   Scenario: The agent detail has no detectable accessibility violations in either theme
     When I click "Agents"
@@ -748,7 +746,7 @@ Feature: Agent editor
     Given a "World Cup Core" dataset exists
     And the model is the recording stub
 
-  Scenario: Creates an agent, previews it, publishes it and deletes it
+  Scenario: Creates an agent, tries it, publishes it and deletes it
     When I click "Agents"
     And I click "New agent"
     Then I see the heading "New agent"
@@ -760,10 +758,10 @@ Feature: Agent editor
     And I click "Save"
     Then I see the toast 'Agent "Cup historian" saved as draft'
     And the editor shows the chip "Draft"
-    When I click "Preview"
-    Then the Details panel shows "Preview" and the starter question "Who won in 2014?"
-    When I send "Who won in 2014?" in the preview
-    Then I see the stub's answer in the preview
+    When I click "Try it"
+    Then the Details panel shows "Try it"
+    When I run "Who won in 2014?" in Try it
+    Then I see the stub's answer in Try it
     And the model received "Always name the tournament year." as the agent's instructions
     And "Cup historian" is not listed in the "Sessions" list
     When I click "Publish"
@@ -797,13 +795,13 @@ Feature: Agent editor
     And I click "+ Link tool"
     And I pick "sample_rows"
     And I click "Save"
-    And I send "Who won in 2014?" in the preview
+    And I run "Who won in 2014?" in Try it
     Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
     And the model's prompt says "You can't ask the user a question back in this session."
     When I click "Back"
     Then the "Tools" tab lists "sample_rows" as "Linked" and "create_visual" as "Not linked"
 
-  Scenario: A linked skill reaches the preview, and the Live agent keeps its copy
+  Scenario: A linked skill reaches Try it, and the Live agent keeps its copy
     Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year." and the body "Our fiscal year starts on 1 July."
     When I click "Agents"
     And I click "New agent"
@@ -811,7 +809,7 @@ Feature: Agent editor
     And I tick "World Cup Core"
     And I type "/fis" in "Instructions" and pick "fiscal-calendar"
     And I click "Save"
-    And I send "What happened in fiscal 2018?" in the preview
+    And I run "What happened in fiscal 2018?" in Try it
     Then the model's skill catalog lists "fiscal-calendar"
     And the model's instructions contain 'the "fiscal-calendar" skill' and no "[["
     When I click "Publish"
@@ -827,7 +825,7 @@ Feature: Agent editor
     And I tick "World Cup Core"
     And I type "/char" in "Instructions" and pick "chart-style"
     And I click "Save"
-    And I send "Chart the goals per year." in the preview
+    And I run "Chart the goals per year." in Try it
     Then the model was offered "create_visual" and "update_visual" but not "sample_rows"
     When I click "Back"
     Then the "Tools" tab lists "create_visual" as "Linked" with "Linked by chart-style"
@@ -869,32 +867,41 @@ Feature: Agent editor
     Then I see "API key" with "Set"
     And I do not see "sk-secret-123" anywhere on the page
 
-  Scenario: Sending in the preview saves the form first
+  Scenario: Try it saves the form first
     Given a draft user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
     When I open "Cup historian" from "Agents" and click "Edit"
-    And I click "Preview"
+    And I click "Try it"
     And I replace the instructions with "Talk like a pirate."
-    And I send "Who won in 2014?" in the preview
+    And I run "Who won in 2014?" in Try it
     Then I see the toast "Draft saved"
     And the model received "Talk like a pirate."
 
-  Scenario: Reset and leaving the editor discard the preview
+  Scenario: Try it stores nothing, and Reset clears the result
     Given a draft user agent "Cup historian" over "World Cup Core"
     When I open "Cup historian" from "Agents" and click "Edit"
-    And I click "Preview" and send "Who won in 2014?" in the preview
-    And I click "Reset preview"
-    Then the preview shows no messages
-    When I send "And in 2010?" in the preview
-    And I click "Back"
-    Then the preview's memory and workspace are gone
-    And no session was created
+    And I click "Try it" and run "Who won in 2014?" in Try it
+    Then the run's workspace is gone and no run or session was created
+    When I click "Reset"
+    Then Try it shows no question and no answer
+    When I run "And in 2010?" in Try it
+    And I click "Back" and click "All agents"
+    Then no run or session was created
 
-  Scenario: Preview needs a dataset, and names must be unique
+  @demo @story-1.23.23
+  Scenario: Try it runs the draft, not the Live version
+    Given a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
+    When I open "Cup historian" from "Agents" and click "Edit"
+    And I replace the instructions with "Talk like a pirate."
+    And I click "Try it" and run "Who won in 2014?" in Try it
+    Then the model received "Talk like a pirate." as the agent's instructions
+    And the Live version still has "Answer in one sentence."
+
+  Scenario: Try it needs a dataset, and names must be unique
     Given a Live user agent "Health plan analyst" over "World Cup Core"
     When I click "Agents" and click "New agent"
     And I type "Cup historian" into "Name"
-    And I click "Preview"
-    Then the preview says "Select at least one dataset to preview"
+    And I click "Try it"
+    Then Try it says "Select at least one dataset to preview"
     When I replace the name with "Health plan analyst"
     And I click "Save"
     Then I see the toast 'An agent named "Health plan analyst" already exists'
@@ -918,7 +925,7 @@ Feature: Agent editor
     Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
     And a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
     When I open "Cup historian" from "Agents"
-    Then the Chat Box tab is shown
+    Then the Try it tab is shown
     When I open the System Prompt tab
     Then I see "Assistant core prompt (fixed)" collapsed and the instructions "Answer in one sentence."
     When I click "Edit"
@@ -948,27 +955,27 @@ Feature: Agent editor
     When I cancel
     Then the System Prompt tab is still open with " Be brief." typed
 
-  Scenario: The Chat Box tab chats with the draft, and New chat starts over
+  Scenario: The Try it tab runs the draft, and Reset starts over
     Given a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
     When I open "Cup historian" from "Agents"
-    Then the Chat Box tab shows "Chat with the draft" and "New chat"
-    When I send "Who won in 2014?" in the Chat Box
-    Then I see the stub's answer in the Chat Box
+    Then the Try it tab shows "Try the draft" and "Reset"
+    When I run "Who won in 2014?" in the Try it tab
+    Then I see the stub's answer in the Try it tab
     And the model received "Answer in one sentence." as the agent's instructions
-    And "Cup historian" is not listed in the "Sessions" list
-    When I click "New chat"
-    Then the Chat Box is empty
+    And "Cup historian" is not listed in the "Sessions" list and no run is stored
+    When I click "Reset"
+    Then the Try it tab is empty
     When I click "All agents" and open "Cup historian" again
-    Then the Chat Box is empty
+    Then the Try it tab is empty
 
-  Scenario: The Chat Box needs a dataset
+  Scenario: Try it needs a dataset
     Given a draft user agent "Empty historian" with no dataset
     When I open "Empty historian" from "Agents"
-    Then the Chat Box tab shows "Add a dataset to this agent to chat with it." and an "Edit" link
+    Then the Try it tab shows "Add a dataset to this agent to try it." and an "Edit" link
 
-  Scenario: An Official agent has no Chat Box and opens on System Prompt
+  Scenario: An Official agent has no Try it tab and opens on System Prompt
     When I open "Questions to Insights Assistant" from "Agents"
-    Then there is no Chat Box tab, and the System Prompt tab is shown
+    Then there is no Try it tab, and the System Prompt tab is shown
 
   Scenario: The Skills tab shows what is linked and creates a skill inline
     Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
@@ -989,7 +996,7 @@ Feature: Agent editor
 
   Scenario: The editor has no detectable accessibility violations in either theme
     When I click "Agents" and click "New agent"
-    And I click "Preview"
+    And I click "Try it"
     Then the axe scan reports no violations in the Light theme
     And the axe scan reports no violations in the Dark theme
 ```

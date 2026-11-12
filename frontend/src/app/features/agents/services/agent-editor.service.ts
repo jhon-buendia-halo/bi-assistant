@@ -3,8 +3,6 @@ import { firstValueFrom } from 'rxjs';
 import { ToastService } from '../../../core/toast/toast.service';
 import { DatasetsApiService } from '../../datasets/services/datasets-api.service';
 import { LlmApiService } from '../../llm/services/llm-api.service';
-import { Session } from '../../sessions/models/session.model';
-import { SessionsApiService } from '../../sessions/services/sessions-api.service';
 import {
   AgentConfig,
   AgentMutationResult,
@@ -30,21 +28,13 @@ import {
   showAgentPublish,
 } from './agent-editor.util';
 
-/** The preview chat in the Details panel (agents-evals R60, R61). */
-export type PreviewState =
-  | { kind: 'idle' }
-  | { kind: 'starting' }
-  | { kind: 'no-dataset'; message: string }
-  | { kind: 'error'; message: string }
-  | { kind: 'ready'; session: Session };
-
 const NO_DATASET_MESSAGE = 'Select at least one dataset to preview';
 
 /**
  * State of the agent editor (agents-evals R54-R61), shared by the editor in
- * the main column, its preview chat in the Details panel and the app shell,
+ * the main column, its Try it panel in the Details panel and the app shell,
  * which asks before leaving with unsaved changes. One editor is open at a
- * time; `open` starts it afresh and `close` discards the preview.
+ * time; `open` starts it afresh.
  */
 @Injectable({ providedIn: 'root' })
 export class AgentEditorService {
@@ -52,7 +42,6 @@ export class AgentEditorService {
   private readonly datasetsApi = inject(DatasetsApiService);
   private readonly llmApi = inject(LlmApiService);
   private readonly skillsApi = inject(SkillsApiService);
-  private readonly sessionsApi = inject(SessionsApiService);
   private readonly toast = inject(ToastService);
 
   /** The agent's id once it exists; null for a new agent never saved. */
@@ -74,7 +63,6 @@ export class AgentEditorService {
   readonly configuredModel = signal<string | null>(null);
   readonly saving = signal(false);
   readonly publishing = signal(false);
-  readonly preview = signal<PreviewState>({ kind: 'idle' });
 
   readonly changed = computed(() =>
     agentFormChanged(this.form(), this.saved()),
@@ -112,7 +100,6 @@ export class AgentEditorService {
   private ready: Promise<void> = Promise.resolve();
   /** Bumped on every open, close and discard, to drop stale answers. */
   private generation = 0;
-  private previewGeneration = 0;
 
   /** Open the editor on an agent's draft, or empty for a new agent (R54). */
   open(agentId: string | null): void {
@@ -204,10 +191,9 @@ export class AgentEditorService {
     });
   }
 
-  /** Leave the editor: the preview is discarded (R61). */
+  /** Leave the editor: its Try it result goes with the panel (R61). */
   close(): void {
     this.generation++;
-    this.discardPreview();
   }
 
   update(patch: Partial<AgentForm>): void {
@@ -250,7 +236,7 @@ export class AgentEditorService {
    * Store the form as the draft, creating the agent on its first save, and
    * toast the backend's message (R56). Resolves whether it saved.
    */
-  async save(options: { refreshPreview?: boolean } = {}): Promise<boolean> {
+  async save(): Promise<boolean> {
     if (this.saving()) return false;
     const form = this.form();
     if (!form.name.trim()) {
@@ -287,7 +273,6 @@ export class AgentEditorService {
     this.legacyNotice.set(false);
     this.status.set(res.agent.status ?? 'draft');
     this.hasUnpublishedChanges.set(!!res.agent.hasUnpublishedChanges);
-    if (options.refreshPreview !== false) this.refreshPreview();
     return true;
   }
 
@@ -319,127 +304,27 @@ export class AgentEditorService {
     }
   }
 
-  /**
-   * Start the preview chat of the saved draft (R60). A form with changes is
-   * saved first; a new agent only once it has a dataset to preview with.
-   * Does nothing while a preview is starting or open.
-   */
-  async startPreview(): Promise<void> {
-    const state = this.preview().kind;
-    if (state === 'starting' || state === 'ready') return;
-    const generation = ++this.previewGeneration;
-    const current = () => generation === this.previewGeneration;
-    this.preview.set({ kind: 'starting' });
+  /** Why Try it can't run the draft: the form has no existing dataset (R60). */
+  readonly tryBlocked = computed(() =>
+    hasExistingDataset(this.form().datasets, this.existingDatasets())
+      ? null
+      : NO_DATASET_MESSAGE,
+  );
 
+  /**
+   * Gate for a Try it run: save the form first when it has changes (a new
+   * agent once it has a name and a dataset), so the run uses what Save
+   * stored (R60). A refusal stops the run.
+   */
+  readonly beforeTry = async (): Promise<boolean> => {
     await this.ready;
-    if (!current()) return;
-    const isNew = this.agentId() === null;
     const form = this.form();
-    const saveFirst = isNew
-      ? form.name.trim() !== '' &&
-        hasExistingDataset(form.datasets, this.existingDatasets())
-      : this.changed() && form.name.trim() !== '';
-    if (saveFirst && !(await this.save({ refreshPreview: false }))) {
-      if (current()) this.preview.set({ kind: 'idle' });
-      return;
-    }
-    if (!current()) return;
-
-    const id = this.agentId();
-    if (
-      id === null ||
-      !hasExistingDataset(this.saved().datasets, this.existingDatasets())
-    ) {
-      this.preview.set({ kind: 'no-dataset', message: NO_DATASET_MESSAGE });
-      return;
-    }
-    try {
-      const res = await firstValueFrom(this.sessionsApi.createPreview(id));
-      if (!current()) {
-        // Discarded while it was being created.
-        if (res.ok && res.session) this.deleteSession(res.session.id);
-        return;
-      }
-      if (res.ok && res.session) {
-        this.preview.set({ kind: 'ready', session: res.session });
-      } else if (res.message === NO_DATASET_MESSAGE) {
-        this.preview.set({ kind: 'no-dataset', message: res.message });
-      } else {
-        this.preview.set({ kind: 'error', message: res.message });
-      }
-    } catch (err) {
-      if (!current()) return;
-      const error = err as { error?: { message?: string } };
-      this.preview.set({
-        kind: 'error',
-        message: error?.error?.message ?? 'Backend unreachable',
-      });
-    }
-  }
-
-  /** Reset preview: discard the conversation and start an empty one (R61). */
-  resetPreview(): void {
-    this.discardPreview();
-    void this.startPreview();
-  }
-
-  /** Discard the preview conversation, if any, with its memory and files. */
-  discardPreview(): void {
-    this.previewGeneration++;
-    const state = this.preview();
-    if (state.kind === 'ready') this.deleteSession(state.session.id);
-    if (state.kind !== 'idle') this.preview.set({ kind: 'idle' });
-  }
-
-  /**
-   * Gate for a preview message: save the form first when it has changes, so
-   * the preview runs what Save stored (R60). A refusal stops the send.
-   */
-  readonly beforePreviewSend = async (): Promise<boolean> => {
-    if (!this.changed()) return true;
-    return this.save({ refreshPreview: false });
+    const needsSave =
+      this.agentId() === null
+        ? form.name.trim() !== '' &&
+          hasExistingDataset(form.datasets, this.existingDatasets())
+        : this.changed() && form.name.trim() !== '';
+    if (needsSave) return this.save();
+    return this.agentId() !== null;
   };
-
-  /** The preview chat persisted a turn; keep the copy current. */
-  previewUpdated(session: Session): void {
-    const state = this.preview();
-    if (state.kind === 'ready' && state.session.id === session.id) {
-      this.preview.set({ kind: 'ready', session });
-    }
-  }
-
-  /**
-   * After a save, a preview waiting for a dataset tries again, and an open
-   * one that nobody has asked anything yet re-reads the draft's description
-   * and starter questions for its welcome card.
-   */
-  private refreshPreview(): void {
-    const state = this.preview();
-    if (state.kind === 'no-dataset' || state.kind === 'error') {
-      this.preview.set({ kind: 'idle' });
-      void this.startPreview();
-      return;
-    }
-    if (state.kind !== 'ready' || state.session.messages.length > 0) return;
-    const id = state.session.id;
-    this.sessionsApi.get(id).subscribe({
-      next: (session) => {
-        const now = this.preview();
-        if (
-          now.kind === 'ready' &&
-          now.session.id === id &&
-          now.session.messages.length === 0 &&
-          session.messages.length === 0
-        ) {
-          this.preview.set({ kind: 'ready', session });
-        }
-      },
-      error: () => undefined,
-    });
-  }
-
-  private deleteSession(id: string): void {
-    // Fire and forget: the backend also discards leftovers at its next start.
-    this.sessionsApi.delete(id).subscribe({ error: () => undefined });
-  }
 }

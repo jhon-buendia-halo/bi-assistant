@@ -467,7 +467,7 @@ flowchart LR
     - its instructions as an extra, labelled per-turn system context block after the base prompt and the knowledge block;
     - its datasets as the session's datasets;
     - its model or reasoning-effort override through the turn's request context, read by `resolveAgentModel()`.
-  - A preview chat applies the **draft** the same way, against a thread that is not stored as a session.
+  - Try it (since 1.23.23, ADR-0041) applies the **draft** the same way, as a draft run (api.md 129) on a host and workspace that are discarded when the run ends; the preview chat it replaced was a thread that was not stored as a session.
   - The built-in agents stay in the code registry. The hub merges them (Official: `assistant`; System: the helpers) with the user agents from the collection.
 - **Consequences:**
   - User agents inherit every assistant tool, guard and fix automatically. They can't add tools or relax the guard.

@@ -160,10 +160,12 @@
           [class.hidden]="activeTab() !== 'chat'"
           data-testid="agent-panel-chat"
         >
-          <app-agent-chat-box
+          <app-agent-try-it
             style="height: calc(100vh - 22rem); min-height: 420px"
-            [agent]="agent"
-            (edit)="edit.emit($event)"
+            [agentId]="agent.key"
+            [blocked]="tryBlocked(agent)"
+            [editable]="true"
+            (edit)="edit.emit(agent)"
           />
         </div>
       }

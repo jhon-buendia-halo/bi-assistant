@@ -770,6 +770,7 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 | 126 | `GET /workflow-runs/:id/panel-items/:itemId/download` | Download a run's file, document or table panel item | yes |
 | 127 | `GET /workflow-runs/:id/rfp-packages/:rfpId/download` | Download a run's RFP package (zip) or one of its files | yes |
 | 128 | `POST /workflow-runs/:id/answer/feedback` | Thumbs up/down on a run's answer | yes |
+| 129 | `POST /agents/:id/draft-runs/stream` | Try it: run a user agent's saved draft once, streamed (SSE), not stored (plan R12) | yes |
 
 #### 120. `GET /workflow-runs`
 - Query: `workflowId` (optional): only that workflow's runs.
@@ -821,6 +822,12 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 - Body: `{ rating: "up" | "down" }`. As 7 on the run's answer: sets `feedback` and `verified` on the stored answer; `up` saves a verified query keyed by `sourceRunId` (question = the run's question; same SQL, datasource and entity rules as 7), `down` deletes it.
 - Success `200`: `{ ok: true, message, run }` (`message` as 7, `run` as 121).
 - Errors (Style B): `400 "rating must be 'up' or 'down'"`; `404 "Run \"<id>\" not found"`; `404 "Run \"<id>\" has no answer"`.
+
+#### 129. `POST /agents/:id/draft-runs/stream`
+- Prefix `/agents`, served by the workflows module's draft-runs controller. Capability: [agents-evals](../capabilities/agents-evals/spec.md) R60, R61. `:id` is a user agent's id.
+- Body: `{ input: { question: string } }`. Runs the agent's saved **draft** once on the question, streamed as 119 is (section 3.6, same events and framing). The agent turn runs on a run host that is a preview-shaped session over the draft (its instructions, model and effort overrides, linked tools and skills, and the datasets of it that exist), through the chat turn path ([agents.md](agents.md) 5.14), so its model request equals a chat turn's. The `run` event carries `workflowId: "agent:<id>"`.
+- Refusals (Style B, before the stream starts, nothing runs): `404 "Agent \"<id>\" not found"`; `400 "Select at least one dataset to preview"` when none of the draft's datasets exists; `400 "Question is required"` for a missing or blank question.
+- Side effects: **none are kept.** The run is not stored in `workflow_runs` (it is not in 120 or 121); its host `run-<run id>` and workspace `session-run-<run id>` are created for the turn and deleted when the run ends, with its memory thread, however it ends (success, failure or a stop). `done.run` is the run as it ended, with its `answer`; it has no stored copy to read back, and its files do not download. A workspace left by a stop of the app is deleted at the next backend start (the runs' start-up recovery).
 
 ### 2.7 Deep analysis
 

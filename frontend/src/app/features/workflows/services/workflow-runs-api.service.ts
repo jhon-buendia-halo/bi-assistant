@@ -155,10 +155,45 @@ export class WorkflowRunsApiService {
     handlers: RunStreamHandlers,
     signal?: AbortSignal,
   ): Promise<void> {
+    await this.streamFrom(
+      `${API_BASE_URL}/workflows/${encodeURIComponent(workflowId)}/runs/stream`,
+      workflowId,
+      body,
+      handlers,
+      signal,
+    );
+  }
+
+  /**
+   * Try it (api.md R12): run a user agent's saved draft once on a question,
+   * streamed as a run is (3.6) but not stored.
+   */
+  async streamDraftRun(
+    agentId: string,
+    question: string,
+    handlers: RunStreamHandlers,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.streamFrom(
+      `${API_BASE_URL}/agents/${encodeURIComponent(agentId)}/draft-runs/stream`,
+      `agent:${agentId}`,
+      { input: { question } },
+      handlers,
+      signal,
+    );
+  }
+
+  private async streamFrom(
+    url: string,
+    workflowId: string,
+    body: WorkflowRunRequest,
+    handlers: RunStreamHandlers,
+    signal?: AbortSignal,
+  ): Promise<void> {
     let res: Response;
     try {
       res = await fetch(
-        `${API_BASE_URL}/workflows/${encodeURIComponent(workflowId)}/runs/stream`,
+        url,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

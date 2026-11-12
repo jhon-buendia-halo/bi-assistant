@@ -27,13 +27,13 @@
     <div class="ml-auto flex shrink-0 items-center gap-2">
       <button
         type="button"
-        data-testid="agent-preview"
-        (click)="startPreview()"
+        data-testid="agent-try-it"
+        (click)="tryIt()"
         [disabled]="editor.loading() || !!editor.loadError()"
         class="btn btn-secondary"
       >
         <lucide-angular [img]="MessageSquare" [size]="14" />
-        <span>Preview</span>
+        <span>Try it</span>
       </button>
       <button
         type="button"
