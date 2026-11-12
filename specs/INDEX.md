@@ -432,7 +432,7 @@ specs/capabilities/agents-evals/spec.md:30-30  R6 The System Prompt tab SHALL sh
 specs/capabilities/agents-evals/spec.md:31-31  R7 The Memory tab SHALL show, for an agent with memory: "Recent messages
 specs/capabilities/agents-evals/spec.md:32-32  R8 Requesting an agent that does not exist SHALL fail with `Agent "<key>"
 specs/capabilities/agents-evals/spec.md:33-35  R9 The system SHALL tolerate an agent whose prompt, tools, memory or mode
-specs/capabilities/agents-evals/spec.md:36-36  R10 Only the assistant SHALL have eval sets (the `rfp` set went with the R
+specs/capabilities/agents-evals/spec.md:36-36  R10 Only the assistant and the Data Readiness Agent SHALL have eval sets (
 specs/capabilities/agents-evals/spec.md:37-37  R11 The system SHALL provide three sets, each bound to one sample fixture:
 specs/capabilities/agents-evals/spec.md:38-38  R12 Each set SHALL carry a name, a description of what it covers and what
 specs/capabilities/agents-evals/spec.md:39-39  R13 The Evals tab SHALL open on the list of sets, each showing its name, "
