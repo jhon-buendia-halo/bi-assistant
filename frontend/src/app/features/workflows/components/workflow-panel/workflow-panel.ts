@@ -29,6 +29,7 @@ import {
   ReadinessPanelItem,
   ReadinessReportRef,
 } from '../../../sessions/models/session.model';
+import { WorkflowBar } from '../../../sessions/components/workflow-bar/workflow-bar';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import { WorkflowInputField, WorkflowSummary } from '../../models/workflow.model';
 import { WorkflowRunFiles } from '../workflow-run-files/workflow-run-files';
@@ -75,6 +76,7 @@ const COPIED_MS = 2000;
     PanelReadinessView,
     ReadinessHistory,
     WorkflowRunFiles,
+    WorkflowBar,
   ],
   templateUrl: './workflow-panel.html',
   host: { class: 'flex min-h-0 flex-col', 'data-testid': 'workflow-panel' },

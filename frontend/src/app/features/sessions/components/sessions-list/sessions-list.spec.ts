@@ -75,7 +75,7 @@ describe('SessionsList', () => {
         },
       }),
     ]);
-    expect(root().querySelector('nav[aria-label="Sessions"]')).toBeTruthy();
+    expect(root().querySelector('nav[aria-label="Past chats"]')).toBeTruthy();
     const rows = root().querySelectorAll('[data-testid^="session-"]');
     expect(rows.length).toBe(3);
     expect(rows[0].textContent).toContain('Alpha');

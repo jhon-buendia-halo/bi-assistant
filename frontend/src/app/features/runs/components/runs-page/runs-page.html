@@ -1,0 +1,195 @@
+<div class="mx-auto flex w-full max-w-[960px] flex-col gap-3">
+  <div
+    role="tablist"
+    aria-label="Runs views"
+    class="flex items-center gap-1 border-b border-border"
+  >
+    @for (tab of tabs; track tab.id) {
+      <button
+        type="button"
+        role="tab"
+        [id]="'runs-tab-' + tab.id"
+        [attr.data-testid]="'runs-tab-' + tab.id"
+        [attr.aria-selected]="runsState.tab() === tab.id"
+        [attr.aria-controls]="'runs-panel-' + tab.id"
+        [attr.tabindex]="runsState.tab() === tab.id ? 0 : -1"
+        (click)="selectTab(tab.id)"
+        class="-mb-px border-b-2 px-3 py-2 text-[13px]"
+        [class.border-border-selected]="runsState.tab() === tab.id"
+        [class.text-fg-strong]="runsState.tab() === tab.id"
+        [class.border-transparent]="runsState.tab() !== tab.id"
+        [class.text-fg-muted]="runsState.tab() !== tab.id"
+      >
+        {{ tab.label }}
+      </button>
+    }
+  </div>
+
+  @if (runsState.tab() === "past-chats") {
+    <div
+      role="tabpanel"
+      id="runs-panel-past-chats"
+      aria-labelledby="runs-tab-past-chats"
+    >
+      <app-sessions-list
+        [sessions]="sessions.sessions()"
+        [loading]="!sessions.sessionsLoaded()"
+        [activeId]="sessions.activeSession()?.id ?? null"
+        [deletingId]="sessions.deletingSession()"
+        (openSession)="sessions.openPastChat($event)"
+        (deleteSession)="sessions.deleteSession($event)"
+        (newConversation)="composer.openComposer()"
+      />
+    </div>
+  } @else {
+    <div
+      role="tabpanel"
+      id="runs-panel-runs"
+      aria-labelledby="runs-tab-runs"
+      data-testid="runs-list"
+      class="flex flex-col gap-3"
+    >
+      <div class="relative">
+        <lucide-angular
+          [img]="Search"
+          [size]="15"
+          class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-fg-muted"
+        />
+        <input
+          type="search"
+          data-testid="runs-search"
+          placeholder="Search runs by title, workflow or ID…"
+          aria-label="Search runs"
+          [value]="query()"
+          (input)="onSearch($event)"
+          class="field pl-10"
+        />
+      </div>
+
+      @if (!runsState.runsLoaded() && runsState.runs().length === 0) {
+        <div class="mt-6 flex items-center justify-center gap-2.5 text-fg-muted">
+          <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+          <span>Loading runs…</span>
+        </div>
+      } @else if (runsState.runs().length === 0) {
+        <p
+          class="py-10 text-center text-[13px] text-fg-muted"
+          data-testid="runs-empty"
+        >
+          No runs yet. Open a workflow and run it.
+        </p>
+      } @else if (visible().length === 0) {
+        <p class="py-10 text-center text-[13px] text-fg-muted">
+          No runs match "{{ query().trim() }}".
+        </p>
+      } @else {
+        <ul class="card divide-y divide-border">
+          @for (run of pageRows(); track run.id) {
+            <li
+              [attr.data-testid]="'run-' + run.id"
+              class="list-row group relative flex items-center gap-3 rounded-none border-0 p-0 first:rounded-t-xl last:rounded-b-xl"
+            >
+              <button
+                type="button"
+                (click)="runsState.openRun(run.id)"
+                [disabled]="runsState.deletingRun() === run.id"
+                class="flex min-w-0 flex-1 flex-col px-3 py-2 text-left disabled:opacity-50"
+              >
+                <span
+                  class="truncate text-[13px] font-medium text-fg-strong"
+                  data-testid="row-run-title"
+                  >{{ run.title }}</span
+                >
+              </button>
+              <span
+                data-testid="row-run-workflow"
+                class="chip chip-neutral min-w-0 max-w-48 shrink-0"
+                [attr.title]="'Workflow: ' + run.workflowName"
+              >
+                <lucide-angular [img]="Workflow" [size]="12" class="shrink-0" />
+                <span class="truncate">{{ run.workflowName }}</span>
+              </span>
+              <span
+                data-testid="row-run-status"
+                class="chip shrink-0"
+                [class.chip-neutral]="run.status !== 'failed'"
+                [class.chip-warning]="run.status === 'failed'"
+                >{{ status(run.status) }}</span
+              >
+              <button
+                type="button"
+                data-testid="row-run-id"
+                class="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px] text-fg-muted hover:bg-surface-selected hover:text-fg"
+                [title]="'Run ID ' + run.id + ' (click to copy)'"
+                [attr.aria-label]="'Copy run ID ' + run.id"
+                (click)="copyId(run.id)"
+              >
+                <span>ID {{ run.id.slice(0, 8) }}</span>
+                <lucide-angular [img]="Copy" [size]="12" />
+              </button>
+              @if (when(run); as at) {
+                <span
+                  class="shrink-0 text-[12px] text-fg-muted"
+                  [attr.title]="fullDate(run)"
+                  >{{ at }}</span
+                >
+              }
+              <button
+                type="button"
+                title="Run options"
+                [attr.aria-label]="'Options for ' + run.title"
+                (click)="menuOpen.set(menuOpen() === run.id ? null : run.id)"
+                [disabled]="runsState.deletingRun() === run.id"
+                class="btn-icon mr-2"
+              >
+                <lucide-angular [img]="EllipsisVertical" [size]="14" />
+              </button>
+              @if (menuOpen() === run.id) {
+                <div class="fixed inset-0 z-20" (click)="menuOpen.set(null)"></div>
+                <div class="menu absolute top-full right-2 z-30 mt-1 w-44">
+                  <button
+                    type="button"
+                    (click)="delete(run)"
+                    class="menu-item text-on-danger-soft"
+                  >
+                    <lucide-angular [img]="Trash2" [size]="14" />
+                    <span>Delete run</span>
+                  </button>
+                </div>
+              }
+            </li>
+          }
+        </ul>
+        <div
+          class="flex items-center justify-end gap-2 text-[12px] text-fg-muted"
+          data-testid="runs-pagination"
+        >
+          <span aria-live="polite">{{ range() }}</span>
+          @if (pageCount() > 1) {
+            <button
+              type="button"
+              class="btn-icon"
+              title="Previous page"
+              aria-label="Previous page"
+              [disabled]="page() === 1"
+              (click)="goTo(page() - 1)"
+            >
+              <lucide-angular [img]="ChevronLeft" [size]="16" />
+            </button>
+            <span>Page {{ page() }} of {{ pageCount() }}</span>
+            <button
+              type="button"
+              class="btn-icon"
+              title="Next page"
+              aria-label="Next page"
+              [disabled]="page() === pageCount()"
+              (click)="goTo(page() + 1)"
+            >
+              <lucide-angular [img]="ChevronRight" [size]="16" />
+            </button>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

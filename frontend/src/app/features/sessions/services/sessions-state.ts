@@ -37,6 +37,8 @@ export class SessionsState {
   /** False until the first list answer, for the Sessions page's loading line. */
   readonly sessionsLoaded = signal(false);
   readonly activeSession = signal<Session | null>(null);
+  /** The open chat is a past chat: readable, not continuable (sessions-chat R66). */
+  readonly readOnlyChat = signal(false);
   readonly deletingSession = signal<string | null>(null);
   readonly generatingVisualSession = signal<string | null>(null);
   readonly downloadingVisualization = signal<string | null>(null);
@@ -47,14 +49,13 @@ export class SessionsState {
   /** Latest data mark clicked inside a visual; drives the chat follow-up chips. */
   readonly selectedDataPoint = signal<DataPointSelection | null>(null);
 
-  /** Title of the Sessions area's page header (app-shell R49). */
+  /** Title of the Runs area's page header (app-shell R49). */
   readonly pageTitle = computed(() => {
-    if (this.shell.mainView() === 'session-chat') {
-      return this.activeSession()?.name ?? 'Sessions';
+    const view = this.shell.mainView();
+    if (view === 'session-chat') {
+      return this.activeSession()?.name ?? 'Runs';
     }
-    return this.shell.mainView() === 'conversation-new'
-      ? 'New conversation'
-      : 'Sessions';
+    return view === 'conversation-new' ? 'New conversation' : 'Runs';
   });
 
   /** The page header shows the session's datasources while a chat is open. */
@@ -96,8 +97,14 @@ export class SessionsState {
       });
   }
 
-  openSession(session: Session): void {
+  /** A row of the Past chats tab: opens the chat read-only (sessions-chat R66). */
+  openPastChat(session: Session): void {
+    this.openSession(session, true);
+  }
+
+  openSession(session: Session, readOnly = false): void {
     if (!this.shell.confirmLeaveAgentEditor()) return;
+    this.readOnlyChat.set(readOnly);
     this.selectedDataPoint.set(null);
     this.activeSession.set(session);
     this.shell.mainView.set('session-chat');
@@ -109,11 +116,11 @@ export class SessionsState {
   openSessionById(id: string): void {
     const known = this.sessions().find((session) => session.id === id);
     if (known) {
-      this.openSession(known);
+      this.openPastChat(known);
       return;
     }
     this.sessionsApi.get(id).subscribe({
-      next: (session) => this.openSession(session),
+      next: (session) => this.openPastChat(session),
       error: () => this.toast.error('Could not open the session'),
     });
   }
@@ -497,7 +504,7 @@ export class SessionsState {
           this.activeVisualization.set(null);
           this.visualizationError.set(null);
           // The agent editor is never left without asking (agents-evals R59).
-          if (!this.shell.inEditor()) this.shell.mainView.set('sessions');
+          if (!this.shell.inEditor()) this.shell.mainView.set('runs');
         }
         this.toast.success(res.message);
       },

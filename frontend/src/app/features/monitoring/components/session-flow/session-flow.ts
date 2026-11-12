@@ -65,6 +65,8 @@ export class SessionFlowPage {
   readonly openCall = output<string>();
   /** The session whose chat should open. */
   readonly openChat = output<string>();
+  /** The stored run behind a run's thread (the Runs page's run-detail). */
+  readonly openRun = output<string>();
 
   private readonly api = inject(MonitoringApiService);
 

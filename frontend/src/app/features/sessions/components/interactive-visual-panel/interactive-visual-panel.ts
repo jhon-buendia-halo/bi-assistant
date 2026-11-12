@@ -148,6 +148,8 @@ export class InteractiveVisualPanel {
 
   readonly sessionId = input<string | null>(null);
   readonly visualization = input<InteractiveVisualization | null>(null);
+  /** Read-only (a past chat): no Tailor, no Refresh, no revert, no repair. */
+  readonly readOnly = input(false);
   readonly loading = input(false);
   readonly error = input<string | null>(null);
   readonly downloading = input(false);
@@ -268,6 +270,7 @@ export class InteractiveVisualPanel {
     if (
       !visual ||
       !sessionId ||
+      this.readOnly() ||
       this.viewingOldVersion() ||
       this.repairing() ||
       this.isAutoRepairVersion() ||

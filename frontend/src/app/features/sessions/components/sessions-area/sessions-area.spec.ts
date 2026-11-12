@@ -3,12 +3,14 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { App } from '../../../../app';
 import { ShellState } from '../../../../core/shell/shell-state';
+import { RunsState } from '../../../runs/services/runs-state';
 import { SessionsState } from '../../../../features/sessions/services/sessions-state';
 
 const shellState = () => TestBed.inject(ShellState);
 const sessionsState = () => TestBed.inject(SessionsState);
+const runsState = () => TestBed.inject(RunsState);
 
-describe('Sessions area (app-shell R3, R49)', () => {
+describe('Runs area (app-shell R3, R49)', () => {
   beforeEach(async () => {
     localStorage.removeItem('questions-to-insights:right-panel-width');
     await TestBed.configureTestingModule({
@@ -17,7 +19,7 @@ describe('Sessions area (app-shell R3, R49)', () => {
     }).compileComponents();
   });
 
-  it('should list sessions on the Sessions page, not in the drawer', async () => {
+  it('should list past chats on the Runs page, not in the drawer', async () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
     sessionsState().sessions.set([{ id: 's1', name: 'Alpha', datasets: [], messages: [] }]);
@@ -29,18 +31,23 @@ describe('Sessions area (app-shell R3, R49)', () => {
     ).toBeFalsy();
     expect(compiled.querySelector('[data-testid="session-s1"]')).toBeFalsy();
 
-    shellState().selectArea('sessions');
+    shellState().selectArea('runs');
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(shellState().mainView()).toBe('sessions');
+    expect(shellState().mainView()).toBe('runs');
     // From an open chat, the rail returns to the list.
     shellState().mainView.set('session-chat');
-    shellState().selectArea('sessions');
-    expect(shellState().mainView()).toBe('sessions');
+    shellState().selectArea('runs');
+    expect(shellState().mainView()).toBe('runs');
+    // Past chats are the Runs page's second tab (sessions-chat R63).
+    runsState().setTab('past-chats');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
     expect(
       compiled.querySelector(
-        'nav[aria-label="Sessions"] [data-testid="session-s1"]',
+        'nav[aria-label="Past chats"] [data-testid="session-s1"]',
       ),
     ).toBeTruthy();
   });

@@ -5,7 +5,11 @@ import {
   DatasetsApiService,
 } from '../../datasets/services/datasets-api.service';
 import { ToastService } from '../../../core/toast/toast.service';
-import { ChatMessage, MessageFeedback } from '../../sessions/models/session.model';
+import {
+  ChatMessage,
+  MessageFeedback,
+  WorkflowView,
+} from '../../sessions/models/session.model';
 import {
   WorkflowDetail,
   WorkflowInputValue,
@@ -22,6 +26,7 @@ import {
   followUpRequest,
   initialInputValues,
   questionFieldName,
+  runAgainValues,
   runInput,
 } from './workflows.util';
 
@@ -126,10 +131,19 @@ export class WorkflowDesigner {
   readonly toolCalls = signal<LiveToolCall[]>([]);
   /** Live: the answer text so far (not authoritative; `done.run` replaces it). */
   readonly streamingText = signal('');
+  /** Live: the agent's phases (`workflow` event), for the phases bar. */
+  private readonly livePhases = signal<WorkflowView | null>(null);
+  /** The agent's phases bar: live while it streams, then as stored. */
+  readonly phases = computed<WorkflowView | null>(
+    () => this.run()?.workflow ?? this.livePhases(),
+  );
   /** The run started, then the stream failed (`error` event, a dropped stream). */
   private readonly streamError = signal<string | null>(null);
   /** The user stopped the run shown. */
   private readonly stopped = signal(false);
+
+  /** Run again: the values the next loaded workflow's form opens with. */
+  private prefill: RunFormValues | null = null;
 
   private loadSubscription: Subscription | null = null;
   private datasetsSubscription: Subscription | null = null;
@@ -233,6 +247,14 @@ export class WorkflowDesigner {
     );
   });
 
+  /**
+   * Run again (plan 1.24.11): the next workflow opened shows its Run tab with
+   * this earlier run's input filled in.
+   */
+  prefillRunAgain(input: WorkflowRun['input']): void {
+    this.prefill = input as RunFormValues;
+  }
+
   /** Open a workflow: everything of the previous one is discarded. */
   load(id: string): void {
     this.clear();
@@ -242,6 +264,12 @@ export class WorkflowDesigner {
         this.workflow.set(workflow);
         this.inputValues.set(initialInputValues(workflow.input));
         this.loading.set(false);
+        if (this.prefill !== null) {
+          const input = this.prefill;
+          this.prefill = null;
+          this.inputValues.set(runAgainValues(workflow.input, input));
+          this.setTab('run');
+        }
         if (
           workflow.input.some(
             (field) =>
@@ -432,6 +460,7 @@ export class WorkflowDesigner {
     this.reasoning.set('');
     this.toolCalls.set([]);
     this.streamingText.set('');
+    this.livePhases.set(null);
     this.streamError.set(null);
     this.stopped.set(false);
   }
@@ -465,6 +494,9 @@ export class WorkflowDesigner {
           },
           onReasoning: (delta) => {
             if (live()) this.reasoning.update((text) => text + delta);
+          },
+          onWorkflow: (view) => {
+            if (live()) this.livePhases.set(view);
           },
           onText: (delta) => {
             if (live()) this.streamingText.update((text) => text + delta);

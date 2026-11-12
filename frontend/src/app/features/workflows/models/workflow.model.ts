@@ -139,3 +139,14 @@ export interface WorkflowRun {
   createdAt?: string;
   updatedAt?: string;
 }
+
+/** One row of the run history (api.md 120 `WorkflowRunSummary`). */
+export interface WorkflowRunSummary {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  status: WorkflowRun['status'];
+  title: string;
+  startedAt: string;
+  finishedAt?: string;
+}

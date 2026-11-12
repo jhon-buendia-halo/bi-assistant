@@ -126,6 +126,26 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer.execute();
   }
 
+  it('opens the Run tab with an earlier run\'s input after Run again (plan 1.24.11)', () => {
+    designer.prefillRunAgain({
+      question: 'Which team scored the most goals?',
+      datasets: ['World Cup Core'],
+      careful: true,
+    });
+    designer.load(ASSISTANT.id);
+    http.expectOne((r) => r.url.endsWith('/workflows/agent%3Aassistant')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+    expect(designer.tab()).toBe('run');
+    expect(designer.inputValue('question')).toBe('Which team scored the most goals?');
+    expect(designer.picked('datasets')).toEqual(['World Cup Core']);
+    expect(designer.checked('careful')).toBeTrue();
+    // A second open starts from the defaults again.
+    designer.load(ASSISTANT.id);
+    http.expectOne((r) => r.url.endsWith('/workflows/agent%3Aassistant')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+    expect(designer.tab()).toBe('workflow');
+  });
+
   it('starts the form from the defaults and loads the datasets to pick from', () => {
     expect(designer.inputValues()).toEqual({ careful: false });
     expect(designer.datasets().map((d) => d.name)).toEqual(['World Cup Core']);
@@ -143,6 +163,22 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
       },
     });
     expect(designer.running()).toBe(true);
+  });
+
+  it('keeps the agent phases of the run for the phases bar, live and as stored (plan 1.24.5)', () => {
+    executeQuestion();
+    expect(designer.phases()).toBeNull();
+    const view = {
+      phases: [{ number: 1, title: 'Understand' }],
+      current: 1,
+      done: [],
+      skipped: [],
+      source: 'workflow' as const,
+    };
+    runs.last.handlers.onWorkflow!(view);
+    expect(designer.phases()).toEqual(view);
+    runs.last.handlers.onDone!({ ...storedRun(), workflow: { ...view, current: null, done: [1] } });
+    expect(designer.phases()?.done).toEqual([1]);
   });
 
   it('shows the steps progress live, the tool calls and the answer forming, then the stored run', () => {

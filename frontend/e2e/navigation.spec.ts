@@ -11,9 +11,9 @@ const evidence = (feature: string, name: string) =>
 const rail = (page: Page) =>
   page.getByRole('complementary', { name: 'Navigation rail' });
 
-/** The session list in the middle of the Sessions page. */
+/** The Runs page: its tabs, Runs and Past chats. */
 const sessionsList = (page: Page) =>
-  page.getByRole('navigation', { name: 'Sessions', exact: true });
+  page.getByRole('tablist', { name: 'Runs views' });
 
 const railItem = (page: Page, name: string) =>
   rail(page).getByRole('button', { name, exact: true });
@@ -61,8 +61,8 @@ test('moves between areas from the rail', async ({ page }) => {
   ).toBeVisible();
   await expectCurrent(page, 'Context');
 
-  await railItem(page, 'Sessions').click();
-  await expectCurrent(page, 'Sessions');
+  await railItem(page, 'Runs').click();
+  await expectCurrent(page, 'Runs');
   await expect(sessionsList(page)).toBeVisible();
   await expect(
     page
@@ -97,12 +97,12 @@ test(
         await expectCurrent(page, 'Monitoring');
       },
     );
-    await scenarioStep(page, 'When I click "Sessions" on the rail', async () => {
-      await railItem(page, 'Sessions').click();
+    await scenarioStep(page, 'When I click "Runs" on the rail', async () => {
+      await railItem(page, 'Runs').click();
     });
     await scenarioStep(
       page,
-      'Then I see the "Sessions" list and "Monitoring" is no longer the current rail item',
+      'Then I see the Runs page and "Monitoring" is no longer the current rail item',
       async () => {
         await expect(sessionsList(page)).toBeVisible();
         await expect(railItem(page, 'Monitoring')).not.toHaveAttribute(
@@ -144,7 +144,7 @@ test('the start page explains how the product works', async ({ page }) => {
   await page.goto(page.url());
   await step(2).getByRole('button', { name: 'Start a conversation' }).click();
   await expect(page.getByPlaceholder('My new session')).toBeVisible();
-  await expectCurrent(page, 'Sessions');
+  await expectCurrent(page, 'Runs');
 
   await page.goto(page.url());
   await step(3).getByRole('button', { name: 'Agents' }).click();
@@ -207,7 +207,7 @@ test('expands the rail into a drawer with labels', async ({ page }) => {
     'Datasets',
     'Agents',
     'Context',
-    'Sessions',
+    'Runs',
     'Monitoring',
   ]) {
     await expect(workspace.getByText(label, { exact: true })).toBeVisible();
@@ -224,7 +224,7 @@ test('expands the rail into a drawer with labels', async ({ page }) => {
     page.getByRole('button', { name: 'Expand navigation' }),
   ).toHaveAttribute('aria-expanded', 'false');
 
-  await railItem(page, 'Sessions').click();
+  await railItem(page, 'Runs').click();
   await expect(sessionsList(page)).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Expand navigation' }),
@@ -316,7 +316,7 @@ test('the app opens straight into the shell', async ({ page }) => {
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     await expectCurrent(page, area);
   }
-  await railItem(page, 'Sessions').click();
+  await railItem(page, 'Runs').click();
   await expect(sessionsList(page)).toBeVisible();
 
   // Every Settings section is reachable, LLM Configuration with its

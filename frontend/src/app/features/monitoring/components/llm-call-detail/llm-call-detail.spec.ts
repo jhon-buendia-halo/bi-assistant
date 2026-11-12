@@ -145,7 +145,7 @@ describe('LlmCallDetailPage', () => {
       'Duration',
       'Time to first token',
       'Status',
-      'Session',
+      'Run',
       'Provider',
       'Finish reason',
       'Tokens in',

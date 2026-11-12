@@ -110,7 +110,7 @@ describe('SessionsPage', () => {
       el.querySelectorAll('[data-testid="monitoring-sessions-table"] th'),
     ).map((th) => th.textContent!.trim());
     expect(headers).toEqual([
-      'Session',
+      'Run',
       'Agent',
       'Turns',
       'Last activity',
@@ -136,7 +136,7 @@ describe('SessionsPage', () => {
     );
     const row = q('monitoring-session-row-abcdef1234567890')!;
     const first = row.querySelector('td')!;
-    expect(first.textContent).toContain('Unnamed session');
+    expect(first.textContent).toContain('Unnamed run');
     expect(first.querySelector('.font-mono')!.textContent!.trim()).toBe(
       'abcdef12',
     );
@@ -202,14 +202,14 @@ describe('SessionsPage', () => {
   it('says no sessions yet, or none match the filters', async () => {
     await render(page([]));
     expect(q('monitoring-sessions-empty')!.textContent!.trim()).toBe(
-      'No sessions yet.',
+      'No runs yet.',
     );
     expect((q('session-filters-clear') as HTMLButtonElement).disabled).toBeTrue();
 
     state.setSessionFilter('range', 'hour');
     await settle();
     expect(q('monitoring-sessions-empty')!.textContent!.trim()).toBe(
-      'No sessions match these filters.',
+      'No runs match these filters.',
     );
     (q('session-filters-clear') as HTMLButtonElement).click();
     await settle();

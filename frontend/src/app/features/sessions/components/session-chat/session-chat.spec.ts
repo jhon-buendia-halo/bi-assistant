@@ -69,6 +69,43 @@ describe('SessionChat trust UX', () => {
     expect(el.textContent).toContain('Generate interactive visuals');
   });
 
+  it('a read-only past chat has no composer, rating, visual generation or welcome (sessions-chat R66)', async () => {
+    await TestBed.configureTestingModule({
+      imports: [SessionChat],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    fixture = TestBed.createComponent(SessionChat);
+    fixture.componentRef.setInput('session', sessionWith(answer));
+    fixture.componentRef.setInput('readOnly', true);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    // The transcript still reads through the answer view.
+    expect(el.querySelectorAll('app-answer-view').length).toBe(1);
+    expect(el.querySelector('textarea')).toBeNull();
+    expect(el.querySelector('[aria-label="Send message"]')).toBeNull();
+    expect(el.querySelector('[aria-label="Careful mode"]')).toBeNull();
+    expect(el.querySelector('[aria-label="Deep analysis"]')).toBeNull();
+    expect(el.querySelector('[aria-label="Save as verified query"]')).toBeNull();
+    expect(el.querySelector('[aria-label="Mark answer as wrong"]')).toBeNull();
+    expect(el.textContent).not.toContain('Generate interactive visuals');
+    const api = TestBed.inject(SessionsApiService);
+    const stream = spyOn(api, 'streamMessage');
+    fixture.componentInstance.pickOption('anything');
+    expect(stream).not.toHaveBeenCalled();
+  });
+
+  it('an empty read-only chat shows no welcome', async () => {
+    await TestBed.configureTestingModule({
+      imports: [SessionChat],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    fixture = TestBed.createComponent(SessionChat);
+    fixture.componentRef.setInput('session', { id: 's', name: 'S', datasets: [], messages: [] });
+    fixture.componentRef.setInput('readOnly', true);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.showWelcome()).toBeFalse();
+  });
+
   it('persists a rating picked on an answer', async () => {
     const el = await render(answer);
     const api = TestBed.inject(SessionsApiService);

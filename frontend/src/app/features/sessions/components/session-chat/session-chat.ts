@@ -165,6 +165,8 @@ export class SessionChat implements OnDestroy {
 
   readonly session = input.required<Session>();
   readonly visualGenerating = input(false);
+  /** A past chat: no composer, no rating, no clarification answers (sessions-chat R66). */
+  readonly readOnly = input(false);
   /** Visual open in the right panel — the default target for tailoring. */
   readonly activeVisualizationId = input<string | null>(null);
   /** Data mark clicked in the open visual; offers follow-up chips. */
@@ -232,7 +234,8 @@ export class SessionChat implements OnDestroy {
    * no context and cannot be mistaken for something the assistant said.
    */
   readonly showWelcome = computed(
-    () => this.messages().length === 0 && !this.sending(),
+    () =>
+      this.messages().length === 0 && !this.sending() && !this.readOnly(),
   );
   /**
    * False for a session bound to a built-in agent such as the RFP Builder,
@@ -609,7 +612,7 @@ export class SessionChat implements OnDestroy {
    * dedup reuses it there instead of stacking a duplicate.
    */
   retryLastQuestion(index: number): void {
-    if (this.sending()) return;
+    if (this.sending() || this.readOnly()) return;
     const previous = this.messages()
       .slice(0, index)
       .reverse()
@@ -930,7 +933,7 @@ export class SessionChat implements OnDestroy {
    * card itself is in `AnswerView`) is sent as the next turn.
    */
   pickOption(label: string): void {
-    if (this.sending()) return;
+    if (this.sending() || this.readOnly()) return;
     this.draft.set(label);
     this.send();
   }

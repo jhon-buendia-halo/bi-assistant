@@ -182,7 +182,7 @@ describe('LlmCallsPage', () => {
       'Running',
     ]);
     expect(optionTexts('llm-filter-session')).toEqual([
-      'All sessions',
+      'All runs',
       'abcdef12',
       'World Cup analysis',
     ]);

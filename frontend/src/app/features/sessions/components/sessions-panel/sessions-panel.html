@@ -4,6 +4,7 @@
     <app-session-panel
       class="min-h-0 flex-1"
       [session]="session"
+      [readOnly]="state.readOnlyChat()"
       [item]="state.activePanelItem()"
       (selectItem)="state.onSelectPanelItem($event)"
       [visualization]="state.activeVisualization()"

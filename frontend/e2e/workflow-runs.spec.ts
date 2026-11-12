@@ -15,6 +15,7 @@ import {
   StubRequest,
   messageText,
   startLlmStub,
+  systemTexts,
 } from './helpers/llm-stub';
 import { worldCupKey } from './helpers/world-cup-db';
 
@@ -291,6 +292,37 @@ test.describe('Feature: Workflow runs', () => {
       );
     },
   );
+  test('Careful mode cross-checks', async ({ page }) => {
+    const verify = answerWithSql({ [QUESTION]: ANSWER });
+    stub.reply = (request) =>
+      systemTexts(request).some((text) => text.includes('You independently derive the SQL'))
+        ? { text: JSON.stringify({ sql: SQL }) }
+        : verify(request);
+
+    await test.step('Given I am on the Assistant\'s Run tab with a question and a dataset', async () => {
+      await openWorkflowPage(page, 'agent:assistant', 'Assistant');
+      await openRunTab(page);
+      await fillRun(page, QUESTION, WORLD_CUP_DATASET);
+    });
+    await test.step('When I turn Careful on and click Execute', async () => {
+      await detailsPanel(page)
+        .getByLabel('Careful: cross-check the result with an independent query')
+        .check();
+      await page.getByTestId('workflow-run').click();
+    });
+    await test.step('Then the answer carries the "Cross-checked" chip', async () => {
+      await expect(runAnswer(page)).toContainText(ANSWER);
+      await expect(runAnswer(page).getByText('Cross-checked', { exact: true })).toBeVisible();
+    });
+    await test.step('And the recorded run had the cross-check asked of the model', async () => {
+      expect(
+        stub.requests.some((request) =>
+          systemTexts(request).some((text) => text.includes('You independently derive the SQL')),
+        ),
+        'a verifier call',
+      ).toBe(true);
+    });
+  });
 
   test('A run needs its datasets', async ({ page }) => {
     await test.step('Given I am on the Assistant\'s Run tab', async () => {

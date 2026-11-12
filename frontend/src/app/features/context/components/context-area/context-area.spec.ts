@@ -33,7 +33,7 @@ describe('Context area (app-shell R3a, roadmap 1.21.6, 1.21.11, 1.21.12)', () =>
       'Workflows',
       'Agents',
       'Context',
-      'Sessions',
+      'Runs',
       'Monitoring',
     ]);
 

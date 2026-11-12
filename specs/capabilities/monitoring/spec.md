@@ -8,7 +8,7 @@ The app records nothing of its own for this. It reads the trace store the agent 
 
 Defined in [../../product/glossary.md](../../product/glossary.md): LLM call, context window box, session, session flow, waterfall, framework span, dataset, agent, assistant.
 
-Capability-local vocabulary is limited to the UI words "LLM calls", "Sessions", "Clear filters", "Context window", "Steps", "Show text", "Hide text", "Open call", "Open timeline", "Hide timeline", "Show more" and "Show framework spans".
+Capability-local vocabulary is limited to the UI words "LLM calls", "Runs", "Clear filters", "Context window", "Steps", "Show text", "Hide text", "Open call", "Open timeline", "Hide timeline", "Show more" and "Show framework spans".
 
 A **turn** is one question of a session and the agent's work to answer it. In the trace store a turn is one trace (`traceId`), and the session is the `threadId` its agent run carries ([../../system/data-model.md](../../system/data-model.md) 1.2).
 
@@ -17,12 +17,12 @@ A **turn** is one question of a session and the agent's work to answer it. In th
 The table
 - R1. The system SHALL list **LLM calls**: one row per model call of one agent run, read from the trace store `observability.duckdb` ([../../system/data-model.md](../../system/data-model.md) 1.2, ADR-0038). Calls recorded before this feature existed are listed too. A model call the agent framework does not trace is not listed.
 - R2. Rows SHALL be ordered by start time, newest first.
-- R3. Each row SHALL show: **Started** (local date and time), **Agent** (its display name), **Model** (with its provider below it, muted), **Session** (its name; when the session has no name, the first 8 characters of its id; a dash when the call belongs to no session), **Tokens in / out** (for example `61,185 / 2,445`; the input count includes cache reads and writes), **Duration** (for example `17.3 s`), **Cost** (for example `$0.0213`) and **Status**. A value the trace does not hold is shown as a dash.
+- R3. Each row SHALL show: **Started** (local date and time), **Agent** (its display name), **Model** (with its provider below it, muted), **Run** (its name; when the session has no name, the first 8 characters of its id; a dash when the call belongs to no session), **Tokens in / out** (for example `61,185 / 2,445`; the input count includes cache reads and writes), **Duration** (for example `17.3 s`), **Cost** (for example `$0.0213`) and **Status**. A value the trace does not hold is shown as a dash.
 - R4. **Status** SHALL be **Succeeded**, **Failed** or **Running**. A call with no end recorded yet is Running. A call whose end carries an error is Failed. Any other call is Succeeded.
 - R5. **Cost** SHALL be an estimate computed from a price table shipped with the app: USD per million tokens for input, output and cache reads, as of 2026-11-03. Cache writes are priced at 1.25 times the input price. The cost is the uncached input tokens at the input price, plus the cache reads at the cache-read price, plus the cache writes at the cache-write price, plus the output tokens at the output price. A model is matched by its exact id or an id that starts with a table key followed by `-`, and the longest key wins. A model not in the table has no cost, shown as a dash, and no context limit. The table is code, not a setting, and the user cannot edit it.
 
 Filters
-- R6. The page SHALL offer these filters: **Agent**, **Model**, **Provider**, **Status** (Any status, Succeeded, Failed, Running), **Session** and **Date**. Their choices SHALL be the values present among all calls, sorted by name, and SHALL NOT shrink as other filters are set. A session without a name is offered by the first 8 characters of its id.
+- R6. The page SHALL offer these filters: **Agent**, **Model**, **Provider**, **Status** (Any status, Succeeded, Failed, Running), **Run** and **Date**. Their choices SHALL be the values present among all calls, sorted by name, and SHALL NOT shrink as other filters are set. A session without a name is offered by the first 8 characters of its id.
 - R7. **Date** SHALL offer Any time, Last hour, Last 24 hours, Last 7 days and Custom. Custom SHALL show a **From** and a **To** date-time input. A call is kept when its start time is inside the range, ends included.
 - R8. Filters SHALL combine (a call must match all of them) and SHALL be applied on the server before paging, so the total counts only matching calls.
 - R9. Changing any filter or the page size SHALL return to page 1. **Clear filters** SHALL reset every filter and SHALL be disabled when no filter is set.
@@ -36,7 +36,7 @@ States
 
 The call page
 - R13. Clicking a row, or pressing Enter on it, SHALL open that call's page. **Monitoring** SHALL stay the current rail item. A **Monitoring** back control above the page, and choosing **Monitoring** on the rail, SHALL return to the table with its filters, page and page size as they were left.
-- R14. The call page SHALL show a heading with the agent's name (or "Model call" when the call has no agent) and the model, and these facts: **Started**, **Duration**, **Time to first token**, **Status**, **Session** (a link that opens the session's chat when the session has a name), **Provider**, **Finish reason**, **Tokens in** (with the cache reads and cache writes), **Tokens out** (with the reasoning tokens) and **Estimated cost**. A fact the trace does not hold is a dash.
+- R14. The call page SHALL show a heading with the agent's name (or "Model call" when the call has no agent) and the model, and these facts: **Started**, **Duration**, **Time to first token**, **Status**, **Run** (a link that opens the session's chat when the session has a name), **Provider**, **Finish reason**, **Tokens in** (with the cache reads and cache writes), **Tokens out** (with the reasoning tokens) and **Estimated cost**. A fact the trace does not hold is a dash.
 - R15. A failed call SHALL show its error message in a highlighted box. A running call SHALL show Status Running and dashes for what is not known yet.
 - R16. A call that does not exist SHALL fail with `LLM call not found` (HTTP 404), and the call page SHALL show that message.
 
@@ -75,14 +75,14 @@ General
 - R25. The Monitoring page SHALL work in the light and dark themes, and its controls SHALL have accessible names (each filter, the table, the row buttons, the paging controls and the box toggles).
 
 Tabs
-- R26. The Monitoring page SHALL show two tabs under its heading, **LLM calls** and **Sessions** (`role="tablist"`, the arrow keys move between them). **LLM calls** is chosen when the page opens for the first time. The note under the heading follows the tab: "LLM calls made by the app's agents, newest first." or "Sessions with recorded agent runs, most recent first.". The chosen tab, and each tab's own filters, page and page size, SHALL be kept while the app runs, so leaving to a call page or a session page and coming back finds them as they were left.
+- R26. The Monitoring page SHALL show two tabs under its heading, **LLM calls** and **Runs** (`role="tablist"`, the arrow keys move between them). **LLM calls** is chosen when the page opens for the first time. The note under the heading follows the tab: "LLM calls made by the app's agents, newest first." or "Runs with recorded agent calls, most recent first.". The chosen tab, and each tab's own filters, page and page size, SHALL be kept while the app runs, so leaving to a call page or a session page and coming back finds them as they were left.
 
 The Sessions table
-- R27. The **Sessions** tab SHALL list **sessions**: one row per session that has at least one recorded agent run, read from the trace store (ADR-0038). A session is a distinct `threadId` on the agent runs. Rows SHALL be ordered by last activity, newest first. A session whose chat was deleted, or that was a preview or an eval, is listed too.
-- R28. Each row SHALL show: **Session** (its name, read from the sessions collection; "Unnamed session" with the first 8 characters of its id, muted, when it has no name), **Agent** (the display names of the agents that ran in it), **Turns**, **Last activity** (local date and time), **Wall time** (the sum of the turns' durations), **Model time** (the sum of the model calls' durations), **Tools** (the number of tool calls), **Tokens in / out**, **Cost** (the sum of the estimated costs, R5) and **Status**. A value the trace does not hold is shown as a dash.
+- R27. The **Runs** tab (named **Sessions** until 2026-11-11, roadmap 1.23.21; its test ids keep `sessions`) SHALL list **sessions**, which the tab and the page now call runs: one row per session that has at least one recorded agent run, read from the trace store (ADR-0038). A session is a distinct `threadId` on the agent runs. Rows SHALL be ordered by last activity, newest first. A session whose chat was deleted, or that was a preview or an eval, is listed too.
+- R28. Each row SHALL show: **Run** (its name, read from the sessions collection; "Unnamed run" with the first 8 characters of its id, muted, when it has no name), **Agent** (the display names of the agents that ran in it), **Turns**, **Last activity** (local date and time), **Wall time** (the sum of the turns' durations), **Model time** (the sum of the model calls' durations), **Tools** (the number of tool calls), **Tokens in / out**, **Cost** (the sum of the estimated costs, R5) and **Status**. A value the trace does not hold is shown as a dash.
 - R29. A session's **Status** SHALL be **Failed** when it has at least one failed span (an agent run, a model call or a tool call that ended with an error or `success: false`), else **Running** when a turn has no end recorded yet, else **Succeeded**. The row's error count SHALL equal the number of those failed spans.
 - R30. The tab SHALL offer the filters **Agent** (sessions in which that agent ran) and **Date** (Any time, Last hour, Last 24 hours, Last 7 days, Custom with **From** and **To**; a session is kept when one of its turns started inside the range, ends included), and **Clear filters**. Agent choices SHALL be the agents present among all sessions and SHALL NOT shrink as the date is set. R8 and R9 apply to these filters, and R10 and R11 to the paging, with the same page sizes and messages.
-- R31. With no sessions at all, the tab SHALL show "No sessions yet.". With sessions but none matching the filters, it SHALL show "No sessions match these filters.". Loading and failed loads behave as in R12. Clicking a row, or pressing Enter on it, SHALL open that session's page, and **Monitoring** SHALL stay the current rail item.
+- R31. With no sessions at all, the tab SHALL show "No runs yet.". With sessions but none matching the filters, it SHALL show "No runs match these filters.". Loading and failed loads behave as in R12. Clicking a row, or pressing Enter on it, SHALL open that session's page, and **Monitoring** SHALL stay the current rail item.
 
 The session page
 - R32. The session page SHALL show a heading with the session's name ("Unnamed session" when it has none), a totals strip (**Turns**, **Wall time**, **Model time**, **Tool calls**, **Tokens**, **Cost**, **Errors**) and, when the session still exists as a chat, an **Open chat** link that opens it. Then it SHALL show the session's turns in the order they started.
@@ -135,10 +135,10 @@ Workflow runs
 
 Placement: the **Monitoring** item on the navigation rail opens the Monitoring page ([../app-shell/spec.md](../app-shell/spec.md) R3b, [../../system/ui.md](../../system/ui.md) 4.8d). A row opens the call page under a **Monitoring** back control ([../../system/ui.md](../../system/ui.md) 4.8e). A session row opens the session page under a **Monitoring** back control ([../../system/ui.md](../../system/ui.md) 4.8f, 4.8g). Monitoring stays the current rail item on all of them.
 
-- Monitoring page: heading "Monitoring", the tabs **LLM calls** and **Sessions**, the note that follows the tab, then the tab's content.
+- Monitoring page: heading "Monitoring", the tabs **LLM calls** and **Runs**, the note that follows the tab, then the tab's content.
 - LLM calls tab: a filter bar (Agent, Model, Provider, Status, Session, Date, **Clear filters**), the table, and the footer with the range, **Rows per page**, **Previous** and **Next**.
 - Call page: heading, the facts grid, the error box when failed, **Context window** (caption, stacked bar, legend, seven boxes), **Steps**.
-- Sessions tab: a filter bar (Agent, Date, **Clear filters**), the table and the same footer.
+- Runs tab: a filter bar (Agent, Date, **Clear filters**), the table and the same footer.
 - Session page: heading, the totals strip, **Open chat**, then each turn (question, meta line, path, answer, **Open timeline**) and the waterfall under the turn that opened it.
 
 ## Flows
@@ -223,19 +223,19 @@ Feature: LLM call detail
 
 Feature: Session flow
 
-  Scenario: The Sessions tab lists a session with its totals
+  Scenario: The Runs tab lists a session with its totals
     Given I asked the assistant two questions in one session
-    When I open "Monitoring" and choose the "Sessions" tab
-    Then I see the note "Sessions with recorded agent runs, most recent first."
+    When I open "Monitoring" and choose the "Runs" tab
+    Then I see the note "Runs with recorded agent calls, most recent first."
     And the session's row shows its name, the assistant, 2 turns, a last activity time, a wall time, a model time, the tool count, tokens in and out, a cost and the status "Succeeded"
 
   Scenario: A new install has no sessions
     Given the app starts with a new data dir
-    When I open "Monitoring" and choose the "Sessions" tab
-    Then I see "No sessions yet."
+    When I open "Monitoring" and choose the "Runs" tab
+    Then I see "No runs yet."
 
   Scenario: Filters narrow the sessions and Clear filters restores them
-    Given the Sessions tab lists sessions from two agents
+    Given the Runs tab lists sessions from two agents
     When I choose an agent in "Agent"
     Then every row shows that agent
     When I click "Clear filters"
@@ -243,10 +243,10 @@ Feature: Session flow
 
   Scenario: No session matches
     Given I choose "Last hour" in "Date" and no session had a turn in the last hour
-    Then I see "No sessions match these filters."
+    Then I see "No runs match these filters."
 
   Scenario: Opens a session and reads the trajectory
-    Given the Sessions tab lists my two-question session
+    Given the Runs tab lists my two-question session
     When I click its row
     Then I see the session page with its name and the totals: turns, wall time, model time, tool calls, tokens, cost and errors
     And "Monitoring" is still the current rail item
@@ -284,11 +284,11 @@ Feature: Session flow
     Then I see the session page again
 
   Scenario: Back keeps the tab and the filters
-    Given I chose the "Sessions" tab, chose an agent in "Agent" and opened one of its sessions
+    Given I chose the "Runs" tab, chose an agent in "Agent" and opened one of its sessions
     When I click the "Monitoring" back control
-    Then I see the "Sessions" tab with that agent still chosen
+    Then I see the "Runs" tab with that agent still chosen
     When I open the session again and click "Monitoring" on the rail
-    Then I see the "Sessions" tab with my filters as I left them
+    Then I see the "Runs" tab with my filters as I left them
 
   Scenario: A call opened from the table still goes back to the table
     Given I am on the "LLM calls" tab and I click a row
@@ -316,7 +316,7 @@ Feature: Runs in Monitoring
 - After a chat turn the call is listed with its agent, model, session, tokens, duration, cost and status; each filter narrows the list and Clear filters restores it; paging and the page-size choice work; a failed call shows Failed (R1–R10).
 - A chat turn's call page shows the seven boxes with text matching what was sent: the system prompt, the skills list, the tool definitions, the earlier turns, the session's dataset blocks, the question, and the SQL run with its rows; the box estimates add up to the step's real input tokens (R18–R21).
 - Back keeps the filters and page (R13).
-- After two chat turns in one session the Sessions tab lists it with 2 turns and totals (tokens, cost, tool calls) equal to the sum of its LLM calls (R27–R29).
+- After two chat turns in one session the Runs tab lists it with 2 turns and totals (tokens, cost, tool calls) equal to the sum of its LLM calls (R27–R29).
 - The session page shows both questions, each model request and tool group in order, and both answers (R32–R34). **Open timeline** shows the waterfall with bars to scale, and the framework switch adds the housekeeping spans (R37–R40).
 - A run's call is listed under `<workflow>: <title>`, offered in the Session filter, and its link opens the run's session page with one turn, its path and its waterfall (R45).
 - Back keeps the tab, filters and page, and a call opened from a session returns to it (R26, R43). Backend unit tests cover R27–R30, R33, R34, R36 and R38–R41 at service and controller level, pinned to the same real-shape fixture.

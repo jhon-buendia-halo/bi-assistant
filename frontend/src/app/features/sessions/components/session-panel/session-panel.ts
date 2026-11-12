@@ -122,6 +122,8 @@ export class SessionPanel {
   readonly item = input<PanelItem | null>(null);
   // The visual panel's own inputs, passed through unchanged.
   readonly visualization = input<InteractiveVisualization | null>(null);
+  /** A past chat's panel: visuals viewable and downloadable, nothing changes them. */
+  readonly readOnly = input(false);
   readonly loading = input(false);
   readonly error = input<string | null>(null);
   readonly downloading = input(false);

@@ -1,4 +1,15 @@
 @if (shell.mainView() === "session-chat" && state.activeSession()) {
+  @if (state.readOnlyChat()) {
+    <!-- A past chat is read-only (sessions-chat R66) -->
+    <div
+      role="note"
+      data-testid="past-chat-banner"
+      class="flex shrink-0 items-center gap-2 border-b border-border bg-surface-muted px-6 py-2 text-[13px] text-fg"
+    >
+      <span class="chip chip-neutral">Past chat</span>
+      <span>This is a past chat. You can read it, but not continue it.</span>
+    </div>
+  }
   <app-workflow-bar
     class="block shrink-0"
     [workflow]="state.activeSession()!.workflow"
@@ -6,6 +17,7 @@
   <app-session-chat
     class="min-h-0 flex-1"
     [session]="state.activeSession()!"
+    [readOnly]="state.readOnlyChat()"
     [visualGenerating]="
       state.generatingVisualSession() === state.activeSession()!.id
     "
@@ -20,19 +32,13 @@
   />
 } @else if (shell.mainView() === "conversation-new") {
   <app-new-conversation />
-} @else if (shell.mainView() === "sessions") {
-  <!-- The Sessions page's list (app-shell R3) -->
+} @else if (shell.mainView() === "run-detail") {
+  <app-run-detail class="flex min-h-0 flex-1 flex-col" />
+} @else if (shell.mainView() === "runs") {
+  <!-- The Runs page: the Runs list and Past chats (app-shell R3) -->
   <div class="min-h-0 flex-1 overflow-y-auto px-8 py-6">
     @defer (on immediate) {
-      <app-sessions-list
-        [sessions]="state.sessions()"
-        [loading]="!state.sessionsLoaded()"
-        [activeId]="state.activeSession()?.id ?? null"
-        [deletingId]="state.deletingSession()"
-        (openSession)="state.openSession($event)"
-        (deleteSession)="state.deleteSession($event)"
-        (newConversation)="composer.openComposer()"
-      />
+      <app-runs-page />
     }
   </div>
 }

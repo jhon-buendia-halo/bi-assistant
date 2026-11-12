@@ -11,7 +11,8 @@ import {
   followOsTheme,
   openSessions,
 } from './helpers/app-actions';
-import { apiJson } from './helpers/api';
+import { apiFetch, apiJson } from './helpers/api';
+import { worldCupKey } from './helpers/world-cup-db';
 import {
   createUserAgent,
   deleteDataset,
@@ -19,11 +20,20 @@ import {
   seedDataset,
   seedWorldCupDataset,
 } from './helpers/agents-api';
+import { saveLenaiSettings } from './helpers/agents-api';
+import {
+  LlmStub,
+  StubReply,
+  StubRequest,
+  startLlmStub,
+  systemTexts,
+} from './helpers/llm-stub';
 import { scenarioStep } from './support/demo-captions';
 
 /**
  * Mirrors the Feature "Session management" in
- * specs/capabilities/sessions-chat/spec.md: the Sessions page, the New
+ * specs/capabilities/sessions-chat/spec.md: the Runs page and its Past chats
+ * tab (R63, R66; roadmap 1.23.21), and the Sessions page, the New
  * conversation screen and its Workflow picker (R1, R46, R63, R64; roadmap
  * 1.14.17, 1.23.6), the Workflow chips of the page header and the Sessions
  * list (R57, R59, R63; roadmap 1.23.6), and the session id in the page
@@ -50,8 +60,9 @@ test.beforeEach(async ({ page }) => {
   datasourceId = await seedWorldCupDataset(page);
 });
 
+/** The Past chats tab's list: the old sessions (sessions-chat R63). */
 const sessionsList = (page: Page) =>
-  page.getByRole('navigation', { name: 'Sessions', exact: true });
+  page.getByRole('navigation', { name: 'Past chats', exact: true });
 const nameField = (page: Page) => page.getByPlaceholder('My new session');
 const createButton = (page: Page) =>
   page.getByRole('button', { name: /^Create$/ });
@@ -68,7 +79,7 @@ const workflowDescription = (page: Page) =>
 const headerWorkflow = (page: Page) =>
   page.locator('header').getByTestId('session-workflow');
 
-/** The Sessions page row of the session named `name`. */
+/** The Past chats row of the session named `name`. */
 const sessionRow = (page: Page, name: string) =>
   sessionsList(page)
     .getByRole('listitem')
@@ -302,7 +313,7 @@ test('cancelling the delete confirmation keeps the session', async ({
   await expect(sessionRow(page, WORLD_CUP_SESSION)).toHaveCount(1);
 });
 
-test('the Sessions page finds a session by name or ID', async ({ page }) => {
+test('the Past chats tab finds a session by name or ID', async ({ page }) => {
   const names = Array.from({ length: 11 }, (_, i) => `Session ${i + 1}`);
   const ids = await seedSessions(page, [...names, 'Cup history']);
   const cupId = ids.at(-1)!;
@@ -734,4 +745,226 @@ test('the New conversation screen has no detectable accessibility violations in 
     });
     expect(results.violations, theme).toEqual([]);
   }
+});
+
+// ------------------------------------------------------------------ Runs
+
+/**
+ * Feature "Session management", plan 1.24.11: the Runs page lists stored
+ * runs and, in its Past chats tab, the old sessions, which open read-only.
+ */
+const QUESTION = 'Which team scored the most goals?';
+const ANSWER = 'Brazil scored the most goals in this data.';
+const OLD_QUESTION = 'How many matches were played at each stage?';
+const OLD_ANSWER = 'The group stage holds most of the matches.';
+const OLD_CHAT = 'Stage counts chat';
+const OLD_SQL = `SELECT stage, COUNT(*) AS matches FROM ${worldCupKey('matches')} GROUP BY stage`;
+const VISUAL_TITLE = 'Matches by stage';
+const SKILL_TAG = '<interactive-visuals-skill>';
+const SPEC_REPLY = {
+  title: VISUAL_TITLE,
+  description: 'The group stage is played far more often than any knockout round.',
+  spec: {
+    spec: 1,
+    chart: {
+      form: 'bar',
+      select: ['stage', 'matches'],
+      x: 'stage',
+      y: 'matches',
+      sort: { by: 'y', dir: 'desc' },
+    },
+  },
+};
+
+test.describe('Runs and Past chats', () => {
+  let stub: LlmStub;
+
+  function reply(request: StubRequest): StubReply {
+    if (systemTexts(request).some((text) => text.includes(SKILL_TAG))) {
+      return { text: JSON.stringify(SPEC_REPLY) };
+    }
+    const lastUser = [...request.messages].reverse().find((m) => m.role === 'user');
+    const text = typeof lastUser?.content === 'string' ? lastUser.content : '';
+    const old = text.includes(OLD_QUESTION);
+    if (old && !request.messages.some((m) => m.role === 'tool')) {
+      return {
+        toolCall: {
+          name: 'run_readonly_sql',
+          arguments: { sql: OLD_SQL, rationale: 'Count the matches per stage.' },
+        },
+      };
+    }
+    return { text: old ? OLD_ANSWER : ANSWER };
+  }
+
+  test.beforeEach(async ({ page }) => {
+    stub = await startLlmStub();
+    stub.reply = reply;
+    await saveLenaiSettings(page, stub.baseUrl);
+  });
+
+  test.afterEach(async () => {
+    await stub.close();
+  });
+
+  const rail = (page: Page) =>
+    page.getByRole('complementary', { name: 'Navigation rail' });
+  const composerBox = (page: Page) =>
+    page.getByPlaceholder('Ask a follow-up question…');
+
+  /** A stored run of the Assistant, made through the API. */
+  async function seedRun(page: Page): Promise<string> {
+    const run = await apiJson<{ id: string }>(
+      page,
+      'POST',
+      '/workflows/agent%3Aassistant/runs',
+      { input: { question: QUESTION, datasets: [WORLD_CUP_DATASET] } },
+    );
+    return run.id;
+  }
+
+  /** An old session with a transcript and a visual, made through the API. */
+  async function seedOldChat(page: Page): Promise<string> {
+    const [id] = await seedSessions(page, [OLD_CHAT]);
+    // The streamed turn keeps the SQL result the visual is designed from.
+    const turn = await apiFetch(page, 'POST', `/sessions/${id}/messages/stream`, {
+      content: OLD_QUESTION,
+    });
+    expect(turn.ok(), await turn.text()).toBe(true);
+    const visual = await apiJson<{ ok: boolean; message: string }>(
+      page,
+      'POST',
+      `/sessions/${id}/visualizations`,
+      {},
+    );
+    expect(visual.ok, visual.message).toBe(true);
+    return id;
+  }
+
+  test(
+    'I find my past runs under Runs and my old chats under Past chats',
+    { tag: ['@demo', '@story-1.23.21'] },
+    async ({ page }) => {
+      let runId = '';
+      await scenarioStep(page, 'Given a run and an old chat made earlier', async () => {
+        runId = await seedRun(page);
+        await seedOldChat(page);
+        await page.reload();
+      });
+      await scenarioStep(page, 'When I open Runs', async () => {
+        await rail(page).getByRole('button', { name: 'Runs', exact: true }).click();
+      });
+      await scenarioStep(page, 'Then I see the run I made earlier', async () => {
+        await expect(page.getByTestId('runs-tab-runs')).toHaveAttribute('aria-selected', 'true');
+        const row = page.getByTestId(`run-${runId}`);
+        await expect(row.getByTestId('row-run-title')).toHaveText(QUESTION);
+        await expect(row.getByTestId('row-run-workflow')).toHaveText('Assistant');
+        await expect(row.getByTestId('row-run-status')).toHaveText('Done');
+      });
+      await scenarioStep(page, 'When I open it', async () => {
+        await page.getByTestId(`run-${runId}`).getByRole('button').first().click();
+      });
+      await scenarioStep(page, 'Then I see its input and its answer', async () => {
+        await expect(page.getByTestId('run-detail-input')).toContainText(QUESTION);
+        await expect(page.getByTestId('run-detail-input')).toContainText(WORLD_CUP_DATASET);
+        await expect(page.getByTestId('run-detail-answer')).toContainText(ANSWER);
+        await expect(page.getByTestId('run-detail-status')).toHaveText('Run succeeded');
+      });
+      await scenarioStep(page, 'When I click Run again', async () => {
+        await page.getByTestId('run-again').click();
+      });
+      await scenarioStep(page, 'Then the Assistant opens on Run with the same input', async () => {
+        await expect(page.getByTestId('workflow-detail-name')).toHaveText('Assistant');
+        await expect(page.getByTestId('workflow-panel-tab-run')).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        await expect(page.getByTestId('workflow-input-question')).toHaveValue(QUESTION);
+        await expect(
+          page.getByTestId('workflow-input-datasets').getByRole('button', { name: WORLD_CUP_DATASET }),
+        ).toHaveAttribute('aria-pressed', 'true');
+      });
+      await scenarioStep(page, 'When I open Past chats and open the old chat', async () => {
+        await rail(page).getByRole('button', { name: 'Runs', exact: true }).click();
+        await page.getByTestId('runs-tab-past-chats').click();
+        await sessionRow(page, OLD_CHAT).getByRole('button', { name: /^Stage counts chat/ }).click();
+      });
+      await scenarioStep(page, 'Then I see the past-chat banner and its transcript', async () => {
+        await expect(page.getByTestId('past-chat-banner')).toContainText('This is a past chat');
+        await expect(page.getByText(OLD_QUESTION, { exact: true })).toBeVisible();
+        await expect(page.getByText(OLD_ANSWER, { exact: true })).toBeVisible();
+      });
+      await scenarioStep(page, 'And there is no composer', async () => {
+        await expect(composerBox(page)).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Send message' })).toHaveCount(0);
+      });
+      await scenarioStep(page, 'When I open its visual in the panel and download it', async () => {
+        const panel = page.getByRole('complementary', { name: 'Details panel' });
+        if (!(await panel.isVisible())) {
+          await page.getByRole('button', { name: 'Expand right panel' }).first().click();
+        }
+        await expect(
+          panel.locator('iframe[title="Interactive visualization"]'),
+        ).toBeVisible();
+        await expect(panel.getByRole('button', { name: 'Tailor' })).toHaveCount(0);
+        await expect(panel.getByRole('button', { name: 'Refresh data' })).toHaveCount(0);
+        const download = page.waitForEvent('download');
+        await panel.getByRole('button', { name: 'Download bundle' }).click();
+        expect((await download).suggestedFilename()).toMatch(/\.zip$/);
+      });
+    },
+  );
+
+  test('no control on a past chat sends, rates, tailors or refreshes', async ({ page }) => {
+    await seedOldChat(page);
+    await page.reload();
+    await openSessions(page);
+    await sessionRow(page, OLD_CHAT).getByRole('button', { name: /^Stage counts chat/ }).click();
+    await expect(page.getByTestId('past-chat-banner')).toBeVisible();
+    await expect(page.getByText(OLD_ANSWER, { exact: true })).toBeVisible();
+
+    const main = page.getByRole('main');
+    await expect(main.locator('textarea')).toHaveCount(0);
+    for (const name of [
+      'Send message',
+      'Careful mode',
+      'Deep analysis',
+      'Save as verified query',
+      'Mark answer as wrong',
+      'Generate interactive visuals',
+    ]) {
+      await expect(page.getByRole('button', { name }), name).toHaveCount(0);
+    }
+    const panel = page.getByRole('complementary', { name: 'Details panel' });
+    if (!(await panel.isVisible())) {
+      await page.getByRole('button', { name: 'Expand right panel' }).first().click();
+    }
+    await expect(panel.locator('iframe[title="Interactive visualization"]')).toBeVisible();
+    for (const name of ['Tailor', 'Refresh data']) {
+      await expect(panel.getByRole('button', { name }), name).toHaveCount(0);
+    }
+    // Deleting stays in the list.
+    await openSessions(page);
+    await expect(sessionRow(page, OLD_CHAT).getByRole('button', { name: /^Options for/ })).toBeVisible();
+  });
+
+  test('the Runs page has no detectable accessibility violations in either theme', async ({
+    page,
+  }) => {
+    await seedRun(page);
+    await followOsTheme(page);
+    await page.reload();
+    await rail(page).getByRole('button', { name: 'Runs', exact: true }).click();
+    await expect(page.getByTestId('runs-list')).toBeVisible();
+    await page.addScriptTag({ content: axe.source });
+    for (const theme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await page.waitForTimeout(500);
+      const results = await page.evaluate(async () => {
+        return (window as unknown as { axe: typeof axe }).axe.run(document);
+      });
+      expect(results.violations, theme).toEqual([]);
+    }
+  });
 });
