@@ -1,0 +1,412 @@
+<button
+  type="button"
+  tabindex="-1"
+  aria-hidden="true"
+  class="fixed inset-0 z-40 cursor-default bg-fg-strong/40 backdrop-blur-[1px]"
+  (click)="close.emit()"
+></button>
+
+<section
+  #dialog
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="workflow-ndv-title"
+  data-testid="workflow-ndv"
+  class="fixed inset-x-6 top-10 bottom-6 z-50 mx-auto flex max-w-[1200px] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
+  (keydown)="onKeydown($event)"
+>
+  <header
+    class="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3"
+  >
+    <span
+      class="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-muted text-accent"
+    >
+      <lucide-angular [img]="icon()" [size]="16" />
+    </span>
+    <h2
+      id="workflow-ndv-title"
+      data-testid="workflow-ndv-title"
+      class="m-0 text-[16px] font-medium text-fg-strong"
+    >
+      {{ node().title }}
+    </h2>
+    @if (badge(); as badge) {
+      <span class="chip chip-info">{{ badge }}</span>
+    }
+    @if (agentLine(); as line) {
+      <span class="text-[12px] text-fg-muted">{{ line }}</span>
+    }
+    <button
+      #closeButton
+      type="button"
+      data-testid="workflow-ndv-close"
+      aria-label="Close"
+      class="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-muted hover:text-fg-strong"
+      (click)="close.emit()"
+    >
+      <lucide-angular [img]="X" [size]="16" />
+    </button>
+  </header>
+
+  <div class="grid min-h-0 flex-1 grid-cols-[1fr_minmax(0,1.1fr)_1fr]">
+    <!-- Input -->
+    <section
+      class="min-h-0 overflow-y-auto border-r border-border p-4"
+      data-testid="workflow-ndv-input"
+      aria-label="Input"
+    >
+      <h3
+        class="m-0 mb-2 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+      >
+        Input
+      </h3>
+      <app-workflow-data-view
+        [value]="run()?.input"
+        [truncated]="run()?.inputTruncated === true"
+        [emptyText]="inputEmpty()"
+      />
+    </section>
+
+    <!-- Parameters / Settings -->
+    <section
+      class="min-h-0 overflow-y-auto p-4"
+      data-testid="workflow-ndv-params"
+      aria-label="Parameters and settings"
+    >
+      <div
+        role="tablist"
+        aria-label="Node configuration"
+        class="mb-3 flex gap-1 border-b border-border"
+      >
+        @for (t of ["parameters", "settings"]; track t) {
+          <button
+            type="button"
+            role="tab"
+            [attr.data-testid]="'workflow-ndv-tab-' + t"
+            [attr.aria-selected]="tab() === t"
+            (click)="tab.set($any(t))"
+            class="-mb-px border-b-2 px-3 py-1.5 text-[13px]"
+            [class.border-border-selected]="tab() === t"
+            [class.text-fg-strong]="tab() === t"
+            [class.font-medium]="tab() === t"
+            [class.border-transparent]="tab() !== t"
+            [class.text-fg-muted]="tab() !== t"
+          >
+            {{ t === "parameters" ? "Parameters" : "Settings" }}
+          </button>
+        }
+      </div>
+
+      @if (tab() === "settings") {
+        <dl
+          class="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]"
+        >
+          <dt class="text-fg-muted">Status</dt>
+          <dd class="m-0 text-fg" data-testid="workflow-ndv-setting-status">
+            {{ statusLabel() ?? "Not run yet" }}
+          </dd>
+          <dt class="text-fg-muted">Duration</dt>
+          <dd class="m-0 text-fg" data-testid="workflow-ndv-setting-duration">
+            {{ duration() }}
+          </dd>
+          <dt class="text-fg-muted">Run id</dt>
+          <dd
+            class="m-0 font-mono text-[12px] break-all text-fg"
+            data-testid="workflow-ndv-setting-run-id"
+          >
+            {{ runId() ?? "Not run yet" }}
+          </dd>
+        </dl>
+      } @else {
+        @switch (node().kind) {
+          @case ("trigger") {
+            <dl
+              class="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]"
+            >
+              <dt class="text-fg-muted">Description</dt>
+              <dd
+                class="m-0 leading-relaxed text-fg"
+                data-testid="workflow-panel-description"
+              >
+                {{ workflow().description || "None" }}
+              </dd>
+              <dt class="text-fg-muted">Trigger</dt>
+              <dd class="m-0 text-fg" data-testid="workflow-panel-trigger">
+                {{ triggerLabels[workflow().trigger] }}
+              </dd>
+              <dt class="text-fg-muted">Output fields</dt>
+              <dd
+                class="m-0 font-mono text-[12px] text-fg"
+                data-testid="workflow-panel-output"
+              >
+                {{ list(outputFields()) }}
+              </dd>
+            </dl>
+
+            <h3
+              class="m-0 mt-5 mb-2 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+            >
+              Input parameters
+            </h3>
+            <ul
+              class="m-0 flex list-none flex-col gap-1.5 p-0"
+              data-testid="workflow-panel-inputs"
+            >
+              @for (field of workflow().input; track field.name) {
+                <li
+                  [attr.data-testid]="'workflow-param-' + field.name"
+                  class="flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-lg border border-border px-3 py-2"
+                >
+                  <span
+                    class="font-mono text-[12px] font-medium text-fg-strong"
+                    >{{ field.name }}</span
+                  >
+                  <span class="min-w-0 text-[13px] text-fg">{{
+                    field.label
+                  }}</span>
+                  <span class="ml-auto font-mono text-[12px] text-fg-muted">{{
+                    field.type
+                  }}</span>
+                  @if (field.required) {
+                    <span class="chip chip-neutral">required</span>
+                  }
+                </li>
+              }
+            </ul>
+
+            @if (workflow().agents.length) {
+              <h3
+                class="m-0 mt-5 mb-2 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+              >
+                Agents
+              </h3>
+              <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
+                @for (agent of workflow().agents; track agent.key) {
+                  <li>
+                    <button
+                      type="button"
+                      [attr.data-testid]="'workflow-agent-' + agent.key"
+                      class="inline-flex items-center gap-1 text-[13px] text-primary hover:underline"
+                      (click)="openAgent.emit(agent.key)"
+                    >
+                      {{ agent.name }}
+                      <lucide-angular [img]="ChevronRight" [size]="12" />
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+          }
+          @case ("output") {
+            <dl
+              class="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]"
+            >
+              <dt class="text-fg-muted">Receives</dt>
+              <dd class="m-0 font-mono text-[12px] text-fg">
+                {{ list(outputFields()) }}
+              </dd>
+            </dl>
+          }
+          @default {
+            @if (node().step; as step) {
+              @if (node().summary) {
+                <p
+                  class="m-0 mb-3 text-[13px] leading-relaxed text-fg"
+                  data-testid="workflow-step-field-summary"
+                >
+                  {{ node().summary }}
+                </p>
+              }
+              <dl
+                class="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]"
+              >
+                <dt class="text-fg-muted">Step id</dt>
+                <dd
+                  class="m-0 font-mono text-[12px] text-fg"
+                  data-testid="workflow-step-field-id"
+                >
+                  {{ step.id }}
+                </dd>
+                <dt class="text-fg-muted">Kind</dt>
+                <dd class="m-0 text-fg" data-testid="workflow-step-field-kind">
+                  {{ step.kind === "agent" ? "LLM (agent call)" : "Code" }}
+                </dd>
+                @if (step.agent; as agent) {
+                  <dt class="text-fg-muted">Agent</dt>
+                  <dd
+                    class="m-0 text-fg"
+                    data-testid="workflow-step-field-agent"
+                  >
+                    @if (agentKey(); as key) {
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1 text-primary hover:underline"
+                        (click)="openAgent.emit(key)"
+                      >
+                        {{ agent.name }}
+                        <lucide-angular [img]="ChevronRight" [size]="12" />
+                      </button>
+                    } @else {
+                      {{ agent.name }}
+                    }
+                  </dd>
+                  <dt class="text-fg-muted">Model</dt>
+                  <dd
+                    class="m-0 font-mono text-[12px] text-fg"
+                    data-testid="workflow-step-field-model"
+                  >
+                    {{ node().agent?.model ?? "No model set" }}
+                  </dd>
+                  <dt class="text-fg-muted">Tools</dt>
+                  <dd
+                    class="m-0 font-mono text-[12px] text-fg"
+                    data-testid="workflow-step-field-tools"
+                  >
+                    {{ list(agent.tools) }}
+                  </dd>
+                  <dt class="text-fg-muted">Max steps</dt>
+                  <dd
+                    class="m-0 text-fg"
+                    data-testid="workflow-step-field-max-steps"
+                  >
+                    {{ agent.maxSteps }}
+                  </dd>
+                }
+                <dt class="text-fg-muted">Exits</dt>
+                <dd class="m-0 text-fg" data-testid="workflow-step-field-exits">
+                  @for (exit of step.exits; track $index; let last = $last) {
+                    <span [class.text-on-danger-soft]="exit.outcome === 'fails'"
+                      >{{ exit.label }}
+                      {{
+                        exit.outcome === "fails" ? "→ fails" : "→ ends here"
+                      }}</span
+                    >
+                    @if (!last) {
+                      <span> · </span>
+                    }
+                  } @empty {
+                    None
+                  }
+                </dd>
+                <dt class="text-fg-muted">Receives</dt>
+                <dd
+                  class="m-0 font-mono text-[12px] text-fg"
+                  data-testid="workflow-step-field-input"
+                >
+                  {{ list(step.input) }}
+                </dd>
+                <dt class="text-fg-muted">Returns</dt>
+                <dd
+                  class="m-0 font-mono text-[12px] text-fg"
+                  data-testid="workflow-step-field-output"
+                >
+                  {{ list(step.output) }}
+                </dd>
+              </dl>
+
+              @if (step.agent && node().agent; as agent) {
+                <h3
+                  class="m-0 mt-5 mb-1 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+                >
+                  System prompt
+                </h3>
+                <p class="m-0 mb-2 text-[12px] text-fg-muted">
+                  The agent's base prompt; each run adds its own context.
+                  @if (agent.systemPromptTruncated) {
+                    Shortened to 20 000 characters.
+                  }
+                </p>
+                <pre
+                  class="m-0 max-h-64 overflow-auto rounded-lg border border-border bg-surface-muted p-3 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
+                  data-testid="workflow-step-field-system-prompt"
+                  tabindex="0"
+                  >{{ agent.systemPrompt }}</pre>
+              }
+            }
+          }
+        }
+      }
+    </section>
+
+    <!-- Output -->
+    <section
+      class="min-h-0 overflow-y-auto border-l border-border p-4"
+      data-testid="workflow-ndv-output"
+      aria-label="Output"
+    >
+      <div class="mb-2 flex items-center gap-2">
+        <h3
+          class="m-0 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+        >
+          Output
+        </h3>
+        @if (statusLabel(); as label) {
+          <span
+            [class]="statusChip()"
+            data-testid="workflow-ndv-output-status"
+            >{{ label }}</span
+          >
+          <span class="text-[12px] text-fg-muted">{{ duration() }}</span>
+        }
+      </div>
+
+      @if (node().kind === "agent" && run()) {
+        <h4
+          class="m-0 mb-1.5 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+        >
+          Tool calls
+        </h4>
+        <ul class="m-0 mb-3 flex list-none flex-col gap-1.5 p-0">
+          @for (call of toolCalls(); track $index) {
+            <li
+              data-testid="workflow-ndv-tool-call"
+              class="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px]"
+            >
+              <span class="font-medium text-fg-strong">{{ call.tool }}</span>
+              <span class="text-[12px] text-fg-muted">
+                @if (hasError(call)) {
+                  · <span class="text-on-danger-soft">{{ call.error }}</span>
+                } @else {
+                  · {{ toolMeta(call) }}
+                }
+              </span>
+              @if (call.input) {
+                <pre
+                  class="m-0 mt-1 font-mono text-[12px] whitespace-pre-wrap break-words text-fg"
+                  >{{ call.input }}</pre>
+              }
+            </li>
+          } @empty {
+            <li class="text-[13px] text-fg-muted">No tool calls recorded.</li>
+          }
+        </ul>
+      }
+
+      @if (node().kind === "output" && endLine(); as line) {
+        <p
+          class="m-0 mb-2 text-[13px] text-fg"
+          data-testid="workflow-ndv-output-line"
+        >
+          {{ line }}
+        </p>
+      }
+
+      @if (run()?.error; as error) {
+        <p
+          class="m-0 mb-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+          data-testid="workflow-ndv-output-error"
+        >
+          {{ error }}
+        </p>
+      }
+
+      @if (!run()?.error || run()?.output) {
+        <app-workflow-data-view
+          [value]="run()?.output"
+          [truncated]="run()?.outputTruncated === true"
+          [emptyText]="outputEmpty()"
+        />
+      }
+    </section>
+  </div>
+</section>
