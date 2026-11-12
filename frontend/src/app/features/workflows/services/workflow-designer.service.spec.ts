@@ -71,6 +71,12 @@ const ASSISTANT: WorkflowDetail = {
       title: 'Answer',
       kind: 'agent',
       summary: 'The agent answers.',
+      agent: {
+        key: 'assistant-v2',
+        name: 'Questions to Insights v2',
+        tools: ['list_entities', 'run_readonly_sql'],
+        maxSteps: 8,
+      },
       input: ['question', 'datasets'],
       output: ['calls', 'stopped'],
       exits: [],
@@ -166,6 +172,34 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer.clear();
     expect(designer.openNodeId()).toBeNull();
     expect(designer.selectedStepId()).toBeNull();
+  });
+
+  it("opens a tool sub-node as that tool, with its calls in the run shown; its agent step stays selected", () => {
+    designer.openNode('answer-tool-run_readonly_sql');
+    expect(designer.openNodeId()).toBe('answer-tool-run_readonly_sql');
+    expect(designer.selectedStepId()).toBe('answer');
+    const tool = designer.openInspection()!;
+    expect(tool.kind).toBe('tool');
+    expect(tool.title).toBe('run_readonly_sql');
+    expect(tool.tool?.calls).toEqual([]);
+    // Tools are not nodes of the state panel.
+    expect(designer.nodes().map((n) => n.nodeId)).toEqual(['start', 'answer', 'end']);
+
+    executeQuestion();
+    runs.last.handlers.onStep!({
+      id: 'answer',
+      title: 'Answer',
+      status: 'success',
+      toolCalls: [
+        { tool: 'list_entities', durationMs: 3 },
+        { tool: 'run_readonly_sql', input: 'SELECT 1', rowCount: 1, durationMs: 40 },
+      ],
+    });
+    expect(designer.openInspection()?.tool?.calls.map((c) => c.input)).toEqual(['SELECT 1']);
+    designer.closeNode();
+    // Model and "+n tools" open the step itself; an unknown tool opens nothing.
+    designer.openNode('answer-tool-nope');
+    expect(designer.openInspection()).toBeNull();
   });
 
   it('Execute workflow only asks for the run form: nothing runs', () => {

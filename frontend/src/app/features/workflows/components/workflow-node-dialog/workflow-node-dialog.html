@@ -61,11 +61,27 @@
       >
         Input
       </h3>
-      <app-workflow-data-view
-        [value]="run()?.input"
-        [truncated]="run()?.inputTruncated === true"
-        [emptyText]="inputEmpty()"
-      />
+      @if (tool(); as tool) {
+        <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
+          @for (call of tool.calls; track $index) {
+            <li>
+              <pre
+                data-testid="workflow-ndv-tool-input"
+                class="m-0 overflow-auto rounded-lg border border-border bg-surface-muted p-3 font-mono text-[12px] leading-relaxed break-words whitespace-pre-wrap text-fg"
+                tabindex="0"
+                >{{ call.input ?? "No input recorded." }}</pre>
+            </li>
+          } @empty {
+            <li class="text-[13px] text-fg-muted">{{ toolNotRun }}</li>
+          }
+        </ul>
+      } @else {
+        <app-workflow-data-view
+          [value]="run()?.input"
+          [truncated]="run()?.inputTruncated === true"
+          [emptyText]="inputEmpty()"
+        />
+      }
     </section>
 
     <!-- Parameters / Settings -->
@@ -98,7 +114,27 @@
         }
       </div>
 
-      @if (tab() === "settings") {
+      @if (tab() === "settings" && tool(); as tool) {
+        <dl
+          class="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]"
+        >
+          <dt class="text-fg-muted">Calls</dt>
+          <dd class="m-0 text-fg" data-testid="workflow-ndv-setting-calls">
+            {{ tool.calls.length }}
+          </dd>
+          <dt class="text-fg-muted">Total duration</dt>
+          <dd class="m-0 text-fg" data-testid="workflow-ndv-setting-duration">
+            {{ toolDuration() }}
+          </dd>
+          <dt class="text-fg-muted">Run id</dt>
+          <dd
+            class="m-0 font-mono text-[12px] break-all text-fg"
+            data-testid="workflow-ndv-setting-run-id"
+          >
+            {{ (tool.ran ? runId() : null) ?? "Not run yet" }}
+          </dd>
+        </dl>
+      } @else if (tab() === "settings") {
         <dl
           class="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]"
         >
@@ -207,6 +243,61 @@
                 {{ list(outputFields()) }}
               </dd>
             </dl>
+          }
+          @case ("tool") {
+            @if (tool(); as tool) {
+              <dl
+                class="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]"
+              >
+                <dt class="text-fg-muted">Name</dt>
+                <dd
+                  class="m-0 font-mono text-[12px] break-all text-fg"
+                  data-testid="workflow-tool-field-name"
+                >
+                  {{ tool.name }}
+                </dd>
+                <dt class="text-fg-muted">Description</dt>
+                <dd
+                  class="m-0 leading-relaxed whitespace-pre-line text-fg"
+                  data-testid="workflow-tool-field-description"
+                >
+                  {{ tool.description || "None" }}
+                </dd>
+                <dt class="text-fg-muted">Inputs</dt>
+                <dd
+                  class="m-0 font-mono text-[12px] text-fg"
+                  data-testid="workflow-tool-field-inputs"
+                >
+                  {{ list(tool.inputs) }}
+                </dd>
+                <dt class="text-fg-muted">Agent</dt>
+                <dd class="m-0 text-fg" data-testid="workflow-tool-field-agent">
+                  @if (tool.agentKey; as key) {
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1 text-primary hover:underline"
+                      (click)="openAgent.emit(key)"
+                    >
+                      {{ tool.agentName }}
+                      <lucide-angular [img]="ChevronRight" [size]="12" />
+                    </button>
+                  } @else {
+                    {{ tool.agentName }}
+                  }
+                </dd>
+                <dt class="text-fg-muted">Step</dt>
+                <dd class="m-0 text-fg" data-testid="workflow-tool-field-step">
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 text-primary hover:underline"
+                    (click)="openStep.emit(tool.stepId)"
+                  >
+                    {{ tool.stepTitle }}
+                    <lucide-angular [img]="ChevronRight" [size]="12" />
+                  </button>
+                </dd>
+              </dl>
+            }
           }
           @default {
             @if (node().step; as step) {
@@ -352,6 +443,34 @@
         }
       </div>
 
+      @if (tool(); as tool) {
+        <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
+          @for (call of tool.calls; track $index) {
+            <li
+              data-testid="workflow-ndv-tool-result"
+              class="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px]"
+            >
+              <span
+                class="font-medium"
+                [class.text-fg-strong]="!hasError(call)"
+                [class.text-on-danger-soft]="hasError(call)"
+                >{{ callStatus(call) }}</span
+              >
+              @if (callMeta(call); as meta) {
+                <span class="text-[12px] text-fg-muted"> · {{ meta }}</span>
+              }
+              @if (hasError(call)) {
+                <span class="text-[12px] text-on-danger-soft">
+                  · {{ call.error }}</span
+                >
+              }
+            </li>
+          } @empty {
+            <li class="text-[13px] text-fg-muted">{{ toolNotRun }}</li>
+          }
+        </ul>
+      }
+
       @if (node().kind === "agent" && run()) {
         <h4
           class="m-0 mb-1.5 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
@@ -402,7 +521,7 @@
         </p>
       }
 
-      @if (!run()?.error || run()?.output) {
+      @if (!tool() && (!run()?.error || run()?.output)) {
         <app-workflow-data-view
           [value]="run()?.output"
           [truncated]="run()?.outputTruncated === true"

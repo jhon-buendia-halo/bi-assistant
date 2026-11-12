@@ -44,6 +44,7 @@ const KIND_LABELS: Record<WorkflowNodeKind, string> = {
   code: 'Code',
   agent: 'LLM',
   output: 'Output',
+  tool: 'Tool',
 };
 
 export function nodeKindLabel(kind: WorkflowNodeKind): string {

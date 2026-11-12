@@ -248,8 +248,21 @@ describe('The workflow catalogue (API)', () => {
           name: 'Questions to Insights v2',
           model: null,
           systemPrompt: expect.any(String) as string,
+          toolDetails: expect.any(Array) as unknown[],
         },
       ]);
+      // Its tools are the ones GET /agents/:key lists (api.md 34).
+      const agent = (await http().get('/agents/assistant-v2').expect(200))
+        .body as { toolDetails: unknown[] };
+      const [detail] = v2.agents as unknown as { toolDetails: unknown[] }[];
+      expect(detail.toolDetails).toEqual(agent.toolDetails);
+      expect(detail.toolDetails).toContainEqual(
+        expect.objectContaining({
+          name: 'run_readonly_sql',
+          description: expect.any(String) as string,
+          inputs: expect.arrayContaining(['sql']) as string[],
+        }),
+      );
     });
 
     it("an agent's detail says which workflows use it: only assistant-v2 is used in one", async () => {

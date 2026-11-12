@@ -24,6 +24,7 @@ import {
 import {
   NodeInspectionSource,
   buildNodeInspections,
+  buildToolInspection,
   nodeStatuses,
   workflowStateSummary,
 } from './workflow-node-inspection';
@@ -234,12 +235,21 @@ export class WorkflowDesigner {
     nodeStatuses(this.nodes()),
   );
 
-  /** The node whose dialog is open, with its data; null when none is. */
+  /**
+   * The node whose dialog is open, with its data, or the tool whose sub-node
+   * opened it; null when none is.
+   */
   readonly openInspection = computed<NodeInspection | null>(() => {
     const id = this.openNodeId();
-    if (id === null) return null;
-    return this.nodes().find((node) => node.nodeId === id) ?? null;
+    return id === null ? null : this.inspect(id);
   });
+
+  private inspect(id: string): NodeInspection | null {
+    const nodes = this.nodes();
+    return (
+      nodes.find((node) => node.nodeId === id) ?? buildToolInspection(nodes, id)
+    );
+  }
 
   /** Follow up is offered under a stored answer of a workflow with a question. */
   readonly canFollowUp = computed(() => {
@@ -323,9 +333,16 @@ export class WorkflowDesigner {
     this.selectedStepId.set(id);
   }
 
-  /** Open a node's dialog; the node is selected too. */
+  /**
+   * Open a node's dialog, or a tool's from its sub-node id
+   * (`<stepId>-tool-<name>`); the node, or the tool's agent step, is
+   * selected too.
+   */
   openNode(id: string): void {
-    this.selectedStepId.set(id);
+    const node = this.inspect(id);
+    this.selectedStepId.set(
+      node?.kind === 'tool' && node.step ? node.step.id : id,
+    );
     this.openNodeId.set(id);
   }
 

@@ -44,7 +44,18 @@ function fakeAgent(
     name,
     getDescription: () => description || `${name} description`,
     listTools: () =>
-      Object.fromEntries(tools.map((tool) => [tool, { description: tool }])),
+      Object.fromEntries(
+        tools.map((tool) => [
+          tool,
+          {
+            description: `${tool} description`,
+            // A Zod-like object schema: its top-level keys are the inputs.
+            ...(tool === 'run_readonly_sql'
+              ? { inputSchema: { shape: { sql: {}, reason: {} } } }
+              : {}),
+          },
+        ]),
+      ),
     getInstructions: () => instructions,
     getMemory: () => undefined,
     getModel: () => {
@@ -191,7 +202,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(detail).toMatchObject({ id: 'qti-v2-turn', stepCount: 4 });
     });
 
-    it('details the agent its steps call: its key, name, model and system prompt; no model without an LLM', async () => {
+    it('details the agent its steps call: its key, name, model, system prompt and tools (as api.md 34 toolDetails); no model without an LLM', async () => {
       ctx = build();
       const detail = await ctx.service.get('qti-v2-turn');
       expect(detail.agents).toEqual([
@@ -200,6 +211,23 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
           name: 'Questions to Insights v2',
           model: null,
           systemPrompt: 'You answer with the core data tools.',
+          toolDetails: [
+            {
+              name: 'describe_entity',
+              description: 'describe_entity description',
+              inputs: [],
+            },
+            {
+              name: 'list_entities',
+              description: 'list_entities description',
+              inputs: [],
+            },
+            {
+              name: 'run_readonly_sql',
+              description: 'run_readonly_sql description',
+              inputs: ['sql', 'reason'],
+            },
+          ],
         },
       ]);
       ctx.db.close();

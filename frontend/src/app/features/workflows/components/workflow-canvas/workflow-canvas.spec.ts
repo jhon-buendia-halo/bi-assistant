@@ -242,6 +242,10 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       '+1 tools',
     ]);
     expect(el.querySelectorAll('.sub-node').length).toBe(6);
+    // "+<n> tools" opens its agent step, a tool its own details.
+    q('workflow-subnode-analyse-more')!.click();
+    q('workflow-subnode-analyse-tool-a')!.click();
+    expect(opened).toEqual(['analyse', 'analyse-tool-a']);
   });
 
   it('draws one edge per pair with its field count, the fields for screen readers', () => {
@@ -303,11 +307,22 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     expect(selected).toEqual(['end']);
   });
 
-  it('a click on a sub-node opens its agent step', () => {
+  it('a click on a tool sub-node opens that tool; the Model and +n tools sub-nodes open their agent step', () => {
     q('workflow-subnode-analyse-tool-describe_entity')!.click();
     q('workflow-subnode-analyse-model')!.click();
-    expect(opened).toEqual(['analyse', 'analyse']);
+    expect(opened).toEqual(['analyse-tool-describe_entity', 'analyse']);
     expect(selected).toEqual([]);
+  });
+
+  it('a double click on a tool sub-node opens that tool', () => {
+    const tool = q('workflow-subnode-analyse-tool-run_readonly_sql')!;
+    tool.click();
+    tool.click();
+    tool.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(opened).toEqual([
+      'analyse-tool-run_readonly_sql',
+      'analyse-tool-run_readonly_sql',
+    ]);
   });
 
   function pointer(type: string, x: number, y: number, target: Element): void {

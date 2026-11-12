@@ -4,6 +4,8 @@ import { WorkflowNodeDialog } from './workflow-node-dialog';
 import {
   FIXTURE_NODES,
   FIXTURE_NODES_NOT_RUN,
+  FIXTURE_TOOL,
+  FIXTURE_TOOL_NOT_RUN,
   FIXTURE_WORKFLOW,
 } from './workflow-node.testing';
 
@@ -221,6 +223,122 @@ describe('WorkflowNodeDialog', () => {
     });
     expect(text('workflow-ndv-output-line')).toBe('Run failed');
     expect(text('workflow-ndv-output-error')).toBe('Boom');
+  });
+
+  describe('a tool (opened from its sub-node)', () => {
+    const all = (id: string) =>
+      Array.from(el().querySelectorAll<HTMLElement>(`[data-testid="${id}"]`));
+    const squash = (e: HTMLElement) =>
+      e.textContent?.replace(/\s+/g, ' ').trim();
+    const FAILED_CALL = {
+      tool: 'run_readonly_sql',
+      input: 'SELECT x FROM claims',
+      error: 'column "x" does not exist',
+      durationMs: 30,
+      finished: true,
+    };
+    const withFailedCall: NodeInspection = {
+      ...FIXTURE_TOOL,
+      tool: {
+        ...FIXTURE_TOOL.tool!,
+        calls: [...FIXTURE_TOOL.tool!.calls, FAILED_CALL],
+        totalDurationMs: 1130,
+      },
+    };
+
+    it("shows the tool's header, not the agent's: wrench, name, TOOL badge, owner line", () => {
+      open(FIXTURE_TOOL);
+      expect(text('workflow-ndv-title')).toBe('run_readonly_sql');
+      const header = el().querySelector('header')!;
+      expect(header.textContent).toContain('TOOL');
+      expect(header.textContent).not.toContain('LLM');
+      expect(header.textContent).toContain(
+        'Tool of Questions to Insights v2 · Analyse',
+      );
+      expect(byId('workflow-step-field-system-prompt')).toBeNull();
+      expect(byId('workflow-step-field-id')).toBeNull();
+    });
+
+    it('lists its name, description, inputs, agent and step', () => {
+      open(FIXTURE_TOOL);
+      expect(text('workflow-tool-field-name')).toBe('run_readonly_sql');
+      expect(text('workflow-tool-field-description')).toBe(
+        'Runs one read-only SQL query.',
+      );
+      expect(text('workflow-tool-field-inputs')).toBe('sql, reason');
+      expect(text('workflow-tool-field-agent')).toBe(
+        'Questions to Insights v2',
+      );
+      expect(text('workflow-tool-field-step')).toBe('Analyse');
+      open({ ...FIXTURE_TOOL, tool: { ...FIXTURE_TOOL.tool!, inputs: [] } });
+      expect(text('workflow-tool-field-inputs')).toBe('None');
+    });
+
+    it('opens its agent and its step from their links', () => {
+      open(FIXTURE_TOOL);
+      const agents: string[] = [];
+      const steps: string[] = [];
+      fixture.componentInstance.openAgent.subscribe((k) => agents.push(k));
+      fixture.componentInstance.openStep.subscribe((s) => steps.push(s));
+      byId('workflow-tool-field-agent')?.querySelector('button')?.click();
+      byId('workflow-tool-field-step')?.querySelector('button')?.click();
+      expect(agents).toEqual(['qti']);
+      expect(steps).toEqual(['analyse']);
+    });
+
+    it("shows each call's input, and a result row per call", () => {
+      open(withFailedCall);
+      expect(all('workflow-ndv-tool-input').map(squash)).toEqual([
+        'SELECT state FROM claims',
+        'SELECT x FROM claims',
+      ]);
+      expect(all('workflow-ndv-tool-result').map(squash)).toEqual([
+        'Done · 5 rows · 1.1 s',
+        'Failed · 30 ms · column "x" does not exist',
+      ]);
+      // The step's own data is not shown.
+      expect(byId('workflow-ndv-input')?.textContent).not.toContain(
+        'Top 5 states?',
+      );
+      expect(byId('workflow-ndv-tool-call')).toBeNull();
+    });
+
+    it('Settings: calls, total duration and run id', () => {
+      open(withFailedCall);
+      byId('workflow-ndv-tab-settings')?.click();
+      fixture.detectChanges();
+      expect(text('workflow-ndv-setting-calls')).toBe('2');
+      expect(text('workflow-ndv-setting-duration')).toBe('1.1 s');
+      expect(text('workflow-ndv-setting-run-id')).toBe('run_8f21c4');
+      expect(byId('workflow-ndv-setting-status')).toBeNull();
+    });
+
+    it('says the tool has not run yet before any run', () => {
+      open(FIXTURE_TOOL_NOT_RUN, null);
+      const notRun =
+        'This tool has not run yet. Execute the workflow to see its calls.';
+      expect(byId('workflow-ndv-input')?.textContent).toContain(notRun);
+      expect(byId('workflow-ndv-output')?.textContent).toContain(notRun);
+      expect(byId('workflow-ndv-tool-input')).toBeNull();
+      byId('workflow-ndv-tab-settings')?.click();
+      fixture.detectChanges();
+      expect(text('workflow-ndv-setting-calls')).toBe('0');
+      expect(text('workflow-ndv-setting-duration')).toBe('—');
+      expect(text('workflow-ndv-setting-run-id')).toBe('Not run yet');
+    });
+
+    it('shows a running call as Running…', () => {
+      open({
+        ...FIXTURE_TOOL,
+        tool: {
+          ...FIXTURE_TOOL.tool!,
+          calls: [{ tool: 'run_readonly_sql', input: 'SELECT 1', finished: false }],
+        },
+      });
+      expect(all('workflow-ndv-tool-result').map(squash)).toEqual([
+        'Running…',
+      ]);
+    });
   });
 
   it('closes on Escape and on Close', () => {

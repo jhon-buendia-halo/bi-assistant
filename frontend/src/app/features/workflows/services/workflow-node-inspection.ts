@@ -6,6 +6,7 @@ import {
   NodeToolCallView,
   START_NODE_ID,
   WorkflowStateSummary,
+  toolNodeId,
 } from '../models/workflow-node.model';
 import {
   LiveToolCall,
@@ -170,6 +171,60 @@ export function buildNodeInspections(s: NodeInspectionSource): NodeInspection[] 
   };
 
   return [start, ...steps, end];
+}
+
+/**
+ * A tool sub-node's details (ui.md 4.4b): the agent step whose
+ * `toolNodeId(step, tool)` is `id`, that tool's description and inputs from
+ * its agent's `toolDetails`, and its calls in that step in the run shown,
+ * live ones included. Null for any other id.
+ */
+export function buildToolInspection(
+  nodes: NodeInspection[],
+  id: string,
+): NodeInspection | null {
+  for (const node of nodes) {
+    const step = node.step;
+    const stepAgent = step?.agent;
+    if (!step || node.kind !== 'agent' || !stepAgent) continue;
+    const name = stepAgent.tools.find(
+      (tool) => toolNodeId(step.id, tool) === id,
+    );
+    if (name === undefined) continue;
+    const detail = node.agent?.toolDetails?.find((tool) => tool.name === name);
+    const calls = (node.run?.toolCalls ?? []).filter(
+      (call) => call.tool === name,
+    );
+    const durations = calls.flatMap((call) =>
+      call.durationMs !== undefined ? [call.durationMs] : [],
+    );
+    return {
+      nodeId: id,
+      kind: 'tool',
+      title: name,
+      number: null,
+      summary: detail?.description ?? '',
+      step,
+      agent: node.agent,
+      run: null,
+      context: null,
+      tool: {
+        name,
+        description: detail?.description ?? '',
+        inputs: [...(detail?.inputs ?? [])],
+        stepId: step.id,
+        stepTitle: step.title,
+        agentKey: node.agent?.key ?? stepAgent.key ?? null,
+        agentName: node.agent?.name ?? stepAgent.name,
+        ran: node.run !== null,
+        calls,
+        totalDurationMs: durations.length
+          ? durations.reduce((sum, ms) => sum + ms, 0)
+          : null,
+      },
+    };
+  }
+  return null;
 }
 
 const RAN: WorkflowRunStepStatus[] = ['success', 'failed', 'stopped'];

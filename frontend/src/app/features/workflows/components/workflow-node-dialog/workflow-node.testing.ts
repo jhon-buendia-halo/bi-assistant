@@ -3,6 +3,7 @@ import {
   NodeInspection,
   WorkflowStateSummary,
 } from '../../models/workflow-node.model';
+import { buildToolInspection } from '../../services/workflow-node-inspection';
 
 /** Fixtures for the node dialog and Workflow state panel specs. */
 export const FIXTURE_WORKFLOW: WorkflowDetail = {
@@ -57,6 +58,18 @@ const AGENT = {
   name: 'Questions to Insights v2',
   model: 'anthropic/claude-sonnet-5-5',
   systemPrompt: 'You are a data analyst.',
+  toolDetails: [
+    {
+      name: 'list_entities',
+      description: 'Lists the tables of the picked datasets.',
+      inputs: [],
+    },
+    {
+      name: 'run_readonly_sql',
+      description: 'Runs one read-only SQL query.',
+      inputs: ['sql', 'reason'],
+    },
+  ],
 };
 
 export const FIXTURE_NODES: NodeInspection[] = [
@@ -164,6 +177,18 @@ export const FIXTURE_NODES_NOT_RUN: NodeInspection[] = FIXTURE_NODES.map(
     run: null,
   }),
 );
+
+/** The `run_readonly_sql` tool of the Analyse step, as its sub-node opens it. */
+export const FIXTURE_TOOL: NodeInspection = buildToolInspection(
+  FIXTURE_NODES,
+  'analyse-tool-run_readonly_sql',
+)!;
+
+/** The same tool before any run. */
+export const FIXTURE_TOOL_NOT_RUN: NodeInspection = buildToolInspection(
+  FIXTURE_NODES_NOT_RUN,
+  'analyse-tool-run_readonly_sql',
+)!;
 
 export const FIXTURE_SUMMARY: WorkflowStateSummary = {
   status: 'success',

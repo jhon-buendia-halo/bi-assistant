@@ -1,7 +1,9 @@
 import { RunView, WorkflowDetail } from '../models/workflow.model';
+import { toolNodeId } from '../models/workflow-node.model';
 import {
   NodeInspectionSource,
   buildNodeInspections,
+  buildToolInspection,
   durationMs,
   formatDuration,
   nodeStatuses,
@@ -153,6 +155,110 @@ describe('buildNodeInspections', () => {
     } as unknown as WorkflowDetail;
     const n = buildNodeInspections({ ...src(null), workflow: w });
     expect(n[1].agent?.key).toBe('assistant');
+  });
+});
+
+describe('buildToolInspection (a tool sub-node opens that tool)', () => {
+  const TOOLS_WORKFLOW = {
+    ...WORKFLOW,
+    agents: [
+      {
+        key: 'assistant',
+        name: 'Assistant',
+        model: 'openai/gpt-5',
+        toolDetails: [
+          { name: 'describe_entity', description: 'Describes a table.', inputs: ['entity'] },
+          { name: 'run_readonly_sql', description: 'Runs one read-only query.', inputs: ['sql', 'reason'] },
+        ],
+      },
+    ],
+    steps: [
+      WORKFLOW.steps[0],
+      {
+        ...WORKFLOW.steps[1],
+        agent: { key: 'assistant', name: 'Assistant', tools: ['describe_entity', 'run_readonly_sql', 'undocumented'], maxSteps: 8 },
+      },
+    ],
+  } as unknown as WorkflowDetail;
+  const nodes = (run: RunView | null, extra: Partial<NodeInspectionSource> = {}) =>
+    buildNodeInspections({ ...src(run, extra), workflow: TOOLS_WORKFLOW });
+
+  it("resolves a tool sub-node id to the tool, its step and agent; not run yet without a run", () => {
+    const t = buildToolInspection(nodes(null), 'answer-tool-run_readonly_sql')!;
+    expect(t.nodeId).toBe(toolNodeId('answer', 'run_readonly_sql'));
+    expect(t.kind).toBe('tool');
+    expect(t.title).toBe('run_readonly_sql');
+    expect(t.number).toBeNull();
+    expect(t.summary).toBe('Runs one read-only query.');
+    expect(t.step?.id).toBe('answer');
+    expect(t.agent?.key).toBe('assistant');
+    expect(t.run).toBeNull();
+    expect(t.context).toBeNull();
+    expect(t.tool).toEqual({
+      name: 'run_readonly_sql',
+      description: 'Runs one read-only query.',
+      inputs: ['sql', 'reason'],
+      stepId: 'answer',
+      stepTitle: 'Answer',
+      agentKey: 'assistant',
+      agentName: 'Assistant',
+      ran: false,
+      calls: [],
+      totalDurationMs: null,
+    });
+  });
+
+  it("keeps only this tool's calls in the run shown, and adds up their durations", () => {
+    const run: RunView = {
+      ...STORED,
+      steps: [
+        STORED.steps[0],
+        {
+          ...STORED.steps[1],
+          toolCalls: [
+            { tool: 'describe_entity', input: 'matches', durationMs: 5 },
+            { tool: 'run_readonly_sql', input: 'select 1', rowCount: 1, durationMs: 40 },
+            { tool: 'run_readonly_sql', input: 'select x', error: 'no column x', durationMs: 2 },
+          ],
+        },
+      ],
+    };
+    const t = buildToolInspection(nodes(run), 'answer-tool-run_readonly_sql')!;
+    expect(t.tool?.ran).toBeTrue();
+    expect(t.tool?.calls).toEqual([
+      { tool: 'run_readonly_sql', input: 'select 1', rowCount: 1, durationMs: 40, finished: true },
+      { tool: 'run_readonly_sql', input: 'select x', error: 'no column x', durationMs: 2, finished: true },
+    ]);
+    expect(t.tool?.totalDurationMs).toBe(42);
+  });
+
+  it('includes the live calls while its step runs', () => {
+    const live: RunView = {
+      status: 'running', runId: 'run-2', input: { question: 'Q' },
+      steps: [STORED.steps[0], { id: 'answer', title: 'Answer', kind: 'agent', status: 'running' }],
+    };
+    const n = nodes(live, {
+      running: true,
+      liveToolCalls: [
+        { name: 'run_readonly_sql', input: 'select 1', finished: false },
+        { name: 'describe_entity', input: 'matches', finished: true },
+      ],
+    });
+    const t = buildToolInspection(n, 'answer-tool-run_readonly_sql')!;
+    expect(t.tool?.calls).toEqual([{ tool: 'run_readonly_sql', input: 'select 1', finished: false }]);
+    expect(t.tool?.totalDurationMs).toBeNull();
+  });
+
+  it('a tool without details has no description and no inputs; anything else is not a tool', () => {
+    const n = nodes(null);
+    expect(buildToolInspection(n, 'answer-tool-undocumented')?.tool).toEqual(
+      jasmine.objectContaining({ name: 'undocumented', description: '', inputs: [] }),
+    );
+    expect(buildToolInspection(n, 'answer')).toBeNull();
+    expect(buildToolInspection(n, 'answer-model')).toBeNull();
+    expect(buildToolInspection(n, 'answer-more')).toBeNull();
+    expect(buildToolInspection(n, 'answer-tool-nope')).toBeNull();
+    expect(buildToolInspection(n, 'prepare-tool-run_readonly_sql')).toBeNull();
   });
 });
 
