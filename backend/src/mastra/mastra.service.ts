@@ -9,11 +9,6 @@ import {
   initializeSessionWorkspace,
   sessionWorkspaceId,
 } from './session-workspaces';
-import {
-  workflowRunResult,
-  type EngineRunResult,
-  type WorkflowRunResult,
-} from './workflows/workflow-run';
 
 /** A workflow run event, as the session code reads it (agents.md 5.11). */
 export interface WorkflowRunEvent {
@@ -76,35 +71,6 @@ export class MastraService {
       fullStream: output.fullStream as AsyncIterable<WorkflowRunEvent>,
       result: output.result,
     };
-  }
-
-  /**
-   * Run a registered run workflow once on its input and wait for it to end
-   * (api.md 118): each step's result in the workflow's order, a step that
-   * did not run `skipped`, and the final output. Nothing is stored.
-   */
-  async runWorkflow(
-    key: string,
-    inputData: Record<string, unknown>,
-  ): Promise<WorkflowRunResult> {
-    const workflow = this.mastra.getWorkflow(
-      key as Parameters<typeof mastra.getWorkflow>[0],
-    );
-    const steps = workflow.stepGraph.flatMap((entry) =>
-      entry.type === 'step'
-        ? [
-            {
-              id: entry.step.id,
-              title: entry.step.description ?? entry.step.id,
-            },
-          ]
-        : [],
-    );
-    const run = await workflow.createRun();
-    const result = (await run.start({
-      inputData: inputData as never,
-    })) as EngineRunResult;
-    return workflowRunResult(key, steps, result);
   }
 
   /** Create or restore a session-scoped workspace and register it with Mastra. */

@@ -151,7 +151,7 @@ describe('built-in agents with sessions of their own (ADR-0028)', () => {
     ).toBe(false);
   });
 
-  it('shows the Data Readiness Agent as Official, blocked without a PostgreSQL or Databricks dataset (api.md 2.6 #33)', async () => {
+  it('shows the Data Readiness Agent as Official, with no dataset and no requirement without a PostgreSQL or Databricks dataset (api.md 2.6 #33)', async () => {
     const agents = await build(
       ['Orders API'],
       [{ name: 'Orders API', datasourceKind: 'rest' }],
@@ -165,11 +165,12 @@ describe('built-in agents with sessions of their own (ADR-0028)', () => {
       datasets: [],
       missingDatasets: [],
       starterQuestions: READINESS_STARTERS,
-      chatRequirement: READINESS_REQUIREMENT,
     });
+    // Agents are a library since 1.23.35: no Run, so no run requirement.
+    expect(readiness).not.toHaveProperty('chatRequirement');
   });
 
-  it('lists the qualifying datasets and drops the requirement once one exists', async () => {
+  it('lists the qualifying datasets once one exists', async () => {
     const readiness = (
       await build(
         ['World Cup', 'Sales'],

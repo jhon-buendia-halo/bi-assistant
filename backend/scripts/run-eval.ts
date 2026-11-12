@@ -263,10 +263,10 @@ async function runCase(
     ...result,
   });
 
-  // The turn runs on a throwaway run host, as a workflow run's does.
+  // The turn runs on a throwaway agent host, as the eval runner's does.
   const session = await sessions.createRunHost({
     runId: `eval-${randomUUID()}`,
-    workflowId: 'agent:assistant',
+    agentKey: 'assistant',
     name: `eval ${testCase.name}`.slice(0, 64),
     datasets: [testCase.dataset],
   });

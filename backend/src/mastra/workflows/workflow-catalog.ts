@@ -1,11 +1,13 @@
 /**
  * The workflow catalogue (ADR-0040; agents.md 5.12): the workflows defined in
- * code, the built-in agents that get a one-step workflow, workflow ids and
- * the rule that derives a session's workflow from its stored agent binding.
- * Plain data and pure functions, no framework import, so the sessions and
- * agents services and Jest can read it without loading Mastra. The API's
- * catalogue (names, datasets, requirements) is built from it by
- * `WorkflowsService`.
+ * code (only Questions to Insights v2, `qti-v2-turn`, since 1.23.35), and the
+ * turn routing of the agent-turn engine: the `agent:<key>` ids a run host, a
+ * draft run or a stored session is bound to, and the rule that derives a
+ * session's workflow from its stored agent binding. An `agent:` id names the
+ * engine an agent turn runs on, never a catalogue workflow: `GET /workflows`
+ * lists none. Plain data and pure functions, no framework import, so the
+ * sessions and agents services and Jest can read it without loading Mastra.
+ * The API's catalogue is built from it by `WorkflowsService`.
  */
 import {
   ASSISTANT_MAX_STEPS,
@@ -18,21 +20,12 @@ import {
   ASSISTANT_V2_NAME,
 } from '../agents/assistant-v2-catalog';
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
-import {
-  DEEP_ANALYSIS_AGENT_KEY,
-  DEEP_ANALYSIS_STEPS,
-  DEEP_ANALYSIS_WORKFLOW_ID,
-} from './deep-analysis.steps';
 import type { AgentWorkflow } from './agent-workflows';
 import {
   QTI_V2_TURN_STEPS,
   QTI_V2_TURN_WORKFLOW_ID,
   type WorkflowStepEntry,
 } from './qti-v2-turn.steps';
-import {
-  SEQ_TEXT_DEMO_STEPS,
-  SEQ_TEXT_DEMO_WORKFLOW_ID,
-} from './seq-text-demo.steps';
 
 /** What drives a chat's workflow bar: the workflow's steps, or the agent's own phases. */
 export type WorkflowBar = 'steps' | 'agent';
@@ -76,11 +69,8 @@ export interface WorkflowInputField {
   hidden?: boolean;
 }
 
-/** The placeholder of an agent workflow's question. */
+/** The placeholder of a run's question. */
 const QUESTION_PLACEHOLDER = 'Ask a question about your data';
-/** What a Data Readiness run asks when its question is left empty. */
-export const READINESS_DEFAULT_QUESTION =
-  'Assess the readiness of this dataset';
 
 const QUESTION_FIELD: WorkflowInputField = {
   name: 'question',
@@ -103,60 +93,12 @@ const CAREFUL_FIELD: WorkflowInputField = {
   default: false,
 };
 
-/** The input of each wrapped built-in agent's one-step workflow (plan 4.2). */
-const BUILTIN_AGENT_INPUTS: Readonly<
-  Record<string, readonly WorkflowInputField[]>
-> = {
-  assistant: [QUESTION_FIELD, DATASETS_FIELD, CAREFUL_FIELD],
-  'data-readiness': [
-    {
-      name: 'dataset',
-      label: 'Dataset',
-      type: 'dataset',
-      required: true,
-      datasourceKinds: ['postgres', 'databricks'],
-    },
-    {
-      name: 'question',
-      label: 'Question',
-      type: 'textarea',
-      required: false,
-      placeholder: READINESS_DEFAULT_QUESTION,
-      default: READINESS_DEFAULT_QUESTION,
-    },
-  ],
-};
-
-/** A user agent's one-step workflow: its datasets are the agent's (plan 4.2). */
-const USER_AGENT_INPUT: readonly WorkflowInputField[] = [
-  QUESTION_FIELD,
-  CAREFUL_FIELD,
-];
-
-/** Copies of fields, so a caller can change them safely. */
-function copyFields(
-  fields: readonly WorkflowInputField[],
-): WorkflowInputField[] {
-  return fields.map((field) => ({
-    ...field,
-    ...(field.datasourceKinds
-      ? { datasourceKinds: [...field.datasourceKinds] }
-      : {}),
-  }));
-}
-
 /**
- * The input of an agent's one-step workflow (plan 4.2): a wrapped built-in
- * agent's own fields, else a user agent's (question and careful).
+ * The input of a draft run (Try it, api.md R12): the question, and careful
+ * mode; its datasets are the draft's.
  */
-export function oneStepWorkflowInput(
-  agentKeyOrId: string,
-): WorkflowInputField[] {
-  return copyFields(
-    Object.hasOwn(BUILTIN_AGENT_INPUTS, agentKeyOrId)
-      ? BUILTIN_AGENT_INPUTS[agentKeyOrId]
-      : USER_AGENT_INPUT,
-  );
+export function draftRunInput(): WorkflowInputField[] {
+  return [{ ...QUESTION_FIELD }, { ...CAREFUL_FIELD }];
 }
 
 /** One workflow defined in code. */
@@ -164,20 +106,11 @@ export interface CodeWorkflowSource {
   id: string;
   name: string;
   description: string;
-  /**
-   * Registry key of the agent its agent step runs: that agent gets no
-   * one-step workflow. A run workflow may call no agent.
-   */
-  primaryFor?: string;
-  /**
-   * Registry key of the agent a run workflow's agent steps call without
-   * being that agent's workflow (deep analysis calls the assistant, which
-   * keeps its own one-step workflow).
-   */
-  calls?: string;
+  /** Registry key of the agent its agent step runs. */
+  primaryFor: string;
   trigger: WorkflowTrigger;
-  /** The typed input of a run workflow, in form order. */
-  input?: readonly WorkflowInputField[];
+  /** The typed input of a run, in form order. */
+  input: readonly WorkflowInputField[];
   steps: readonly WorkflowStepEntry[];
   /** `steps` for every code workflow today. */
   bar: WorkflowBar;
@@ -195,39 +128,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] = [
     steps: QTI_V2_TURN_STEPS,
     bar: 'steps',
   },
-  {
-    id: SEQ_TEXT_DEMO_WORKFLOW_ID,
-    name: 'Sequential test workflow',
-    description:
-      'A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.',
-    trigger: 'run',
-    input: [
-      {
-        name: 'text',
-        label: 'Text',
-        type: 'textarea',
-        required: true,
-        placeholder: 'Paste or type any text',
-      },
-    ],
-    steps: SEQ_TEXT_DEMO_STEPS,
-    bar: 'steps',
-  },
-  {
-    id: DEEP_ANALYSIS_WORKFLOW_ID,
-    name: 'Deep analysis',
-    description:
-      'Investigates a broad question from several angles with SQL and writes a downloadable report: executive summary, findings, anomalies and recommendations. Takes a few minutes.',
-    calls: DEEP_ANALYSIS_AGENT_KEY,
-    trigger: 'run',
-    input: [QUESTION_FIELD, DATASETS_FIELD],
-    steps: DEEP_ANALYSIS_STEPS,
-    bar: 'steps',
-  },
 ];
-
-/** Every one-step workflow (`agent:*`) runs on its input. */
-export const ONE_STEP_WORKFLOW_TRIGGER: WorkflowTrigger = 'run';
 
 /** One value of a run's input. */
 export type WorkflowInputValue = string | number | boolean | string[];
@@ -399,23 +300,38 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
   };
 }
 
-/** The built-in agents that get a one-step workflow. */
+/**
+ * The built-in agents whose turns run on the agent-turn engine: a stored
+ * session of theirs, and the eval runner's direct host (agents.md 5.14).
+ * They have no catalogue workflow since 1.23.35.
+ */
 export const WRAPPED_AGENT_KEYS: readonly string[] = [
   'assistant',
   'data-readiness',
 ];
 
-/** The prefix of a one-step workflow's id. */
+/** The prefix of an agent-turn binding's id. */
 export const AGENT_WORKFLOW_PREFIX = 'agent:';
 
-/** The plain assistant's one-step workflow: what a session with no agent runs. */
+/** The plain assistant's agent-turn binding: what a session with no agent runs. */
 export const ASSISTANT_WORKFLOW_ID = 'agent:assistant';
-/** Its name and description: the picker's, so the Sessions chip keeps reading `Assistant`. */
+/** Its name, so an old session's chip keeps reading `Assistant`. */
 export const ASSISTANT_WORKFLOW_NAME = 'Assistant';
-export const ASSISTANT_WORKFLOW_DESCRIPTION =
-  'Answers questions over the datasets you pick.';
 
-/** The id of an agent's one-step workflow: `agent:` + its registry key or user-agent id. */
+/**
+ * The catalogue workflows whose agent step runs an agent, as an agent's
+ * detail lists them (api.md 34 `usedInWorkflows`): `qti-v2-turn` for
+ * `assistant-v2`, none for any other agent.
+ */
+export function workflowsUsingAgent(
+  agentKey: string,
+): { id: string; name: string }[] {
+  return CODE_WORKFLOWS.filter(
+    (workflow) => workflow.primaryFor === agentKey,
+  ).map((workflow) => ({ id: workflow.id, name: workflow.name }));
+}
+
+/** The agent-turn binding id: `agent:` + a registry key or user-agent id. */
 export function agentWorkflowId(agentKeyOrId: string): string {
   return `${AGENT_WORKFLOW_PREFIX}${agentKeyOrId}`;
 }
@@ -426,10 +342,12 @@ export type ParsedWorkflowId =
   | { kind: 'user-agent'; agentId: string };
 
 /**
- * What a workflow id names. Undefined for an unknown id, a System agent's
- * key and the `primaryFor` agent of a code workflow (it runs that workflow,
- * never a one-step one). Any other `agent:` id names a user agent: the
- * caller checks it exists and is Live.
+ * What a session's workflow id names: a code workflow, or the agent-turn
+ * binding of a wrapped built-in agent or a user agent. Undefined for an
+ * unknown id (a removed workflow such as `seq-text-demo` or
+ * `deep-analysis`), a System agent's key and the `primaryFor` agent of a
+ * code workflow (it runs that workflow). Any other `agent:` id names a user
+ * agent. Only `GET /workflows` says what the catalogue holds.
  */
 export function parseWorkflowId(id: string): ParsedWorkflowId | undefined {
   const source = CODE_WORKFLOWS.find((workflow) => workflow.id === id);
@@ -484,32 +402,7 @@ export function sessionWorkflowId(session: SessionWorkflowFields): string {
 }
 
 /**
- * The ids of the workflows whose steps call an agent, in catalogue order: a
- * built-in agent's code workflows and its one-step workflow; a user agent's
- * one-step workflow while it is Live. System agents are used in none.
- */
-export function workflowsUsingAgent(
-  agentKey: string,
-  opts: { userAgentLive?: boolean; builtin: boolean },
-): string[] {
-  if (!opts.builtin) {
-    return opts.userAgentLive ? [agentWorkflowId(agentKey)] : [];
-  }
-  const wrapped = WRAPPED_AGENT_KEYS.includes(agentKey)
-    ? agentWorkflowId(agentKey)
-    : undefined;
-  const code = CODE_WORKFLOWS.filter(
-    (workflow) =>
-      workflow.primaryFor === agentKey || workflow.calls === agentKey,
-  ).map((workflow) => workflow.id);
-  // The assistant's workflow leads the catalogue; the other one-step
-  // workflows follow the code-defined ones.
-  if (wrapped === ASSISTANT_WORKFLOW_ID) return [wrapped, ...code];
-  return wrapped ? [...code, wrapped] : code;
-}
-
-/**
- * The tool-loop budget of a one-step workflow's agent: 10 for the Data
+ * The tool-loop budget of an agent-turn binding's agent: 10 for the Data
  * Readiness Agent, 15 for the assistant and user agents.
  */
 export function wrappedAgentMaxSteps(agentKeyOrId: string): number {

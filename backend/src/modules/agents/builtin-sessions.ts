@@ -5,7 +5,7 @@ import { ASSISTANT_V2_AGENT_KEY } from '../../mastra/agents/assistant-v2-catalog
  * Built-in agents a session can be bound to (ADR-0028): each declares the
  * datasets its sessions run over, the text shown while there is none, and the
  * starter questions of its welcome block. Read by the hub (`AgentsService`:
- * datasets, missingDatasets, chatRequirement) and by `SessionsService`
+ * datasets, missingDatasets) and by `SessionsService`
  * (createFromAgent, the derived `agent` of a session).
  *
  * An agent declares either one dataset by name or a dataset

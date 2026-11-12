@@ -57,8 +57,7 @@ export interface EvalRunView {
 
 /**
  * Eval runs are long (one model call per question, with tool loops), so they
- * follow the same start/poll shape as deep analysis rather than blocking an
- * HTTP request. Runs are in-memory: a backend restart forgets them.
+ * follow a start/poll shape rather than blocking an HTTP request. Runs are in-memory: a backend restart forgets them.
  *
  */
 @Injectable()

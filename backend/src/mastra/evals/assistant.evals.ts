@@ -1234,9 +1234,11 @@ export async function createEvalHost(
 ): Promise<EvalHost> {
   // An agent that declares its own datasets (Data Readiness)
   // takes them; the assistant runs over the run's.
+  // An agent host: the agent's turn on the agent-turn engine, with no
+  // catalogue workflow behind it (agents are a library since 1.23.35).
   const host = await sessions.createRunHost({
     runId: `eval-${randomUUID()}`,
-    workflowId: `agent:${agentKey ?? 'assistant'}`,
+    agentKey: agentKey ?? 'assistant',
     name: `${agentKey ?? 'assistant'} eval`,
     ...(agentKey ? {} : { datasets }),
     context: EVAL_HOST_PLACEHOLDER,
@@ -1259,9 +1261,9 @@ export async function cleanupEvalHost(
 }
 
 /** Parse a model's JSON reply, tolerating a markdown fence around it —
- * mirrors `parseJsonObject` in `SqlChecks`/`DeepAnalysisService`,
- * duplicated here rather than imported so this module's judge check stays
- * usable without pulling in either of those heavier services. */
+ * mirrors `parseJsonObject` in `SqlChecks`, duplicated here rather than
+ * imported so this module's judge check stays usable without pulling in
+ * that heavier service. */
 function parseJsonObject(text: string | undefined): unknown {
   const trimmed = (text ?? '').trim();
   if (!trimmed) return undefined;

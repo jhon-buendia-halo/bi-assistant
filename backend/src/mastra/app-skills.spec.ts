@@ -412,11 +412,11 @@ describe('skill folders', () => {
       loading: 'on-demand',
       agents: ['assistant'],
     });
-    expect(skills.get('deep-analysis')).toMatchObject({
+    expect(skills.get('interactive-visuals')).toMatchObject({
       loading: 'harness',
-      agents: ['assistant'],
+      agents: ['visualization'],
     });
-    expect(Object.keys(skills.get('deep-analysis')!).sort()).toEqual([
+    expect(Object.keys(skills.get('interactive-visuals')!).sort()).toEqual([
       'agents',
       'description',
       'dir',
@@ -445,7 +445,6 @@ describe('skill folders', () => {
         expect([...fresh.appSkills().keys()].sort()).toEqual([
           'curated-knowledge',
           'data-readiness',
-          'deep-analysis',
           'interactive-visuals',
           'readiness-drilldown',
         ]);

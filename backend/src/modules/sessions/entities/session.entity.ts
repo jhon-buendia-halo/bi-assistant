@@ -109,8 +109,9 @@ export interface ChatMessage {
    */
   knowledge?: KnowledgeUse[];
   /**
-   * Present when a deep-analysis job produced a report. The message content is
-   * the report's executive summary; the full markdown lives in the workspace.
+   * Present when a deep-analysis job produced a report: stored data only,
+   * deep analysis was removed in 1.23.35. The message content is the
+   * report's executive summary; the full markdown lives in the workspace.
    */
   report?: AnalysisReport;
   /**
