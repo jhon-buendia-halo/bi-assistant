@@ -1,0 +1,38 @@
+@if (shell.mainView() === "session-chat" && state.activeSession()) {
+  <app-workflow-bar
+    class="block shrink-0"
+    [workflow]="state.activeSession()!.workflow"
+  />
+  <app-session-chat
+    class="min-h-0 flex-1"
+    [session]="state.activeSession()!"
+    [visualGenerating]="
+      state.generatingVisualSession() === state.activeSession()!.id
+    "
+    [activeVisualizationId]="state.activeVisualization()?.id ?? null"
+    [dataPointSelection]="state.selectedDataPoint()"
+    (generateVisual)="state.generateInteractiveVisual($event)"
+    (visualUpdated)="state.onVisualUpdated($event)"
+    (panelItem)="state.onPanelItem($event)"
+    (workflowChanged)="state.onWorkflowChanged($event)"
+    (viewVisual)="state.showVisualization($event, $event.version)"
+    (sessionUpdated)="state.onSessionUpdated($event)"
+  />
+} @else if (shell.mainView() === "conversation-new") {
+  <app-new-conversation />
+} @else if (shell.mainView() === "sessions") {
+  <!-- The Sessions page's list (app-shell R3) -->
+  <div class="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+    @defer (on immediate) {
+      <app-sessions-list
+        [sessions]="state.sessions()"
+        [loading]="!state.sessionsLoaded()"
+        [activeId]="state.activeSession()?.id ?? null"
+        [deletingId]="state.deletingSession()"
+        (openSession)="state.openSession($event)"
+        (deleteSession)="state.deleteSession($event)"
+        (newConversation)="composer.openComposer()"
+      />
+    }
+  </div>
+}

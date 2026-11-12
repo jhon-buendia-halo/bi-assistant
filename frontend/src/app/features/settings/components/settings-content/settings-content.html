@@ -1,0 +1,34 @@
+@switch (settings.shownSettingsSection()) {
+  @case ("datasources") {
+    <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+      <app-datasource-config class="w-full max-w-[560px]" />
+    </div>
+  }
+  @case ("llm") {
+    <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+      <app-llm-config class="w-full max-w-[480px]" />
+    </div>
+  }
+  @case ("testing-data") {
+    <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+      <app-testing-data-config class="w-full max-w-[560px]" />
+    </div>
+  }
+  @case ("developer") {
+    <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+      <app-developer-settings class="w-full max-w-[560px]" />
+    </div>
+  }
+  @case ("appearance") {
+    <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+      <app-appearance-settings class="w-full max-w-[560px]" />
+    </div>
+  }
+  @default {
+    <div
+      class="flex flex-1 items-center justify-center px-6 text-center text-[13px] text-fg-muted"
+    >
+      Choose a settings section.
+    </div>
+  }
+}
