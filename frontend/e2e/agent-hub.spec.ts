@@ -550,8 +550,8 @@ function railItem(page: Page, name: string): Locator {
     .getByRole('button', { name, exact: true });
 }
 
-const DRAFT_EMPTY =
-  'Not used in any workflow yet. Publish it to get its one-step workflow.';
+/** The Used in text of a user agent, or an Official agent no workflow uses. */
+const NOT_USED = 'Not used in any workflow.';
 const SYSTEM_EMPTY =
   'Not used in any workflow. The app calls this agent itself.';
 
@@ -610,7 +610,7 @@ test(
     );
     await scenarioStep(
       page,
-      'Then I see no "Chat Box" tab, and "System Prompt" is open',
+      'Then I see no "Chat Box" tab, "System Prompt" is open, and it is used in no workflow',
       async () => {
         await expect(page.getByTestId('agent-tab-prompt')).toBeVisible();
         await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
@@ -620,20 +620,25 @@ test(
         await expect(page.getByTestId('agent-prompt-view')).toContainText(
           'You are the Data Readiness Agent',
         );
-        await expect(page.getByTestId('agent-used-in-agent:data-readiness')).toHaveText(
-          'Data Readiness Agent',
-        );
+        // Its one-step workflow is gone: it can no longer be run.
+        await expect(page.getByTestId('agent-used-in')).toContainText(NOT_USED);
+        await expect(
+          page.getByTestId('agent-used-in').getByRole('button'),
+        ).toHaveCount(0);
+        await expect(
+          page.getByTestId('agent-used-in-agent:data-readiness'),
+        ).toHaveCount(0);
       },
     );
   },
 );
 
-test('a draft-only agent is used in no workflow until it is published', async ({
+test('a user agent is used in no workflow, even once published', async ({
   page,
 }) => {
   await openHub(page);
   await openAgent(page, claimsId, CLAIMS);
-  await expect(page.getByTestId('agent-used-in')).toContainText(DRAFT_EMPTY);
+  await expect(page.getByTestId('agent-used-in')).toContainText(NOT_USED);
   await expect(
     page.getByTestId('agent-used-in').getByRole('button'),
   ).toHaveCount(0);
@@ -650,14 +655,14 @@ test('a draft-only agent is used in no workflow until it is published', async ({
   await openAgent(page, claimsId, CLAIMS);
   await button(page, 'Publish').click();
   await expect(page.getByText(`Agent "${CLAIMS}" is Live`)).toBeVisible();
-  const chip = page.getByTestId(`agent-used-in-agent:${claimsId}`);
-  await expect(chip).toHaveText(CLAIMS);
-  await expect(page.getByTestId('agent-used-in')).not.toContainText(
-    DRAFT_EMPTY,
-  );
-
-  await chip.click();
-  await expect(page.getByTestId('workflow-detail-name')).toHaveText(CLAIMS);
+  // Agents are a library: publishing gives it no workflow.
+  await expect(page.getByTestId('agent-used-in')).toContainText(NOT_USED);
+  await expect(
+    page.getByTestId(`agent-used-in-agent:${claimsId}`),
+  ).toHaveCount(0);
+  await expect(
+    page.getByTestId('agent-used-in').getByRole('button'),
+  ).toHaveCount(0);
 });
 
 test('a System agent says the app calls it itself', async ({ page }) => {
@@ -696,6 +701,6 @@ test('the agent detail has no detectable accessibility violations in either them
 
   await button(page, 'All agents').click();
   await openAgent(page, claimsId, CLAIMS);
-  await expect(page.getByTestId('agent-used-in')).toContainText(DRAFT_EMPTY);
+  await expect(page.getByTestId('agent-used-in')).toContainText(NOT_USED);
   await scan('draft user agent');
 });

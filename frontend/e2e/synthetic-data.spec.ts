@@ -7,10 +7,8 @@ import { WORLD_CUP_DATASET } from './helpers/app-actions';
 import {
   apiBase,
   deleteDataset,
-  saveLenaiSettings,
   seedWorldCupDataset,
 } from './helpers/agents-api';
-import { type LlmStub, messageText, startLlmStub } from './helpers/llm-stub';
 import {
   WORLD_CUP_DB,
   worldCupKey,
@@ -584,124 +582,6 @@ test.describe('Feature: Synthetic data', () => {
       );
     },
   );
-
-  test.describe('Run', () => {
-    const QUESTION = 'Give me 50 synthetic rows per table';
-    const FILE = `${SLUG}-synthetic-postgresql-seed1.sql`;
-    const ANSWER = `The script ${FILE} is in the panel to download.`;
-    let stub: LlmStub;
-
-    test.beforeEach(async ({ page }) => {
-      stub = await startLlmStub();
-      await saveLenaiSettings(page, stub.baseUrl);
-      // One generate_synthetic_data call in the turn, then the answer.
-      stub.reply = (request) => {
-        const users = request.messages.filter((m) => m.role === 'user');
-        const last = users.length ? messageText(users[users.length - 1]) : '';
-        if (!request.stream || last !== QUESTION) return { text: 'Noted.' };
-        const lastUser = request.messages.lastIndexOf(users[users.length - 1]);
-        const answered = request.messages
-          .slice(lastUser + 1)
-          .some((m) => m.role === 'tool');
-        return answered
-          ? { text: ANSWER }
-          : {
-              toolCall: {
-                name: 'generate_synthetic_data',
-                arguments: { dataset: WORLD_CUP_DATASET, rowsPerTable: 50 },
-              },
-            };
-      };
-    });
-
-    test.afterEach(async () => {
-      await stub.close();
-    });
-
-    test(
-      'Generate a synthetic script from the Data Readiness Agent',
-      { tag: ['@demo', '@story-1.22.4'] },
-      async ({ page }) => {
-        const files = page.getByTestId('workflow-run-files');
-        await scenarioStep(
-          page,
-          `Given I opened the Data Readiness Agent's Run tab on the "${WORLD_CUP_DATASET}" dataset`,
-          async () => {
-            await rail(page, 'Workflows').click();
-            await page.getByTestId('workflow-agent:data-readiness').click();
-            await expect(page.getByTestId('workflow-detail-name')).toHaveText(
-              'Data Readiness Agent',
-            );
-            await page.getByTestId('workflow-execute').click();
-            await page
-              .getByTestId('workflow-input-dataset')
-              .selectOption({ label: WORLD_CUP_DATASET });
-          },
-        );
-        await scenarioStep(page, `When I run it on "${QUESTION}"`, async () => {
-          await page.getByTestId('workflow-input-question').fill(QUESTION);
-          await page.getByTestId('workflow-run').click();
-          await expect(page.getByTestId('run-answer')).toContainText(ANSWER, {
-            timeout: 90_000,
-          });
-        });
-        await scenarioStep(
-          page,
-          'Then the agent calls "generate_synthetic_data" with 50 rows per table',
-          async () => {
-            const turn = stub.requests.filter(
-              (r) =>
-                r.stream &&
-                r.messages.some(
-                  (m) => m.role === 'user' && messageText(m) === QUESTION,
-                ),
-            );
-            expect(turn[0].tools).toEqual(
-              expect.arrayContaining([
-                'profile_data_sample',
-                'generate_synthetic_data',
-              ]),
-            );
-            // The tool's result reached the model: the file, 50 rows a table.
-            const result = turn
-              .flatMap((r) => r.messages)
-              .filter((m) => m.role === 'tool')
-              .map(messageText)
-              .find((text) => text.includes(FILE));
-            expect(result, 'the tool result names the file').toBeTruthy();
-            expect(result).toContain('"rows":50');
-            expect(result).not.toContain('"error"');
-          },
-        );
-        await scenarioStep(
-          page,
-          `And the run lists "Synthetic data — ${WORLD_CUP_DATASET} (seed 1)" with the file "${FILE}"`,
-          async () => {
-            await expect(files).toContainText(
-              `Synthetic data — ${WORLD_CUP_DATASET} (seed 1)`,
-            );
-            await expect(files).toContainText(FILE);
-          },
-        );
-        await scenarioStep(
-          page,
-          'And "Download file" downloads that .sql script, which starts with "-- Synthetic data for dataset "',
-          async () => {
-            const download = await downloadOf(page, () =>
-              files.getByRole('button', { name: `Download ${FILE}` }).click(),
-            );
-            expect(download.suggestedFilename()).toBe(FILE);
-            const text = fs.readFileSync(await download.path(), 'utf8');
-            expect(text.startsWith('-- Synthetic data for dataset ')).toBe(
-              true,
-            );
-            expect(text).toContain('INSERT INTO');
-            expect(text).not.toContain('\r');
-          },
-        );
-      },
-    );
-  });
 
   test('Cancelling the confirm downloads nothing', async ({ page }) => {
     await scenarioStep(page, 'Given I profiled the "World Cup" dataset', () =>

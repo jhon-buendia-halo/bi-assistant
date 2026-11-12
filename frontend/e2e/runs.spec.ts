@@ -10,6 +10,7 @@ import {
 } from './helpers/app-actions';
 import { apiJson } from './helpers/api';
 import { seedPastChat } from './helpers/past-chats';
+import { V2_WORKFLOW_ID, V2_WORKFLOW_NAME } from './helpers/runs-api';
 import { worldCupKey } from './helpers/world-cup-db';
 import {
   createUserAgent,
@@ -344,12 +345,12 @@ test.describe('Runs and Past chats', () => {
   const composerBox = (page: Page) =>
     page.getByPlaceholder('Ask a follow-up question…');
 
-  /** A stored run of the Assistant, made through the API. */
+  /** A stored run of Questions to Insights v2, made through the API. */
   async function seedRun(page: Page): Promise<string> {
     const run = await apiJson<{ id: string }>(
       page,
       'POST',
-      '/workflows/agent%3Aassistant/runs',
+      `/workflows/${V2_WORKFLOW_ID}/runs`,
       { input: { question: QUESTION, datasets: [WORLD_CUP_DATASET] } },
     );
     return run.id;
@@ -406,7 +407,7 @@ test.describe('Runs and Past chats', () => {
         await expect(page.getByTestId('runs-tab-runs')).toHaveAttribute('aria-selected', 'true');
         const row = page.getByTestId(`run-${runId}`);
         await expect(row.getByTestId('row-run-title')).toHaveText(QUESTION);
-        await expect(row.getByTestId('row-run-workflow')).toHaveText('Assistant');
+        await expect(row.getByTestId('row-run-workflow')).toHaveText(V2_WORKFLOW_NAME);
         await expect(row.getByTestId('row-run-status')).toHaveText('Done');
       });
       await scenarioStep(page, 'When I open it', async () => {
@@ -421,8 +422,8 @@ test.describe('Runs and Past chats', () => {
       await scenarioStep(page, 'When I click Run again', async () => {
         await page.getByTestId('run-again').click();
       });
-      await scenarioStep(page, 'Then the Assistant opens on Run with the same input', async () => {
-        await expect(page.getByTestId('workflow-detail-name')).toHaveText('Assistant');
+      await scenarioStep(page, `Then "${V2_WORKFLOW_NAME}" opens on Run with the same input`, async () => {
+        await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2_WORKFLOW_NAME);
         await expect(page.getByTestId('workflow-run')).toBeVisible();
         await expect(page.getByTestId('workflow-input-question')).toHaveValue(QUESTION);
         await expect(
