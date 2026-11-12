@@ -688,8 +688,20 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 - **Order:** `agent:assistant`, `qti-v2-turn`, `seq-text-demo`, `deep-analysis`, then the other Official workflows by name, then the user agents' workflows by name. System agents and draft-only user agents are never listed.
 
 #### 117. `GET /workflows/:id`
-- Response `200`: `WorkflowDetail = WorkflowSummary & { steps: AgentWorkflow['steps'] }`, with `AgentWorkflow` exactly as 34 defines it. A `WorkflowDetail` is structurally an `AgentWorkflow` (it has `id` and `steps`).
-- For `qti-v2-turn`, `steps` equals `agentWorkflow('assistant-v2').steps`, the `workflow` of 34. For `seq-text-demo`, `steps` are its three code steps (`clean-text`, `count-words`, `format-result`; [agents.md](agents.md) 5.13), none with an `agent`. For `deep-analysis`, `steps` are `plan`, `investigate`, `write` (kind `agent`) and `assemble` (kind `code`; [agents.md](agents.md) 5.15); the agent steps' `agent` is `{ name: <the assistant's name>, tools: [], maxSteps: 1 }` for `plan` and `write`, and `{ name, tools: <the assistant's AgentSummary.tools>, maxSteps: 15 }` for `investigate`. A one-step workflow has one step, `answer` (`Answer`, kind `agent`, summary `The agent answers with its tools, streamed to the chat.`, input `question`, `datasets`, output `calls`, `stopped`, exits `Model error` fails and `Stop` stops, plus `Clarifying question` stops when the agent's tools include `ask_clarification`), whose `agent` is `{ name: <the agent's name>, tools: <its AgentSummary.tools>, maxSteps }`: `maxSteps` is 15 for `assistant`, `rfp` and user agents, 10 for `data-readiness`.
+- Response `200`: `WorkflowDetail = Omit<WorkflowSummary, 'agents'> & { agents: WorkflowAgentDetail[]; steps: WorkflowDetailStep[] }`, with `AgentWorkflow` exactly as 34 defines it. A `WorkflowDetail` is structurally an `AgentWorkflow` (it has `id` and `steps`).
+  ```ts
+  type WorkflowAgentDetail = {
+    key: string; name: string;        // as 116's agents entry, same order (step order, each once)
+    model: string | null;             // `${llm.provider}/${llm.model}` of 34's AgentDetail.llm; null when no LLM is set (never the environment's fallback)
+    systemPrompt: string;             // 34's AgentDetail.instructions, at most 20 000 characters; each run adds its own context
+    systemPromptTruncated?: true;     // the prompt was longer than 20 000 characters and was shortened
+  };
+  type WorkflowDetailStep = Omit<AgentWorkflowStep, 'agent'> & {
+    agent?: { key: string; name: string; tools: string[]; maxSteps: number };   // `key`: the agent's registry key or user-agent id
+  };
+  ```
+- Each agent step's `agent` also names its agent's `key`: the agent the code workflow runs for (`assistant-v2` for `qti-v2-turn`), the agent it calls (`assistant` for `deep-analysis`), or the one-step workflow's own agent. `agents` is 116's list with each agent's `model` and `systemPrompt` read from 34; 116 itself is unchanged.
+- For `qti-v2-turn`, `steps` equals `agentWorkflow('assistant-v2').steps`, the `workflow` of 34, with `key` on its agent step's `agent`. For `seq-text-demo`, `steps` are its three code steps (`clean-text`, `count-words`, `format-result`; [agents.md](agents.md) 5.13), none with an `agent`. For `deep-analysis`, `steps` are `plan`, `investigate`, `write` (kind `agent`) and `assemble` (kind `code`; [agents.md](agents.md) 5.15); the agent steps' `agent` is `{ name: <the assistant's name>, tools: [], maxSteps: 1 }` for `plan` and `write`, and `{ name, tools: <the assistant's AgentSummary.tools>, maxSteps: 15 }` for `investigate`. A one-step workflow has one step, `answer` (`Answer`, kind `agent`, summary `The agent answers with its tools, streamed to the chat.`, input `question`, `datasets`, output `calls`, `stopped`, exits `Model error` fails and `Stop` stops, plus `Clarifying question` stops when the agent's tools include `ask_clarification`), whose `agent` is `{ name: <the agent's name>, tools: <its AgentSummary.tools>, maxSteps }`: `maxSteps` is 15 for `assistant`, `rfp` and user agents, 10 for `data-readiness`.
 - Errors (Style B): `404 "Workflow \"<id>\" not found"` for any id 116 does not list: unknown, a draft-only user agent, a System agent (`agent:sql-fixer`), or a code workflow's own agent (`agent:assistant-v2`).
 
 #### 118. `POST /workflows/:id/runs`
@@ -1484,7 +1496,7 @@ Note the error text is in **`message`** here but in **`content`** for the chat s
 | `type` | Payload (beside `type`) | Meaning |
 |---|---|---|
 | `run` | `runId: string`, `workflowId: string` | First frame: the run started. |
-| `step` | `id`, `title`, `status: 'running' \| 'success' \| 'failed' \| 'skipped' \| 'stopped'`, `output?`, `outputTruncated?: true`, `error?` | A step of the workflow started (`running`) or ended. `success` carries the step's output (`outputTruncated` instead when it is larger than 20 000 JSON characters); `failed` its error; `stopped` a step that ended the run early (an agent step stopped by the user or ended on a clarifying question; v2's Analyse after a stop). When the run ends, a step that never started is sent as `skipped`, and one still running as `stopped` (the run stopped) or `failed` (the run failed). Every step event of the run is sent, whatever the workflow's `bar`. |
+| `step` | `WorkflowRunStep`: `id`, `title`, `status: 'running' \| 'success' \| 'failed' \| 'skipped' \| 'stopped'`, `input?`, `inputTruncated?: true`, `output?`, `outputTruncated?: true`, `error?`, `startedAt?`, `endedAt?`, `toolCalls?` (below) | A step of the workflow started (`running`) or ended. A started step carries what it received (`input`, the engine's step-start `payload.payload`; `inputTruncated` instead when it is larger than 20 000 JSON characters) and `startedAt`; an ended one keeps them and adds `endedAt`. `success` carries the step's output (`outputTruncated` instead when it is larger than 20 000 JSON characters); `failed` its error; an agent step fed by an agent turn carries its `toolCalls` so far; `stopped` a step that ended the run early (an agent step stopped by the user or ended on a clarifying question; v2's Analyse after a stop). When the run ends, a step that never started is sent as `skipped`, and one still running as `stopped` (the run stopped) or `failed` (the run failed). Every step event of the run is sent, whatever the workflow's `bar`. |
 | `reasoning`, `text`, `tool`, `tool-result`, `tool-progress`, `visual-updated`, `panel-item`, `workflow`, `rfp-package`, `readiness-report` | as 3.1 (`content`) | Agent workflows: the agent turn's events, unchanged, interleaved with the `step` events. 3.1's `done { session }` is never sent. |
 | `done` | `run: WorkflowRun` | **Terminal, success** (also for a code-only run whose step failed, and for a turn that ended on a clarifying question). |
 | `error` | `content: string` | **Terminal, failure** of an agent turn: the chat stream's message for the same failure (a custom endpoint's R50 text, a provider error, `No API key configured…`). |
@@ -1497,7 +1509,7 @@ type WorkflowRun = {
   input: Record<string, string | number | boolean | string[]>;   // the checked input (defaults filled)
   context?: { fromRunId: string };
   status: 'running' | 'success' | 'failed' | 'stopped';   // 'running' only while it runs (121); done.run is never 'running'
-  steps: { id: string; title: string; status: 'success' | 'failed' | 'skipped' | 'stopped'; output?: Record<string, unknown>; outputTruncated?: true; error?: string }[];
+  steps: WorkflowRunStep[];        // status 'success' | 'failed' | 'skipped' | 'stopped' once the run ended
   output?: Record<string, unknown>;   // success: the last step's output (Wrap up's for v2; `{ calls, stopped }` for a one-step workflow; the engine's result for a code-only run)
   error?: string;                  // failed
   // Agent workflows only:
@@ -1517,9 +1529,31 @@ type WorkflowRun = {
   createdAt: string;               // store-maintained (data-model 3.16)
   updatedAt: string;
 };
+
+type WorkflowRunStep = {
+  id: string;
+  title: string;
+  status: 'running' | 'success' | 'failed' | 'skipped' | 'stopped';
+  input?: Record<string, unknown>;   // what the step received (the engine's step-start `payload.payload`), when its JSON is at most 20 000 characters
+  inputTruncated?: true;             // instead of `input` when it is larger
+  output?: Record<string, unknown>;  // at most 20 000 JSON characters
+  outputTruncated?: true;
+  error?: string;
+  startedAt?: string;                // ISO; absent for a skipped step
+  endedAt?: string;                  // ISO; absent while running and for a skipped step
+  toolCalls?: WorkflowRunToolCall[]; // agent steps fed by an agent turn: their calls in order, at most 50; absent when none
+};
+
+type WorkflowRunToolCall = {
+  tool: string;
+  input?: string;       // the `tool-result` input (the SQL), else the `tool` event's (3.1); at most 2 000 characters
+  rowCount?: number;    // from the `tool-result`
+  error?: string;       // from the `tool-result`
+  durationMs?: number;  // from the `tool` event to its `tool-result`; absent when no result came
+};
 ```
 
-`panelItems`, `workflow` and `agent` are derived on every read (121) and never stored; the stored run is [data-model.md](data-model.md) 3.16.
+`panelItems`, `workflow` and `agent` are derived on every read (121) and never stored; the stored run is [data-model.md](data-model.md) 3.16. Runs stored before the step `input`, times and `toolCalls` existed lack them. A step's tool calls come from the turn's `tool` and `tool-result` events: each call belongs to the agent step running when its `tool` event arrives, and a result ends the first unfinished call of the same tool; a result without a call is kept as a call with no `durationMs`. A deep analysis's agent steps have no `toolCalls` (their calls are not turn events).
 
 **Stop.** The client aborts the fetch; the server aborts the agent turn (a readiness assessment is cancelled, ADR-0033) and sends nothing more, as 3.1. The run is stored as `stopped`, with the partial answer the host persisted, if any.
 

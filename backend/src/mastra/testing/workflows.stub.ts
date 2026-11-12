@@ -5,7 +5,8 @@
  *
  * It runs `.then()` steps in order and streams the same step events as
  * @mastra/core 1.66's default engine (checked against it on 2026-11-09):
- * `workflow-step-start` (`running`) and `workflow-step-result` with
+ * `workflow-step-start` (`running`, the step's input as `payload.payload`)
+ * and `workflow-step-result` with
  * `success`, `failed` (the run stops, `result` is `{ status: 'failed',
  * error }`) or `bailed` (the run stops with the bailed value as a success).
  * No schemas are validated and nothing is persisted.
@@ -23,7 +24,12 @@ interface StubStep {
 
 interface StubEvent {
   type: string;
-  payload?: { id?: string; status?: string; output?: unknown };
+  payload?: {
+    id?: string;
+    status?: string;
+    payload?: unknown;
+    output?: unknown;
+  };
 }
 
 interface StubResult {
@@ -71,7 +77,8 @@ function runSteps(
     for (const step of steps) {
       yield {
         type: 'workflow-step-start',
-        payload: { id: step.id, status: 'running' },
+        // As the default engine does, the step's input is `payload.payload`.
+        payload: { id: step.id, status: 'running', payload: data },
       };
       let bailed: { value: unknown } | undefined;
       try {

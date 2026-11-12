@@ -78,7 +78,13 @@ interface TurnScript {
   events?: { type: string; content?: string }[];
   steps?: {
     type: string;
-    payload: { id: string; status?: string; output?: unknown; error?: unknown };
+    payload: {
+      id: string;
+      status?: string;
+      payload?: unknown;
+      output?: unknown;
+      error?: unknown;
+    };
   }[];
   throws?: Error;
   /** Abort the run mid-turn, as a closed connection does. */
@@ -492,7 +498,7 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
 
   it("refuses a workflow that has no input fields: it can't run on an input", async () => {
     ctx = build();
-    jest.spyOn(ctx.workflows, 'get').mockResolvedValue({
+    jest.spyOn(ctx.workflows, 'definition').mockResolvedValue({
       id: 'x',
       input: [],
     } as never);
@@ -567,6 +573,7 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
       id: 'answer',
       title: 'Answer',
       status: 'running',
+      startedAt: expect.any(String) as string,
     });
     expect(events[4]).toEqual({
       type: 'step',
@@ -574,6 +581,10 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
       title: 'Answer',
       status: 'success',
       output: { calls: [], stopped: false },
+      startedAt: expect.any(String) as string,
+      endedAt: expect.any(String) as string,
+      // The turn's `tool` event is the step's call; no result came for it.
+      toolCalls: [{ tool: 'run_readonly_sql' }],
     });
     expect(events.at(-1)).toEqual({ type: 'done', run });
     expect(run).toMatchObject({
@@ -602,6 +613,82 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
     });
     expect(run.finishedAt).toBeDefined();
     await expect(ctx.service.get(run.id)).resolves.toEqual(run);
+  });
+
+  it("attaches the turn's tool calls to its running agent step, in the step events and the stored run", async () => {
+    ctx = build(DATASETS, {
+      steps: [
+        {
+          type: 'workflow-step-start',
+          payload: {
+            id: 'answer',
+            payload: { question: 'Who won?', datasets: ['World Cup Core'] },
+          },
+        },
+      ],
+      events: [
+        {
+          type: 'tool',
+          content: JSON.stringify({ name: 'run_readonly_sql', input: 'wins' }),
+        },
+        {
+          type: 'tool-result',
+          content: JSON.stringify({
+            tool: 'run_readonly_sql',
+            input: 'SELECT winner FROM matches',
+            rowCount: 1,
+          }),
+        },
+        {
+          type: 'tool',
+          content: JSON.stringify({ name: 'run_readonly_sql', input: 'x' }),
+        },
+        {
+          type: 'tool-result',
+          content: JSON.stringify({
+            tool: 'run_readonly_sql',
+            input: 'SELECT nope',
+            error: 'column "nope" does not exist',
+          }),
+        },
+      ],
+    });
+    const { events, run } = await streamed(ctx, 'agent:assistant', {
+      input: ASK,
+    });
+    const calls = [
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT winner FROM matches',
+        rowCount: 1,
+        durationMs: expect.any(Number) as number,
+      },
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT nope',
+        error: 'column "nope" does not exist',
+        durationMs: expect.any(Number) as number,
+      },
+    ];
+    const steps = events.filter((event) => event.type === 'step');
+    expect(steps[0]).toMatchObject({
+      status: 'running',
+      input: { question: 'Who won?', datasets: ['World Cup Core'] },
+    });
+    expect(steps[0]).not.toHaveProperty('toolCalls');
+    expect(steps[1]).toMatchObject({
+      status: 'success',
+      input: { question: 'Who won?', datasets: ['World Cup Core'] },
+      toolCalls: calls,
+    });
+    expect(run.steps[0].toolCalls).toEqual(calls);
+    const stored = await ctx.repository.get(run.id);
+    expect(stored?.steps[0]).toMatchObject({
+      input: { question: 'Who won?', datasets: ['World Cup Core'] },
+      startedAt: expect.any(String) as string,
+      endedAt: expect.any(String) as string,
+      toolCalls: calls,
+    });
   });
 
   it('ends with error, as the chat stream does, when the turn fails; the host is still discarded', async () => {
@@ -647,7 +734,13 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
     expect(events.map((event) => event.type)).toEqual(['run', 'step', 'text']);
     expect(run.status).toBe('stopped');
     expect(run.steps).toEqual([
-      { id: 'answer', title: 'Answer', status: 'stopped' },
+      {
+        id: 'answer',
+        title: 'Answer',
+        status: 'stopped',
+        startedAt: expect.any(String) as string,
+        endedAt: expect.any(String) as string,
+      },
     ]);
     expect(ctx.sessions.streamRunTurn.mock.calls[0][3]).toBe(abort.signal);
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
@@ -895,6 +988,42 @@ describe('WorkflowRunsService: a code-only workflow run (api.md 118, 119)', () =
       datasets: [],
     });
     expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
+  });
+
+  it('119 step events and the stored run carry what each step received, its output and its times', async () => {
+    ctx = build();
+    const { events, run } = await streamed(ctx, 'seq-text-demo', {
+      input: { text: ' Hi  there ' },
+    });
+    const steps = events.filter((event) => event.type === 'step');
+    expect(steps[0]).toEqual({
+      type: 'step',
+      id: 'clean-text',
+      title: 'Clean text',
+      status: 'running',
+      input: { text: ' Hi  there ' },
+      startedAt: expect.any(String) as string,
+    });
+    expect(steps[1]).toMatchObject({
+      id: 'clean-text',
+      status: 'success',
+      input: { text: ' Hi  there ' },
+      output: { text: 'Hi there' },
+    });
+    // Each step receives the one before it's output.
+    expect(steps[2]).toMatchObject({
+      id: 'count-words',
+      status: 'running',
+      input: { text: 'Hi there' },
+    });
+    const stored = await ctx.repository.get(run.id);
+    for (const step of stored!.steps) {
+      expect(step.input).toBeDefined();
+      expect(Date.parse(step.startedAt!)).not.toBeNaN();
+      expect(Date.parse(step.endedAt!)).toBeGreaterThanOrEqual(
+        Date.parse(step.startedAt!),
+      );
+    }
   });
 
   it('119 reports a failed step, skips the rest, and still ends with done', async () => {

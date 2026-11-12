@@ -248,6 +248,54 @@ describe('The workflow catalogue (API)', () => {
       ]);
     });
 
+    it('GET /workflows/:id details the agents its steps call: model (none without an LLM) and system prompt; each agent step names its key', async () => {
+      interface Detail {
+        agents: {
+          key: string;
+          name: string;
+          model: string | null;
+          systemPrompt: string;
+          systemPromptTruncated?: true;
+        }[];
+        steps: { id: string; agent?: { key: string } }[];
+      }
+      const rfp = (await http().get('/workflows/agent%3Arfp').expect(200))
+        .body as Detail;
+      expect(rfp.agents).toEqual([
+        {
+          key: 'rfp',
+          name: 'RFP Builder',
+          model: null,
+          systemPrompt: expect.any(String) as string,
+        },
+      ]);
+      expect(rfp.agents[0].systemPrompt.length).toBeGreaterThan(0);
+      expect(rfp.steps[0].agent?.key).toBe('rfp');
+      const v2 = (await http().get('/workflows/qti-v2-turn').expect(200))
+        .body as Detail;
+      expect(v2.agents.map((agent) => agent.key)).toEqual(['assistant-v2']);
+      expect(
+        v2.steps.filter((step) => step.agent).map((step) => step.agent?.key),
+      ).toEqual(['assistant-v2']);
+      const live = (
+        await http()
+          .get(`/workflows/${encodeURIComponent(`agent:${liveId}`)}`)
+          .expect(200)
+      ).body as Detail;
+      expect(live.agents[0]).toMatchObject({
+        key: liveId,
+        name: 'Cup historian',
+        model: null,
+      });
+      expect(live.steps[0].agent?.key).toBe(liveId);
+      const seq = (await http().get('/workflows/seq-text-demo').expect(200))
+        .body as Detail;
+      expect(seq.agents).toEqual([]);
+      // The list (116) stays the summary: no model or prompt.
+      const listed = (await workflows()).find((w) => w.id === 'agent:rfp');
+      expect(listed?.agents).toEqual([{ key: 'rfp', name: 'RFP Builder' }]);
+    });
+
     it("an agent's detail says which workflows use it", async () => {
       const v2 = (await http().get('/agents/assistant-v2').expect(200))
         .body as { usedInWorkflows: { id: string; name: string }[] };

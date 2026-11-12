@@ -19,10 +19,19 @@ export type StreamEvent = {
   session?: SessionDoc;
 };
 
-/** A run step event as the run's turn streams it (agents.md 5.14). */
+/**
+ * A run step event as the run's turn streams it (agents.md 5.14); a
+ * `workflow-step-start` carries the step's input as `payload.payload`.
+ */
 export type RunStepEvent = {
   type: string;
-  payload?: { id?: string; status?: string; output?: unknown; error?: unknown };
+  payload?: {
+    id?: string;
+    status?: string;
+    payload?: unknown;
+    output?: unknown;
+    error?: unknown;
+  };
 };
 
 /**

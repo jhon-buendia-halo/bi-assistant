@@ -28,17 +28,50 @@ export type WorkflowRunStatus = 'running' | 'success' | 'failed' | 'stopped';
 export type WorkflowRunStepStatus =
   'running' | 'success' | 'failed' | 'skipped' | 'stopped';
 
-/** One step of a run, as a `step` event and in the run carry it. */
+/**
+ * One tool call of an agent step, from its agent turn's `tool` and
+ * `tool-result` events (api.md 3.1, 3.6).
+ */
+export interface WorkflowRunToolCall {
+  tool: string;
+  /**
+   * What the tool ran: the `tool-result` input (the SQL), else the `tool`
+   * event's; at most `TOOL_CALL_INPUT_CAP` characters.
+   */
+  input?: string;
+  rowCount?: number;
+  error?: string;
+  /** From the `tool` event to its `tool-result`; absent when no result came. */
+  durationMs?: number;
+}
+
+/**
+ * One step of a run, as a `step` event and in the run carry it. Runs stored
+ * before the n8n-style workflow page lack `input`, the times and `toolCalls`.
+ */
 export interface WorkflowRunStep {
   id: string;
   title: string;
   status: WorkflowRunStepStatus;
+  /** What the step received, when under `STEP_OUTPUT_CAP` as JSON. */
+  input?: Record<string, unknown>;
+  /** Set instead of `input` when the input is larger than the cap. */
+  inputTruncated?: true;
   /** A step's output once it ended, when under `STEP_OUTPUT_CAP` as JSON. */
   output?: Record<string, unknown>;
   /** Set instead of `output` when the output is larger than the cap. */
   outputTruncated?: true;
   /** A failed step's error. */
   error?: string;
+  /** ISO time the step started. */
+  startedAt?: string;
+  /** ISO time the step ended (absent for a skipped step). */
+  endedAt?: string;
+  /**
+   * Agent steps fed by an agent turn: their tool calls in call order, at
+   * most `STEP_TOOL_CALL_CAP`; absent when the step made none.
+   */
+  toolCalls?: WorkflowRunToolCall[];
 }
 
 /**
@@ -227,13 +260,28 @@ export function interruptedRunPatch(
   };
 }
 
-/** The largest step output carried, as JSON characters (plan 5.3). */
+/** The largest step output or input carried, as JSON characters (plan 5.3). */
 export const STEP_OUTPUT_CAP = 20_000;
 
-/** An engine step event, as much of it as the tracker reads. */
+/** The most tool calls one step keeps. */
+export const STEP_TOOL_CALL_CAP = 50;
+
+/** The longest tool call input kept, in characters. */
+export const TOOL_CALL_INPUT_CAP = 2_000;
+
+/**
+ * An engine step event, as much of it as the tracker reads. Mastra's
+ * `workflow-step-start` carries the step's input as `payload.payload`.
+ */
 export interface EngineStepEvent {
   type: string;
-  payload?: { id?: string; status?: string; output?: unknown; error?: unknown };
+  payload?: {
+    id?: string;
+    status?: string;
+    payload?: unknown;
+    output?: unknown;
+    error?: unknown;
+  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -242,33 +290,86 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
+/** A record under `STEP_OUTPUT_CAP` as JSON, `'truncated'` above, else none. */
+function capped(
+  value: unknown,
+): Record<string, unknown> | 'truncated' | undefined {
+  const record = asRecord(value);
+  if (!record) return undefined;
+  let size = Infinity;
+  try {
+    size = JSON.stringify(record).length;
+  } catch {
+    // A circular or otherwise unserializable value is not carried.
+  }
+  return size <= STEP_OUTPUT_CAP ? record : 'truncated';
+}
+
 /** A step's output, or the truncation mark when it is too large. */
 function outputFields(
   value: unknown,
 ): Pick<WorkflowRunStep, 'output' | 'outputTruncated'> {
-  const output = asRecord(value);
-  if (!output) return {};
-  let size = Infinity;
-  try {
-    size = JSON.stringify(output).length;
-  } catch {
-    // A circular or otherwise unserializable output is not carried.
-  }
-  return size <= STEP_OUTPUT_CAP ? { output } : { outputTruncated: true };
+  const output = capped(value);
+  if (output === undefined) return {};
+  return output === 'truncated' ? { outputTruncated: true } : { output };
+}
+
+/** A step's input, or the truncation mark when it is too large. */
+function inputFields(
+  value: unknown,
+): Pick<WorkflowRunStep, 'input' | 'inputTruncated'> {
+  const input = capped(value);
+  if (input === undefined) return {};
+  return input === 'truncated' ? { inputTruncated: true } : { input };
+}
+
+/** What a step keeps from its start once it ends: input, start, calls. */
+function startedFields(
+  state: WorkflowRunStep | undefined,
+): Pick<WorkflowRunStep, 'input' | 'inputTruncated' | 'startedAt'> {
+  if (!state) return {};
+  return {
+    ...(state.input ? { input: state.input } : {}),
+    ...(state.inputTruncated ? { inputTruncated: true } : {}),
+    ...(state.startedAt ? { startedAt: state.startedAt } : {}),
+  };
+}
+
+/** A tool call input, clipped to `TOOL_CALL_INPUT_CAP`. */
+function callInput(input: unknown): Pick<WorkflowRunToolCall, 'input'> {
+  return typeof input === 'string' && input
+    ? { input: input.slice(0, TOOL_CALL_INPUT_CAP) }
+    : {};
+}
+
+/** A tool call as a step holds it: the call, its start, whether it ended. */
+interface TrackedCall {
+  call: WorkflowRunToolCall;
+  startedAt?: number;
+  done: boolean;
 }
 
 /**
  * The steps of one run, from the engine's step events (agents.md 5.14): a
- * step that starts is `running`; one that ends is `success`, `failed` with
- * its error, or `stopped` when it ended the run early (an agent step whose
- * output says `stopped`, or one that bailed). A step this workflow doesn't
- * have, and any other event, change nothing.
+ * step that starts is `running`, with what it received and when; one that
+ * ends is `success`, `failed` with its error, or `stopped` when it ended the
+ * run early (an agent step whose output says `stopped`, or one that bailed),
+ * keeping its input and start and adding its end. A step this workflow
+ * doesn't have, and any other event, change nothing. An agent step that is
+ * running also collects its turn's tool calls (`noteTool`,
+ * `noteToolResult`).
  */
 export class RunStepTracker {
   private readonly states = new Map<string, WorkflowRunStep>();
+  private readonly calls = new Map<string, TrackedCall[]>();
 
   constructor(
-    private readonly steps: readonly { id: string; title: string }[],
+    private readonly steps: readonly {
+      id: string;
+      title: string;
+      kind?: 'code' | 'agent';
+    }[],
+    private readonly now: () => Date = () => new Date(),
   ) {}
 
   /** The `step` event one engine event makes, or undefined. */
@@ -276,9 +377,17 @@ export class RunStepTracker {
     const id = event.payload?.id;
     const step = this.steps.find((candidate) => candidate.id === id);
     if (!step) return undefined;
+    const prev = this.states.get(step.id);
     let next: WorkflowRunStep | undefined;
     if (event.type === 'workflow-step-start') {
-      next = { id: step.id, title: step.title, status: 'running' };
+      this.calls.delete(step.id);
+      next = {
+        id: step.id,
+        title: step.title,
+        status: 'running',
+        ...inputFields(event.payload?.payload),
+        startedAt: this.now().toISOString(),
+      };
     } else if (event.type === 'workflow-step-result') {
       const status = event.payload?.status;
       const fields = outputFields(event.payload?.output);
@@ -289,7 +398,9 @@ export class RunStepTracker {
           id: step.id,
           title: step.title,
           status: stopped ? 'stopped' : 'success',
+          ...startedFields(prev),
           ...fields,
+          endedAt: this.now().toISOString(),
         };
       } else if (status === 'failed') {
         // An event without the error leaves it to the run's (`finish`).
@@ -297,22 +408,83 @@ export class RunStepTracker {
           id: step.id,
           title: step.title,
           status: 'failed',
+          ...startedFields(prev),
           ...(event.payload?.error === undefined
             ? {}
             : { error: runErrorMessage(event.payload.error) }),
+          endedAt: this.now().toISOString(),
         };
       }
     }
     if (!next) return undefined;
     this.states.set(step.id, next);
-    return { ...next };
+    return this.view(next);
+  }
+
+  /**
+   * A tool call of the agent turn (api.md 3.1 `tool`): it belongs to the
+   * agent step that is running; none running, or the step holding
+   * `STEP_TOOL_CALL_CAP` calls already, drops it.
+   */
+  noteTool(name: string, input?: string): void {
+    const step = this.runningAgentStep();
+    if (!step) return;
+    const calls = this.calls.get(step) ?? [];
+    if (calls.length >= STEP_TOOL_CALL_CAP) return;
+    calls.push({
+      call: { tool: name, ...callInput(input) },
+      startedAt: this.now().getTime(),
+      done: false,
+    });
+    this.calls.set(step, calls);
+  }
+
+  /**
+   * A tool call's result (api.md 3.1 `tool-result`): it ends the first
+   * unfinished call of the same tool of the running agent step (FIFO), with
+   * its input (the SQL) when it has one, its row count or error and the
+   * call's duration. A result without a call is kept as a call of its own.
+   */
+  noteToolResult(result: {
+    tool: string;
+    input?: string;
+    rowCount?: number;
+    error?: string;
+  }): void {
+    const step = this.runningAgentStep();
+    if (!step) return;
+    const calls = this.calls.get(step) ?? [];
+    let tracked = calls.find(
+      (candidate) => !candidate.done && candidate.call.tool === result.tool,
+    );
+    if (!tracked) {
+      if (calls.length >= STEP_TOOL_CALL_CAP) return;
+      tracked = { call: { tool: result.tool }, done: false };
+      calls.push(tracked);
+      this.calls.set(step, calls);
+    }
+    tracked.done = true;
+    tracked.call = {
+      ...tracked.call,
+      ...callInput(result.input),
+      ...(typeof result.rowCount === 'number'
+        ? { rowCount: result.rowCount }
+        : {}),
+      ...(typeof result.error === 'string' && result.error
+        ? { error: result.error }
+        : {}),
+      ...(tracked.startedAt !== undefined
+        ? { durationMs: Math.max(0, this.now().getTime() - tracked.startedAt) }
+        : {}),
+    };
   }
 
   /**
    * The steps once the run ended, and those the end changed: a step still
    * running ends `stopped` (the run stopped) or `failed` with `error` (the
-   * run failed); a failed step whose event had no error takes `error`; a
-   * step that never started is `skipped`.
+   * run failed), keeping its input and start and taking its end; a failed
+   * step whose event had no error takes `error`; a step that never started
+   * is `skipped`.
    */
   finish(
     status: Exclude<WorkflowRunStatus, 'running'>,
@@ -323,24 +495,45 @@ export class RunStepTracker {
       const state = this.states.get(step.id);
       if (state?.status === 'failed' && state.error === undefined) {
         const filled = { ...state, error: error ?? 'The step failed' };
-        changed.push({ ...filled });
-        return filled;
+        this.states.set(step.id, filled);
+        changed.push(this.view(filled));
+        return this.view(filled);
       }
-      if (state && state.status !== 'running') return { ...state };
+      if (state && state.status !== 'running') return this.view(state);
       const ended: WorkflowRunStep = state
-        ? status === 'failed'
-          ? {
-              id: step.id,
-              title: step.title,
-              status: 'failed',
-              error: error ?? 'The step failed',
-            }
-          : { id: step.id, title: step.title, status: 'stopped' }
+        ? {
+            id: step.id,
+            title: step.title,
+            ...(status === 'failed'
+              ? {
+                  status: 'failed' as const,
+                  error: error ?? 'The step failed',
+                }
+              : { status: 'stopped' as const }),
+            ...startedFields(state),
+            endedAt: this.now().toISOString(),
+          }
         : { id: step.id, title: step.title, status: 'skipped' };
-      changed.push({ ...ended });
-      return ended;
+      changed.push(this.view(ended));
+      return this.view(ended);
     });
     return { steps, changed };
+  }
+
+  /** The id of the agent step that is running, if any. */
+  private runningAgentStep(): string | undefined {
+    return this.steps.find(
+      (step) =>
+        step.kind === 'agent' && this.states.get(step.id)?.status === 'running',
+    )?.id;
+  }
+
+  /** A copy of a step's state, with its tool calls when it made any. */
+  private view(state: WorkflowRunStep): WorkflowRunStep {
+    const calls = this.calls.get(state.id);
+    return calls?.length
+      ? { ...state, toolCalls: calls.map((tracked) => ({ ...tracked.call })) }
+      : { ...state };
   }
 
   /** The output of the last step that ended with one. */
@@ -351,6 +544,47 @@ export class RunStepTracker {
     }
     return undefined;
   }
+}
+
+/**
+ * Feed one event of a run's agent turn to its tracker (api.md 3.1): a `tool`
+ * event (`{ name, input? }`, or a bare legacy tool name) starts a call, a
+ * `tool-result` (`{ tool, input?, rowCount?, error? }`) ends one. Any other
+ * event, and a malformed one, changes nothing.
+ */
+export function noteToolFrame(
+  tracker: RunStepTracker,
+  event: { type: string; content?: string },
+): void {
+  if (event.type !== 'tool' && event.type !== 'tool-result') return;
+  const content = event.content;
+  if (typeof content !== 'string' || !content) return;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    // A legacy `tool` event carries the bare tool name.
+    if (event.type === 'tool') tracker.noteTool(content);
+    return;
+  }
+  const frame = asRecord(parsed);
+  if (!frame) return;
+  const text = (value: unknown) =>
+    typeof value === 'string' ? value : undefined;
+  if (event.type === 'tool') {
+    const name = text(frame['name']);
+    if (name) tracker.noteTool(name, text(frame['input']));
+    return;
+  }
+  const tool = text(frame['tool']);
+  if (!tool) return;
+  const rowCount = frame['rowCount'];
+  tracker.noteToolResult({
+    tool,
+    input: text(frame['input']),
+    ...(typeof rowCount === 'number' ? { rowCount } : {}),
+    error: text(frame['error']),
+  });
 }
 
 /**
