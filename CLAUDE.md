@@ -85,4 +85,4 @@ Execute by fanning out: split the plan into independent units and dispatch them 
 | UI on an existing pattern, tests, test migrations, deletions, docs | Sonnet | default or low |
 | Search, inventories, "where is X" | Haiku (`Explore`) | low |
 
-When two or more builders run in parallel, at most two use Opus.
+When two or more builders run in parallel, at most two use Opus. The `builder` agent defaults to Sonnet (`model: sonnet` in its definition); pass `model: opus` only for a row above that calls for it. In this repo, builders were 61 % of all usage on 2026-11-11 while they inherited the lead's Opus.

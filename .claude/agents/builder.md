@@ -1,7 +1,7 @@
 ---
 name: builder
 description: Builds one roadmap story of the active epic on its own unit branch, from a brief. Writes the failing unit test first, then the code; for a UI story also the main Gherkin scenario as a Playwright test with test.step captions. Use from the story pipeline, one builder per story.
-model: inherit
+model: sonnet
 isolation: worktree
 omitClaudeMd: true
 ---
