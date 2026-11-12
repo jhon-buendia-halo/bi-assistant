@@ -12,6 +12,6 @@ run_mode = "concurrent"
 
 [scripts.run.web]
 available_in = [ "local" ]
-command = "node backend/dist/cli.js --no-open --port $CONDUCTOR_PORT --intellify-api-port $((CONDUCTOR_PORT + 1)) --data-dir .context/qti-data"
+command = "node backend/dist/cli.js --no-open --port $CONDUCTOR_PORT --data-dir .context/qti-data"
 default = true
 icon = "play"
