@@ -139,7 +139,7 @@ export async function existingDatasetsFor(
   return [...(await catalog.datasetNames())].map((name) => ({ name }));
 }
 
-/** Whether Start chat can create a session now (sessions-chat R52). */
+/** Whether Start chat can create a session now (agent-answers R52). */
 export function canStartBuiltinSession({
   datasets,
   missing,

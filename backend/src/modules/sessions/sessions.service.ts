@@ -7,7 +7,6 @@ import {
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
 import { parseWorkflow } from '../../mastra/workflow-section';
 import { agentPromptOverrideFor } from '../../mastra/agent-prompt-overrides';
 import { assistantShippedPrompt } from '../../mastra/agents/assistant-prompt';
@@ -17,7 +16,6 @@ import {
   builtinSessionDatasets,
   canStartBuiltinSession,
   existingDatasetsFor,
-  runsOnPickedDatasets,
 } from '../agents/builtin-sessions';
 import { ASSISTANT_V2_AGENT_KEY } from '../../mastra/agents/assistant-v2-catalog';
 import { DataReadinessService } from '../data-readiness/data-readiness.service';
@@ -361,23 +359,6 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * Append one assistant message written outside a chat turn (a deep-analysis
-   * report). Re-reads the session first, so a job that finishes while the user
-   * keeps chatting never overwrites the turns persisted meanwhile.
-   */
-  async appendAssistantMessage(
-    id: string,
-    message: Omit<ChatMessage, 'role' | 'at'>,
-  ): Promise<SessionDoc> {
-    const fresh = await this.get(id);
-    const messages: ChatMessage[] = [
-      ...fresh.messages,
-      { role: 'assistant', at: new Date().toISOString(), ...message },
-    ];
-    return (await this.updateDoc(id, { messages })) ?? { ...fresh, messages };
-  }
-
-  /**
    * Careful mode's cross-check (agents.md 5.4), the seam the turn engine
    * reaches it through.
    */
@@ -417,137 +398,6 @@ export class SessionsService implements OnModuleInit {
     const removed = await this.repository.delete(id);
     if (removed === 0) throw new NotFoundException(`Session ${id} not found`);
     return session;
-  }
-
-  /**
-   * Create a named session; the conversation starts empty in the chat view.
-   * `agent` binds it to a built-in agent that runs on picked datasets
-   * (Questions to Insights v2, api.md 3).
-   */
-  async create(
-    name: string,
-    datasets: string[],
-    agent?: Pick<SessionDoc, 'agentKey' | 'agentName'>,
-  ): Promise<SessionDoc> {
-    const trimmed = (name ?? '').trim();
-    if (!trimmed) throw new BadRequestException('session name is required');
-    if (!Array.isArray(datasets) || datasets.length === 0) {
-      throw new BadRequestException('select at least one dataset');
-    }
-    return this.insertSession(trimmed, datasets, agent);
-  }
-
-  /**
-   * Start chat on a Live user agent (sessions-chat R52): named after the
-   * agent, over those of its Live datasets that still exist, bound to it.
-   * A built-in agent that declares a dataset (the RFP Builder, R61) gets a
-   * session over that dataset, bound by its registry key. A built-in agent
-   * that runs on picked datasets (Questions to Insights v2) takes `name` and
-   * `datasets` validated as `create` does. Any other built-in key is "not
-   * found".
-   */
-  async createFromAgent(
-    agentId: string,
-    name?: string,
-    pickedDatasets?: string[],
-  ): Promise<SessionDoc> {
-    // An optional typed name (the New conversation screen) replaces the
-    // agent's default one; blank keeps the default.
-    const typed = typeof name === 'string' ? name.trim().slice(0, 64) : '';
-    const picked = runsOnPickedDatasets(agentId)
-      ? this.mastra.listAgents()[agentId]
-      : undefined;
-    if (picked) {
-      return this.create(name ?? '', pickedDatasets ?? [], {
-        agentKey: agentId,
-        agentName: picked.name ?? agentId,
-      });
-    }
-    const builtin = this.builtinSessionAgent(agentId);
-    if (builtin) {
-      const declared = builtinSessionDatasets(
-        builtin.session,
-        await existingDatasetsFor(builtin.session, this.userAgents),
-      );
-      if (!canStartBuiltinSession(declared)) {
-        throw new BadRequestException(builtin.session.requirement);
-      }
-      return this.insertSession(
-        typed || builtin.session.sessionName || builtin.name,
-        declared.datasets,
-        { agentKey: agentId, agentName: builtin.name },
-      );
-    }
-    const agent = await this.userAgents.get(agentId);
-    if (!agent) throw new NotFoundException(`Agent "${agentId}" not found`);
-    if (!agent.live) {
-      throw new BadRequestException(
-        `Publish "${agent.draft.name}" before starting a chat`,
-      );
-    }
-    const datasets = await this.existingDatasets(agent.live.datasets);
-    if (!datasets.length) {
-      throw new BadRequestException("None of this agent's datasets exist");
-    }
-    return this.insertSession(typed || agent.live.name, datasets, {
-      agentId,
-      agentName: agent.live.name,
-    });
-  }
-
-  /**
-   * Keeps only `datasets` among a session's datasets (agents.md 8.1): an eval
-   * run bound to a built-in agent that takes every qualifying dataset (the
-   * Data Readiness Agent) is narrowed to the datasets the run names, so a data
-   * dir holding more samples does not make the agent ask which one. Datasets
-   * the session does not have are ignored; an empty result keeps the session
-   * as it was.
-   */
-  async narrowDatasets(
-    id: string,
-    datasets: string[],
-  ): Promise<SessionDoc | null> {
-    const session = await this.repository.get(id);
-    if (!session) return null;
-    const keep = session.datasets.filter((name) => datasets.includes(name));
-    if (keep.length === 0 || keep.length === session.datasets.length) {
-      return session;
-    }
-    return this.repository.update(id, { datasets: keep });
-  }
-
-  /**
-   * The agent editor's preview chat (agents-evals R60, R61): an in-memory
-   * session that runs the agent's saved draft, with its own memory thread
-   * and workspace, never stored with the sessions.
-   */
-  async createPreview(agentId: string): Promise<SessionDoc> {
-    const agent = await this.userAgents.get(agentId);
-    if (!agent) throw new NotFoundException(`Agent "${agentId}" not found`);
-    const datasets = await this.existingDatasets(agent.draft.datasets);
-    if (!datasets.length) {
-      throw new BadRequestException('Select at least one dataset to preview');
-    }
-    const id = `${PREVIEW_ID_PREFIX}${randomUUID()}`;
-    const name = `Preview: ${agent.draft.name}`.slice(0, 64);
-    const workspace = await this.mastra.ensureSessionWorkspace(id, name);
-    const now = new Date().toISOString();
-    const preview: SessionDoc = {
-      id,
-      name,
-      workspaceId: workspace.id,
-      datasets,
-      agentId,
-      agentName: agent.draft.name,
-      workflowId: sessionWorkflowId({ agentId }),
-      preview: true,
-      messages: [],
-      visualizations: [],
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.memoryHosts.set(id, preview);
-    return { ...preview };
   }
 
   /**
@@ -817,30 +667,6 @@ export class SessionsService implements OnModuleInit {
     };
     this.memoryHosts.set(id, updated);
     return { ...updated };
-  }
-
-  private async insertSession(
-    name: string,
-    datasets: string[],
-    agent?: Pick<SessionDoc, 'agentId' | 'agentName' | 'agentKey'>,
-  ): Promise<SessionDoc> {
-    const id = randomUUID();
-    const workspace = await this.mastra.ensureSessionWorkspace(id, name);
-    return this.repository.insert({
-      id,
-      name: name.slice(0, 64),
-      workspaceId: workspace.id,
-      datasets,
-      ...(agent ?? {}),
-      // Every new session stores the workflow it runs (ADR-0040): the one
-      // its agent fields derive (workflows R4).
-      workflowId: sessionWorkflowId({
-        agentKey: agent?.agentKey,
-        agentId: agent?.agentId,
-      }),
-      messages: [],
-      visualizations: [],
-    });
   }
 
   /**
@@ -1168,28 +994,6 @@ export class SessionsService implements OnModuleInit {
 
   // ------------------------------------------------------------- visuals
 
-  /** Button path: generate a visual for one answer and record it in the chat. */
-  async generateVisualization(
-    id: string,
-    sourceMessageAt: string,
-  ): Promise<{ session: SessionDoc; visualization: InteractiveVisualization }> {
-    const session = await this.get(id);
-    const { metadata } = await this.visuals.create(
-      session,
-      sourceMessageAt || undefined,
-    );
-    const updated = await this.saveVisualMetadata(session, metadata, {
-      visualId: metadata.id,
-      version: 1,
-      title: metadata.title,
-      action: 'created',
-    });
-    return {
-      session: updated,
-      visualization: await this.visuals.load(updated, metadata.id, 1),
-    };
-  }
-
   async getVisualization(
     id: string,
     visualizationId: string,
@@ -1253,121 +1057,6 @@ export class SessionsService implements OnModuleInit {
     draft = false,
   ): Promise<{ filename: string; contentType: string; body: Buffer }> {
     return this.requireRfpPackages().download(session.id, rfpId, file, draft);
-  }
-
-  async revertVisualization(
-    id: string,
-    visualizationId: string,
-    version: number,
-  ): Promise<{ session: SessionDoc; visualization: InteractiveVisualization }> {
-    const session = await this.get(id);
-    const metadata = await this.visuals.revert(
-      session,
-      visualizationId,
-      version,
-    );
-    const updated = await this.saveVisualMetadata(session, metadata, {
-      visualId: metadata.id,
-      version,
-      title: metadata.title,
-      action: 'reverted',
-    });
-    return {
-      session: updated,
-      visualization: await this.visuals.load(updated, visualizationId, version),
-    };
-  }
-
-  /**
-   * Panel path: tailor an open visual from a plain-English instruction. Same
-   * pipeline as the `update_visual` tool, but callable over HTTP, and it logs
-   * the `updated` chat event the way the generate button logs `created`.
-   */
-  async tailorVisualization(
-    id: string,
-    visualizationId: string,
-    instruction: string,
-  ): Promise<{ session: SessionDoc; visualization: InteractiveVisualization }> {
-    const trimmed = (instruction ?? '').trim();
-    if (!trimmed) throw new BadRequestException('instruction is required');
-    const session = await this.get(id);
-    const { metadata } = await this.visuals.update(
-      session,
-      visualizationId,
-      trimmed,
-    );
-    const version = this.visuals.currentVersion(metadata);
-    const updated = await this.saveVisualMetadata(session, metadata, {
-      visualId: metadata.id,
-      version,
-      title: metadata.title,
-      action: 'updated',
-    });
-    return {
-      session: updated,
-      visualization: await this.visuals.load(updated, visualizationId, version),
-    };
-  }
-
-  /**
-   * Re-run the SQL behind the visual's current version and refresh its data
-   * in place — no new version, no designer call, no chat event. Separates
-   * the visual's data from its code: the code stays exactly as designed,
-   * only the rows change.
-   */
-  async refreshVisualizationData(
-    id: string,
-    visualizationId: string,
-  ): Promise<{ session: SessionDoc; visualization: InteractiveVisualization }> {
-    const session = await this.get(id);
-    const { metadata } = await this.visuals.refreshData(
-      session,
-      visualizationId,
-    );
-    const version = this.visuals.currentVersion(metadata);
-    const updated = await this.saveVisualMetadata(session, metadata);
-    return {
-      session: updated,
-      visualization: await this.visuals.load(updated, visualizationId, version),
-    };
-  }
-
-  /**
-   * Silent auto-repair of a visual that failed in the dataset. Only the
-   * current version may be repaired, and only once — the version guard here
-   * repeats the client's check because the client is not trusted, and
-   * `VisualizationService.repair` refuses to repair an auto-repair.
-   */
-  async repairVisualization(
-    id: string,
-    visualizationId: string,
-    error: string,
-    version: number,
-  ): Promise<{ session: SessionDoc; visualization: InteractiveVisualization }> {
-    const session = await this.get(id);
-    const meta = this.visuals.find(session, visualizationId);
-    const current = this.visuals.currentVersion(meta);
-    if (version !== current) {
-      throw new BadRequestException(
-        `Only the current version can be repaired (requested v${version}, current v${current})`,
-      );
-    }
-    const { metadata } = await this.visuals.repair(
-      session,
-      visualizationId,
-      error,
-    );
-    const repaired = this.visuals.currentVersion(metadata);
-    // No chat event: an automatic fix is not a conversation turn.
-    const updated = await this.saveVisualMetadata(session, metadata);
-    return {
-      session: updated,
-      visualization: await this.visuals.load(
-        updated,
-        visualizationId,
-        repaired,
-      ),
-    };
   }
 
   /**
@@ -1532,71 +1221,6 @@ export class SessionsService implements OnModuleInit {
       title: metadata.title,
       description: metadata.description,
     };
-  }
-
-  // ---------------------------------------------------------------- chat
-
-  /** Append a user message, run the agent over the history, persist both. */
-  async sendMessage(id: string, content: string): Promise<SessionDoc> {
-    const trimmed = (content ?? '').trim();
-    if (!trimmed) throw new BadRequestException('message is required');
-    const session = await this.get(id);
-    return this.turns.generateTurn(session, trimmed);
-  }
-
-  /**
-   * Streamed chat turn: emits reasoning/text/tool deltas as they arrive,
-   * persists the exchange at the end, then emits `done` with the session.
-   *
-   * `careful` opts the turn into an independent cross-check of the answer's
-   * SQL, run before `done` so the transcript the client receives already
-   * carries the verdict.
-   */
-  async streamMessage(
-    id: string,
-    content: string,
-    emit: (event: StreamEvent) => void,
-    abortSignal?: AbortSignal,
-    activeVisualId?: string,
-    careful = false,
-  ): Promise<void> {
-    const trimmed = (content ?? '').trim();
-    if (!trimmed) throw new BadRequestException('message is required');
-    const session = await this.get(id);
-    await this.turns.streamTurn(
-      session,
-      trimmed,
-      emit,
-      abortSignal,
-      activeVisualId,
-      careful,
-    );
-  }
-
-  // ------------------------------------------------------------- feedback
-
-  /**
-   * Persist a thumbs rating on one assistant answer. Thumbs-up promotes the
-   * answer's question → SQL pair into the verified query library (Vanna
-   * pattern) and badges the answer as verified; thumbs-down removes whatever
-   * that answer contributed and clears the badge. An answer that ran no SQL
-   * just records the rating.
-   */
-  async recordFeedback(
-    id: string,
-    messageAt: string,
-    rating: MessageFeedback,
-  ): Promise<SessionDoc> {
-    const session = await this.get(id);
-    const messages = await this.rateAnswer(
-      session,
-      messageAt,
-      rating,
-      { sourceSessionId: id },
-      () => this.verifiedQueries.removeForMessage(id, messageAt),
-    );
-    const updated = await this.updateDoc(id, { messages });
-    return updated ?? { ...session, messages };
   }
 
   /**

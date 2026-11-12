@@ -1,12 +1,9 @@
 import {
   BadRequestException,
-  Body,
   Controller,
   Delete,
   Get,
-  HttpCode,
   Param,
-  Post,
   Query,
   Res,
 } from '@nestjs/common';
@@ -15,10 +12,14 @@ import type { SessionDoc } from './entities/session.entity';
 import type {
   FilePanelItem,
   InteractiveVisualization,
-  MessageFeedback,
 } from './entities/session.entity';
 import type { Response } from 'express';
 
+/**
+ * The stored sessions' read routes (api.md 2.1): since 1.23.22 nothing starts
+ * or continues a chat, so a past chat is listed, opened, downloaded from and
+ * deleted, and nothing writes to it.
+ */
 @Controller('sessions')
 export class SessionsController {
   constructor(private readonly sessionsService: SessionsService) {}
@@ -37,18 +38,6 @@ export class SessionsController {
     return this.sessionsService.toView(await this.sessionsService.get(id));
   }
 
-  /** Every session leaving this controller carries its `agent` (api.md 2.1). */
-  private async withView<T extends { session?: SessionDoc }>(
-    result: T,
-  ): Promise<T> {
-    return result.session
-      ? {
-          ...result,
-          session: await this.sessionsService.toView(result.session),
-        }
-      : result;
-  }
-
   @Get(':id/visualizations/:visualizationId')
   getVisualization(
     @Param('id') id: string,
@@ -60,117 +49,6 @@ export class SessionsController {
       visualizationId,
       parseVersion(version),
     );
-  }
-
-  @Post(':id/visualizations/:visualizationId/revert')
-  async revertVisualization(
-    @Param('id') id: string,
-    @Param('visualizationId') visualizationId: string,
-    @Body() body: { version?: number },
-  ): Promise<{
-    ok: boolean;
-    message: string;
-    session?: SessionDoc;
-    visualization?: InteractiveVisualization;
-  }> {
-    try {
-      const result = await this.sessionsService.revertVisualization(
-        id,
-        visualizationId,
-        Number(body?.version),
-      );
-      return {
-        ok: true,
-        message: `Reverted to version ${result.visualization.version}`,
-        ...(await this.withView(result)),
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { ok: false, message };
-    }
-  }
-
-  @Post(':id/visualizations/:visualizationId/repair')
-  async repairVisualization(
-    @Param('id') id: string,
-    @Param('visualizationId') visualizationId: string,
-    @Body() body: { error?: string; version?: number },
-  ): Promise<{
-    ok: boolean;
-    message: string;
-    session?: SessionDoc;
-    visualization?: InteractiveVisualization;
-  }> {
-    try {
-      const result = await this.sessionsService.repairVisualization(
-        id,
-        visualizationId,
-        body?.error ?? '',
-        Number(body?.version),
-      );
-      return {
-        ok: true,
-        message: `Repaired as version ${result.visualization.version}`,
-        ...(await this.withView(result)),
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { ok: false, message };
-    }
-  }
-
-  @Post(':id/visualizations/:visualizationId/tailor')
-  async tailorVisualization(
-    @Param('id') id: string,
-    @Param('visualizationId') visualizationId: string,
-    @Body() body: { instruction?: string },
-  ): Promise<{
-    ok: boolean;
-    message: string;
-    session?: SessionDoc;
-    visualization?: InteractiveVisualization;
-  }> {
-    try {
-      const result = await this.sessionsService.tailorVisualization(
-        id,
-        visualizationId,
-        body?.instruction ?? '',
-      );
-      return {
-        ok: true,
-        message: `Updated to version ${result.visualization.version}`,
-        ...(await this.withView(result)),
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { ok: false, message };
-    }
-  }
-
-  @Post(':id/visualizations/:visualizationId/refresh')
-  async refreshVisualization(
-    @Param('id') id: string,
-    @Param('visualizationId') visualizationId: string,
-  ): Promise<{
-    ok: boolean;
-    message: string;
-    session?: SessionDoc;
-    visualization?: InteractiveVisualization;
-  }> {
-    try {
-      const result = await this.sessionsService.refreshVisualizationData(
-        id,
-        visualizationId,
-      );
-      return {
-        ok: true,
-        message: `Refreshed data for version ${result.visualization.version}`,
-        ...(await this.withView(result)),
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { ok: false, message };
-    }
   }
 
   @Get(':id/visualizations/:visualizationId/download')
@@ -262,181 +140,7 @@ export class SessionsController {
       const session = await this.sessionsService.delete(id);
       return {
         ok: true,
-        message: session.preview
-          ? 'Preview discarded'
-          : `Session "${session.name}" deleted`,
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { ok: false, message };
-    }
-  }
-
-  @Post()
-  async create(
-    @Body()
-    body: {
-      name?: string;
-      datasets?: string[];
-      agentId?: string;
-      preview?: boolean;
-      workflowId?: string;
-    },
-  ): Promise<{ ok: boolean; message: string; session?: SessionDoc }> {
-    try {
-      const agentId =
-        typeof body?.agentId === 'string' && body.agentId ? body.agentId : '';
-      const workflowId =
-        typeof body?.workflowId === 'string' && body.workflowId
-          ? body.workflowId
-          : '';
-      // Chats cannot start from a workflow: it runs on an input
-      // (workflows R5; `POST /workflows/:id/runs`, api.md 118).
-      if (workflowId) {
-        throw new BadRequestException(
-          `Workflow "${workflowId}" runs on an input`,
-        );
-      }
-      // With an agent, the agent decides the
-      // name and datasets (R52), except one that runs on picked datasets
-      // (Questions to Insights v2), which takes both from the body; a preview
-      // runs its draft (agents-evals R60).
-      const session = !agentId
-        ? await this.sessionsService.create(
-            body?.name ?? '',
-            body?.datasets ?? [],
-          )
-        : body?.preview === true
-          ? await this.sessionsService.createPreview(agentId)
-          : await this.sessionsService.createFromAgent(
-              agentId,
-              body?.name,
-              body?.datasets,
-            );
-      return {
-        ok: true,
-        message: session.preview
-          ? 'Preview started'
-          : `Session "${session.name}" created`,
-        session: await this.sessionsService.toView(session),
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { ok: false, message };
-    }
-  }
-
-  @Post(':id/visualizations')
-  async generateVisualization(
-    @Param('id') id: string,
-    @Body() body: { sourceMessageAt?: string },
-  ): Promise<{
-    ok: boolean;
-    message: string;
-    session?: SessionDoc;
-    visualization?: InteractiveVisualization;
-  }> {
-    try {
-      const result = await this.sessionsService.generateVisualization(
-        id,
-        body?.sourceMessageAt ?? '',
-      );
-      return {
-        ok: true,
-        message: 'Interactive visual generated',
-        ...(await this.withView(result)),
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { ok: false, message };
-    }
-  }
-
-  // Server-sent events: reasoning/text deltas while the agent thinks, then
-  // `done` with the persisted session. 200 once started, even when the turn
-  // fails: the failure arrives as an `error` event (api.md 3.1).
-  @Post(':id/messages/stream')
-  @HttpCode(200)
-  async streamMessage(
-    @Param('id') id: string,
-    @Body()
-    body: {
-      content?: string;
-      activeVisualizationId?: string;
-      /** Careful mode: cross-check the answer before finishing the turn. */
-      careful?: boolean;
-    },
-    @Res() res: Response,
-  ): Promise<void> {
-    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
-    const send = (data: unknown) =>
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
-    const controller = new AbortController();
-    const abort = () => controller.abort();
-    res.once('close', abort);
-    try {
-      await this.sessionsService.streamMessage(
-        id,
-        body?.content ?? '',
-        send,
-        controller.signal,
-        typeof body?.activeVisualizationId === 'string'
-          ? body.activeVisualizationId
-          : undefined,
-        body?.careful === true,
-      );
-    } catch (err) {
-      if (!controller.signal.aborted) {
-        const message = err instanceof Error ? err.message : String(err);
-        send({ type: 'error', content: message });
-      }
-    }
-    res.off('close', abort);
-    if (!res.writableEnded) res.end();
-  }
-
-  @Post(':id/messages/feedback')
-  async rateMessage(
-    @Param('id') id: string,
-    @Body() body: { messageAt?: string; rating?: string },
-  ): Promise<{ ok: boolean; message: string; session?: SessionDoc }> {
-    try {
-      const session = await this.sessionsService.recordFeedback(
-        id,
-        body?.messageAt ?? '',
-        body?.rating as MessageFeedback,
-      );
-      return {
-        ok: true,
-        message:
-          body?.rating === 'up'
-            ? 'Answer saved as a verified query'
-            : 'Answer marked as wrong',
-        session: await this.sessionsService.toView(session),
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { ok: false, message };
-    }
-  }
-
-  @Post(':id/messages')
-  async sendMessage(
-    @Param('id') id: string,
-    @Body() body: { content?: string },
-  ): Promise<{ ok: boolean; message: string; session?: SessionDoc }> {
-    try {
-      const session = await this.sessionsService.sendMessage(
-        id,
-        body?.content ?? '',
-      );
-      return {
-        ok: true,
-        message: 'Message sent',
-        session: await this.sessionsService.toView(session),
+        message: `Session "${session.name}" deleted`,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

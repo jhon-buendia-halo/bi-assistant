@@ -119,38 +119,6 @@ export interface TurnEngineDeps {
 export class TurnEngine {
   constructor(private readonly deps: TurnEngineDeps) {}
 
-  /**
-   * A non-streamed turn: append the user message, run the agent over the
-   * history and persist both.
-   */
-  async generateTurn(
-    session: SessionDoc,
-    trimmed: string,
-  ): Promise<SessionDoc> {
-    const id = session.id;
-    appendUserMessage(session, trimmed);
-    const agent = this.deps.mastra.getAgent(
-      session.agentKey ?? ASSISTANT_AGENT_KEY,
-    );
-    const input = await this.deps.options.agentInput(agent, session);
-    const options = await this.deps.options.agentOptions(session, trimmed);
-    const result = await agent.generate(input, options);
-    const reasoning = reasoningTrail(toolRecords(result));
-    const knowledge = knowledgeUsed(options.requestContext);
-    session.messages.push({
-      role: 'assistant',
-      content: (result.text ?? '').trim(),
-      at: new Date().toISOString(),
-      ...(reasoning ? { reasoning } : {}),
-      ...(knowledge ? { knowledge } : {}),
-    });
-    const updated = await this.deps.updateDoc(id, {
-      messages: session.messages,
-      ...turnRfpPatch(session, options.requestContext),
-    });
-    return updated ?? session;
-  }
-
   /** The streamed turn itself, once the request reached the assistant. */
   async streamTurn(
     session: SessionDoc,
@@ -702,7 +670,7 @@ export class TurnEngine {
    * Runtime backstop for the grounding rule in the system prompt: a turn
    * that produced a non-empty answer without calling a single tool gets one
    * corrective pass, tools allowed, before it is accepted. Called at most
-   * once per turn by `streamMessage`.
+   * once per turn by `streamTurn`.
    *
    * Deliberately memory-free. `agentInput` shows that once a session has a
    * memory thread, the turn's `input` is just the latest user message —

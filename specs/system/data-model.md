@@ -105,7 +105,7 @@ Summary:
 | `connections` | Saved datasources (data platform connections) | `id` | `updatedAt` desc | [datasources](../capabilities/datasources/spec.md) |
 | `settings` | Single-row app settings: the LLM settings, the built-in agent pins and the UI preferences | `key` (`"llm"`, `"builtin-agent-pins"`, `"ui-preferences"`, `"personas-seed"`, `"visuals-seed"`) | n/a | [llm-settings](../capabilities/llm-settings/spec.md) |
 | `datasets` | Named selections of entities with a schema snapshot | `name` (unique, upsert key) | `updatedAt` desc | [datasets](../capabilities/datasets/spec.md) |
-| `sessions` | Chat sessions with full transcript and visual metadata | `id` | `updatedAt` desc | [sessions-chat](../capabilities/sessions-chat/spec.md), [visuals](../capabilities/visuals/spec.md) |
+| `sessions` | Chat sessions with full transcript and visual metadata | `id` | `updatedAt` desc | [agent-answers](../capabilities/agent-answers/spec.md), [visuals](../capabilities/visuals/spec.md) |
 | `datasource_inventories` | Cached catalog/schema/table walk per datasource | `id` = datasource id | n/a | [datasources](../capabilities/datasources/spec.md) |
 | `verified_queries` | User-approved question to SQL pairs | `id`; dedupe key `(sourceSessionId, sourceMessageAt)` | `updatedAt` desc | [verified-queries](../capabilities/verified-queries/spec.md) |
 | `metrics` | Curated metric definitions | `id`; `name` unique | `updatedAt` desc | [metrics](../capabilities/metrics/spec.md) |
@@ -577,7 +577,7 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 
 - REST datasource queries are executed by materialising the referenced endpoints into a throwaway in-memory SQLite database per call; nothing of it is written to disk.
 - Eval runs also keep an in-memory map for in-flight runs (section 3.8 is the durable copy).
-- **Preview sessions** (agents-evals R60, R61) live only in the backend's memory: a `SessionDoc`-shaped object with `id` `preview-<uuid>`, `preview: true` and `agentId`, never written to `sessions`. While one exists its agent memory thread (id = the session id) and its workspace `workspaces/session-preview-<uuid>/` exist like a session's (sections 4 and 5). Discarding the preview deletes all three. A backend restart forgets the in-memory object, and at start-up the backend deletes every `session-preview-*` workspace and the matching memory thread, so a crash leaves nothing behind.
+- **Preview sessions** (agents-evals R60, R61) no longer exist (1.23.27: `POST /sessions { preview }` is removed; the agent editor's preview is a draft run, whose host is a run host, 3.16). At start-up the backend still deletes every `session-preview-*` workspace and its memory thread that an earlier version left. No stored shape changed: the `sessions` collection and its documents stay on disk as past chats.
 - **Run hosts** ([agents.md](agents.md) 5.14) live only in the backend's memory while their run's agent turn runs: a `SessionDoc`-shaped object with `id` `run-<run id>` and `run: true`, never written to `sessions`. Its memory thread (id `run-<run id>`) is deleted when the turn ends; its workspace `workspaces/session-run-<run id>/` belongs to the stored run (3.16) and is never swept with the previews'.
 
 ### 3.13 Relationships and referential rules
@@ -595,8 +595,8 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 | `metrics` | `datasourceId`, `sourceVerifiedQueryId` | `connections.id`, `verified_queries.id` | Provenance only, may dangle (a verified query id also rotates on re-approval). |
 | `eval_runs` | `datasourceId`, `datasets[]` | `connections.id`, `datasets.name` | Scope snapshot, may dangle. |
 | `agents` | `draft.datasets[]`, `live.datasets[]` | `datasets.name` | By name, no cascade. May dangle; the hub flags the agent as having a missing dataset. |
-| `sessions` | `agentId` | `agents.id` | By value, no cascade. Deleting the agent leaves the session pointing at a missing id; it then runs as the plain assistant and is shown with `agentName` (sessions-chat R59). |
-| `sessions` | `workflowId` (or derived from `agentKey` / `agentId`) | a workflow of the catalogue ([agents.md](agents.md) 5.12) | By id, derived, never a collection: workflows are defined in code or computed from the agent registry and `agents`. A stored id that no longer resolves is ignored and the id is derived again. A deleted user agent's workflow leaves the catalogue; its sessions keep `agent:<id>` and are shown with `agentName` (sessions-chat R59, R65). |
+| `sessions` | `agentId` | `agents.id` | By value, no cascade. Deleting the agent leaves the session pointing at a missing id; it then runs as the plain assistant and is shown with `agentName` (past-chats R59). |
+| `sessions` | `workflowId` (or derived from `agentKey` / `agentId`) | a workflow of the catalogue ([agents.md](agents.md) 5.12) | By id, derived, never a collection: workflows are defined in code or computed from the agent registry and `agents`. A stored id that no longer resolves is ignored and the id is derived again. A deleted user agent's workflow leaves the catalogue; its sessions keep `agent:<id>` and are shown with `agentName` (past-chats R59, R65). |
 | `sessions[].visualizations[]` | `id`, `path` | `workspaces/session-<id>/visuals/<id>/` | Files under the session workspace; both removed with the session. |
 | `sessions[].messages[]` | `visual.visualId`, `report.jobId` | visual id / report file | By value. |
 | session | `id` | agent memory thread id and resource id; workspace `session-<id>` | See section 5. |

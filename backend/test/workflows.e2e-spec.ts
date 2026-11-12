@@ -3,10 +3,8 @@
  * R1-R4; api.md 116, 117, 3, 2.1 and 34; ADR-0040): `GET /workflows` lists
  * the assistant's, Questions to Insights v2's and the Official agents'
  * workflows and one per Live user agent, `GET /workflows/:id` answers 404
- * for System and draft-only agents, `POST /sessions { workflowId }` is
- * refused (a workflow runs on an input, 1.23.22), every session read carries
- * `workflowRef`,
- * and an agent's detail says which workflows use it. The sequential test
+ * for System and draft-only agents, and an agent's detail says which
+ * workflows use it. The sequential test
  * workflow runs once on a text (`POST /workflows/:id/runs`, api.md 118;
  * workflows R11); no workflow starts a chat.
  *
@@ -36,20 +34,9 @@ interface WorkflowSummary {
   runRequirement?: string;
 }
 
-interface SessionView {
-  id: string;
-  name: string;
-  datasets: string[];
-  agentKey?: string;
-  agentName?: string;
-  workflowId?: string;
-  workflowRef?: { id: string; name: string; kind: string; deleted: boolean };
-}
-
 interface Answer {
   ok: boolean;
   message: string;
-  session?: SessionView;
   agent?: { id: string };
 }
 
@@ -74,8 +61,6 @@ describe('The workflow catalogue (API)', () => {
         workflows: WorkflowSummary[];
       }
     ).workflows;
-  const createSession = async (body: object) =>
-    (await http().post('/sessions').send(body)).body as Answer;
 
   beforeAll(async () => {
     backend = await boot(dataDir);
@@ -261,89 +246,6 @@ describe('The workflow catalogue (API)', () => {
         'analyse',
         'wrap-up',
       ]);
-    });
-
-    it('POST /sessions { agentId: assistant-v2 } binds the session to v2 and its workflow', async () => {
-      const answer = await createSession({
-        agentId: 'assistant-v2',
-        name: 'v2 chat',
-        datasets: ['World Cup Core'],
-      });
-      expect(answer).toMatchObject({
-        ok: true,
-        message: 'Session "v2 chat" created',
-        session: {
-          name: 'v2 chat',
-          datasets: ['World Cup Core'],
-          agentKey: 'assistant-v2',
-          workflowId: 'qti-v2-turn',
-          workflowRef: {
-            id: 'qti-v2-turn',
-            name: 'Questions to Insights v2',
-            kind: 'code',
-            deleted: false,
-          },
-        },
-      });
-      const read = (
-        await http().get(`/sessions/${answer.session!.id}`).expect(200)
-      ).body as SessionView;
-      expect(read.workflowRef?.name).toBe('Questions to Insights v2');
-    });
-
-    it('refuses any workflowId: a workflow runs on an input, and nothing is created', async () => {
-      const before = (
-        (await http().get('/sessions').expect(200)).body as {
-          sessions: SessionView[];
-        }
-      ).sessions.length;
-      for (const workflowId of [
-        'qti-v2-turn',
-        'agent:assistant',
-        'seq-text-demo',
-        'nope',
-        `agent:${draftId}`,
-      ]) {
-        expect(
-          await createSession({
-            workflowId,
-            name: 'Chat',
-            datasets: ['World Cup Core'],
-          }),
-        ).toEqual({
-          ok: false,
-          message: `Workflow "${workflowId}" runs on an input`,
-        });
-      }
-      expect(
-        await createSession({ workflowId: 'qti-v2-turn', agentId: liveId }),
-      ).toEqual({
-        ok: false,
-        message: 'Workflow "qti-v2-turn" runs on an input',
-      });
-      const after = (
-        (await http().get('/sessions').expect(200)).body as {
-          sessions: SessionView[];
-        }
-      ).sessions.length;
-      expect(after).toBe(before);
-    });
-
-    it('a session created with a plain body runs agent:assistant', async () => {
-      const answer = await createSession({
-        name: 'Plain chat',
-        datasets: ['World Cup Core'],
-      });
-      expect(answer.session).toMatchObject({
-        workflowId: 'agent:assistant',
-        workflowRef: { id: 'agent:assistant', name: 'Assistant' },
-      });
-      const listed = (
-        (await http().get('/sessions').expect(200)).body as {
-          sessions: SessionView[];
-        }
-      ).sessions.find((session) => session.id === answer.session!.id);
-      expect(listed?.workflowRef?.id).toBe('agent:assistant');
     });
 
     it("an agent's detail says which workflows use it", async () => {

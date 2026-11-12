@@ -4,7 +4,7 @@ jest.mock('../data-readiness/data-readiness.service', () => ({
   DataReadinessService: class {},
 }));
 
-// Sessions bound to a workflow (ADR-0040; workflows R4; sessions-chat R65):
+// Sessions bound to a workflow (ADR-0040; workflows R4; past-chats R65):
 // every creation path stores the workflow its agent fields derive, `POST
 // /sessions { workflowId }` resolves and refuses as api.md 3 says, and every
 // view carries the derived `workflowRef`.
@@ -76,8 +76,6 @@ jest.mock('./visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
 
-import { sessionWorkflowId } from '../../mastra/workflows/workflow-catalog';
-import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 import type { SessionDoc } from './entities/session.entity';
 import type { UserAgentDoc } from '../user-agents/entities/user-agent.entity';
@@ -160,37 +158,7 @@ function build() {
   return { service, repository, docs, stored };
 }
 
-const derived = (session: SessionDoc) =>
-  sessionWorkflowId({ agentKey: session.agentKey, agentId: session.agentId });
-
 describe('SessionsService sessions bound to a workflow (ADR-0040)', () => {
-  describe('every creation path stores the workflowId its agent fields derive (R4)', () => {
-    it.each<[string, (s: SessionsService) => Promise<SessionDoc>, string]>([
-      [
-        'a plain body',
-        (s) => s.create('Chat', ['World Cup']),
-        'agent:assistant',
-      ],
-      [
-        'agentId assistant-v2',
-        (s) => s.createFromAgent('assistant-v2', 'v2 chat', ['World Cup']),
-        'qti-v2-turn',
-      ],
-      ['agentId rfp', (s) => s.createFromAgent('rfp'), 'agent:rfp'],
-      [
-        'agentId data-readiness',
-        (s) => s.createFromAgent('data-readiness'),
-        'agent:data-readiness',
-      ],
-      ['a Live user agent', (s) => s.createFromAgent('u-live'), 'agent:u-live'],
-      ['a preview', (s) => s.createPreview('u-draft'), 'agent:u-draft'],
-    ])('%s', async (_label, create, expected) => {
-      const session = await create(build().service);
-      expect(session.workflowId).toBe(expected);
-      expect(session.workflowId).toBe(derived(session));
-    });
-  });
-
   describe('the derived workflowRef (api.md 2.1)', () => {
     const doc = (fields: Partial<SessionDoc>): SessionDoc => ({
       id: 's-1',
@@ -284,35 +252,5 @@ describe('SessionsService sessions bound to a workflow (ADR-0040)', () => {
       expect(session).not.toHaveProperty('workflowRef');
       expect(view.workflow?.source).toBe('workflow');
     });
-  });
-});
-
-describe('SessionsController POST /sessions with workflowId (api.md 3)', () => {
-  const controllerWith = () => {
-    const service = {
-      create: jest.fn(),
-      createFromAgent: jest.fn(),
-      createPreview: jest.fn(),
-      toView: jest.fn((s: SessionDoc) => Promise.resolve(s)),
-    };
-    return {
-      service,
-      controller: new SessionsController(service as never),
-    };
-  };
-
-  it('refuses a workflowId: a workflow runs on an input, creating nothing', async () => {
-    const { controller, service } = controllerWith();
-    for (const workflowId of ['qti-v2-turn', 'agent:assistant', 'agent:rfp']) {
-      expect(
-        await controller.create({ workflowId, name: 'Chat', preview: true }),
-      ).toEqual({
-        ok: false,
-        message: `Workflow "${workflowId}" runs on an input`,
-      });
-    }
-    expect(service.create).not.toHaveBeenCalled();
-    expect(service.createFromAgent).not.toHaveBeenCalled();
-    expect(service.createPreview).not.toHaveBeenCalled();
   });
 });

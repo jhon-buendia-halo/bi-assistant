@@ -67,7 +67,7 @@ All stories are built on one branch, `feat/BA-141-agentic-hub-look-and-feel`, an
   - §7 copy for the rename and the Appearance setting (BA-143, BA-144);
   - §9 visual baseline (BA-148).
 - [capabilities/app-shell/spec.md](../../capabilities/app-shell/spec.md): rules and Gherkin for the theme switch, the icon rail and the banner (BA-143, BA-144).
-- [capabilities/sessions-chat/spec.md](../../capabilities/sessions-chat/spec.md): the Gherkin for the session list in its new pane (BA-146).
+- [capabilities/agent-answers/spec.md](../../capabilities/agent-answers/spec.md): the Gherkin for the session list in its new pane (BA-146).
 - [system/data-model.md](../../system/data-model.md): the theme preference key on the renderer (BA-143).
 - [system/tech-stack.md](../../system/tech-stack.md): the bundled webfont and the token file (BA-143).
 - [product/non-functional.md](../../product/non-functional.md): resolves the open question on a light theme and adds contrast in both themes (BA-143).

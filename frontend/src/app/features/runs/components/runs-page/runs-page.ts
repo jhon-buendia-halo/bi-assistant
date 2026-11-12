@@ -22,7 +22,7 @@ import {
 import { RunsState, RunsTab } from '../../services/runs-state';
 
 /**
- * The Runs page (app-shell R3, R46; sessions-chat R63): two tabs. Runs lists
+ * The Runs page (app-shell R3, R46; past-chats R63): two tabs. Runs lists
  * the stored runs, newest first, ten to a page with search and delete; Past
  * chats lists the old sessions, which open read-only.
  */

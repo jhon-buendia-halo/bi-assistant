@@ -5,7 +5,7 @@ jest.mock('../data-readiness/data-readiness.service', () => ({
 }));
 
 // Every streamed turn runs the session's workflow (agents.md 5.1, 5.12;
-// ADR-0040; sessions-chat R61): the assistant, the RFP Builder and a user
+// ADR-0040; agent-answers R61): the assistant, the RFP Builder and a user
 // agent each run one `agent-turn` run, whose `answer` step is today's agent
 // turn, with today's error rules; a one-step workflow never writes the bar.
 jest.mock('@mastra/core/request-context', () => ({
@@ -86,6 +86,7 @@ jest.mock('./visualization-document', () => ({
 import { streamTurnWorkflow } from '../../mastra/testing/turn-workflow.stub';
 import { setAgentPromptOverrides } from '../../mastra/agent-prompt-overrides';
 import { SessionsService, type StreamEvent } from './sessions.service';
+import { streamStored } from './testing/stream-stored';
 import type { SessionDoc } from './entities/session.entity';
 
 const RFP_ID = '7b0c2f0e-1d2a-4c9b-9a51-0f6f1c2d3e4f';
@@ -261,7 +262,7 @@ async function turn(
   content: string,
 ): Promise<StreamEvent[]> {
   const events: StreamEvent[] = [];
-  await ctx.service.streamMessage('s-1', content, (event) =>
+  await streamStored(ctx.service, 's-1', content, (event) =>
     events.push(event),
   );
   return events;

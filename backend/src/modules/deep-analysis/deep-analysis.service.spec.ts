@@ -8,7 +8,14 @@ import {
   extractSqlBlocks,
   reportMarkdown,
 } from './deep-analysis.service';
-import type { ChatMessage } from '../sessions/entities/session.entity';
+import {
+  investigateAngle,
+  planAnalysis,
+  writeAnalysis,
+  type DeepAnalysisCallDeps,
+} from './deep-analysis.calls';
+import type { AngleFinding } from '../../mastra/workflows/deep-analysis.steps';
+import type { SessionDoc } from '../sessions/entities/session.entity';
 import * as appSkills from '../../mastra/app-skills';
 
 const SESSION = {
@@ -16,7 +23,7 @@ const SESSION = {
   name: 'Denials review',
   datasets: ['claims'],
   messages: [],
-};
+} as unknown as SessionDoc;
 
 const PLAN = {
   object: {
@@ -49,8 +56,8 @@ const asDemoUser =
   (): Promise<T> =>
     fn();
 
-/** A service wired to one job, with the agent and the workspace stubbed. */
-function build(responses: unknown[], options: { plannerFails?: boolean } = {}) {
+/** The assistant's calls with the agent and the workspace stubbed. */
+function build(responses: unknown[]) {
   const generate = jest.fn<
     Promise<unknown>,
     [unknown, Record<string, unknown>?]
@@ -58,10 +65,9 @@ function build(responses: unknown[], options: { plannerFails?: boolean } = {}) {
   for (const response of responses) {
     generate.mockResolvedValueOnce(response);
   }
-  if (options.plannerFails) generate.mockRejectedValue(new Error('no model'));
   const filesystem = {
     writeFile: jest.fn().mockResolvedValue(undefined),
-    readFile: jest.fn().mockResolvedValue('# stored report'),
+    readFile: jest.fn().mockResolvedValue('# Stored report\n\nBody'),
   };
   const mastra = {
     getAgent: jest.fn().mockReturnValue({ generate }),
@@ -69,243 +75,57 @@ function build(responses: unknown[], options: { plannerFails?: boolean } = {}) {
       .fn()
       .mockResolvedValue({ id: 'workspace-1', filesystem }),
   };
-  const appended: Omit<ChatMessage, 'role' | 'at'>[] = [];
   const sessions = {
     get: jest.fn().mockResolvedValue({ ...SESSION }),
     backgroundAgentOptions: jest
       .fn()
       .mockResolvedValue({ maxSteps: 15, context: [], requestContext: {} }),
-    appendAssistantMessage: jest
-      .fn()
-      .mockImplementation((_id: string, message: never) => {
-        appended.push(message);
-        return Promise.resolve(SESSION);
-      }),
+  };
+  const calls: DeepAnalysisCallDeps = {
+    sessions: sessions,
+    mastra: mastra,
+    warn: jest.fn(),
   };
   const service = new DeepAnalysisService(sessions as never, mastra as never);
-  return { service, generate, filesystem, sessions, appended };
+  return { service, calls, generate, filesystem, sessions };
 }
 
-/** Let the in-process job run to completion (or failure). */
-async function settle(
-  service: DeepAnalysisService,
-  jobId: string,
+/**
+ * The three phases in order, as the `deep-analysis` run workflow sends them
+ * (agents.md 5.15): the plan, one turn per angle, the report.
+ */
+async function pipeline(
+  ctx: ReturnType<typeof build>,
+  question = 'Why are denials rising?',
 ): Promise<void> {
-  for (let i = 0; i < 500; i++) {
-    const { status } = service.status(SESSION.id, jobId);
-    if (status === 'done' || status === 'error') return;
-    await new Promise((resolve) => setImmediate(resolve));
+  const plan = await planAnalysis(ctx.calls, SESSION, question);
+  const findings: AngleFinding[] = [];
+  for (const [index, angle] of plan.angles.entries()) {
+    findings.push(
+      await investigateAngle(
+        ctx.calls,
+        SESSION,
+        question,
+        angle,
+        index,
+        plan.angles.length,
+      ),
+    );
   }
-  throw new Error('job never settled');
+  await writeAnalysis(ctx.calls, SESSION, question, findings);
 }
 
-async function startJob(service: DeepAnalysisService): Promise<string> {
-  const result = await service.start(SESSION.id, 'Why are denials rising?');
-  if (!('jobId' in result)) throw new Error('job was rejected');
-  return result.jobId;
-}
-
-describe('DeepAnalysisService', () => {
-  it("answers not found for an unknown job and for another session's job", async () => {
-    const { service } = build([
-      PLAN,
-      finding(1),
-      finding(2),
-      finding(3),
-      REPORT,
-    ]);
-    const jobId = await startJob(service);
-
-    expect(() => service.status(SESSION.id, 'nope')).toThrow('not found');
-    expect(() => service.status('other-session', jobId)).toThrow('not found');
-    await settle(service, jobId);
-    expect(service.status(SESSION.id, jobId).status).toBe('done');
+describe('DeepAnalysisService (a past chat’s report)', () => {
+  it('serves the stored markdown for download, named after its title', async () => {
+    const { service, filesystem } = build([]);
+    const result = await service.download(SESSION.id, 'job-1234abcd');
+    expect(filesystem.readFile).toHaveBeenCalledWith(
+      'reports/job-1234abcd.md',
+      { encoding: 'utf-8' },
+    );
+    expect(result.markdown).toBe('# Stored report\n\nBody');
+    expect(result.filename).toBe('stored-report.md');
   });
-
-  it(
-    'plans, investigates each angle, writes the report and posts it to the chat',
-    asDemoUser(async () => {
-      const { service, generate, filesystem, sessions, appended } = build([
-        PLAN,
-        finding(1),
-        finding(2),
-        finding(3),
-        REPORT,
-      ]);
-
-      const jobId = await startJob(service);
-      await settle(service, jobId);
-
-      // One plan call, one per angle, one synthesis.
-      expect(generate).toHaveBeenCalledTimes(5);
-      expect(sessions.backgroundAgentOptions).toHaveBeenCalledTimes(5);
-
-      const view = service.status(SESSION.id, jobId);
-      expect(view.status).toBe('done');
-      expect(view.steps).toBe(3);
-      expect(view.title).toBe('Denial drivers deep dive');
-
-      // Report persisted in the session workspace.
-      const [path, markdown] = filesystem.writeFile.mock.calls[0] as [
-        string,
-        string,
-      ];
-      expect(path).toBe(`reports/${jobId}.md`);
-      expect(markdown).toContain('# Denial drivers deep dive');
-      expect(markdown).toContain('## Executive summary');
-      expect(markdown).toContain('## Findings by angle');
-      expect(markdown).toContain('## Data appendix');
-      expect(markdown).toContain('select 2');
-
-      // Chat message carries the summary and the report handle.
-      expect(appended).toHaveLength(1);
-      expect(appended[0]).toEqual({
-        content: 'Denials rose to 12.4% driven by payer A.',
-        report: {
-          jobId,
-          title: 'Denial drivers deep dive',
-          path: `reports/${jobId}.md`,
-          angles: 3,
-        },
-      });
-    }),
-  );
-
-  it(
-    'keeps the job out of the session conversation memory',
-    asDemoUser(async () => {
-      const { service, generate } = build([
-        PLAN,
-        finding(1),
-        finding(2),
-        finding(3),
-        REPORT,
-      ]);
-
-      await settle(service, await startJob(service));
-
-      for (const call of generate.mock.calls) {
-        expect(call[1]).not.toHaveProperty('memory');
-      }
-      // The tool-free steps run in one step; the angles get the full budget.
-      expect(generate.mock.calls[0][1]).toEqual(
-        expect.objectContaining({ maxSteps: 1, toolChoice: 'none' }),
-      );
-      expect(generate.mock.calls[1][1]).toEqual(
-        expect.objectContaining({ maxSteps: 15 }),
-      );
-    }),
-  );
-
-  it(
-    'reports progress per angle while investigating',
-    asDemoUser(async () => {
-      let releaseAngle: (value: unknown) => void = () => {};
-      const held = new Promise((resolve) => {
-        releaseAngle = resolve;
-      });
-      const { service, generate } = build([PLAN]);
-      generate.mockImplementationOnce(async () => {
-        await held;
-        return finding(1);
-      });
-      generate.mockResolvedValue(REPORT);
-
-      const jobId = await startJob(service);
-      for (let i = 0; i < 20; i++) {
-        if (service.status(SESSION.id, jobId).step === 1) break;
-        await new Promise((resolve) => setImmediate(resolve));
-      }
-      const view = service.status(SESSION.id, jobId);
-      expect(view.status).toBe('investigating');
-      expect(view.step).toBe(1);
-      expect(view.steps).toBe(3);
-      expect(view.progress).toContain('angle 1 of 3');
-
-      releaseAngle(undefined);
-      await settle(service, jobId);
-    }),
-  );
-
-  it(
-    'rejects a second job while one is running for the session',
-    asDemoUser(async () => {
-      let release: (value: unknown) => void = () => {};
-      const held = new Promise((resolve) => {
-        release = resolve;
-      });
-      const { service, generate } = build([]);
-      generate.mockImplementationOnce(async () => {
-        await held;
-        return PLAN;
-      });
-      generate.mockResolvedValue(REPORT);
-
-      const first = await service.start(SESSION.id, 'Why are denials rising?');
-      const second = await service.start(SESSION.id, 'Something else');
-      expect(second).toEqual({
-        conflictWith: (first as { jobId: string }).jobId,
-      });
-
-      release(undefined);
-      await settle(service, (first as { jobId: string }).jobId);
-
-      // Once it finished, the session can start another one.
-      const third = await service.start(SESSION.id, 'Now what?');
-      expect(third).toHaveProperty('jobId');
-    }),
-  );
-
-  it(
-    'records the failure in the chat when the pipeline breaks',
-    asDemoUser(async () => {
-      const { service, filesystem, appended } = build([], {
-        plannerFails: true,
-      });
-
-      const jobId = await startJob(service);
-      await settle(service, jobId);
-
-      const view = service.status(SESSION.id, jobId);
-      expect(view.status).toBe('error');
-      expect(view.error).toContain('no model');
-      expect(filesystem.writeFile).not.toHaveBeenCalled();
-      expect(appended).toHaveLength(1);
-      expect(appended[0].content).toContain('could not be completed');
-      expect(appended[0].report).toBeUndefined();
-    }),
-  );
-
-  it(
-    'keeps an angle failure from losing the report',
-    asDemoUser(async () => {
-      const { service, generate, appended } = build([PLAN]);
-      generate.mockRejectedValueOnce(new Error('warehouse timeout'));
-      generate.mockResolvedValueOnce(finding(2));
-      generate.mockResolvedValueOnce(finding(3));
-      generate.mockResolvedValueOnce(REPORT);
-
-      const jobId = await startJob(service);
-      await settle(service, jobId);
-
-      expect(service.status(SESSION.id, jobId).status).toBe('done');
-      expect(appended[0].report?.angles).toBe(3);
-    }),
-  );
-
-  it(
-    'serves the stored markdown for download',
-    asDemoUser(async () => {
-      const { service, filesystem } = build([]);
-      const result = await service.download(SESSION.id, 'job-1234abcd');
-      expect(filesystem.readFile).toHaveBeenCalledWith(
-        'reports/job-1234abcd.md',
-        { encoding: 'utf-8' },
-      );
-      expect(result.markdown).toBe('# stored report');
-      expect(result.filename.endsWith('.md')).toBe(true);
-    }),
-  );
 
   it('rejects a traversal attempt in the job id', async () => {
     const { service } = build([]);
@@ -314,9 +134,12 @@ describe('DeepAnalysisService', () => {
     ).rejects.toThrow(/invalid deep analysis id/);
   });
 
-  it('404s an unknown job', () => {
-    const { service } = build([]);
-    expect(() => service.status(SESSION.id, 'nope')).toThrow(/not found/);
+  it('404s a report that is not in the workspace', async () => {
+    const { service, filesystem } = build([]);
+    filesystem.readFile.mockRejectedValue(new Error('ENOENT'));
+    await expect(service.download(SESSION.id, 'nope')).rejects.toThrow(
+      /No deep analysis report/,
+    );
   });
 });
 
@@ -523,17 +346,11 @@ describe('deep-analysis prompts', () => {
   it(
     'sends the plan, each angle and the report byte-identical to the golden prompts',
     asDemoUser(async () => {
-      const { service, generate } = build([
-        PLAN,
-        finding(1),
-        finding(2),
-        finding(3),
-        REPORT,
-      ]);
+      const ctx = build([PLAN, finding(1), finding(2), finding(3), REPORT]);
 
-      await settle(service, await startJob(service));
+      await pipeline(ctx);
 
-      expect(prompts(generate)).toEqual([
+      expect(prompts(ctx.generate)).toEqual([
         GOLDEN_PLAN,
         GOLDEN_ANGLE_1,
         GOLDEN_ANGLE_2,
@@ -546,19 +363,12 @@ describe('deep-analysis prompts', () => {
   it(
     'passes the question through verbatim, whatever characters it holds',
     asDemoUser(async () => {
-      const { service, generate } = build([
-        PLAN,
-        finding(1),
-        finding(2),
-        finding(3),
-        REPORT,
-      ]);
+      const ctx = build([PLAN, finding(1), finding(2), finding(3), REPORT]);
       const question = 'Why $& rise? {{angleTitle}} $1';
 
-      const started = await service.start(SESSION.id, question);
-      await settle(service, (started as { jobId: string }).jobId);
+      await pipeline(ctx, question);
 
-      const sent = prompts(generate);
+      const sent = prompts(ctx.generate);
       expect(sent[0]).toBe(GOLDEN_TRICKY_PLAN);
       expect(sent[1]).toBe(GOLDEN_TRICKY_ANGLE_1);
       expect(sent[4]).toContain(`<question>\n${question}\n</question>`);
@@ -569,15 +379,9 @@ describe('deep-analysis prompts', () => {
     'loads one phase file per call and sends only that phase',
     asDemoUser(async () => {
       const read = jest.spyOn(appSkills, 'appSkillFile');
-      const { service, generate } = build([
-        PLAN,
-        finding(1),
-        finding(2),
-        finding(3),
-        REPORT,
-      ]);
+      const ctx = build([PLAN, finding(1), finding(2), finding(3), REPORT]);
 
-      await settle(service, await startJob(service));
+      await pipeline(ctx);
 
       expect(read.mock.calls).toEqual([
         ['deep-analysis', 'phases/1-plan.md'],
@@ -593,7 +397,7 @@ describe('deep-analysis prompts', () => {
         'investigate',
         'report',
       ] as const;
-      prompts(generate).forEach((prompt, call) => {
+      prompts(ctx.generate).forEach((prompt, call) => {
         for (const [phase, markers] of Object.entries(PHASE_MARKERS)) {
           for (const marker of markers) {
             if (phase === phases[call]) expect(prompt).toContain(marker);
@@ -608,25 +412,22 @@ describe('deep-analysis prompts', () => {
   );
 
   it(
-    'fails the job when a phase file leaves a placeholder unfilled',
+    'fails when a phase file leaves a placeholder unfilled',
     asDemoUser(async () => {
       jest
         .spyOn(appSkills, 'appSkillFile')
         .mockReturnValue('Plan {{question}} for {{audience}}\n');
-      const { service, generate } = build([PLAN]);
+      const ctx = build([PLAN]);
 
-      const jobId = await startJob(service);
-      await settle(service, jobId);
-
-      const view = service.status(SESSION.id, jobId);
-      expect(view.status).toBe('error');
-      expect(view.error).toContain('unfilled placeholder {{audience}}');
-      expect(generate).not.toHaveBeenCalled();
+      await expect(pipeline(ctx)).rejects.toThrow(
+        'unfilled placeholder {{audience}}',
+      );
+      expect(ctx.generate).not.toHaveBeenCalled();
     }),
   );
 
   it(
-    'fails the job, rather than one angle, when the investigate phase is broken',
+    'fails the analysis, rather than one angle, when the investigate phase is broken',
     asDemoUser(async () => {
       const real = appSkills.appSkillFile;
       jest
@@ -636,18 +437,12 @@ describe('deep-analysis prompts', () => {
             ? 'Angle {{angleTitle}} without the rest\n'
             : real(name, path),
         );
-      const { service, generate, filesystem } = build([PLAN]);
+      const ctx = build([PLAN]);
 
-      const jobId = await startJob(service);
-      await settle(service, jobId);
-
-      const view = service.status(SESSION.id, jobId);
-      expect(view.status).toBe('error');
-      expect(view.error).toMatch(
+      await expect(pipeline(ctx)).rejects.toThrow(
         /^deep-analysis phase phases\/2-investigate\.md has no \{\{\w+\}\} placeholder$/,
       );
-      expect(generate).toHaveBeenCalledTimes(1);
-      expect(filesystem.writeFile).not.toHaveBeenCalled();
+      expect(ctx.generate).toHaveBeenCalledTimes(1);
     }),
   );
 });

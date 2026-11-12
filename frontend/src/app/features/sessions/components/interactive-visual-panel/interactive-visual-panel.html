@@ -83,7 +83,7 @@
             type="button"
             (click)="toggleTailorMenu()"
             [attr.aria-expanded]="tailorMenuOpen()"
-            [disabled]="viewingOldVersion() || !(sessionId() || runId())"
+            [disabled]="viewingOldVersion() || !runId()"
             [title]="
               viewingOldVersion()
                 ? 'Make this version current before tailoring'

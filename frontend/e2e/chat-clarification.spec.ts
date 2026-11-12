@@ -11,7 +11,7 @@ import {
 
 /**
  * Mirrors the clarification scenarios of the Feature "Chat answers and
- * reliability signals" in specs/capabilities/sessions-chat/spec.md, run in
+ * reliability signals" in specs/capabilities/agent-answers/spec.md, run in
  * the Assistant's Run tab
  * ("Answering a clarification" and "A malformed clarification is asked
  * again, never shown without options"). The model is the recording stub.

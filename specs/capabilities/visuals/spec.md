@@ -11,7 +11,7 @@ Every version can be exported as a self-contained bundle that opens offline, wit
 
 ## Concepts
 
-Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version** (current vs. viewed), **Visual spec** (the small chart description rendered by the fixed chart runtime), **Freeform visual** (designer-written markup, style and script), **Readable frame**, **Takeaway**, **Data provenance**, **Data mark**, **Auto-repair**, **Tailoring instruction**, **Visual bundle**, **Session workspace**, **Answer**, **Data record**, **Reasoning trail**. Chat-side concepts (answer, data records, turn) are specified in [sessions-chat](../sessions-chat/spec.md).
+Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version** (current vs. viewed), **Visual spec** (the small chart description rendered by the fixed chart runtime), **Freeform visual** (designer-written markup, style and script), **Readable frame**, **Takeaway**, **Data provenance**, **Data mark**, **Auto-repair**, **Tailoring instruction**, **Visual bundle**, **Session workspace**, **Answer**, **Data record**, **Reasoning trail**. Chat-side concepts (answer, data records, turn) are specified in [agent-answers](../agent-answers/spec.md).
 
 ## Rules
 
@@ -76,7 +76,7 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
   - the version control is highlighted.
 - R17. Reverting SHALL only move the current-version pointer to an existing version. No files change. An unknown version is rejected with "Version <N> does not exist".
 - R18. Creating (button), tailoring (panel) and reverting SHALL each add a visual event card to the chat, persisted as an assistant message: `Created|Updated|Reverted interactive visual "<title>" (v<N>).` A chat turn that created or updated a visual carries the same card on its answer message. Refreshing and auto-repair SHALL NOT add chat messages.
-- R19. When a chat turn creates or updates a visual, the panel SHALL switch to that visual at the new version while the turn is still streaming, without disturbing the turn (see [sessions-chat](../sessions-chat/spec.md) R21). The visual becomes the latest item of the session's panel history ([agent-panel](../agent-panel/spec.md) R10).
+- R19. When a chat turn creates or updates a visual, the panel SHALL switch to that visual at the new version while the turn is still streaming, without disturbing the turn (see [agent-answers](../agent-answers/spec.md) R21). The visual becomes the latest item of the session's panel history ([agent-panel](../agent-panel/spec.md) R10).
 - R20. Opening a session SHALL load into the panel the latest item the agent or the user showed, at its current version when that is a visual: the visual that changed most recently when nothing else was shown after it ([agent-panel](../agent-panel/spec.md) R12). Every visual of the session is also an item of the unified shown-items history ([agent-panel](../agent-panel/spec.md) R10); an agent can bring a visual back with `show_in_panel` ([agent-panel](../agent-panel/spec.md) R6).
 
 ### Refresh data in place
@@ -237,7 +237,7 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
   - the `visual-updated` event of the chat stream.
 - Data in [data-model.md](../../system/data-model.md): the session document's visual list (visual metadata and version entries), the chat message's visual event, the version directory layout in the session workspace, and the legacy un-versioned layout.
 - Agents in [agents.md](../../system/agents.md): the interactive visual designer (spec and freeform output shapes, the interactive-visuals skill, model routing including the `VISUAL_MODEL` override and swaps away from reasoning-class and nano-class models), and the assistant's `create_visual` / `update_visual` tools.
-- Chat integration: [sessions-chat](../sessions-chat/spec.md).
+- Chat integration: [agent-answers](../agent-answers/spec.md).
 
 ## UI
 
@@ -407,7 +407,7 @@ Feature: Visual tailoring
 
 E2E: `frontend/e2e/designer-skills.spec.ts`
 
-What the visual designer is told, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent" in [sessions-chat](../sessions-chat/spec.md#feature-sessions-started-from-an-agent); here it also runs one query for the answer and returns a valid spec for the designer's call. Which parts of the `interactive-visuals` skill reach the designer: [agents.md](../../system/agents.md) sections 6.4 and 7.2; decision ADR-0018.
+What the visual designer is told, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent" in [agent-answers](../agent-answers/spec.md#feature-sessions-started-from-an-agent); here it also runs one query for the answer and returns a valid spec for the designer's call. Which parts of the `interactive-visuals` skill reach the designer: [agents.md](../../system/agents.md) sections 6.4 and 7.2; decision ADR-0018.
 
 ```gherkin
 Feature: Skills the designer is given

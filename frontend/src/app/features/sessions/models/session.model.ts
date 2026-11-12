@@ -291,7 +291,7 @@ export interface InteractiveVisualization extends SessionVisualization {
 }
 
 /**
- * The agent a session was started from (sessions-chat R52-R59), derived by
+ * The agent a session was started from (agent-answers R52-R59), derived by
  * the backend from the agent's current Live version. `deleted` sessions keep
  * the name the agent last had and run on the plain assistant.
  */
@@ -338,7 +338,7 @@ export interface Session {
   /** What the agent showed in the right panel, oldest first. */
   panelItems?: PanelItem[];
   /**
-   * The workflow the session runs (api.md 2.1; sessions-chat R65), derived
+   * The workflow the session runs (api.md 2.1; past-chats R65), derived
    * by the backend on every read; always sent from M1-23 on.
    */
   workflowRef?: SessionWorkflowRef;
@@ -349,7 +349,7 @@ export interface Session {
 }
 
 /**
- * The agent's name as the page header chip shows it (sessions-chat R57),
+ * The agent's name as the page header chip shows it (past-chats R57),
  * marked once the agent is gone (R59).
  */
 export function sessionAgentLabel(agent: SessionAgent): string {
@@ -363,7 +363,7 @@ export function sessionListSubtitle(session: Session): string {
 
 /**
  * The workflow's name as the page header chip and the Sessions list chip
- * show it (sessions-chat R57, R63), marked once its agent is gone (R59).
+ * show it (past-chats R57, R63), marked once its agent is gone (R59).
  */
 export function sessionWorkflowLabel(ref: SessionWorkflowRef): string {
   return ref.deleted ? `${ref.name} · agent deleted` : ref.name;

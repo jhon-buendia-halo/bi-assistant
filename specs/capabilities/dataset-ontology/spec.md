@@ -90,7 +90,7 @@ On the Context page
 - Collection and document shape (ontology item, per-answer knowledge record), the reference rules and migration M15: see [../../system/data-model.md](../../system/data-model.md) 3.9, 3.13 and 6.
 - Agents: the Ontology Bootstrap agent (prompt requirements, output schema, draft cap, post-processing) and the assistant's curated-knowledge instructions (the `curated-knowledge` skill) and block format: see [../../system/agents.md](../../system/agents.md) 2.5, 4.1 and Appendix B.
 - Decision: [../../system/architecture.md](../../system/architecture.md) ADR-0036.
-- Per-answer provenance is stored on the assistant message and read by [../sessions-chat/spec.md](../sessions-chat/spec.md).
+- Per-answer provenance is stored on the assistant message and read by [../agent-answers/spec.md](../agent-answers/spec.md).
 - Related: [../datasets/spec.md](../datasets/spec.md) (the editor that hosts the tab, the delete cascade), [../metrics/spec.md](../metrics/spec.md) (the governed metrics a relation can point at; a sibling context block), [../verified-queries/spec.md](../verified-queries/spec.md) (a sibling context block), [../agents-evals/spec.md](../agents-evals/spec.md) (eval runs reuse the block), [../app-shell/spec.md](../app-shell/spec.md) (Context page).
 
 ## UI

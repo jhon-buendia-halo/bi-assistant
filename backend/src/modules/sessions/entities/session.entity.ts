@@ -316,7 +316,7 @@ export interface SessionDoc {
   workspaceId?: string;
   /** Names of the datasets this session works over. */
   datasets: string[];
-  /** The user agent the session was started from (sessions-chat R52). */
+  /** The user agent the session was started from (agent-answers R52). */
   agentId?: string;
   /** The agent's Live name, re-stamped by each turn that applies it (R59). */
   agentName?: string;

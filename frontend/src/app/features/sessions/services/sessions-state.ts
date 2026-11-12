@@ -6,16 +6,12 @@ import { Datasource } from '../../datasources/models/datasource.model';
 import { DatasourcesApiService } from '../../datasources/services/datasources-api.service';
 import { DatasetsApiService } from '../../datasets/services/datasets-api.service';
 import {
-  ChatMessage,
-  DataPointSelection,
   InteractiveVisualization,
   PanelItem,
   PanelItemEvent,
   Session,
-  SessionActionResult,
   SessionVisualization,
   VisualEvent,
-  WorkflowView,
 } from '../models/session.model';
 import { SessionsApiService } from './sessions-api.service';
 
@@ -37,17 +33,12 @@ export class SessionsState {
   /** False until the first list answer, for the Sessions page's loading line. */
   readonly sessionsLoaded = signal(false);
   readonly activeSession = signal<Session | null>(null);
-  /** The open chat is a past chat: readable, not continuable (sessions-chat R66). */
-  readonly readOnlyChat = signal(false);
   readonly deletingSession = signal<string | null>(null);
-  readonly generatingVisualSession = signal<string | null>(null);
   readonly downloadingVisualization = signal<string | null>(null);
   readonly activeVisualization = signal<InteractiveVisualization | null>(null);
   readonly visualizationError = signal<string | null>(null);
   /** What the right panel shows: the latest thing the agent showed, or the user's pick. */
   readonly activePanelItem = signal<PanelItem | null>(null);
-  /** Latest data mark clicked inside a visual; drives the chat follow-up chips. */
-  readonly selectedDataPoint = signal<DataPointSelection | null>(null);
 
   /** Title of the Runs area's page header (app-shell R49). */
   readonly pageTitle = computed(() => {
@@ -96,15 +87,9 @@ export class SessionsState {
       });
   }
 
-  /** A row of the Past chats tab: opens the chat read-only (sessions-chat R66). */
+  /** A row of the Past chats tab: opens the chat read-only (past-chats R66). */
   openPastChat(session: Session): void {
-    this.openSession(session, true);
-  }
-
-  openSession(session: Session, readOnly = false): void {
     if (!this.shell.confirmLeaveAgentEditor()) return;
-    this.readOnlyChat.set(readOnly);
-    this.selectedDataPoint.set(null);
     this.activeSession.set(session);
     this.shell.mainView.set('session-chat');
     this.loadActiveSessionDatasources(session);
@@ -210,10 +195,7 @@ export class SessionsState {
 
     this.sessionsApi.getVisualization(session.id, latest.id).subscribe({
       next: (visualization) => {
-        if (
-          this.activeSession()?.id === session.id &&
-          this.generatingVisualSession() !== session.id
-        ) {
+        if (this.activeSession()?.id === session.id) {
           this.activeVisualization.set(visualization);
         }
       },
@@ -245,32 +227,6 @@ export class SessionsState {
         // Keep the stale copy; the next turn will refresh it.
       },
     });
-  }
-
-  /**
-   * The chat persisted the session out of band (answer feedback). Refresh the
-   * cached copies; the chat guards same-id refreshes, so streams are safe.
-   */
-  onSessionUpdated(session: Session): void {
-    this.sessions.update((sessions) =>
-      sessions.map((item) => (item.id === session.id ? session : item)),
-    );
-    if (this.activeSession()?.id === session.id) {
-      this.activeSession.set(session);
-    }
-  }
-
-  /** A chat turn created/updated a visual — show the new version live. */
-  onVisualUpdated(event: VisualEvent): void {
-    this.refreshActiveSession((session) => {
-      const meta = session.visualizations?.find((v) => v.id === event.visualId);
-      if (meta) this.showVisualization(meta, event.version);
-    });
-  }
-
-  /** The `workflow` stream event: patch the open session's status bar live. */
-  onWorkflowChanged(workflow: WorkflowView): void {
-    this.activeSession.update((s) => (s ? { ...s, workflow } : s));
   }
 
   /** The agent called `show_in_panel`: show it live. */
@@ -307,57 +263,6 @@ export class SessionsState {
     this.showVisualization(visual, version);
   }
 
-  revertVisualVersion(version: number): void {
-    const session = this.activeSession();
-    const visual = this.activeVisualization();
-    if (!session || !visual) return;
-    this.sessionsApi
-      .revertVisualization(session.id, visual.id, version)
-      .subscribe({
-        next: (result) => {
-          if (!this.applyVisualResult(result)) {
-            this.toast.error(result.message || 'Revert failed');
-            return;
-          }
-          this.toast.success(result.message);
-        },
-        error: (err) =>
-          this.toast.error(err?.error?.message ?? 'Backend unreachable'),
-      });
-  }
-
-  /**
-   * The panel repaired or tailored the open visual and already has the fresh
-   * payload — same refresh path as revert (no SSE event to wait for).
-   */
-  onVisualRefreshed(result: SessionActionResult): void {
-    if (this.applyVisualResult(result)) {
-      this.toast.success(result.message);
-    }
-  }
-
-  /**
-   * Adopt a `{session, visualization}` payload into the cached copies. Returns
-   * false when the call did not succeed, so callers can report it.
-   */
-  private applyVisualResult(result: SessionActionResult): boolean {
-    if (!result.ok || !result.session || !result.visualization) return false;
-    const session = result.session;
-    this.sessions.update((sessions) =>
-      sessions.map((item) => (item.id === session.id ? session : item)),
-    );
-    if (this.activeSession()?.id === session.id) {
-      this.activeSession.set(session);
-      this.activeVisualization.set(result.visualization);
-    }
-    return true;
-  }
-
-  /** A data mark inside the visual was clicked — offer follow-ups in the chat. */
-  onDataPointSelected(selection: DataPointSelection): void {
-    this.selectedDataPoint.set(selection);
-  }
-
   showVisualization(
     visualization: SessionVisualization | VisualEvent,
     version?: number,
@@ -368,7 +273,6 @@ export class SessionsState {
       'visualId' in visualization ? visualization.visualId : visualization.id;
     this.activeVisualization.set(null);
     this.visualizationError.set(null);
-    this.selectedDataPoint.set(null);
     this.shell.rightPanelOpen.set(true);
     this.activePanelItem.set(
       this.visualPanelItem(
@@ -423,61 +327,6 @@ export class SessionsState {
           this.toast.error(err?.error?.message ?? 'Bundle download failed');
         },
       });
-  }
-
-  generateInteractiveVisual(message: ChatMessage): void {
-    const session = this.activeSession();
-    if (!session || this.generatingVisualSession()) return;
-
-    this.generatingVisualSession.set(session.id);
-    this.activePanelItem.set({
-      id: 'visual:pending',
-      kind: 'visual',
-      title: 'Visuals',
-      shownAt: new Date().toISOString(),
-      visualId: '',
-    });
-    this.activeVisualization.set(null);
-    this.visualizationError.set(null);
-    this.shell.rightPanelOpen.set(true);
-    this.sessionsApi.generateVisualization(session.id, message.at).subscribe({
-      next: (result) => {
-        this.generatingVisualSession.set(null);
-        if (!result.ok || !result.session || !result.visualization) {
-          const error = result.message || 'Visual generation failed';
-          if (this.activeSession()?.id === session.id) {
-            this.visualizationError.set(error);
-          }
-          this.toast.error(error);
-          return;
-        }
-        this.sessions.update((sessions) =>
-          sessions.map((item) =>
-            item.id === result.session!.id ? result.session! : item,
-          ),
-        );
-        if (this.activeSession()?.id === result.session.id) {
-          this.activeSession.set(result.session);
-          this.activeVisualization.set(result.visualization);
-          this.activePanelItem.set(
-            this.visualPanelItem(
-              result.session,
-              result.visualization.id,
-              result.visualization.title,
-            ),
-          );
-        }
-        this.toast.success(result.message);
-      },
-      error: (err) => {
-        this.generatingVisualSession.set(null);
-        const error = err?.error?.message ?? 'Backend unreachable';
-        if (this.activeSession()?.id === session.id) {
-          this.visualizationError.set(error);
-        }
-        this.toast.error(error);
-      },
-    });
   }
 
   deleteSession(session: Session): void {

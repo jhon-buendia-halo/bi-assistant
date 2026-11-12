@@ -1043,7 +1043,7 @@ flowchart LR
   - **Amends ADR-0004:** the Mastra instance registers two workflows.
   - **Cost per turn.** Every turn runs one more Mastra workflow, with snapshot persistence off. The trace store may record workflow spans around the agent run, and Monitoring must keep showing one turn per question.
   - **Adding a code-defined workflow** takes its Mastra workflow, its step catalogue and one catalogue entry. It then appears in the Workflows list and the new-session picker with no UI change.
-  - **Evals keep calling agents directly.** The legacy non-streamed turn stays a direct agent call.
+  - **Evals keep calling agents directly.** The legacy non-streamed turn stayed a direct agent call until 1.23.27 removed it.
   - **Stack-neutral:** any rebuild needs an engine that runs typed steps in a fixed order and reports each step's start and end, a catalogue of workflows built from code and from stored agents, and the rule that derives a session's workflow from its stored agent binding.
 - **Amendment (2026-11-11, 1.23.9):** the user decided the same day that workflows trigger **runs**, not chats ([plan](../../docs/plans/m1-23-workflow-first.md) section 9).
   - **Every workflow has a trigger, `chat` or `run`.** A `chat` workflow runs on every message of a chat, as above. A `run` workflow runs once on a typed input and returns a result. Every one-step workflow and `qti-v2-turn` are `chat` workflows.
@@ -1089,7 +1089,8 @@ flowchart LR
   - Unchanged: ADR-0031 (readiness reports gain `runId`), ADR-0033 (`tool-progress` is forwarded in the run stream; Stop cancels the assessment), ADR-0035.
   - Deep analysis becomes a code-defined run workflow (Phase B); it is unavailable until then.
   - The desktop readiness probe moves from `GET /sessions` to `GET /health`.
-  - Evals keep calling agents directly with a throwaway host.
+  - Evals keep calling agents directly with a throwaway run host (1.23.26b); the dev scripts (`run-eval`, `check-answers`, `custom-endpoint-smoke`) run on run hosts too.
+  - **Chat write paths removed (1.23.27):** `POST /sessions`, the chat message routes, the session visual actions, preview sessions, the non-streamed turn and the deep-analysis start and poll routes are gone; a stored session is only read, downloaded from and deleted. The `sessions` collection and every stored shape are unchanged, and the turn engine still reads a stored session in the sessions unit suites (a test seam), never at runtime.
   - **Stack-neutral:** a rebuild needs typed inputs per workflow, a streamed run that reports step starts and ends and the agent's events, a stored run with its files, and a read-only view of the conversations stored before.
 
 ## Level 4 — Code
@@ -1105,8 +1106,8 @@ flowchart TB
   end
 
   subgraph be["Backend (modules/sessions)"]
-    ctrl["SessionsController<br/>POST /sessions/:id/messages/stream<br/>(text/event-stream)"]
-    svc["SessionsService.streamMessage<br/>(requestContext: session-id, active-visual-id, turn-data-records)"]
+    ctrl["WorkflowsController<br/>POST /workflows/:id/runs/stream<br/>(text/event-stream)"]
+    svc["SessionsService.streamRunTurn<br/>(requestContext: session-id, active-visual-id, turn-data-records)"]
     bridge["tool-services bridge<br/>(createVisual / updateVisual)"]
     vis["VisualizationService<br/>(create, update, revert, load)"]
     validate["validation<br/>(spec check, or new Function parse + 1 retry)"]

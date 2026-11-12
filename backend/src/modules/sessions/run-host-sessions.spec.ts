@@ -118,6 +118,7 @@ import {
 import type { WorkflowsService } from '../workflows/workflows.service';
 import type { SessionDoc } from './entities/session.entity';
 import { SessionsService, type StreamEvent } from './sessions.service';
+import { streamStored } from './testing/stream-stored';
 
 const RFP_ID = '7b0c2f0e-1d2a-4c9b-9a51-0f6f1c2d3e4f';
 
@@ -408,7 +409,8 @@ async function chatTurn(
   careful = false,
 ): Promise<StreamEvent[]> {
   const events: StreamEvent[] = [];
-  await ctx.sessions.streamMessage(
+  await streamStored(
+    ctx.sessions,
     sessionId,
     content,
     (e) => events.push(e),

@@ -182,8 +182,11 @@ describe('createEvalHost (agents.md 8.3)', () => {
     expect(sessions.createRunHost).toHaveBeenCalledWith(
       expect.objectContaining({
         workflowId: 'agent:assistant',
-        datasets: ['World Cup'],
-        context: expect.objectContaining({ answer: expect.any(String) }),
+        datasets: ['World Cup'] as unknown,
+        context: {
+          question: expect.any(String) as unknown,
+          answer: expect.any(String) as unknown,
+        },
       }),
     );
     expect(sessions.narrowRunHost).not.toHaveBeenCalled();

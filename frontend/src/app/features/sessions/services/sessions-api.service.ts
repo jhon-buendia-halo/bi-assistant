@@ -132,7 +132,10 @@ export interface StreamFrame {
 }
 
 /** Parse a double-encoded JSON `content`; malformed content is ignored. */
-function parseContent<T>(content: string | undefined, use: (value: T) => void): void {
+function parseContent<T>(
+  content: string | undefined,
+  use: (value: T) => void,
+): void {
   let value: T;
   try {
     value = JSON.parse(content ?? '{}') as T;
@@ -162,7 +165,9 @@ export function dispatchAgentEvent(
       handlers.onTool?.(parseToolEvent(event.content ?? 'tool'));
       return true;
     case 'tool-result':
-      parseContent<ToolDataRecord>(event.content, (v) => handlers.onToolResult?.(v));
+      parseContent<ToolDataRecord>(event.content, (v) =>
+        handlers.onToolResult?.(v),
+      );
       return true;
     case 'tool-progress':
       parseContent<ToolProgressEvent | null>(event.content, (p) => {
@@ -172,16 +177,24 @@ export function dispatchAgentEvent(
       });
       return true;
     case 'visual-updated':
-      parseContent<VisualEvent>(event.content, (v) => handlers.onVisualUpdated?.(v));
+      parseContent<VisualEvent>(event.content, (v) =>
+        handlers.onVisualUpdated?.(v),
+      );
       return true;
     case 'panel-item':
-      parseContent<PanelItemEvent>(event.content, (v) => handlers.onPanelItem?.(v));
+      parseContent<PanelItemEvent>(event.content, (v) =>
+        handlers.onPanelItem?.(v),
+      );
       return true;
     case 'workflow':
-      parseContent<WorkflowView>(event.content, (v) => handlers.onWorkflow?.(v));
+      parseContent<WorkflowView>(event.content, (v) =>
+        handlers.onWorkflow?.(v),
+      );
       return true;
     case 'rfp-package':
-      parseContent<RfpPackage>(event.content, (v) => handlers.onRfpPackage?.(v));
+      parseContent<RfpPackage>(event.content, (v) =>
+        handlers.onRfpPackage?.(v),
+      );
       return true;
     case 'readiness-report': {
       const parsed = parseReadinessReportEvent(event.content ?? '');
@@ -249,80 +262,9 @@ export class SessionsApiService {
     );
   }
 
-  revertVisualization(
-    sessionId: string,
-    visualizationId: string,
-    version: number,
-  ): Observable<SessionActionResult> {
-    return this.http.post<SessionActionResult>(
-      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/visualizations/${encodeURIComponent(visualizationId)}/revert`,
-      { version },
-    );
-  }
-
-  /**
-   * Ask the backend to regenerate the current version with the runtime error
-   * as feedback. The backend rejects stale versions and repairs of repairs.
-   */
-  repairVisualization(
-    sessionId: string,
-    visualizationId: string,
-    error: string,
-    version: number,
-  ): Observable<SessionActionResult> {
-    return this.http.post<SessionActionResult>(
-      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/visualizations/${encodeURIComponent(visualizationId)}/repair`,
-      { error, version },
-    );
-  }
-
-  /** Tailor the open visual with a plain-English instruction (update path). */
-  tailorVisualization(
-    sessionId: string,
-    visualizationId: string,
-    instruction: string,
-  ): Observable<SessionActionResult> {
-    return this.http.post<SessionActionResult>(
-      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/visualizations/${encodeURIComponent(visualizationId)}/tailor`,
-      { instruction },
-    );
-  }
-
-  /** Re-run the stored SQL behind a visual and refresh its data in place. */
-  refreshVisualizationData(
-    sessionId: string,
-    visualizationId: string,
-  ): Observable<SessionActionResult> {
-    return this.http.post<SessionActionResult>(
-      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/visualizations/${encodeURIComponent(visualizationId)}/refresh`,
-      {},
-    );
-  }
-
-  /**
-   * Start a preview conversation of a user agent's draft (agents-evals R60).
-   * It is never listed; `delete` discards it.
-   */
-  createPreview(agentId: string): Observable<SessionActionResult> {
-    return this.http.post<SessionActionResult>(`${API_BASE_URL}/sessions`, {
-      agentId,
-      preview: true,
-    });
-  }
-
   delete(id: string): Observable<SessionActionResult> {
     return this.http.delete<SessionActionResult>(
       `${API_BASE_URL}/sessions/${encodeURIComponent(id)}`,
-    );
-  }
-
-  generateVisualization(
-    id: string,
-    sourceMessageAt: string,
-  ): Observable<SessionActionResult> {
-    return this.http.post<SessionActionResult>(
-      `${API_BASE_URL}/sessions/${encodeURIComponent(id)}/visualizations`,
-      { sourceMessageAt },
     );
   }
 
@@ -379,31 +321,7 @@ export class SessionsApiService {
     );
   }
 
-  // ------------------------------------------------------- deep analysis
-
-  /**
-   * Start the slow path: a background job that plans several angles,
-   * investigates each one and writes a report into the conversation.
-   */
-  startDeepAnalysis(
-    sessionId: string,
-    question: string,
-  ): Observable<DeepAnalysisResult> {
-    return this.http.post<DeepAnalysisResult>(
-      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/deep-analysis`,
-      { question },
-    );
-  }
-
-  /** Poll one job: planning → investigating → writing → done/error. */
-  deepAnalysisStatus(
-    sessionId: string,
-    jobId: string,
-  ): Observable<DeepAnalysisResult> {
-    return this.http.get<DeepAnalysisResult>(
-      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/deep-analysis/${encodeURIComponent(jobId)}`,
-    );
-  }
+  // ------------------------------------------------------- deep analysis report
 
   /** The finished report as markdown. */
   downloadDeepAnalysis(sessionId: string, jobId: string): Observable<Blob> {
@@ -434,93 +352,5 @@ export class SessionsApiService {
           : {}),
       },
     );
-  }
-
-  sendMessage(id: string, content: string): Observable<SessionActionResult> {
-    return this.http.post<SessionActionResult>(
-      `${API_BASE_URL}/sessions/${encodeURIComponent(id)}/messages`,
-      { content },
-    );
-  }
-
-  /** Rate an assistant answer; `up` saves it to the verified query library. */
-  sendMessageFeedback(
-    sessionId: string,
-    messageAt: string,
-    rating: MessageFeedback,
-  ): Observable<SessionActionResult> {
-    return this.http.post<SessionActionResult>(
-      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/messages/feedback`,
-      { messageAt, rating },
-    );
-  }
-
-  /** SSE stream: reasoning/text/tool deltas while the agent thinks. */
-  async streamMessage(
-    id: string,
-    content: string,
-    handlers: AgentStreamHandlers & {
-      onDone?: (session: Session) => void;
-      onError?: (message: string) => void;
-    },
-    signal?: AbortSignal,
-    activeVisualizationId?: string,
-    /** Careful mode: the backend cross-checks the answer before `done`. */
-    careful = false,
-  ): Promise<void> {
-    let res: Response;
-    try {
-      res = await fetch(
-        `${API_BASE_URL}/sessions/${encodeURIComponent(id)}/messages/stream`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            content,
-            activeVisualizationId,
-            ...(careful ? { careful: true } : {}),
-          }),
-          signal,
-        },
-      );
-    } catch (error) {
-      if (
-        signal?.aborted ||
-        (error instanceof DOMException && error.name === 'AbortError')
-      ) {
-        return;
-      }
-      handlers.onError?.('Backend unreachable');
-      return;
-    }
-    if (!res.ok || !res.body) {
-      handlers.onError?.(`Stream failed (${res.status})`);
-      return;
-    }
-    let terminalEventReceived = false;
-    const ended = await readEventStream(
-      res.body,
-      (event) => {
-        if (dispatchAgentEvent(event, handlers)) return;
-        if (event.type === 'done') {
-          terminalEventReceived = true;
-          handlers.onDone?.(event['session'] as Session);
-        } else if (event.type === 'error') {
-          terminalEventReceived = true;
-          handlers.onError?.(event.content ?? 'Unknown error');
-        }
-      },
-      signal,
-    );
-    if (ended === 'aborted') return;
-    if (ended === 'disconnected') {
-      handlers.onError?.('Stream disconnected');
-      return;
-    }
-    if (!signal?.aborted && !terminalEventReceived) {
-      handlers.onError?.('Stream ended before completion');
-    }
   }
 }

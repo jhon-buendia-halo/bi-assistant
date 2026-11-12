@@ -202,7 +202,7 @@ describe('LenAI provider contract', () => {
     });
   });
 
-  // A user agent's model override (agents.md 1.3, sessions-chat R56).
+  // A user agent's model override (agents.md 1.3, agent-answers R56).
   it("swaps in a user agent's model override, keeping the saved provider and key", async () => {
     const service = serviceWith({
       settings: {

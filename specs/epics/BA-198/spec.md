@@ -61,7 +61,7 @@ All stories are built on `refactor/BA-198-assistant-skills` (worktree `.claude/w
 - [system/data-model.md](../../system/data-model.md): session workspace folders no longer get `.agents/skills/…`. Existing copies are left on disk and ignored. §4.8: the user skill folder of 0.32 is ignored since BA-211.
 - [product/glossary.md](../../product/glossary.md): *Skill*.
 - [system/tech-stack.md](../../system/tech-stack.md): skills folder layout in the backend code map.
-- Capability specs: 1.13.1-1.13.6 preserve behaviour, so step 6 of each re-runs the scenarios that exercise the touched agents (chat, visuals, knowledge, deep analysis, the Agents prompt tab). 1.13.7 adds scenarios to [sessions-chat](../../capabilities/sessions-chat/spec.md) "Skills the assistant is given"; 1.13.8 adds the agents-evals Feature "Agent skills". 1.13.13 removes their user and project skill scenarios and checks that an old skills folder is ignored.
+- Capability specs: 1.13.1-1.13.6 preserve behaviour, so step 6 of each re-runs the scenarios that exercise the touched agents (chat, visuals, knowledge, deep analysis, the Agents prompt tab). 1.13.7 adds scenarios to [agent-answers](../../capabilities/agent-answers/spec.md) "Skills the assistant is given"; 1.13.8 adds the agents-evals Feature "Agent skills". 1.13.13 removes their user and project skill scenarios and checks that an old skills folder is ignored.
 
 ## Acceptance
 

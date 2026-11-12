@@ -50,7 +50,7 @@ The phase is where the fate lands (section 7). Specs named are the ones the chan
 
 | # | Today | Fate | Phase | Notes and specs |
 |---|---|---|---|---|
-| U1 | **Sessions** rail item and the Sessions page list (sessions-chat R63, app-shell R3, R46, R49) | Replaced | A (1.24.11) | A **Runs** rail item in the same place opens the run history: a list with search, the workflow chip, the status, a title from the run's first text input, and the time. A **Past chats** tab, shown only when old sessions exist, lists the old sessions. ui.md 1.3, 4.7.1. |
+| U1 | **Sessions** rail item and the Sessions page list (past-chats R63, app-shell R3, R46, R49) | Replaced | A (1.24.11) | A **Runs** rail item in the same place opens the run history: a list with search, the workflow chip, the status, a title from the run's first text input, and the time. A **Past chats** tab, shown only when old sessions exist, lists the old sessions. ui.md 1.3, 4.7.1. |
 | U2 | **New conversation** screen and **Start New Conversation** (R1, R64, ui.md 4.7) | Removed | A (1.24.12) | Its dataset picker is reused as the `datasets` input control. |
 | U3 | Chat page: composer, Thinking block, Stop, error bubble and Retry, history strip, welcome block (R8–R16, R21, R45, R50, R51, R58; ui.md 4.12) | Replaced | A (1.24.5) | The run page has the input form, a live step list with the Thinking block inside the agent step, **Stop** and **Run again**. The history strip and the welcome block have no equivalent (there is no transcript). Starter questions become example chips that fill the question field. |
 | U4 | **Start chat** on workflow cards and pages (workflows R6), and the chat-workflow-only picker (R64) | Removed | A (1.24.12) | Every card shows **Run** (1.23.9). |
@@ -179,7 +179,7 @@ Unknown input keys are ignored.
 | **Questions to Insights v2** `qti-v2-turn` (4 steps) | `question` textarea, required. `datasets` datasets, required. | `answer` (as above, without cross-check or clarification). The final output is Wrap up's `{ sqlQueries, failedQueries, rows }`. Each step's output shows in the step list. | Tool-only synthesis. As today, no grounding guard, careful mode or clarification. |
 | **Data Readiness Agent** `agent:data-readiness` (1 step) | `dataset` dataset, required, `datasourceKinds: ['postgres','databricks']`. `question` textarea, optional, placeholder `Assess the readiness of this dataset`; empty means that text. | `answer` with `readinessReport`, and the `readiness:<id>` panel item (scorecard). File panel items for synthetic SQL scripts. The report is stored in `readiness_reports` with `runId`. | `tool-progress` on the running tool row, the readiness card, the scorecard and Past assessments, drill-down SQL, synthetic data tools, Stop cancelling the assessment (ADR-0033). One dataset per run, so the agent never needs to ask which one. |
 | **RFP Builder** `agent:rfp` (1 step) | `message` textarea, required, placeholder `Name the client and plan year, or state your decision`. `rfpId` text, hidden: set by **Continue**, never typed. | `answer` with `rfpPackage` when exported; the RFP document panel item; `workflow` (stages from the record); `rfpId` (the RFP the run worked on, from `turn-rfp`). | Stage auto-drive of the phases, the package card and downloads (run-scoped), clarification. Section 4.3 has the design choice. |
-| **User agent** `agent:<id>` (1 step) | `question` textarea, required. `careful` boolean, as the Assistant's. The datasets are the agent's Live datasets that exist, shown read-only above the form (not an input). | As the Assistant. | As the Assistant, plus the agent's Live instructions, overrides, tool selection and skills (sessions-chat R54–R56). |
+| **User agent** `agent:<id>` (1 step) | `question` textarea, required. `careful` boolean, as the Assistant's. The datasets are the agent's Live datasets that exist, shown read-only above the form (not an input). | As the Assistant. | As the Assistant, plus the agent's Live instructions, overrides, tool selection and skills (agent-answers R54–R56). |
 | **Sequential test workflow** `seq-text-demo` | Unchanged (1.23.9). | Unchanged. | — |
 
 **Run requirement.** `runRequirement` replaces `chatRequirement` with the same texts:
@@ -241,7 +241,7 @@ The agent's design is a conversation: one stage per exchange, saving only what t
    - The host is projected into the run document: `answer` (the last assistant message), `panelItems`, `visualizations`, the derived `workflow` view, `rfpId`, the step results and `status`.
    - The memory thread `run-<run id>` is deleted.
    - The host leaves memory. The workspace stays, owned by the run.
-4. **Stop** is a client abort, as for a chat: the agent turn aborts, which also cancels a readiness assessment. The run is stored `stopped`, with any partial answer the host persisted (sessions-chat R16). A dropped connection is a stop.
+4. **Stop** is a client abort, as for a chat: the agent turn aborts, which also cancels a readiness assessment. The run is stored `stopped`, with any partial answer the host persisted (agent-answers R16). A dropped connection is a stop.
 5. **At start-up:**
    - a run document still `running` becomes `failed` with `error` `The app stopped before the run finished`;
    - a `session-run-*` workspace with no run document is deleted;
@@ -308,7 +308,7 @@ This is an additive collection, so there is no migration. 1.23.9's "nothing stor
 - The host has no memory thread yet, so today's input rule (agents.md 4.3: no thread, so send the whole transcript) sends all three. **No new agent-input code is needed.**
 - This covers three cases with one mechanism:
   - **Follow up** on a result;
-  - **Answering a clarification**, which sends the option label, `Something else` text, or `Skip — proceed with your best judgment.` as the question (sessions-chat R43, R44);
+  - **Answering a clarification**, which sends the option label, `Something else` text, or `Skip — proceed with your best judgment.` as the question (agent-answers R43, R44);
   - the **RFP Continue**, which also sets `rfpId`.
 - It goes one level only: the earlier run's own context is not carried. A chain of follow-ups therefore sees only the run just before. *(Q4 asks whether follow-ups should exist at all. If not, only clarification answers and the RFP Continue use the mechanism.)*
 - The run host's turn otherwise behaves as a session's first turn. That includes R11's retry dedupe, which has nothing to dedupe.
@@ -609,7 +609,7 @@ Each UI story records its demo in the fast loop. Each API-only story writes `evi
 
 #### 1.24.9 — Rate a run's answer: verified queries from runs  `📋 Planned`
 - **Intent:** a thumbs-up on a run's answer saves a verified query, as it did on a chat answer, so the library keeps growing.
-- **Scope:** R10; `verified_queries.sourceRunId` (optional) with `sourceSessionId` optional; dedupe on `sourceRunId`; rating enabled in `answer-view` for runs. Specs: verified-queries R1–R7, data-model 3.6, 3.13, api.md R10, sessions-chat R35/R36 wording.
+- **Scope:** R10; `verified_queries.sourceRunId` (optional) with `sourceSessionId` optional; dedupe on `sourceRunId`; rating enabled in `answer-view` for runs. Specs: verified-queries R1–R7, data-model 3.6, 3.13, api.md R10, agent-answers R35/R36 wording.
 - **Out of scope:** a verified-query screen; rating past chats.
 - **Acceptance:** unit tests for save, re-rate (one pair), thumbs-down (removed), and a pair from a run found by retrieval (R8) and by metrics candidates. The `@demo @story-1.24.9` scenario: thumbs-up on a run answer shows the toast `Answer saved as a verified query` and the `Verified` badge; a second run with the same question shows `Verified`.
 - **Notes:** small UI story.
@@ -633,7 +633,7 @@ Each UI story records its demo in the fast loop. Each API-only story writes `evi
   - the Runs page (search, rows, paging ten per page as R63, delete);
   - `run-detail`;
   - the Past chats tab (the old Sessions list, with the same columns), and the past-chat view: transcript through `answer-view`, the banner, the panel read-only (visual versions viewable, downloads working, no Tailor/Refresh/Generate), no composer, no rating, delete kept.
-  - Specs: app-shell R3, R46, R49; sessions-chat R63 (Past chats) and a new R66 (read-only); ui.md 1.3, 1.4, 4.7.1, 4.12; agent-panel (read-only on past chats).
+  - Specs: app-shell R3, R46, R49; past-chats R63 (Past chats) and a new R66 (read-only); ui.md 1.3, 1.4, 4.7.1, 4.12; agent-panel (read-only on past chats).
 - **Out of scope:** removing Start chat and the composer (1.24.12); an export of past chats.
 - **Acceptance:**
   - `session-management.spec.ts` becomes `runs.spec.ts`. Its `@demo @story-1.24.11` scenario: open Runs and see a run made earlier; open it and see its input and answer; Run again with this input; open Past chats, open a seeded old session (seeded through `POST /sessions`), see the banner and its transcript, see no composer, open its visual in the panel and download it.
@@ -650,7 +650,7 @@ Each UI story records its demo in the fast loop. Each API-only story writes `evi
   - The home page copy (U14).
   - `GET /health` (R11) and the Electron probe moved to it.
   - The Workflows page note becomes `Each workflow runs on an input. Its steps call agents, and agents use skills and tools.`
-  - Specs: workflows R5–R10 (Run replaces Start chat), sessions-chat R1, R52, R64 (retired, kept as `Retired (1.24.12)`), app-shell R51, api.md 3, 4.3, 116, ui.md 4.1, 4.4a, 4.7 (removed).
+  - Specs: workflows R5–R10 (Run replaces Start chat), past-chats R1, R52, R64 (retired, kept as `Retired (1.24.12)`), app-shell R51, api.md 3, 4.3, 116, ui.md 4.1, 4.4a, 4.7 (removed).
 - **Out of scope:** the backend chat code (Phase C); the agent editor preview (1.25.2).
 - **Acceptance:**
   - `workflows.spec.ts` and `navigation.spec.ts` updated. The `@demo @story-1.24.12` scenario: home shows `Run a workflow`; Workflows lists every workflow with **Run** and none with Start chat; Runs has no Start New Conversation.

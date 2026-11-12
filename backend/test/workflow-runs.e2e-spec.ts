@@ -1,10 +1,10 @@
 /**
  * API-level proof of streamed runs of agent workflows (ADR-0041; api.md 119;
  * agents.md 5.14; workflows R14-R16): `POST /workflows/:id/runs/stream`
- * runs one agent turn on a run host through today's turn path, so a run's
- * model request equals a chat turn's for the same input (the Assistant,
- * Questions to Insights v2, the Data Readiness Agent and the RFP Builder,
- * recorded by the stub model), streams `run`, `step`, the turn's events and
+ * runs one agent turn on a run host through the turn engine, so a run asks
+ * the model for its input with the agent's tools (the Assistant, Questions
+ * to Insights v2, the Data Readiness Agent and the RFP Builder, recorded by
+ * the stub model), streams `run`, `step`, the turn's events and
  * `done { run }`, refuses a bad request with its real status before any
  * stream, and stops when the connection closes. The sequential test workflow
  * still runs through `POST /workflows/:id/runs` (118).
@@ -114,28 +114,6 @@ describe('Streamed runs of agent workflows (API)', () => {
     );
     const text = await res.text();
     return { status: res.status, text, frames: framesOf(text) };
-  };
-
-  const chatTurn = async (sessionId: string, content: string) => {
-    const res = await fetch(
-      `${backend!.url}/sessions/${sessionId}/messages/stream`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
-      },
-    );
-    return framesOf(await res.text());
-  };
-
-  const createSession = async (body: object) => {
-    const answer = (await http().post('/sessions').send(body)).body as {
-      ok: boolean;
-      message: string;
-      session?: { id: string; datasets: string[] };
-    };
-    expect(answer).toMatchObject({ ok: true });
-    return answer.session!;
   };
 
   const save = async (path: string, body: object) => {
@@ -285,64 +263,57 @@ describe('Streamed runs of agent workflows (API)', () => {
     });
   });
 
-  describe("a run's model request equals a chat turn's for the same input", () => {
-    it('the Assistant', async () => {
-      const question = 'Which team scored most in 2014?';
-      const session = await createSession({
-        name: 'Parity',
-        datasets: ['World Cup Core'],
-      });
-      const chat = await recorded(() => chatTurn(session.id, question));
-      const run = await recorded(() =>
-        runStream('agent:assistant', {
-          input: { question, datasets: ['World Cup Core'] },
-        }),
-      );
-      expect(chat.length).toBeGreaterThan(0);
-      expect(run).toEqual(chat);
-    });
+  describe("a run's model request, per agent (the turn path a chat once shared)", () => {
+    /** The last user message of a request, as the provider read it. */
+    const lastUser = (req: ReturnType<typeof asSent>) =>
+      messageText([...req.messages].reverse().find((m) => m.role === 'user')!);
 
-    it('Questions to Insights v2', async () => {
-      const question = 'Which stadium hosted the final?';
-      const session = await createSession({
-        agentId: 'assistant-v2',
-        name: 'Parity v2',
-        datasets: ['World Cup Core'],
-      });
-      const chat = await recorded(() => chatTurn(session.id, question));
-      const run = await recorded(() =>
-        runStream('qti-v2-turn', {
-          input: { question, datasets: ['World Cup Core'] },
-        }),
-      );
-      expect(chat.length).toBeGreaterThan(0);
-      expect(run).toEqual(chat);
-    });
-
-    it('the Data Readiness Agent', async () => {
-      const question = 'What are the worst data-quality problems?';
-      const session = await createSession({ agentId: 'data-readiness' });
-      expect(session.datasets).toEqual(['World Cup Core']);
-      const chat = await recorded(() => chatTurn(session.id, question));
-      const run = await recorded(() =>
-        runStream('agent:data-readiness', {
-          input: { dataset: 'World Cup Core', question },
-        }),
-      );
-      expect(chat.length).toBeGreaterThan(0);
-      expect(run).toEqual(chat);
-    });
-
-    it('the RFP Builder', async () => {
-      const message = 'Start an RFP for Acme, plan year 2027';
-      const session = await createSession({ agentId: 'rfp' });
-      const chat = await recorded(() => chatTurn(session.id, message));
-      const run = await recorded(() =>
-        runStream('agent:rfp', { input: { message } }),
-      );
-      expect(chat.length).toBeGreaterThan(0);
-      expect(run).toEqual(chat);
-    });
+    it.each([
+      [
+        'the Assistant',
+        'agent:assistant',
+        'Which team scored most in 2014?',
+        {
+          question: 'Which team scored most in 2014?',
+          datasets: ['World Cup Core'],
+        },
+      ],
+      [
+        'Questions to Insights v2',
+        'qti-v2-turn',
+        'Which stadium hosted the final?',
+        {
+          question: 'Which stadium hosted the final?',
+          datasets: ['World Cup Core'],
+        },
+      ],
+      [
+        'the Data Readiness Agent',
+        'agent:data-readiness',
+        'What are the worst data-quality problems?',
+        {
+          dataset: 'World Cup Core',
+          question: 'What are the worst data-quality problems?',
+        },
+      ],
+      [
+        'the RFP Builder',
+        'agent:rfp',
+        'Start an RFP for Acme, plan year 2027',
+        { message: 'Start an RFP for Acme, plan year 2027' },
+      ],
+    ])(
+      '%s asks the model once with the input last and its tools',
+      async (_name, id, question, input) => {
+        const run = await recorded(() => runStream(id, { input }));
+        expect(run.length).toBeGreaterThan(0);
+        expect(lastUser(run[0])).toContain(question);
+        expect(run[0].tools?.length ?? 0).toBeGreaterThan(0);
+        // Two runs of the same input send the model the same request.
+        const again = await recorded(() => runStream(id, { input }));
+        expect(again).toEqual(run);
+      },
+    );
   });
 
   it("a follow-up run sends the earlier run's question and answer first", async () => {

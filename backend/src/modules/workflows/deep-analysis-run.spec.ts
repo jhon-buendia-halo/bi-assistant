@@ -19,7 +19,6 @@ import type { MastraService } from '../../mastra/mastra.service';
 import { deepAnalysisWorkflow } from '../../mastra/workflows/deep-analysis.workflow';
 import { DEEP_ANALYSIS_STEPS } from '../../mastra/workflows/deep-analysis.steps';
 import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
-import { DeepAnalysisService } from '../deep-analysis/deep-analysis.service';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import type { SessionsService } from '../sessions/sessions.service';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
@@ -157,7 +156,6 @@ function build(
       Promise.resolve({ ...doc, panelItems: doc.panelItems ?? [] }),
     ),
     deleteRunHostResources: jest.fn().mockResolvedValue(undefined),
-    appendAssistantMessage: jest.fn().mockResolvedValue({}),
   };
   const workflows = {
     get: jest.fn((id: string) =>
@@ -299,37 +297,15 @@ describe('a deep-analysis run (agents.md 5.15; plan 1.25.3)', () => {
       answer: { report: { jobId: run.id, path } },
       panelItems: [{ id: DEEP_ANALYSIS_REPORT_ITEM_ID, path }],
     });
-    // The chat transcript is never written.
-    expect(ctx.sessions.appendAssistantMessage).not.toHaveBeenCalled();
   });
 
-  it("sends the assistant exactly the chat deep analysis's prompts and options", async () => {
+  it("sends the assistant the deep analysis's phase prompts, one call per step", async () => {
     ctx = build();
     await stream(ctx);
-    const runCalls = ctx.generate.mock.calls;
-
-    const chat = build();
-    const job = new DeepAnalysisService(
-      chat.sessions as never,
-      chat.mastra as never,
-    );
-    const started = await job.start('session-1', QUESTION);
-    if (!('jobId' in started)) throw new Error('job was rejected');
-    for (let i = 0; i < 500; i++) {
-      const { status } = job.status('session-1', started.jobId);
-      if (status === 'done' || status === 'error') break;
-      await new Promise((resolve) => setImmediate(resolve));
-    }
-    chat.db.close();
-
-    expect(runCalls).toHaveLength(4);
-    const shape = (calls: unknown[][]) =>
-      calls.map(([prompt, opts]) => {
-        const rest = { ...(opts ?? {}) } as Record<string, unknown>;
-        delete rest['abortSignal'];
-        return [prompt, rest];
-      });
-    expect(shape(runCalls)).toEqual(shape(chat.generate.mock.calls));
+    const prompts = ctx.generate.mock.calls.map(([prompt]) => String(prompt));
+    expect(prompts).toHaveLength(4);
+    expect(prompts[0]).toMatch(/^Plan a deep analysis of the question below\./);
+    expect(prompts[0]).toContain(`<question>\n${QUESTION}\n</question>`);
   });
 
   it("fails the run at Plan when the planner's reply is unusable, skipping the rest, with no answer", async () => {

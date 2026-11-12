@@ -73,7 +73,7 @@ Why: the order of work and the rules that must always hold belong in code, not i
 - [system/data-model.md](../../system/data-model.md): the session's `workflowId` and the derivation rule.
 - [system/agents.md](../../system/agents.md): the registry (`agent-turn`, the showcase agents removed), the turn (5.1) and 5.11.
 - [system/ui.md](../../system/ui.md): the rail, the Workflows list and page, the composer's Workflow field, the chat header and Sessions chips, the agent detail.
-- Capabilities: [app-shell](../../capabilities/app-shell/spec.md), [sessions-chat](../../capabilities/sessions-chat/spec.md), [agents-evals](../../capabilities/agents-evals/spec.md), [agent-panel](../../capabilities/agent-panel/spec.md), [rfp](../../capabilities/rfp/spec.md), [data-readiness](../../capabilities/data-readiness/spec.md), and [monitoring](../../capabilities/monitoring/spec.md) only if the trace shape changes.
+- Capabilities: [app-shell](../../capabilities/app-shell/spec.md), [agent-answers](../../capabilities/agent-answers/spec.md), [agents-evals](../../capabilities/agents-evals/spec.md), [agent-panel](../../capabilities/agent-panel/spec.md), [rfp](../../capabilities/rfp/spec.md), [data-readiness](../../capabilities/data-readiness/spec.md), and [monitoring](../../capabilities/monitoring/spec.md) only if the trace shape changes.
 - [product/glossary.md](../../product/glossary.md): Workflow, One-step workflow, Code-defined workflow; Session and Agent amended; Showcase agent removed.
 
 ## Acceptance

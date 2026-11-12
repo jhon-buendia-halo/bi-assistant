@@ -30,7 +30,6 @@ import {
   InteractiveVisualization,
   SessionActionResult,
 } from '../../models/session.model';
-import { SessionsApiService } from '../../services/sessions-api.service';
 import {
   RunVisualResult,
   WorkflowRunsApiService,
@@ -151,10 +150,9 @@ export class InteractiveVisualPanel {
   readonly minTopN = TAILOR_MIN_TOP_N;
   readonly maxTopN = TAILOR_MAX_TOP_N;
 
-  readonly sessionId = input<string | null>(null);
   /**
-   * The stored run whose visual this is (api.md 130-134): the actions go to
-   * its routes instead of a session's. Without a session id it hosts them.
+   * The stored run whose visual this is (api.md 130-134): the tailor, refresh
+   * and repair actions go to its routes; a past chat has none (read-only).
    */
   readonly runId = input<string | null>(null);
   readonly visualization = input<InteractiveVisualization | null>(null);
@@ -185,7 +183,6 @@ export class InteractiveVisualPanel {
   /** A data-refresh call for the single open visual is in flight. */
   readonly refreshingData = signal(false);
 
-  private readonly api = inject(SessionsApiService);
   private readonly runsApi = inject(WorkflowRunsApiService);
   /** `visualId:version` pairs already given their one auto-repair attempt. */
   private readonly repairAttempts = new Set<string>();
@@ -254,45 +251,34 @@ export class InteractiveVisualPanel {
     }
   }
 
-  /** The session or run the open visual belongs to. */
-  private hostId(): string | null {
-    return this.runId() ?? this.sessionId();
-  }
-
   private callRefresh(
-    hostId: string,
+    runId: string,
     visualId: string,
-  ): Observable<SessionActionResult & RunVisualResult> {
-    return this.runId()
-      ? this.runsApi.refreshVisualization(hostId, visualId)
-      : this.api.refreshVisualizationData(hostId, visualId);
+  ): Observable<RunVisualResult> {
+    return this.runsApi.refreshVisualization(runId, visualId);
   }
 
   private callRepair(
-    hostId: string,
+    runId: string,
     visualId: string,
     error: string,
     version: number,
-  ): Observable<SessionActionResult & RunVisualResult> {
-    return this.runId()
-      ? this.runsApi.repairVisualization(hostId, visualId, error, version)
-      : this.api.repairVisualization(hostId, visualId, error, version);
+  ): Observable<RunVisualResult> {
+    return this.runsApi.repairVisualization(runId, visualId, error, version);
   }
 
   private callTailor(
-    hostId: string,
+    runId: string,
     visualId: string,
     instruction: string,
-  ): Observable<SessionActionResult & RunVisualResult> {
-    return this.runId()
-      ? this.runsApi.tailorVisualization(hostId, visualId, instruction)
-      : this.api.tailorVisualization(hostId, visualId, instruction);
+  ): Observable<RunVisualResult> {
+    return this.runsApi.tailorVisualization(runId, visualId, instruction);
   }
 
   /** Re-run the open visual's stored SQL and adopt the fresh document. */
   refreshData(): void {
     const visual = this.visualization();
-    const sessionId = this.hostId();
+    const sessionId = this.runId();
     if (!visual || !sessionId || this.refreshingData()) return;
     this.refreshingData.set(true);
     this.callRefresh(sessionId, visual.id).subscribe({
@@ -312,7 +298,7 @@ export class InteractiveVisualPanel {
    */
   private handleRuntimeError(message: string): void {
     const visual = this.visualization();
-    const sessionId = this.hostId();
+    const sessionId = this.runId();
     if (
       !visual ||
       !sessionId ||
@@ -329,21 +315,20 @@ export class InteractiveVisualPanel {
     this.repairAttempts.add(this.repairKey(visual.id, visual.version));
     this.runtimeError.set(null);
     this.repairing.set(true);
-    this.callRepair(sessionId, visual.id, message, visual.version)
-      .subscribe({
-        next: (result) => {
-          this.repairing.set(false);
-          if (!result.ok || !result.visualization) {
-            this.runtimeError.set(message);
-            return;
-          }
-          this.visualRefreshed.emit(result);
-        },
-        error: () => {
-          this.repairing.set(false);
+    this.callRepair(sessionId, visual.id, message, visual.version).subscribe({
+      next: (result) => {
+        this.repairing.set(false);
+        if (!result.ok || !result.visualization) {
           this.runtimeError.set(message);
-        },
-      });
+          return;
+        }
+        this.visualRefreshed.emit(result);
+      },
+      error: () => {
+        this.repairing.set(false);
+        this.runtimeError.set(message);
+      },
+    });
   }
 
   private repairKey(visualId: string, version: number): string {
@@ -374,7 +359,7 @@ export class InteractiveVisualPanel {
   applyTailoring(): void {
     const instruction = this.tailorInstruction();
     const visual = this.visualization();
-    const sessionId = this.hostId();
+    const sessionId = this.runId();
     if (!instruction || !visual || !sessionId || this.tailoring()) return;
 
     this.tailorError.set(null);

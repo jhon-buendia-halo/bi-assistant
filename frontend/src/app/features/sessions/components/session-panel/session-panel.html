@@ -91,7 +91,10 @@
                   class="fixed inset-0 z-20 cursor-default"
                   (click)="downloadMenuOpen.set(false)"
                 ></button>
-                <div class="absolute top-full right-0 z-30 mt-1 w-44 menu" role="menu">
+                <div
+                  class="absolute top-full right-0 z-30 mt-1 w-44 menu"
+                  role="menu"
+                >
                   <button
                     type="button"
                     role="menuitem"
@@ -122,17 +125,12 @@
       @case ("visual") {
         <app-interactive-visual-panel
           class="h-full"
-          [sessionId]="session().id"
-          [readOnly]="readOnly()"
+          [readOnly]="true"
           [visualization]="visualization()"
-          [loading]="loading()"
           [error]="error()"
           [downloading]="downloading()"
           (downloadVisual)="downloadVisual.emit($event)"
           (selectVersion)="selectVersion.emit($event)"
-          (revertVersion)="revertVersion.emit($event)"
-          (visualRefreshed)="visualRefreshed.emit($event)"
-          (dataPointSelected)="dataPointSelected.emit($event)"
         >
           <ng-container ngProjectAs="[panelHistory]">
             <ng-container *ngTemplateOutlet="historyMenu" />

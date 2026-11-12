@@ -96,7 +96,7 @@ function errorMessage(message: string): MessageEvent {
   return { data: { type: 'visual-error', message } } as MessageEvent;
 }
 
-const repairUrl = `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/repair`;
+const repairUrl = `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/repair`;
 
 describe('InteractiveVisualPanel auto-repair', () => {
   let fixture: ComponentFixture<InteractiveVisualPanel>;
@@ -111,7 +111,7 @@ describe('InteractiveVisualPanel auto-repair', () => {
     fixture = TestBed.createComponent(InteractiveVisualPanel);
     panel = fixture.componentInstance;
     http = TestBed.inject(HttpTestingController);
-    fixture.componentRef.setInput('sessionId', session.id);
+    fixture.componentRef.setInput('runId', session.id);
     fixture.componentRef.setInput('visualization', visual());
     fixture.detectChanges();
   });
@@ -228,7 +228,7 @@ describe('InteractiveVisualPanel tailoring', () => {
     fixture = TestBed.createComponent(InteractiveVisualPanel);
     panel = fixture.componentInstance;
     http = TestBed.inject(HttpTestingController);
-    fixture.componentRef.setInput('sessionId', session.id);
+    fixture.componentRef.setInput('runId', session.id);
     fixture.componentRef.setInput('visualization', visual());
     fixture.detectChanges();
   });
@@ -245,7 +245,7 @@ describe('InteractiveVisualPanel tailoring', () => {
     panel.applyTailoring();
 
     const req = http.expectOne(
-      `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/tailor`,
+      `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
     );
     expect(req.request.body).toEqual({
       instruction:
@@ -270,7 +270,7 @@ describe('InteractiveVisualPanel tailoring', () => {
     expect(panel.tailorInstruction()).toBe('');
     panel.applyTailoring();
     http.expectNone(
-      `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/tailor`,
+      `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
     );
     expect(panel.tailoring()).toBeFalse();
   });
@@ -280,7 +280,7 @@ describe('InteractiveVisualPanel tailoring', () => {
     panel.applyTailoring();
     http
       .expectOne(
-        `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/tailor`,
+        `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
       )
       .flush({ ok: false, message: 'Instruction required' });
 
@@ -289,7 +289,7 @@ describe('InteractiveVisualPanel tailoring', () => {
   });
 });
 
-const refreshUrl = `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/refresh`;
+const refreshUrl = `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/refresh`;
 
 describe('InteractiveVisualPanel data refresh', () => {
   let fixture: ComponentFixture<InteractiveVisualPanel>;
@@ -304,7 +304,7 @@ describe('InteractiveVisualPanel data refresh', () => {
     fixture = TestBed.createComponent(InteractiveVisualPanel);
     panel = fixture.componentInstance;
     http = TestBed.inject(HttpTestingController);
-    fixture.componentRef.setInput('sessionId', session.id);
+    fixture.componentRef.setInput('runId', session.id);
     fixture.componentRef.setInput('visualization', visual());
     fixture.detectChanges();
   });
@@ -372,7 +372,7 @@ describe('InteractiveVisualPanel data point selection', () => {
     fixture = TestBed.createComponent(InteractiveVisualPanel);
     panel = fixture.componentInstance;
     http = TestBed.inject(HttpTestingController);
-    fixture.componentRef.setInput('sessionId', session.id);
+    fixture.componentRef.setInput('runId', session.id);
     fixture.componentRef.setInput('visualization', visual());
     fixture.detectChanges();
   });
@@ -424,7 +424,7 @@ describe('InteractiveVisualPanel theme', () => {
     theme = TestBed.inject(ThemeService);
     theme.setPreference('light');
     fixture = TestBed.createComponent(InteractiveVisualPanel);
-    fixture.componentRef.setInput('sessionId', session.id);
+    fixture.componentRef.setInput('runId', session.id);
     fixture.componentRef.setInput(
       'visualization',
       visual({ document: '<html lang="en"><body></body></html>' }),

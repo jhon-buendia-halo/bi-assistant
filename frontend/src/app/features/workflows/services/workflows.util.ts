@@ -239,7 +239,7 @@ export function runAgainValues(
   return values;
 }
 
-/** One page of the Runs list (ten, as sessions-chat R63). */
+/** One page of the Runs list (ten, as past-chats R63). */
 export const RUNS_PAGE_SIZE = 10;
 
 /** The runs whose title, workflow name or id contains the query. */

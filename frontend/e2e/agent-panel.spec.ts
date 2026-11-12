@@ -742,7 +742,7 @@ test('a failing step of the v2 workflow is marked failed', async ({ page }) => {
   expect(stepStatuses(result, 'wrap-up').at(-1)).toBe('skipped');
   expect(turnRequests(stub, V2_QUESTION).length).toBeGreaterThan(0);
 
-  // The run ends with the step's error (R8a, sessions-chat R61).
+  // The run ends with the step's error (R8a, agent-answers R61).
   const last = result.events[result.events.length - 1];
   expect(last.type).toBe('error');
   expect(String(last.content)).toBeTruthy();

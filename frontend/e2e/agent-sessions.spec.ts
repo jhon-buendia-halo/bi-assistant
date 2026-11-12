@@ -32,7 +32,7 @@ import { worldCupScalar } from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "Sessions started from an agent" in
- * specs/capabilities/sessions-chat/spec.md, through the agents' workflow runs
+ * specs/capabilities/agent-answers/spec.md, through the agents' workflow runs
  * (a run's model request equals a chat turn's). The model is a local
  * OpenAI-compatible stub that records what the backend sends it.
  */

@@ -1,6 +1,8 @@
-# Sessions and chat
+# Agent answers
 
-A session is a named, persistent conversation over one or more datasets. The user asks business questions in plain English. The assistant plans the analysis, writes and runs read-only SQL against the datasets' datasources, and streams back its reasoning, each tool call and a final Markdown answer. Every answer shows how it was produced: the queries it ran and why, the rows each returned, the entities it touched, the curated knowledge it was given, and reliability signals (automatic SQL repair, result-quality warnings, a verified-query badge and an optional independent cross-check). Users can trust a number because they can see where it came from. They can stop a turn, answer the assistant's clarifying questions, and come back after a restart to the same conversation with the same memory.
+An agent answers a business question over one or more datasets. It plans the analysis, writes and runs read-only SQL against the datasets' datasources, and streams back its reasoning, each tool call and a final Markdown answer. Since 1.23.22 the turn is always one run of a workflow, on a temporary run host ([workflows](../workflows/spec.md), [agents.md](../../system/agents.md) 5.14); no chat is started or continued, and the stored sessions of earlier versions open read-only ([past-chats](../past-chats/spec.md)). Every answer shows how it was produced: the queries it ran and why, the rows each returned, the entities it touched, the curated knowledge it was given, and reliability signals (automatic SQL repair, result-quality warnings, a verified-query badge and an optional independent cross-check). Users can trust a number because they can see where it came from. They can stop a run and answer the assistant's clarifying questions.
+
+This spec is what stayed of the former sessions-chat capability when it was split into agent-answers and past-chats (1.23.27). Rule numbers are kept, so older references read; rules about the chat composer and the chat session are retired here or moved to [past-chats](../past-chats/spec.md) (R1–R7, R49, R57, R59, R60, R62, R63, R65, R66).
 
 ## Concepts
 
@@ -8,22 +10,12 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 ## Rules
 
-### Session lifecycle
-
-- R1. Retired (1.24.12). A session was created only with a non-blank name and at least one dataset (name trimmed, stored truncated to 64 characters). No screen creates a session any more: chats can no longer be started. Stored sessions stay readable as past chats (R66).
-- R2. The system SHALL give each new session a unique id, an empty transcript, an empty visual list and its own session workspace (a private file area for visuals and reports).
-- R3. The system SHALL list sessions most recently written first, where any write to the session counts: a message, a rating, or a visual change.
-- R4. The system SHALL ask for confirmation before deleting a session, then permanently remove its transcript, its agent memory thread and its workspace files (all visual versions included).
-- R5. The system SHALL NOT offer renaming a session or changing its datasets after creation. *(Open question: rename and dataset re-attachment are not implemented. Confirm they are out of scope.)*
-- R6. The system SHALL show, in the header of an open session, every datasource its datasets are bound to (name and kind). A dataset with no bound datasource is treated as bound to the default datasource: the first Databricks datasource, else the first datasource.
-- R7. On startup the system SHALL make sure every existing session has a workspace and re-register it, so visuals and memory survive restarts.
-
 ### Sending a message and streaming
 
-- R8. The system SHALL reject an empty or whitespace-only message. The composer's send action is disabled while the draft is blank.
-- R9. Pressing Enter SHALL send the draft. Shift+Enter SHALL insert a newline.
+- R8. The system SHALL reject an empty or whitespace-only question: a run refuses it before it starts ([workflows](../workflows/spec.md)).
+- R9. Retired (1.23.27). The composer's Enter and Shift+Enter went with it.
 - R10. The system SHALL persist the user's message before the model starts, so it survives a reload even if the turn is stopped or fails.
-- R11. If the transcript already ends with an unanswered user message whose text is identical, the system SHALL reuse it instead of adding a duplicate. This is how a retry works.
+- R11. Retired (1.23.27). A retry reused an unanswered user message in a stored session; a run host starts empty.
 - R12. While a turn runs, the system SHALL stream, in order of arrival:
   - the model's reasoning text;
   - each tool call, with its stated rationale when it has one;
@@ -32,21 +24,21 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - a visual-updated notice when a visual is created or tailored.
 
   The turn ends with exactly one terminal event: `done`, carrying the persisted session, or `error`, carrying a message.
-- R13. While a turn runs, the chat SHALL show a "Thinking" block with:
+- R13. While a turn runs, the Run page SHALL show a "Thinking" block with:
   - the last ~90 characters of reasoning on one line;
   - one row per tool call: tool name, then "failed", "N rows" or a spinner;
   - the rationale and the input (SQL) of each call;
   - for a tool that emits `tool-progress` events (today `assess_data_readiness`), the latest progress message on its row while it runs, cleared when its result lands;
   - the answer as rendered Markdown while it streams;
   - an elapsed-seconds counter with one decimal.
-- R14. When `done` arrives, the chat SHALL replace its whole transcript with the persisted one from the event. Streamed text is provisional. The persisted answer is authoritative and may differ, for example after the grounding check.
-- R15. The system SHALL allow only one turn per session at a time from the client. While it runs, the send control becomes "Stop response".
-- R16. Stopping SHALL abort the turn on the server. The client keeps any answer text already streamed as an assistant message, and the composer becomes sendable again. The server also persists partial answer text when it was stopped mid-answer.
+- R14. Retired (1.23.27). The chat replaced its transcript with the persisted one on `done`; a run's page shows the run's stored answer.
+- R15. Retired (1.23.27). The one-turn-per-session rule and the "Stop response" control went with the chat composer; a run is stopped from its page.
+- R16. Stopping a run SHALL abort the turn on the server. The server persists partial answer text when it was stopped mid-answer.
 - R17. The assistant SHALL use at most 15 model steps per turn.
 - R18. If a turn ends with no answer text and no visual, the system SHALL run one extra tool-free pass that writes an answer from the data already collected. If that also yields nothing, the answer is the fixed text "I completed the data analysis but could not produce a final response. Please retry your question."
 - R19. If a turn produced a non-empty answer without calling any tool, the system SHALL run one corrective pass, tools allowed, at most once per turn. That pass tells the model to re-answer data claims from executed queries, or to say the data does not cover the question. Its answer replaces the original. Any queries it runs join the answer's data records. The pass does not write to the session's memory thread.
 - R20. A turn that only created or tailored a visual and wrote no text SHALL be persisted with the text `Created interactive visual "<title>" (v<N>).` or `Updated interactive visual "<title>" (v<N>).`.
-- R21. A same-session refresh of the session data, for example after a visual changed or a rating was saved, SHALL NOT abort or disturb an in-flight turn. While a turn is in flight such a refresh does not replace the transcript. Only switching to a *different* session aborts the in-flight turn and resets the chat (draft, careful mode, clarification input, turn state). The same holds when an agent shows a panel item during a turn: the session is refreshed without disturbing the turn ([agent-panel](../agent-panel/spec.md) R12).
+- R21. Retired (1.23.27). A same-session refresh that must not disturb an in-flight chat turn went with the live chat.
 
 ### Grounding and tools
 
@@ -126,7 +118,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 ### Careful mode (cross-check)
 
-- R37. The composer SHALL offer a "Careful" toggle. It applies to every turn sent while on. It is client-only and lasts for the open conversation: switching sessions turns it off, and it is never stored.
+- R37. Careful mode is asked for per run (the `careful` option of a run's turn). It applies to that run only and is never stored.
 - R38. In careful mode, before `done`, the system SHALL check the turn's last successful SQL result:
   1. The SQL-verifier agent derives an independent query from the question alone. It sees the question, the schema with up to 3 sample values per column and similar verified pairs, never the original SQL.
   2. The system runs that query with a 200-row limit.
@@ -153,130 +145,77 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - "Skip" sends "Skip — proceed with your best judgment."
 - R44. When the user answers a clarification, the system SHALL give the model the clarifying question together with the answer, so the follow-up turn has the context.
 
-### Errors and retry
+### Errors
 
-- R45. When a turn fails (unreachable backend, non-OK response, dropped stream, stream ended without a terminal event, or a server error event), the chat SHALL:
-  - keep any streamed answer text as an assistant message;
-  - add a client-only error bubble "Something went wrong" with the message;
-  - show the message as an error toast.
-
-  The latest error bubble offers "Retry", which resends the preceding user question (deduplicated per R11). Error bubbles are never persisted.
+- R45. Retired (1.23.27). The chat error bubble, its toast and **Retry** went with the composer. A run that fails ends `failed` with its error on the Run page ([workflows](../workflows/spec.md)); the provider's error text is the run's error.
 
 ### Memory and continuity
 
 - R46. Each session SHALL have its own persistent agent memory thread. Each turn replays the last 40 messages. There is no semantic recall and no auto-generated title.
 - R47. When a session has a transcript but no memory thread (created before memory existed), the system SHALL seed the thread from the full persisted transcript on the next turn.
 - R48. Background work (deep-analysis sub-calls, grounding pass, SQL repair, cross-check, visual design) SHALL NOT write into the session's memory thread.
-- R49. The full transcript SHALL be stored with the session and shown on reopen, including clarifications, visual event cards and deep-analysis reports. Memory and transcript survive app restarts.
 
-### Empty session and navigation aids
+### Retired chat rules
 
-- R50. A session with no messages SHALL show a client-only welcome block that is never persisted or sent to the model. It contains:
-  - "<session name> is ready";
-  - a one-line description of what the assistant does;
-  - "Connected to <datasets>.";
-  - "Try one of these:" with three starter prompts. Clicking one fills the composer but does not send:
-    - "What data is available here? Summarise the tables and the key metrics."
-    - "What stands out in this data right now? Give me the headline numbers."
-    - "How have the main metrics moved over the last 12 months?"
-- R51. When a transcript has user messages, the chat SHALL show a history strip with one tick per user question. Hovering lists the questions, and clicking one scrolls to it.
+- R50. Retired (1.23.27). The empty chat's welcome block and its starter prompts went with the chat composer.
+- R51. Moved to past-chats R66 (the history strip of a transcript; see ../past-chats/spec.md).
 
 ### Sessions started from an agent
 
 Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decision ADR-0008 in [architecture.md](../../system/architecture.md).
 
-- R52. Retired (1.24.12). **Start chat** (on a workflow, never on an agent) created a session from the workflow or its agent. No card, page or button starts a chat now: a workflow runs through its **Run** ([workflows](../workflows/spec.md) R5, R12) and `POST /sessions` with a `workflowId` is refused with `Workflow "<id>" runs on an input` ([api.md](../../system/api.md) 3). Its refusal texts for an agent (`Agent "<id>" not found`, `Publish "<name>" before starting a chat`, `None of this agent's datasets exist`) stay on the `agentId` body until the backend chat code is removed.
-- R53. A session started from an agent SHALL keep the datasets it was created with (R5). Republishing the agent with other datasets SHALL NOT change them.
+- R52. Retired (1.24.12). **Start chat** (on a workflow, never on an agent) created a session from the workflow or its agent. No card, page or button starts a chat now: a workflow runs through its **Run** ([workflows](../workflows/spec.md) R5, R12) and `POST /sessions` with a `workflowId` is refused with `Workflow "<id>" runs on an input` ([api.md](../../system/api.md) 3). `POST /sessions` was removed in 1.23.27 ([api.md](../../system/api.md) 3): no route creates a session, and a run of an agent workflow refuses a missing or unpublished agent with the texts of [workflows](../workflows/spec.md) R12.
+- R53. A session started from an agent SHALL keep the datasets it was created with ([past-chats](../past-chats/spec.md) R5). Republishing the agent with other datasets SHALL NOT change them.
 - R54. Every assistant call made for a session bound to a user agent that still exists (chat turns, the grounding pass and deep-analysis calls) SHALL apply the agent's **current Live version**:
   - its instructions, when not empty, as a system context block labelled as user-supplied, after every other context block (R24; the block is in [agents.md](../../system/agents.md) section 4.1, and only the grounding pass's own nudge follows it);
   - its model override and reasoning-effort override, when set (R56);
   - its tool selection: only the tools it selects are offered, and the prompt's tool list and working rules match them ([agents.md](../../system/agents.md) 2.1);
   - its skills: the copies taken when it was published, given to the model through the framework's skill catalog and skill tool, from those copies ([agents.md](../../system/agents.md) 7.3).
 
-  Publishing a new version SHALL change the next turn of every session bound to the agent. A draft SHALL never apply to a session. The only exception is the agent editor's preview chat, an in-memory session that runs the draft (agents-evals R60, R61).
+  Publishing a new version SHALL change the next turn of every session bound to the agent. A draft SHALL never apply to a session. The only exception is the agent editor's draft run, an in-memory run host that runs the draft (agents-evals R60, R61).
 - R55. An agent's instructions SHALL NOT relax any rule enforced in code: the read-only SQL guard, dataset scoping (R22), SQL repair (R25-R28), the grounding pass (R19) and the result-quality warnings hold whatever the instructions say. A write statement attempted under an agent's instructions SHALL be rejected by the read-only guard and shown as a failed tool call.
 - R56. A model override SHALL name a model or deployment of the configured provider. It SHALL replace the configured model for the assistant's calls only. The SQL fixer, SQL verifier, visual designer, ontology bootstrap and eval judge keep the configured model and their own efforts. A reasoning-effort override SHALL replace the user's setting for the same assistant calls. With no LLM settings saved, the model override SHALL be ignored and the fallback model applies. A model the provider rejects SHALL fail the turn with the provider's error, like any model error (R45).
-- R57. Every session, plain Assistant chats included, SHALL name the workflow it runs (R65) in the page header's session context (`Workflow` and a chip with the workflow's name, before the datasources) and in its row of the Sessions page list (R63), as the row's workflow chip. Both come from the session's `workflowRef` ([api.md](../../system/api.md) 2.1). The name SHALL be the workflow's catalogue name ([workflows](../workflows/spec.md) R1): `Assistant` for a plain session, the built-in agent's workflow (`Questions to Insights v2`, `RFP Builder`, `Data Readiness Agent`) for a session bound to it, and the agent's current Live name for a session started from a user agent. A session saved before workflows existed names the workflow derived from its agent binding (R65): one saved with only `agentKey: "rfp"` reads `RFP Builder`.
-- R58. The welcome block (R50) of a session bound to an agent SHALL use the agent's Live description as its one-line description when that is not empty, and the agent's Live starter questions (up to 5, in order) as the starter prompts when there are any. Otherwise R50's text and prompts apply. Clicking a starter question SHALL fill the composer and SHALL NOT send it.
-- R59. When the agent is deleted, its sessions SHALL keep their transcript, memory and datasets and continue with the plain assistant: no instructions block and no overrides. The page header's Workflow chip and the list row's workflow chip SHALL read `<agent name> · agent deleted`, using the name the agent last had for the session, and the welcome block falls back to R50.
-- R61. A session bound to a built-in agent (today the RFP Builder, the Data Readiness Agent and Questions to Insights v2, R52) SHALL run that agent on every turn, not the assistant: its own prompt, tools, skill and per-turn context ([agents.md](../../system/agents.md) 2.8, 4.1, 5.1). The assistant-only passes (the grounding pass R19, careful mode and the result-quality warnings) SHALL NOT apply to it. R54-R56 and R59 do not apply; R57 and R58 do, with the built-in agent's name, description and starter questions. Their behaviour is specified in [../rfp/spec.md](../rfp/spec.md) and [../data-readiness/spec.md](../data-readiness/spec.md). **Questions to Insights v2** (`assistant-v2`, BA-320) is bound the same way but is created from the New conversation screen with the user's own datasets and a required name (R64): the session stores `agentKey: "assistant-v2"` and `agentName: "Questions to Insights v2"`, every turn runs v2 with its three data tools and shipped prompt ([agents.md](../../system/agents.md) 2.11), and a v2 turn runs like the other bound agents' turns: no grounding pass and no careful mode. A streamed v2 turn is a workflow defined in code (ADR-0034, [agents.md](../../system/agents.md) 5.11) whose steps `Receive question`, `Load catalog`, `Analyse` and `Wrap up` show in the workflow bar ([agent-panel](../agent-panel/spec.md) R8a); the answer streams in the Analyse step exactly as above, and a failed step ends the turn with its error. The chat header and the session chip name the agent as for the other built-in agents (R57). A session bound to a built-in agent runs that agent's workflow (R65): Questions to Insights v2's session runs `qti-v2-turn`, the RFP Builder's `agent:rfp` and the Data Readiness Agent's `agent:data-readiness` ([workflows](../workflows/spec.md) R2, R4). Every streamed turn of any session, plain, bound or started from a user agent, is one run of its workflow ([agents.md](../../system/agents.md) 5.1): a one-step workflow's single step runs the turn above, with the same answer, events, workflow bar and stored message, and nothing else changes. The non-streamed turn stays a direct agent call.
+- R58. Retired (1.23.27). The welcome block of a session bound to an agent went with the chat composer.
+- R61. A session bound to a built-in agent (today the RFP Builder, the Data Readiness Agent and Questions to Insights v2, R52) SHALL run that agent on every turn, not the assistant: its own prompt, tools, skill and per-turn context ([agents.md](../../system/agents.md) 2.8, 4.1, 5.1). The assistant-only passes (the grounding pass R19, careful mode and the result-quality warnings) SHALL NOT apply to it. R54-R56 and R59 do not apply; R57 and R58 do, with the built-in agent's name, description and starter questions. Their behaviour is specified in [../rfp/spec.md](../rfp/spec.md) and [../data-readiness/spec.md](../data-readiness/spec.md). **Questions to Insights v2** (`assistant-v2`, BA-320) is bound the same way but runs on the user's own datasets: a session of an earlier version stored `agentKey: "assistant-v2"` and `agentName: "Questions to Insights v2"`, every turn runs v2 with its three data tools and shipped prompt ([agents.md](../../system/agents.md) 2.11), and a v2 turn runs like the other bound agents' turns: no grounding pass and no careful mode. A streamed v2 turn is a workflow defined in code (ADR-0034, [agents.md](../../system/agents.md) 5.11) whose steps `Receive question`, `Load catalog`, `Analyse` and `Wrap up` show in the workflow bar ([agent-panel](../agent-panel/spec.md) R8a); the answer streams in the Analyse step exactly as above, and a failed step ends the turn with its error. The chat header and the session chip name the agent as for the other built-in agents (R57). A session bound to a built-in agent runs that agent's workflow (R65): Questions to Insights v2's session runs `qti-v2-turn`, the RFP Builder's `agent:rfp` and the Data Readiness Agent's `agent:data-readiness` ([workflows](../workflows/spec.md) R2, R4). Every streamed turn of any session, plain, bound or started from a user agent, is one run of its workflow ([agents.md](../../system/agents.md) 5.1): a one-step workflow's single step runs the turn above, with the same answer, events, workflow bar and stored message, and nothing else changes. The non-streamed turn was removed in 1.23.27.
 - R64. Retired (1.24.12). The new-session screen, with its **Workflow** field and **Create**, is removed together with its route and the **Start New Conversation** buttons.
-- R62. While a chat is open, the page header's session context SHALL end with the session's id: `ID <first 8 characters>` in monospace, with the full id as its tooltip and a copy icon. Clicking it copies the full id and shows the toast "Session ID copied" ("Copy failed" when the browser refuses). A user shares the id so a session can be found and diagnosed in the app's data (BA-231).
-- R63. In the **Past chats** tab of the Runs page (app-shell R46) the system SHALL list every session of the user in the middle of the page card, newest activity first as the backend returns them, under a "Search sessions by name or ID…" field (a `nav` named "Past chats") that filters by name or session id, ignoring case, **ten sessions per page**. A row SHALL show the name, its datasets, the workflow it runs as a chip (the workflow's name, R57, `<agent name> · agent deleted`, R59, or `Assistant` for a plain session; the full label as tooltip `Workflow: <label>`), the session id as `ID <first 8 characters>` (full id as tooltip; a click copies it and toasts "Session ID copied", as R62), the last activity (`updatedAt`, else `createdAt`) as `just now`, `<n> min ago`, `<n> h ago`, `yesterday` or a short date with the full date as tooltip, and an options menu with **Delete session**. Clicking a row SHALL open the session read-only (R66). The list SHALL read "Loading sessions…" until the first answer, "No sessions yet. Start a new conversation or open an agent." when empty (with **Start New Conversation**) and `No sessions match "<query>".` when the search finds none. Under the list SHALL be `<first>–<last> of <total>` and, when there is more than one page, **Previous page** and **Next page** buttons with `Page <n> of <pages>`; a new search returns to page 1, and a deletion that empties the last page moves to the page before.
-- R66. A session opened from the **Past chats** tab SHALL open **read-only** as a past chat (roadmap 1.23.21; no session is lost or migrated): a banner "This is a past chat. You can read it, but not continue it." under the page header, its transcript through the answer view, its workflow bar and its right panel with the visuals viewable (every version) and downloadable and the panel items and files viewable and downloadable. A past chat SHALL show no composer, no starter prompts, no "Careful" or "Deep analysis", no rating or "Save as verified query", no "Generate interactive visuals" and no way to answer a clarification, and its visual panel SHALL offer no Tailor, Refresh data, revert or auto-repair. Deleting it stays on the list (R63). A session just created from New conversation or **Start chat** is still a live chat until chats are removed (1.23.22).
-- R65. Every session SHALL run exactly one workflow ([workflows](../workflows/spec.md) R1, R4; ADR-0040): a plain session the assistant's one-step workflow (`agent:assistant`, named `Assistant`), a session bound to a built-in agent that agent's workflow (R61), and a session bound to a user agent that agent's one-step workflow (`agent:<id>`, named after its Live name; a preview's, after the draft's). A new session SHALL store its workflow at creation, whichever way it was started; an older one SHALL derive it from its agent binding. A session SHALL be startable from a workflow as from the workflow's agent, with the same names, datasets and refusals (R52, R64). When the user agent is deleted, its sessions SHALL keep their workflow's id and name it with the name the agent last had, marked deleted (R59). Which agent a turn runs, and everything it does, is unchanged by the binding (R54, R59, R61).
-
-### Ownership
-
-- R60. A session, with its transcript, visuals, reports, workspace files and agent memory, SHALL belong to the one user (the built-in super admin; the stored `ownerId` is a legacy attribute, [data-model.md](../../system/data-model.md)). The user SHALL see every session in the session list and open, chat in, rate, tailor, refresh, download, analyse or delete it. Every session action is available.
 
 ## Edge cases and errors
 
 | Situation | Behaviour |
 |---|---|
-| Create with blank name | Rejected: "session name is required". The "Create" button is disabled until a name is typed. |
-| Create with no dataset | Rejected: "select at least one dataset". "Create" stays disabled. |
-| Session list fails to load at startup | Retried up to 12 times with growing delay, then the toast "Could not load sessions". Sessions already loaded are kept. |
-| Session id not found | 404 "Session <id> not found". |
-| Delete fails | Error toast with the server message. |
-| Delete succeeds | Toast `Session "<name>" deleted`. If the deleted session was open, the main area returns to home and the visual panel clears. |
-| Datasource lookup for header fails or finds none | The header shows "Unavailable". |
-| Session dataset deleted or renamed later | Missing datasets are silently dropped from the turn's scope. *(Open question: no user-visible warning.)* |
 | Entity on several datasources without a datasource id | Tool error naming the datasource options. The model must retry with an id. |
 | No datasource bound | Tool error "No datasource is bound to this session's datasets". |
 | Stopped before any text | Only the user message remains (persisted per R10). No assistant message. |
-| Stream fails to start | Error bubble "Backend unreachable" or "Stream failed (<status>)". |
-| Stream drops | "Stream disconnected". |
-| Stream closes without `done`/`error` | "Stream ended before completion". |
 | Rating fails | The local rating rolls back. Error toast with the server message, "Could not save feedback" or "Backend unreachable". |
+| Agent's model override rejected by the provider | The run fails with the provider's error (R45). |
 | Rating succeeds | Toast "Answer saved as a verified query" (up) or "Answer marked as wrong" (down). |
 | Rating an unknown message | 404 "No assistant message at <at>". |
 | Invalid rating | 400 "rating must be 'up' or 'down'". |
 | Copy to clipboard | "Copied to clipboard" / "SQL copied to clipboard" / "Copy failed". |
-| Session created | Toast `Session "<name>" created`. The session opens immediately and the list reloads. |
-| Start chat on the workflow of an agent with some datasets missing | The session is created over the remaining datasets (R52). The workflow card and the agent's hub card already show `Missing dataset: <names>`. |
-| Start chat on the workflow of an agent with none of its datasets left | **Start chat** is disabled, titled `None of this agent's datasets exist`; a direct request is refused with the same message. |
-| Start chat on the workflow of an agent deleted meanwhile | Toast `Workflow "agent:<id>" not found` ([workflows](../workflows/spec.md)); nothing is created. |
-| Agent renamed and republished | Its sessions show the new name from their next load. The session names don't change. |
-| Agent's model override rejected by the provider | The turn fails with the provider's error bubble and **Retry** (R45). |
 
 ## Contracts
 
 - Endpoints, all in [api.md](../../system/api.md):
-  - sessions: list, get, create, delete;
-  - chat: streamed message (and its event types `reasoning`, `text`, `tool`, `tool-result`, `visual-updated`, `done`, `error`), non-streamed message, message feedback.
+  - a past chat's read routes: [past-chats](../past-chats/spec.md);
+  - runs: `POST /workflows/:id/runs/stream` (api.md 119) streams the answer with the event types `run`, `step`, `reasoning`, `text`, `tool`, `tool-result`, `visual-updated`, `done`, `error` (api.md 3.1), and the stored run's rating and visual routes (api.md 128-134). The chat routes (create a session, the streamed and non-streamed message, message feedback, the session visual actions) were removed in 1.23.27.
 - Data in [data-model.md](../../system/data-model.md): the `sessions` collection (session document, chat message, data record, reasoning step, cross-check, clarification, visual event), the `verified_queries` collection, the agent memory store, and the per-session workspace directory and its legacy migrations.
 - Agents in [agents.md](../../system/agents.md): `assistant` (prompt, tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`, `create_visual`, `update_visual`, and memory), `sql-fixer`, `sql-verifier`. Model resolution is in [llm-settings](../llm-settings/spec.md).
-- Agent sessions: `POST /sessions` with an `agentId`, and the session's derived `agent` field, in [api.md](../../system/api.md); the session's `agentId` and `agentName` in [data-model.md](../../system/data-model.md) section 3.4; the agent instructions block, the `agent-overrides` requestContext key and the model override in [agents.md](../../system/agents.md) sections 1.3, 4.1 and 4.2.
+- Agent-bound runs: the session's derived `agent` field in [api.md](../../system/api.md) 2.1 (what a past chat shows); the session's `agentId` and `agentName` in [data-model.md](../../system/data-model.md) section 3.4; the agent instructions block, the `agent-overrides` requestContext key and the model override in [agents.md](../../system/agents.md) sections 1.3, 4.1 and 4.2.
 - Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents and the Agent Hub), [workflows](../workflows/spec.md) (the Workflows pages and their **Run**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [dataset-ontology](../dataset-ontology/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
 
 ## UI
 
 Shell placement and tokens are in [ui.md](../../system/ui.md).
 
-- **Past chats list, "Past chats"** (the **Runs** rail item opens the page, its second tab; app-shell R3, R46):
-  - A "Search sessions by name or ID…" field above the list, filtering by name or session id, ignoring case; ten sessions per page with `<first>–<last> of <total>` and Previous / Next page buttons (R63).
-  - One entry per session, newest activity first, showing its name and marked when it is the session last opened. Under the name: its datasets. Beside it, the workflow the session runs as a chip with a workflow icon (`row-session-workflow`, tooltip `Workflow: <label>`): the workflow's name (R57), `<agent name> · agent deleted` (R59, warning style), or `Assistant` for a plain session. At the right, the last activity as a relative time (`2 h ago`, `yesterday`, else a short date), with the full date as tooltip.
-  - Each entry has an options button (title "Session options", label "Options for <name>") whose menu holds "Delete session". The confirm dialog reads: `Delete “<name>”?` / `This permanently removes its conversation, agent memory, and workspace files.`
-  - An entry is disabled while it is being deleted.
-  - Empty: "No past chats." No match: `No sessions match "<query>".` Loading: "Loading sessions…".
-- **Session header**: "Datasource" followed by one chip per bound datasource (name and kind label, summary tooltip), a loading placeholder, or "Unavailable".
-- **Page header** (app-shell R49): the session's name as the title, the session context under it (for every session, `Workflow` and the workflow chip `session-workflow` first, R57 and R59, then the datasources). It has no button that starts a conversation.
-- **Disclaimer** under the chat input: `Responses are generated by AI (Powered by LenAI) and may be inaccurate or incomplete. Please verify against source data before sharing.`
-- **Chat** (main area):
-  - transcript;
-  - Thinking block while a turn runs;
-  - deep-analysis status card;
-  - composer: textarea with placeholder "Ask a follow-up question…", plus "Careful" (pressed state), "Deep analysis", and "Send message" / "Stop response";
-  - follow-up chips from the open visual, specified in [visuals](../visuals/spec.md).
+- **Where an answer shows**: the Run page of a workflow run ([workflows](../workflows/spec.md)) and, read-only, a past chat ([past-chats](../past-chats/spec.md)). There is no chat composer: since 1.23.27 nothing starts or continues a chat.
+- **Run page, while a turn runs**: the Thinking block of R13, then the answer.
 - **Message kinds**:
   - user bubble;
   - answer (Markdown plus the R32–R36 blocks, the "Generate interactive visuals" action from [visuals](../visuals/spec.md), and the badges and rating buttons);
   - clarification card (R43);
   - visual event card (see [visuals](../visuals/spec.md));
-  - deep-analysis report card;
-  - error bubble (R45).
-- **States**: empty session shows the welcome block (R50, or R58 for a session bound to an agent); a turn running shows the Thinking block; failure shows the error bubble and a toast; populated shows the transcript.
+  - deep-analysis report card.
+- **States**: a turn running shows the Thinking block; a failed run shows its error ([workflows](../workflows/spec.md)); a finished run shows the answer.
 
 ## Flows
 
@@ -303,89 +242,6 @@ Feature: Chat and visuals
     Then I see the SQL
     When I run "Start a slow response" and click Stop
     Then Execute is shown again and "Thinking" is no longer shown
-```
-
-### Feature: Session management
-
-E2E: `frontend/e2e/runs.spec.ts` covers every scenario below except "The conversation and its history survive a restart" (none yet). The scenarios that started a chat from the New conversation screen were removed with the screen (1.24.12). Session creation with real data and reopening after a reload are covered by the "Datasources, datasets, and sessions (World Cup database)" Feature in [datasources](../datasources/spec.md).
-
-```gherkin
-Feature: Session management
-
-  Background:
-    Given a "World Cup Core" dataset exists
-
-  Scenario: A deleted agent's chat names its workflow as deleted
-    Given a chat of my published agent "Cup historian"
-    And the agent "Cup historian" is deleted
-    When I click "Runs" on the rail
-    Then the chat's workflow chip reads "Cup historian · agent deleted"
-    When I open the chat
-    Then the page header shows the workflow "Cup historian · agent deleted"
-
-  Scenario: A chat saved before workflows names the workflow of its agent
-    Given a session "Saved RFP chat" saved before workflows existed, bound to the RFP Builder with no workflow
-    When I click "Runs" on the rail
-    Then the "Saved RFP chat" row's workflow chip reads "RFP Builder"
-    When I click "Saved RFP chat"
-    Then the page header shows "Workflow" and "RFP Builder"
-
-  Scenario: Deletes a session after confirmation
-    Given a "World Cup analysis" session exists and is open
-    When I click "Options for World Cup analysis"
-    And I click "Delete session"
-    Then I am asked to confirm 'Delete “World Cup analysis”?'
-    When I confirm
-    Then I see the toast 'Session "World Cup analysis" deleted'
-    And the main area shows the Runs page and "World Cup analysis" is no longer listed
-
-  Scenario: Cancelling the delete confirmation keeps the session
-    Given a "World Cup analysis" session exists
-    When I click "Options for World Cup analysis"
-    And I click "Delete session"
-    And I dismiss the confirmation
-    Then "World Cup analysis" is still listed in the "Past chats" list
-
-  Scenario: The conversation and its history survive a restart
-    Given the "World Cup analysis" session has the question "Who won in 2022?" and its answer
-    When I restart the application
-    And I click "World Cup analysis"
-    Then I see "Who won in 2022?" and its answer
-    And hovering the history strip lists "Who won in 2022?"
-
-  Scenario: I copy the session id to share it
-    Given a "World Cup analysis" session exists and is open
-    Then the page header shows "ID" and the first 8 characters of the session id, with the tooltip "Session ID <id> (click to copy)"
-    When I click the session id
-    Then I see the toast "Session ID copied"
-    And the clipboard holds the full session id
-
-  Scenario: I find my past runs under Runs and my old chats under Past chats
-    Given a run and an old chat with a visual exist
-    When I open Runs, then the run, then Run again
-    Then the workflow opens on Run with the run's input
-    When I open Past chats and the old chat
-    Then I see the past-chat banner and its transcript, and no composer
-    And I can open its visual in the panel and download it
-
-  Scenario: No control on a past chat sends, rates, tailors or refreshes
-    When I open an old chat from Past chats
-    Then no control sends a message, answers a clarification, rates an answer, generates a visual, tailors one or refreshes its data
-
-  Scenario: The Past chats tab finds a session by name or ID
-    Given 12 sessions exist, the newest named "Cup history"
-    When I click "Runs" on the rail and then "Past chats"
-    Then I see 10 sessions, "Cup history" first, and "1–10 of 12" with "Page 1 of 2"
-    When I click "Next page"
-    Then I see 2 sessions and "11–12 of 12"
-    When I type "cup HISTORY" into "Search sessions by name or ID…"
-    Then I see only "Cup history", with "World Cup Core" under its name, the workflow chip "Assistant" and "ID" with the first 8 characters of its id
-    When I type the first 8 characters of its id in capitals
-    Then I see only "Cup history"
-    When I type "nothing like this"
-    Then I see 'No sessions match "nothing like this".'
-    When I clear the search and click "Cup history"
-    Then I see the "Cup history" chat open
 ```
 
 ### Feature: Chat answers and reliability signals
@@ -617,17 +473,11 @@ Feature: Skills the assistant is given
 
 ## Acceptance
 
-- Every scenario above passes. The covered Feature runs in `chat-and-visuals.spec.ts`. The scenario that generated an interactive visual from a chat answer is retired with the chat composer; a run's visual returns with plans 1.24.5 and 1.25.4.
+- Every scenario above passes. The scenario that generated an interactive visual from a chat answer is retired with the chat composer; a run's visual returns with plans 1.24.5 and 1.25.4.
 - Against a real datasource:
   - a data question produces at least one executed query;
   - no answer states a figure absent from its "Data used" rows;
   - an answer with no tool calls has been through the grounding pass.
-- After an app restart: an existing session lists its full transcript, a follow-up question relies on prior turns (memory), and its visuals still open.
-- Deleting a session leaves no transcript, memory thread or workspace directory behind.
-- Stopping a turn before the model answers leaves the question in the transcript after a reload.
-- Known gaps to settle (see the Open questions):
-  - the session list order is fetched only at startup and after creating a session, so it does not re-sort after a turn;
-  - there is no rename;
-  - datasets cannot be edited after creation.
+- A run's stored answer lists its full transcript and its visuals still open after an app restart; the stored sessions that remain are specified in [past-chats](../past-chats/spec.md).
 
 <!-- sources: backend/src/modules/sessions/sessions.controller.ts, sessions.service.ts, turn-data.ts, result-guards.ts, result-compare.ts, entities/session.entity.ts, repositories/sessions.repository.ts; backend/src/mastra/agents/assistant.agent.ts, sql-fixer.agent.ts, sql-verifier.agent.ts, tools/dataset.tools.ts, tools/clarification.tool.ts, tools/visual.tools.ts, agent-constants.ts, mastra.service.ts; backend/src/modules/verified-queries/verified-queries.service.ts; backend/src/infrastructure/database/sqlite-doc-store.ts; frontend/src/app/app.ts, app.html; frontend/src/app/features/sessions/components/session-chat/*, answer-view/*, services/sessions-api.service.ts, models/session.model.ts; frontend/e2e/chat-and-visuals.spec.ts, e2e/helpers/app-actions.ts -->

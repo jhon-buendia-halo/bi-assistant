@@ -6,7 +6,6 @@ import { test, expect } from './fixtures/app.fixture';
 import {
   WORLD_CUP_DATASET,
   followOsTheme,
-  openSessions,
 } from './helpers/app-actions';
 import { DatabaseSync } from 'node:sqlite';
 import {
@@ -17,7 +16,7 @@ import {
   saveLenaiSettings,
   seedWorldCupDataset,
 } from './helpers/agents-api';
-import { apiFetch, apiJson } from './helpers/api';
+import { apiJson } from './helpers/api';
 import { runWorkflow } from './helpers/runs-api';
 import {
   LlmStub,
@@ -190,7 +189,7 @@ test('creates an agent, tries it, publishes it and deletes it', async ({
   await expect(page.getByText(HISTORIAN, { exact: true })).toHaveCount(0);
 });
 
-test('editing a Live agent keeps its sessions on the Live version until republished', async ({
+test('editing a Live agent keeps its runs on the Live version until republished', async ({
   page,
 }) => {
   const id = await createUserAgent(page, {
@@ -199,15 +198,6 @@ test('editing a Live agent keeps its sessions on the Live version until republis
     datasets: [WORLD_CUP_DATASET],
   });
   await publishAgent(page, id);
-  // Chats can no longer start from the UI (1.23.22): the session is made
-  // through the API, as an old chat of the Live agent would be.
-  const created = await apiJson<{ ok: boolean; message: string }>(
-    page,
-    'POST',
-    '/sessions',
-    { agentId: id },
-  );
-  expect(created.ok, created.message).toBe(true);
 
   await openEditor(page, id, HISTORIAN);
   await instructionsField(page).fill('Talk like a pirate.');
@@ -216,35 +206,11 @@ test('editing a Live agent keeps its sessions on the Live version until republis
   await expect(editorStatus(page)).toContainText('Live');
   await expect(editorStatus(page)).toContainText('Unpublished changes');
 
-  const openSession = async () => {
-    await openSessions(page);
-    await page
-      .getByRole('navigation', { name: 'Past chats', exact: true })
-      .locator('[data-testid^="session-"]')
-      .filter({ hasText: HISTORIAN })
-      .click();
-    await expect(page.getByTestId('session-workflow')).toHaveText(HISTORIAN);
-  };
-  // An old chat cannot be continued in the UI (sessions-chat R66): the turn
-  // runs through the API, and the chat is then read as a past chat.
-  const send = async (question: string) => {
-    const { sessions } = await apiJson<{
-      sessions: { id: string; name: string }[];
-    }>(page, 'GET', '/sessions');
-    const session = sessions.find((s) => s.name === HISTORIAN)!;
-    const turn = await apiFetch(
-      page,
-      'POST',
-      `/sessions/${session.id}/messages/stream`,
-      { content: question },
-    );
-    expect(turn.ok(), await turn.text()).toBe(true);
-  };
-
-  await send('Who won in 2014?');
-  await page.reload();
-  await openSession();
-  await expectAnswers(page, 1);
+  // A run of the agent's workflow uses its Live version, not the draft.
+  const first = await runWorkflow(page, `agent:${id}`, {
+    question: 'Who won in 2014?',
+  });
+  expect(first.status).toBe(200);
   expect(systemsFor('Who won in 2014?')).toContain('Answer in one sentence.');
   expect(systemsFor('Who won in 2014?')).not.toContain('Talk like a pirate.');
 
@@ -254,10 +220,10 @@ test('editing a Live agent keeps its sessions on the Live version until republis
   await expect(editorStatus(page)).toContainText('Live');
   await expect(editorStatus(page)).not.toContainText('Unpublished changes');
 
-  await send('And in 2010?');
-  await page.reload();
-  await openSession();
-  await expectAnswers(page, 2);
+  const second = await runWorkflow(page, `agent:${id}`, {
+    question: 'And in 2010?',
+  });
+  expect(second.status).toBe(200);
   expect(systemsFor('And in 2010?')).toContain('Talk like a pirate.');
 });
 

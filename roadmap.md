@@ -178,7 +178,7 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
 
 #### 1.7.19 — Sidebar session order goes stale ([BA-100](https://halo-powered.atlassian.net/browse/BA-100))  `📋 Planned`
 - **Intent:** the most recently used session is on top.
-- **Scope:** see the Jira bug and the Open question in [capabilities/sessions-chat/spec.md](specs/capabilities/sessions-chat/spec.md).
+- **Scope:** see the Jira bug and the Open question in [capabilities/agent-answers/spec.md](specs/capabilities/agent-answers/spec.md).
 - **Acceptance:** After a chat turn the session moves to the top without a reload.
 
 #### 1.7.20 — Renderer honours a non-default `BACKEND_PORT` ([BA-109](https://halo-powered.atlassian.net/browse/BA-109))  `📋 Planned`
@@ -277,7 +277,7 @@ The app becomes workflow-first: a chat runs a **workflow** defined in code, and 
 
 #### 1.23.8 — Remove the showcase agents  `📋 Planned`
 - **Intent:** the four showcase agents (Benchmarking, Survey, LAD COE, Strategy), which never run, are gone from the app.
-- **Scope:** their agent files, registration and shipped prompts; every showcase branch in the backend and the agent hub; a saved pin or prompt override for their keys is ignored, never an error (no migration). Specs: agents-evals R106 retired and the lines naming them, agents.md 2.9, api.md 33, sessions-chat R64, ui.md, glossary. Past epic specs stay as history.
+- **Scope:** their agent files, registration and shipped prompts; every showcase branch in the backend and the agent hub; a saved pin or prompt override for their keys is ignored, never an error (no migration). Specs: agents-evals R106 retired and the lines naming them, agents.md 2.9, api.md 33, agent-answers R64, ui.md, glossary. Past epic specs stay as history.
 - **Out of scope:** System agents; any other agent.
 - **Acceptance:** no showcase agent in the hub or the new-session picker; `GET /agents/benchmarking` answers 404; with a pin and an override saved for `strategy`, the hub and `GET /agents` still load; `agent-hub` and `session-management` specs updated; the `@demo @story-1.23.8` scenario passes; builds, unit tests, lint and check-specs green.
 - **Notes:** requested on 2026-11-11 (answer to the plan's open question 1). Built right after 1.23.2, so later stories have no showcase case. Detail: plan section 7.

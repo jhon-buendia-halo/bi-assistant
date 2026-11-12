@@ -1149,7 +1149,7 @@ export function fixtureForCases(
  * plus, when a throwaway eval session exists, the same `session-id` and a
  * live turn-records array `create_visual`/`update_visual` read via
  * `TURN_RECORDS_CONTEXT_KEY` in a real chat turn (see
- * `SessionsService.streamMessage`).
+ * `TurnEngine.streamTurn`).
  */
 function evalRequestContext(
   datasets: string[],
@@ -1172,11 +1172,11 @@ function evalRequestContext(
 }
 
 /**
- * Mirrors `toolRecords()` in `TurnEngine.generateTurn` (the non-streaming turn path)
+ * Mirrors `toolRecords()` (the turn engine)
  * but incrementally, per step, via `targetOptions.onStepFinish` — so a
  * `create_visual`/`update_visual` call later in the *same* run sees the SQL
  * earlier steps already captured, the same way production threads a live
- * records array through requestContext during `streamMessage`.
+ * records array through requestContext during `streamTurn`.
  */
 function captureStepRecords(
   step: unknown,
@@ -1474,7 +1474,7 @@ export async function runAssistantEvalCase(
       },
     });
 
-    // Mirrors SessionsService.streamMessage's tool-only-turn fallback: a run
+    // Mirrors TurnEngine.streamTurn's tool-only-turn fallback: a run
     // that spent every step on tools and never produced prose still gets a
     // reported answer built from what the tools actually returned, instead
     // of scoring/reporting an empty string. Note: `runEvals` scores the

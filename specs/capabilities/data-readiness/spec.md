@@ -39,7 +39,7 @@ Capability-local vocabulary:
   - The run host covers that one dataset only, so the agent never asks which dataset.
   - While no qualifying dataset exists, Execute SHALL be disabled with the title `Add a PostgreSQL or Databricks dataset first`, and a run request SHALL be refused with that text.
   - The run's answer, its readiness card and its files show in the Run tab (R5; [synthetic-data](../synthetic-data/spec.md) R43). **Follow up** asks a drill-down or synthetic-data question as a further run with this run as its context; **Stop** cancels a running assessment (R33).
-  - Every run SHALL run the Data Readiness Agent, not the assistant. The assistant-only passes SHALL NOT apply ([sessions-chat](../sessions-chat/spec.md) R61).
+  - Every run SHALL run the Data Readiness Agent, not the assistant. The assistant-only passes SHALL NOT apply ([agent-answers](../agent-answers/spec.md) R61).
 - R2a. Until chats are retired (1.23.22), **Start chat** on the workflow (R1) SHALL also still create a session at once, with no form.
   - The session is named "Data Readiness" and bound to the agent. It covers every dataset bound to a PostgreSQL or Databricks datasource, ordered by dataset name.
   - The app SHALL show the toast `Session "Data Readiness" created` and open the session on its welcome block.

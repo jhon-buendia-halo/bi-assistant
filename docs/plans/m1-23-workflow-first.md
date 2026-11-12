@@ -176,7 +176,7 @@ Max steps, from framework-free modules:
 | `agentKey: 'assistant-v2'` | `qti-v2-turn` (the code workflow whose `primaryFor` is the key) | v2's 4 steps |
 | `agentKey: 'rfp'` / `'data-readiness'` | `agent:rfp` / `agent:data-readiness` | `agent-turn` with that agent |
 | `agentId: <id>`, agent exists | `agent:<id>` | `agent-turn` with the assistant + the agent's Live config (a preview: the draft) |
-| `agentId: <id>`, agent deleted | `agent:<id>` (view `deleted: true`) | `agent-turn` with the plain assistant (sessions-chat R59, unchanged) |
+| `agentId: <id>`, agent deleted | `agent:<id>` (view `deleted: true`) | `agent-turn` with the plain assistant (past-chats R59, unchanged) |
 | neither | `agent:assistant` | `agent-turn` with the assistant |
 
 The rules:
@@ -189,7 +189,7 @@ The rules:
 - A draft-only agent has no listed workflow: `GET /workflows/agent:<id>` answers 404.
 - The **agent editor's preview** and the **Chat Box** tab keep starting through `POST /sessions { agentId, preview: true }` (agents-evals R60, R61), unchanged. A preview session derives `agent:<id>` and runs the one-step path with the **draft**, through the existing `runningConfig` rule. Its `workflowRef.name` is the draft's name.
 
-**Deleted user agent** (sessions-chat R57–R59). Its workflow leaves the catalogue. Its sessions keep `workflowRef = { id: 'agent:<id>', name: <stored agentName>, kind: 'agent', deleted: true }`, and their turns run the plain assistant, exactly as today.
+**Deleted user agent** (past-chats R57–R59). Its workflow leaves the catalogue. Its sessions keep `workflowRef = { id: 'agent:<id>', name: <stored agentName>, kind: 'agent', deleted: true }`, and their turns run the plain assistant, exactly as today.
 
 ## 5. Contract
 
@@ -427,7 +427,7 @@ Each story updates the specs of its own change, before its code (workflow step 5
 | [roadmap.md](../../roadmap.md) | 1.23.2 | Milestone heading `### Milestone 1.23 — Workflow-first: chats start from a workflow (M1-23)`, the intro rewritten, and features 1.23.2–1.23.7 (section 7), linked to this plan. |
 | [product/glossary.md](../../specs/product/glossary.md) | 1.23.2 | New: **Workflow** (a fixed sequence of steps defined in code that a chat runs on each message; each step is code or calls an agent), **One-step workflow** (the workflow the app makes for an agent with no workflow of its own: one step that runs the agent), **Code-defined workflow**. Amended: **Session** (runs one workflow), **Agent** (a building block that workflow steps call). |
 | capabilities/**workflows**/spec.md (new) | 1.23.3, 1.23.5 | All required sections (Concepts, Rules, Edge cases and errors, Contracts, UI, Flows, Acceptance). 1.23.3 writes R1–R4 and Contracts; 1.23.5 writes R5–R10, UI and the Feature. The rules are listed below the table. |
-| [sessions-chat](../../specs/capabilities/sessions-chat/spec.md) | 1.23.3, 1.23.4, 1.23.6, 1.23.7 | 1.23.3: **R65**, a session runs one workflow; R61 says a bound built-in agent's session runs its workflow. 1.23.4: R61's turn wording (every streamed turn is a workflow run; nothing else changes). 1.23.6: R64 rewritten for the Workflow field; R57/R63 chips name the workflow, shown for every session. 1.23.7: R52 reworded "Start chat on a workflow" (creation semantics unchanged, keyed by workflow); the UI lines 259/267/269. |
+| [agent-answers](../../specs/capabilities/agent-answers/spec.md) | 1.23.3, 1.23.4, 1.23.6, 1.23.7 | 1.23.3: **R65**, a session runs one workflow; R61 says a bound built-in agent's session runs its workflow. 1.23.4: R61's turn wording (every streamed turn is a workflow run; nothing else changes). 1.23.6: R64 rewritten for the Workflow field; R57/R63 chips name the workflow, shown for every session. 1.23.7: R52 reworded "Start chat on a workflow" (creation semantics unchanged, keyed by workflow); the UI lines 259/267/269. |
 | [agents-evals](../../specs/capabilities/agents-evals/spec.md) | 1.23.7 | R5 (Official agents lose Chat Box and Start chat; the default tab for an Official agent is System Prompt), R53 rewritten (Start chat is offered on workflows, workflows R6, never on agents), R90 (Chat Box: user agents only), R106 (showcase: no workflow, no Start chat anywhere), **R109** (Used in workflows, with its empty texts). The Agent Hub Feature: Start chat scenarios move to the workflows Feature; a new scenario for R109. |
 | [app-shell](../../specs/capabilities/app-shell/spec.md) | 1.23.5 | R3 (six items; Workflows stays current on the workflow page; choosing it there returns to the list), R36/R37 (names), the Navigation rail Feature (a step for Workflows). |
 | [agent-panel](../../specs/capabilities/agent-panel/spec.md) | 1.23.4 | R8a (a workflow-backed agent is the agent of a code-defined workflow), R15 (a one-step workflow never writes the state; the bar's sources are unchanged). |
@@ -487,7 +487,7 @@ These entries are ready to paste under Milestone 1.23, in dependency order. 1.23
 - **Scope:**
   - Remove the Benchmarking, Survey, LAD COE and Strategy agents: `showcase.agents.ts`, `showcase-catalog.ts`, their registration in `mastra/index.ts`, their shipped prompts in `shipped-agent-prompts.ts`, and every showcase branch in `agents.service.ts`, `sessions.service.ts` and the agent hub, card, detail and page utilities (the Showcase chip, the reason text, `showcase` on `AgentSummary`).
   - Data left by them is ignored, never an error: a saved pin or a prompt override for one of their keys is skipped when the hub and the prompt endpoints read it. No migration.
-  - Specs: agents-evals R106 is retired (kept as `R106. Retired (1.23.8): …`), with R1, R3, R5 and R90–R91 lines that name showcase agents; agents.md 2.9 and its registry lines; api.md 33 (`showcase`, its `chatRequirement`); sessions-chat R64's list; ui.md's showcase lines; the glossary entry. Past epic specs (BA-233, BA-305) stay as history.
+  - Specs: agents-evals R106 is retired (kept as `R106. Retired (1.23.8): …`), with R1, R3, R5 and R90–R91 lines that name showcase agents; agents.md 2.9 and its registry lines; api.md 33 (`showcase`, its `chatRequirement`); agent-answers R64's list; ui.md's showcase lines; the glossary entry. Past epic specs (BA-233, BA-305) stay as history.
 - **Out of scope:** the System agents; any other agent; the workflow catalogue (1.23.3), which then has no showcase case.
 - **Acceptance:**
   - The hub shows no showcase agent and no Showcase chip; `GET /agents/benchmarking` answers 404 `Agent "benchmarking" not found`.
@@ -505,7 +505,7 @@ These entries are ready to paste under Milestone 1.23, in dependency order. 1.23
   - `WorkflowsModule` / `WorkflowsService` / `WorkflowsController`: `GET /workflows`, `GET /workflows/:id` (5.2). `AgentsModule` exports `AgentsService`.
   - `POST /sessions { workflowId, name?, datasets? }`, with the resolution and refusals of 5.2. Every new session stores `workflowId`.
   - The session view's `workflowRef`; the agent detail's `usedInWorkflows`.
-  - Specs: api.md (2.6.2, 3, 2.1, 34); data-model 3.4 and 3.13; agents.md 5.12; the new `workflows` capability (R1–R4, Contracts, other sections stubbed with `E2E: none yet`) and its README row; sessions-chat R65 and R61.
+  - Specs: api.md (2.6.2, 3, 2.1, 34); data-model 3.4 and 3.13; agents.md 5.12; the new `workflows` capability (R1–R4, Contracts, other sections stubbed with `E2E: none yet`) and its README row; past-chats R65 and R61.
 - **Out of scope:**
   - the turn path (1.23.4);
   - every UI change;
@@ -538,7 +538,7 @@ These entries are ready to paste under Milestone 1.23, in dependency order. 1.23
   - `runTurnWorkflow` replaces `runAssistantV2Workflow` and the direct `agent.stream` branch (5.5).
   - The step error rule; the bar rule (`bar: 'agent'` never writes `workflowState`); `workflowSourceOf` from the catalogue.
   - A captured real trace of one wrapper turn and one v2 turn, read through Monitoring's queries. If the turn now carries workflow spans, Monitoring classifies the `workflow_run` and `workflow_step` span types as Framework spans (monitoring R39), so the waterfall, turn counts and agent column read as before.
-  - Specs: agents.md 1.2, 5.1, 5.11 and the "Invoked by" tables; agent-panel R8a and R15; sessions-chat R61; architecture Level 3 prose; monitoring R39 (only if the trace shows workflow spans).
+  - Specs: agents.md 1.2, 5.1, 5.11 and the "Invoked by" tables; agent-panel R8a and R15; agent-answers R61; architecture Level 3 prose; monitoring R39 (only if the trace shows workflow spans).
 - **Out of scope:**
   - the non-streamed turn;
   - evals;
@@ -593,12 +593,12 @@ These entries are ready to paste under Milestone 1.23, in dependency order. 1.23
 #### 1.23.6 — The New conversation screen picks a workflow; chats name their workflow  `📋 Planned`
 - **Intent:** a chat is started by choosing a **Workflow**, and every chat says which workflow it runs, in its header and in the Sessions list.
 - **Scope:**
-  - The composer's Agent field becomes **Workflow**: the same listbox and keyboard behaviour (sessions-chat R64), options from `GET /workflows` in their order, Assistant preselected on every visit, a disabled option showing its `chatRequirement`, and test ids and copy from 5.8.
+  - The composer's Agent field becomes **Workflow**: the same listbox and keyboard behaviour (agent-answers R64), options from `GET /workflows` in their order, Assistant preselected on every visit, a disabled option showing its `chatRequirement`, and test ids and copy from 5.8.
   - **Create** sends `POST /sessions { workflowId, name, datasets }` for a `picksDatasets` workflow, else `{ workflowId, name? }`.
   - `openComposer` takes a workflow id, and the call site of 1.23.5 is updated.
   - The header chip `Workflow` (every session) and the Sessions list chip from `workflowRef`; `sessionWorkflowLabel`.
   - No showcase case: the showcase agents are gone (1.23.8).
-  - Specs: sessions-chat R57, R63, R64 and the UI lines; ui.md 4.7, 4.7.1 and 4.12; the Session management Feature.
+  - Specs: past-chats R57, R63, R64 and the UI lines; ui.md 4.7, 4.7.1 and 4.12; the Session management Feature.
 - **Out of scope:** the agent pages (1.23.7); changes to the welcome block (it still reads `agent`, R58).
 - **Acceptance:**
   - `session-management.spec.ts`:
@@ -617,7 +617,7 @@ These entries are ready to paste under Milestone 1.23, in dependency order. 1.23
   - The Official agents' Chat Box tab is removed, and their default tab becomes System Prompt (section 2, item 5). A user agent keeps Chat Box, the draft preview.
   - The `Used in` line in the agent header (5.8), from `usedInWorkflows`; each chip opens the workflow page.
   - `startChatWithAgent`, `newSessionAgentOptions` and their unused helpers are removed.
-  - Specs: agents-evals R5, R53, R90, R106 and **R109**, and the Agent Hub Feature; sessions-chat R52's wording; rfp R1, R2 and its Start chat scenarios; data-readiness R2; ui.md 4.4, 4.5 and 4.5.8.
+  - Specs: agents-evals R5, R53, R90, R106 and **R109**, and the Agent Hub Feature; agent-answers R52's wording; rfp R1, R2 and its Start chat scenarios; data-readiness R2; ui.md 4.4, 4.5 and 4.5.8.
 - **Out of scope:**
   - removing the `chatRequirement` and `starterQuestions` fields from `AgentSummary` (the workflows service reads them);
   - any change to the agent editor or the preview chat.
@@ -705,4 +705,4 @@ Pure functions: `cleanText(text)` (trim, collapse every run of whitespace to one
 
 ### 9.5 Specs
 
-ADR-0040 gains an amendment (workflows have a trigger, chat or run; a run workflow runs once on a typed input defined in code, and nothing is stored). `specs/capabilities/workflows/spec.md` (rules and a Feature scenario), `specs/system/api.md` (116/117 fields, 118, sessions refusal), `specs/system/agents.md` (the `seq-text-demo` workflow next to 5.11/5.12), `specs/system/ui.md` (4.4a/4.4b run controls), `specs/capabilities/sessions-chat/spec.md` R64 (chat workflows only).
+ADR-0040 gains an amendment (workflows have a trigger, chat or run; a run workflow runs once on a typed input defined in code, and nothing is stored). `specs/capabilities/workflows/spec.md` (rules and a Feature scenario), `specs/system/api.md` (116/117 fields, 118, sessions refusal), `specs/system/agents.md` (the `seq-text-demo` workflow next to 5.11/5.12), `specs/system/ui.md` (4.4a/4.4b run controls), `specs/capabilities/agent-answers/spec.md` R64 (chat workflows only).

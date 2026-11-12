@@ -5,7 +5,7 @@ jest.mock('../data-readiness/data-readiness.service', () => ({
 }));
 
 // Sessions bound to the Data Readiness Agent (BA-261; data-readiness R2, R5;
-// sessions-chat R52, R61): creation, the derived agent, the turn's context
+// agent-answers R52, R61): creation, the derived agent, the turn's context
 // and the readiness-report event.
 jest.mock('@mastra/core/request-context', () => ({
   RequestContext: class {
@@ -82,7 +82,6 @@ jest.mock('./visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
 
-import { BadRequestException } from '@nestjs/common';
 import { isoToday } from '../../mastra/rfp-context';
 import { getReadinessToolServices } from '../../mastra/readiness-tool-services';
 import { getSyntheticDataToolServices } from '../../mastra/synthetic-data-tool-services';
@@ -91,10 +90,10 @@ import type {
   ReadinessSummary,
 } from '../data-readiness/engine/types';
 import { SessionsService, type StreamEvent } from './sessions.service';
+import { streamStored } from './testing/stream-stored';
 import { streamTurnWorkflow } from '../../mastra/testing/turn-workflow.stub';
 import type { SessionDoc } from './entities/session.entity';
 
-const REQUIREMENT = 'Add a PostgreSQL or Databricks dataset first';
 const DESCRIPTION =
   'Assesses how ready a PostgreSQL or Databricks dataset is for analysis, scoring it on the DMBOK data-quality dimensions with a deterministic engine and explaining the findings.';
 
@@ -296,7 +295,7 @@ async function turn(
   content: string,
 ): Promise<StreamEvent[]> {
   const events: StreamEvent[] = [];
-  await ctx.service.streamMessage('s-1', content, (event) =>
+  await streamStored(ctx.service, 's-1', content, (event) =>
     events.push(event),
   );
   return events;
@@ -330,37 +329,6 @@ function readinessToolTurn(
 }
 
 describe('SessionsService sessions bound to the Data Readiness Agent (BA-261)', () => {
-  describe('createFromAgent (api.md 2.1 #3, data-readiness R2)', () => {
-    it('creates "Data Readiness" over every PostgreSQL or Databricks dataset, by name', async () => {
-      const ctx = build();
-      const session = await ctx.service.createFromAgent('data-readiness');
-      expect(session).toMatchObject({
-        name: 'Data Readiness',
-        datasets: ['Sales', 'World Cup'],
-        agentKey: 'data-readiness',
-        agentName: 'Data Readiness Agent',
-        messages: [],
-      });
-      expect(session).not.toHaveProperty('agentId');
-    });
-
-    it('uses a typed name instead', async () => {
-      const session = await build().service.createFromAgent(
-        'data-readiness',
-        '  Q4 data check ',
-      );
-      expect(session.name).toBe('Q4 data check');
-    });
-
-    it('refuses with the requirement when no dataset qualifies, creating nothing', async () => {
-      const ctx = build({ existing: [DATASETS[2]] });
-      await expect(
-        ctx.service.createFromAgent('data-readiness'),
-      ).rejects.toThrow(new BadRequestException(REQUIREMENT));
-      expect(ctx.repository.insert).not.toHaveBeenCalled();
-    });
-  });
-
   it('derives the agent with its starters (api.md 2.1)', async () => {
     const ctx = build();
     expect((await ctx.service.toView(ctx.session)).agent).toEqual({

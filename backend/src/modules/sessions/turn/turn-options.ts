@@ -104,7 +104,7 @@ export class TurnOptions {
     activeVisualId?: string,
   ) {
     // A session started from a user agent runs with the agent's current Live
-    // version (sessions-chat R54), a preview with its draft (agents-evals
+    // version (agent-answers R54), a preview with its draft (agents-evals
     // R60); once the agent is gone it is the plain assistant (R59).
     const agent = await this.agentConfigFor(session);
     const datasets = await this.deps.datasets.bound(session.datasets);

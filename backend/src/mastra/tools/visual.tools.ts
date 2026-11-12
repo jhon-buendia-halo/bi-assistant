@@ -8,7 +8,7 @@ export const SESSION_ID_CONTEXT_KEY = 'session-id';
 export const ACTIVE_VISUAL_CONTEXT_KEY = 'active-visual-id';
 /**
  * Holds a live reference to the current chat turn's captured SQL/rows
- * (`ToolDataRecord[]`), set once per turn in `SessionsService.streamMessage`
+ * (`ToolDataRecord[]`), set once per turn in `TurnEngine.streamTurn`
  * before the model starts and mutated in place as tool results arrive — so a
  * `create_visual`/`update_visual` call later in the same turn sees everything
  * gathered so far. A fresh object is created per turn, so there is no

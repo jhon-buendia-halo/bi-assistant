@@ -99,7 +99,7 @@ export class AgentsNavState {
 
   /**
    * Back to the hub after deleting a user agent. Its sessions now read
-   * `<name> · agent deleted` (sessions-chat R59), so the list is reloaded.
+   * `<name> · agent deleted` (past-chats R59), so the list is reloaded.
    */
   onAgentDeleted(): void {
     this.shell.mainView.set('agents');

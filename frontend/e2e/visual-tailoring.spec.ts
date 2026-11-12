@@ -8,8 +8,9 @@ import {
   openSessions,
   WORLD_CUP_SESSION,
 } from './helpers/app-actions';
-import { apiFetch, apiJson } from './helpers/api';
+import { apiJson } from './helpers/api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
+import { seedPastChat } from './helpers/past-chats';
 import {
   LlmStub,
   StubReply,
@@ -124,34 +125,47 @@ async function expectFrameTheme(frame: Frame, theme: Theme): Promise<void> {
 }
 
 /**
- * Seeds an old chat with a visual, through the API (internal endpoints kept
- * for past chats), and opens it from Runs → Past chats. The chat is
- * read-only, with its visual in the panel.
+ * Seeds an old chat with a visual into the data dir (no route starts a chat
+ * any more) and opens it from Runs → Past chats. The chat is read-only, with
+ * its visual in the panel.
  */
-async function openPastChatWithVisual(page: Page): Promise<string> {
-  const { session } = await apiJson<{ session: { id: string } }>(
-    page,
-    'POST',
-    '/sessions',
-    { name: WORLD_CUP_SESSION, datasets: [WORLD_CUP_DATASET] },
-  );
-  const turn = await apiFetch(
-    page,
-    'POST',
-    `/sessions/${session.id}/messages/stream`,
-    { content: QUESTION },
-  );
-  expect(turn.ok(), await turn.text()).toBe(true);
-  const visual = await apiJson<{ ok: boolean; message: string }>(
-    page,
-    'POST',
-    `/sessions/${session.id}/visualizations`,
-    {},
-  );
-  expect(visual.ok, visual.message).toBe(true);
+async function openPastChatWithVisual(
+  page: Page,
+  appDataDir: string,
+): Promise<string> {
+  const id = seedPastChat(appDataDir, {
+    name: WORLD_CUP_SESSION,
+    datasets: [WORLD_CUP_DATASET],
+    workflowId: 'agent:assistant',
+    turns: [
+      {
+        question: QUESTION,
+        answer: ANSWER,
+        data: [
+          {
+            tool: 'run_readonly_sql',
+            input: SQL,
+            columns: ['stage', 'matches'],
+            rows: [
+              { stage: 'Group stage', matches: 48 },
+              { stage: 'Round of 16', matches: 8 },
+              { stage: 'Final', matches: 1 },
+            ],
+            rowCount: 3,
+            rationale: 'Count the matches per stage.',
+          },
+        ],
+      },
+    ],
+    visual: {
+      title: VISUAL_TITLE,
+      description: SPEC_REPLY.description,
+      spec: SPEC_REPLY.spec,
+    },
+  });
   await page.reload();
   await openPastChat(page);
-  return session.id;
+  return id;
 }
 
 /** Opens the past chat from Runs → Past chats and its visual in the panel. */
@@ -171,7 +185,7 @@ async function openPastChat(page: Page): Promise<void> {
     .click();
 }
 
-test("the visual follows the app's theme", async ({ page }) => {
+test("the visual follows the app's theme", async ({ appDataDir, page }) => {
   // The theme is switched while the visual stays open: Settings would replace
   // the chat (and with it the panel), so the app follows the operating system
   // (System) and the OS setting is switched; the app's resolved theme changes
@@ -180,7 +194,7 @@ test("the visual follows the app's theme", async ({ page }) => {
   await followOsTheme(page);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
-  await openPastChatWithVisual(page);
+  await openPastChatWithVisual(page, appDataDir);
   const frame = await visualFrame(page);
   await expectFrameTheme(frame, 'light');
   // A chart label uses the frame's tokens too, not a hardcoded light grey.
@@ -218,7 +232,7 @@ test('an older visual opens in the current theme', async ({
   page,
   appDataDir,
 }) => {
-  const sessionId = await openPastChatWithVisual(page);
+  const sessionId = await openPastChatWithVisual(page, appDataDir);
   await visualFrame(page);
 
   // Rewrite the stored visual as one made before the themed frame: a legacy

@@ -40,7 +40,7 @@ describe('Runs area (app-shell R3, R49)', () => {
     shellState().mainView.set('session-chat');
     shellState().selectArea('runs');
     expect(shellState().mainView()).toBe('runs');
-    // Past chats are the Runs page's second tab (sessions-chat R63).
+    // Past chats are the Runs page's second tab (past-chats R63).
     runsState().setTab('past-chats');
     fixture.detectChanges();
     await fixture.whenStable();
@@ -88,7 +88,7 @@ describe('Runs area (app-shell R3, R49)', () => {
   });
 });
 
-describe('Chat header Workflow chip (sessions-chat R57, R59, roadmap 1.23.6)', () => {
+describe('Chat header Workflow chip (past-chats R57, R59, roadmap 1.23.6)', () => {
   beforeEach(async () => {
     localStorage.removeItem('questions-to-insights:right-panel-width');
     await TestBed.configureTestingModule({

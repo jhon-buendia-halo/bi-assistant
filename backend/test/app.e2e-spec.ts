@@ -62,12 +62,9 @@ describe('Opening a data dir from the multi-user version (M14)', () => {
       datasourceId: 'none',
       datasourceKind: 'postgres',
     });
-    ids.session = (
-      await created('/sessions', {
-        name: "Alice's session",
-        datasets: ['World Cup Core'],
-      })
-    ).session.id;
+    // No route starts a chat any more (1.23.27): Alice's past chat is
+    // written into the store below, as an earlier version left it.
+    ids.session = 'past-chat-alice';
     ids.agent = (
       await created('/agents', {
         name: "Bob's agent",
@@ -95,6 +92,18 @@ describe('Opening a data dir from the multi-user version (M14)', () => {
           `UPDATE "${table}" SET doc = json_set(doc, '$.ownerId', ?) WHERE json_extract(doc, '$.id') = ?`,
         )
         .run(owner, id);
+    db.prepare(`INSERT INTO sessions (doc) VALUES (?)`).run(
+      JSON.stringify({
+        id: ids.session,
+        name: "Alice's session",
+        datasets: ['World Cup Core'],
+        workflowId: 'agent:assistant',
+        messages: [],
+        visualizations: [],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }),
+    );
     setOwner('sessions', ids.session, 'u-alice');
     setOwner('agents', ids.agent, 'u-bob');
     // A knowledge snippet of Carol's, in the table the knowledge library
@@ -156,6 +165,13 @@ describe('Opening a data dir from the multi-user version (M14)', () => {
       sessions: { id: string; name: string }[];
     };
     expect(sessions.sessions.map((s) => s.id)).toContain(ids.session);
+    // A past chat still opens (1.23.27): its read route answers it.
+    const past = (await api().get(`/sessions/${ids.session}`).expect(200))
+      .body as { id: string; workflowRef: { id: string } };
+    expect(past).toMatchObject({
+      id: ids.session,
+      workflowRef: { id: 'agent:assistant' },
+    });
 
     const agents = (await api().get('/agents').expect(200)).body as {
       agents: { id?: string; key?: string; name: string }[];

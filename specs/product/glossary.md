@@ -146,7 +146,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Plan design.** One benefit plan a client offers on a *line of coverage*: its carrier, funding type (for example fully insured or self-funded), plan type and state, with the financials of its coverage (premiums, rates by tier, enrolment, contributions and fees).
 
-**Preview chat.** A conversation in the agent editor's Details panel that runs a *user agent*'s saved *draft*. It is held in memory only, never listed with the sessions, and discarded with its memory when the editor closes.
+**Preview chat.** Retired in 1.23.27 (the agent editor's Try it is a draft run, a run on a temporary run host, agents.md 5.14).
 
 **Readiness dimension.** One of the ten DMBOK data-quality dimensions a readiness report lists. Eight are assessed: completeness, validity, consistency, uniqueness, integrity, accessibility, timeliness and reasonability. Two are listed but not assessed, because they need reference data: accuracy and currency.
 
@@ -192,7 +192,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Schema note.** A *dataset*'s *schema layer* and free-text description for one *schema*. Saved with the dataset and given to the assistant. See [../capabilities/datasets/spec.md](../capabilities/datasets/spec.md).
 
-**Session.** One conversation with the assistant, bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Needs a name and at least one dataset. Every session runs one *workflow* on each message (ADR-0040). A session started from a *Live* *user agent* is bound to that agent and runs with its instructions (see [../capabilities/sessions-chat/spec.md](../capabilities/sessions-chat/spec.md), R52-R59). A session started from the *RFP Builder* is bound to it and runs it on every turn (see [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md)). Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
+**Session.** A stored conversation of an earlier version, now a *past chat* (read-only), bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Every session runs one *workflow* on each message (ADR-0040). A session started from a *Live* *user agent* is bound to that agent and runs with its instructions (see [../capabilities/agent-answers/spec.md](../capabilities/agent-answers/spec.md), R52-R59). A session started from the *RFP Builder* is bound to it and runs it on every turn (see [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md)). Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
 
 **Session panel.** The right-hand panel when the main view is a *session*'s chat. It shows one *panel item* at a time (the *visual* panel, a document, a file or a table), with a menu of everything shown in the session and a Download button. See [agent-panel](../capabilities/agent-panel/spec.md).
 

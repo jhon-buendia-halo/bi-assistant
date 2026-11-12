@@ -62,7 +62,7 @@ interface CatalogueEntry {
   steps(): AgentWorkflow['steps'];
 }
 
-/** Why a Live user agent's workflow can't start (sessions-chat R52). */
+/** Why a Live user agent's workflow can't start (agent-answers R52). */
 const NO_DATASETS_REQUIREMENT = "None of this agent's datasets exist";
 
 /**

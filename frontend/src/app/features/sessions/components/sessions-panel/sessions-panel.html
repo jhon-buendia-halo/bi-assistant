@@ -4,20 +4,15 @@
     <app-session-panel
       class="min-h-0 flex-1"
       [session]="session"
-      [readOnly]="state.readOnlyChat()"
       [item]="state.activePanelItem()"
       (selectItem)="state.onSelectPanelItem($event)"
       [visualization]="state.activeVisualization()"
-      [loading]="state.generatingVisualSession() === session.id"
       [error]="state.visualizationError()"
       [downloading]="
         state.downloadingVisualization() === state.activeVisualization()?.id
       "
       (downloadVisual)="state.downloadVisualization($event)"
       (selectVersion)="state.selectVisualVersion($event)"
-      (revertVersion)="state.revertVisualVersion($event)"
-      (visualRefreshed)="state.onVisualRefreshed($event)"
-      (dataPointSelected)="state.onDataPointSelected($event)"
     />
   }
 }

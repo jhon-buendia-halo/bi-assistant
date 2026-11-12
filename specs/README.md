@@ -36,7 +36,8 @@ specs/
 | [datasets](capabilities/datasets/spec.md) | Catalog browser, entity selection, entity details, relationships | — (covered by the datasources Feature) |
 | [testing-data](capabilities/testing-data/spec.md) | Sample / test data setup | — |
 | [developer-settings](capabilities/developer-settings/spec.md) | Developer observability switch, endpoints, restart to apply | Developer settings (`developer-settings.spec.ts`), Developer observability export (`developer-observability.spec.ts`) |
-| [sessions-chat](capabilities/sessions-chat/spec.md) | Sessions, streamed chat, tools, SQL repair and verification, clarification, memory | Chat and visuals (`chat-and-visuals.spec.ts`) |
+| [agent-answers](capabilities/agent-answers/spec.md) | How an agent answers: the streamed turn, tools, SQL repair and verification, clarification, memory, the agent-bound rules | Chat and visuals (`chat-and-visuals.spec.ts`) |
+| [past-chats](capabilities/past-chats/spec.md) | The stored sessions of earlier versions: the Past chats list, the read-only chat, delete, downloads | Session management (`runs.spec.ts`) |
 | [visuals](capabilities/visuals/spec.md) | Interactive visuals: create, tailor, version, revert, refresh, repair, export | — (covered by the Chat and visuals Feature) |
 | [dataset-ontology](capabilities/dataset-ontology/spec.md) | Each dataset's ontology: concepts, relations, constraints and instructions, shared items, bootstrap from data; the Ontology tab and "Ontology in context" | Dataset ontology (`dataset-ontology.spec.ts`) |
 | [user-personas](capabilities/user-personas/spec.md) | User personas: who asks the questions (role, goals, typical questions, expertise, answer style); manage-only | User personas (`user-personas.spec.ts`) |

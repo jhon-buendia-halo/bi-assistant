@@ -107,33 +107,33 @@ Legend for **FE**: whether the shipped frontend calls it. Document types referen
 
 ### 2.1 Sessions
 
-Controller prefix `/sessions`. Capability: sessions-chat, visuals, agent-panel, rfp, workflows.
+Controller prefix `/sessions`. Capability: past-chats, visuals, agent-panel, rfp, workflows.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
 | 1 | `GET /sessions` | List all sessions | yes |
 | 2 | `GET /sessions/:id` | Get one session with full transcript | yes |
-| 3 | `POST /sessions` | Create a session | yes |
+| 3 | `POST /sessions` | Create a session (Removed in 1.23.27) | — |
 | 4 | `DELETE /sessions/:id` | Delete a session and its Mastra state | yes |
-| 5 | `POST /sessions/:id/messages/stream` | Streamed chat turn (SSE) | yes |
-| 6 | `POST /sessions/:id/messages` | Non-streamed chat turn | **no** |
-| 7 | `POST /sessions/:id/messages/feedback` | Thumbs up/down on an answer | yes |
-| 8 | `POST /sessions/:id/visualizations` | Generate a visual from an answer | yes |
+| 5 | `POST /sessions/:id/messages/stream` | Streamed chat turn (SSE) (Removed in 1.23.27) | — |
+| 6 | `POST /sessions/:id/messages` | Non-streamed chat turn (Removed in 1.23.27) | — |
+| 7 | `POST /sessions/:id/messages/feedback` | Thumbs up/down on an answer (Removed in 1.23.27) | — |
+| 8 | `POST /sessions/:id/visualizations` | Generate a visual from an answer (Removed in 1.23.27) | — |
 | 9 | `GET /sessions/:id/visualizations/:vid` | Load a visual (document + metadata) | yes |
-| 10 | `POST /sessions/:id/visualizations/:vid/tailor` | Tailor from an instruction | yes |
-| 11 | `POST /sessions/:id/visualizations/:vid/revert` | Move the version pointer | yes |
-| 12 | `POST /sessions/:id/visualizations/:vid/refresh` | Re-run SQL, refresh data in place | yes |
-| 13 | `POST /sessions/:id/visualizations/:vid/repair` | One-shot silent auto-repair | yes |
+| 10 | `POST /sessions/:id/visualizations/:vid/tailor` | Tailor from an instruction (Removed in 1.23.27) | — |
+| 11 | `POST /sessions/:id/visualizations/:vid/revert` | Move the version pointer (Removed in 1.23.27) | — |
+| 12 | `POST /sessions/:id/visualizations/:vid/refresh` | Re-run SQL, refresh data in place (Removed in 1.23.27) | — |
+| 13 | `POST /sessions/:id/visualizations/:vid/repair` | One-shot silent auto-repair (Removed in 1.23.27) | — |
 | 14 | `GET /sessions/:id/visualizations/:vid/download` | Zip bundle | yes |
 | 105 | `GET /sessions/:id/rfp-packages/:rfpId/download` | Download an RFP package (zip) or one of its files | yes |
 | 106 | `GET /sessions/:id/panel-items/:itemId/file` | Read the text of a file panel item | yes |
 | 107 | `GET /sessions/:id/panel-items/:itemId/download` | Download a file, document or table panel item | yes |
 
-The session on the wire (endpoints 1-3, and the `done` event of 5) is the stored `SessionDoc` (data-model 3.4), or a preview session (endpoint 3), plus two derived fields of the right panel ([agent-panel](../capabilities/agent-panel/spec.md), never stored as such): `panelItems: PanelItem[]` (always present, newest shown last as stored; the stored items, without any of the retired kind `phases`, plus a synthesized `visual:<id>` item for every visual without one, [data-model.md](data-model.md) 3.4.4) and `workflow?: WorkflowView` (present when the session's agent is workflow-backed (`assistant-v2`, [agents.md](agents.md) 5.11), its prompt has a `## Workflow` section or the agent has defined its own steps with `update_workflow`; the extended view of [data-model.md](data-model.md) 3.4.4: `source`, `skipped`, `waiting?`, `note?`, `failed?` besides the phases and the saved progress; the `done` event carries it too), plus, for a session with an `agentId`, a derived `agent: { id: string; name: string; deleted: boolean; description: string; starterQuestions: string[] }`. While the agent exists, `name`, `description` and `starterQuestions` come from its Live version and `deleted` is `false`. Once it is deleted, `name` is the stored `agentName`, `deleted` is `true`, and `description` and `starterQuestions` are empty (sessions-chat R57-R59). For a preview session, `name`, `description` and `starterQuestions` come from the agent's **draft**, read at each request. For a session with an `agentKey` (bound to a built-in agent, ADR-0028), `agent` is `{ id: <agentKey>, name: <the registered agent's name>, deleted: false, description: <its description>, starterQuestions: <its built-in starters> }`; for `rfp` the starters are `Start an RFP for a client`, `Which of my clients renew on 1 January 2027?` and `Resume my draft RFPs` ([rfp](../capabilities/rfp/spec.md)). It is computed on every read, never stored.
+The session on the wire (endpoints 1 and 2) is the stored `SessionDoc` (data-model 3.4) plus two derived fields of the right panel ([agent-panel](../capabilities/agent-panel/spec.md), never stored as such): `panelItems: PanelItem[]` (always present, newest shown last as stored; the stored items, without any of the retired kind `phases`, plus a synthesized `visual:<id>` item for every visual without one, [data-model.md](data-model.md) 3.4.4) and `workflow?: WorkflowView` (present when the session's agent is workflow-backed (`assistant-v2`, [agents.md](agents.md) 5.11), its prompt has a `## Workflow` section or the agent has defined its own steps with `update_workflow`; the extended view of [data-model.md](data-model.md) 3.4.4: `source`, `skipped`, `waiting?`, `note?`, `failed?` besides the phases and the saved progress; the `done` event carries it too), plus, for a session with an `agentId`, a derived `agent: { id: string; name: string; deleted: boolean; description: string; starterQuestions: string[] }`. While the agent exists, `name`, `description` and `starterQuestions` come from its Live version and `deleted` is `false`. Once it is deleted, `name` is the stored `agentName`, `deleted` is `true`, and `description` and `starterQuestions` are empty (past-chats R57-R59). For a preview session, `name`, `description` and `starterQuestions` come from the agent's **draft**, read at each request. For a session with an `agentKey` (bound to a built-in agent, ADR-0028), `agent` is `{ id: <agentKey>, name: <the registered agent's name>, deleted: false, description: <its description>, starterQuestions: <its built-in starters> }`; for `rfp` the starters are `Start an RFP for a client`, `Which of my clients renew on 1 January 2027?` and `Resume my draft RFPs` ([rfp](../capabilities/rfp/spec.md)). It is computed on every read, never stored.
 
 Every session on the wire also carries an always-present, derived `workflowRef: { id: string; name: string; kind: 'code' | 'agent'; deleted: boolean }`: the workflow the session runs ([workflows](../capabilities/workflows/spec.md) R4; [agents.md](agents.md) 5.12). `id` is the stored `workflowId` while it resolves, else the id derived from `agentKey` / `agentId` (data-model 3.4). `name` is the workflow's catalogue name (116): `Assistant` for `agent:assistant`, `Questions to Insights v2` for `qti-v2-turn`, the registered agent's name for `agent:rfp` and `agent:data-readiness`; for a user agent's workflow the agent's Live name, for a preview the draft's name, and once the agent is deleted the stored `agentName` with `deleted: true` (`deleted` is `false` otherwise). `kind` is `code` for a code-defined workflow, else `agent`. It is computed on every read, never stored. The `agent` and `workflow` fields above are unchanged: `workflow` is the workflow bar's view, not this reference.
 
-Preview sessions answer endpoints 2 and 4 to 14 like any session (a turn runs with the draft, sessions-chat R54) but are never in endpoint 1's list. Endpoint 4 on a preview discards it (memory thread and workspace included) and answers `{ ok:true, message:"Preview discarded" }`.
+Since 1.23.27 the routes that wrote to a session are removed (3, 5, 6, 7, 8, 10-13 here and 46, 47 in 2.7): a stored session is listed, read, downloaded from and deleted, nothing more ([past-chats](../capabilities/past-chats/spec.md)). A preview session never exists any more; the agent editor's preview is a draft run (api.md 129).
 
 #### 1. `GET /sessions`
 - Response `200`: `{ sessions: SessionDoc[] }`. Ordering is the repository's (most recently updated first; see data-model). No pagination; full documents including messages are returned.
@@ -145,18 +145,7 @@ Preview sessions answer endpoints 2 and 4 to 14 like any session (a turn runs wi
 - Errors: `404 "Session <id> not found"` (Style B).
 
 #### 3. `POST /sessions`
-- Body: `{ name: string; datasets: string[] }` or `{ agentId: string }`. A body with `workflowId` is refused (below): chats can no longer be started from a workflow. `name` required (trimmed, non-empty, **truncated to 64 chars**); `datasets` must be a non-empty array of dataset **names**.
-- With `agentId` (a user-agent id; sessions-chat R52): `datasets` in the body is ignored, and `name` is optional: a non-blank `name` (trimmed, truncated to 64 chars; sent by the New conversation screen's Agent picker) names the session, else it takes the agent's Live name. The session takes those of its Live datasets that exist, and stores `agentId` and `agentName` (data-model 3.4).
-- With `agentId` set to the registry key of a built-in agent that declares a dataset (today only `rfp`, whose dataset is `Intellify RFP API`; ADR-0028): `datasets` in the body is ignored and an optional non-blank `name` works as above. The session takes the typed name, else the agent's name (`RFP Builder`), and that dataset, and stores `agentKey` (the registry key) and `agentName` instead of `agentId` (data-model 3.4); every turn then runs that agent. When the dataset doesn't exist the call fails with the agent's requirement text, for `rfp` `"Load the \"Intellify RFP API\" sample in Settings → Testing Data first"`. A built-in key that declares no dataset and takes none from the user (e.g. `assistant`) still fails with `"Agent \"<key>\" not found"`.
-- With `agentId` set to `assistant-v2` (Questions to Insights v2; agents.md 2.11, ADR-0028 as amended by BA-320): like the assistant's composer, the agent has no dataset of its own, so `name` and `datasets` are **required and validated exactly as without `agentId`** (`"session name is required"`, `"select at least one dataset"`). The session takes the typed name (trimmed, truncated to 64 chars) and those datasets, and stores `agentKey: "assistant-v2"` and `agentName: "Questions to Insights v2"` instead of `agentId` (data-model 3.4); every turn then runs that agent. A preview (`preview: true`) of this key fails like any built-in key, with `"Agent \"assistant-v2\" not found"`.
-- With `agentId` set to `data-readiness` (agents.md 2.10): `datasets` in the body is ignored and an optional non-blank `name` works as above. The session takes the typed name, else `Data Readiness`, and every dataset bound to a `postgres` or `databricks` datasource, ordered by name, and stores `agentKey` and `agentName`. With no such dataset the call fails with `"Add a PostgreSQL or Databricks dataset first"`.
-- With `{ agentId, preview: true }` (agents-evals R60, R61): starts a **preview session** of the agent's draft. It is held in memory only (data-model 3.12), never listed and never written to the `sessions` collection. Its `id` is `preview-<uuid>`, its `name` `Preview: <draft name>`, its `datasets` those of the draft that exist, and it carries `preview: true` and `agentId`. Its derived `agent` comes from the draft. Success message `Preview started`. Failures: `"Agent \"<id>\" not found"` (also for a built-in key), `"Select at least one dataset to preview"`.
-- With `workflowId` (since 1.23.22; [workflows](../capabilities/workflows/spec.md) R5): refused with `"Workflow \"<id>\" runs on an input"` (Style A), whatever the id and whatever else the body holds, and nothing is created. A workflow runs through `POST /workflows/:id/runs` (118, 119).
-- **Every** session created by this endpoint (any body form, previews included) stores `workflowId`: the id its agent fields derive ([data-model.md](data-model.md) 3.4). `agentId` bodies keep working unchanged.
-- Success: `{ ok:true, message:"Session \"<name>\" created", session: SessionDoc }` with `messages: []`, `visualizations: []`, a generated UUID `id`, and a contained Mastra workspace created and linked (`workspaceId`).
-- Failures (Style A): `"session name is required"`, `"select at least one dataset"`. With `agentId`: `"Agent \"<id>\" not found"` (unknown id, or the key of a built-in agent that declares no dataset), the built-in agent's requirement text (its dataset is missing), `"Publish \"<name>\" before starting a chat"` (no Live version), `"None of this agent's datasets exist"`. With `workflowId`: `"Workflow \"<id>\" runs on an input"`.
-- Side effects: persists the session; creates the workspace directory `workspaces/session-<id>`.
-- Without `agentId`, does not verify the named datasets exist (see G7).
+Removed in 1.23.27: nothing creates a session; a workflow runs through `POST /workflows/:id/runs` (118) or `/runs/stream` (119). Nothing in the app or its scripts calls it, and a call answers `404`.
 
 #### 4. `DELETE /sessions/:id`
 - Success: `{ ok:true, message:"Session \"<name>\" deleted" }`.
@@ -164,26 +153,16 @@ Preview sessions answer endpoints 2 and 4 to 14 like any session (a turn runs wi
 - Side effects: removes the session document and all Mastra state it owns (memory thread/resource, workspace).
 
 #### 5. `POST /sessions/:id/messages/stream`
-See [section 3.1](#31-chat-stream-post-sessionsidmessagesstream).
+Removed in 1.23.27: a question is a run (119); the framing and event types of [3.1](#31-chat-stream-removed-in-12327) are what a run streams (3.6). Nothing in the app or its scripts calls it, and a call answers `404`.
 
 #### 6. `POST /sessions/:id/messages`
-- Body: `{ content: string }` (required, trimmed non-empty).
-- Success: `{ ok:true, message:"Message sent", session }`. Runs the assistant to completion (no streaming), appends the user message and one assistant message (text, `reasoning`, `knowledge`), persists.
-- Failure (Style A): `"message is required"`, `"Session <id> not found"`, model errors.
-- Weaker than the stream path: no tool-data capture (`data`, `entities`, `interpretation`, `verified`), no clarification handling, no grounding guard, no careful mode. **Not called by the frontend** (the client method exists but is unused). Treat as legacy; see G2.
+Removed in 1.23.27: the non-streamed chat turn is gone with the chat. Nothing in the app or its scripts calls it, and a call answers `404`.
 
 #### 7. `POST /sessions/:id/messages/feedback`
-- Body: `{ messageAt: string; rating: "up" | "down" }`. Both required.
-- Success: `{ ok:true, message, session }` where `message` is `"Answer saved as a verified query"` for `up` and `"Answer marked as wrong"` for `down`. (The `up` sentence is returned even when no SQL was found to save.)
-- Failures (Style A): `"rating must be 'up' or 'down'"`, `"messageAt is required"`, `"No assistant message at <messageAt>"`, `"Session <id> not found"`.
-- Side effects on the matched assistant message: sets `feedback`; `up` sets `verified: true`, `down` removes `verified`. `up` additionally saves a **verified query** `{question, sql, datasourceId, entities, sourceSessionId, sourceMessageAt}` when the answer has a successful `run_readonly_sql` and a preceding user question (question = nearest earlier user message; sql = the last successful `run_readonly_sql` input; `datasourceId` only when all the session's datasets share one datasource). `down` deletes any verified query contributed by that message.
-- Persists the updated transcript.
+Removed in 1.23.27: a run's answer is rated by 128. Nothing in the app or its scripts calls it, and a call answers `404`.
 
 #### 8. `POST /sessions/:id/visualizations`
-- Body: `{ sourceMessageAt?: string }`. Empty/omitted = the latest completed (non-clarification, non-empty) assistant answer.
-- Success: `{ ok:true, message:"Interactive visual generated", session, visualization: InteractiveVisualization }` (version 1).
-- Failures (Style A): `"completed assistant answer not found"`, `"Session <id> not found"`, `"interactive visual generation timed out; please try again"` (120 s limit), designer/validation errors.
-- Side effects: writes the bundle under the session workspace (`visuals/<visualId>/v1/`), upserts `SessionDoc.visualizations`, and **logs a chat event**: appends an assistant message `Created interactive visual "<title>" (v1).` carrying `visual: {visualId, version, title, action:"created"}`.
+Removed in 1.23.27: a run's answer gets a visual from 130. Nothing in the app or its scripts calls it, and a call answers `404`.
 
 #### 9. `GET /sessions/:id/visualizations/:vid`
 - Query: `version` (optional positive integer; anything else is ignored and means "current").
@@ -191,28 +170,16 @@ See [section 3.1](#31-chat-stream-post-sessionsidmessagesstream).
 - Errors (Style B): `404 "Visualization <vid> not found in session <id>"` / session not found; `400 "Version <n> does not exist"`.
 
 #### 10. `POST /sessions/:id/visualizations/:vid/tailor`
-- Body: `{ instruction: string }` (required, trimmed non-empty).
-- Success: `{ ok:true, message:"Updated to version <n>", session, visualization }`.
-- Failures (Style A): `"instruction is required"`, not-found errors, timeout, designer errors.
-- Side effects: creates a new version (`v<n+1>`), updates metadata, **logs a chat event** (`Updated interactive visual "<title>" (v<n>).`, `visual.action:"updated"`). Same pipeline as the assistant's `update_visual` tool. Tailoring a freeform visual stays freeform.
+Removed in 1.23.27: a run's visual is tailored by 131. Nothing in the app or its scripts calls it, and a call answers `404`.
 
 #### 11. `POST /sessions/:id/visualizations/:vid/revert`
-- Body: `{ version: number }`.
-- Success: `{ ok:true, message:"Reverted to version <n>", session, visualization }`.
-- Failures (Style A): `"Version <n> does not exist"` (also for a missing/non-numeric `version`, which arrives as `NaN`), not-found errors.
-- Side effects: moves `currentVersion` only (no new files). **Logs a chat event** (`Reverted interactive visual ...`, `action:"reverted"`).
+Removed in 1.23.27: a run's visual is reverted by 132. Nothing in the app or its scripts calls it, and a call answers `404`.
 
 #### 12. `POST /sessions/:id/visualizations/:vid/refresh`
-- Body: none.
-- Success: `{ ok:true, message:"Refreshed data for version <n>", session, visualization }`.
-- Behaviour: re-runs each stored `run_readonly_sql` record of the **current** version (row cap per record; non-SQL and already-failed records keep their rows; a query that fails stores its error instead of aborting the rest) and rewrites only `data.json` + `index.html` in place. **No new version, no designer call, no chat event.** When the session's datasets map to zero or several datasources, every SQL record gets an `error` (`"No datasource is bound to this session's datasets"` / `"Several datasources are in scope for this session; refresh is not supported"`) but the call still succeeds.
-- Failures (Style A): not-found errors.
+Removed in 1.23.27: a run's visual is refreshed by 133. Nothing in the app or its scripts calls it, and a call answers `404`.
 
 #### 13. `POST /sessions/:id/visualizations/:vid/repair`
-- Body: `{ error?: string; version: number }`. `error` is the runtime error reported by the sandboxed frame (clipped server-side); `version` is the version the client saw failing.
-- Success: `{ ok:true, message:"Repaired as version <n>", session, visualization }`.
-- Failures (Style A): `"Only the current version can be repaired (requested v<x>, current v<y>)"`, `"Version <n> is already an automatic repair; not repairing again"`, not-found, timeout.
-- Side effects: creates a new version whose instruction is auto-repair-prefixed, updates metadata, **no chat event** (an automatic fix is not a conversation turn). Never repairs an auto-repair.
+Removed in 1.23.27: a run's visual is repaired by 134. Nothing in the app or its scripts calls it, and a call answers `404`.
 
 #### 14. `GET /sessions/:id/visualizations/:vid/download`
 - Query: `version` (optional positive integer; default current). The frontend never sends it (always downloads the current version).
@@ -861,22 +828,19 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 
 ### 2.7 Deep analysis
 
-Controller prefix `/sessions` (same prefix as 2.1, separate controller). Capability: deep-analysis. Jobs live **in memory** (lost on restart); finished reports persist in the session workspace.
+Controller prefix `/sessions` (same prefix as 2.1, separate controller). Capability: deep-analysis. Only the report download of a past chat stays (48); the start and poll routes were removed in 1.23.27 and no job lives in memory any more.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
-| 46 | `POST /sessions/:id/deep-analysis` | Start a job | yes |
-| 47 | `GET /sessions/:id/deep-analysis/:jobId` | Poll a job | yes |
+| 46 | `POST /sessions/:id/deep-analysis` | Start a job (Removed in 1.23.27) | — |
+| 47 | `GET /sessions/:id/deep-analysis/:jobId` | Poll a job (Removed in 1.23.27) | — |
 | 48 | `GET /sessions/:id/deep-analysis/:jobId/download` | Report as Markdown | yes |
 
 #### 46. `POST /sessions/:id/deep-analysis`
-- Body: `{ question: string }` (required, trimmed non-empty).
-- Success: `{ ok:true, message:"Deep analysis started", jobId }`. Returns immediately; one running job per session.
-- Failures (Style A): `"question is required"`, `"Session <id> not found"`, conflict `{ ok:false, message:"A deep analysis is already running for this session", jobId:<running job> }`.
-- Side effects: runs in the background (see [3.2](#32-deep-analysis)); on completion appends an assistant message to the session carrying `report: { jobId, title, path, angles }` whose `content` is the executive summary; on failure appends an assistant message `Deep analysis of "<question>" could not be completed — <detail>`.
+Removed in 1.23.27: a deep analysis is a run of the `deep-analysis` workflow (119; [3.2](#32-deep-analysis)). Nothing in the app or its scripts calls it, and a call answers `404`.
 
 #### 47. `GET /sessions/:id/deep-analysis/:jobId`
-- Response `200`: `{ ok:true, message: progress ?? status, jobId, status, progress?, step?, steps?, title?, error? }` where `status ∈ planning | investigating | writing | done | error`. Unknown job or a job belonging to another session: `{ ok:false, message:"Deep analysis <jobId> not found" }`. After a backend restart every old job is unknown, but the report stays downloadable (43).
+Removed in 1.23.27: a deep analysis is a run of the `deep-analysis` workflow (119; [3.2](#32-deep-analysis)). Nothing in the app or its scripts calls it, and a call answers `404`.
 
 #### 48. `GET /sessions/:id/deep-analysis/:jobId/download`
 - Response `200`: `text/markdown; charset=utf-8`, `Content-Disposition: attachment; filename="<slug-of-title>.md"` (fallback `deep-analysis-<first 8 of jobId>.md`; after a restart the title is unknown so the fallback applies).
@@ -1398,7 +1362,9 @@ Controller prefix `/health`. Capability: [app-shell](../capabilities/app-shell/s
 
 Three Server-Sent-Events endpoints exist (chat, workflow runs, ontology bootstrap). Both are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. Two background-job patterns use start + poll instead of SSE (deep analysis, eval runs).
 
-### 3.1 Chat stream: `POST /sessions/:id/messages/stream`
+### 3.1 Chat stream (removed in 1.23.27)
+
+`POST /sessions/:id/messages/stream` was removed in 1.23.27. The framing, request fields that survive (`careful`) and event types below are those a run streams on `POST /workflows/:id/runs/stream` (3.6), kept here as the reference they cite.
 
 **Request.** `Content-Type: application/json`
 
@@ -1465,7 +1431,7 @@ interface StreamMessageRequest {
 
 ### 3.2 Deep analysis
 
-Pattern: **start, poll, then download**. Endpoints 46-48.
+Pattern: **start, poll, then download**, until 1.23.27. Endpoints 46 and 47 (start, poll) are removed: a deep analysis is a run of the `deep-analysis` workflow (3.6), its report a run output, and only 48 (download a past chat's report) stays. What follows describes the job the removed routes ran; the run workflow's steps are in agents.md 5.15.
 
 - State machine: `planning` → `investigating` (one step per angle, 1..`steps`, at most 5 angles, 3-5 planned) → `writing` → `done`; any failure → `error`. Not resumable.
 - Progress is observed by polling `GET /sessions/:id/deep-analysis/:jobId` (the shipped chat polls every **3000 ms**, gives up after 5 consecutive poll failures). `progress` is the human line for the pending card: `"Planning the investigation"`, `"Investigating angle <i> of <n>: <title>"`, `"Writing the report"`, `"Report ready — <n> angle(s) investigated"`, `"Deep analysis failed"`. `step`/`steps` are 1-based.

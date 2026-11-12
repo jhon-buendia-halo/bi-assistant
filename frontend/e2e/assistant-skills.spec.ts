@@ -21,7 +21,7 @@ import {
 
 /**
  * Mirrors the Feature "Skills the assistant is given" in
- * specs/capabilities/sessions-chat/spec.md, run through the Assistant's
+ * specs/capabilities/agent-answers/spec.md, run through the Assistant's
  * workflow (a run's model request equals a chat turn's). The model is the recording
  * OpenAI-compatible stub, so the scenarios check what the backend sent.
  */

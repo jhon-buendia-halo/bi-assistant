@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import axe from 'axe-core';
@@ -10,7 +8,8 @@ import {
   followOsTheme,
   openSessions,
 } from './helpers/app-actions';
-import { apiFetch, apiJson } from './helpers/api';
+import { apiJson } from './helpers/api';
+import { seedPastChat } from './helpers/past-chats';
 import { worldCupKey } from './helpers/world-cup-db';
 import {
   createUserAgent,
@@ -29,7 +28,7 @@ import { scenarioStep } from './support/demo-captions';
 
 /**
  * Mirrors the Feature "Session management" in
- * specs/capabilities/sessions-chat/spec.md: the Runs page and its Past chats
+ * specs/capabilities/agent-answers/spec.md: the Runs page and its Past chats
  * tab (R63, R66; roadmap 1.23.21), the Past chats list, the Workflow chips
  * of the page header and the list (R57, R59, R63; roadmap 1.23.6) and the
  * session id in the page header (R62; roadmap 1.14.18). Chats can no longer
@@ -48,7 +47,7 @@ test.beforeEach(async ({ page }) => {
   datasourceId = await seedWorldCupDataset(page);
 });
 
-/** The Past chats tab's list: the old sessions (sessions-chat R63). */
+/** The Past chats tab's list: the old sessions (past-chats R63). */
 const sessionsList = (page: Page) =>
   page.getByRole('navigation', { name: 'Past chats', exact: true });
 /** The page header's Workflow chip (R57). */
@@ -63,24 +62,22 @@ const sessionRow = (page: Page, name: string) =>
       has: page.getByRole('button', { name: new RegExp(`^${name}`) }),
     });
 
-/** Creates sessions through the API, oldest first. */
-async function seedSessions(page: Page, names: string[]): Promise<string[]> {
-  const ids: string[] = [];
-  for (const name of names) {
-    const { session } = await apiJson<{ session: { id: string } }>(
-      page,
-      'POST',
-      '/sessions',
-      { name, datasets: [WORLD_CUP_DATASET] },
-    );
-    ids.push(session.id);
-  }
-  return ids;
+/** Writes past chats into the data dir (no route starts one), oldest first. */
+function seedSessions(appDataDir: string, names: string[]): string[] {
+  const start = Date.now() - names.length * 60_000;
+  return names.map((name, index) =>
+    seedPastChat(appDataDir, {
+      name,
+      datasets: [WORLD_CUP_DATASET],
+      workflowId: 'agent:assistant',
+      createdAt: new Date(start + index * 60_000),
+    }),
+  );
 }
 
-test('deletes a session after confirmation', async ({ page }) => {
+test('deletes a session after confirmation', async ({ appDataDir, page }) => {
   // Given a "World Cup analysis" session exists and is open
-  await seedSessions(page, [WORLD_CUP_SESSION]);
+  seedSessions(appDataDir, [WORLD_CUP_SESSION]);
   await page.reload();
   await openSessions(page);
   await sessionRow(page, WORLD_CUP_SESSION)
@@ -110,9 +107,10 @@ test('deletes a session after confirmation', async ({ page }) => {
 });
 
 test('cancelling the delete confirmation keeps the session', async ({
+  appDataDir,
   page,
 }) => {
-  await seedSessions(page, [WORLD_CUP_SESSION]);
+  seedSessions(appDataDir, [WORLD_CUP_SESSION]);
   await page.reload();
   await openSessions(page);
   page.once('dialog', (dialog) => void dialog.dismiss());
@@ -127,9 +125,12 @@ test('cancelling the delete confirmation keeps the session', async ({
   await expect(sessionRow(page, WORLD_CUP_SESSION)).toHaveCount(1);
 });
 
-test('the Past chats tab finds a session by name or ID', async ({ page }) => {
+test('the Past chats tab finds a session by name or ID', async ({
+  appDataDir,
+  page,
+}) => {
   const names = Array.from({ length: 11 }, (_, i) => `Session ${i + 1}`);
-  const ids = await seedSessions(page, [...names, 'Cup history']);
+  const ids = seedSessions(appDataDir, [...names, 'Cup history']);
   const cupId = ids.at(-1)!;
   await page.reload();
   await openSessions(page);
@@ -179,11 +180,11 @@ test('the Past chats tab finds a session by name or ID', async ({ page }) => {
   ).toBeVisible();
 });
 
-test('I copy the session id to share it', async ({ page }) => {
+test('I copy the session id to share it', async ({ appDataDir, page }) => {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], {
     origin: new URL(page.url()).origin,
   });
-  const [id] = await seedSessions(page, [WORLD_CUP_SESSION]);
+  const [id] = seedSessions(appDataDir, [WORLD_CUP_SESSION]);
   await page.reload();
   await openSessions(page);
   await sessionRow(page, WORLD_CUP_SESSION)
@@ -217,55 +218,20 @@ async function publishHistorian(page: Page): Promise<string> {
   return id;
 }
 
-/**
- * Saves a session the way a version before workflows did (sessions-chat
- * R65): straight into the app's SQLite store, with an agent binding and no
- * `workflowId`. The store reads the table on every call, so the running app
- * lists it at once.
- */
-function seedPreWorkflowSession(
-  appDataDir: string,
-  doc: { name: string; datasets: string[]; agentKey: string; agentName: string },
-): string {
-  const backendRequire = createRequire(
-    path.resolve(__dirname, '../../backend/package.json'),
-  );
-  const Database = backendRequire('better-sqlite3') as new (
-    file: string,
-  ) => {
-    prepare(sql: string): { run(...args: unknown[]): unknown };
-    close(): void;
-  };
-  const db = new Database(path.join(appDataDir, 'app.sqlite'));
-  try {
-    const id = randomUUID();
-    const now = new Date().toISOString();
-    db.prepare('INSERT INTO "sessions" (doc) VALUES (?)').run(
-      JSON.stringify({
-        id,
-        ...doc,
-        messages: [],
-        createdAt: now,
-        updatedAt: now,
-      }),
-    );
-    return id;
-  } finally {
-    db.close();
-  }
-}
 
 test("a deleted agent's chat names its workflow as deleted", async ({
+  appDataDir,
   page,
 }) => {
   // Given a chat started from the workflow of the published agent
   const id = await publishHistorian(page);
-  const { session } = await apiJson<{ session: { id: string } }>(
-    page,
-    'POST',
-    '/sessions',
-    { agentId: id },
-  );
+  const sessionId = seedPastChat(appDataDir, {
+    name: HISTORIAN,
+    datasets: [WORLD_CUP_DATASET],
+    agentId: id,
+    agentName: HISTORIAN,
+    workflowId: `agent:${id}`,
+  });
   // And the agent is deleted
   await apiJson(page, 'DELETE', `/agents/${encodeURIComponent(id)}`);
   await page.reload();
@@ -280,7 +246,7 @@ test("a deleted agent's chat names its workflow as deleted", async ({
     .getByRole('button', { name: new RegExp(`^${HISTORIAN}`) })
     .click();
   await expect(page.locator('header').getByTestId('session-id')).toHaveText(
-    `ID ${session.id.slice(0, 8)}`,
+    `ID ${sessionId.slice(0, 8)}`,
   );
   await expect(headerWorkflow(page)).toHaveText(deleted);
 });
@@ -289,7 +255,8 @@ test('a chat saved before workflows names the workflow of its agent', async ({
   appDataDir,
   page,
 }) => {
-  const id = seedPreWorkflowSession(appDataDir, {
+  // Saved with an agent binding and no `workflowId` (past-chats R65).
+  const id = seedPastChat(appDataDir, {
     name: 'Saved RFP chat',
     datasets: [WORLD_CUP_DATASET],
     agentKey: 'rfp',
@@ -388,32 +355,48 @@ test.describe('Runs and Past chats', () => {
     return run.id;
   }
 
-  /** An old session with a transcript and a visual, made through the API. */
-  async function seedOldChat(page: Page): Promise<string> {
-    const [id] = await seedSessions(page, [OLD_CHAT]);
-    // The streamed turn keeps the SQL result the visual is designed from.
-    const turn = await apiFetch(page, 'POST', `/sessions/${id}/messages/stream`, {
-      content: OLD_QUESTION,
+  /** An old chat with a transcript and a visual, written into the data dir. */
+  function seedOldChat(appDataDir: string): string {
+    return seedPastChat(appDataDir, {
+      name: OLD_CHAT,
+      datasets: [WORLD_CUP_DATASET],
+      workflowId: 'agent:assistant',
+      turns: [
+        {
+          question: OLD_QUESTION,
+          answer: OLD_ANSWER,
+          data: [
+            {
+              tool: 'run_readonly_sql',
+              input: OLD_SQL,
+              columns: ['stage', 'matches'],
+              rows: [
+                { stage: 'Group stage', matches: 48 },
+                { stage: 'Round of 16', matches: 8 },
+                { stage: 'Final', matches: 1 },
+              ],
+              rowCount: 3,
+              rationale: 'Count the matches per stage.',
+            },
+          ],
+        },
+      ],
+      visual: {
+        title: VISUAL_TITLE,
+        description: SPEC_REPLY.description,
+        spec: SPEC_REPLY.spec,
+      },
     });
-    expect(turn.ok(), await turn.text()).toBe(true);
-    const visual = await apiJson<{ ok: boolean; message: string }>(
-      page,
-      'POST',
-      `/sessions/${id}/visualizations`,
-      {},
-    );
-    expect(visual.ok, visual.message).toBe(true);
-    return id;
   }
 
   test(
     'I find my past runs under Runs and my old chats under Past chats',
     { tag: ['@demo', '@story-1.23.21'] },
-    async ({ page }) => {
+    async ({ appDataDir, page }) => {
       let runId = '';
       await scenarioStep(page, 'Given a run and an old chat made earlier', async () => {
         runId = await seedRun(page);
-        await seedOldChat(page);
+        seedOldChat(appDataDir);
         await page.reload();
       });
       await scenarioStep(page, 'When I open Runs', async () => {
@@ -480,8 +463,11 @@ test.describe('Runs and Past chats', () => {
     },
   );
 
-  test('no control on a past chat sends, rates, tailors or refreshes', async ({ page }) => {
-    await seedOldChat(page);
+  test('no control on a past chat sends, rates, tailors or refreshes', async ({
+    appDataDir,
+    page,
+  }) => {
+    seedOldChat(appDataDir);
     await page.reload();
     await openSessions(page);
     await sessionRow(page, OLD_CHAT).getByRole('button', { name: /^Stage counts chat/ }).click();

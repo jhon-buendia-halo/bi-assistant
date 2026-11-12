@@ -1,15 +1,13 @@
 @if (shell.mainView() === "session-chat" && state.activeSession()) {
-  @if (state.readOnlyChat()) {
-    <!-- A past chat is read-only (sessions-chat R66) -->
-    <div
-      role="note"
-      data-testid="past-chat-banner"
-      class="flex shrink-0 items-center gap-2 border-b border-border bg-surface-muted px-6 py-2 text-[13px] text-fg"
-    >
-      <span class="chip chip-neutral">Past chat</span>
-      <span>This is a past chat. You can read it, but not continue it.</span>
-    </div>
-  }
+  <!-- Every open chat is a past chat: read-only (past-chats R66) -->
+  <div
+    role="note"
+    data-testid="past-chat-banner"
+    class="flex shrink-0 items-center gap-2 border-b border-border bg-surface-muted px-6 py-2 text-[13px] text-fg"
+  >
+    <span class="chip chip-neutral">Past chat</span>
+    <span>This is a past chat. You can read it, but not continue it.</span>
+  </div>
   <app-workflow-bar
     class="block shrink-0"
     [workflow]="state.activeSession()!.workflow"
@@ -17,18 +15,8 @@
   <app-session-chat
     class="min-h-0 flex-1"
     [session]="state.activeSession()!"
-    [readOnly]="state.readOnlyChat()"
-    [visualGenerating]="
-      state.generatingVisualSession() === state.activeSession()!.id
-    "
-    [activeVisualizationId]="state.activeVisualization()?.id ?? null"
-    [dataPointSelection]="state.selectedDataPoint()"
-    (generateVisual)="state.generateInteractiveVisual($event)"
-    (visualUpdated)="state.onVisualUpdated($event)"
     (panelItem)="state.onPanelItem($event)"
-    (workflowChanged)="state.onWorkflowChanged($event)"
     (viewVisual)="state.showVisualization($event, $event.version)"
-    (sessionUpdated)="state.onSessionUpdated($event)"
   />
 } @else if (shell.mainView() === "run-detail") {
   <app-run-detail class="flex min-h-0 flex-1 flex-col" />

@@ -4,7 +4,7 @@ Every LLM agent in Questions to Insights: how agents are run, which model each o
 
 This file owns **prompts, tool contracts, per-turn context and model routing**. It links rather than repeats:
 
-- User-visible behaviour: [sessions-chat](../capabilities/sessions-chat/spec.md), [visuals](../capabilities/visuals/spec.md), [dataset-ontology](../capabilities/dataset-ontology/spec.md), [verified-queries](../capabilities/verified-queries/spec.md), [metrics](../capabilities/metrics/spec.md), [deep-analysis](../capabilities/deep-analysis/spec.md), [agents-evals](../capabilities/agents-evals/spec.md), [llm-settings](../capabilities/llm-settings/spec.md), [datasources](../capabilities/datasources/spec.md).
+- User-visible behaviour: [agent-answers](../capabilities/agent-answers/spec.md), [visuals](../capabilities/visuals/spec.md), [dataset-ontology](../capabilities/dataset-ontology/spec.md), [verified-queries](../capabilities/verified-queries/spec.md), [metrics](../capabilities/metrics/spec.md), [deep-analysis](../capabilities/deep-analysis/spec.md), [agents-evals](../capabilities/agents-evals/spec.md), [llm-settings](../capabilities/llm-settings/spec.md), [datasources](../capabilities/datasources/spec.md).
 - Persisted shapes (chat messages, tool data records, visual metadata, visual version files, ontology items, eval runs, LLM settings): [data-model.md](data-model.md).
 - HTTP endpoints and the chat event stream wire format: [api.md](api.md).
 - Why an agent framework at all, and why visuals are versioned conversation participants: ADR-0004 and ADR-0005 in [architecture.md](architecture.md).
@@ -53,7 +53,7 @@ All agents are registered once in a single framework instance and looked up by *
 
 The prompt each row's agent runs on is the shipped one unless overridden (1.1). Lookup of an unknown key throws. The catalogue lists agents sorted by display name. It shows `assistant`, `assistant-v2` (2.11), `rfp` and `data-readiness` (2.10) as Official, and the other five as System ([api.md](api.md) 33). The four showcase agents (2.9) were removed in 1.23.8.
 
-**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the nine registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0022), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0025). Rules: sessions-chat R52-R59. A session can also be bound to a **built-in** agent: one that declares a dataset, today `rfp` (2.8) and `data-readiness` (2.10), or `assistant-v2` (2.11), which takes the user's own datasets. It stores the agent's registry key and every turn runs that agent instead of the `assistant` (ADR-0028, sessions-chat R61).
+**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the nine registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0022), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0025). Rules: agent-answers R52-R59. A session can also be bound to a **built-in** agent: one that declares a dataset, today `rfp` (2.8) and `data-readiness` (2.10), or `assistant-v2` (2.11), which takes the user's own datasets. It stores the agent's registry key and every turn runs that agent instead of the `assistant` (ADR-0028, agent-answers R61).
 
 Not registered (never listed in the catalogue):
 
@@ -81,7 +81,7 @@ Every agent's model is a function evaluated on each call, so a newly saved LLM s
 
 The same resolved model is used by every agent except the visual designer (1.5), and except the assistant in a session bound to a user agent with a model override. There is no per-agent model setting for the built-in agents and no hard-coded judge model.
 
-**User-agent model override.** When an assistant call carries the requestContext key `agent-overrides` (4.2) with a `model`, the resolver uses that name in place of the persisted model and maps it exactly as the table does: `openai/<override>`, `anthropic/<override>`, a LenAI deployment `<override>` (in both the id and the URL), `custom/<override>` (OpenAI style, URL unchanged) or `anthropic/<override>` in a `custom-anthropic` config (Anthropic style, base URL unchanged), or `copilot/<override>` in a `copilot` config. Provider, API style, base URL and key stay as saved. With nothing saved the override is ignored and the fallback row applies. Only the `assistant`'s model function reads the key; every helper agent resolves the persisted model even when called during such a turn (sessions-chat R56).
+**User-agent model override.** When an assistant call carries the requestContext key `agent-overrides` (4.2) with a `model`, the resolver uses that name in place of the persisted model and maps it exactly as the table does: `openai/<override>`, `anthropic/<override>`, a LenAI deployment `<override>` (in both the id and the URL), `custom/<override>` (OpenAI style, URL unchanged) or `anthropic/<override>` in a `custom-anthropic` config (Anthropic style, base URL unchanged), or `copilot/<override>` in a `copilot` config. Provider, API style, base URL and key stay as saved. With nothing saved the override is ignored and the fallback row applies. Only the `assistant`'s model function reads the key; every helper agent resolves the persisted model even when called during such a turn (agent-answers R56).
 
 > Implementation note: `LlmService.resolveAgentModelConfig` and `LlmService.resolveAgentModel` (`modules/llm/llm.service.ts`) + `lenaiModelConfig`; Mastra's model router accepts the router-id string, the `{id, apiKey, url?, headers?}` object and a ready model instance. The model factory builds `custom-anthropic` configs with `createAnthropic({ baseURL, apiKey })` from `@ai-sdk/anthropic` (version pinned per ADR-0032 and [tech-stack.md](tech-stack.md)).
 
@@ -189,8 +189,7 @@ A `copilot` config is never swapped: rules 2 and 3 do not apply to it, so the de
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| The **Answer** step of `agent-turn` (5.12), which runs every streamed chat turn (`POST /sessions/:id/messages/stream`) of a plain session (`agent:assistant`) and of a user agent's session (`agent:<id>`) | stream | session thread | all | 15 |
-| Non-streamed chat turn (`POST /sessions/:id/messages`) | generate | session thread | all | 15 |
+| The **Answer** step of `agent-turn` (5.12), which runs the agent turn of every run of `agent:assistant` and of a user agent (`agent:<id>`), on a run host (5.14) | stream | session thread | all | 15 |
 | Grounding-guard corrective pass (5.6) | generate | **none** | all | 15 |
 | Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
 | Deep analysis planner / angle investigator / report writer (2.7) | generate | none | none / all / none | 1 / 15 / 1 |
@@ -698,7 +697,7 @@ The report markdown (title, question, meta line, executive summary, body, data a
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| The **Answer** step of `agent-turn` (5.12), which runs every streamed chat turn of a session bound to it (`agent:rfp`, `agentKey: 'rfp'`, sessions-chat R61) | stream | session thread | all | 15 |
+| The **Answer** step of `agent-turn` (5.12), which runs every streamed chat turn of a session bound to it (`agent:rfp`, `agentKey: 'rfp'`, agent-answers R61) | stream | session thread | all | 15 |
 | Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
 | `rfp` eval set (8) | generate | none | all | 15 |
 
@@ -756,7 +755,7 @@ The four showcase agents (`benchmarking`, `survey`, `lad-coe`, `strategy`; BA-23
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| The **Answer** step of `agent-turn` (5.12), which runs every streamed chat turn of a session bound to it (`agent:data-readiness`, `agentKey: 'data-readiness'`, sessions-chat R61) | stream | session thread | all | 10 |
+| The **Answer** step of `agent-turn` (5.12), which runs every streamed chat turn of a session bound to it (`agent:data-readiness`, `agentKey: 'data-readiness'`, agent-answers R61) | stream | session thread | all | 10 |
 | Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
 | `data-readiness` eval set (8) | generate | none | all | 10 |
 
@@ -816,13 +815,13 @@ The rules encoded (prefix D):
 
 ### 2.11 `assistant-v2` (id `questions-to-insights-v2`) — Questions to Insights v2
 
-**Purpose.** A slimmed-down data analyst, built up next to the `assistant` (BA-320). It maps a question to dataset entities, runs read-only SQL and gives the numbers it found. It starts minimal: a short prompt and only the core data tools. Later stories of the epic move reduced assistant rules, tools and skills into it, so the two can be compared. The `assistant` is not changed by it. Behaviour rules: [agents-evals](../capabilities/agents-evals/spec.md) R107, [sessions-chat](../capabilities/sessions-chat/spec.md) R52, R61, R64.
+**Purpose.** A slimmed-down data analyst, built up next to the `assistant` (BA-320). It maps a question to dataset entities, runs read-only SQL and gives the numbers it found. It starts minimal: a short prompt and only the core data tools. Later stories of the epic move reduced assistant rules, tools and skills into it, so the two can be compared. The `assistant` is not changed by it. Behaviour rules: [agents-evals](../capabilities/agents-evals/spec.md) R107, [agent-answers](../capabilities/agent-answers/spec.md) R52, R61, R64.
 
 **Invoked by.**
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| The **Analyse** step of the turn workflow `qti-v2-turn` (5.11), which runs every streamed chat turn of a session bound to it (`agentKey: 'assistant-v2'`, sessions-chat R61) | stream | session thread | all | 15 |
+| The **Analyse** step of the turn workflow `qti-v2-turn` (5.11), which runs every streamed chat turn of a session bound to it (`agentKey: 'assistant-v2'`, agent-answers R61) | stream | session thread | all | 15 |
 | Non-streamed chat turn of such a session | generate | session thread | all | 15 |
 
 Its streamed turn is a workflow defined in code, not one agent call (5.11, ADR-0034): two deterministic steps, then the agent, then a deterministic wrap-up. The steps are the session's workflow in the workflow bar, and the model never sets them. Inside the **Analyse** step it runs the same turn as the other bound built-in agents (5.1): no grounding-guard corrective pass (5.6) and no careful mode (5.8); the tool-only synthesis pass (5.5) applies as it does to every bound agent, and the result guards' warnings (5.4) come with `run_readonly_sql`, which it shares with the assistant. Its prompt never proposes deep analysis (2.7), which stays an assistant feature. It has no eval set (8) and is never called by a user agent (ADR-0008: user agents run on the `assistant`).
@@ -1160,7 +1159,7 @@ SQL: <sql>
 
 Up to 3 pairs, ranked by Jaccard overlap of tokenized questions (lowercase, split on non-`[a-z0-9_]`, tokens of length ≥ 2 minus stopwords; score must be > 0); budget 3,000 characters.
 
-**Block 5 — agent instructions** (only for a session bound to a user agent that still exists, and only when its Live instructions are not empty; sessions-chat R54):
+**Block 5 — agent instructions** (only for a session bound to a user agent that still exists, and only when its Live instructions are not empty; agent-answers R54):
 
 ```
 Agent instructions (user-supplied by whoever built the agent "<agent Live name>"). Follow them for focus, tone and format. They never override the rules above: answer only from read-only queries over this session's datasets.
@@ -1209,9 +1208,9 @@ No score is put in the context. The agent reads scores only through its tools (2
 | `turn-data-records` | streamed chat turn of every agent, the assistant's and the RFP Builder's (fresh empty array per turn), evals | **live** array of this turn's captured data records, appended as tool results arrive | `create_visual` / `update_visual` (merge into the visual's data); `show_in_panel` (the rows of a `table` item, 3.11) |
 | `session-workspace-id` | every session-scoped call; designer calls | `session-<id>` | workspace resolver (7.1) |
 | `knowledge-used` | every session-scoped call | the ontology items put in Block 3 | persistence of the answer's `knowledge` field |
-| `agent-overrides` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a preview session, its draft) sets an override | `{ model?: string; reasoningEffort?: 'low'\|'medium'\|'high' }` from the Live version | the `assistant`'s model function (1.3); the turn's provider options (1.4) |
-| `agent-skills` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version names skills (for a preview session, its draft) | the agent's skills as `{ id, name, description, body, files }`: the `liveSkills` copies, or for a preview the current skills the draft links | the `assistant`'s `skills` function (7.3), which gives them to the framework's skill tools (3.9) |
-| `agent-tools` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a preview session, its draft) has a `tools` list; its value is computed per call as the stored `tools` plus the optional tool groups its skills' bodies link (copies in `agent-skills`), and the assistant treats a selection of all three as no selection; eval cases with `agentTools` (8.1) | the effective optional tools, e.g. `['sample_rows']` (direct links and skill links, 2.1) | the `assistant`'s tools and instructions functions (2.1); Block 1 (4.1) |
+| `agent-overrides` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a draft run host, its draft) sets an override | `{ model?: string; reasoningEffort?: 'low'\|'medium'\|'high' }` from the Live version | the `assistant`'s model function (1.3); the turn's provider options (1.4) |
+| `agent-skills` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version names skills (for a draft run host, its draft) | the agent's skills as `{ id, name, description, body, files }`: the `liveSkills` copies, or for a preview the current skills the draft links | the `assistant`'s `skills` function (7.3), which gives them to the framework's skill tools (3.9) |
+| `agent-tools` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a draft run host, its draft) has a `tools` list; its value is computed per call as the stored `tools` plus the optional tool groups its skills' bodies link (copies in `agent-skills`), and the assistant treats a selection of all three as no selection; eval cases with `agentTools` (8.1) | the effective optional tools, e.g. `['sample_rows']` (direct links and skill links, 2.1) | the `assistant`'s tools and instructions functions (2.1); Block 1 (4.1) |
 | `rfp-created-by` | calls of the `rfp` agent: chat turns (the super admin's id, `local`); `rfp` eval runs (`eval:<jobId>`) | the creator recorded on new RFP records | `create_rfp` (3.10); eval clean-up (8.1) |
 | `turn-rfp` | calls of the `rfp` agent (a fresh holder per turn) | **live** `{ rfpId?, stage? }` holder, filled when `create_rfp`, `get_rfp` or `update_rfp` succeeds (`stage` is the RFP's last completed stage) | the orchestrator, which stores `rfpId` on the session after the turn and moves the workflow tracker from `stage` (5.1) |
 
@@ -1273,7 +1272,7 @@ Wire format of these events: [api.md](api.md). Errors thrown during the stream (
 - After the turn the orchestrator stores `turn-rfp.rfpId`, when set, on the session as `rfpId`.
 - **Stage drives the workflow bar (ADR-0029).** A `create_rfp`, `get_rfp` or `update_rfp` result sets `turn-rfp.stage` to the RFP's last completed stage. On an `update_rfp` result (mid-turn) and after the turn, the orchestrator sets the session's workflow state to `current = min(stage + 1, 7)` and `done = 1..stage`, and emits `workflow`, so the workflow bar moves without the agent calling a tool; it creates no panel item and emits no `panel-item`, so the right panel is left as it is; when the current step changes it clears the note and `waiting`.
 
-**Non-streamed turn** (`POST /sessions/:id/messages`): a single generate with the same options; persists only `{content, reasoning?, knowledge?}` — no data records, no clarification interception, no synthesis, grounding guard or cross-check.
+**Non-streamed turn** (`POST /sessions/:id/messages`): removed in 1.23.27 with the chat write paths; the turn engine has only the streamed turn.
 
 ### 5.2 Read-only enforcement
 
@@ -1437,7 +1436,7 @@ With one entity the first line reads `1 entity.`; with none, the block is `Catal
 
 The model never writes this state: v2 has no `update_workflow`. A failed step ends the turn with its error, as any failed turn does (5.1: the controller sends `error`). When the Analyse step failed, the error is the agent's own (for a custom endpoint, the R50 text of [llm-settings](../capabilities/llm-settings/spec.md)). After the run succeeds, the turn goes on at 5.1 step 4 (final text, tool-only synthesis 5.5, persist, `done`).
 
-The non-streamed turn (`POST /sessions/:id/messages`, 5.1) is not a workflow run: it calls the agent once, as before.
+The non-streamed turn was removed in 1.23.27: every turn is a run (5.1).
 
 **The step catalogue describes each step for the agent's Graph tab** ([agents-evals](../capabilities/agents-evals/spec.md) R108). Besides the id and title, it holds for each step:
 - its kind, `code` or `agent`;
@@ -1489,7 +1488,7 @@ Its agent is the workflow's agent with its tools (a user agent: the assistant's 
 | `agentId: <id>`, agent exists or deleted | `agent:<id>` |
 | neither (or an `agentKey` that is neither wrapped nor a `primaryFor`) | `agent:assistant` |
 
-Which agent a turn runs is unchanged: `agentKey`, else the `assistant` (with a user agent's Live configuration, or a preview's draft). A deleted user agent's session keeps `agent:<id>`, shows the stored `agentName` with `deleted: true` ([api.md](api.md) 2.1), and its turns run the plain assistant (sessions-chat R59).
+Which agent a turn runs is unchanged: `agentKey`, else the `assistant` (with a user agent's Live configuration, or a preview's draft). A deleted user agent's session keeps `agent:<id>`, shows the stored `agentName` with `deleted: true` ([api.md](api.md) 2.1), and its turns run the plain assistant (past-chats R59).
 
 **Which workflows use an agent** ([api.md](api.md) 34 `usedInWorkflows`): the code workflows whose `primaryFor` it is and its own one-step workflow, in catalogue order. `assistant` → `agent:assistant`; `assistant-v2` → `qti-v2-turn`; `rfp` → `agent:rfp`; `data-readiness` → `agent:data-readiness`; a Live user agent → `agent:<id>`; a draft-only user agent and the System agents → none.
 
@@ -2157,7 +2156,6 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 - **Open question:** the eval judge sends `temperature: 0` as a *provider option*; for OpenAI/LenAI buckets this is likely an unknown option rather than the sampling temperature. Is temperature actually applied?
 - **Gap:** deep-analysis investigation calls keep `ask_clarification`, `create_visual` and `update_visual` available; only the prompt forbids them, and nothing intercepts a clarification in `generate` mode. Should these tools be removed for background calls?
 - **Gap:** `list_entities`' description says the kind is "databricks or postgres", omitting `rest` (which the SQL tool description and prompt do mention).
-- **Gap:** the non-streamed chat endpoint persists no `data`, `entities`, `interpretation`, clarification, grounding guard or cross-check. Is it still used by any client? (The frontend service still has a caller.)
 - **Gap:** `run_readonly_sql` does not enforce that the SQL only references session entities (prompt-only rule A24); any table reachable on the datasource can be read.
 - **Gap:** auto-repair designs from the **source answer's** data, not the current version's stored `data.json` (which may include merged turn records or refreshed rows), so a repaired version can lose drill-down data or a refresh.
 - **Gap:** the eval harness omits the metrics and verified-query blocks, the effort setting, the session workspace and the grounding guard, so it does not measure exactly what production runs (the code comments claim parity for step budget and grounding only).

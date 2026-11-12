@@ -11,7 +11,7 @@ import { kindLabel } from '../../../datasources/models/datasource.model';
 import { sessionWorkflowLabel } from '../../models/session.model';
 import { SessionsState } from '../../services/sessions-state';
 
-/** The Sessions area's page header (app-shell R49, sessions-chat R57). */
+/** The Sessions area's page header (app-shell R49, past-chats R57). */
 @Component({
   selector: 'app-sessions-header',
   imports: [LucideAngularModule],
@@ -27,6 +27,6 @@ export class SessionsHeader {
   readonly PanelRight = PanelRight;
   readonly Workflow = Workflow;
   readonly datasourceKindLabel = kindLabel;
-  /** The page header's Workflow chip, for every session (sessions-chat R57). */
+  /** The page header's Workflow chip, for every session (past-chats R57). */
   readonly workflowLabel = sessionWorkflowLabel;
 }

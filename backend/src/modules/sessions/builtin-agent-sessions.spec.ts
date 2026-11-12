@@ -4,7 +4,7 @@ jest.mock('../data-readiness/data-readiness.service', () => ({
   DataReadinessService: class {},
 }));
 
-// Sessions bound to a built-in agent (sessions-chat R52, R61; ADR-0028): the
+// Sessions bound to a built-in agent (agent-answers R52, R61; ADR-0028): the
 // RFP Builder's session creation, its derived `agent`, and its turn.
 jest.mock('@mastra/core/request-context', () => ({
   RequestContext: class {
@@ -81,20 +81,19 @@ jest.mock('./visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
 
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { setDatasetToolServices } from '../../mastra/tool-services';
 import type { DatasetToolServices } from '../../mastra/tool-services';
 import { isoToday } from '../../mastra/rfp-context';
 import { SUPER_ADMIN } from '../../common/super-admin';
 import { SessionsService, type StreamEvent } from './sessions.service';
+import { streamStored } from './testing/stream-stored';
 import { streamTurnWorkflow } from '../../mastra/testing/turn-workflow.stub';
 import { toolDataRecord } from './turn-data';
 import { setAgentPromptOverrides } from '../../mastra/agent-prompt-overrides';
 import type { SessionDoc } from './entities/session.entity';
 
 const RFP_ID = '7b0c2f0e-1d2a-4c9b-9a51-0f6f1c2d3e4f';
-const REQUIREMENT =
-  'Load the "Intellify RFP API" sample in Settings → Testing Data first';
 const RFP_DESCRIPTION =
   'Walks a Mercer benefits consultant through building a carrier RFP for one client over the Intellify data, stage by stage, and assembles the RFP package.';
 
@@ -278,7 +277,8 @@ async function turn(
   careful = false,
 ): Promise<StreamEvent[]> {
   const events: StreamEvent[] = [];
-  await ctx.service.streamMessage(
+  await streamStored(
+    ctx.service,
     's-1',
     content,
     (event) => events.push(event),
@@ -290,46 +290,6 @@ async function turn(
 }
 
 describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => {
-  describe('createFromAgent with a built-in key (api.md 2.1 #3)', () => {
-    it('creates a session named after the agent over its dataset, bound by key', async () => {
-      const ctx = build();
-      const session = await ctx.service.createFromAgent('rfp');
-      expect(session).toMatchObject({
-        name: 'RFP Builder',
-        datasets: ['Intellify RFP API'],
-        agentKey: 'rfp',
-        agentName: 'RFP Builder',
-        messages: [],
-      });
-      expect(session).not.toHaveProperty('agentId');
-      expect(ctx.mastra.ensureSessionWorkspace).toHaveBeenCalled();
-    });
-
-    it('uses a typed name (trimmed, 64 chars) instead of the agent name', async () => {
-      const ctx = build();
-      const session = await ctx.service.createFromAgent('rfp', '  Acme RFP  ');
-      expect(session).toMatchObject({ name: 'Acme RFP', agentKey: 'rfp' });
-      const blank = await build().service.createFromAgent('rfp', '   ');
-      expect(blank.name).toBe('RFP Builder');
-      const long = await build().service.createFromAgent('rfp', 'x'.repeat(80));
-      expect(long.name).toHaveLength(64);
-    });
-
-    it('refuses with the requirement while the dataset is missing, creating nothing', async () => {
-      const ctx = build({ datasets: [] });
-      await expect(ctx.service.createFromAgent('rfp')).rejects.toThrow(
-        new BadRequestException(REQUIREMENT),
-      );
-      expect(ctx.repository.insert).not.toHaveBeenCalled();
-    });
-
-    it('still answers not found for a built-in key that declares no dataset', async () => {
-      await expect(
-        build().service.createFromAgent('assistant'),
-      ).rejects.toThrow(new NotFoundException('Agent "assistant" not found'));
-    });
-  });
-
   it('derives the agent from the registered built-in with its starters (api.md 2.1)', async () => {
     const ctx = build();
     const expected = {
