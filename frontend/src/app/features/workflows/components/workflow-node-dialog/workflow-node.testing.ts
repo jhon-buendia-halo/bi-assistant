@@ -16,8 +16,21 @@ export const FIXTURE_WORKFLOW: WorkflowDetail = {
   stepCount: 2,
   trigger: 'run',
   input: [
-    { name: 'question', label: 'Question', type: 'text', required: true },
-    { name: 'datasets', label: 'Datasets', type: 'datasets', required: false },
+    {
+      name: 'question',
+      label: 'Question',
+      type: 'text',
+      required: true,
+      maxLength: 4000,
+      usedBy: ['receive'],
+    },
+    {
+      name: 'datasets',
+      label: 'Datasets',
+      type: 'datasets',
+      required: false,
+      datasourceKinds: ['postgres'],
+    },
   ],
   datasets: [],
   missingDatasets: [],
@@ -30,7 +43,7 @@ export const FIXTURE_WORKFLOW: WorkflowDetail = {
       summary: 'Checks the question.',
       input: ['question'],
       output: ['question', 'catalog'],
-      exits: [{ label: 'Empty question', outcome: 'fails' }],
+      exits: [],
     },
     {
       id: 'analyse',
@@ -196,4 +209,5 @@ export const FIXTURE_SUMMARY: WorkflowStateSummary = {
   total: 4,
   durationMs: 14_000,
   runId: 'run_8f21c4',
+  invalidFields: 0,
 };

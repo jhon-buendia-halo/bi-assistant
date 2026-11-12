@@ -53,6 +53,7 @@ describe('WorkflowStatePanel', () => {
         total: 4,
         durationMs: null,
         runId: null,
+        invalidFields: 0,
       },
     });
     expect(text('workflow-state-progress')).toBe('0 of 4 nodes ran');
@@ -60,6 +61,22 @@ describe('WorkflowStatePanel', () => {
       "No run yet. Execute the workflow to see each node's data.",
     );
     expect(byId('workflow-state-status')).toBeNull();
+    expect(byId('workflow-state-invalid')).toBeNull();
+  });
+
+  it('says how many fields refused the last Execute', () => {
+    const refused: WorkflowStateSummary = {
+      status: null,
+      ran: 0,
+      total: 4,
+      durationMs: null,
+      runId: null,
+      invalidFields: 2,
+    };
+    make({ nodes: FIXTURE_NODES_NOT_RUN, summary: refused });
+    expect(text('workflow-state-invalid')).toBe('Input invalid: 2 fields');
+    make({ nodes: FIXTURE_NODES_NOT_RUN, summary: { ...refused, invalidFields: 1 } });
+    expect(text('workflow-state-invalid')).toBe('Input invalid: 1 field');
   });
 
   it('toggles open and closed through openChange', () => {
@@ -178,6 +195,7 @@ describe('WorkflowStatePanel', () => {
         total: 4,
         durationMs: null,
         runId: null,
+        invalidFields: 0,
       },
       selectedId: 'analyse',
     });

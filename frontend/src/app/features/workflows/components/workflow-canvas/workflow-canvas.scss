@@ -112,7 +112,8 @@
     border-color: var(--qti-on-success-soft);
   }
 
-  &[data-status="failed"] {
+  &[data-status="failed"],
+  &[data-status="invalid"] {
     border-color: var(--qti-on-danger-soft);
   }
 
@@ -215,7 +216,8 @@
     color: var(--qti-on-success-soft);
   }
 
-  &[data-status="failed"] {
+  &[data-status="failed"],
+  &[data-status="invalid"] {
     background: var(--qti-danger-soft);
     color: var(--qti-on-danger-soft);
   }

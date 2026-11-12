@@ -117,15 +117,21 @@ describe('WorkflowNodeDialog', () => {
     expect(text('workflow-step-field-kind')).toBe('Code');
     expect(byId('workflow-step-field-agent')).toBeNull();
     expect(byId('workflow-step-field-system-prompt')).toBeNull();
-    expect(text('workflow-step-field-exits')).toBe('Empty question → fails');
+    expect(text('workflow-step-field-exits')).toBe('None');
     expect(el().textContent).toContain('CODE');
     expect(el().textContent).not.toContain('Tool calls');
   });
 
-  it('shows Exits as None when a step has none', () => {
+  it("lists a code step's exits", () => {
     const receive = node('receive');
-    open({ ...receive, step: { ...receive.step!, exits: [] } });
-    expect(text('workflow-step-field-exits')).toBe('None');
+    open({
+      ...receive,
+      step: {
+        ...receive.step!,
+        exits: [{ label: 'No catalog', outcome: 'fails' }],
+      },
+    });
+    expect(text('workflow-step-field-exits')).toBe('No catalog → fails');
   });
 
   it('switches to Settings: status, duration and run id', () => {
@@ -180,10 +186,10 @@ describe('WorkflowNodeDialog', () => {
         ...receive.run!,
         status: 'failed',
         output: undefined,
-        error: 'Empty question',
+        error: 'No catalog',
       },
     });
-    expect(text('workflow-ndv-output-error')).toBe('Empty question');
+    expect(text('workflow-ndv-output-error')).toBe('No catalog');
     expect(text('workflow-ndv-output-status')).toBe('Failed');
   });
 
@@ -194,14 +200,49 @@ describe('WorkflowNodeDialog', () => {
     );
     expect(text('workflow-panel-trigger')).toBe('Runs on an input');
     expect(text('workflow-param-question')).toContain('Question');
-    expect(text('workflow-param-question')).toContain('required');
-    expect(text('workflow-param-datasets')).not.toContain('required');
+    expect(text('workflow-param-question')).toContain('Required');
+    expect(text('workflow-param-datasets')).not.toContain('Required');
     expect(text('workflow-panel-output')).toBe('calls, stopped');
     expect(byId('workflow-ndv-output')?.textContent).toContain('Top 5 states?');
+    expect(byId('workflow-ndv-input-errors')).toBeNull();
     const keys: string[] = [];
     fixture.componentInstance.openAgent.subscribe((k) => keys.push(k));
     byId('workflow-agent-qti')?.click();
     expect(keys).toEqual(['qti']);
+  });
+
+  it("lists each input field's type, rules and the steps that use it", () => {
+    open(node('start'));
+    expect(text('workflow-param-question')).toContain('text');
+    expect(text('workflow-param-rules-question')).toBe(
+      'Rules: Max 4000 characters',
+    );
+    expect(text('workflow-param-usedby-question')).toBe(
+      'Used by: Receive question',
+    );
+    expect(text('workflow-param-rules-datasets')).toBe(
+      'Rules: PostgreSQL datasets',
+    );
+    expect(text('workflow-param-usedby-datasets')).toBe('Used by: None');
+  });
+
+  it('lists the errors that refused the last Execute in the Start Output', () => {
+    open({
+      ...node('start'),
+      run: null,
+      inputErrors: [
+        { field: 'question', message: 'Question is required' },
+        { field: 'datasets', message: 'Select at least one dataset' },
+      ],
+    });
+    const list = byId('workflow-ndv-input-errors')!;
+    expect(
+      Array.from(list.querySelectorAll('li')).map((li) => li.textContent?.trim()),
+    ).toEqual(['Question is required', 'Select at least one dataset']);
+    expect(text('workflow-ndv-output-status')).toBe('Invalid input');
+    expect(byId('workflow-ndv-output')?.textContent).not.toContain(
+      'This node has not run yet',
+    );
   });
 
   it('shows the End node: the last output as input, the run line and output', () => {

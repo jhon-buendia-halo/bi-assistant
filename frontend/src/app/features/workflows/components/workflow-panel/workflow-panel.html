@@ -24,6 +24,8 @@
                       [id]="inputId(field.name)"
                       [attr.data-testid]="inputId(field.name)"
                       [checked]="designer.checked(field.name)"
+                      [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                      [attr.aria-describedby]="describedBy(field.name)"
                       (change)="onCheck(field.name, $event)"
                       class="mt-0.5 h-4 w-4 shrink-0 accent-primary"
                     />
@@ -32,14 +34,26 @@
                   @if (field.help) {
                     <p class="m-0 text-[12px] text-fg-muted">{{ field.help }}</p>
                   }
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
                 </div>
               }
               @case ("datasets") {
                 <div
                   role="group"
+                  tabindex="-1"
                   [attr.aria-labelledby]="inputId(field.name) + '-label'"
+                  [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                  [attr.aria-describedby]="describedBy(field.name)"
                   data-testid="workflow-input-datasets"
-                  class="flex flex-col gap-1.5"
+                  class="flex flex-col gap-1.5 outline-none"
                 >
                   <span [id]="inputId(field.name) + '-label'" class="field-label">{{
                     field.label
@@ -82,6 +96,15 @@
                       }
                     </ul>
                   }
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
                 </div>
               }
               @case ("textarea") {
@@ -94,11 +117,23 @@
                     [attr.data-testid]="inputId(field.name)"
                     [attr.placeholder]="field.placeholder ?? null"
                     [attr.aria-required]="field.required ? 'true' : null"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
                     [value]="designer.inputValue(field.name)"
                     (input)="onInput(field.name, $event)"
                     rows="4"
                     class="field resize-y"
+                    [class.border-on-danger-soft]="!!fieldError(field.name)"
                   ></textarea>
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
                   @if (field.name === designer.questionField() && w.starterQuestions.length > 0) {
                     <ul
                       class="m-0 flex list-none flex-wrap gap-1.5 p-0"
@@ -131,10 +166,22 @@
                     [type]="field.type === 'number' ? 'number' : 'text'"
                     [attr.placeholder]="field.placeholder ?? null"
                     [attr.aria-required]="field.required ? 'true' : null"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
                     [value]="designer.inputValue(field.name)"
                     (input)="onInput(field.name, $event)"
                     class="field"
+                    [class.border-on-danger-soft]="!!fieldError(field.name)"
                   />
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
                 </div>
               }
             }

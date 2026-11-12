@@ -1,6 +1,7 @@
 import {
   WorkflowAgentDetail,
   WorkflowDetailStep,
+  WorkflowInputError,
   WorkflowRun,
   WorkflowRunStepStatus,
   WorkflowRunToolCall,
@@ -103,6 +104,11 @@ export interface NodeInspection {
   context: NodeContext | null;
   /** Tools only (`kind: 'tool'`); their `run` and `context` are null. */
   tool?: NodeToolView;
+  /**
+   * Start only: the errors that refused the last Execute, before any run
+   * (ui.md 4.4b); absent when the input was not refused.
+   */
+  inputErrors?: WorkflowInputError[];
 }
 
 /** The summary row of the Workflow state panel. */
@@ -115,4 +121,12 @@ export interface WorkflowStateSummary {
   total: number;
   durationMs: number | null;
   runId: string | null;
+  /** The errors that refused the last Execute; 0 when it was not refused. */
+  invalidFields: number;
 }
+
+/**
+ * A node's status on the canvas: its status in the run shown, or `invalid`
+ * for Start when the last Execute was refused (ui.md 4.4b).
+ */
+export type WorkflowNodeStatus = WorkflowRunStepStatus | 'invalid';

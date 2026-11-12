@@ -266,7 +266,7 @@ describe('workflowStateSummary and nodeStatuses', () => {
   it('counts nodes that ran and maps statuses', () => {
     const s = src(STORED);
     const n = buildNodeInspections(s);
-    expect(workflowStateSummary(s, n)).toEqual({ status: 'success', ran: 4, total: 4, durationMs: 14000, runId: 'run-1' });
+    expect(workflowStateSummary(s, n)).toEqual({ status: 'success', ran: 4, total: 4, durationMs: 14000, runId: 'run-1', invalidFields: 0 });
     expect(nodeStatuses(n)).toEqual({ start: 'success', prepare: 'success', answer: 'success', end: 'success' });
   });
 
@@ -276,8 +276,22 @@ describe('workflowStateSummary and nodeStatuses', () => {
     expect(workflowStateSummary(src(live), n).ran).toBe(2);
     expect(nodeStatuses(n)['answer']).toBe('running');
     const none = buildNodeInspections(src(null));
-    expect(workflowStateSummary(src(null), none)).toEqual({ status: null, ran: 0, total: 4, durationMs: null, runId: null });
+    expect(workflowStateSummary(src(null), none)).toEqual({ status: null, ran: 0, total: 4, durationMs: null, runId: null, invalidFields: 0 });
     expect(nodeStatuses(none)).toEqual({});
+  });
+  it('marks Start invalid and counts the errors when the last Execute was refused', () => {
+    const inputErrors = [
+      { field: 'question', message: 'Question is required' },
+      { field: 'datasets', message: 'Select at least one dataset' },
+    ];
+    const s = src(null, { inputErrors });
+    const n = buildNodeInspections(s);
+    expect(n[0].inputErrors).toEqual(inputErrors);
+    expect(n[0].run).toBeNull();
+    expect(n[1].inputErrors).toBeUndefined();
+    expect(workflowStateSummary(s, n).invalidFields).toBe(2);
+    expect(nodeStatuses(n)).toEqual({ start: 'invalid' });
+    expect(buildNodeInspections(src(null, { inputErrors: [] }))[0].inputErrors).toBeUndefined();
   });
 });
 

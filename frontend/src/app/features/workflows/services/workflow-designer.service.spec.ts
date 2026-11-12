@@ -218,6 +218,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
       total: 3,
       durationMs: null,
       runId: null,
+      invalidFields: 0,
     });
     expect(designer.nodeStatuses()).toEqual({});
   });
@@ -295,6 +296,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
       total: 3,
       durationMs: 13900,
       runId: 'run-1',
+      invalidFields: 0,
     });
     expect(designer.nodeStatuses()).toEqual({
       start: 'success',
@@ -380,11 +382,59 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
   });
 
   it('a refusal shows the message under Execute and no result', () => {
-    designer.execute();
-    runs.last.handlers.onError!('Question is required');
-    expect(designer.runError()).toBe('Question is required');
+    executeQuestion();
+    runs.last.handlers.onError!('Dataset "World Cup Core" not found');
+    expect(designer.runError()).toBe('Dataset "World Cup Core" not found');
     expect(designer.runResult()).toBeNull();
     expect(designer.running()).toBe(false);
+  });
+
+  it('an invalid form is refused before any request: each field has its error, Start is invalid', () => {
+    designer.setInput('question', '   ');
+    const focus = designer.invalidFocusRequest();
+    designer.execute();
+    expect(runs.calls.length).toBe(0);
+    expect(designer.running()).toBe(false);
+    expect(designer.fieldErrors()).toEqual({
+      question: 'Question is required',
+      datasets: 'Select at least one dataset',
+    });
+    expect(designer.runError()).toBeNull();
+    expect(designer.runResult()).toBeNull();
+    expect(designer.nodeStatuses()).toEqual({ start: 'invalid' });
+    expect(designer.stateSummary().invalidFields).toBe(2);
+    expect(designer.invalidFocusRequest()).toBe(focus + 1);
+
+    designer.setInput('question', 'Which team?');
+    expect(designer.fieldErrors()).toEqual({ datasets: 'Select at least one dataset' });
+    expect(designer.stateSummary().invalidFields).toBe(1);
+    designer.toggleDataset('datasets', 'World Cup Core');
+    expect(designer.fieldErrors()).toEqual({});
+    expect(designer.nodeStatuses()).toEqual({});
+
+    designer.execute();
+    expect(runs.calls.length).toBe(1);
+  });
+
+  it("maps a refusal's field errors onto the fields; a non-field error stays under Execute", () => {
+    executeQuestion();
+    runs.last.handlers.onError!('Question must be at most 4000 characters', [
+      { field: 'question', message: 'Question must be at most 4000 characters' },
+      { field: null, message: 'Run "old" not found' },
+    ]);
+    expect(designer.fieldErrors()).toEqual({
+      question: 'Question must be at most 4000 characters',
+    });
+    expect(designer.runError()).toBe('Run "old" not found');
+    expect(designer.nodeStatuses()).toEqual({ start: 'invalid' });
+    expect(designer.runResult()).toBeNull();
+
+    designer.execute();
+    expect(runs.calls.length).toBe(2);
+    runs.last.handlers.onError!('Question is required', [
+      { field: 'question', message: 'Question is required' },
+    ]);
+    expect(designer.runError()).toBeNull();
   });
 
   it('an error after the run started fails the run with it, and the running step', () => {

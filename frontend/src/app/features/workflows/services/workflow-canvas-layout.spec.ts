@@ -71,12 +71,7 @@ const V2: Source = {
   input: [field('question'), field('datasets')],
   agents: AGENTS,
   steps: [
-    code(
-      'receive-question',
-      ['question', 'datasets'],
-      ['question', 'datasets'],
-      [{ label: 'Empty question', outcome: 'fails' }],
-    ),
+    code('receive-question', ['question', 'datasets'], ['question', 'datasets']),
     code('load-catalog', ['question', 'datasets'], ['question', 'catalog']),
     agentStep('analyse', [
       'list_entities',
@@ -133,7 +128,8 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
       ['End', 'text, words'],
     ]);
     expect(layout.width).toBe(376 + 88 + 40);
-    expect(layout.height).toBe(40 + 88 + 52 + 40);
+    // Start's exit note row sits under its label.
+    expect(layout.height).toBe(40 + 88 + 52 + 16 + 40);
   });
 
   it('three code steps: no room above the row, each step one square column', () => {
@@ -159,6 +155,15 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
       null,
       null,
       null,
+    ]);
+    // Start's exit: an invalid input never starts the run.
+    expect(layout.nodes[0].exits).toEqual([
+      {
+        text: 'Invalid input → not started',
+        outcome: 'fails',
+        x: 40 + 44,
+        y: 40 + 88 + 52,
+      },
     ]);
     // A code step's exit sits under its label, centred on the node.
     expect(layout.nodes[2].exits).toEqual([

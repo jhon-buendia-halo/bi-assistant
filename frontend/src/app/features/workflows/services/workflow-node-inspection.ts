@@ -5,6 +5,7 @@ import {
   NodeRunView,
   NodeToolCallView,
   START_NODE_ID,
+  WorkflowNodeStatus,
   WorkflowStateSummary,
   toolNodeId,
 } from '../models/workflow-node.model';
@@ -14,6 +15,7 @@ import {
   RunView,
   WorkflowDetail,
   WorkflowDetailStep,
+  WorkflowInputError,
   WorkflowRunStepStatus,
 } from '../models/workflow.model';
 
@@ -22,6 +24,8 @@ export interface NodeInspectionSource {
   run: RunView | null;
   liveToolCalls: LiveToolCall[];
   running: boolean;
+  /** The errors that refused the last Execute (ui.md 4.4b); none when absent. */
+  inputErrors?: WorkflowInputError[];
 }
 
 /** Milliseconds between two ISO times; null when either is missing or invalid. */
@@ -78,6 +82,7 @@ export function buildNodeInspections(s: NodeInspectionSource): NodeInspection[] 
   const { workflow, run } = s;
   const runInput = (run?.input ?? null) as Record<string, unknown> | null;
   const runSteps = new Map((run?.steps ?? []).map((r) => [r.id, r]));
+  const inputErrors = s.inputErrors ?? [];
 
   const start: NodeInspection = {
     nodeId: START_NODE_ID,
@@ -96,6 +101,7 @@ export function buildNodeInspections(s: NodeInspectionSource): NodeInspection[] 
         }
       : null,
     context: null,
+    ...(inputErrors.length ? { inputErrors: [...inputErrors] } : {}),
   };
 
   const steps: NodeInspection[] = workflow.steps.map((step, i) => {
@@ -239,13 +245,18 @@ export function workflowStateSummary(
     total: s.workflow.steps.length + 2,
     durationMs: durationMs(s.run?.startedAt, s.run?.finishedAt),
     runId: s.run?.runId ?? null,
+    invalidFields: s.inputErrors?.length ?? 0,
   };
 }
 
+/** Each node's canvas status: its run status, or `invalid` for a refused Start. */
 export function nodeStatuses(
   nodes: NodeInspection[],
-): Record<string, WorkflowRunStepStatus> {
-  const out: Record<string, WorkflowRunStepStatus> = {};
-  for (const n of nodes) if (n.run) out[n.nodeId] = n.run.status;
+): Record<string, WorkflowNodeStatus> {
+  const out: Record<string, WorkflowNodeStatus> = {};
+  for (const n of nodes) {
+    if (n.inputErrors?.length) out[n.nodeId] = 'invalid';
+    else if (n.run) out[n.nodeId] = n.run.status;
+  }
   return out;
 }

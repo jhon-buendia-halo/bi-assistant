@@ -192,21 +192,37 @@
               @for (field of workflow().input; track field.name) {
                 <li
                   [attr.data-testid]="'workflow-param-' + field.name"
-                  class="flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-lg border border-border px-3 py-2"
+                  class="flex flex-col gap-1 rounded-lg border border-border px-3 py-2"
                 >
-                  <span
-                    class="font-mono text-[12px] font-medium text-fg-strong"
-                    >{{ field.name }}</span
-                  >
-                  <span class="min-w-0 text-[13px] text-fg">{{
-                    field.label
-                  }}</span>
-                  <span class="ml-auto font-mono text-[12px] text-fg-muted">{{
-                    field.type
-                  }}</span>
-                  @if (field.required) {
-                    <span class="chip chip-neutral">required</span>
+                  <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                    <span
+                      class="font-mono text-[12px] font-medium text-fg-strong"
+                      >{{ field.name }}</span
+                    >
+                    <span class="min-w-0 text-[13px] text-fg">{{
+                      field.label
+                    }}</span>
+                    <span class="ml-auto font-mono text-[12px] text-fg-muted">{{
+                      field.type
+                    }}</span>
+                    @if (field.required) {
+                      <span class="chip chip-neutral">Required</span>
+                    }
+                  </div>
+                  @if (fieldRules(field); as rules) {
+                    <p
+                      class="m-0 text-[12px] text-fg-muted"
+                      [attr.data-testid]="'workflow-param-rules-' + field.name"
+                    >
+                      Rules: {{ rules }}
+                    </p>
                   }
+                  <p
+                    class="m-0 text-[12px] text-fg-muted"
+                    [attr.data-testid]="'workflow-param-usedby-' + field.name"
+                  >
+                    Used by: {{ fieldUsedBy(field) }}
+                  </p>
                 </li>
               }
             </ul>
@@ -521,7 +537,24 @@
         </p>
       }
 
-      @if (!tool() && (!run()?.error || run()?.output)) {
+      @if (inputErrors().length) {
+        <!-- Start: the last Execute was refused; nothing ran (ui.md 4.4b). -->
+        <p class="m-0 mb-1.5 text-[13px] text-fg">
+          The input was refused, so the workflow did not start:
+        </p>
+        <ul
+          class="m-0 flex list-none flex-col gap-1.5 p-0"
+          data-testid="workflow-ndv-input-errors"
+        >
+          @for (error of inputErrors(); track $index) {
+            <li
+              class="rounded-lg bg-danger-soft px-3 py-1.5 text-[13px] text-on-danger-soft"
+            >
+              {{ error.message }}
+            </li>
+          }
+        </ul>
+      } @else if (!tool() && (!run()?.error || run()?.output)) {
         <app-workflow-data-view
           [value]="run()?.output"
           [truncated]="run()?.outputTruncated === true"

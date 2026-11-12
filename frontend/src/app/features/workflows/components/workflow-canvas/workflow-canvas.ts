@@ -15,6 +15,7 @@ import {
 import {
   Braces,
   Check,
+  CircleAlert,
   CircleX,
   Cpu,
   Ellipsis,
@@ -34,10 +35,8 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-angular';
-import {
-  WorkflowDetail,
-  WorkflowRunStepStatus,
-} from '../../models/workflow.model';
+import { WorkflowDetail } from '../../models/workflow.model';
+import { WorkflowNodeStatus } from '../../models/workflow-node.model';
 import {
   CanvasNode,
   CanvasNodeKind,
@@ -49,7 +48,7 @@ import {
   zoomIn,
   zoomOut,
 } from '../../services/workflow-canvas-layout';
-import { runStepStatusLabel } from '../../services/workflows.util';
+import { nodeStatusLabel } from '../../services/workflows.util';
 
 /** A drag shorter than this, in pixels, is a click on the background. */
 const PAN_THRESHOLD = 3;
@@ -67,7 +66,8 @@ const SUB_ICONS: Record<CanvasSubNode['kind'], LucideIconData> = {
   more: Ellipsis,
 };
 
-const STATUS_ICONS: Record<WorkflowRunStepStatus, LucideIconData> = {
+const STATUS_ICONS: Record<WorkflowNodeStatus, LucideIconData> = {
+  invalid: CircleAlert,
   success: Check,
   failed: X,
   running: Loader2,
@@ -103,13 +103,13 @@ export class WorkflowCanvas {
   protected readonly nodeIcons = NODE_ICONS;
   protected readonly subIcons = SUB_ICONS;
   protected readonly statusIcons = STATUS_ICONS;
-  protected readonly statusLabel = runStepStatusLabel;
+  protected readonly statusLabel = nodeStatusLabel;
 
   readonly workflow = input.required<WorkflowDetail>();
   /** The selected node: `start`, `end` or a step id. */
   readonly selectedId = input<string | null>(null);
-  /** Each node's status in the run shown, by node id (incl. `start` / `end`). */
-  readonly statuses = input<Record<string, WorkflowRunStepStatus>>({});
+  /** Each node's status in the run shown, by node id (incl. `start` / `end`); Start may be `invalid`. */
+  readonly statuses = input<Record<string, WorkflowNodeStatus>>({});
   /** A node chosen by a single click, or null for a click on the background. */
   readonly selectNode = output<string | null>();
   /** Open a node's details: double click or Enter, or a click on an agent's sub-node (its step id). */
@@ -160,7 +160,7 @@ export class WorkflowCanvas {
     });
   }
 
-  protected status(id: string): WorkflowRunStepStatus | null {
+  protected status(id: string): WorkflowNodeStatus | null {
     const statuses = this.statuses();
     return Object.hasOwn(statuses, id) ? statuses[id] : null;
   }

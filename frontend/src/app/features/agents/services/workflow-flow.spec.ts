@@ -11,7 +11,7 @@ const WORKFLOW: AgentWorkflow = {
       summary: 'Trims the question.',
       input: ['question', 'datasets'],
       output: ['question', 'datasets'],
-      exits: [{ label: 'Empty question', outcome: 'fails' }],
+      exits: [],
     },
     {
       id: 'analyse',
@@ -63,7 +63,7 @@ describe('workflowCards (agents-evals R108)', () => {
 
   it('words each other exit by its outcome', () => {
     expect(workflowCards(WORKFLOW).map((card) => card.exits)).toEqual([
-      [{ text: 'Empty question → fails the turn', outcome: 'fails' }],
+      [],
       [
         { text: 'Model error → fails the turn', outcome: 'fails' },
         { text: 'Stop → ends the turn here', outcome: 'stops' },

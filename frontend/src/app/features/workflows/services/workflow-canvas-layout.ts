@@ -140,6 +140,8 @@ export interface CanvasLayout {
 }
 
 const EXIT_TEXT = { fails: 'fails', stops: 'ends here' } as const;
+/** Start's exit note (ui.md 4.4b): the input is checked before anything runs. */
+const START_EXIT_TEXT = 'Invalid input → not started';
 
 /** `1 field` / `<n> fields`, or '' for none. */
 export function fieldsLabel(count: number): string {
@@ -242,7 +244,17 @@ export function workflowCanvasLayout(
     subtitle: w.input.map((f) => f.name).join(', '),
     agentLine: null,
     step: null,
-    exits: [],
+    // The input is checked before the run: an invalid one never starts it.
+    exits: w.input.length
+      ? [
+          {
+            text: START_EXIT_TEXT,
+            outcome: 'fails',
+            x: x + CANVAS.square / 2,
+            y: top + CANVAS.nodeHeight + CANVAS.labelHeight,
+          },
+        ]
+      : [],
     ports: [],
     subNodes: [],
   });

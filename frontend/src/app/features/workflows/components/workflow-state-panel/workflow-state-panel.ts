@@ -51,6 +51,11 @@ export class WorkflowStatePanel {
   readonly progress = computed(
     () => `${this.summary().ran} of ${this.summary().total} nodes ran`,
   );
+  /** `Input invalid: <n> field(s)` after a refused Execute; null otherwise. */
+  readonly invalidLine = computed(() => {
+    const n = this.summary().invalidFields;
+    return n > 0 ? `Input invalid: ${n} ${n === 1 ? 'field' : 'fields'}` : null;
+  });
   readonly pill = computed(() => {
     const status = this.summary().status;
     if (!status) return null;
