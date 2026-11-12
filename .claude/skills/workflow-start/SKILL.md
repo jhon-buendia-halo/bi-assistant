@@ -25,7 +25,7 @@ Scale each step to the change's size (**S / M / L**, defined in CLAUDE.md). The 
 1. **Classify, don't append.** Find the milestone the work belongs to (read the milestone descriptions). Extend an existing feature when the work fits it; otherwise add a feature under the right milestone, in dependency order; if no milestone fits, propose one before adding the feature.
 2. Write the entry (Intent / Scope / Out of scope / Acceptance / Notes) and set it `🚧 In progress`. It becomes `✅ Done` at step 10. A cut feature stays, `🚫 Cut` with a one-line reason.
 3. Longer plans go in [docs/plans/](../../../docs/plans/), linked from the feature, never copied into it.
-4. Backlog items are promoted into a milestone before work starts.
+4. Backlog items live in [roadmap-backlog.md](../../../roadmap-backlog.md) (open stories moved out of finished or stale milestones, and unsequenced plans); promote one into a milestone of `roadmap.md` before work starts. Finished milestones live in [roadmap-archive.md](../../../roadmap-archive.md).
 
 - **S:** one feature entry with a one-line Intent, Scope and Acceptance, under the epic it touches, or under Milestone 1.7 *Bug Fixes* for a fix to shipped work.
 

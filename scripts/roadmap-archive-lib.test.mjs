@@ -1,7 +1,7 @@
 // node --test scripts/roadmap-archive-lib.test.mjs (roadmap 1.23.30, delivery.md 13)
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ARCHIVED_MARK, archiveRoadmap, isArchivable, joinRoadmaps, milestoneSections } from './roadmap-archive-lib.mjs';
+import { ARCHIVED_MARK, BACKLOG_FILE, archiveRoadmap, isArchivable, joinRoadmaps, milestoneSections } from './roadmap-archive-lib.mjs';
 import { storyEntry } from './spec-index-lib.mjs';
 
 const ROADMAP = [
@@ -65,4 +65,34 @@ test('archiving twice changes nothing and an archived story is found', () => {
   assert.equal(second.roadmap, first.roadmap);
   assert.ok(storyEntry(joinRoadmaps(first.roadmap, first.archive), '1.1.2'));
   assert.equal(storyEntry(first.roadmap, '1.1.2'), null);
+});
+
+test('a milestone left with only backlog placeholders is archivable; a feature-less planned one is not', () => {
+  const text = [
+    '## Release 1',
+    '',
+    '### Milestone 1.5 — Moved out (M1-5)',
+    '',
+    '- 1.5.1 Databricks — moved to Backlog (2026-11-12).',
+    '',
+    '### Milestone 2.1 — Future (M2-1)',
+    '',
+    'Planned work, no features yet.',
+    '',
+    '## Backlog',
+    '',
+  ].join('\n');
+  const r = archiveRoadmap(text);
+  assert.deepEqual(r.moved, ['1.5']);
+  assert.ok(r.archive.includes('- 1.5.1 Databricks — moved to Backlog'));
+  assert.ok(r.roadmap.includes(`### Milestone 1.5 — Moved out (M1-5)${ARCHIVED_MARK}`));
+  assert.ok(r.roadmap.includes('Planned work, no features yet.'));
+});
+
+test('a story moved to the backlog is found in the joined roadmaps, not in roadmap.md', () => {
+  const roadmap = '### Milestone 1.5 — X (M1-5)\n\n- 1.5.1 Databricks — moved to Backlog (2026-11-12).\n';
+  const backlog = '## Backlog\n\n### Moved from Milestone 1.5 — X (2026-11-12)\n\n#### 1.5.1 — Databricks  `📋 Planned`\n- **Intent:** connect.\n';
+  assert.equal(storyEntry(roadmap, '1.5.1'), null);
+  assert.ok(storyEntry(joinRoadmaps(roadmap, '', backlog), '1.5.1'));
+  assert.equal(BACKLOG_FILE, 'roadmap-backlog.md');
 });

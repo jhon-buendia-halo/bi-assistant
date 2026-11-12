@@ -56,11 +56,11 @@ import {
   waveReportPath,
   waveSpecUnion,
 } from './qa-lib.mjs';
-import { ARCHIVE_FILE, joinRoadmaps } from './roadmap-archive-lib.mjs';
+import { ARCHIVE_FILE, BACKLOG_FILE, joinRoadmaps } from './roadmap-archive-lib.mjs';
 
 // roadmap.md and roadmap-archive.md together: an archived story is still found (roadmap 1.23.30).
 const readRoadmaps = (root) =>
-  joinRoadmaps(...['roadmap.md', ARCHIVE_FILE].map((f) => (fs.existsSync(path.join(root, f)) ? fs.readFileSync(path.join(root, f), 'utf8') : null)));
+  joinRoadmaps(...['roadmap.md', ARCHIVE_FILE, BACKLOG_FILE].map((f) => (fs.existsSync(path.join(root, f)) ? fs.readFileSync(path.join(root, f), 'utf8') : null)));
 
 const IS_WIN = process.platform === 'win32';
 

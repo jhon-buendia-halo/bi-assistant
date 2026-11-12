@@ -27,7 +27,7 @@ const walk = (dir) => {
 walk('specs');
 const pack = buildPack(id, {
   read,
-  roadmaps: ['roadmap.md', 'roadmap-archive.md'],
+  roadmaps: ['roadmap.md', 'roadmap-archive.md', 'roadmap-backlog.md'],
   specs: specFiles,
   plans: fs
     .readdirSync(path.join(root, 'docs', 'plans'), { withFileTypes: true })

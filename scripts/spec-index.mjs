@@ -22,7 +22,7 @@ function walk(dir) {
 
 export function collectFiles() {
   const rels = walk(path.join(root, 'specs')).map((p) => path.relative(root, p).split(path.sep).join('/'));
-  for (const extra of ['roadmap.md', 'roadmap-archive.md']) if (fs.existsSync(path.join(root, extra))) rels.push(extra);
+  for (const extra of ['roadmap.md', 'roadmap-archive.md', 'roadmap-backlog.md']) if (fs.existsSync(path.join(root, extra))) rels.push(extra);
   return rels
     .filter((r) => r !== INDEX_PATH)
     .map((r) => ({ path: r, text: fs.readFileSync(path.join(root, r), 'utf8') }));

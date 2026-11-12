@@ -55,7 +55,7 @@ check(listed_epics == set(epics), "specs/README.md lists exactly the epic specs 
 
 # 2. Every relative link resolves.
 # changelog.md and retrospective.md are excluded: past entries are never rewritten, so their links may point at moved files.
-files = ["CLAUDE.md", "README.md", "roadmap.md", "roadmap-archive.md", "lessons.md"] + glob.glob("specs/**/*.md", recursive=True) + glob.glob(".claude/skills/*/SKILL.md") + glob.glob(".claude/tools/**/*.md", recursive=True)
+files = ["CLAUDE.md", "README.md", "roadmap.md", "roadmap-archive.md", "roadmap-backlog.md", "lessons.md"] + glob.glob("specs/**/*.md", recursive=True) + glob.glob(".claude/skills/*/SKILL.md") + glob.glob(".claude/tools/**/*.md", recursive=True)
 broken = []
 for f in files:
     for target in re.findall(r"\]\(([^)\s]+)\)", strip_code(read(f))):
@@ -115,7 +115,7 @@ check(agents and not absent, f"{len(agents)} registered agents appear in specs/s
 # Finished milestones live in roadmap-archive.md (roadmap 1.23.30); both files are read.
 # Epics are repo-only since 2026-11-11 (roadmap 0.5.1): a heading ends in "(M<R>-<M>)".
 # Older milestones still name their former Jira key as a link, "[BA-<n>]".
-roadmap_epics = set(re.findall(r"^### Milestone [\d.]+ — .*?(?:\[(BA-\d+)\]|\((M\d+-\d+)\))", read("roadmap.md") + "\n" + read("roadmap-archive.md"), flags=re.M))
+roadmap_epics = set(re.findall(r"^### Milestone [\d.]+ — .*?(?:\[(BA-\d+)\]|\((M\d+-\d+)\))", read("roadmap.md") + "\n" + read("roadmap-archive.md") + "\n" + read("roadmap-backlog.md"), flags=re.M))
 roadmap_epics = {a or b for a, b in roadmap_epics}
 missing = sorted(roadmap_epics - set(epics))
 check(not missing, f"{len(roadmap_epics)} roadmap milestone epics have a spec in specs/epics/", missing)

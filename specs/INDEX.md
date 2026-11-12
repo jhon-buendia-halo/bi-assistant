@@ -165,6 +165,44 @@ roadmap-archive.md:1408-1412  #### 1.14.13 — The Intellify RFP API: read endpo
 roadmap-archive.md:1414-1420  #### 1.14.14 — RFP records and the RFP package in the API ([BA-227](https://halo-powered.atlassian.net/browse/BA-227))  `✅ Done`
 roadmap-archive.md:1422-1430  #### 1.14.16 — The RFP package from the chat ([BA-229](https://halo-powered.atlassian.net/browse/BA-229))  `✅ Done`
 roadmap-archive.md:1432-1437  #### 1.14.19 — Single-user app: remove authentication and authorization, keep only the super admin ([BA-232](https://halo-powered.atlassian.net/browse/BA-232))  `✅ Done`
+roadmap-archive.md:1439-1443  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2))
+roadmap-archive.md:1445-1449  ### Milestone 1.4 — Response Reliability Signals ([BA-12](https://halo-powered.atlassian.net/browse/BA-12))
+roadmap-archive.md:1451-1459  ### Milestone 1.5 — Data Connectors ([BA-5](https://halo-powered.atlassian.net/browse/BA-5))
+roadmap-archive.md:1461-1465  ### Milestone 1.6 — User Testing ([BA-10](https://halo-powered.atlassian.net/browse/BA-10))
+
+roadmap-backlog.md:1-260  ## Backlog
+roadmap-backlog.md:12-88  ### Moved from Milestone 0.4 — Harness Adjustments (2026-11-12)
+roadmap-backlog.md:14-39  #### 0.4.4 — Story pipeline: brief, build, deterministic checks, review up to 3×  `📋 Planned`
+roadmap-backlog.md:41-55  #### 0.4.6 — "ship it": a human-typed gate on the epic PR  `📋 Planned`
+roadmap-backlog.md:57-73  #### 0.4.7 — Board status and check-ins without an LLM  `📋 Planned`
+roadmap-backlog.md:75-88  #### 0.4.8 — Tagged lessons digest and token metering  `📋 Planned`
+roadmap-backlog.md:90-97  ### Moved from Milestone 1.1 — Golden Dataset and Evals (2026-11-12)
+roadmap-backlog.md:92-97  #### 1.1.1 — Golden dataset and eval suite  `📋 Planned`
+roadmap-backlog.md:99-106  ### Moved from Milestone 1.2 — Data Model DSL (2026-11-12)
+roadmap-backlog.md:101-106  #### 1.2.1 — Data Model DSL  `📋 Planned`
+roadmap-backlog.md:108-130  ### Moved from Milestone 1.3 — Knowledge Store (2026-11-12)
+roadmap-backlog.md:110-119  #### 1.3.3 — Ontology-grounded retrieval and SQL generation, measured by evals ([BA-80](https://halo-powered.atlassian.net/browse/BA-80))  `📋 Planned`
+roadmap-backlog.md:121-130  #### 1.3.4 — Curation UI, feedback learning and provenance ([BA-81](https://halo-powered.atlassian.net/browse/BA-81))  `📋 Planned`
+roadmap-backlog.md:132-145  ### Moved from Milestone 1.4 — Response Reliability Signals (2026-11-12)
+roadmap-backlog.md:134-145  #### 1.4.1 — Answer trust signals  `📋 Planned`
+roadmap-backlog.md:147-165  ### Moved from Milestone 1.5 — Data Connectors (2026-11-12)
+roadmap-backlog.md:149-153  #### 1.5.1 — Databricks ([BA-6](https://halo-powered.atlassian.net/browse/BA-6))  `📋 Planned`
+roadmap-backlog.md:155-159  #### 1.5.2 — Postgres ([BA-7](https://halo-powered.atlassian.net/browse/BA-7))  `📋 Planned`
+roadmap-backlog.md:161-165  #### 1.5.3 — REST API ([BA-8](https://halo-powered.atlassian.net/browse/BA-8))  `📋 Planned`
+roadmap-backlog.md:167-174  ### Moved from Milestone 1.6 — User Testing (2026-11-12)
+roadmap-backlog.md:169-174  #### 1.6.1 — Beta user testing round  `📋 Planned`
+roadmap-backlog.md:176-183  ### Moved from Milestone 1.10 — LLM configuration (2026-11-12)
+roadmap-backlog.md:178-183  #### 1.10.4 — Ship the Copilot runtime in the installers and the npm package  `📋 Planned`
+roadmap-backlog.md:185-260  ### Moved from Milestone 1.14 — Agent Hub: tools and skills per agent (2026-11-12)
+roadmap-backlog.md:187-193  #### 1.14.2 — Choose an agent's tools ([BA-217](https://halo-powered.atlassian.net/browse/BA-217))  `🚧 In progress`
+roadmap-backlog.md:195-201  #### 1.14.4 — Assign skills to an agent ([BA-216](https://halo-powered.atlassian.net/browse/BA-216))  `🚧 In progress`
+roadmap-backlog.md:203-209  #### 1.14.5 — Edit built-in skills in the app ([BA-218](https://halo-powered.atlassian.net/browse/BA-218))  `🚧 In progress`
+roadmap-backlog.md:211-217  #### 1.14.6 — Link skills and tools in an agent's instructions ([BA-219](https://halo-powered.atlassian.net/browse/BA-219))  `🚧 In progress`
+roadmap-backlog.md:219-225  #### 1.14.10 — Skills reach the model through Mastra's skill tool ([BA-223](https://halo-powered.atlassian.net/browse/BA-223))  `🚧 In progress`
+roadmap-backlog.md:227-233  #### 1.14.11 — Edit every agent's System Prompt, built-in agents included ([BA-224](https://halo-powered.atlassian.net/browse/BA-224))  `🚧 In progress`
+roadmap-backlog.md:235-241  #### 1.14.15 — The RFP Builder agent: prompt, skill, tools, hub and sessions ([BA-228](https://halo-powered.atlassian.net/browse/BA-228))  `🚧 In progress`
+roadmap-backlog.md:243-250  #### 1.14.17 — Visuals follow the app's Light and Dark theme ([BA-230](https://halo-powered.atlassian.net/browse/BA-230))  `🚧 In progress`
+roadmap-backlog.md:252-260  #### 1.14.18 — Agents choose what the right panel shows ([BA-231](https://halo-powered.atlassian.net/browse/BA-231))  `🚧 In progress`
 
 roadmap.md:24-36  ## Release 0 — Maintenance
 roadmap.md:28-28  ### Milestone 0.1 — Desktop runtime correctness — archived, see roadmap-archive.md
@@ -172,117 +210,85 @@ roadmap.md:30-30  ### Milestone 0.2 — Delivery process ([BA-89](https://halo-p
 roadmap.md:32-32  ### Milestone 0.3 — Local Development Observability ([BA-111](https://halo-powered.atlassian.net/browse/BA-111)) — archived, see roadmap-archive.md
 roadmap.md:34-34  ### Milestone 0.4 — Harness Adjustments ([BA-119](https://halo-powered.atlassian.net/browse/BA-119)) — archived, see roadmap-archive.md
 roadmap.md:36-36  ### Milestone 0.5 — Faster workflow, repo-only planning (M0-5) — archived, see roadmap-archive.md
-roadmap.md:38-428  ## Release 1 — 1.0 Beta  (target 2026-10-31)
+roadmap.md:38-408  ## Release 1 — 1.0 Beta  (target 2026-10-31)
 roadmap.md:58-58  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9)) — archived, see roadmap-archive.md
-roadmap.md:60-64  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2))
-roadmap.md:66-66  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4)) — archived, see roadmap-archive.md
-roadmap.md:68-72  ### Milestone 1.4 — Response Reliability Signals ([BA-12](https://halo-powered.atlassian.net/browse/BA-12))
-roadmap.md:74-82  ### Milestone 1.5 — Data Connectors ([BA-5](https://halo-powered.atlassian.net/browse/BA-5))
-roadmap.md:84-88  ### Milestone 1.6 — User Testing ([BA-10](https://halo-powered.atlassian.net/browse/BA-10))
-roadmap.md:90-213  ### Milestone 1.7 — Bug Fixes ([BA-11](https://halo-powered.atlassian.net/browse/BA-11))
-roadmap.md:94-101  #### 1.7.1 — Session thread is empty after navigating away and back ([BA-83](https://halo-powered.atlassian.net/browse/BA-83))  `📋 Planned`
-roadmap.md:103-108  #### 1.7.2 — Release stabilization  `📋 Planned`
-roadmap.md:110-113  #### 1.7.3 — Datasource credentials stored in plaintext ([BA-101](https://halo-powered.atlassian.net/browse/BA-101))  `📋 Planned`
-roadmap.md:115-118  #### 1.7.4 — Desktop backend reachable from the network ([BA-102](https://halo-powered.atlassian.net/browse/BA-102))  `📋 Planned`
-roadmap.md:120-123  #### 1.7.5 — Bearer tokens survive diagnostics redaction ([BA-91](https://halo-powered.atlassian.net/browse/BA-91))  `📋 Planned`
-roadmap.md:125-128  #### 1.7.6 — Assistant SQL not limited to session datasets ([BA-103](https://halo-powered.atlassian.net/browse/BA-103))  `📋 Planned`
-roadmap.md:130-133  #### 1.7.7 — Read-only SQL guard is a keyword blacklist ([BA-104](https://halo-powered.atlassian.net/browse/BA-104))  `📋 Planned`
-roadmap.md:135-138  #### 1.7.8 — PostgreSQL SSL skips certificate checks ([BA-105](https://halo-powered.atlassian.net/browse/BA-105))  `📋 Planned`
-roadmap.md:140-152  #### 1.7.9 — Fixed default APP_SECRET fallback ([BA-106](https://halo-powered.atlassian.net/browse/BA-106))  `✅ Done`
-roadmap.md:154-157  #### 1.7.10 — Web-mode diagnostics export not redacted ([BA-107](https://halo-powered.atlassian.net/browse/BA-107))  `📋 Planned`
-roadmap.md:159-162  #### 1.7.11 — Tailoring after a revert overwrites a version ([BA-92](https://halo-powered.atlassian.net/browse/BA-92))  `📋 Planned`
-roadmap.md:164-167  #### 1.7.12 — Interrupted eval runs stay running ([BA-93](https://halo-powered.atlassian.net/browse/BA-93))  `📋 Planned`
-roadmap.md:169-172  #### 1.7.13 — Auto-repair rebuilds from stale data ([BA-94](https://halo-powered.atlassian.net/browse/BA-94))  `📋 Planned`
-roadmap.md:174-177  #### 1.7.14 — Verified query id rotates on re-approval ([BA-95](https://halo-powered.atlassian.net/browse/BA-95))  `📋 Planned`
-roadmap.md:179-182  #### 1.7.15 — Testing data clobbers same-name datasources ([BA-96](https://halo-powered.atlassian.net/browse/BA-96))  `📋 Planned`
-roadmap.md:184-187  #### 1.7.16 — Dataset rename duplicates; delete unconfirmed ([BA-97](https://halo-powered.atlassian.net/browse/BA-97))  `📋 Planned`
-roadmap.md:189-192  #### 1.7.17 — Datasource-scoped knowledge is never used ([BA-98](https://halo-powered.atlassian.net/browse/BA-98))  `📋 Planned`
-roadmap.md:194-197  #### 1.7.18 — Stale application-shell visual baseline ([BA-99](https://halo-powered.atlassian.net/browse/BA-99))  `📋 Planned`
-roadmap.md:199-202  #### 1.7.19 — Sidebar session order goes stale ([BA-100](https://halo-powered.atlassian.net/browse/BA-100))  `📋 Planned`
-roadmap.md:204-213  #### 1.7.20 — Renderer honours a non-default `BACKEND_PORT` ([BA-109](https://halo-powered.atlassian.net/browse/BA-109))  `📋 Planned`
-roadmap.md:215-215  ### Milestone 1.8 — Agentic Hub Look and Feel ([BA-141](https://halo-powered.atlassian.net/browse/BA-141)) — archived, see roadmap-archive.md
-roadmap.md:217-217  ### Milestone 1.9 — Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) — archived, see roadmap-archive.md
-roadmap.md:219-219  ### Milestone 1.10 — LLM configuration ([BA-159](https://halo-powered.atlassian.net/browse/BA-159)) — archived, see roadmap-archive.md
-roadmap.md:221-221  ### Milestone 1.11 — Claude Code workflow mod ([BA-169](https://halo-powered.atlassian.net/browse/BA-169)) — archived, see roadmap-archive.md
-roadmap.md:223-223  ### Milestone 1.13 — Assistant skills: progressive-disclosure agent structure ([BA-198](https://halo-powered.atlassian.net/browse/BA-198)) — archived, see roadmap-archive.md
-roadmap.md:225-225  ### Milestone 1.14 — Agent Hub: tools and skills per agent ([BA-213](https://halo-powered.atlassian.net/browse/BA-213)) — archived, see roadmap-archive.md
-roadmap.md:227-227  ### Milestone 1.15 — US Health demo ([BA-233](https://halo-powered.atlassian.net/browse/BA-233)) — archived, see roadmap-archive.md
-roadmap.md:229-229  ### Milestone 1.16 — Data Readiness Agent ([BA-251](https://halo-powered.atlassian.net/browse/BA-251)) — archived, see roadmap-archive.md
-roadmap.md:231-231  ### Milestone 1.17 — Custom LLM endpoint provider ([BA-281](https://halo-powered.atlassian.net/browse/BA-281)) — archived, see roadmap-archive.md
-roadmap.md:233-233  ### Milestone 1.18 — Desktop installer builds ([BA-302](https://halo-powered.atlassian.net/browse/BA-302)) — archived, see roadmap-archive.md
-roadmap.md:235-235  ### Milestone 1.19 — US Health testing data ([BA-305](https://halo-powered.atlassian.net/browse/BA-305)) — archived, see roadmap-archive.md
-roadmap.md:237-237  ### Milestone 1.20 — Schema metadata in datasets ([BA-318](https://halo-powered.atlassian.net/browse/BA-318)) — archived, see roadmap-archive.md
-roadmap.md:239-239  ### Milestone 1.21 — Questions to Insights v2 ([BA-320](https://halo-powered.atlassian.net/browse/BA-320)) — archived, see roadmap-archive.md
-roadmap.md:241-241  ### Milestone 1.22 — Sampled profiling and synthetic data (M1-22) — archived, see roadmap-archive.md
-roadmap.md:243-428  ### Milestone 1.23 — Workflow-first: chats run workflows, agents are building blocks (M1-23)
-roadmap.md:247-286  #### 1.23.1 — The Graph tab draws a workflow-backed agent's turn  `🚧 In progress`
-roadmap.md:288-296  #### 1.23.2 — Workflow-first: ADR, epic spec, glossary and roadmap  `🚧 In progress`
-roadmap.md:298-303  #### 1.23.8 — Remove the showcase agents  `📋 Planned`
-roadmap.md:305-310  #### 1.23.3 — The workflow catalogue: list, detail, and sessions bound to a workflow  `📋 Planned`
-roadmap.md:312-317  #### 1.23.4 — Every streamed turn runs the session's workflow  `📋 Planned`
-roadmap.md:319-324  #### 1.23.5 — A Workflows area: list, workflow page and Start chat  `📋 Planned`
-roadmap.md:326-331  #### 1.23.6 — The New conversation screen picks a workflow; chats name their workflow  `📋 Planned`
-roadmap.md:333-338  #### 1.23.7 — Agents are building blocks: no Start chat, and "Used in" workflows  `📋 Planned`
-roadmap.md:340-347  #### 1.23.9 — Run a workflow on an input: the sequential test workflow  `🚧 In progress`
-roadmap.md:349-354  #### 1.23.10 — The workflow page as a designer: graph canvas in the middle, configuration on the right  `🚧 In progress`
-roadmap.md:356-357  #### 1.23.11 — Chats retired: ADR-0041, epic spec, glossary and roadmap  `🚧 In progress`
-roadmap.md:359-360  #### 1.23.12 — Streamed runs of agent workflows on the backend  `📋 Planned`
-roadmap.md:362-363  #### 1.23.13 — The answer view, extracted from the chat  `📋 Planned`
-roadmap.md:365-366  #### 1.23.14 — Stored runs, the run history API and run files  `📋 Planned`
-roadmap.md:368-369  #### 1.23.15 — Run the Assistant, Questions to Insights v2 and user agents from their page  `📋 Planned`
-roadmap.md:371-372  #### 1.23.16 — Run the Data Readiness Agent on a dataset  `📋 Planned`
-roadmap.md:374-375  #### 1.23.17 — Run the RFP Builder one exchange at a time  `📋 Planned`
-roadmap.md:377-378  #### 1.23.18 — Move the request-recording E2E specs from chats to runs  `📋 Planned`
-roadmap.md:380-381  #### 1.23.19 — Rate a run's answer: verified queries from runs  `📋 Planned`
-roadmap.md:383-384  #### 1.23.20 — Monitoring shows runs  `📋 Planned`
-roadmap.md:386-387  #### 1.23.21 — Runs replace Sessions on the rail; past chats open read-only  `📋 Planned`
-roadmap.md:389-390  #### 1.23.22 — Chats can no longer start  `📋 Planned`
-roadmap.md:392-393  #### 1.23.23 — Try it: run an agent's draft instead of a preview chat  `📋 Planned`
-roadmap.md:395-396  #### 1.23.24 — Deep analysis as a run workflow  `📋 Planned`
-roadmap.md:398-399  #### 1.23.25 — Visual actions on a run's result  `📋 Planned`
-roadmap.md:401-403  #### 1.23.26 — Extract the turn engine; evals and dev scripts on run hosts  `🚧 In progress`
-roadmap.md:405-408  #### 1.23.27 — Remove the chat write paths and specs  `📋 Planned`
-roadmap.md:410-411  #### 1.23.28 — Lean story lane, model and effort routing, decide-before-build  `🚧 In progress`
-roadmap.md:413-414  #### 1.23.29 — `story-pack.mjs` and the spec section index  `📋 Planned`
-roadmap.md:416-417  #### 1.23.30 — Archive finished milestones of the roadmap  `📋 Planned`
-roadmap.md:419-420  #### 1.23.31 — `qa.mjs --wave`: one verification for several stories  `📋 Planned`
-roadmap.md:422-423  #### 1.23.32 — Playwright in parallel  `📋 Planned`
-roadmap.md:425-428  #### 1.23.33 — Split `app.ts` / `app.html` by area  `🚧 In progress`
-roadmap.md:430-434  ## Release 2 — Multi-user  (no target date yet)
-roadmap.md:434-434  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
-roadmap.md:436-695  ## Backlog
-roadmap.md:447-523  ### Moved from Milestone 0.4 — Harness Adjustments (2026-11-12)
-roadmap.md:449-474  #### 0.4.4 — Story pipeline: brief, build, deterministic checks, review up to 3×  `📋 Planned`
-roadmap.md:476-490  #### 0.4.6 — "ship it": a human-typed gate on the epic PR  `📋 Planned`
-roadmap.md:492-508  #### 0.4.7 — Board status and check-ins without an LLM  `📋 Planned`
-roadmap.md:510-523  #### 0.4.8 — Tagged lessons digest and token metering  `📋 Planned`
-roadmap.md:525-532  ### Moved from Milestone 1.1 — Golden Dataset and Evals (2026-11-12)
-roadmap.md:527-532  #### 1.1.1 — Golden dataset and eval suite  `📋 Planned`
-roadmap.md:534-541  ### Moved from Milestone 1.2 — Data Model DSL (2026-11-12)
-roadmap.md:536-541  #### 1.2.1 — Data Model DSL  `📋 Planned`
-roadmap.md:543-565  ### Moved from Milestone 1.3 — Knowledge Store (2026-11-12)
-roadmap.md:545-554  #### 1.3.3 — Ontology-grounded retrieval and SQL generation, measured by evals ([BA-80](https://halo-powered.atlassian.net/browse/BA-80))  `📋 Planned`
-roadmap.md:556-565  #### 1.3.4 — Curation UI, feedback learning and provenance ([BA-81](https://halo-powered.atlassian.net/browse/BA-81))  `📋 Planned`
-roadmap.md:567-580  ### Moved from Milestone 1.4 — Response Reliability Signals (2026-11-12)
-roadmap.md:569-580  #### 1.4.1 — Answer trust signals  `📋 Planned`
-roadmap.md:582-600  ### Moved from Milestone 1.5 — Data Connectors (2026-11-12)
-roadmap.md:584-588  #### 1.5.1 — Databricks ([BA-6](https://halo-powered.atlassian.net/browse/BA-6))  `📋 Planned`
-roadmap.md:590-594  #### 1.5.2 — Postgres ([BA-7](https://halo-powered.atlassian.net/browse/BA-7))  `📋 Planned`
-roadmap.md:596-600  #### 1.5.3 — REST API ([BA-8](https://halo-powered.atlassian.net/browse/BA-8))  `📋 Planned`
-roadmap.md:602-609  ### Moved from Milestone 1.6 — User Testing (2026-11-12)
-roadmap.md:604-609  #### 1.6.1 — Beta user testing round  `📋 Planned`
-roadmap.md:611-618  ### Moved from Milestone 1.10 — LLM configuration (2026-11-12)
-roadmap.md:613-618  #### 1.10.4 — Ship the Copilot runtime in the installers and the npm package  `📋 Planned`
-roadmap.md:620-695  ### Moved from Milestone 1.14 — Agent Hub: tools and skills per agent (2026-11-12)
-roadmap.md:622-628  #### 1.14.2 — Choose an agent's tools ([BA-217](https://halo-powered.atlassian.net/browse/BA-217))  `🚧 In progress`
-roadmap.md:630-636  #### 1.14.4 — Assign skills to an agent ([BA-216](https://halo-powered.atlassian.net/browse/BA-216))  `🚧 In progress`
-roadmap.md:638-644  #### 1.14.5 — Edit built-in skills in the app ([BA-218](https://halo-powered.atlassian.net/browse/BA-218))  `🚧 In progress`
-roadmap.md:646-652  #### 1.14.6 — Link skills and tools in an agent's instructions ([BA-219](https://halo-powered.atlassian.net/browse/BA-219))  `🚧 In progress`
-roadmap.md:654-660  #### 1.14.10 — Skills reach the model through Mastra's skill tool ([BA-223](https://halo-powered.atlassian.net/browse/BA-223))  `🚧 In progress`
-roadmap.md:662-668  #### 1.14.11 — Edit every agent's System Prompt, built-in agents included ([BA-224](https://halo-powered.atlassian.net/browse/BA-224))  `🚧 In progress`
-roadmap.md:670-676  #### 1.14.15 — The RFP Builder agent: prompt, skill, tools, hub and sessions ([BA-228](https://halo-powered.atlassian.net/browse/BA-228))  `🚧 In progress`
-roadmap.md:678-685  #### 1.14.17 — Visuals follow the app's Light and Dark theme ([BA-230](https://halo-powered.atlassian.net/browse/BA-230))  `🚧 In progress`
-roadmap.md:687-695  #### 1.14.18 — Agents choose what the right panel shows ([BA-231](https://halo-powered.atlassian.net/browse/BA-231))  `🚧 In progress`
+roadmap.md:60-60  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2)) — archived, see roadmap-archive.md
+roadmap.md:62-62  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4)) — archived, see roadmap-archive.md
+roadmap.md:64-64  ### Milestone 1.4 — Response Reliability Signals ([BA-12](https://halo-powered.atlassian.net/browse/BA-12)) — archived, see roadmap-archive.md
+roadmap.md:66-66  ### Milestone 1.5 — Data Connectors ([BA-5](https://halo-powered.atlassian.net/browse/BA-5)) — archived, see roadmap-archive.md
+roadmap.md:68-68  ### Milestone 1.6 — User Testing ([BA-10](https://halo-powered.atlassian.net/browse/BA-10)) — archived, see roadmap-archive.md
+roadmap.md:70-193  ### Milestone 1.7 — Bug Fixes ([BA-11](https://halo-powered.atlassian.net/browse/BA-11))
+roadmap.md:74-81  #### 1.7.1 — Session thread is empty after navigating away and back ([BA-83](https://halo-powered.atlassian.net/browse/BA-83))  `📋 Planned`
+roadmap.md:83-88  #### 1.7.2 — Release stabilization  `📋 Planned`
+roadmap.md:90-93  #### 1.7.3 — Datasource credentials stored in plaintext ([BA-101](https://halo-powered.atlassian.net/browse/BA-101))  `📋 Planned`
+roadmap.md:95-98  #### 1.7.4 — Desktop backend reachable from the network ([BA-102](https://halo-powered.atlassian.net/browse/BA-102))  `📋 Planned`
+roadmap.md:100-103  #### 1.7.5 — Bearer tokens survive diagnostics redaction ([BA-91](https://halo-powered.atlassian.net/browse/BA-91))  `📋 Planned`
+roadmap.md:105-108  #### 1.7.6 — Assistant SQL not limited to session datasets ([BA-103](https://halo-powered.atlassian.net/browse/BA-103))  `📋 Planned`
+roadmap.md:110-113  #### 1.7.7 — Read-only SQL guard is a keyword blacklist ([BA-104](https://halo-powered.atlassian.net/browse/BA-104))  `📋 Planned`
+roadmap.md:115-118  #### 1.7.8 — PostgreSQL SSL skips certificate checks ([BA-105](https://halo-powered.atlassian.net/browse/BA-105))  `📋 Planned`
+roadmap.md:120-132  #### 1.7.9 — Fixed default APP_SECRET fallback ([BA-106](https://halo-powered.atlassian.net/browse/BA-106))  `✅ Done`
+roadmap.md:134-137  #### 1.7.10 — Web-mode diagnostics export not redacted ([BA-107](https://halo-powered.atlassian.net/browse/BA-107))  `📋 Planned`
+roadmap.md:139-142  #### 1.7.11 — Tailoring after a revert overwrites a version ([BA-92](https://halo-powered.atlassian.net/browse/BA-92))  `📋 Planned`
+roadmap.md:144-147  #### 1.7.12 — Interrupted eval runs stay running ([BA-93](https://halo-powered.atlassian.net/browse/BA-93))  `📋 Planned`
+roadmap.md:149-152  #### 1.7.13 — Auto-repair rebuilds from stale data ([BA-94](https://halo-powered.atlassian.net/browse/BA-94))  `📋 Planned`
+roadmap.md:154-157  #### 1.7.14 — Verified query id rotates on re-approval ([BA-95](https://halo-powered.atlassian.net/browse/BA-95))  `📋 Planned`
+roadmap.md:159-162  #### 1.7.15 — Testing data clobbers same-name datasources ([BA-96](https://halo-powered.atlassian.net/browse/BA-96))  `📋 Planned`
+roadmap.md:164-167  #### 1.7.16 — Dataset rename duplicates; delete unconfirmed ([BA-97](https://halo-powered.atlassian.net/browse/BA-97))  `📋 Planned`
+roadmap.md:169-172  #### 1.7.17 — Datasource-scoped knowledge is never used ([BA-98](https://halo-powered.atlassian.net/browse/BA-98))  `📋 Planned`
+roadmap.md:174-177  #### 1.7.18 — Stale application-shell visual baseline ([BA-99](https://halo-powered.atlassian.net/browse/BA-99))  `📋 Planned`
+roadmap.md:179-182  #### 1.7.19 — Sidebar session order goes stale ([BA-100](https://halo-powered.atlassian.net/browse/BA-100))  `📋 Planned`
+roadmap.md:184-193  #### 1.7.20 — Renderer honours a non-default `BACKEND_PORT` ([BA-109](https://halo-powered.atlassian.net/browse/BA-109))  `📋 Planned`
+roadmap.md:195-195  ### Milestone 1.8 — Agentic Hub Look and Feel ([BA-141](https://halo-powered.atlassian.net/browse/BA-141)) — archived, see roadmap-archive.md
+roadmap.md:197-197  ### Milestone 1.9 — Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) — archived, see roadmap-archive.md
+roadmap.md:199-199  ### Milestone 1.10 — LLM configuration ([BA-159](https://halo-powered.atlassian.net/browse/BA-159)) — archived, see roadmap-archive.md
+roadmap.md:201-201  ### Milestone 1.11 — Claude Code workflow mod ([BA-169](https://halo-powered.atlassian.net/browse/BA-169)) — archived, see roadmap-archive.md
+roadmap.md:203-203  ### Milestone 1.13 — Assistant skills: progressive-disclosure agent structure ([BA-198](https://halo-powered.atlassian.net/browse/BA-198)) — archived, see roadmap-archive.md
+roadmap.md:205-205  ### Milestone 1.14 — Agent Hub: tools and skills per agent ([BA-213](https://halo-powered.atlassian.net/browse/BA-213)) — archived, see roadmap-archive.md
+roadmap.md:207-207  ### Milestone 1.15 — US Health demo ([BA-233](https://halo-powered.atlassian.net/browse/BA-233)) — archived, see roadmap-archive.md
+roadmap.md:209-209  ### Milestone 1.16 — Data Readiness Agent ([BA-251](https://halo-powered.atlassian.net/browse/BA-251)) — archived, see roadmap-archive.md
+roadmap.md:211-211  ### Milestone 1.17 — Custom LLM endpoint provider ([BA-281](https://halo-powered.atlassian.net/browse/BA-281)) — archived, see roadmap-archive.md
+roadmap.md:213-213  ### Milestone 1.18 — Desktop installer builds ([BA-302](https://halo-powered.atlassian.net/browse/BA-302)) — archived, see roadmap-archive.md
+roadmap.md:215-215  ### Milestone 1.19 — US Health testing data ([BA-305](https://halo-powered.atlassian.net/browse/BA-305)) — archived, see roadmap-archive.md
+roadmap.md:217-217  ### Milestone 1.20 — Schema metadata in datasets ([BA-318](https://halo-powered.atlassian.net/browse/BA-318)) — archived, see roadmap-archive.md
+roadmap.md:219-219  ### Milestone 1.21 — Questions to Insights v2 ([BA-320](https://halo-powered.atlassian.net/browse/BA-320)) — archived, see roadmap-archive.md
+roadmap.md:221-221  ### Milestone 1.22 — Sampled profiling and synthetic data (M1-22) — archived, see roadmap-archive.md
+roadmap.md:223-408  ### Milestone 1.23 — Workflow-first: chats run workflows, agents are building blocks (M1-23)
+roadmap.md:227-266  #### 1.23.1 — The Graph tab draws a workflow-backed agent's turn  `🚧 In progress`
+roadmap.md:268-276  #### 1.23.2 — Workflow-first: ADR, epic spec, glossary and roadmap  `🚧 In progress`
+roadmap.md:278-283  #### 1.23.8 — Remove the showcase agents  `📋 Planned`
+roadmap.md:285-290  #### 1.23.3 — The workflow catalogue: list, detail, and sessions bound to a workflow  `📋 Planned`
+roadmap.md:292-297  #### 1.23.4 — Every streamed turn runs the session's workflow  `📋 Planned`
+roadmap.md:299-304  #### 1.23.5 — A Workflows area: list, workflow page and Start chat  `📋 Planned`
+roadmap.md:306-311  #### 1.23.6 — The New conversation screen picks a workflow; chats name their workflow  `📋 Planned`
+roadmap.md:313-318  #### 1.23.7 — Agents are building blocks: no Start chat, and "Used in" workflows  `📋 Planned`
+roadmap.md:320-327  #### 1.23.9 — Run a workflow on an input: the sequential test workflow  `🚧 In progress`
+roadmap.md:329-334  #### 1.23.10 — The workflow page as a designer: graph canvas in the middle, configuration on the right  `🚧 In progress`
+roadmap.md:336-337  #### 1.23.11 — Chats retired: ADR-0041, epic spec, glossary and roadmap  `🚧 In progress`
+roadmap.md:339-340  #### 1.23.12 — Streamed runs of agent workflows on the backend  `📋 Planned`
+roadmap.md:342-343  #### 1.23.13 — The answer view, extracted from the chat  `📋 Planned`
+roadmap.md:345-346  #### 1.23.14 — Stored runs, the run history API and run files  `📋 Planned`
+roadmap.md:348-349  #### 1.23.15 — Run the Assistant, Questions to Insights v2 and user agents from their page  `📋 Planned`
+roadmap.md:351-352  #### 1.23.16 — Run the Data Readiness Agent on a dataset  `📋 Planned`
+roadmap.md:354-355  #### 1.23.17 — Run the RFP Builder one exchange at a time  `📋 Planned`
+roadmap.md:357-358  #### 1.23.18 — Move the request-recording E2E specs from chats to runs  `📋 Planned`
+roadmap.md:360-361  #### 1.23.19 — Rate a run's answer: verified queries from runs  `📋 Planned`
+roadmap.md:363-364  #### 1.23.20 — Monitoring shows runs  `📋 Planned`
+roadmap.md:366-367  #### 1.23.21 — Runs replace Sessions on the rail; past chats open read-only  `📋 Planned`
+roadmap.md:369-370  #### 1.23.22 — Chats can no longer start  `📋 Planned`
+roadmap.md:372-373  #### 1.23.23 — Try it: run an agent's draft instead of a preview chat  `📋 Planned`
+roadmap.md:375-376  #### 1.23.24 — Deep analysis as a run workflow  `📋 Planned`
+roadmap.md:378-379  #### 1.23.25 — Visual actions on a run's result  `📋 Planned`
+roadmap.md:381-383  #### 1.23.26 — Extract the turn engine; evals and dev scripts on run hosts  `🚧 In progress`
+roadmap.md:385-388  #### 1.23.27 — Remove the chat write paths and specs  `📋 Planned`
+roadmap.md:390-391  #### 1.23.28 — Lean story lane, model and effort routing, decide-before-build  `🚧 In progress`
+roadmap.md:393-394  #### 1.23.29 — `story-pack.mjs` and the spec section index  `📋 Planned`
+roadmap.md:396-397  #### 1.23.30 — Archive finished milestones of the roadmap  `📋 Planned`
+roadmap.md:399-400  #### 1.23.31 — `qa.mjs --wave`: one verification for several stories  `📋 Planned`
+roadmap.md:402-403  #### 1.23.32 — Playwright in parallel  `📋 Planned`
+roadmap.md:405-408  #### 1.23.33 — Split `app.ts` / `app.html` by area  `🚧 In progress`
+roadmap.md:410-414  ## Release 2 — Multi-user  (no target date yet)
+roadmap.md:414-414  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
+roadmap.md:416-418  ## Backlog
 
 specs/README.md:7-88  ## Layout
 specs/README.md:28-55  ### Capabilities

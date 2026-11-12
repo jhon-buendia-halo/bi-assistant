@@ -2,16 +2,18 @@
 // move finished milestones from roadmap.md to roadmap-archive.md, verbatim.
 
 export const ARCHIVE_FILE = 'roadmap-archive.md';
+export const BACKLOG_FILE = 'roadmap-backlog.md';
 export const ARCHIVED_MARK = ` — archived, see ${ARCHIVE_FILE}`;
 export const ARCHIVE_HEADER = [
   '# Roadmap archive',
   '',
-  'Milestones whose features are all `✅ Done` or `🚫 Cut`, moved verbatim and in order from [roadmap.md](roadmap.md) by `node scripts/roadmap-archive.mjs` (roadmap 1.23.30). Each keeps a one-line skeleton heading in `roadmap.md`. Never edit a moved entry here except to correct a typo; `qa.mjs`, `demo-page.mjs`, `story-pack.mjs` and `check-specs.py` read both files.',
+  'Milestones whose features are all `✅ Done` or `🚫 Cut`, moved verbatim and in order from [roadmap.md](roadmap.md) by `node scripts/roadmap-archive.mjs` (roadmap 1.23.30). Each keeps a one-line skeleton heading in `roadmap.md`. Never edit a moved entry here except to correct a typo; Open stories live in [roadmap-backlog.md](roadmap-backlog.md). `qa.mjs`, `demo-page.mjs`, `story-pack.mjs`, `spec-index.mjs` and `check-specs.py` read all three files.',
   '',
   '',
 ].join('\n');
 
 const MILESTONE = /^### Milestone ([\d.]+) — /;
+const MOVED_LINE = /^- [\d.]+ .* — moved to Backlog \(/;
 const SECTION_END = /^##? /; // `## Release …`, `## Backlog`
 
 /**
@@ -46,12 +48,14 @@ export function featureStatuses(sectionLines) {
     });
 }
 
-/** Archivable: has features, every one Done or Cut, not already archived, not Milestone 1.23. */
+/** Archivable: every feature Done or Cut (or none left but backlog placeholders), not already archived, not Milestone 1.23. */
 export function isArchivable(section, sectionLines) {
   if (section.number === '1.23' || section.heading.includes('(M1-23)')) return false;
   if (section.heading.includes(ARCHIVED_MARK)) return false;
   const statuses = featureStatuses(sectionLines);
-  return statuses.length > 0 && statuses.every((s) => s === '✅ Done' || s === '🚫 Cut');
+  // A milestone whose open features all moved to the backlog keeps only placeholder lines.
+  if (statuses.length === 0) return sectionLines.some((l) => MOVED_LINE.test(l));
+  return statuses.every((s) => s === '✅ Done' || s === '🚫 Cut');
 }
 
 /** The skeleton heading kept in roadmap.md: the milestone heading (it names its epic) plus the archive mark. */

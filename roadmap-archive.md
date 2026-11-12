@@ -1435,3 +1435,31 @@ A user agent's builder chooses its tools from the assistant's own set, writes sk
 - **Out of scope:** any replacement access control (the host is the boundary); changing the desktop backend's bind address (kept by the user's choice); a way back to multi-user (needs a new ADR).
 - **Acceptance:** the app opens straight into the shell with no sign-in page, no account menu and no Admin rail item; every area and Settings section is reachable and Reasoning effort is always shown; sessions, agents, skills, knowledge, metrics and verified queries owned by any user are listed after opening an old data dir, and `app.sqlite` has no `users` table; `grep -rn "ORG_\|RequirePermission\|CurrentUserService\|auth.can\|/me'" backend/src frontend/src` is empty; the `navigation.spec.ts` scenario "opens as the super admin" passes; `check-specs.py`, unit tests, builds and the impacted E2E specs are green. No eval gate: nothing an agent receives changes.
 - **Notes:** asked on 2026-10-14: "No just leave the super admin user remove everything related to authentication and authorization". Decisions: single user, no sign-in; Admin area removed entirely; other users' data reassigned to the super admin; the super admin's name appears nowhere (agents keep "Owner: You"); the desktop bind is unchanged and the ADR states the exposure (anyone who reaches the port has full access). Design: [docs/plans/BA-213/ba-232-design.md](docs/plans/BA-213/ba-232-design.md).
+
+### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2))
+
+The structure the assistant reasons over, as a single, versionable source of truth.
+
+- 1.2.1 Data Model DSL — moved to Backlog (2026-11-12).
+
+### Milestone 1.4 — Response Reliability Signals ([BA-12](https://halo-powered.atlassian.net/browse/BA-12))
+
+Show users how much to trust each answer. Assignee: Sergio Berrospi.
+
+- 1.4.1 Answer trust signals — moved to Backlog (2026-11-12).
+
+### Milestone 1.5 — Data Connectors ([BA-5](https://halo-powered.atlassian.net/browse/BA-5))
+
+Connect to the sources beta users actually have. Each connector needs reliable connection setup, schema discovery and read-only querying. All three kinds already exist in code (`DatasourceKind = 'databricks' | 'postgres' | 'rest'`), so this milestone is about hardening them to beta quality.
+
+- 1.5.1 Databricks ([BA-6](https://halo-powered.atlassian.net/browse/BA-6)) — moved to Backlog (2026-11-12).
+
+- 1.5.2 Postgres ([BA-7](https://halo-powered.atlassian.net/browse/BA-7)) — moved to Backlog (2026-11-12).
+
+- 1.5.3 REST API ([BA-8](https://halo-powered.atlassian.net/browse/BA-8)) — moved to Backlog (2026-11-12).
+
+### Milestone 1.6 — User Testing ([BA-10](https://halo-powered.atlassian.net/browse/BA-10))
+
+Hands-on testing of the beta build with real users and their data. No fix version in Jira yet.
+
+- 1.6.1 Beta user testing round — moved to Backlog (2026-11-12).

@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ARCHIVE_FILE, joinRoadmaps } from './roadmap-archive-lib.mjs';
+import { ARCHIVE_FILE, BACKLOG_FILE, joinRoadmaps } from './roadmap-archive-lib.mjs';
 import {
   UsageError,
   extractStory,
@@ -46,9 +46,9 @@ try {
   throw err;
 }
 
-const story = extractStory(joinRoadmaps(read(path.join(root, 'roadmap.md')), read(path.join(root, ARCHIVE_FILE))), id);
+const story = extractStory(joinRoadmaps(read(path.join(root, 'roadmap.md')), read(path.join(root, ARCHIVE_FILE)), read(path.join(root, BACKLOG_FILE))), id);
 if (!story) {
-  console.error(`demo-page: roadmap.md and roadmap-archive.md have no story ${id}`);
+  console.error(`demo-page: roadmap.md, roadmap-archive.md and roadmap-backlog.md have no story ${id}`);
   process.exit(1);
 }
 
