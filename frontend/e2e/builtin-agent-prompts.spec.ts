@@ -1,7 +1,10 @@
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
+import axe from 'axe-core';
 import { test, expect } from './fixtures/app.fixture';
-import { WORLD_CUP_DATASET, openSessions } from './helpers/app-actions';
+import { scenarioStep } from './support/demo-captions';
+import { followOsTheme } from './helpers/app-actions';
+import { runAssistantOk } from './helpers/runs-api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import { apiJson } from './helpers/api';
 import {
@@ -22,6 +25,9 @@ import {
 
 const ASSISTANT = 'Questions to Insights Assistant';
 const RFP_BUILDER = 'RFP Builder';
+const V2_KEY = 'assistant-v2';
+const V2 = 'Questions to Insights v2';
+const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
 const QUESTION = 'Who won in 2022?';
 const DONE_LINE = 'Always end an answer with the word Done.';
 const BANNER =
@@ -40,6 +46,9 @@ test.afterEach(async () => {
 
 /** Opens a built-in agent's page from the hub (System agents sit behind "Show more"). */
 async function openAgent(page: Page, key: string, name: string) {
+  // A run sent through the API leaves the page where it was: go back to the hub first.
+  const back = page.getByRole('button', { name: 'All agents' });
+  if (await back.isVisible()) await back.click();
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
     .getByRole('button', { name: 'Agents', exact: true })
@@ -47,7 +56,7 @@ async function openAgent(page: Page, key: string, name: string) {
   await expect(
     page.getByRole('heading', { name: 'Agents', exact: true }),
   ).toBeVisible();
-  if (!['assistant', 'rfp'].includes(key)) {
+  if (!['assistant', 'rfp', V2_KEY].includes(key)) {
     await page.getByTestId('agent-show-more-system').click();
   }
   await page.getByTestId(`agent-${key}`).click();
@@ -115,32 +124,11 @@ async function promptView(page: Page, key: string) {
   return agent.prompt!;
 }
 
-/** Creates a World Cup session named `name` from "Start New Conversation". */
-async function newSession(page: Page, name: string): Promise<void> {
-  await openSessions(page);
-  await page
-    .locator('header')
-    .getByRole('button', { name: 'Start New Conversation' })
-    .click();
-  await page.getByPlaceholder('My new session').fill(name);
-  await page
-    .getByRole('button', { name: new RegExp(WORLD_CUP_DATASET) })
-    .click();
-  await page.getByRole('button', { name: /^Create$/ }).click();
-  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
-}
-
-/** Asks `question` in a new session; returns the turn's first model request. */
-async function askInNewSession(
-  page: Page,
-  sessionName: string,
-  question: string,
-): Promise<StubRequest> {
-  await newSession(page, sessionName);
+/** Runs the Assistant on `question`; returns the turn's first model request. */
+async function askInRun(page: Page, question: string): Promise<StubRequest> {
   const from = stub.requests.length;
-  await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText(STUB_ANSWER)).toBeVisible();
+  const result = await runAssistantOk(page, question);
+  expect(result.text).toContain(STUB_ANSWER);
   const request = stub.requests.slice(from).find((r) => r.stream);
   expect(request, `a streamed call for "${question}"`).toBeDefined();
   return request!;
@@ -185,7 +173,7 @@ test("I edit the assistant's prompt, and Reset restores it", async ({
   });
 
   const edited = systemTexts(
-    await askInNewSession(page, 'Prompt override', QUESTION),
+    await askInRun(page, QUESTION),
   )[0];
   expect(edited).toContain(DONE_LINE);
   expect(
@@ -203,7 +191,7 @@ test("I edit the assistant's prompt, and Reset restores it", async ({
   await expect(modifiedChip(page)).toHaveCount(0);
 
   const reset = systemTexts(
-    await askInNewSession(page, 'Prompt reset', QUESTION),
+    await askInRun(page, QUESTION),
   )[0];
   expect(reset).not.toContain(DONE_LINE);
 });
@@ -278,7 +266,7 @@ test('the shipped assistant prompt shows its tools and skill as chips and the mo
     path: path.join(EVIDENCE, 'assistant-system-prompt-chips.png'),
   });
 
-  const request = await askInNewSession(page, 'Plain mentions', QUESTION);
+  const request = await askInRun(page, QUESTION);
   const prompt = systemTexts(request)[0];
   expect(prompt).toContain('Call the "ask_clarification" tool only when');
   for (const text of systemTexts(request)) expect(text).not.toContain('[[');
@@ -401,4 +389,161 @@ test("the RFP Builder's prompt links only its own tools and skill", async ({
   ).toBeVisible();
   await expect(modifiedChip(page)).toHaveCount(0);
   expect((await promptView(page, 'rfp')).modified).toBe(false);
+});
+
+const workflowStep = (page: Page, id: string) =>
+  page.getByTestId(`workflow-step-${id}`);
+
+test(
+  "Questions to Insights v2's Graph tab draws what happens on each message",
+  { tag: ['@demo', '@story-1.23.1'] },
+  async ({ page }) => {
+    await scenarioStep(page, 'When I open the "Questions to Insights v2" agent', async () => {
+      await openAgent(page, V2_KEY, V2);
+    });
+    await scenarioStep(page, 'And I open the Graph tab', async () => {
+      await page.getByTestId('agent-tab-graph').click();
+      await expect(page.getByTestId('agent-workflow')).toBeVisible();
+    });
+    await scenarioStep(
+      page,
+      'Then I see "What happens on each message" with the steps "Receive question", "Load catalog", "Analyse" and "Wrap up", numbered 1 to 4',
+      async () => {
+        await expect(
+          page.getByRole('heading', { name: 'What happens on each message' }),
+        ).toHaveCount(1);
+        await expect(
+          page.getByTestId('agent-workflow').getByTestId('workflow-step-title'),
+        ).toHaveText(['Receive question', 'Load catalog', 'Analyse', 'Wrap up']);
+        await expect(workflowStep(page, 'wrap-up')).toHaveAccessibleName(
+          /^Step 4: Wrap up/,
+        );
+      },
+    );
+    await scenarioStep(
+      page,
+      'And "Analyse" is marked "LLM" and shows "list_entities", "describe_entity", "run_readonly_sql" and "≤ 15 steps"',
+      async () => {
+        const analyse = workflowStep(page, 'analyse');
+        await expect(analyse.getByTestId('workflow-step-kind')).toHaveText('LLM');
+        await expect(analyse.getByTestId('workflow-step-tool')).toHaveText(
+          V2_TOOLS,
+        );
+        await expect(analyse.getByTestId('workflow-step-loop')).toHaveText(
+          '≤ 15 steps',
+        );
+      },
+    );
+    await scenarioStep(page, 'And the other three steps are marked "Code"', async () => {
+      for (const id of ['receive-question', 'load-catalog', 'wrap-up']) {
+        await expect(
+          workflowStep(page, id).getByTestId('workflow-step-kind'),
+        ).toHaveText('Code');
+      }
+    });
+    await scenarioStep(
+      page,
+      'And the arrow from "Load catalog" to "Analyse" reads "question, catalog"',
+      async () => {
+        await expect(page.getByTestId('workflow-edge-load-catalog')).toHaveText(
+          /question, catalog/,
+        );
+        // The arrow sits between the two cards, left to right.
+        const [load, edge, analyse] = await Promise.all([
+          workflowStep(page, 'load-catalog').boundingBox(),
+          page.getByTestId('workflow-edge-load-catalog').boundingBox(),
+          workflowStep(page, 'analyse').boundingBox(),
+        ]);
+        expect(edge!.x).toBeGreaterThanOrEqual(load!.x + load!.width - 1);
+        expect(analyse!.x).toBeGreaterThanOrEqual(edge!.x + edge!.width - 1);
+      },
+    );
+    await scenarioStep(
+      page,
+      'And I see "Empty question → fails the turn", "Stop → ends the turn here" and "Model error → fails the turn"',
+      async () => {
+        await expect(page.getByTestId('workflow-step-exit')).toHaveText([
+          'Empty question → fails the turn',
+          'Model error → fails the turn',
+          'Stop → ends the turn here',
+        ]);
+      },
+    );
+    await scenarioStep(page, 'When I click the "Load catalog" step', async () => {
+      await workflowStep(page, 'load-catalog').click();
+      await expect(workflowStep(page, 'load-catalog')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+    await scenarioStep(
+      page,
+      'Then the step details show Input "question, datasets" and Output "question, catalog"',
+      async () => {
+        const details = page.getByTestId('workflow-step-details');
+        await expect(details).toContainText('2. Load catalog');
+        await expect(details.getByTestId('workflow-detail-kind')).toHaveText('Code');
+        await expect(details.getByTestId('workflow-detail-input')).toHaveText(
+          'question, datasets',
+        );
+        await expect(details.getByTestId('workflow-detail-output')).toHaveText(
+          'question, catalog',
+        );
+      },
+    );
+    await scenarioStep(page, 'And I see "Prompt links" with the agent\'s tools', async () => {
+      await expect(
+        page.getByRole('heading', { name: 'Prompt links' }),
+      ).toBeVisible();
+      for (const tool of V2_TOOLS) {
+        await expect(page.getByTestId(`graph-node-tool:${tool}`)).toBeVisible();
+      }
+    });
+    await scenarioStep(
+      page,
+      'When I open the "Questions to Insights Assistant" agent and its Graph tab',
+      async () => {
+        // From an agent's detail, its back button returns to the hub.
+        await page.getByRole('button', { name: 'All agents' }).click();
+        await page.getByTestId('agent-assistant').click();
+        await expect(
+          page.getByRole('heading', { name: ASSISTANT, exact: true }),
+        ).toBeVisible();
+        await page.getByTestId('agent-tab-graph').click();
+        await expect(page.getByTestId('agent-graph')).toBeVisible();
+      },
+    );
+    await scenarioStep(page, 'Then I do not see the workflow drawing', async () => {
+      await expect(page.getByTestId('agent-workflow')).toHaveCount(0);
+      await expect(
+        page.getByRole('heading', { name: 'Prompt links' }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole('heading', { name: 'What happens on each message' }),
+      ).toBeVisible();
+    });
+  },
+);
+
+test("v2's Graph tab has no detectable accessibility violations in either theme", async ({
+  page,
+}) => {
+  await followOsTheme(page);
+  await openAgent(page, V2_KEY, V2);
+  await page.getByTestId('agent-tab-graph').click();
+  await expect(page.getByTestId('agent-workflow')).toBeVisible();
+  await workflowStep(page, 'analyse').click();
+  await expect(page.getByTestId('workflow-step-details')).toBeVisible();
+
+  await page.addScriptTag({ content: axe.source });
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    // Let the theme's colour transitions finish before axe reads colours.
+    await page.waitForTimeout(500);
+    const results = await page.evaluate(async () => {
+      return (window as unknown as { axe: typeof axe }).axe.run(document);
+    });
+    expect(results.violations, theme).toEqual([]);
+  }
 });

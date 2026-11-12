@@ -125,6 +125,7 @@ function summarise(report: ReadinessReport): ReadinessReportSummary {
     entityCount: report.entityCount,
   };
   if (report.sessionId) summary.sessionId = report.sessionId;
+  if (report.runId) summary.runId = report.runId;
   return summary;
 }
 
@@ -198,6 +199,8 @@ export class DataReadinessService {
     const sessionId =
       typeof input.sessionId === 'string' ? input.sessionId.trim() : '';
     if (sessionId) report.sessionId = sessionId;
+    const runId = typeof input.runId === 'string' ? input.runId.trim() : '';
+    if (runId) report.runId = runId;
     const notProfiled = notProfiledOf(profile);
     if (notProfiled.length > 0) report.notProfiled = notProfiled;
     onProgress?.({ phase: 'storing', message: 'Writing the report…' });

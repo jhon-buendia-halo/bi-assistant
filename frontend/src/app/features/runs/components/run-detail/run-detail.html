@@ -1,0 +1,175 @@
+<div
+  class="min-h-0 flex-1 overflow-y-auto px-8 py-6"
+  data-testid="run-detail"
+>
+  <div class="mx-auto flex w-full max-w-[960px] flex-col gap-4">
+    <button
+      type="button"
+      data-testid="run-detail-back"
+      (click)="state.closeRun()"
+      class="btn btn-ghost self-start"
+    >
+      <lucide-angular [img]="ArrowLeft" [size]="14" />
+      <span>All runs</span>
+    </button>
+
+    @if (state.loadingRun()) {
+      <div class="flex items-center justify-center gap-2.5 py-10 text-fg-muted">
+        <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+        <span>Loading the run…</span>
+      </div>
+    } @else if (state.runError(); as error) {
+      <p
+        role="alert"
+        data-testid="run-detail-error"
+        class="flex items-center gap-2 text-[13px] text-on-danger-soft"
+      >
+        <lucide-angular [img]="TriangleAlert" [size]="14" />
+        {{ error }}
+      </p>
+    } @else if (state.activeRun(); as run) {
+      <section class="flex flex-wrap items-center gap-3">
+        <span
+          class="chip chip-neutral min-w-0 max-w-64"
+          data-testid="run-detail-workflow"
+          [attr.title]="'Workflow: ' + run.workflowName"
+        >
+          <lucide-angular [img]="Workflow" [size]="12" class="shrink-0" />
+          <span class="truncate">{{ run.workflowName }}</span>
+        </span>
+        <span
+          data-testid="run-detail-status"
+          role="status"
+          class="text-[13px] font-medium text-fg-strong"
+          >{{ status() }}</span
+        >
+        <button
+          type="button"
+          data-testid="run-again"
+          (click)="state.runAgain(run)"
+          class="btn btn-secondary ml-auto"
+        >
+          <lucide-angular [img]="RotateCcw" [size]="14" />
+          <span>Run again</span>
+        </button>
+      </section>
+
+      <section aria-labelledby="run-input-heading" data-testid="run-detail-input">
+        <h2
+          id="run-input-heading"
+          class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+        >
+          Input
+        </h2>
+        <dl class="m-0 mt-2 flex flex-col gap-1.5">
+          @for (entry of inputs(); track entry.name) {
+            <div class="flex flex-wrap gap-x-3 gap-y-0.5">
+              <dt class="font-mono text-[12px] text-fg-muted">{{ entry.name }}</dt>
+              <dd class="m-0 min-w-0 text-[13px] break-words text-fg-strong">
+                {{ entry.value }}
+              </dd>
+            </div>
+          }
+        </dl>
+      </section>
+
+      <section aria-labelledby="run-steps-heading" data-testid="run-detail-steps">
+        <h2
+          id="run-steps-heading"
+          class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+        >
+          Steps
+        </h2>
+        <ol class="m-0 mt-2 flex list-none flex-col gap-2 p-0">
+          @for (step of run.steps; track step.id) {
+            <li
+              [attr.data-testid]="'run-detail-step-' + step.id"
+              class="card flex flex-col gap-2 p-3"
+            >
+              <div class="flex items-center gap-2.5">
+                <span
+                  class="min-w-0 flex-1 truncate text-[13px] font-medium text-fg-strong"
+                  >{{ step.title }}</span
+                >
+                <span
+                  class="chip"
+                  [class.chip-success]="step.status === 'success'"
+                  [class.chip-danger]="step.status === 'failed'"
+                  [class.chip-neutral]="
+                    step.status !== 'success' && step.status !== 'failed'
+                  "
+                  >{{ stepStatus(step.status) }}</span
+                >
+              </div>
+              @if (step.error) {
+                <p
+                  class="m-0 rounded bg-danger-soft px-2 py-1 text-[12px] text-on-danger-soft"
+                >
+                  {{ step.error }}
+                </p>
+              }
+              @if (run.workflow && run.answer && step.id === "answer") {
+                <app-workflow-bar
+                  class="block"
+                  data-testid="run-detail-phases"
+                  [workflow]="run.workflow"
+                />
+              }
+            </li>
+          }
+        </ol>
+      </section>
+
+      @if (run.answer; as answer) {
+        <section aria-label="Answer" data-testid="run-detail-answer">
+          <app-answer-view
+            [message]="answer"
+            [latest]="false"
+            [busy]="false"
+            [showGenerateVisual]="run.status !== 'running' && run.workflowId !== 'agent:rfp'"
+            [visualGenerating]="visuals.generating() === run.id"
+            (generateVisual)="visuals.generate(run, applyRun)"
+            (viewVisual)="visuals.view(run, $event)"
+          />
+          @for (event of run.events ?? []; track event.at) {
+            <app-answer-view
+              class="mt-2 block"
+              [message]="event"
+              [latest]="false"
+              [busy]="false"
+              (viewVisual)="visuals.view(run, $event)"
+            />
+          }
+          <!-- Deferred: the interactive panel stays out of the initial bundle -->
+          @defer (when visuals.shown() !== null || visuals.loading() || visuals.error() !== null) {
+            <app-run-visual [run]="run" (runChange)="applyRun($event)" />
+          }
+        </section>
+      }
+
+      @if (output().length > 0) {
+        <section data-testid="run-detail-output">
+          <h2
+            class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+          >
+            Output
+          </h2>
+          <dl class="m-0 mt-2 flex flex-col gap-1.5">
+            @for (entry of output(); track entry.key) {
+              <div class="flex flex-wrap gap-x-3 gap-y-0.5">
+                <dt class="font-mono text-[12px] text-fg-muted">{{ entry.key }}</dt>
+                <dd
+                  class="m-0 min-w-0 text-[13px] break-words text-fg-strong"
+                  [class.font-mono]="entry.structured"
+                  [class.whitespace-pre-wrap]="entry.structured"
+                >
+                  {{ entry.value }}
+                </dd>
+              </div>
+            }
+          </dl>
+        </section>
+      }
+    }
+  </div>
+</div>

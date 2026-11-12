@@ -5,7 +5,7 @@ jest.mock('../data-readiness/data-readiness.service', () => ({
 }));
 
 // Sessions bound to Questions to Insights v2 (BA-320; api.md 2.1 #3,
-// agents.md 2.11, sessions-chat R61): creation over picked datasets, the
+// agents.md 2.11, agent-answers R61): creation over picked datasets, the
 // derived agent, the turn's agent, its context and the plain turn.
 jest.mock('@mastra/core/request-context', () => ({
   RequestContext: class {
@@ -102,9 +102,8 @@ jest.mock('./visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
 
-import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SessionsService, type StreamEvent } from './sessions.service';
-import { SessionsController } from './sessions.controller';
+import { streamStored } from './testing/stream-stored';
 import type { SessionDoc, SessionView } from './entities/session.entity';
 import { qtiV2TurnWorkflow } from '../../mastra/workflows/qti-v2-turn.workflow';
 
@@ -261,7 +260,8 @@ async function turn(
   abortSignal?: AbortSignal,
   events: StreamEvent[] = [],
 ): Promise<StreamEvent[]> {
-  await ctx.service.streamMessage(
+  await streamStored(
+    ctx.service,
     's-1',
     content,
     (event) => events.push(event),
@@ -298,89 +298,6 @@ const STEPS = [
 ];
 
 describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', () => {
-  describe('POST /sessions with agentId "assistant-v2" (api.md 2.1 #3)', () => {
-    it('creates a session over the picked datasets with the typed name, bound by key', async () => {
-      const ctx = build();
-      const session = await ctx.service.createFromAgent(
-        'assistant-v2',
-        '  Goals by year ',
-        ['Sales', 'World Cup'],
-      );
-      expect(session).toMatchObject({
-        name: 'Goals by year',
-        datasets: ['Sales', 'World Cup'],
-        agentKey: 'assistant-v2',
-        agentName: NAME,
-        messages: [],
-        visualizations: [],
-      });
-      expect(session).not.toHaveProperty('agentId');
-      expect(ctx.repository.insert).toHaveBeenCalledTimes(1);
-    });
-
-    it('truncates the name to 64 characters', async () => {
-      const session = await build().service.createFromAgent(
-        'assistant-v2',
-        'x'.repeat(80),
-        ['World Cup'],
-      );
-      expect(session.name).toBe('x'.repeat(64));
-    });
-
-    it.each([
-      [undefined, ['World Cup'], 'session name is required'],
-      ['   ', ['World Cup'], 'session name is required'],
-      ['Goals', undefined, 'select at least one dataset'],
-      ['Goals', [], 'select at least one dataset'],
-    ])(
-      'refuses name %p with datasets %p as without an agent: %s',
-      async (name, datasets, message) => {
-        const ctx = build();
-        await expect(
-          ctx.service.createFromAgent('assistant-v2', name, datasets),
-        ).rejects.toThrow(new BadRequestException(message));
-        expect(ctx.repository.insert).not.toHaveBeenCalled();
-      },
-    );
-
-    it('refuses a preview of the key as not found', async () => {
-      await expect(
-        build().service.createPreview('assistant-v2'),
-      ).rejects.toThrow(
-        new NotFoundException('Agent "assistant-v2" not found'),
-      );
-    });
-
-    it('the controller passes the name and datasets through and answers with the view', async () => {
-      const ctx = build();
-      const controller = new SessionsController(ctx.service);
-      const created = await controller.create({
-        name: 'Goals',
-        datasets: ['World Cup'],
-        agentId: 'assistant-v2',
-      });
-      expect(created.ok).toBe(true);
-      expect(created.message).toBe('Session "Goals" created');
-      expect(created.session).toMatchObject({
-        agentKey: 'assistant-v2',
-        agentName: NAME,
-        datasets: ['World Cup'],
-        agent: { id: 'assistant-v2', name: NAME },
-      });
-      expect(
-        await controller.create({ name: 'Goals', agentId: 'assistant-v2' }),
-      ).toEqual({ ok: false, message: 'select at least one dataset' });
-      expect(
-        await controller.create({
-          name: 'Goals',
-          datasets: ['World Cup'],
-          agentId: 'assistant-v2',
-          preview: true,
-        }),
-      ).toEqual({ ok: false, message: 'Agent "assistant-v2" not found' });
-    });
-  });
-
   it('derives the agent from the registry, with no starters (api.md 2.1)', async () => {
     const ctx = build();
     expect((await ctx.service.toView(ctx.session)).agent).toEqual({
@@ -640,14 +557,5 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
       await turn(ctx, 'How many?').catch(() => undefined);
       expect(ctx.mastra.streamWorkflow).not.toHaveBeenCalled();
     });
-  });
-
-  it('runs v2 on a non-streamed turn too', async () => {
-    const ctx = build();
-    ctx.v2.generate.mockResolvedValue({ text: 'Answer.' });
-    await ctx.service.sendMessage('s-1', 'How many?');
-    expect(ctx.mastra.getAgent).toHaveBeenCalledWith('assistant-v2');
-    expect(ctx.v2.generate).toHaveBeenCalledTimes(1);
-    expect(ctx.session.messages.at(-1)?.content).toBe('Answer.');
   });
 });

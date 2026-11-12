@@ -23,13 +23,13 @@ import {
   Loader2,
   ListChecks,
   MessageSquare,
-  MessageSquarePlus,
   Pencil,
   ChevronRight,
   Download,
   Play,
   ScrollText,
   Upload,
+  Workflow,
   Wrench,
 } from 'lucide-angular';
 import {
@@ -42,10 +42,6 @@ import {
   EvalRunView,
 } from '../../services/agents-api.service';
 import { EvalSelectionService } from '../../services/eval-selection.service';
-import {
-  canStartChat,
-  startChatBlockedReason,
-} from '../../services/agent-hub.util';
 import { ToastService } from '../../../../core/toast/toast.service';
 import {
   Datasource,
@@ -54,9 +50,10 @@ import {
 import { DatasourcesApiService } from '../../../datasources/services/datasources-api.service';
 import { AgentSkills } from '../agent-skills/agent-skills';
 import { AgentGraph } from '../agent-graph/agent-graph';
+import { AgentWorkflowView } from '../agent-workflow/agent-workflow';
 import { AgentLlmConfig } from '../agent-llm-config/agent-llm-config';
 import { AgentToolLinks } from '../agent-tool-links/agent-tool-links';
-import { AgentChatBox } from '../agent-chat-box/agent-chat-box';
+import { AgentTryIt } from '../agent-try-it/agent-try-it';
 import { AgentSkillsInline } from '../agent-skills-inline/agent-skills-inline';
 import { AgentSystemPrompt } from '../agent-system-prompt/agent-system-prompt';
 import { AgentPageState } from '../../services/agent-page-state.service';
@@ -67,6 +64,7 @@ import {
   hasChatTab,
   includedInEveryAgent,
   skillsCount,
+  usedInEmptyText,
 } from '../../services/agent-page.util';
 import { agentKind } from '../../services/agent-hub.util';
 import { officialGraphInput } from '../../services/official-links';
@@ -87,9 +85,10 @@ type EvalTab = 'questions' | 'runs';
     LucideAngularModule,
     AgentSkills,
     AgentGraph,
+    AgentWorkflowView,
     AgentLlmConfig,
     AgentToolLinks,
-    AgentChatBox,
+    AgentTryIt,
     AgentSkillsInline,
     AgentSystemPrompt,
   ],
@@ -109,7 +108,6 @@ export class AgentDetail implements OnDestroy {
   readonly Loader2 = Loader2;
   readonly ListChecks = ListChecks;
   readonly MessageSquare = MessageSquare;
-  readonly MessageSquarePlus = MessageSquarePlus;
   readonly Pencil = Pencil;
   readonly ChevronRight = ChevronRight;
   readonly Download = Download;
@@ -117,6 +115,7 @@ export class AgentDetail implements OnDestroy {
   readonly Trash2 = Trash2;
   readonly ScrollText = ScrollText;
   readonly Upload = Upload;
+  readonly WorkflowIcon = Workflow;
   readonly Wrench = Wrench;
 
   private readonly api = inject(AgentsApiService);
@@ -145,20 +144,18 @@ export class AgentDetail implements OnDestroy {
   readonly back = output<void>();
   /** Emitted after a user agent is deleted; the app returns to the hub. */
   readonly deleted = output<void>();
-  /** Start chat; the shell creates or composes the session (R53). */
-  readonly startChat = output<AgentDetailModel>();
+  /** A Used in chip; the shell opens the workflow's page (R109). */
+  readonly openWorkflow = output<string>();
   /** Edit a user agent; the shell opens the agent editor on its draft (R54). */
   readonly edit = output<AgentDetailModel>();
   /** An admin's Edit on a built-in skill; the shell opens its editor. */
   readonly openBuiltInSkill = output<string>();
-  /** True while a session is being created from this agent. */
-  readonly starting = input(false);
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly agent = signal<AgentDetailModel | null>(null);
   readonly activeTab = signal<AgentTab>('prompt');
-  /** The Chat Box mounts the first time it is shown, then stays. */
+  /** Try it mounts the first time it is shown, then stays. */
   readonly chatMounted = signal(false);
 
   /** The skills tab's content, loaded with the agent (R63). */
@@ -187,7 +184,7 @@ export class AgentDetail implements OnDestroy {
       skills: `Skills${this.skillsCountLabel(kind, skills)}`,
     };
     return AGENT_TAB_ORDER.filter(
-      (tab) => tab.id !== 'chat' || hasChatTab(kind, !!agent?.showcase),
+      (tab) => tab.id !== 'chat' || hasChatTab(kind),
     ).map((tab) => ({
       id: tab.id,
       label: labels[tab.id] ?? tab.label,
@@ -220,7 +217,7 @@ export class AgentDetail implements OnDestroy {
       this.loadDatasources();
     });
 
-    // The Chat Box mounts when first shown.
+    // Try it mounts when first shown.
     effect(() => {
       if (this.activeTab() === 'chat') this.chatMounted.set(true);
     });
@@ -349,9 +346,7 @@ export class AgentDetail implements OnDestroy {
         this.agent.set(agent);
         this.loading.set(false);
         if (initial) {
-          this.activeTab.set(
-            defaultAgentTab(agentKind(agent), !!agent.showcase),
-          );
+          this.activeTab.set(defaultAgentTab(agentKind(agent)));
         }
         if (agent.kind === 'user') {
           this.loadLibrarySkills(key);
@@ -368,6 +363,18 @@ export class AgentDetail implements OnDestroy {
     });
   }
 
+  /**
+   * Why Try it can't run a user agent's draft: none of its draft's datasets
+   * exists (R90). The backend refuses the same way.
+   */
+  protected tryBlocked(agent: AgentDetailModel): string | null {
+    const missing = agent.missingDatasets ?? [];
+    const datasets = agent.draft?.datasets ?? agent.datasets ?? [];
+    return datasets.some((name) => !missing.includes(name))
+      ? null
+      : 'Add a dataset to this agent to try it.';
+  }
+
   /** User agents only; built-in agents offer neither Publish nor Delete (R5). */
   readonly isUserAgent = computed(() => this.agent()?.kind === 'user');
 
@@ -382,15 +389,14 @@ export class AgentDetail implements OnDestroy {
     () => this.isUserAgent() && this.canCreateAgents(),
   );
 
-  /** The Official agent and Live user agents offer Start chat (R53). */
-  readonly showStartChat = computed(() => {
+  /** The workflows that use the agent, for the Used in line (R109). */
+  readonly usedInWorkflows = computed(
+    () => this.agent()?.usedInWorkflows ?? [],
+  );
+  /** The Used in line's text when no workflow uses the agent (R109). */
+  readonly usedInEmpty = computed(() => {
     const agent = this.agent();
-    return !!agent && canStartChat(agent);
-  });
-  /** Set when none of the agent's datasets exist; disables Start chat. */
-  readonly startChatBlockedReason = computed(() => {
-    const agent = this.agent();
-    return agent ? startChatBlockedReason(agent) : null;
+    return usedInEmptyText(agent ? agentKind(agent) : 'system');
   });
 
   /** Publish shows when there is no Live version or it has unpublished changes. */

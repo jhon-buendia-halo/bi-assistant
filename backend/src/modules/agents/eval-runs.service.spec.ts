@@ -27,8 +27,8 @@ jest.mock('../../mastra/evals/assistant.evals', () => ({
   selectEvalCases: jest.fn(() => [
     { id: 'champion-2022', question: 'Who won the 2022 World Cup?' },
   ]),
-  createEvalSession: jest.fn().mockResolvedValue({ id: 'session' }),
-  cleanupEvalSession: jest.fn().mockResolvedValue(undefined),
+  createEvalHost: jest.fn().mockResolvedValue({ id: 'session' }),
+  cleanupEvalHost: jest.fn().mockResolvedValue(undefined),
   runAssistantEvalCase: jest
     .fn()
     .mockResolvedValue({ id: 'champion-2022', passed: true }),
@@ -45,7 +45,7 @@ jest.mock('../../mastra/evals/assistant.evals', () => ({
 
 import { EvalRunsService } from './eval-runs.service';
 import {
-  createEvalSession,
+  createEvalHost,
   fixtureForCases,
   runAssistantEvalCase,
   selectEvalCases,
@@ -98,7 +98,7 @@ describe('EvalRunsService dataset validation', () => {
         error: expect.stringContaining('bundled World Cup sample') as string,
       });
       expect(repository.insert).not.toHaveBeenCalled();
-      expect(createEvalSession).not.toHaveBeenCalled();
+      expect(createEvalHost).not.toHaveBeenCalled();
       expect(runAssistantEvalCase).not.toHaveBeenCalled();
     }),
   );

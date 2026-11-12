@@ -1,0 +1,24 @@
+@if (shell.mainView() === "workflows") {
+  <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+    <app-workflows-page
+      class="w-full max-w-[960px]"
+      (openWorkflow)="workflows.openWorkflow($event)"
+    />
+  </div>
+} @else if (
+  shell.mainView() === "workflow-detail" &&
+  workflows.activeWorkflowId() !== null
+) {
+  <!-- The designer: header and canvas fill the content area;
+       its configuration is in the right panel (ui.md 4.4b).
+       Deferred: it stays out of the initial bundle. -->
+  @defer (on immediate) {
+    <app-workflow-detail
+      class="min-w-0 flex-1"
+      [workflowId]="workflows.activeWorkflowId()!"
+      [panelOpen]="shell.rightPanelOpen()"
+      (back)="workflows.closeWorkflowDetail()"
+      (openPanel)="shell.rightPanelOpen.set(true)"
+    />
+  }
+}

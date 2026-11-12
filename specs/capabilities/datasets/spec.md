@@ -117,7 +117,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - Endpoints: list, create/upsert and delete datasets: [api.md](../../system/api.md), section Datasets. Inventory and sampling come from the datasources endpoints.
 - Collections: `datasets` (legacy name `sandbox_selections`), the session field `datasets` and the dataset's ontology items (`ontology_items`): [data-model.md](../../system/data-model.md). Ontology endpoints: [api.md](../../system/api.md) 2.8.
 - Assistant tools (`list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`) and the per-turn dataset block: [agents.md](../../system/agents.md), assistant agent.
-- Datasource behaviour (inventory, sampling, foreign keys, read-only SQL): [datasources](../datasources/spec.md). Session creation: [sessions-chat](../sessions-chat/spec.md). Metrics shown under the browser: [metrics](../metrics/spec.md).
+- Datasource behaviour (inventory, sampling, foreign keys, read-only SQL): [datasources](../datasources/spec.md). Session creation: [agent-answers](../agent-answers/spec.md). Metrics shown under the browser: [metrics](../metrics/spec.md).
 - Terms: [glossary](../../product/glossary.md).
 
 ## UI
@@ -262,7 +262,7 @@ Feature: Dataset management
 1. The datasources Feature scenarios that involve datasets pass (dataset creation against the seeded World Cup database; catalog schema and column metadata visible before saving).
 2. The "Dataset management" scenarios above behave as written once automated.
 3. After saving a dataset over the World Cup tables, the stored snapshot of `goals` has sample values for its text/number columns and references such as `goals.scoring_team_id → teams.id` and `goals.match_id → matches.id` (declared by PostgreSQL's constraints; each marked `declared`), and, for a datasource without constraints, inferred references (`~>`) for the same pairs.
-4. A session created from the dataset lists the dataset's entities and join hints in its context, can describe and sample only those entities, and answers questions through the datasource named by the dataset (checked in [sessions-chat](../sessions-chat/spec.md)).
+4. A session created from the dataset lists the dataset's entities and join hints in its context, can describe and sample only those entities, and answers questions through the datasource named by the dataset (checked in [agent-answers](../agent-answers/spec.md)).
 5. Deleting the dataset removes it from the list and deletes its ontology items (shared items stay); sessions that used it keep working on their remaining datasets.
 5a. A saved dataset opens with Schema, Ontology and Profile & synthesize tabs, a new one with none (R48).
 6. Schema notes round-trip through the UI: in Edit dataset, selecting a schema, choosing Layer "Consumption" and typing a description, then **Save dataset**, shows a "Consumption" badge on the schema row, and after a reload and reopening the dataset the details panel shows both values. A dataset saved before schema notes existed opens with no badges and Layer "None" (R40–R47).

@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DuckDBConnection } from '@mastra/duckdb';
 import type { SessionsRepository } from '../sessions/repositories/sessions.repository';
+import type { WorkflowRunsRepository } from '../workflows/repositories/workflow-runs.repository';
 import { MonitoringService } from './monitoring.service';
 import { SpanEventsRepository } from './repositories/span-events.repository';
 import {
@@ -37,6 +38,15 @@ function sessionsWith(names: Record<string, string>): SessionsRepository {
   } as unknown as SessionsRepository;
 }
 
+function runsWith(
+  docs: Record<string, { workflowName: string; question?: string }>,
+): WorkflowRunsRepository {
+  return {
+    get: (id: string) =>
+      Promise.resolve(docs[id] ? { id, input: {}, ...docs[id] } : null),
+  } as unknown as WorkflowRunsRepository;
+}
+
 async function serviceWith(
   rows: Record<string, unknown>[] | null,
 ): Promise<MonitoringService> {
@@ -48,6 +58,7 @@ async function serviceWith(
   return new MonitoringService(
     new SpanEventsRepository(db),
     sessionsWith({ [THREAD_ID]: 'World Cup goals' }),
+    runsWith({}),
   );
 }
 

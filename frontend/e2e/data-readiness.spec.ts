@@ -5,6 +5,8 @@ import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { apiJson } from './helpers/api';
 import { saveLenaiSettings } from './helpers/agents-api';
+import { runWorkflow } from './helpers/runs-api';
+import { scenarioStep } from './support/demo-captions';
 import { WORLD_CUP_DATASOURCE } from './helpers/app-actions';
 
 /** Saves an evidence screenshot when E2E_EVIDENCE_DIR names a folder. */
@@ -155,20 +157,12 @@ interface ReadinessReport {
   dimensionScores: DimensionScore[];
   findings: { dimension: Dimension; severity: Severity }[];
   sessionId?: string;
+  runId?: string;
   notProfiled?: {
     entity: string;
     reason: 'too-large' | 'timed-out';
     rowCount?: number;
   }[];
-}
-
-/** The `data:` frames of an SSE body, parsed in order. */
-function sseFrames(body: string): { type: string; content?: string }[] {
-  return body
-    .split(/\r?\n\r?\n/)
-    .map((block) => block.replace(/^data: ?/, '').trim())
-    .filter((json) => json.startsWith('{'))
-    .map((json) => JSON.parse(json) as { type: string; content?: string });
 }
 
 interface ReadinessReportSummary {
@@ -297,42 +291,39 @@ async function openHub(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
-function startChatButton(page: Page): Locator {
-  return page.getByRole('button', { name: `Start chat with ${AGENT}` });
-}
-
-/** Starts a chat from the hub card and waits for its session's welcome. */
-async function startReadinessChat(page: Page): Promise<void> {
-  await openHub(page);
-  await expect(startChatButton(page)).toBeEnabled();
-  await startChatButton(page).click();
-  await expect(page.getByText(`Session "${SESSION}" created`)).toBeVisible();
-  await expect(page.getByTestId('session-welcome')).toBeVisible();
-}
-
-/** The current session's id, read from the header's session ID button. */
-async function sessionId(page: Page): Promise<string> {
-  const label = await page
-    .locator('header')
-    .getByTestId('session-id')
-    .getAttribute('aria-label');
-  const id = /^Copy session ID (.+)$/.exec(label ?? '')?.[1];
-  if (!id) throw new Error('The session did not expose its id');
-  return id;
-}
-
-/** Sends `question` and waits for `answer` and the composer to be free. */
-async function send(
-  page: Page,
-  question: string,
-  answer: string,
-): Promise<void> {
-  await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText(answer)).toBeVisible({ timeout: TURN_TIMEOUT });
+async function openWorkflows(page: Page): Promise<void> {
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Workflows', exact: true })
+    .click();
   await expect(
-    page.getByRole('button', { name: 'Send message' }),
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
   ).toBeVisible();
+}
+
+/** Opens the agent's workflow page on its Run tab (workflows R12, R21). */
+async function openReadinessRunTab(page: Page): Promise<void> {
+  await openWorkflows(page);
+  await page.getByTestId(`workflow-agent:${AGENT_KEY}`).click();
+  await expect(page.getByTestId('workflow-detail-name')).toHaveText(AGENT);
+  await page.getByTestId('workflow-execute').click();
+  await expect(page.getByTestId('workflow-panel-tab-run')).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+}
+
+/**
+ * Runs an assessment from the Run tab: picks the dataset, executes, waits for
+ * the answer and opens its scorecard.
+ */
+async function runReadinessAssessment(page: Page): Promise<void> {
+  await openReadinessRunTab(page);
+  await page.getByTestId('workflow-input-dataset').selectOption({ label: DATASET });
+  await page.getByTestId('workflow-run').click();
+  const answer = page.getByTestId('run-answer');
+  await expect(answer).toContainText(ASSESS_ANSWER, { timeout: TURN_TIMEOUT });
+  await answer.getByTestId('readiness-open-scorecard').click();
 }
 
 /** Scripts the assessment turn: one `assess_data_readiness`, then the answer. */
@@ -350,17 +341,16 @@ function scriptAssessment(): void {
   });
 }
 
-/** Starts a chat and runs one assessment from it; returns the stored report. */
-async function assessFromChat(
+/** Runs one assessment from the Run tab; returns the stored report. */
+async function assessFromRun(
   page: Page,
   datasourceId: string,
 ): Promise<ReadinessReport> {
   scriptAssessment();
-  await startReadinessChat(page);
-  await send(page, ASSESS_QUESTION, ASSESS_ANSWER);
+  await runReadinessAssessment(page);
   await expect(scorecard(page)).toBeVisible();
   const [newest] = await listReports(page, datasourceId);
-  expect(newest, 'the chat stored a report').toBeTruthy();
+  expect(newest, 'the run stored a report').toBeTruthy();
   return getReport(page, newest.id);
 }
 
@@ -446,7 +436,171 @@ test.afterEach(async () => {
 
 // ------------------------------------------------------------ scenarios
 
-test('start chat is blocked without a PostgreSQL or Databricks dataset', async ({
+test(
+  'I run the Data Readiness Agent on a dataset',
+  { tag: ['@demo', '@story-1.23.16'] },
+  async ({ page }) => {
+    const followUp = 'Show the rows behind the worst finding';
+    const goals = worldCupKey('goals');
+    const sql = `SELECT id, scorer_player_id, assist_player_id FROM ${goals} WHERE assist_player_id IS NULL ORDER BY id LIMIT 20`;
+    let datasourceId = '';
+    let runId = '';
+    const run = page.getByTestId('workflow-run');
+    const answer = page.getByTestId('run-answer');
+
+    await scenarioStep(
+      page,
+      'Given the World Cup sample datasource and a dataset "World Cup" over it exist',
+      async () => {
+        datasourceId = await seedWorldCup(page);
+      },
+    );
+    // The stub: the assessment run calls assess_data_readiness, then answers;
+    // the follow-up drills down with describe_entity and run_readonly_sql,
+    // then answers with the rows the query returned as a table.
+    stub.reply = (request) => {
+      const results = turnToolResults(request);
+      if (lastUserText(request) === ASSESS_QUESTION) {
+        return results.length === 0
+          ? { toolCall: { name: 'assess_data_readiness', arguments: { dataset: DATASET } } }
+          : { text: ASSESS_ANSWER };
+      }
+      if (lastUserText(request) !== followUp) return { text: 'Noted.' };
+      if (results.length === 0) {
+        return { toolCall: { name: 'describe_entity', arguments: { entity: goals, datasourceId } } };
+      }
+      if (results.length === 1) {
+        return {
+          toolCall: {
+            name: 'run_readonly_sql',
+            arguments: { sql, datasourceId, rationale: 'The goals with no assist.' },
+          },
+        };
+      }
+      const { rows = [] } = JSON.parse(results[1]) as { rows?: Record<string, unknown>[] };
+      const table = [
+        '| id | scorer_player_id |',
+        '| --- | --- |',
+        ...rows.map((row) => `| ${String(row['id'])} | ${String(row['scorer_player_id'])} |`),
+      ].join('\n');
+      return { text: `There are ${rows.length} goals with a null assist_player_id.\n\n${table}` };
+    };
+
+    await scenarioStep(
+      page,
+      'When I open the "Data Readiness Agent" from Workflows and click Execute',
+      async () => {
+        await openWorkflows(page);
+        await page.getByTestId(`workflow-agent:${AGENT_KEY}`).click();
+        await expect(page.getByTestId('workflow-detail-name')).toHaveText(AGENT);
+        await page.getByTestId('workflow-execute').click();
+        await expect(page.getByTestId('workflow-panel-tab-run')).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+      },
+    );
+    await scenarioStep(
+      page,
+      `Then the Run tab offers the dataset "${DATASET}" and the question "${ASSESS_QUESTION}"`,
+      async () => {
+        const dataset = page.getByTestId('workflow-input-dataset');
+        await expect(dataset.locator('option', { hasText: DATASET })).toHaveCount(1);
+        await expect(page.getByTestId('workflow-input-question')).toHaveValue(ASSESS_QUESTION);
+        for (const [index, starter] of STARTERS.entries()) {
+          await expect(page.getByTestId(`workflow-example-${index}`)).toHaveText(starter);
+        }
+      },
+    );
+    await scenarioStep(page, `When I pick "${DATASET}" and click Execute`, async () => {
+      await page.getByTestId('workflow-input-dataset').selectOption({ label: DATASET });
+      // Records every text the running tool row shows: the run lasts well
+      // under a second, so the progress lines are read back afterwards.
+      await page.evaluate(() => {
+        const seen: string[] = [];
+        (window as unknown as { __toolRowTexts: string[] }).__toolRowTexts = seen;
+        new MutationObserver(() => {
+          document
+            .querySelectorAll('[data-testid="workflow-run-tool"]')
+            .forEach((row) => seen.push((row.textContent ?? '').replace(/\s+/g, ' ').trim()));
+        }).observe(document.body, { subtree: true, childList: true, characterData: true });
+      });
+      await run.click();
+    });
+    await scenarioStep(
+      page,
+      'Then the "assess_data_readiness" row shows "Profiling … (n/m)…" while it runs',
+      async () => {
+        await expect(answer).toContainText(ASSESS_ANSWER, { timeout: TURN_TIMEOUT });
+        const texts = await page.evaluate(
+          () => (window as unknown as { __toolRowTexts: string[] }).__toolRowTexts,
+        );
+        expect(
+          texts.some((text) => /^assess_data_readiness\s*Profiling .+ \(\d+\/\d+\)…$/.test(text)),
+          `a profiling line on the tool row, among: ${[...new Set(texts)].join(' | ')}`,
+        ).toBe(true);
+      },
+    );
+    await scenarioStep(
+      page,
+      'And the answer carries a readiness card, and the stored report records the run that made it',
+      async () => {
+        await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+        const [newest] = await listReports(page, datasourceId);
+        expect(newest, 'the run stored a report').toBeTruthy();
+        const report = await getReport(page, newest.id);
+        expect(report.sessionId, 'a report from a run names no session').toBeUndefined();
+        runId = report.runId ?? '';
+        expect(runId, 'the report names its run').not.toBe('');
+        const stored = await apiJson<{ workflowId: string; status: string }>(
+          page,
+          'GET',
+          `/workflow-runs/${runId}`,
+        );
+        expect(stored.workflowId).toBe(`agent:${AGENT_KEY}`);
+        const card = answer.getByTestId('readiness-card');
+        await expect(card).toContainText(WORLD_CUP_DATASOURCE);
+        await expect(card.getByTestId('readiness-card-score')).toContainText(
+          `${report.overallScore}/100 · ${report.maturity}`,
+        );
+      },
+    );
+    await scenarioStep(page, 'When I click "Open scorecard"', async () => {
+      await answer.getByTestId('readiness-open-scorecard').click();
+    });
+    await scenarioStep(
+      page,
+      'Then the Run tab shows the scorecard for the World Cup datasource, with Past assessments',
+      async () => {
+        const [newest] = await listReports(page, datasourceId);
+        const report = await getReport(page, newest.id);
+        const section = page.getByTestId('workflow-run-scorecard');
+        await expect(section).toBeVisible();
+        await expectScorecardShows(page, report);
+        await expect(section.getByRole('button', { name: /Past assessments/ })).toBeVisible();
+      },
+    );
+    await scenarioStep(page, `When I follow up with "${followUp}"`, async () => {
+      await page.getByTestId('workflow-follow-up-input').fill(followUp);
+      await page.getByTestId('workflow-run-follow-up').click();
+    });
+    await scenarioStep(page, 'Then I see the rows behind the finding in a table', async () => {
+      await expect(answer).toContainText('goals with a null assist_player_id', {
+        timeout: TURN_TIMEOUT,
+      });
+      const nulls = Number(
+        await worldCupScalar('select count(*) from world_cup.goals where assist_player_id is null'),
+      );
+      const rows = answer.locator('table tbody tr');
+      await expect(rows).toHaveCount(Math.min(nulls, 20));
+      await expect(page.getByTestId('workflow-run-context')).toHaveText(
+        `Follows up on “${ASSESS_QUESTION}”`,
+      );
+    });
+  },
+);
+
+test('a run is blocked without a PostgreSQL or Databricks dataset', async ({
   page,
 }) => {
   // Given no dataset is bound to a PostgreSQL or Databricks datasource.
@@ -457,70 +611,37 @@ test('start chat is blocked without a PostgreSQL or Databricks dataset', async (
   await expect(card.getByTestId(`agent-${AGENT_KEY}`)).toContainText(AGENT);
   await expect(card).toContainText('Owner: Official');
   await expect(card).toContainText(DESCRIPTION.slice(0, 60));
+  // The agent card never starts a chat, and chats cannot start at all.
+  await expect(card.getByRole('button', { name: /Start chat/ })).toHaveCount(0);
 
-  const button = startChatButton(page);
-  await expect(button).toBeVisible();
-  await expect(button).toHaveAttribute(
-    'data-testid',
-    `agent-start-chat-${AGENT_KEY}`,
+  await openReadinessRunTab(page);
+  await expect(page.getByTestId('workflow-run-requirement')).toHaveText(
+    REQUIREMENT,
   );
-  await expect(button).toBeDisabled();
-  await expect(button).toHaveAttribute('title', REQUIREMENT);
+  const execute = page.getByTestId('workflow-run');
+  await expect(execute).toBeDisabled();
+  await expect(execute).toHaveAttribute('title', REQUIREMENT);
   expect(stub.requests, 'nothing reached the model').toHaveLength(0);
 });
 
-test('assessing a dataset from the chat shows the scorecard', async ({
+test('assessing a dataset from a run streams progress and stores the report', async ({
   page,
-}, testInfo) => {
+}) => {
   const datasourceId = await seedWorldCup(page);
   scriptAssessment();
 
-  // When I click "Start chat with Data Readiness Agent".
-  await startReadinessChat(page);
-  await expect(page.getByTestId('session-agent')).toHaveText(AGENT);
-  await expect(
-    page.getByRole('heading', { name: SESSION, exact: true }),
-  ).toBeVisible();
-  const welcome = page.getByTestId('session-welcome');
-  await expect(welcome).toContainText(DESCRIPTION);
-  for (const starter of STARTERS) {
-    await expect(
-      welcome.getByRole('button', { name: starter, exact: true }),
-    ).toBeVisible();
-  }
-  // R15 of rfp, shared by Data Readiness sessions: no assistant-only toggles.
-  await expect(page.getByRole('button', { name: 'Careful mode' })).toHaveCount(
-    0,
-  );
-  await expect(page.getByRole('button', { name: 'Deep analysis' })).toHaveCount(
-    0,
-  );
-  expect(stub.requests, 'no message has been sent').toHaveLength(0);
-  const session = await sessionId(page);
-
-  // When I ask "Assess the readiness of this dataset" (the starter fills the composer).
-  await welcome
-    .getByRole('button', { name: ASSESS_QUESTION, exact: true })
-    .click();
-  await expect(page.getByPlaceholder('Ask a follow-up question…')).toHaveValue(
-    ASSESS_QUESTION,
-  );
-  const streamed = page.waitForResponse((r) =>
-    r.url().endsWith('/messages/stream'),
-  );
-  await page.getByRole('button', { name: 'Send message' }).click();
-
-  // And the agent calls "assess_data_readiness": the step shows in the chat.
-  await expect(
-    page.getByText('assess_data_readiness', { exact: true }).first(),
-  ).toBeVisible({ timeout: TURN_TIMEOUT });
-  await expect(page.getByText(ASSESS_ANSWER)).toBeVisible({
-    timeout: TURN_TIMEOUT,
+  // When I run the Data Readiness Agent on the dataset and ask for an assessment.
+  const result = await runWorkflow(page, `agent:${AGENT_KEY}`, {
+    question: ASSESS_QUESTION,
+    dataset: DATASET,
   });
+  expect(result.status, result.body).toBe(200);
+  expect(result.error, result.body).toBeUndefined();
+  expect(result.text).toContain(ASSESS_ANSWER);
 
   // R32: the stream carries `tool-progress` frames between the tool call and
   // its result, in phase order, profiling counting done 1..N of N.
-  const frames = sseFrames((await (await streamed).body()).toString('utf8'));
+  const frames = result.events as { type: string; content?: string }[];
   const toolAt = frames.findIndex(
     (f) =>
       f.type === 'tool' &&
@@ -570,8 +691,6 @@ test('assessing a dataset from the chat shows the scorecard', async ({
   expect(
     profiling.some((f) => /^Profiling .+ \(\d+\/\d+\)…$/.test(f.message)),
   ).toBe(true);
-  // The UI part (the running row's `tool-progress`) is not asserted: the
-  // World Cup run lasts about 0.3 s and the fixture has no stream throttle.
 
   // The turn ran the Data Readiness Agent, not the assistant (R2, R3, Block D1).
   const requests = requestsOf(ASSESS_QUESTION);
@@ -610,13 +729,14 @@ test('assessing a dataset from the chat shows the scorecard', async ({
     `Today is ${new Date().toISOString().slice(0, 10)}.`,
   );
 
-  // The stored report: from this session, over the World Cup datasource (R24).
+  // The stored report: from this run, over the World Cup datasource (R24).
   const reports = await listReports(page, datasourceId);
   expect(reports).toHaveLength(1);
   const report = await getReport(page, reports[0].id);
   expect(report.datasourceName).toBe(WORLD_CUP_DATASOURCE);
   expect(report.datasourceKind).toBe('postgres');
-  expect(report.sessionId).toBe(session);
+  expect(report.runId).toBe(result.runId);
+  expect(report.sessionId).toBeUndefined();
   expect(report.entityCount).toBe(WORLD_CUP_TABLES.length);
 
   // The model saw the compact summary only (R5): the report id, no full list.
@@ -625,33 +745,6 @@ test('assessing a dataset from the chat shows the scorecard', async ({
   expect(toolResult).toContain('topFindings');
   // The full list is never sent: no `findings` key, only `topFindings`.
   expect(toolResult).not.toMatch(/findings\\*"\s*:/);
-
-  // Then the right panel shows the scorecard for the World Cup datasource,
-  // with an overall score out of 100, a band and ten dimension bars.
-  await expect(scorecard(page)).toBeVisible();
-  await expectScorecardShows(page, report);
-  for (const dimension of UNASSESSED) {
-    await expect(dimensionRow(page, dimension as Dimension)).toContainText(
-      'Not assessed',
-    );
-  }
-
-  // And the answer carries a readiness card with "Open scorecard" (R25).
-  const readinessCard = page.getByTestId('readiness-card');
-  await expect(readinessCard).toHaveCount(1);
-  await expect(readinessCard).toContainText(WORLD_CUP_DATASOURCE);
-  await expect(readinessCard.getByTestId('readiness-card-score')).toContainText(
-    `${report.overallScore}/100 · ${report.maturity}`,
-  );
-  const open = readinessCard.getByTestId('readiness-open-scorecard');
-  await expect(open).toHaveText(/Open scorecard/);
-  await open.click();
-  await expect(scorecard(page)).toBeVisible();
-  await expectScorecardShows(page, report);
-
-  await page.screenshot({
-    path: testInfo.outputPath('data-readiness-scorecard.png'),
-  });
 });
 
 test('A table too large to profile is listed as not profiled', async ({
@@ -668,8 +761,8 @@ test('A table too large to profile is listed as not profiled', async ({
   await saveLenaiSettings(page, stub.baseUrl);
   const datasourceId = await seedWorldCup(page);
 
-  // When I assess the dataset from the chat.
-  const report = await assessFromChat(page, datasourceId);
+  // When I assess the dataset from a run.
+  const report = await assessFromRun(page, datasourceId);
 
   // Then the stored report lists those tables as not profiled (R31).
   const listed = report.notProfiled ?? [];
@@ -695,9 +788,9 @@ test('A table too large to profile is listed as not profiled', async ({
 });
 
 test('the scorecard shows the same numbers as the API', async ({ page }) => {
-  // Given an assessment of the World Cup datasource was run from the chat.
+  // Given an assessment of the World Cup datasource was run from a run.
   const datasourceId = await seedWorldCup(page);
-  await assessFromChat(page, datasourceId);
+  await assessFromRun(page, datasourceId);
   const [newest] = await listReports(page, datasourceId);
 
   // When I request GET /data-readiness/assessments/<report id>.
@@ -722,10 +815,10 @@ test('the scorecard shows the same numbers as the API', async ({ page }) => {
 
 test('past assessments lists and reopens earlier reports', async ({ page }) => {
   // Given two assessments of the World Cup datasource were run: an earlier
-  // one through the API, then one from the chat.
+  // one through the API, then one from a run.
   const datasourceId = await seedWorldCup(page);
   const older = await assessThroughApi(page, datasourceId);
-  const newer = await assessFromChat(page, datasourceId);
+  const newer = await assessFromRun(page, datasourceId);
   expect(newer.id).not.toBe(older.id);
   const listed = await listReports(page, datasourceId);
   expect(listed.map((r) => r.id)).toEqual([newer.id, older.id]);
@@ -774,7 +867,7 @@ test('past assessments lists and reopens earlier reports', async ({ page }) => {
 test('filtering findings by dimension and severity', async ({ page }) => {
   // Given the scorecard shows a report with findings in several dimensions.
   const datasourceId = await seedWorldCup(page);
-  const report = await assessFromChat(page, datasourceId);
+  const report = await assessFromRun(page, datasourceId);
   const dimensionsWithFindings = new Set(
     report.findings.map((f) => f.dimension),
   );
@@ -861,7 +954,7 @@ test('filtering findings by dimension and severity', async ({ page }) => {
   await expect(findingRows(page)).toHaveCount(report.findings.length);
 });
 
-test('the agent shows the records behind a finding', async ({ page }) => {
+test('the agent shows the records behind a finding in a run', async ({ page }) => {
   // The Gherkin's Formula 1 `driver.second_nationality_country_id` stands in
   // here as the World Cup `goals.assist_player_id`, null for unassisted goals:
   // the suite's database is the World Cup sample.
@@ -917,10 +1010,13 @@ test('the agent shows the records behind a finding', async ({ page }) => {
     };
   };
 
-  await startReadinessChat(page);
-  await send(
-    page,
+  const result = await runWorkflow(page, `agent:${AGENT_KEY}`, {
     question,
+    dataset: DATASET,
+  });
+  expect(result.status, result.body).toBe(200);
+  expect(result.error, result.body).toBeUndefined();
+  expect(result.text).toContain(
     `There are ${shown} goals with a null assist_player_id.`,
   );
 
@@ -939,14 +1035,9 @@ test('the agent shows the records behind a finding', async ({ page }) => {
   );
 
   // The answer leads with the count and shows the rows in a table.
-  const answer = page.locator('table').last();
-  await expect(answer.locator('tbody tr')).toHaveCount(shown);
-  await expect(answer.locator('tbody tr').first()).toContainText(
-    String(sqlResult.rows![0]['id']),
+  expect(result.text.split('\n').filter((line) => /^\| \d+ /.test(line))).toHaveLength(
+    shown,
   );
-  await page.getByText('Data used (1 query)').click();
-  await expect(page.getByText(`run_readonly_sql — ${shown} rows`)).toBeVisible();
-  await expect(page.getByText('WHERE assist_player_id IS NULL')).toBeVisible();
 
   // No score changes: the stored report is the same one, unchanged.
   const reports = await listReports(page, datasourceId);

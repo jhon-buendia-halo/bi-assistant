@@ -286,7 +286,8 @@ flowchart LR
   end
 
   subgraph mastra["mastra/"]
-    mastrasvc["MastraService<br/>(getAgent, ensureSessionWorkspace)"]
+    mastrasvc["MastraService<br/>(getAgent, streamWorkflow, ensureSessionWorkspace)"]
+    turnwf["workflows/<br/>(agent-turn, qti-v2-turn, seq-text-demo; ADR-0034, ADR-0040)"]
     toolsvc["tool-services<br/>(setDatasetToolServices bridge)"]
     resolver["model-resolver<br/>(setAgentModelResolver)"]
     assistant["assistant agent"]
@@ -308,6 +309,7 @@ flowchart LR
   sessions --> metrics
   sessions --> ontology
   sessions -->|"assistant, sql-fixer, sql-verifier"| mastrasvc
+  sessions -->|"every streamed turn: one workflow run"| mastrasvc
   sessions -->|"installs on init"| toolsvc
   visualization -->|"visualization agent, workspace fs"| mastrasvc
   agentsmod --> sessions
@@ -336,6 +338,8 @@ flowchart LR
   mastrasvc --> sqlagents
   mastrasvc --> bootstrap
   mastrasvc --> rfpagent
+  mastrasvc --> turnwf
+  turnwf -.->|"agent step calls back into the session turn"| sessions
   rfpagent --> rfptools
   rfpagent -.->|"its seven stage skills (catalog + skill tool)"| skills
   rfptools -->|"restTarget(), exportRfpPackage()"| toolsvc
@@ -347,7 +351,7 @@ flowchart LR
   assistant -.->|"model: async resolveAgentModel()"| resolver
 ```
 
-*Backend components: NestJS feature modules and their constructor-level dependencies, the `DocStore` behind every repository, and the `mastra/` harness reached only through `MastraService` plus the two DI bridges (`tool-services`, `model-resolver`) installed on module init.*
+*Backend components: NestJS feature modules and their constructor-level dependencies, the `DocStore` behind every repository, and the `mastra/` harness reached only through `MastraService` plus the two DI bridges (`tool-services`, `model-resolver`) installed on module init. Every streamed chat turn is one run of a registered turn workflow ([agents.md](agents.md) 5.1): `qti-v2-turn` for a Questions to Insights v2 session, `agent-turn` (one `answer` step) for every other session. `SessionsService` starts the run through `MastraService.streamWorkflow` and hands it the turn's agent call on the run's `RequestContext`; the agent step calls back into it, so the agent, its context and its tools are chosen by the session code, never per registered workflow (ADR-0040).*
 
 **Frontend**
 
@@ -418,14 +422,14 @@ flowchart LR
 - **Consequences:** Renaming collections or persisted fields needs explicit migrations (`LEGACY_TABLE_NAMES`, `LEGACY_DOC_FIELDS`).
 
 #### ADR-0004 — Mastra as the agentic harness *(retroactive)*
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0040 (the instance registers the `agent-turn` workflow too, and since its 1.23.9 amendment the `seq-text-demo` run workflow); amended by ADR-0041 (one workspace per run; runs keep no lasting memory)
 - **Date:** 2026-10-01
 - **Context:** Agents need tools, memory, and a provider-agnostic model layer.
 - **Decision:** Standalone Mastra instance wrapped by `MastraService`; models resolved at call time from persisted LLM settings; LibSQL memory; one filesystem workspace per session.
 - **Consequences:** The rest of the backend stays Mastra-agnostic; provider quirks are handled in `model-compat.ts`.
 
 #### ADR-0005 — Visuals as versioned conversation participants *(retroactive)*
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0041 (visuals are created by runs)
 - **Date:** 2026-10-01
 - **Context:** Users tailor visuals iteratively from the chat.
 - **Decision:** `create_visual` / `update_visual` tools drive a designer sub-agent; each edit writes a new `v<N>` directory; revert moves a pointer; a fixed, transcript-derived frame provides readable context.
@@ -450,7 +454,7 @@ flowchart LR
   - The theme is per renderer origin, so the desktop app and the npm CLI's browser tab can hold different preferences.
 
 #### ADR-0008 — User-built agents are stored configurations of the assistant
-- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0022; the core prompt it layers on becomes editable by ADR-0026; narrowed by ADR-0028 (sessions may bind to a built-in agent)
+- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0022; the core prompt it layers on becomes editable by ADR-0026; narrowed by ADR-0028 (sessions may bind to a built-in agent); amended by ADR-0040 (a user agent's sessions run its one-step workflow); amended by ADR-0041 (user agents run as one-step run workflows; the preview becomes a draft run)
 - **Date:** 2026-10-09
 - **Context:**
   - The Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) lets users build their own agents: a name, a description, instructions, datasets, starter questions and an optional model override. Each one is drafted, published and chatted with.
@@ -463,7 +467,7 @@ flowchart LR
     - its instructions as an extra, labelled per-turn system context block after the base prompt and the knowledge block;
     - its datasets as the session's datasets;
     - its model or reasoning-effort override through the turn's request context, read by `resolveAgentModel()`.
-  - A preview chat applies the **draft** the same way, against a thread that is not stored as a session.
+  - Try it (since 1.23.23, ADR-0041) applies the **draft** the same way, as a draft run (api.md 129) on a host and workspace that are discarded when the run ends; the preview chat it replaced was a thread that was not stored as a session.
   - The built-in agents stay in the code registry. The hub merges them (Official: `assistant`; System: the helpers) with the user agents from the collection.
 - **Consequences:**
   - User agents inherit every assistant tool, guard and fix automatically. They can't add tools or relax the guard.
@@ -672,7 +676,7 @@ flowchart LR
   - A System agent's prompt edit can degrade a structured-output pipeline (designer, fixer, verifier, bootstrap, judge); their callers' existing fallbacks for unusable output still apply.
 
 #### ADR-0028 — A built-in RFP Builder agent with dedicated HTTP tools, resolved through a REST datasource; sessions can bind to a built-in agent
-- **Status:** Accepted; amended 2026-11-09 (BA-320, see the amendment at the end of this ADR)
+- **Status:** Accepted; amended 2026-11-09 (BA-320, see the amendment at the end of this ADR); amended by ADR-0040 (sessions bind to a workflow; Start chat moves to the workflow); amended by ADR-0041 (the RFP Builder runs one exchange per run)
 - **Date:** 2026-10-14
 - **Context:**
   - The user asked for an agent that walks a Mercer benefits consultant through building a carrier RFP, built in code with its own prompt, skill and tools (not a user agent, which can only configure the assistant's tools; ADR-0022, ADR-0024).
@@ -692,7 +696,7 @@ flowchart LR
 - **Amendment, 2026-11-09 (BA-320):** a bound built-in agent may also take **user-picked datasets**. Questions to Insights v2 (`assistant-v2`, [agents.md](agents.md) 2.11) is bound like `rfp` and `data-readiness` (`agentKey`, every turn runs it, the assistant-only passes do not apply), but it declares no dataset of its own: Start chat opens the New conversation screen with it preselected, and `POST /sessions` with `agentId: "assistant-v2"` takes `name` and `datasets` from the body like a plain session ([api.md](api.md) 3). The decision above is otherwise unchanged. The rule "the assistant keeps the composer" now reads "an agent that declares no dataset keeps the composer". The session code's per-agent branches grow by one.
 
 #### ADR-0029 — One built-in panel tool for every agent; panel items persisted on the session; a `## Workflow` prompt convention; a workflow status bar with its own tool
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0040 (a one-step workflow never writes the bar); amended by ADR-0041 (the bar and the panel belong to a run)
 - **Date:** 2026-10-14
 - **Context:**
   - Only `create_visual` and `update_visual` reach the right panel (the `visual-updated` event). The RFP Builder writes the RFP document into the session workspace, but the consultant has to download it to read it; no agent can put a document, a file, a table or its progress beside the chat.
@@ -828,7 +832,7 @@ flowchart LR
   - The `data-readiness` eval set re-runs once: no prompt or tool description changes, but the tool's behaviour does.
   - Stack-neutral: a rebuild needs a way for a tool to push progress to the client during a call, and connection reuse in its profiling layer.
 #### ADR-0034 — Questions to Insights v2 runs each turn as a code-defined Mastra workflow; the workflow bar shows the run's steps
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0040 (its second turn path becomes the only one); amended by ADR-0041 (v2 runs on an input)
 - **Date:** 2026-11-09
 - **Context:**
   - Every agent today runs a turn as one agent call; the order of the work lives in the prompt (the assistant's method rules), and the workflow bar is driven by the model calling `update_workflow` under the prompt's `## Workflow` convention (ADR-0029). The model can skip, reorder or misreport steps.
@@ -926,7 +930,7 @@ flowchart LR
   - Stack-neutral: a rebuild needs a model adapter over an agent runtime that can disable its own tools, hand tool calls back to the caller and accept a response schema.
 
 #### ADR-0038 — Monitoring reads Mastra's trace store in-process; the app records no LLM calls of its own
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0041 (a run's agent call is grouped by its run host id)
 - **Date:** 2026-11-10
 - **Context:**
   - On 2026-11-10 the user asked for a Monitoring area that lists every LLM call the agents make, with its tokens, duration, cost and status, and shows what filled each call's context window (roadmap 1.21.13–1.21.15).
@@ -996,6 +1000,99 @@ flowchart LR
   - **(c) `unique-range`.** An integer column that is only unique (not a primary or foreign key) is generated as distinct integers drawn without replacement within its observed range, so `tournament_year` gives years, not 1, 2, 3. When the range is smaller than the rows asked for, it falls back to a sequence from the observed minimum, and the script header says so. Only key integers stay a `sequence`.
   - Consequences: the privacy rules of the capability gain the raw-export rule; the new endpoints are 112 (with `format`), 113 and 114 ([api.md](api.md) 2.18); the stack gains the two packages ([tech-stack.md](tech-stack.md)).
 
+#### ADR-0040 — Workflow-first: a session runs a workflow defined in code; agents are the steps' building blocks; an agent without a workflow gets a one-step workflow, never registered per agent
+- **Status:** Accepted (2026-11-11, with the widened M1-23 epic spec); partly superseded by ADR-0041 (sessions no longer bind to workflows; workflows run on an input). Plan: [docs/plans/m1-23-workflow-first.md](../../docs/plans/m1-23-workflow-first.md)
+- **Date:** 2026-11-11
+- **Context:**
+  - A session is bound to an agent. A user agent is bound by `agentId` and runs the `assistant` with its configuration (ADR-0008). A built-in agent is bound by `agentKey` and runs that agent (ADR-0028).
+  - Questions to Insights v2 runs each streamed turn as a Mastra workflow defined in code (ADR-0034). That gave the session service a second turn path, used for v2 only.
+  - The workflow bar is fed in one of two ways:
+    - from the agent's prompt (`## Workflow`, `update_workflow`, the RFP stage auto-drive; ADR-0029);
+    - from the code-defined workflow's step events (v2, ADR-0034).
+  - On 2026-11-11 the user decided that the app becomes **workflow-first**, with the hierarchy workflows → agents → skills → tools:
+    - workflows are defined only in code and are never edited in the app;
+    - every agent without a workflow is wrapped in an automatic one-step workflow, so every session runs a workflow and there is one turn path;
+    - a chat starts from a workflow (a Workflows rail item, Start chat on the workflow's page, a Workflow field on the new-session screen);
+    - agents stay as a library and show which workflows use them.
+  - ADR-0008 explains why agents are not registered per user definition: it would mean re-registering on every edit, and it would bypass the assistant's tools, memory and guards.
+- **Decision:**
+  - **A session is bound to a workflow.** A workflow is a fixed sequence of steps defined in code. Each step is deterministic code or one bounded call to an agent.
+  - **Workflow ids:**
+    - a code-defined workflow keeps its own id (`qti-v2-turn`);
+    - the one-step workflow of a built-in agent is `agent:<registry key>` (`agent:assistant`, `agent:rfp`, `agent:data-readiness`);
+    - the one-step workflow of a user agent is `agent:<user-agent id>`.
+  - **Which agents get a one-step workflow:** the agents a session can run that have no code-defined workflow of their own (the assistant, the RFP Builder, the Data Readiness Agent and every Live user agent). System agents have none.
+  - **One registered engine for every one-step workflow.** The Mastra instance registers a single workflow, `agent-turn`, with one agent step, `answer`. The orchestrator picks the agent for each run and passes it through the run's request context. A one-step workflow is a descriptor, computed at read time from the agent registry and the `agents` collection. Nothing is registered per agent or per user agent, so publishing, editing or deleting a user agent needs no re-registration.
+  - **One turn path.** Every streamed turn is one run of the session's workflow. Its agent step runs today's agent turn unchanged: the context blocks, request context, tools, memory thread, clarification interception, tool-only synthesis, the assistant-only grounding guard and careful mode, the RFP stage tracking, visuals and panel items. Which of these apply still depends on the agent the step runs, never on the workflow.
+  - **The workflow bar keeps its two sources.**
+    - A code-defined workflow's steps drive the bar from its step events (ADR-0034).
+    - A one-step workflow never writes the bar. The agent's prompt-defined phases, `update_workflow` and the RFP stage auto-drive keep driving it, exactly as before (ADR-0029).
+  - **Storage.** A new session stores `workflowId`, plus the agent fields it stores today (`agentKey`, or `agentId` and `agentName`) for the workflow's agent. A session without `workflowId` derives it at read time from those fields. There is no migration.
+  - **Read-only catalogue.** The app lists workflows, shows each one's steps and agents, and starts chats from them. It never creates, edits, reorders or deletes a workflow.
+- **Rejected:**
+  - **One registered Mastra workflow per agent** (built-in agents at startup, user agents at runtime). User agents would be registered and re-registered on every publish and delete, for the same reason ADR-0008 rejects registering agents, and there would be two kinds of wrapper.
+  - **No Mastra run for one-step workflows** (the orchestrator treats "one agent step" as a workflow by itself). That keeps two engines: step events and run results would exist only for code-defined workflows, and each turn feature would still need its own branch per engine.
+  - **Showing the one-step workflow's single step in the workflow bar.** A lone `Answer` step would replace the assistant's and the RFP Builder's phases and fight the RFP stage auto-drive.
+  - **Persisted or user-edited workflows.** Out of this version, by the user's choice.
+  - **A migration that writes `workflowId` into existing sessions.** Deriving the id is deterministic and cheap, and a migration adds risk for no gain.
+- **Consequences:**
+  - **Amends ADR-0008.** A user agent's session runs its one-step workflow `agent:<id>`. The agent still runs on the `assistant` and is still not registered. Deleting the agent removes its workflow, and its sessions continue with the plain assistant, as before.
+  - **Amends ADR-0028.** Sessions bind to a workflow, and `agentKey` records the workflow's agent. Start chat moves from the agent to the workflow.
+  - **Amends ADR-0029.** The bar's sources gain the rule above. No behaviour changes.
+  - **Amends ADR-0034.** Its "second turn path" becomes the only path, and `qti-v2-turn` becomes one entry of the workflow catalogue.
+  - **Amends ADR-0004:** the Mastra instance registers two workflows.
+  - **Cost per turn.** Every turn runs one more Mastra workflow, with snapshot persistence off. The trace store may record workflow spans around the agent run, and Monitoring must keep showing one turn per question.
+  - **Adding a code-defined workflow** takes its Mastra workflow, its step catalogue and one catalogue entry. It then appears in the Workflows list and the new-session picker with no UI change.
+  - **Evals keep calling agents directly.** The legacy non-streamed turn stayed a direct agent call until 1.23.27 removed it.
+  - **Stack-neutral:** any rebuild needs an engine that runs typed steps in a fixed order and reports each step's start and end, a catalogue of workflows built from code and from stored agents, and the rule that derives a session's workflow from its stored agent binding.
+- **Amendment (2026-11-11, 1.23.9):** the user decided the same day that workflows trigger **runs**, not chats ([plan](../../docs/plans/m1-23-workflow-first.md) section 9).
+  - **Every workflow has a trigger, `chat` or `run`.** A `chat` workflow runs on every message of a chat, as above. A `run` workflow runs once on a typed input and returns a result. Every one-step workflow and `qti-v2-turn` are `chat` workflows.
+  - **A run workflow's input is defined in code** with its catalogue entry: a list of typed fields (`text`, `textarea` or `number`, with a label, whether it is required and a placeholder). The inputs will grow over time.
+  - **A run is never stored.** `POST /workflows/:id/runs` ([api.md](api.md) 118) checks the input against the fields, runs the registered workflow once through `MastraService.runWorkflow` (snapshot persistence off) and answers each step's result and the final output. A failing step fails the run, and the steps after it are skipped. The workflow's page shows the result until the user leaves it. A run is not a session, writes no workflow bar and is not listed anywhere.
+  - **The two triggers never cross.** A chat workflow can't be run (`Workflow "<id>" runs in a chat`), and a run workflow can't start a chat (`Workflow "<id>" can't start a chat`). The New conversation screen lists chat workflows only.
+  - **A run workflow may call no agent**, so `primaryFor` becomes optional. The first one is `seq-text-demo` ([agents.md](agents.md) 5.13), three code steps and no LLM. Converting the four chat workflows to run workflows, and how chats start afterwards, is story 1.23.10.
+  - **Amends ADR-0004:** the Mastra instance registers three workflows (`agent-turn`, `qti-v2-turn`, `seq-text-demo`).
+  - **Stack-neutral:** a rebuild needs the same engine to run a workflow once, synchronously, on an input validated against fields declared in code, and to report each step's status, output and error.
+
+#### ADR-0041 — Chats retired: every workflow runs once on a typed input; runs are stored; existing sessions become read-only past chats
+- **Status:** Accepted (2026-11-11, with the M1-23 amendment that keeps every phase in this epic). Plan: [docs/plans/m1-23-retire-chats.md](../../docs/plans/m1-23-retire-chats.md)
+- **Date:** 2026-11-11
+- **Context:**
+  - ADR-0040 bound every session to a workflow and started chats from workflows. Its amendment (1.23.9) added run workflows: a workflow with typed input fields defined in code runs once and shows each step's result.
+  - On 2026-11-11 the user decided that workflows trigger runs, not chats, that all workflows become run workflows (the Assistant, Questions to Insights v2, the RFP Builder, the Data Readiness Agent and every user agent's one-step workflow), and that chats are retired.
+  - Users' machines hold sessions with transcripts, memory threads, visuals, reports, RFP packages, readiness reports and verified queries sourced from answers.
+  - The turn path (agents.md 5.1) holds every reliability feature: grounding guard, SQL repair, result guards, careful mode, tool-only synthesis, clarification interception, visuals, panel items and the RFP stage drive. It operates on a session document.
+- **Decision:**
+  - **No chat can start.** The app has no composer, no New conversation screen and no Start chat. A workflow is used by running it on its input.
+  - **Every workflow runs on a typed input defined in code**, with field types text, textarea, number, boolean, datasets and dataset. A run streams its step events and its agent's events, and ends with a stored result.
+  - **Runs are stored** in a `workflow_runs` collection, with their files in a run workspace. The Runs area lists them; a run is deleted only by the user.
+  - **A run of an agent workflow is one agent turn.** In this version it executes on an in-memory run host with the session shape, through the unchanged turn path, and is then projected into the run document. So every turn feature applies to a run exactly as it applied to a chat turn, and no agent's input changes. Runs keep no memory thread after they end.
+  - **Context from one earlier run** (a follow-up, an answer to a clarifying question, the RFP Builder's Continue) is given as that run's question and answer before the new message, through the existing transcript bootstrap. Nothing else carries over between runs.
+  - **The RFP Builder runs one exchange per run.** The RFP record in the Intellify RFP API carries the state between runs; the run stores the RFP id it worked on.
+  - **Existing sessions are kept, read-only.** No migration, no deletion, no new writes. Past chats open read-only with their visuals and downloads. The user may delete one, which removes its transcript, memory thread and workspace as before.
+- **Rejected:**
+  - **Keeping one chat workflow** (e.g. the Assistant as a chat): contradicts the user's decision.
+  - **Unstored runs for agent workflows** (as 1.23.9's test workflow): an answer, its visuals and its RFP package would be lost when the page is left, which is worse than the chats they replace.
+  - **Migrating sessions into runs:** a multi-turn transcript is not one run, and a migration risks data for no gain.
+  - **Deleting existing sessions:** silent data loss.
+  - **A new turn engine for runs from day one:** it would duplicate every reliability feature and make parity unprovable. It is extracted later, behind the same tests (Phase C).
+  - **Runs with lasting memory** (a thread per workflow, or chained runs): that is a chat by another name.
+- **Consequences:**
+  - **Partly supersedes ADR-0040:** "a session is bound to a workflow" and "a chat starts from a workflow" no longer describe new work. The catalogue, the ids, `agent-turn`, code-defined workflows and the derivation rule (kept for past chats) stand.
+  - **Amends ADR-0028:** the RFP Builder's runs replace its sessions, `rfpId` lives on the run, and packages are stored in the run workspace.
+  - **Amends ADR-0029:** panel items and workflow state belong to the run. The workflow bar's place is taken by the run's step list, and a one-step workflow's agent phases show inside its agent step. The tools are unchanged.
+  - **Amends ADR-0034:** v2's step events drive the run's step list.
+  - **Amends ADR-0005:** visuals belong to the run that made them. Tailoring in a chat is gone; tailoring a run's visual returns in Phase B.
+  - **Amends ADR-0008:** a user agent runs as its one-step run workflow. The preview becomes a run of the draft (Phase B).
+  - **Amends ADR-0004:** one workspace per run; memory is used only within a run.
+  - **Amends ADR-0038:** a run's agent call is grouped under its run host id, and Monitoring names it from the run.
+  - Unchanged: ADR-0031 (readiness reports gain `runId`), ADR-0033 (`tool-progress` is forwarded in the run stream; Stop cancels the assessment), ADR-0035.
+  - Deep analysis becomes a code-defined run workflow (Phase B); it is unavailable until then.
+  - The desktop readiness probe moves from `GET /sessions` to `GET /health`.
+  - Evals keep calling agents directly with a throwaway run host (1.23.26b); the dev scripts (`run-eval`, `check-answers`, `custom-endpoint-smoke`) run on run hosts too.
+  - **Chat write paths removed (1.23.27):** `POST /sessions`, the chat message routes, the session visual actions, preview sessions, the non-streamed turn and the deep-analysis start and poll routes are gone; a stored session is only read, downloaded from and deleted. The `sessions` collection and every stored shape are unchanged, and the turn engine still reads a stored session in the sessions unit suites (a test seam), never at runtime.
+  - **Stack-neutral:** a rebuild needs typed inputs per workflow, a streamed run that reports step starts and ends and the agent's events, a stored run with its files, and a read-only view of the conversations stored before.
+
 ## Level 4 — Code
 
 ```mermaid
@@ -1009,8 +1106,8 @@ flowchart TB
   end
 
   subgraph be["Backend (modules/sessions)"]
-    ctrl["SessionsController<br/>POST /sessions/:id/messages/stream<br/>(text/event-stream)"]
-    svc["SessionsService.streamMessage<br/>(requestContext: session-id, active-visual-id, turn-data-records)"]
+    ctrl["WorkflowsController<br/>POST /workflows/:id/runs/stream<br/>(text/event-stream)"]
+    svc["SessionsService.streamRunTurn<br/>(requestContext: session-id, active-visual-id, turn-data-records)"]
     bridge["tool-services bridge<br/>(createVisual / updateVisual)"]
     vis["VisualizationService<br/>(create, update, revert, load)"]
     validate["validation<br/>(spec check, or new Function parse + 1 retry)"]

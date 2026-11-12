@@ -18,7 +18,7 @@ export type AgentTabId =
 
 /** The tabs of the agent page, in order (agents-evals R86). */
 export const AGENT_TAB_ORDER: { id: AgentTabId; label: string }[] = [
-  { id: 'chat', label: 'Chat Box' },
+  { id: 'chat', label: 'Try it' },
   { id: 'prompt', label: 'System Prompt' },
   { id: 'skills', label: 'Skills' },
   { id: 'tools', label: 'Tools' },
@@ -28,20 +28,40 @@ export const AGENT_TAB_ORDER: { id: AgentTabId; label: string }[] = [
   { id: 'model', label: 'LLM Config' },
 ];
 
-/** The tab an agent's page opens on: the chat, or the prompt for System agents. */
-export function defaultAgentTab(kind: AgentKind, showcase = false): AgentTabId {
-  return hasChatTab(kind, showcase) ? 'chat' : 'prompt';
+/**
+ * The tab an agent's page opens on: a user agent's Try it, else System
+ * Prompt (agents-evals R5, R91).
+ */
+export function defaultAgentTab(kind: AgentKind): AgentTabId {
+  return hasChatTab(kind) ? 'chat' : 'prompt';
 }
 
-/** System agents and showcase agents (R106) have no Chat Box. */
-export function hasChatTab(kind: AgentKind, showcase = false): boolean {
-  return kind !== 'system' && !showcase;
+/**
+ * Only a user agent has Try it, a run of its draft (R90; the tab id stays `chat`). A chat
+ * with a built-in agent starts from its workflow (workflows R6).
+ */
+export function hasChatTab(kind: AgentKind): boolean {
+  return kind === 'user';
+}
+
+/**
+ * The Used in line's text when no workflow uses the agent (R109, plan 5.8):
+ * a draft-only user agent until it is published, a System agent always.
+ */
+export function usedInEmptyText(kind: AgentKind): string {
+  if (kind === 'user') {
+    return 'Not used in any workflow yet. Publish it to get its one-step workflow.';
+  }
+  if (kind === 'system') {
+    return 'Not used in any workflow. The app calls this agent itself.';
+  }
+  return 'Not used in any workflow.';
 }
 
 /** The tab ids shown for an agent kind, in order. */
-export function agentTabIds(kind: AgentKind, showcase = false): AgentTabId[] {
+export function agentTabIds(kind: AgentKind): AgentTabId[] {
   return AGENT_TAB_ORDER.filter(
-    (tab) => tab.id !== 'chat' || hasChatTab(kind, showcase),
+    (tab) => tab.id !== 'chat' || hasChatTab(kind),
   ).map((tab) => tab.id);
 }
 

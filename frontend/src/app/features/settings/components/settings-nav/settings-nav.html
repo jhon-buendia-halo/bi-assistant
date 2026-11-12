@@ -1,0 +1,37 @@
+<!-- Settings list pane -->
+<div class="flex w-[260px] shrink-0 flex-col border-r border-border">
+  <div class="p-3">
+    <div class="field flex items-center gap-2">
+      <lucide-angular
+        [img]="Search"
+        [size]="14"
+        class="shrink-0 text-fg-muted"
+      />
+      <input
+        placeholder="Search settings"
+        aria-label="Search settings"
+        class="w-full bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-muted"
+      />
+      <kbd class="shrink-0 font-sans text-[11px] text-fg-muted">⌘ F</kbd>
+    </div>
+  </div>
+  <nav aria-label="Settings navigation" class="flex flex-col gap-1.5 px-3">
+    @for (section of settings.visibleSettingsSections(); track section.key) {
+      <button
+        type="button"
+        (click)="settings.selectSection(section.key)"
+        [attr.aria-current]="
+          settings.settingsSection() === section.key ? 'page' : null
+        "
+        class="list-row flex items-center gap-2.5 py-1.5 text-[13px]"
+        [class.list-row-selected]="settings.settingsSection() === section.key"
+      >
+        <lucide-angular [img]="section.icon" [size]="15" class="text-accent" />
+        <span>{{ section.label }}</span>
+      </button>
+    }
+  </nav>
+  <div class="flex-1"></div>
+  <!-- prettier-ignore -->
+  <p class="px-4 pt-2 pb-3 text-[12px] text-fg-muted" data-testid="app-version">Agentic Hub v{{ appVersion }}</p>
+</div>

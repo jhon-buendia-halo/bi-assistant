@@ -172,15 +172,16 @@ Feature: Datasources, datasets, and sessions (World Cup database)
   Background:
     Given the seeded World Cup PostgreSQL database is running
 
-  Scenario: Creates a PostgreSQL datasource, dataset, and session using the real World Cup database
-    Given I have created the "World Cup PostgreSQL" datasource, the "World Cup Core" dataset and the "World Cup analysis" session
+  Scenario: Creates a PostgreSQL datasource, dataset, and run using the real World Cup database
+    Given I have created the "World Cup PostgreSQL" datasource and the "World Cup Core" dataset
+    When I run the Assistant on "World Cup Core" with "How many World Cup matches are in the data?"
+    Then I see the answer and "Data used (1 query)" with the query that ran on the real database
     When I reload the application
     Then I see "Open system logs"
-    When I click "Sessions" on the rail
-    Then I see the "World Cup analysis" session
-    When I click "World Cup analysis"
-    Then the header shows "World Cup PostgreSQL" and "PostgreSQL"
-    And I see the "Ask a follow-up question…" box
+    When I click "Runs" on the rail
+    Then I see the run "How many World Cup matches are in the data?"
+    When I open it
+    Then I see its answer and the dataset "World Cup Core"
 
   Scenario: Preserves masked credentials when editing and supports datasource deletion
     Given the "World Cup PostgreSQL" datasource exists

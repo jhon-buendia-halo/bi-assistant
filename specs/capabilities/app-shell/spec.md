@@ -7,9 +7,9 @@ The app shell is the frame every other capability lives in: a navigation rail, a
 Defined in [../../product/glossary.md](../../product/glossary.md): session, dataset, datasource, entity, diagnostics (System logs), eval run.
 
 Capability-local vocabulary, used only for UI words:
-- **Navigation rail** — the narrow, always-visible left column of icon buttons: the five workspace areas at the top, and system logs and Settings at the bottom.
-- **Area** — what the rail selects: Datasets, Agents, Context, Sessions, Monitoring or Settings. Sessions and Settings show a list pane beside their content.
-- **Main view** — what the central area shows: home (empty), Datasets, dataset editor, Agents, an agent's detail, Context (its section cards) or one of its sections (Ontologies, User personas, Visuals), the Sessions area (with nothing open), new-session composer, a session's chat, or a Settings section.
+- **Navigation rail** — the narrow, always-visible left column of icon buttons: the six workspace areas at the top, and system logs and Settings at the bottom.
+- **Area** — what the rail selects: Datasets, Workflows, Agents, Context, Sessions, Monitoring or Settings. Sessions and Settings show a list pane beside their content.
+- **Main view** — what the central area shows: home (empty), Datasets, dataset editor, Agents, an agent's detail, Context (its section cards) or one of its sections (Ontologies, User personas, Visuals), the Runs area (with nothing open), an open run, a past chat (read-only), or a Settings section.
 - **Details panel** — the right-hand column. What it shows depends on the main view (see R14).
 - **Backend status** — one of `starting`, `ready`, `restarting`, `down`, reported by the desktop shell's backend supervisor.
 
@@ -18,8 +18,8 @@ Capability-local vocabulary, used only for UI words:
 Layout and navigation
 - R1. The system SHALL present, left to right: the navigation rail (expandable into a drawer, R48), then a column holding the "US Health Agentic Hub" banner above the page and, when open, the details panel. Everything sits inside a textured gradient frame.
 - R2. On launch the navigation drawer SHALL be expanded unless the user last collapsed it (R50), the details panel SHALL be collapsed and the main view SHALL be home. The details panel state SHALL NOT be remembered between launches.
-- R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Agents**, **Context**, **Sessions** and **Monitoring**. Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it, except in the agent editor and, for **Sessions**, in a chat or the composer: there, **Agents** SHALL return to the hub, after the unsaved-changes question (agents-evals R59). Agents stays current while an agent's detail is open, Datasets while the dataset editor is open, and Sessions while the composer or a chat is open. Choosing **Sessions** SHALL open the Sessions page with the list of sessions (R46), also from an open chat or the composer, and SHALL NOT change the drawer.
-- R3a. Choosing **Context** SHALL show the Context page: the level-two heading "Context", the note "What agents are given besides your data." and one card per section, laid out like the Agent Hub cards (three to a row). Each card SHALL show the section's icon tile, name and a two-line description, and clicking it SHALL open that section, with Context still the current rail item and a **Context** back control above the section that returns to the cards. Choosing **Context** on the rail from a section SHALL also return to the cards (as Sessions returns to its list, R3). The sections, in this order, are **Ontologies** ("Each dataset's concepts, relations, constraints and instructions the assistant applies.", network icon), which shows every dataset's ontology ([../dataset-ontology/spec.md](../dataset-ontology/spec.md) R40), and **User personas** ("Who asks the questions: their role, goals, typical questions and the answers they prefer.", Users icon), which shows the User personas section ([../user-personas/spec.md](../user-personas/spec.md)), and **Visuals** ("Chart types for data visualization, grouped by category, with when to use each.", chart-column icon), which shows the Visuals library section ([../visuals-library/spec.md](../visuals-library/spec.md)). Context replaced the rail's Knowledge item on 2026-11-09 (roadmap 1.21.4), User personas was added the same day (roadmap 1.21.6), and the Knowledge card left Context when knowledge became each dataset's ontology, edited in the dataset editor ([../dataset-ontology/spec.md](../dataset-ontology/spec.md), roadmap 1.21.8); the Ontologies card brought those ontologies back to Context the same day (roadmap 1.21.11), and the Visuals card was added on 2026-11-10 (roadmap 1.21.12). Later sections are added as cards.
+- R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Workflows**, **Agents**, **Context**, **Runs** and **Monitoring**, in that order (**Runs** replaced **Sessions** on 2026-11-11, roadmap 1.23.21). Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it, except in the agent editor and, for **Runs**, in a run or a past chat: there, **Agents** SHALL return to the hub, after the unsaved-changes question (agents-evals R59). Agents stays current while an agent's detail is open, Workflows while a workflow's page is open, Datasets while the dataset editor is open, and Runs while a run, the composer or a chat is open. Choosing **Workflows** on a workflow's page SHALL return to the Workflows page ([workflows](../workflows/spec.md) R5, R7). Choosing **Runs** SHALL open the Runs page (R46), also from an open run, past chat or composer, and SHALL NOT change the drawer.
+- R3a. Choosing **Context** SHALL show the Context page: the level-two heading "Context", the note "What agents are given besides your data." and one card per section, laid out like the Agent Hub cards (three to a row). Each card SHALL show the section's icon tile, name and a two-line description, and clicking it SHALL open that section, with Context still the current rail item and a **Context** back control above the section that returns to the cards. Choosing **Context** on the rail from a section SHALL also return to the cards (as Runs returns to its page, R3). The sections, in this order, are **Ontologies** ("Each dataset's concepts, relations, constraints and instructions the assistant applies.", network icon), which shows every dataset's ontology ([../dataset-ontology/spec.md](../dataset-ontology/spec.md) R40), and **User personas** ("Who asks the questions: their role, goals, typical questions and the answers they prefer.", Users icon), which shows the User personas section ([../user-personas/spec.md](../user-personas/spec.md)), and **Visuals** ("Chart types for data visualization, grouped by category, with when to use each.", chart-column icon), which shows the Visuals library section ([../visuals-library/spec.md](../visuals-library/spec.md)). Context replaced the rail's Knowledge item on 2026-11-09 (roadmap 1.21.4), User personas was added the same day (roadmap 1.21.6), and the Knowledge card left Context when knowledge became each dataset's ontology, edited in the dataset editor ([../dataset-ontology/spec.md](../dataset-ontology/spec.md), roadmap 1.21.8); the Ontologies card brought those ontologies back to Context the same day (roadmap 1.21.11), and the Visuals card was added on 2026-11-10 (roadmap 1.21.12). Later sections are added as cards.
 - R3b. Choosing **Monitoring** SHALL show the Monitoring page, with Monitoring the current rail item: the level-two heading "Monitoring" and the LLM calls page ([../monitoring/spec.md](../monitoring/spec.md)): the note "LLM calls made by the app's agents, newest first.", the filters and the table of calls, or "No LLM calls yet." when there are none. A call opens its own page with Monitoring still current, and choosing **Monitoring** on the rail from it returns to the table (as Context returns to its cards, R3a). The item and an empty page were added on 2026-11-10 (roadmap 1.21.13); the LLM calls table and the call page the same day (roadmap 1.21.14, 1.21.15).
 - R4. Below the workspace items the rail SHALL offer **Open system logs** (tooltip "System logs and diagnostics") and **Settings**, then a divider and the LenAI mark with "Powered by LenAI". The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+". The rail SHALL show no account avatar, no account menu and no Admin item: the app has one built-in super admin and nothing in the UI shows a user name.
 - R5. Choosing **Settings** on the rail SHALL show the Settings area: a list pane with "Settings navigation" offering five sections, **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** ([../developer-settings/spec.md](../developer-settings/spec.md)) and **Appearance** (R39–R45), beside the chosen section's form. Choosing a section SHALL show it and mark it current; choosing the current section again SHALL deselect it and show the prompt "Choose a settings section." Choosing another rail area SHALL leave Settings; coming back SHALL show the section that was chosen.
@@ -29,7 +29,7 @@ Layout and navigation
 
 Details panel: collapse and resize
 - R9. The system SHALL provide a **Collapse right panel** control inside the details panel. When collapsed, the panel and its resize separator SHALL be hidden and the top bar SHALL show an **Expand right panel** control at its right edge.
-- R10. The details panel SHALL open (if collapsed) whenever the user selects a dataset element for detail, selects an eval question, opens or generates a visual, switches the visual being shown, an agent shows an item in the panel ([agent-panel](../agent-panel/spec.md) R12), or clicks **Preview** in the agent editor. Otherwise it stays as the user left it.
+- R10. The details panel SHALL open (if collapsed) whenever the user selects a dataset element for detail, selects an eval question, opens or generates a visual, switches the visual being shown, an agent shows an item in the panel ([agent-panel](../agent-panel/spec.md) R12), clicks **Preview** in the agent editor, opens a workflow's page, or selects a step or clicks **Execute** on it ([workflows](../workflows/spec.md) R7). Otherwise it stays as the user left it.
 - R11. The details panel width SHALL default to 572 px and SHALL always lie between a minimum of 360 px and a maximum of 960 px, as whole pixels.
 - R12. The maximum SHALL additionally be limited to the viewport width minus 240 px (the minimum main-content width), but SHALL never fall below the 360 px minimum. The system SHALL re-apply this limit whenever the window is resized; a resize SHALL NOT change the remembered width.
 - R13. The details panel SHALL have a vertical separator on its left edge, labelled **Resize right panel**, focusable, exposing its current, minimum and maximum width as value-now, value-min and value-max. Its tooltip SHALL read "Drag to resize · Double-click to reset".
@@ -64,12 +64,12 @@ App identity and version
 - R34. The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 960 × 600, SHALL use the canvas colour of the operating system's theme as its background until the page reports its resolved theme (R44), and on macOS SHALL use an inset title bar so the sidebar header clears the window controls.
 
 Sessions area
-- R46. In the Sessions area the content shows the open session's chat, the new-session composer, or, with nothing open (the **Sessions** page), the list of sessions in the middle of the page card (sessions-chat R63). The navigation rail and drawer SHALL NOT list sessions (moved to the page on 2026-10-14, BA-230). Selecting a row SHALL open that session's chat; **Start New Conversation** in the page header SHALL open the composer. Deleting the open session SHALL return to the Sessions page, where the list no longer shows it.
+- R46. In the Runs area the content shows an open run (`run-detail`: its workflow and status, input, steps and answer, read-only, with **Run again**; [workflows](../workflows/spec.md) R19), an open past chat (read-only; past-chats R66), or, with nothing open (the **Runs** page), two tabs: **Runs**, the stored runs, newest first, ten to a page under a "Search runs by title, workflow or ID…" field, each row with its title, workflow chip, status chip (`Done`, `Failed`, `Stopped`, `Running`), `ID <first 8 characters>` and start time and an options menu with **Delete run**; and **Past chats**, the old sessions (past-chats R63). The navigation rail and drawer SHALL NOT list runs or sessions. Selecting a run row SHALL open its run; selecting a past-chat row SHALL open that session read-only. Deleting the open run or session SHALL return to the Runs page, where the list no longer shows it.
 - R47. Removed in roadmap 1.8.8: the separate, collapsible session list pane is replaced by the drawer (R48).
 - R48. The rail SHALL start with a menu button, **Expand navigation** (when collapsed) / **Collapse navigation** (when expanded), exposing `aria-expanded`. Expanding widens the rail into a 240 px drawer that shows each item's label beside its icon. Collapsing returns to the 64 px icon rail. Expanding or collapsing SHALL NOT change the main view or close the open session.
-- R49. In the Sessions area the page SHALL start with a header: an icon, then the title — the open session's name, "New conversation" in the composer, or "Sessions" — with the session's context under the title while a chat is open (its agent, when it was started from one, then its datasources; sessions-chat R57), and a **Start New Conversation** button that opens the composer.
+- R49. In the Runs area the page SHALL start with a header: an icon, then the title — the open past chat's name, or "Runs" — with the past chat's context under the title while one is open (its agent, when it was started from one, then its datasources; past-chats R57). It has no button that starts a conversation (the **Start New Conversation** button is gone since 1.23.22).
 - R50. Clicking **Expand navigation** or **Collapse navigation** SHALL remember the new state in the backend's `ui-preferences` document (ADR-0009), with a browser-local copy under `questions-to-insights:nav-expanded` (`true` / `false`) applied before the first paint. Nothing remembered means expanded; the backend wins over the copy.
-- R51. The home view (R2) SHALL welcome the user and explain how the product works (asked by the user on 2026-10-14; BA-230): the heading "Welcome to Agentic Hub", the line "Ask questions about your data in plain English, or let an agent walk you through a process step by step.", and four numbered steps, each opening the place it names: 1 "Pick your data" (button "Datasets", opens the Datasets area), 2 "Ask a question" (button "Start a conversation", opens the New conversation composer), 3 "Work with an agent" (button "Agents", opens the Agents area), 4 "Read, refine, download" (no button). Below the steps, a primary "Explore agents" button opens the Agents area. It replaces the earlier decorative empty composer box.
+- R51. The home view (R2) SHALL welcome the user and explain how the product works (asked by the user on 2026-10-14; BA-230; steps 2 and 3 replaced in 1.23.22): the heading "Welcome to Agentic Hub", the line "Run a workflow on your data and read the result, with the steps and agents behind it.", and four numbered steps, each opening the place it names: 1 "Pick your data" (button "Datasets", opens the Datasets area), 2 "Run a workflow" (button "Workflows", opens the Workflows area), 3 "Agents are the building blocks" (button "Agents", opens the Agents area), 4 "Read, refine, download" (no button). Below the steps, a primary "Explore agents" button opens the Agents area. It replaces the earlier decorative empty composer box.
 
 Single user
 - R52. The shell SHALL appear at once on launch, with no sign-in page, and every control SHALL be shown: the Settings area offers **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** and **Appearance** to the one user (the built-in super admin).
@@ -87,7 +87,7 @@ Appearance
 Accessibility and visual stability
 - R35. The application shell, in its initial state, SHALL produce zero violations when scanned by an automated accessibility engine (axe-core, all default rules).
 - R36. The system SHALL expose labelled landmarks: "Navigation rail" (complementary), "Workspace navigation", "Sessions" (the list on the Sessions page), "Settings navigation" (in the Settings area), and "Details panel".
-- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Agents, Context, Sessions, Monitoring, Open system logs, Settings), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel and Session options.
+- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Workflows, Agents, Context, Sessions, Monitoring, Open system logs, Settings), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel and Session options.
 - R38. The application shell in its initial state SHALL match the approved `application-shell` screenshot baseline. The baseline SHALL be changed only deliberately, together with an intended visual change.
 
 ## Edge cases and errors
@@ -115,7 +115,7 @@ Accessibility and visual stability
 
 Lives in the shell itself: [../../system/ui.md](../../system/ui.md). States:
 - Banner: hidden (starting, ready), amber (restarting), red (down).
-- Rail: one current area (Datasets, Agents, Context, Sessions or Settings), or none on home.
+- Rail: one current area (Datasets, Workflows, Agents, Context, Runs, Monitoring or Settings), or none on home.
 - Details panel: expanded at the remembered width, collapsed.
 - Toasts: success, info, error, several stacked.
 
@@ -147,7 +147,7 @@ Feature: Layout and accessibility
 
   Scenario: Has no automatically detectable accessibility violations on any screen in either theme
     Given the World Cup datasource and dataset exist
-    When an automated accessibility scan runs in the light theme and in the dark theme on: Datasets, the dataset editor, Agents, an agent's detail, Context (User personas), the Sessions area, the new-session composer, and each Settings section
+    When an automated accessibility scan runs in the light theme and in the dark theme on: Datasets, the dataset editor, Agents, an agent's detail, Context (User personas), the Runs area, and each Settings section
     Then it finds no violations
 
   Scenario: Text in the app can be selected
@@ -170,6 +170,8 @@ Feature: Navigation rail
   Scenario: Moves between areas from the rail
     When I click "Datasets" on the rail
     Then I see the "Datasets" page and "Datasets" is the current rail item
+    When I click "Workflows" on the rail
+    Then I see the "Workflows" page and "Workflows" is the current rail item
     When I click "Agents" on the rail
     Then I see the "Agents" page and "Agents" is the current rail item
     When I click "Agents" on the rail again
@@ -185,7 +187,7 @@ Feature: Navigation rail
     When I click the "Context" back control
     Then I see the "Context" page with its cards
     When I click "Sessions" on the rail
-    Then I see the "Sessions" list in the middle of the page and the "Start New Conversation" button
+    Then I see the Runs page with its tabs and no "Start New Conversation" button
     And the drawer does not list sessions
 
   Scenario: Opens the Monitoring page from the rail
@@ -196,9 +198,21 @@ Feature: Navigation rail
 
   Scenario: The start page explains how the product works
     When I open the app
-    Then I see "Welcome to Agentic Hub" and the four steps "Pick your data", "Ask a question", "Work with an agent" and "Read, refine, download"
+    Then I see "Welcome to Agentic Hub" and the four steps "Pick your data", "Run a workflow", "Agents are the building blocks" and "Read, refine, download"
     When I click "Datasets" in the first step
     Then I see the "Datasets" page
+
+  @demo @story-1.23.22
+  Scenario: Chats can no longer be started: home points to workflows, and nothing offers a chat
+    Given I open the app on its home page
+    Then home shows "Run a workflow"
+    When I open Workflows
+    Then every workflow has "Run" and none has "Start chat"
+    When I open Runs, then there is no "Start New Conversation"
+
+  Scenario: No Start chat, New conversation or Send message control exists outside the agent editor
+    When I visit home, Workflows, a workflow's page, Agents, Runs and Past chats
+    Then none of them offers "Start chat", "New conversation", "Start New Conversation" or "Send message"
 
   Scenario: Opens with the navigation drawer expanded
     Given I have never collapsed the navigation drawer

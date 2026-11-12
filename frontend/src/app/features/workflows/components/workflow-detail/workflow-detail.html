@@ -1,0 +1,93 @@
+<div class="flex min-h-0 flex-1 flex-col" data-testid="workflow-detail-page">
+  <!-- Header: breadcrumb, name, id and kind, and the primary action -->
+  <header
+    class="shrink-0 border-b border-border py-3 pl-6"
+    [class.pr-6]="panelOpen()"
+    [class.pr-14]="!panelOpen()"
+  >
+    <nav aria-label="Breadcrumb">
+      <ol class="m-0 flex list-none items-center gap-1.5 p-0 text-[12px]">
+        <li>
+          <button
+            type="button"
+            data-testid="workflow-breadcrumb"
+            (click)="back.emit()"
+            class="rounded text-fg-muted underline-offset-2 hover:text-fg hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+          >
+            Workflows
+          </button>
+        </li>
+        <li class="text-fg-muted" aria-hidden="true">/</li>
+        <li class="min-w-0 truncate text-fg" aria-current="page">
+          {{ crumb() }}
+        </li>
+      </ol>
+    </nav>
+
+    @if (designer.workflow(); as w) {
+      <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <!-- The name keeps at least 200 px; below that the action wraps under it. -->
+        <div class="flex min-w-[200px] flex-1 flex-col gap-1">
+          <h1
+            data-testid="workflow-detail-name"
+            class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
+          >
+            {{ w.name }}
+          </h1>
+          <div class="flex flex-wrap items-center gap-2">
+            <span
+              data-testid="workflow-detail-id"
+              class="font-mono text-[12px] text-fg-muted"
+              >{{ w.id }}</span
+            >
+            <span
+              data-testid="workflow-detail-kind"
+              class="chip"
+              [class.chip-info]="w.kind === 'code'"
+              [class.chip-neutral]="w.kind !== 'code'"
+              >{{ kindLabel() }}</span
+            >
+            @if (missing()) {
+              <span class="chip chip-warning whitespace-normal">
+                <lucide-angular [img]="TriangleAlert" [size]="12" class="shrink-0" />
+                <span>Missing dataset: {{ missing() }}</span>
+              </span>
+            }
+          </div>
+        </div>
+        <div class="ml-auto flex max-w-full shrink-0 items-center gap-3">
+          <button
+            type="button"
+            data-testid="workflow-execute"
+            (click)="execute()"
+            class="btn btn-primary shrink-0"
+          >
+            <lucide-angular [img]="Rocket" [size]="14" />
+            <span>Execute</span>
+          </button>
+        </div>
+      </div>
+    }
+  </header>
+
+  @if (designer.loading()) {
+    <div class="flex items-center gap-2.5 px-6 py-8 text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading workflow…</span>
+    </div>
+  } @else if (designer.error(); as err) {
+    <p
+      class="mx-6 mt-6 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  } @else if (designer.workflow(); as w) {
+    <app-workflow-canvas
+      class="flex-1"
+      [workflow]="w"
+      [selectedId]="designer.selectedStepId()"
+      [statuses]="designer.stepStatuses()"
+      (selectStep)="onSelectStep($event)"
+    />
+  }
+</div>

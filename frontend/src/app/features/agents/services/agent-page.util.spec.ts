@@ -1,4 +1,5 @@
 import {
+  AGENT_TAB_ORDER,
   agentTabIds,
   brokenLinkMessage,
   brokenLinks,
@@ -8,11 +9,12 @@ import {
   includedInEveryAgent,
   skillLinked,
   skillsCount,
+  usedInEmptyText,
 } from './agent-page.util';
 import { knownLinks } from './prompt-links';
 
 describe('agent page util', () => {
-  it('orders the tabs and drops the Chat Box for System agents', () => {
+  it('orders the tabs and keeps Try it for user agents only (R5, R90)', () => {
     expect(agentTabIds('user')).toEqual([
       'chat',
       'prompt',
@@ -23,14 +25,28 @@ describe('agent page util', () => {
       'evals',
       'model',
     ]);
-    expect(agentTabIds('official')[0]).toBe('chat');
+    expect(agentTabIds('official')).not.toContain('chat');
+    expect(agentTabIds('official')[0]).toBe('prompt');
     expect(agentTabIds('system')).not.toContain('chat');
+    expect(
+      AGENT_TAB_ORDER.find((tab) => tab.id === 'chat')?.label,
+    ).toBe('Try it');
   });
 
-  it('opens on the Chat Box, or on System Prompt for System agents', () => {
+  it('opens a user agent on Try it and every built-in agent on System Prompt (R5, R91)', () => {
     expect(defaultAgentTab('user')).toBe('chat');
-    expect(defaultAgentTab('official')).toBe('chat');
+    expect(defaultAgentTab('official')).toBe('prompt');
     expect(defaultAgentTab('system')).toBe('prompt');
+  });
+
+  it('words the empty Used in line per agent kind (R109)', () => {
+    expect(usedInEmptyText('user')).toBe(
+      'Not used in any workflow yet. Publish it to get its one-step workflow.',
+    );
+    expect(usedInEmptyText('system')).toBe(
+      'Not used in any workflow. The app calls this agent itself.',
+    );
+    expect(usedInEmptyText('official')).toBe('Not used in any workflow.');
   });
 
   it('finds broken links and words the error', () => {

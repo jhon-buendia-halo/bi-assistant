@@ -1,44 +1,90 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { test, expect } from './fixtures/app.fixture';
-import { WORLD_CUP_CATALOG } from './helpers/world-cup-db';
+import { WORLD_CUP_CATALOG, worldCupKey } from './helpers/world-cup-db';
 import {
+  WORLD_CUP_DATASET,
   WORLD_CUP_DATASOURCE,
-  WORLD_CUP_SESSION,
   createWorldCupDatasource,
   createWorldCupDataset,
-  createWorldCupWorkspace,
   openDatasourceSettings,
-  openSessions,
 } from './helpers/app-actions';
+import { saveLenaiSettings } from './helpers/agents-api';
+import {
+  startLlmStub,
+  type StubRequest,
+  type StubReply,
+  messageText,
+} from './helpers/llm-stub';
+import { railItem, runAnswer, runAssistantInTab } from './helpers/run-ui';
 
-test('creates a PostgreSQL datasource, dataset, and session using the real World Cup database', async ({
+const QUESTION = 'How many World Cup matches are in the data?';
+const ANSWER = 'The World Cup data holds the matches counted by the query.';
+const SQL = `SELECT COUNT(*) AS matches FROM ${worldCupKey('matches')}`;
+
+test('creates a PostgreSQL datasource, dataset, and run using the real World Cup database', async ({
   app,
   page,
 }) => {
-  await createWorldCupWorkspace(page);
+  const stub = await startLlmStub();
+  try {
+    await createWorldCupDatasource(page);
+    await createWorldCupDataset(page);
+    await saveLenaiSettings(page, stub.baseUrl);
 
-  // Reload the application: the desktop shell loads its built entry file,
-  // the browser reloads the app URL.
-  if (app.target === 'desktop') {
-    const entryUrl = pathToFileURL(
-      path.resolve(process.cwd(), 'dist/frontend/browser/index.html'),
-    ).href;
-    await page.goto(entryUrl);
-  } else {
-    await page.reload();
+    // The model queries the real World Cup database once, then answers.
+    stub.reply = (request: StubRequest): StubReply =>
+      request.messages.at(-1)?.role === 'tool'
+        ? { text: ANSWER }
+        : {
+            toolCall: {
+              name:
+                request.tools.find((tool) => tool.endsWith('run_readonly_sql')) ??
+                'run_readonly_sql',
+              arguments: { sql: SQL, rationale: 'Counting the matches.' },
+            },
+          };
+
+    // A run of the Assistant over the dataset just created queries the real
+    // database and shows the answer with the query behind it.
+    await runAssistantInTab(page, QUESTION, WORLD_CUP_DATASET);
+    await expect(runAnswer(page)).toContainText(ANSWER);
+    await runAnswer(page)
+      .getByText(/Data used \(1 query\)/)
+      .click();
+    await expect(runAnswer(page).locator('pre', { hasText: SQL })).toBeVisible();
+    const toolResult = stub.requests
+      .flatMap((request) => request.messages)
+      .filter((message) => message.role === 'tool')
+      .map(messageText)
+      .join('\n');
+    expect(toolResult).toContain('matches');
+    expect(toolResult).not.toMatch(/"error"/i);
+
+    // Reload the application: the desktop shell loads its built entry file,
+    // the browser reloads the app URL.
+    if (app.target === 'desktop') {
+      const entryUrl = pathToFileURL(
+        path.resolve(process.cwd(), 'dist/frontend/browser/index.html'),
+      ).href;
+      await page.goto(entryUrl);
+    } else {
+      await page.reload();
+    }
+    await expect(page.getByLabel('Open system logs')).toBeVisible();
+
+    // The run is kept: Runs lists it, and it reopens with its answer.
+    await railItem(page, 'Runs').click();
+    const row = page.getByTestId('row-run-title').filter({ hasText: QUESTION });
+    await expect(row).toBeVisible();
+    await row.click();
+    await expect(page.getByTestId('run-detail-answer')).toContainText(ANSWER);
+    await expect(page.getByTestId('run-detail-input')).toContainText(
+      WORLD_CUP_DATASET,
+    );
+  } finally {
+    await stub.close();
   }
-  await expect(page.getByLabel('Open system logs')).toBeVisible();
-  await openSessions(page);
-  await expect(
-    page.getByText(WORLD_CUP_SESSION, { exact: true }),
-  ).toBeVisible();
-  await page.getByText(WORLD_CUP_SESSION, { exact: true }).click();
-  await expect(page.locator('header')).toContainText(WORLD_CUP_DATASOURCE);
-  await expect(page.locator('header')).toContainText('PostgreSQL');
-  await expect(
-    page.getByPlaceholder('Ask a follow-up question…'),
-  ).toBeVisible();
 });
 
 test('preserves masked credentials when editing and supports datasource deletion', async ({

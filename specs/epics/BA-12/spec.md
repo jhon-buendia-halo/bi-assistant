@@ -20,7 +20,7 @@ Jira lists **no child issues**; the roadmap has one feature.
 | — | Answer trust signals | 1.4.1 |
 
 ## Specs touched
-- Capabilities: [sessions-chat](../../capabilities/sessions-chat/spec.md) (signals on assistant messages, feedback), [verified-queries](../../capabilities/verified-queries/spec.md) (match and promotion), [dataset-ontology](../../capabilities/dataset-ontology/spec.md) (knowledge the answer used).
+- Capabilities: [agent-answers](../../capabilities/agent-answers/spec.md) (signals on assistant messages, feedback), [verified-queries](../../capabilities/verified-queries/spec.md) (match and promotion), [dataset-ontology](../../capabilities/dataset-ontology/spec.md) (knowledge the answer used).
 - System: [data-model](../../system/data-model.md) (message fields), [api](../../system/api.md) (feedback endpoint, stream events), [ui](../../system/ui.md) (answer badges and detail).
 
 ## Acceptance

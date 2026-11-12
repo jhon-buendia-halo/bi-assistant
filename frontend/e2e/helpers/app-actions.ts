@@ -80,46 +80,13 @@ export async function createWorldCupDataset(
 export async function openSessions(page: Page): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Sessions', exact: true })
+    .getByRole('button', { name: 'Runs', exact: true })
     .click();
+  // The old sessions are the Past chats tab of the Runs page.
+  await page.getByRole('tab', { name: 'Past chats', exact: true }).click();
   await expect(
-    page.getByRole('navigation', { name: 'Sessions', exact: true }),
+    page.getByRole('navigation', { name: 'Past chats', exact: true }),
   ).toBeVisible();
-}
-
-export async function createWorldCupSession(page: Page): Promise<string> {
-  await openSessions(page);
-  await page
-    .locator('header')
-    .getByRole('button', { name: 'Start New Conversation' })
-    .click();
-  await expect(page.getByPlaceholder('My new session')).toBeVisible();
-  await page.getByPlaceholder('My new session').fill(WORLD_CUP_SESSION);
-  await page
-    .getByRole('button', { name: new RegExp(WORLD_CUP_DATASET) })
-    .click();
-  await page.getByRole('button', { name: /^Create$/ }).click();
-
-  await expect(
-    page.getByRole('heading', { name: WORLD_CUP_SESSION }),
-  ).toBeVisible();
-  await expect(page.locator('header')).toContainText(WORLD_CUP_DATASOURCE);
-  await expect(page.locator('header')).toContainText('PostgreSQL');
-
-  // The session ID button in the session header carries the id.
-  const label = await page
-    .locator('header')
-    .getByTestId('session-id')
-    .getAttribute('aria-label');
-  const id = /^Copy session ID (.+)$/.exec(label ?? '')?.[1];
-  if (!id) throw new Error('Created session did not expose its id');
-  return id;
-}
-
-export async function createWorldCupWorkspace(page: Page): Promise<string> {
-  await createWorldCupDatasource(page);
-  await createWorldCupDataset(page);
-  return createWorldCupSession(page);
 }
 
 /**

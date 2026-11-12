@@ -26,7 +26,7 @@ function check(name, ok, detail = '') {
 }
 function probe(port) {
   return new Promise((resolve) => {
-    const req = http.get({ host: '127.0.0.1', port, path: '/sessions', timeout: 500 }, (res) => {
+    const req = http.get({ host: '127.0.0.1', port, path: '/health', timeout: 500 }, (res) => {
       res.resume();
       resolve({ status: res.statusCode, instance: res.headers['x-backend-instance'] ?? null });
     });

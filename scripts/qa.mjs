@@ -25,6 +25,7 @@ import {
   BUILD_OUTPUTS,
   DEMO_MAX_BYTES,
   DEMO_SKIPPED_LINE,
+  PW_REPORTERS,
   USAGE,
   UsageError,
   acquireLock,
@@ -42,13 +43,24 @@ import {
   parseImpact,
   playwrightCounts,
   playwrightFailures,
+  playwrightReportEnv,
   renderDemoTxt,
   renderDraftImpact,
   renderTestsMd,
+  renderWavePlan,
+  renderWaveReport,
+  renderWaveStoryTests,
   selectedSpecs,
   storyTitle,
   toPosix,
+  waveReportPath,
+  waveSpecUnion,
 } from './qa-lib.mjs';
+import { ARCHIVE_FILE, BACKLOG_FILE, joinRoadmaps } from './roadmap-archive-lib.mjs';
+
+// roadmap.md and roadmap-archive.md together: an archived story is still found (roadmap 1.23.30).
+const readRoadmaps = (root) =>
+  joinRoadmaps(...['roadmap.md', ARCHIVE_FILE, BACKLOG_FILE].map((f) => (fs.existsSync(path.join(root, f)) ? fs.readFileSync(path.join(root, f), 'utf8') : null)));
 
 const IS_WIN = process.platform === 'win32';
 
@@ -134,15 +146,20 @@ async function main() {
     throw err;
   }
   const { id, mode, rebuild, noDemo, dryRun } = opts;
+  const wave = mode === 'wave';
+  const ids = opts.ids ?? [id];
+  // A wave runs the fast loop's steps once for several stories; its one demo is `--demo <id>`.
+  const demoId = wave ? opts.demo : id;
+  const fastLike = mode === 'fast' || wave;
   const root = git(['rev-parse', '--show-toplevel']);
   const commonDir = path.resolve(root, git(['rev-parse', '--git-common-dir'], root));
   const gitDir = git(['rev-parse', '--absolute-git-dir'], root);
   const base = opts.base ?? git(['merge-base', 'HEAD', 'origin/main'], root);
-  const evidenceDir = path.join(root, 'evidence', id);
+  const evidenceDir = path.join(root, 'evidence', wave ? 'waves' : id);
   // Outside frontend/test-results, which Playwright empties at the start of
   // every run (it is its outputDir); git-ignored (delivery.md 13).
   const reportsRoot = path.join(root, '.qa-reports');
-  const reportDir = path.join(reportsRoot, id);
+  const reportDir = path.join(reportsRoot, wave ? `wave-${ids[0]}-${ids[ids.length - 1]}` : id);
   const buildStampPath = path.join(reportsRoot, 'build-stamp.json');
   const impactPath = path.join(evidenceDir, 'e2e-impact.md');
   const frontend = path.join(root, 'frontend');
@@ -172,13 +189,18 @@ async function main() {
     ),
   ];
   const impactRows = fs.existsSync(impactPath) ? parseImpact(fs.readFileSync(impactPath, 'utf8')) : null;
-  const listed = impactRows ? impactSpecs(impactRows) : [];
+  const storyList = (storyId) => {
+    const file = path.join(root, 'evidence', storyId, 'e2e-impact.md');
+    return fs.existsSync(file) ? impactSpecs(parseImpact(fs.readFileSync(file, 'utf8'))) : [];
+  };
+  // A wave unites the step-6 lists of its stories.
+  const listed = wave ? waveSpecUnion(Object.fromEntries(ids.map((i) => [i, storyList(i)]))) : impactRows ? impactSpecs(impactRows) : [];
 
   // `playwright test --list` runs no global setup and starts no app: no lock needed.
   const pwList = (args) =>
     listedSpecFiles(spawnSync(`${pw} --list ${args}`, { cwd: frontend, env, shell: true, encoding: 'utf8' }).stdout ?? '');
   // The story's demo test, if a UI scenario carries its tag.
-  const demoSpecs = pwList(`--grep "@story-${id}"`);
+  const demoSpecs = demoId ? pwList(`--grep "@story-${demoId}"`) : [];
   const fastSelection = () =>
     selectedSpecs({ onlyChanged: pwList(`--only-changed=${base}`), listed, changed, demo: demoSpecs });
 
@@ -229,7 +251,7 @@ async function main() {
    * 2026-11-11, 0 of 4 alone), so they run alone after the others.
    */
   const parallelPlan = () => {
-    if (mode === 'fast') {
+    if (fastLike) {
       const plan = [];
       const backendFiles = backendRelated(changed);
       if (backendFiles.length) {
@@ -267,14 +289,29 @@ async function main() {
 
   if (dryRun) {
     const decision = decideBuild();
+    if (wave) {
+      const lines = renderWavePlan({
+        ids,
+        base: git(['rev-parse', '--short=7', base], root),
+        changedCount: changed.length,
+        buildLine: [buildLine(decision), ...(decision.build ? ['  npm --prefix backend run build:all'] : [])].join('\n'),
+        parallel: parallelPlan(),
+        specs: fastSelection(),
+        demo: demoId ? (demoSpecs.length ? `demo.webm of ${demoId} from ${demoSpecs.join(' ')}` : `demo.txt of ${demoId} (no UI scenario tagged)`) : null,
+        reportPath: waveReportPath(ids),
+        lane: path.join(commonDir, 'qa.lock'),
+      });
+      console.log(lines.join('\n'));
+      process.exit(0);
+    }
     console.log(`qa ${mode} ${id} (dry run): base ${git(['rev-parse', '--short=7', base], root)}, ${changed.length} changed file(s)`);
     console.log(buildLine(decision));
     if (decision.build) console.log('  npm --prefix backend run build:all');
     console.log('parallel:');
     for (const s of parallelPlan()) console.log(`  ${s.name}${s.solo ? ' (alone, after the others)' : ''}: ${s.command}`);
-    const specs = mode === 'fast' ? fastSelection() : listed;
+    const specs = fastLike ? fastSelection() : listed;
     console.log(`playwright (Postgres lane ${path.join(commonDir, 'qa.lock')}): ${specs.length ? specs.join(' ') : '(none)'}`);
-    if (mode === 'fast') {
+    if (fastLike) {
       console.log(`demo: ${noDemo ? `demo.txt (--no-demo)` : demoSpecs.length ? `demo.webm from ${demoSpecs.join(' ')}` : 'demo.txt (no UI scenario tagged)'}`);
     } else {
       if (!impactRows) console.log(`step-6 list missing: ${rel(impactPath)}`);
@@ -316,7 +353,6 @@ async function main() {
    */
   const runStep = async ({ name, command, cwd, extraEnv = {}, counts }, { quiet = false } = {}) => {
     const logPath = path.join(reportDir, `${++logIndex}-${name.replace(/\W+/g, '-')}.log`);
-    if (!quiet) console.log(`\n▶ ${name}: ${command}`);
     const started = Date.now();
     const r = await exec(command, cwd, { ...env, ...extraEnv });
     fs.writeFileSync(logPath, r.output);
@@ -330,14 +366,10 @@ async function main() {
       summary: r.output.split(/\r?\n/).filter((l) => l.trim()).slice(-3),
     };
     if (counts) step.counts = counts(r.output) ?? undefined;
-    const status = `  ${step.status} (exit ${step.exitCode}, ${step.seconds}s)`;
-    if (quiet) {
-      // One block per finished parallel step, so outputs never interleave.
-      const tail = step.status === 'failed' ? `\n${r.output.split(/\r?\n/).slice(-30).join('\n')}` : '';
-      console.log(`\n▶ ${name}: ${command}\n${status}, log: ${rel(logPath)}${tail}`);
-    } else {
-      console.log(status);
-    }
+    // One line per step (the child's output is in its log); only a failure prints the log's last lines.
+    // `quiet` steps run in parallel, so each prints once, when it finishes.
+    const tail = step.status === 'failed' ? `\n${r.output.split(/\r?\n/).slice(-30).join('\n')}` : '';
+    console.log(`${step.status === 'passed' ? '✔' : '✖'} ${name}: ${step.status} (exit ${step.exitCode}, ${step.seconds}s), log ${rel(logPath)}${tail}`);
     return step;
   };
   const run = async (spec) => {
@@ -353,14 +385,10 @@ async function main() {
     const together = plan.filter((s) => !s.solo);
     const results = new Map();
     if (together.length) {
-      console.log(`\n▶ in parallel: ${together.map((s) => s.name).join(', ')}`);
       const done = await Promise.all(together.map((s) => runStep(s, { quiet: true })));
       together.forEach((s, i) => results.set(s, done[i]));
     }
-    for (const s of plan.filter((p) => p.solo)) {
-      console.log(`\n▶ alone (timing-sensitive): ${s.name}`);
-      results.set(s, await runStep(s, { quiet: true }));
-    }
+    for (const s of plan.filter((p) => p.solo)) results.set(s, await runStep(s, { quiet: true }));
     const done = plan.map((s) => results.get(s));
     steps.push(...done);
     return done;
@@ -403,39 +431,43 @@ async function main() {
     });
   }
 
-  if (mode === 'fast') {
+  if (fastLike) {
     await runParallel(parallelPlan());
     const selected = fastSelection();
     if (selected.length || (!noDemo && demoSpecs.length)) await takeLane();
     if (selected.length) {
       await run({
         name: 'playwright (selected)',
-        command: `${pw} ${selected.map(relPw).join(' ')}`,
+        command: `${pw} ${selected.map(relPw).join(' ')} ${PW_REPORTERS}`,
         cwd: frontend,
-        extraEnv: { QA_REPORT_DIR: reportDir },
+        extraEnv: playwrightReportEnv(reportDir),
         counts: () => readPlaywright(reportDir)?.counts,
       });
     }
 
     // The demo, recorded after the checks so it shows passing behaviour.
     const failedBeforeDemo = steps.some((s) => s.status === 'failed');
-    if (noDemo) {
+    const demoDir = path.join(root, 'evidence', demoId ?? id);
+    fs.mkdirSync(demoDir, { recursive: true });
+    if (wave && !demoId) {
       leaveLane();
-      const roadmap = fs.readFileSync(path.join(root, 'roadmap.md'), 'utf8');
-      fs.writeFileSync(path.join(evidenceDir, 'demo.txt'), renderDemoTxt(id, storyTitle(roadmap, id), steps, { noDemo: true }));
-      console.log(`  demo: ${rel(path.join(evidenceDir, 'demo.txt'))} (--no-demo, no video recorded)`);
+    } else if (noDemo) {
+      leaveLane();
+      const roadmap = readRoadmaps(root);
+      fs.writeFileSync(path.join(demoDir, 'demo.txt'), renderDemoTxt(demoId, storyTitle(roadmap, demoId), steps, { noDemo: true }));
+      console.log(`  demo: ${rel(path.join(demoDir, 'demo.txt'))} (--no-demo, no video recorded)`);
     } else if (demoSpecs.length) {
       const videoDir = path.join(reportDir, 'demo-video');
       const demo = await run({
         name: 'demo',
-        command: `${pw} --grep "@story-${id}" --workers=1 --reporter=list`,
+        command: `${pw} --grep "@story-${demoId}" --workers=1 --reporter=dot`,
         cwd: frontend,
         extraEnv: { DEMO: '1', DEMO_VIDEO_DIR: videoDir },
       });
       leaveLane();
       const video = newestFile(videoDir, '.webm');
       if (demo.status === 'passed' && video) {
-        const dest = path.join(evidenceDir, 'demo.webm');
+        const dest = path.join(demoDir, 'demo.webm');
         fs.copyFileSync(video, dest);
         const size = fs.statSync(dest).size;
         if (size > DEMO_MAX_BYTES) {
@@ -450,11 +482,38 @@ async function main() {
       }
     } else {
       leaveLane();
-      const roadmap = fs.readFileSync(path.join(root, 'roadmap.md'), 'utf8');
-      fs.writeFileSync(path.join(evidenceDir, 'demo.txt'), renderDemoTxt(id, storyTitle(roadmap, id), steps));
-      console.log(`  demo: ${rel(path.join(evidenceDir, 'demo.txt'))} (no UI scenario tagged @story-${id})`);
+      const roadmap = readRoadmaps(root);
+      fs.writeFileSync(path.join(demoDir, 'demo.txt'), renderDemoTxt(demoId, storyTitle(roadmap, demoId), steps));
+      console.log(`  demo: ${rel(path.join(demoDir, 'demo.txt'))} (no UI scenario tagged @story-${demoId})`);
     }
-    if (failedBeforeDemo) console.log('\nThe demo was recorded, but a check above failed.');
+    if (failedBeforeDemo && !(wave && !demoId)) console.log('\nThe demo was recorded, but a check above failed.');
+    if (wave) {
+      // One shared report; each story's tests.md points to it.
+      const pwReport = readPlaywright(reportDir);
+      const date = new Date().toISOString().slice(0, 10);
+      const shortBase = base.slice(0, 7);
+      const ok = steps.every((s) => s.status === 'passed');
+      const reportFile = path.join(root, waveReportPath(ids));
+      fs.mkdirSync(path.dirname(reportFile), { recursive: true });
+      fs.writeFileSync(
+        reportFile,
+        renderWaveReport({
+          ids,
+          date,
+          base: shortBase,
+          steps,
+          specs: selected,
+          ran: pwReport?.counts.files ?? [],
+          failures: (pwReport?.failures ?? []).map((f) => ({ ...f, video: f.video ? rel(f.video) : undefined })),
+          links: [`Playwright report (local): \`.qa-reports/${path.basename(reportDir)}/html/index.html\``, `Command logs and reports (local): \`.qa-reports/${path.basename(reportDir)}/\``],
+        }),
+      );
+      for (const storyId of ids) {
+        fs.mkdirSync(path.join(root, 'evidence', storyId), { recursive: true });
+        fs.writeFileSync(path.join(root, 'evidence', storyId, 'tests.md'), renderWaveStoryTests({ id: storyId, ids, date, base: shortBase, ok }));
+      }
+      console.log(`\nwave report: ${waveReportPath(ids)}`);
+    }
   } else {
     if (!impactRows) {
       console.log(`\nNo step-6 list at ${rel(impactPath)}: the gate cannot check which specs ran.`);
@@ -466,9 +525,9 @@ async function main() {
       await takeLane();
       await run({
         name: 'playwright (step 6)',
-        command: `${pw} ${listed.map(relPw).join(' ')}`,
+        command: `${pw} ${listed.map(relPw).join(' ')} ${PW_REPORTERS}`,
         cwd: frontend,
-        extraEnv: { QA_REPORT_DIR: reportDir },
+        extraEnv: playwrightReportEnv(reportDir),
         counts: () => readPlaywright(reportDir)?.counts,
       });
       leaveLane();

@@ -1,4 +1,3 @@
-import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   ElementRef,
@@ -6,298 +5,57 @@ import {
   effect,
   inject,
   input,
-  OnDestroy,
   output,
   signal,
-  untracked,
   viewChild,
 } from '@angular/core';
-import {
-  LucideAngularModule,
-  ArrowUp,
-  BadgeCheck,
-  BarChart3,
-  Brain,
-  Copy,
-  Download,
-  Info,
-  Loader2,
-  ShieldAlert,
-  ShieldCheck,
-  ShieldOff,
-  Sparkles,
-  Square,
-  FileArchive,
-  Telescope,
-  ThumbsDown,
-  ThumbsUp,
-  TriangleAlert,
-  Wrench,
-  BookOpen,
-  X,
-} from 'lucide-angular';
+import { LucideAngularModule, Copy } from 'lucide-angular';
 import { SessionsApiService } from '../../services/sessions-api.service';
 import {
   AnalysisReport,
   RfpPackage,
-  ChatMessage,
-  CrossCheck,
-  DataPointSelection,
-  DeepAnalysisStatus,
-  MessageFeedback,
   Session,
-  ReasoningStep,
-  ToolDataRecord,
   PanelItemEvent,
   ReadinessPanelItem,
   ReadinessReportRef,
-  WorkflowView,
   VisualEvent,
 } from '../../models/session.model';
-import {
-  legacyTagAccentClass,
-  legacyTagDescription,
-  legacyTagLabel,
-} from '../../../ontology/models/ontology.model';
 import { ToastService } from '../../../../core/toast/toast.service';
-import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import { slug } from '../../services/slug';
 import {
   readinessPanelItemId,
   readinessPanelTitle,
-  readinessReportRef,
 } from '../../models/readiness.model';
-import { ReadinessCard } from './readiness-card';
+import { AnswerView } from '../answer-view/answer-view';
 
-/** Human-readable text for a clicked mark: its label when it has one. */
-export function selectionText(selection: DataPointSelection): string {
-  return selection.label?.trim() || selection.value;
-}
-
-/** Prompts behind the two follow-up chips. The user reviews before sending. */
-export function drillPrompt(selection: DataPointSelection): string {
-  return `Drill into "${selection.value}": break it down further.`;
-}
-
-export function whyPrompt(selection: DataPointSelection): string {
-  return `Why does "${selection.value}" stand out? Explain the drivers.`;
-}
-
-/** One tool call shown in the Thinking block, enriched when its result lands. */
-interface ToolActivity {
-  name: string;
-  /** Why the assistant ran this call, in its own words. */
-  rationale?: string;
-  input?: string;
-  rowCount?: number;
-  error?: string;
-  /** Live progress of a long-running tool; cleared when its result lands. */
-  progress?: { message: string; done?: number; total?: number };
-}
-
-/** The deep-analysis job this conversation is waiting on, if any. */
-interface DeepAnalysisActivity {
-  jobId: string;
-  question: string;
-  status: DeepAnalysisStatus;
-  progress?: string;
-  step?: number;
-  steps?: number;
-  error?: string;
-}
-
-/** Status cadence for the pending card — the job itself takes minutes. */
-export const DEEP_ANALYSIS_POLL_MS = 3_000;
-/** Unanswered polls tolerated before the card stops watching the job. */
-const MAX_POLL_FAILURES = 5;
-
-/** The welcome block's text for a plain session (sessions-chat R50). */
-export const GENERIC_WELCOME_DESCRIPTION =
-  'Ask a question in plain English and I will query your data, explain how I got the answer and turn it into an interactive visual.';
-/** The welcome block's starter prompts for a plain session (R50). */
-export const GENERIC_STARTER_PROMPTS: readonly string[] = [
-  'What data is available here? Summarise the tables and the key metrics.',
-  'What stands out in this data right now? Give me the headline numbers.',
-  'How have the main metrics moved over the last 12 months?',
-];
-/** An agent's starter questions shown in the welcome block, at most (R58). */
-const MAX_AGENT_STARTERS = 5;
-
-/** One line describing where a running job is, for the pending card. */
-export function deepAnalysisProgressLine(job: DeepAnalysisActivity): string {
-  if (job.progress?.trim()) return job.progress.trim();
-  switch (job.status) {
-    case 'planning':
-      return 'planning the investigation';
-    case 'investigating':
-      return job.steps
-        ? `investigating angle ${job.step ?? 1} of ${job.steps}`
-        : 'investigating';
-    case 'writing':
-      return 'writing the report';
-    case 'error':
-      return job.error ?? 'the analysis failed';
-    default:
-      return 'finishing up';
-  }
-}
-
-/** The skill tools of the framework (agents.md 3.9), labelled by what they do. */
-const SKILL_STEP_LABELS: Record<string, string> = {
-  skill: 'Using skill',
-  skill_read: 'Reading skill file',
-  skill_search: 'Searching skills',
-};
-
-/** The label of a skill tool's step, or null for any other tool. */
-export function skillStepLabel(toolName: string): string | null {
-  return SKILL_STEP_LABELS[toolName] ?? null;
-}
-
+/**
+ * A past chat (past-chats R66): its transcript, read-only. Since 1.23.22
+ * nothing starts or continues a chat, so there is no composer, no rating and
+ * no clarification answer; the reader can still open a visual, a scorecard,
+ * download a report or an RFP package, and copy a question.
+ */
 @Component({
   selector: 'app-session-chat',
-  imports: [LucideAngularModule, MarkdownPipe, NgTemplateOutlet, ReadinessCard],
+  imports: [LucideAngularModule, AnswerView],
   templateUrl: './session-chat.html',
   styleUrl: './session-chat.scss',
 })
-export class SessionChat implements OnDestroy {
-  // Labels/colours for the ontology items an answer was produced under. The
-  // per-turn record keeps the legacy tags (term, default_filter, …); the
-  // ontology model maps them so the chat and the Ontology tab never drift.
-  readonly knowledgeKindLabel = legacyTagLabel;
-  readonly knowledgeDescription = legacyTagDescription;
-  readonly knowledgeAccentClass = legacyTagAccentClass;
-
-  readonly ArrowUp = ArrowUp;
-  readonly BadgeCheck = BadgeCheck;
-  readonly BarChart3 = BarChart3;
-  readonly Brain = Brain;
+export class SessionChat {
   readonly Copy = Copy;
-  readonly Download = Download;
-  readonly Info = Info;
-  readonly Loader2 = Loader2;
-  readonly ShieldAlert = ShieldAlert;
-  readonly ShieldCheck = ShieldCheck;
-  readonly ShieldOff = ShieldOff;
-  readonly Sparkles = Sparkles;
-  readonly Square = Square;
-  readonly Telescope = Telescope;
-  readonly FileArchive = FileArchive;
-  readonly ThumbsDown = ThumbsDown;
-  readonly ThumbsUp = ThumbsUp;
-  readonly TriangleAlert = TriangleAlert;
-  readonly Wrench = Wrench;
-  readonly BookOpen = BookOpen;
-  readonly skillStepLabel = skillStepLabel;
-  readonly X = X;
 
   private readonly api = inject(SessionsApiService);
   private readonly toast = inject(ToastService);
 
   readonly session = input.required<Session>();
-  readonly visualGenerating = input(false);
-  /** Visual open in the right panel — the default target for tailoring. */
-  readonly activeVisualizationId = input<string | null>(null);
-  /** Data mark clicked in the open visual; offers follow-up chips. */
-  readonly dataPointSelection = input<DataPointSelection | null>(null);
-  readonly generateVisual = output<ChatMessage>();
-  /** A turn created/updated a visual; the host should refresh the panel. */
-  readonly visualUpdated = output<VisualEvent>();
   readonly viewVisual = output<VisualEvent>();
-  /** The agent put something in the right panel (`panel-item`). */
+  /** The reader opened a scorecard in the right panel (`panel-item`). */
   readonly panelItem = output<PanelItemEvent>();
-  /** The workflow status bar changed (`workflow` stream event). */
-  readonly workflowChanged = output<WorkflowView>();
-  /**
-   * The session was persisted (a finished turn, answer feedback) — refresh
-   * the host's copies. Same id, so the chat does not re-sync from it.
-   */
-  readonly sessionUpdated = output<Session>();
-  /**
-   * Runs before a message is sent; resolving `false` cancels the send and
-   * keeps the draft. The agent editor's preview uses it to save the form
-   * first (agents-evals R60). Without it, sending starts at once.
-   */
-  readonly beforeSend = input<(() => Promise<boolean>) | null>(null);
-  /** True while `beforeSend` runs; the composer waits for it. */
-  readonly preparing = signal(false);
 
-  readonly messages = signal<ChatMessage[]>([]);
-  readonly draft = signal('');
-  readonly sending = signal(false);
-  /**
-   * Careful mode: every turn sent while this is on is cross-checked by an
-   * independent query. Session-scoped — it lasts for this conversation, it is
-   * not stored with the session.
-   */
-  readonly careful = signal(false);
-  /** Tail of the model's reasoning stream, shown Conductor-style. */
-  readonly reasoning = signal('');
-  /** Tools invoked during the current turn, with result summaries. */
-  readonly toolCalls = signal<ToolActivity[]>([]);
-  /** Streamed assistant text for the in-flight turn. */
-  readonly streamingText = signal('');
-  /**
-   * The readiness report this turn produced (`readiness-report`), shown as a
-   * card on the in-flight answer until the persisted answer carries it.
-   */
-  readonly streamingReadiness = signal<ReadinessReportRef | null>(null);
-  readonly elapsed = signal(0);
-  /** `at` of the message whose rating is being persisted right now. */
-  readonly feedbackPending = signal<string | null>(null);
-  /**
-   * Deep-analysis job this conversation started. It runs in the background —
-   * normal chat stays usable — and reports through polling until the report
-   * message lands in the transcript.
-   */
-  readonly deepAnalysisJob = signal<DeepAnalysisActivity | null>(null);
-  readonly deepAnalysisRunning = computed(() => {
-    const job = this.deepAnalysisJob();
-    return !!job && job.status !== 'error';
-  });
+  readonly messages = computed(() => this.session().messages);
   /** Job id whose report is being downloaded right now. */
   readonly reportDownloading = signal<string | null>(null);
-  /**
-   * Opening message for a session nobody has asked anything in yet. Rendered
-   * client-side only — it never enters the transcript, so it costs the model
-   * no context and cannot be mistaken for something the assistant said.
-   */
-  readonly showWelcome = computed(
-    () => this.messages().length === 0 && !this.sending(),
-  );
-  /**
-   * False for a session bound to a built-in agent such as the RFP Builder,
-   * which hides the assistant's own controls (rfp R15).
-   */
-  readonly runsAssistant = computed(() => !this.session().agentKey);
-  /** Datasets wired to this session, named in the welcome block. */
-  readonly welcomeDatasets = computed(() => this.session().datasets ?? []);
-  /**
-   * The welcome block's one-line description: the agent's Live description
-   * for a session bound to an agent that still exists, else the generic text
-   * (sessions-chat R50, R58, R59).
-   */
-  readonly welcomeDescription = computed(() => {
-    const agent = this.session().agent;
-    const description = agent && !agent.deleted ? agent.description.trim() : '';
-    if (!description) return GENERIC_WELCOME_DESCRIPTION;
-    // "Connected to …" follows in the same paragraph, so end the sentence.
-    return /[.!?…]$/.test(description) ? description : `${description}.`;
-  });
-  /**
-   * Starter questions offered with the welcome block: the agent's Live
-   * starter questions (up to 5) when it has any, else the generic three.
-   */
-  readonly starterPrompts = computed<readonly string[]>(() => {
-    const agent = this.session().agent;
-    const starters =
-      agent && !agent.deleted
-        ? (agent.starterQuestions ?? []).filter((q) => q.trim())
-        : [];
-    return starters.length > 0
-      ? starters.slice(0, MAX_AGENT_STARTERS)
-      : GENERIC_STARTER_PROMPTS;
-  });
+  /** `rfpId/file` being downloaded right now (`rfpId/` for the zip). */
+  readonly rfpDownloading = signal<string | null>(null);
 
   /** Chat-history navigator (Conductor-style tick strip). */
   readonly historyOpen = signal(false);
@@ -307,508 +65,16 @@ export class SessionChat implements OnDestroy {
       .filter(({ message }) => message.role === 'user'),
   );
 
-  private timer: ReturnType<typeof setInterval> | null = null;
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
-  /** Consecutive unanswered status polls; too many and the card gives up. */
-  private pollFailures = 0;
-  private activeStream: AbortController | null = null;
-  private syncedSessionId: string | null = null;
-  /**
-   * The `messages` array of the input last synced. A same-id refresh that
-   * keeps this array (e.g. a `workflow` stream event patching only the status
-   * bar) must not overwrite what the chat added since — the user's question
-   * and an error bubble live only here until the server copy catches up.
-   */
-  private syncedMessages: ChatMessage[] | undefined;
-
   private readonly scroller = viewChild<ElementRef<HTMLDivElement>>('scroller');
-  private readonly composer =
-    viewChild<ElementRef<HTMLTextAreaElement>>('composer');
-
-  /** The selection whose chips were dismissed or already sent. */
-  private readonly usedSelection = signal<DataPointSelection | null>(null);
-  /**
-   * Selection currently offering follow-up chips. Derived, so a new click on a
-   * mark always replaces the row and dismissing only silences that selection —
-   * no effect can race the session re-sync.
-   */
-  readonly followUpSelection = computed(() => {
-    const selection = this.dataPointSelection();
-    return selection && selection !== this.usedSelection() ? selection : null;
-  });
-  readonly followUpLabel = computed(() => {
-    const selection = this.followUpSelection();
-    return selection ? selectionText(selection) : '';
-  });
-  /** Chips only make sense while a visual is open in the panel. */
-  readonly followUpVisible = computed(
-    () => !!this.followUpSelection() && !!this.activeVisualizationId(),
-  );
+  private syncedSessionId: string | null = null;
 
   constructor() {
-    // Re-sync when the active session changes (component instance is reused).
+    // Opening another past chat shows its end, as a transcript opens.
     effect(() => {
-      const session = this.session();
-      if (session.id === this.syncedSessionId) {
-        // Same session, refreshed metadata (e.g. a visual was versioned).
-        // Never disturb an in-flight turn; `done` brings the final transcript.
-        if (
-          !untracked(() => this.sending()) &&
-          session.messages !== this.syncedMessages
-        ) {
-          this.syncedMessages = session.messages;
-          this.messages.set(session.messages);
-        }
-        return;
-      }
-      this.syncedSessionId = session.id;
-      this.syncedMessages = session.messages;
-      this.activeStream?.abort();
-      this.activeStream = null;
-      this.stopTimer();
-      // The job keeps running server-side; this conversation simply stops
-      // watching it — its report lands in the transcript either way.
-      this.stopPolling();
-      this.deepAnalysisJob.set(null);
-      this.sending.set(false);
-      this.messages.set(session.messages);
-      this.feedbackPending.set(null);
-      // Follow-up chips follow their input: the host drops the selection when
-      // it opens another session, so nothing to reset here.
-      this.draft.set('');
-      // A new conversation starts a new session — careful mode is opt-in again.
-      this.careful.set(false);
-      this.customAnswer.set('');
-      this.customAnswerOpen.set(false);
-      this.resetTurnState();
+      const id = this.session().id;
+      if (id === this.syncedSessionId) return;
+      this.syncedSessionId = id;
       this.scrollToBottom();
-    });
-  }
-
-  /** Last ~90 chars of reasoning, single line, like Conductor's snippet. */
-  get reasoningSnippet(): string {
-    const flat = this.reasoning().replace(/\s+/g, ' ').trim();
-    return flat.length > 90 ? `…${flat.slice(-90)}` : flat;
-  }
-
-  onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      this.send();
-    }
-  }
-
-  /** Chip actions: prefill the composer, never send — the user decides. */
-  /** Put a starter question in the composer; the user sends it themselves. */
-  useStarterPrompt(prompt: string): void {
-    this.draft.set(prompt);
-    setTimeout(() => {
-      const el = this.composer()?.nativeElement;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(el.value.length, el.value.length);
-    });
-  }
-
-  useDrillPrompt(): void {
-    this.fillComposer(drillPrompt);
-  }
-
-  useWhyPrompt(): void {
-    this.fillComposer(whyPrompt);
-  }
-
-  private fillComposer(build: (selection: DataPointSelection) => string): void {
-    const selection = this.followUpSelection();
-    if (!selection) return;
-    this.draft.set(build(selection));
-    setTimeout(() => {
-      const el = this.composer()?.nativeElement;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(el.value.length, el.value.length);
-    });
-  }
-
-  dismissFollowUps(): void {
-    this.usedSelection.set(this.dataPointSelection());
-  }
-
-  send(): void {
-    const content = this.draft().trim();
-    if (!content || this.sending() || this.preparing()) return;
-    const guard = this.beforeSend();
-    if (!guard) {
-      this.startTurn(content);
-      return;
-    }
-    const sessionId = this.session().id;
-    this.preparing.set(true);
-    void guard()
-      .catch(() => false)
-      .then((proceed) => {
-        this.preparing.set(false);
-        // A refusal, or another session opened meanwhile, keeps the draft.
-        if (proceed && this.session().id === sessionId && !this.sending()) {
-          this.startTurn(content);
-        }
-      });
-  }
-
-  private startTurn(content: string): void {
-    this.dismissFollowUps();
-    this.draft.set('');
-    this.sending.set(true);
-    this.resetTurnState();
-    this.messages.set([
-      ...this.messages(),
-      { role: 'user', content, at: new Date().toISOString() },
-    ]);
-    this.scrollToBottom();
-    this.startTimer();
-
-    const controller = new AbortController();
-    this.activeStream = controller;
-
-    void this.api.streamMessage(
-      this.session().id,
-      content,
-      {
-        onReasoning: (delta) => {
-          if (this.activeStream !== controller) return;
-          this.reasoning.set(this.reasoning() + delta);
-        },
-        onTool: (call) => {
-          if (this.activeStream !== controller) return;
-          this.toolCalls.set([
-            ...this.toolCalls(),
-            { name: call.name, rationale: call.rationale, input: call.input },
-          ]);
-          this.scrollToBottom();
-        },
-        onToolProgress: (p) => {
-          if (this.activeStream !== controller) return;
-          const calls = [...this.toolCalls()];
-          for (let i = calls.length - 1; i >= 0; i--) {
-            const call = calls[i];
-            if (
-              call.name === p.tool &&
-              call.rowCount === undefined &&
-              call.error === undefined
-            ) {
-              calls[i] = {
-                ...call,
-                progress: { message: p.message, done: p.done, total: p.total },
-              };
-              break;
-            }
-          }
-          this.toolCalls.set(calls);
-        },
-        onToolResult: (summary) => {
-          if (this.activeStream !== controller) return;
-          // Attach to the latest call of that tool still missing a result.
-          const calls = [...this.toolCalls()];
-          for (let i = calls.length - 1; i >= 0; i--) {
-            const call = calls[i];
-            if (
-              call.name === summary.tool &&
-              call.rowCount === undefined &&
-              call.error === undefined
-            ) {
-              calls[i] = {
-                ...call,
-                // The call frame usually carries the reason; take the
-                // result's when it did not.
-                rationale: call.rationale ?? summary.rationale,
-                input: summary.input,
-                rowCount: summary.rowCount,
-                error: summary.error,
-                progress: undefined,
-              };
-              break;
-            }
-          }
-          this.toolCalls.set(calls);
-        },
-        onText: (delta) => {
-          if (this.activeStream !== controller) return;
-          this.streamingText.set(this.streamingText() + delta);
-          this.scrollToBottom();
-        },
-        onVisualUpdated: (event) => {
-          if (this.activeStream !== controller) return;
-          this.visualUpdated.emit(event);
-        },
-        onPanelItem: (event) => {
-          if (this.activeStream !== controller) return;
-          this.panelItem.emit(event);
-        },
-        onWorkflow: (workflow) => {
-          if (this.activeStream !== controller) return;
-          this.workflowChanged.emit(workflow);
-        },
-        onReadinessReport: ({ report, panelItem }) => {
-          if (this.activeStream !== controller) return;
-          this.streamingReadiness.set(readinessReportRef(report));
-          this.panelItem.emit({ item: panelItem });
-        },
-        onDone: (session) => {
-          if (this.activeStream !== controller) return;
-          this.activeStream = null;
-          this.stopTimer();
-          this.sending.set(false);
-          this.resetTurnState();
-          if (session) {
-            this.messages.set(session.messages);
-            // Keep the host's copies current, so reopening the session from
-            // the list shows this turn.
-            this.sessionUpdated.emit(session);
-          }
-          this.scrollToBottom();
-        },
-        onError: (message) => {
-          if (this.activeStream !== controller) return;
-          this.activeStream = null;
-          this.stopTimer();
-          this.sending.set(false);
-          // Preserve whatever text had already streamed in — the same
-          // rescue `stop()` gives a manually-cancelled turn — before the
-          // error bubble that explains why the turn didn't finish.
-          const partial = this.streamingText().trim();
-          const readiness = this.streamingReadiness();
-          this.resetTurnState();
-          const now = Date.now();
-          this.messages.set([
-            ...this.messages(),
-            ...(partial
-              ? [
-                  {
-                    role: 'assistant' as const,
-                    content: partial,
-                    at: new Date(now).toISOString(),
-                    ...(readiness ? { readinessReport: readiness } : {}),
-                  },
-                ]
-              : []),
-            {
-              role: 'assistant' as const,
-              content: message,
-              at: new Date(now + 1).toISOString(),
-              error: true,
-            },
-          ]);
-          this.toast.error(message);
-          this.scrollToBottom();
-        },
-      },
-      controller.signal,
-      this.activeVisualizationId() ?? undefined,
-      this.careful(),
-    );
-  }
-
-  toggleCareful(): void {
-    this.careful.update((on) => !on);
-  }
-
-  stop(): void {
-    if (!this.sending()) return;
-    const partial = this.streamingText().trim();
-    const readiness = this.streamingReadiness();
-    this.activeStream?.abort();
-    this.activeStream = null;
-    this.stopTimer();
-    this.sending.set(false);
-    if (partial) {
-      this.messages.set([
-        ...this.messages(),
-        {
-          role: 'assistant',
-          content: partial,
-          at: new Date().toISOString(),
-          ...(readiness ? { readinessReport: readiness } : {}),
-        },
-      ]);
-    }
-    this.resetTurnState();
-    this.scrollToBottom();
-  }
-
-  /**
-   * Resend the question behind a failed turn (the error bubble's Retry
-   * action). The error bubble is never persisted, so the backend transcript
-   * still ends with that unanswered user question — `appendUserMessage`'s
-   * dedup reuses it there instead of stacking a duplicate.
-   */
-  retryLastQuestion(index: number): void {
-    if (this.sending()) return;
-    const previous = this.messages()
-      .slice(0, index)
-      .reverse()
-      .find((message) => message.role === 'user');
-    if (!previous) return;
-    this.draft.set(previous.content);
-    this.send();
-  }
-
-  private resetTurnState(): void {
-    this.reasoning.set('');
-    this.toolCalls.set([]);
-    this.streamingText.set('');
-    this.streamingReadiness.set(null);
-    this.elapsed.set(0);
-  }
-
-  private startTimer(): void {
-    this.stopTimer();
-    const started = Date.now();
-    this.timer = setInterval(
-      () => this.elapsed.set((Date.now() - started) / 1000),
-      100,
-    );
-  }
-
-  private stopTimer(): void {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
-    }
-  }
-
-  ngOnDestroy(): void {
-    this.stopTimer();
-    this.stopPolling();
-  }
-
-  // --------------------------------------------------- deep analysis
-
-  /**
-   * Send the draft as a deep-analysis job instead of a chat turn. The job runs
-   * in the background: the composer stays free, ordinary turns still work, and
-   * the report arrives as a message when it is done.
-   */
-  runDeepAnalysis(): void {
-    const question = this.draft().trim();
-    if (!question || this.deepAnalysisRunning()) return;
-    this.draft.set('');
-    this.deepAnalysisJob.set({
-      jobId: '',
-      question,
-      status: 'planning',
-      progress: 'Starting the deep analysis',
-    });
-
-    this.api.startDeepAnalysis(this.session().id, question).subscribe({
-      next: (result) => {
-        if (!result.ok || !result.jobId) {
-          this.deepAnalysisJob.set(null);
-          // Give the question back rather than losing what the user typed.
-          if (!this.draft().trim()) this.draft.set(question);
-          this.toast.error(result.message || 'Could not start deep analysis');
-          return;
-        }
-        this.deepAnalysisJob.set({
-          jobId: result.jobId,
-          question,
-          status: result.status ?? 'planning',
-          progress: result.progress ?? 'Planning the investigation',
-        });
-        this.scrollToBottom();
-        this.startPolling(result.jobId);
-      },
-      error: (err) => {
-        this.deepAnalysisJob.set(null);
-        if (!this.draft().trim()) this.draft.set(question);
-        this.toast.error(err?.error?.message ?? 'Backend unreachable');
-      },
-    });
-  }
-
-  /** Stop watching a finished or failed job (the card's dismiss action). */
-  dismissDeepAnalysis(): void {
-    this.stopPolling();
-    this.deepAnalysisJob.set(null);
-  }
-
-  deepAnalysisLine(job: DeepAnalysisActivity): string {
-    return deepAnalysisProgressLine(job);
-  }
-
-  private startPolling(jobId: string): void {
-    this.stopPolling();
-    this.pollFailures = 0;
-    this.pollTimer = setInterval(
-      () => this.pollDeepAnalysis(jobId),
-      DEEP_ANALYSIS_POLL_MS,
-    );
-  }
-
-  private stopPolling(): void {
-    if (this.pollTimer) {
-      clearInterval(this.pollTimer);
-      this.pollTimer = null;
-    }
-  }
-
-  private pollDeepAnalysis(jobId: string): void {
-    const sessionId = this.session().id;
-    this.api.deepAnalysisStatus(sessionId, jobId).subscribe({
-      next: (view) => {
-        const job = this.deepAnalysisJob();
-        if (!job || job.jobId !== jobId) return;
-        this.pollFailures = 0;
-        if (!view.ok || !view.status) {
-          this.failDeepAnalysis(view.message || 'Deep analysis was lost');
-          return;
-        }
-        this.deepAnalysisJob.set({
-          ...job,
-          status: view.status,
-          progress: view.progress,
-          step: view.step,
-          steps: view.steps,
-        });
-        if (view.status === 'done') {
-          this.stopPolling();
-          this.completeDeepAnalysis(sessionId, jobId);
-        } else if (view.status === 'error') {
-          this.failDeepAnalysis(view.error || 'Deep analysis failed');
-        }
-      },
-      // A transient poll failure is not a job failure — try again in 3s, but
-      // do not keep polling a backend that has stopped answering.
-      error: () => {
-        if (++this.pollFailures >= MAX_POLL_FAILURES) {
-          this.failDeepAnalysis('Lost contact with the deep analysis');
-        }
-      },
-    });
-  }
-
-  private failDeepAnalysis(message: string): void {
-    this.stopPolling();
-    const job = this.deepAnalysisJob();
-    if (job) {
-      this.deepAnalysisJob.set({ ...job, status: 'error', error: message });
-    }
-    this.toast.error(message);
-  }
-
-  /** The report is persisted — pull the transcript that now contains it. */
-  private completeDeepAnalysis(sessionId: string, jobId: string): void {
-    this.api.get(sessionId).subscribe({
-      next: (session) => {
-        const job = this.deepAnalysisJob();
-        if (job?.jobId === jobId) this.deepAnalysisJob.set(null);
-        // Never disturb an in-flight turn; its `done` brings the transcript.
-        if (!this.sending()) this.messages.set(session.messages);
-        this.sessionUpdated.emit(session);
-        this.scrollToBottom();
-        this.toast.success('Deep analysis report ready');
-      },
-      error: () =>
-        this.failDeepAnalysis('The report is ready but could not be loaded'),
     });
   }
 
@@ -850,22 +116,16 @@ export class SessionChat implements OnDestroy {
         item.kind === 'readiness' && item.id === id,
     );
     this.panelItem.emit({
-      item: saved ? { ...saved } : {
-        id,
-        kind: 'readiness',
-        title: readinessPanelTitle(ref.datasourceName),
-        shownAt: ref.generatedAt,
-        reportId: ref.reportId,
-      },
+      item: saved
+        ? { ...saved }
+        : {
+            id,
+            kind: 'readiness',
+            title: readinessPanelTitle(ref.datasourceName),
+            shownAt: ref.generatedAt,
+            reportId: ref.reportId,
+          },
     });
-  }
-
-  /** `rfpId/file` being downloaded right now (`rfpId/` for the zip). */
-  readonly rfpDownloading = signal<string | null>(null);
-
-  /** Whether the package holds the rendered `rfp.pdf`. */
-  hasRfpPdf(pkg: RfpPackage): boolean {
-    return pkg.files.some((f) => f.name === 'rfp.pdf');
   }
 
   /** Save an RFP package's zip, or one of its files (ui.md 4.12). */
@@ -900,172 +160,12 @@ export class SessionChat implements OnDestroy {
       });
   }
 
-  // --------------------------------------------------- cross-check chip
-
-  /** What the independent re-derivation concluded, in one word. */
-  crossCheckLabel(check: CrossCheck): string {
-    if (check.status === 'agree') return 'Cross-checked';
-    return check.status === 'disagree'
-      ? 'Cross-check differs'
-      : 'Cross-check failed';
-  }
-
-  crossCheckIcon(check: CrossCheck): typeof ShieldCheck {
-    if (check.status === 'agree') return this.ShieldCheck;
-    return check.status === 'disagree' ? this.ShieldAlert : this.ShieldOff;
-  }
-
-  /** Emerald when corroborated, amber when it differs, muted when it failed. */
-  crossCheckClass(check: CrossCheck): string {
-    if (check.status === 'agree') {
-      return 'border-on-success-soft/30 bg-success-soft text-on-success-soft';
-    }
-    return check.status === 'disagree'
-      ? 'border-on-warning-soft/30 bg-warning-soft text-on-warning-soft'
-      : 'border-border bg-surface-muted text-fg-muted';
-  }
-
-  /** Tooltip: the backend's note, or the verdict when it sent none. */
-  crossCheckTitle(check: CrossCheck): string {
-    return check.note?.trim() || this.crossCheckLabel(check);
-  }
-
-  /**
-   * Muted outcome shown after one step of "How I worked this out": what the
-   * step returned, or why it failed. Empty when the step reported neither.
-   */
-  reasoningOutcome(step: ReasoningStep): string {
-    if (step.error) return `failed — ${step.error}`;
-    if (step.rowCount === undefined) return '';
-    const rows = step.rowCount.toLocaleString('en-US');
-    return `${rows} row${step.rowCount === 1 ? '' : 's'}`;
-  }
-
-  /** Short label for a persisted data record under an answer. */
-  dataLabel(record: ToolDataRecord): string {
-    if (record.error) return `${record.tool} — failed`;
-    const rows = record.rowCount ?? record.rows?.length ?? 0;
-    return `${record.tool} — ${rows} row${rows === 1 ? '' : 's'}`;
-  }
-
+  /** Copy a user message (an answer's copy button lives in `AnswerView`). */
   copyMessage(content: string): void {
-    this.copyToClipboard(content, 'Copied to clipboard');
-  }
-
-  /** Copy the query behind one persisted data record. */
-  copySql(record: ToolDataRecord): void {
-    const sql = record.input?.trim();
-    if (!sql) return;
-    this.copyToClipboard(sql, 'SQL copied to clipboard');
-  }
-
-  private copyToClipboard(text: string, success: string): void {
-    void navigator.clipboard.writeText(text).then(
-      () => this.toast.success(success),
+    void navigator.clipboard.writeText(content).then(
+      () => this.toast.success('Copied to clipboard'),
       () => this.toast.error('Copy failed'),
     );
-  }
-
-  /**
-   * Rate an answer. Same rating twice is a no-op; the other rating switches.
-   * The transcript is patched locally first so the click feels instant, then
-   * reconciled with the persisted session — never while a turn is streaming,
-   * because `done` brings the authoritative transcript.
-   */
-  rateMessage(message: ChatMessage, rating: MessageFeedback): void {
-    if (message.feedback === rating) return;
-    if (this.feedbackPending() === message.at) return;
-    const previous = message.feedback;
-    this.feedbackPending.set(message.at);
-    this.patchFeedback(message.at, rating);
-
-    this.api
-      .sendMessageFeedback(this.session().id, message.at, rating)
-      .subscribe({
-        next: (result) => {
-          this.feedbackPending.set(null);
-          if (!result.ok) {
-            this.patchFeedback(message.at, previous);
-            this.toast.error(result.message || 'Could not save feedback');
-            return;
-          }
-          if (result.session) {
-            if (!this.sending()) this.messages.set(result.session.messages);
-            this.sessionUpdated.emit(result.session);
-          }
-          this.toast.success(result.message || 'Feedback saved');
-        },
-        error: (err) => {
-          this.feedbackPending.set(null);
-          this.patchFeedback(message.at, previous);
-          this.toast.error(err?.error?.message ?? 'Backend unreachable');
-        },
-      });
-  }
-
-  private patchFeedback(
-    at: string,
-    feedback: MessageFeedback | undefined,
-  ): void {
-    this.messages.update((messages) =>
-      messages.map((message) =>
-        message.role === 'assistant' && message.at === at
-          ? { ...message, feedback }
-          : message,
-      ),
-    );
-  }
-
-  requestVisualization(message: ChatMessage): void {
-    if (this.sending() || this.visualGenerating()) return;
-    this.generateVisual.emit(message);
-  }
-
-  /** Clarification card actions. */
-  pickOption(label: string): void {
-    if (this.sending()) return;
-    this.customAnswer.set('');
-    this.customAnswerOpen.set(false);
-    this.draft.set(label);
-    this.send();
-  }
-
-  skipClarification(): void {
-    this.pickOption('Skip — proceed with your best judgment.');
-  }
-
-  /** Inline custom answer inside the clarification card. */
-  readonly customAnswerOpen = signal(false);
-  readonly customAnswer = signal('');
-
-  toggleCustomAnswer(): void {
-    this.customAnswerOpen.set(!this.customAnswerOpen());
-    if (this.customAnswerOpen()) {
-      setTimeout(() => {
-        const el = this.scroller()?.nativeElement.querySelector(
-          '#custom-answer',
-        ) as HTMLInputElement | null;
-        el?.focus();
-      });
-    }
-  }
-
-  sendCustomAnswer(): void {
-    const answer = this.customAnswer().trim();
-    if (!answer || this.sending()) return;
-    this.pickOption(answer);
-  }
-
-  onCustomAnswerKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      this.sendCustomAnswer();
-    }
-  }
-
-  /** Only the latest message's clarification card is actionable. */
-  isLatest(index: number): boolean {
-    return index === this.messages().length - 1;
   }
 
   scrollToMessage(index: number): void {

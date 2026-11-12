@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { getObservabilityDb } from '../../mastra/storage';
 import { SessionsRepository } from '../sessions/repositories/sessions.repository';
+import { WorkflowRunsRepository } from '../workflows/repositories/workflow-runs.repository';
 import { MonitoringController } from './monitoring.controller';
 import { MonitoringService } from './monitoring.service';
 import {
@@ -19,6 +20,7 @@ import {
     MonitoringService,
     SpanEventsRepository,
     SessionsRepository,
+    WorkflowRunsRepository,
     { provide: SPAN_EVENTS_DB, useFactory: getObservabilityDb },
   ],
 })

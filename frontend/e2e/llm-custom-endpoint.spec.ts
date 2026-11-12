@@ -2,12 +2,8 @@ import http from 'node:http';
 import { AddressInfo } from 'node:net';
 import { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
-import {
-  WORLD_CUP_SESSION,
-  createWorldCupSession,
-  openSessions,
-} from './helpers/app-actions';
 import { apiBase, seedWorldCupDataset } from './helpers/agents-api';
+import { runAssistantOk } from './helpers/runs-api';
 import {
   LlmStub,
   STUB_ANSWER,
@@ -188,31 +184,18 @@ test.describe('OpenAI-compatible', () => {
     );
   });
 
-  test('a chat turn runs on the custom endpoint', async ({ page }) => {
+  test('a run of the Assistant runs on the custom endpoint', async ({ page }) => {
     await seedWorldCupDataset(page);
     await saveCustomSettings(page, endpoint, MODEL);
     await page.reload();
 
-    await openSessions(page);
-    await page
-      .locator('header')
-      .getByRole('button', { name: 'Start New Conversation' })
-      .click();
-    await expect(
-      page.getByText(`${MODEL} · ${new URL(stub.baseUrl).host}`),
-    ).toBeVisible();
-
-    await createWorldCupSession(page);
     const question = 'How many matches were played in 2022?';
-    await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-    await page.getByLabel('Send message').click();
-    await expect
-      .poll(() => turnRequests(stub, question).length)
-      .toBeGreaterThan(0);
+    const result = await runAssistantOk(page, question);
+    expect(turnRequests(stub, question).length).toBeGreaterThan(0);
     const [turn] = turnRequests(stub, question);
     expect(turn.path).toBe('/v1/chat/completions');
     expect(turn.model).toBe(MODEL);
-    await expect(page.getByText(STUB_ANSWER)).toBeVisible();
+    expect(result.text).toContain(STUB_ANSWER);
   });
 
   test('uses an endpoint that needs no key', async ({ page }) => {
@@ -375,7 +358,7 @@ test.describe('Anthropic-compatible', () => {
     }
   }
 
-  test('configures an Anthropic-compatible endpoint by loading models, testing and saving, then chats on it', async ({
+  test('configures an Anthropic-compatible endpoint by loading models, testing and saving, then runs on it', async ({
     page,
   }, testInfo) => {
     await seedWorldCupDataset(page);
@@ -419,26 +402,11 @@ test.describe('Anthropic-compatible', () => {
       '••••••••4c4c',
     );
 
-    // The composer chip names the model and the root's host (R53).
-    await openSessions(page);
-    await page
-      .locator('header')
-      .getByRole('button', { name: 'Start New Conversation' })
-      .click();
-    await expect(
-      page.getByText(`${MODEL} · ${new URL(stub.baseUrl).host}`),
-    ).toBeVisible();
-
-    // A chat turn goes to <root>/v1/messages with the saved model and key.
+    // A run goes to <root>/v1/messages with the saved model and key.
     stub.reply(ANSWER);
-    await createWorldCupSession(page);
-    await expect(
-      page.getByRole('heading', { name: WORLD_CUP_SESSION }),
-    ).toBeVisible();
     const question = 'How many matches were played in 2022?';
-    await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-    await page.getByLabel('Send message').click();
-    await expect(page.getByText(ANSWER)).toBeVisible();
+    const result = await runAssistantOk(page, question);
+    expect(result.text).toContain(ANSWER);
 
     const turns = requestsTo('messages').filter((request) => !request.isProbe);
     expect(turns.length).toBeGreaterThan(0);

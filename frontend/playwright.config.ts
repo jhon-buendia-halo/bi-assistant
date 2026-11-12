@@ -23,8 +23,16 @@ const snapshots = '{snapshotDir}/{testFileDir}/{testFileName}-snapshots/{arg}';
 export default defineConfig<object, { target: Target }>({
   testDir: './e2e',
   outputDir: './test-results',
+  // Spec files run in parallel; tests within a file stay in order. Each web
+  // test has its own CLI port, data dir and stub servers, and specs that
+  // create databases on the shared Postgres name them uniquely (delivery.md
+  // 13, roadmap 1.23.32). E2E_WORKERS overrides; CI stays serial.
   fullyParallel: false,
-  workers: 1,
+  workers: process.env['E2E_WORKERS']
+    ? Number(process.env['E2E_WORKERS'])
+    : process.env['CI']
+      ? 1
+      : 3,
   timeout: 60_000,
   expect: {
     timeout: 10_000,
@@ -62,6 +70,8 @@ export default defineConfig<object, { target: Target }>({
     {
       name: 'desktop',
       use: { target: 'desktop' },
+      // The desktop backend always listens on port 3000: one app at a time.
+      workers: 1,
       snapshotPathTemplate: `${snapshots}-{platform}{ext}`,
     },
   ],

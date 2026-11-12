@@ -49,15 +49,21 @@ describe('POST routes the spec answers with 200 (api.md 1.4)', () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
-  it('the chat stream answers 200 and reports a failure in the stream (3.1)', async () => {
-    const res = await post('/sessions/no-such-session/messages/stream', {
-      content: 'Who won?',
-    });
-    expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toMatch(/^text\/event-stream/);
-    expect(await frames(res)).toEqual([
-      { type: 'error', content: 'Session no-such-session not found' },
-    ]);
+  it('the chat write routes removed in 1.23.27 answer 404', async () => {
+    for (const path of [
+      '/sessions',
+      '/sessions/s1/messages',
+      '/sessions/s1/messages/stream',
+      '/sessions/s1/messages/feedback',
+      '/sessions/s1/visualizations',
+      '/sessions/s1/visualizations/v1/tailor',
+      '/sessions/s1/deep-analysis',
+    ]) {
+      expect({ path, status: (await post(path, {})).status }).toEqual({
+        path,
+        status: 404,
+      });
+    }
   });
 
   it('the ontology bootstrap stream answers 200 and reports a failure in the stream (3.4)', async () => {

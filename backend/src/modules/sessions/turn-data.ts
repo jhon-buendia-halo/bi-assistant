@@ -1,5 +1,5 @@
 // Tool-result capture and tool-only-turn synthesis, shared by
-// `SessionsService.streamMessage` (a real chat turn) and the assistant eval
+// `TurnEngine.streamTurn` (a real chat turn) and the assistant eval
 // harness — extracted so both measure/build the same way rather than
 // duplicating the logic.
 import type { RequestContext } from '@mastra/core/request-context';

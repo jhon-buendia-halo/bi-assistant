@@ -1,6 +1,14 @@
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
-import { WORLD_CUP_DATASET, openSessions } from './helpers/app-actions';
+import { WORLD_CUP_DATASET } from './helpers/app-actions';
+import { runWorkflow } from './helpers/runs-api';
+import {
+  fillRun,
+  openRunTab,
+  openWorkflowPage,
+  railItem,
+  runAnswer,
+} from './helpers/run-ui';
 import {
   UserAgentInput,
   createSkill,
@@ -24,11 +32,11 @@ import { worldCupScalar } from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "Sessions started from an agent" in
- * specs/capabilities/sessions-chat/spec.md. The model is a local
+ * specs/capabilities/agent-answers/spec.md, through the agents' workflow runs
+ * (a run's model request equals a chat turn's). The model is a local
  * OpenAI-compatible stub that records what the backend sends it.
  */
 
-const ASSISTANT = 'Questions to Insights Assistant';
 const HISTORIAN = 'Cup historian';
 const HISTORIAN_DESCRIPTION = 'Answers questions about World Cup history';
 const HISTORIAN_INSTRUCTIONS =
@@ -79,33 +87,22 @@ async function openHub(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
-function startChatButton(page: Page, name: string): Locator {
-  return page.getByRole('button', { name: `Start chat with ${name}` });
-}
-
-/** Starts a chat from the agent's hub card and waits for its session. */
-async function startChatFromCard(page: Page, name: string): Promise<void> {
-  await openHub(page);
-  await startChatButton(page, name).click();
-  await expect(page.getByText(`Session "${name}" created`)).toBeVisible();
-  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
-}
-
-function composer(page: Page): Locator {
-  return page.getByPlaceholder('Ask a follow-up question…');
-}
-
-async function send(page: Page, question: string): Promise<void> {
-  await composer(page).fill(question);
-  await page.getByRole('button', { name: 'Send message' }).click();
-}
-
-/** Waits until `question` has been answered `answers` times in the chat. */
-async function expectAnswered(page: Page, answers: number): Promise<void> {
-  await expect(page.getByText(STUB_ANSWER)).toHaveCount(answers);
+async function openWorkflows(page: Page): Promise<void> {
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Workflows', exact: true })
+    .click();
   await expect(
-    page.getByRole('button', { name: 'Send message' }),
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
   ).toBeVisible();
+}
+
+/** Runs the agent's workflow (`agent:<id>`) on `question`, expecting it to end in `done`. */
+async function runAgent(page: Page, id: string, question: string): Promise<void> {
+  const result = await runWorkflow(page, `agent:${id}`, { question });
+  expect(result.status, result.body).toBe(200);
+  expect(result.error, result.body).toBeUndefined();
+  expect(result.text).toContain(STUB_ANSWER);
 }
 
 /** The first streamed request of the turn that asked `question`. */
@@ -117,46 +114,12 @@ function firstTurnRequest(question: string): StubRequest {
   return requests[0];
 }
 
-function sessionRow(page: Page, name: string): Locator {
-  return page
-    .getByRole('navigation', { name: 'Sessions', exact: true })
-    .locator('[data-testid^="session-"]')
-    .filter({ hasText: name });
-}
-
 /** Rows of `world_cup.matches` in the suite's World Cup database. */
 async function matchRowCount(): Promise<number> {
   return Number(await worldCupScalar('select count(*) from world_cup.matches'));
 }
 
-test('start chat on an agent card opens a session bound to the agent', async ({
-  page,
-}) => {
-  await startChatFromCard(page, HISTORIAN);
-
-  await expect(page.getByTestId('session-agent')).toHaveText(HISTORIAN);
-  const welcome = page.getByTestId('session-welcome');
-  await expect(welcome).toContainText(`${HISTORIAN} is ready`);
-  await expect(welcome).toContainText(HISTORIAN_DESCRIPTION);
-  for (const starter of STARTERS) {
-    await expect(
-      welcome.getByRole('button', { name: starter, exact: true }),
-    ).toBeVisible();
-  }
-  await expect(welcome).not.toContainText('What data is available here?');
-
-  await welcome.getByRole('button', { name: STARTERS[0], exact: true }).click();
-  await expect(composer(page)).toHaveValue(STARTERS[0]);
-  expect(stub.requests, 'no message has been sent').toHaveLength(0);
-
-  await openSessions(page);
-  const row = sessionRow(page, HISTORIAN);
-  await expect(row.getByTestId('row-session-agent')).toHaveText(HISTORIAN);
-  await expect(row).toContainText(WORLD_CUP_DATASET);
-  await expect(row).toHaveClass(/list-row-selected/);
-});
-
-test('only Live agents and the Official agent offer Start chat', async ({
+test('only the workflows of Live agents and the Assistant can be run, and no agent page offers a chat', async ({
   page,
 }) => {
   await createUserAgent(page, {
@@ -164,33 +127,28 @@ test('only Live agents and the Official agent offer Start chat', async ({
     datasets: [WORLD_CUP_DATASET],
   });
 
+  await openWorkflows(page);
+  await expect(page.getByTestId('workflow-agent:assistant')).toBeVisible();
+  await expect(page.getByTestId(`workflow-agent:${historianId}`)).toBeVisible();
+  await expect(page.getByText('Claims triage')).toHaveCount(0);
+
   await openHub(page);
-  await expect(startChatButton(page, ASSISTANT)).toBeVisible();
-  await expect(startChatButton(page, HISTORIAN)).toBeVisible();
-  await expect(startChatButton(page, 'Claims triage')).toHaveCount(0);
+  await expect(page.getByTestId(`agent-card-${historianId}`)).toBeVisible();
   const system = page.getByTestId('agent-section-system');
   await system.getByTestId('agent-show-more-system').click();
   await expect(
-    system.getByRole('button', { name: /^Start chat with / }),
+    page.getByRole('button', { name: /^Start chat with / }),
   ).toHaveCount(0);
 
-  await startChatButton(page, ASSISTANT).click();
-  await expect(page.getByPlaceholder('My new session')).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'New conversation', exact: true }),
-  ).toBeVisible();
-
-  await openHub(page);
-  await page.getByTestId(`agent-${historianId}`).click();
-  await expect(
-    page.getByRole('heading', { name: HISTORIAN, exact: true }),
-  ).toBeVisible();
-  await page.getByTestId('agent-start-chat').click();
-  await expect(page.getByText(`Session "${HISTORIAN}" created`)).toBeVisible();
-  await expect(page.getByTestId('session-agent')).toHaveText(HISTORIAN);
+  await openWorkflowPage(page, `agent:${historianId}`, HISTORIAN);
+  await expect(page.getByTestId('workflow-execute')).toBeVisible();
+  await openRunTab(page);
+  // A user agent runs over its own datasets: the Run tab has a question only.
+  await expect(page.getByTestId('workflow-input-question')).toBeVisible();
+  await expect(page.getByTestId('workflow-input-datasets')).toHaveCount(0);
 });
 
-test("start chat is unavailable when none of the agent's datasets exist", async ({
+test("a run is unavailable when none of the agent's datasets exist", async ({
   page,
 }) => {
   await seedDataset(page, 'Scratch', datasourceId);
@@ -201,16 +159,17 @@ test("start chat is unavailable when none of the agent's datasets exist", async 
   await publishAgent(page, scratchId);
   await deleteDataset(page, 'Scratch');
 
-  await openHub(page);
-  const button = startChatButton(page, 'Scratch analyst');
-  await expect(button).toBeDisabled();
-  await expect(button).toHaveAttribute(
-    'title',
+  await openWorkflowPage(page, `agent:${scratchId}`, 'Scratch analyst');
+  await openRunTab(page);
+  const run = page.getByTestId('workflow-run');
+  await expect(run).toBeDisabled();
+  await expect(run).toHaveAttribute('title', "None of this agent's datasets exist");
+  await expect(page.getByTestId('workflow-run-requirement')).toHaveText(
     "None of this agent's datasets exist",
   );
 });
 
-test("the agent's Live instructions and model shape every turn", async ({
+test("the agent's Live instructions and model shape every run", async ({
   page,
 }) => {
   await saveAgentDraft(page, historianId, {
@@ -218,10 +177,8 @@ test("the agent's Live instructions and model shape every turn", async ({
     model: 'historian-deployment',
   });
   await publishAgent(page, historianId);
-  await startChatFromCard(page, HISTORIAN);
 
-  await send(page, 'Who won in 2014?');
-  await expectAnswered(page, 1);
+  await runAgent(page, historianId, 'Who won in 2014?');
 
   const first = firstTurnRequest('Who won in 2014?');
   expect(first.path).toContain('/deployments/historian-deployment/');
@@ -255,8 +212,7 @@ test("the agent's Live instructions and model shape every turn", async ({
     model: 'historian-deployment',
   });
 
-  await send(page, 'And in 2010?');
-  await expectAnswered(page, 2);
+  await runAgent(page, historianId, 'And in 2010?');
 
   const next = systemTexts(firstTurnRequest('And in 2010?')).join('\n');
   expect(next).toContain('Answer in one sentence.');
@@ -288,11 +244,13 @@ test("instructions can't switch off the read-only guard", async ({ page }) => {
         };
   const rowsBefore = await matchRowCount();
 
-  await startChatFromCard(page, 'Cleaner');
-  await send(page, 'Tidy up the data');
-  await expectAnswered(page, 1);
+  await openWorkflowPage(page, `agent:${cleanerId}`, 'Cleaner');
+  await openRunTab(page);
+  await fillRun(page, 'Tidy up the data');
+  await page.getByTestId('workflow-run').click();
+  await expect(runAnswer(page)).toContainText(STUB_ANSWER);
 
-  await page.getByText('Data used (1 query)').click();
+  await runAnswer(page).getByText('Data used (1 query)').click();
   await expect(page.getByText('run_readonly_sql — failed')).toBeVisible();
   await expect(
     page.getByText('Only read-only SELECT / WITH queries can be run.', {
@@ -304,12 +262,10 @@ test("instructions can't switch off the read-only guard", async ({ page }) => {
   expect(await matchRowCount()).toBe(rowsBefore);
 });
 
-test('deleting the agent keeps its sessions on the plain assistant', async ({
+test('deleting the agent keeps its runs, readable from Runs', async ({
   page,
 }) => {
-  await startChatFromCard(page, HISTORIAN);
-  await send(page, 'Who won in 2014?');
-  await expectAnswered(page, 1);
+  await runAgent(page, historianId, 'Who won in 2014?');
 
   await openHub(page);
   await page.getByTestId(`agent-${historianId}`).click();
@@ -317,27 +273,14 @@ test('deleting the agent keeps its sessions on the plain assistant', async ({
   await page.getByTestId('agent-delete').click();
   await expect(page.getByText(`Agent "${HISTORIAN}" deleted`)).toBeVisible();
 
-  await openSessions(page);
-  await sessionRow(page, HISTORIAN).click();
-  await expect(page.getByText('Who won in 2014?').first()).toBeVisible();
-  await expect(page.getByText(STUB_ANSWER)).toHaveCount(1);
-  await expect(page.getByTestId('session-agent')).toHaveText(
-    `${HISTORIAN} · agent deleted`,
-  );
-  await openSessions(page);
-  await expect(
-    sessionRow(page, HISTORIAN).getByTestId('row-session-agent'),
-  ).toHaveText(`${HISTORIAN} · agent deleted`);
-  await sessionRow(page, HISTORIAN).click();
-
-  await send(page, 'And in 2010?');
-  await expectAnswered(page, 2);
-  const systems = systemTexts(firstTurnRequest('And in 2010?')).join('\n');
-  expect(systems).toContain(BASE_PROMPT_START);
-  expect(systems).not.toContain(AGENT_BLOCK_START);
-  expect(firstTurnRequest('And in 2010?').path).toContain(
-    '/deployments/stub-deployment/',
-  );
+  await railItem(page, 'Runs').click();
+  const row = page
+    .getByTestId('row-run-title')
+    .filter({ hasText: 'Who won in 2014?' });
+  await expect(row).toBeVisible();
+  await row.click();
+  await expect(page.getByTestId('run-detail-answer')).toContainText(STUB_ANSWER);
+  await expect(page.getByTestId('run-detail-status')).toHaveText('Run succeeded');
 });
 
 /** Skill names in the `<available_skills>` catalog of a request. */
@@ -349,7 +292,7 @@ function catalogSkills(request: StubRequest): string[] {
   return [...catalog[0].matchAll(/<name>([^<]+)<\/name>/g)].map((m) => m[1]);
 }
 
-test("the agent's tool selection and skills apply to every turn", async ({
+test("the agent's tool selection and skills apply to every run", async ({
   page,
 }) => {
   await createSkill(page, {
@@ -365,14 +308,9 @@ test("the agent's tool selection and skills apply to every turn", async ({
     datasets: [WORLD_CUP_DATASET],
   });
   await publishAgent(page, financeId);
-  await startChatFromCard(page, 'Finance helper');
 
-  for (const [index, question] of [
-    'Who won in 2014?',
-    'And in 2010?',
-  ].entries()) {
-    await send(page, question);
-    await expectAnswered(page, index + 1);
+  for (const question of ['Who won in 2014?', 'And in 2010?']) {
+    await runAgent(page, financeId, question);
     const request = firstTurnRequest(question);
     expect(request.tools).toContain('sample_rows');
     for (const tool of [
@@ -386,32 +324,19 @@ test("the agent's tool selection and skills apply to every turn", async ({
   }
 });
 
-test('a Questions to Insights v2 session runs v2 on every turn', async ({
+test('a Questions to Insights v2 run runs v2 on every question', async ({
   page,
 }) => {
-  const V2 = 'Questions to Insights v2';
   const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
-  // Start chat on v2 opens New conversation with v2 selected (R52, R64).
-  await openHub(page);
-  await startChatButton(page, V2).click();
-  await expect(page.getByTestId('new-session-agent')).toHaveText(
-    new RegExp(V2),
-  );
-  await page.getByPlaceholder('My new session').fill('V2 turn');
-  await page
-    .getByRole('button', { name: new RegExp(`^${WORLD_CUP_DATASET}`) })
-    .click();
-  await page.getByRole('button', { name: /^Create$/ }).click();
-  await expect(page.getByText('Session "V2 turn" created')).toBeVisible();
-  await expect(page.getByTestId('session-agent')).toHaveText(V2);
 
-  for (const [index, question] of [
-    'How many matches are there?',
-    'And in 2014?',
-  ].entries()) {
-    await send(page, question);
-    await expectAnswered(page, index + 1);
-    // The turn ran v2 (R61): its prompt and only its three data tools.
+  for (const question of ['How many matches are there?', 'And in 2014?']) {
+    const result = await runWorkflow(page, 'qti-v2-turn', {
+      question,
+      datasets: [WORLD_CUP_DATASET],
+    });
+    expect(result.status, result.body).toBe(200);
+    expect(result.text).toContain(STUB_ANSWER);
+    // The run ran v2 (R61): its prompt and only its three data tools.
     const request = firstTurnRequest(question);
     expect(systemTexts(request)[0]).toContain('You are Questions to Insights v2');
     expect(systemTexts(request).join('\n')).not.toContain(BASE_PROMPT_START);

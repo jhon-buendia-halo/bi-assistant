@@ -13,12 +13,26 @@ import {
 
 describe('qti-v2-turn steps (agents.md 5.11)', () => {
   it('lists the four steps with their ids and titles', () => {
-    expect(QTI_V2_TURN_STEPS).toEqual([
+    expect(QTI_V2_TURN_STEPS.map(({ id, title }) => ({ id, title }))).toEqual([
       { id: 'receive-question', title: 'Receive question' },
       { id: 'load-catalog', title: 'Load catalog' },
       { id: 'analyse', title: 'Analyse' },
       { id: 'wrap-up', title: 'Wrap up' },
     ]);
+  });
+
+  it('marks only Analyse as the agent step, and each step passes on what the next takes', () => {
+    expect(QTI_V2_TURN_STEPS.map((step) => step.kind)).toEqual([
+      'code',
+      'code',
+      'agent',
+      'code',
+    ]);
+    for (let i = 1; i < QTI_V2_TURN_STEPS.length; i++) {
+      expect(QTI_V2_TURN_STEPS[i].input).toEqual(
+        QTI_V2_TURN_STEPS[i - 1].output,
+      );
+    }
   });
 
   describe('receiveQuestion', () => {

@@ -2,9 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Page } from '@playwright/test';
 import { test, expect, Env } from './fixtures/app.fixture';
-import { createWorldCupSession, openSessions } from './helpers/app-actions';
 import { apiBase, seedWorldCupDataset } from './helpers/agents-api';
 import { startLlmStub } from './helpers/llm-stub';
+import { runAssistantOk } from './helpers/runs-api';
 import { scenarioStep } from './support/demo-captions';
 import {
   COPILOT_NOT_SIGNED_IN,
@@ -157,14 +157,6 @@ test(
     await scenarioStep(page, 'Then I see "Configuration saved"', async () => {
       await expect(page.getByText('Configuration saved', { exact: true })).toBeVisible();
     });
-    await scenarioStep(page, 'And the new-session composer shows "auto · GitHub Copilot"', async () => {
-      await openSessions(page);
-      await page
-        .locator('header')
-        .getByRole('button', { name: 'Start New Conversation' })
-        .click();
-      await expect(page.getByText('auto · GitHub Copilot', { exact: true })).toBeVisible();
-    });
 
     // The stored settings hold the provider and model only (R55).
     const settings = await (
@@ -233,7 +225,7 @@ test('a Copilot Free seat lists no models', async ({
   await expect(modelOptions(page)).toHaveCount(0);
 });
 
-test('a chat turn runs on GitHub Copilot', async ({
+test('a run of the Assistant runs on GitHub Copilot', async ({
   appDataDir,
   launchApp,
 }) => {
@@ -250,28 +242,26 @@ test('a chat turn runs on GitHub Copilot', async ({
   await putSettings(page, { provider: 'copilot', model: 'auto' });
   await page.reload();
 
-  await createWorldCupSession(page);
   const question = 'Who won the 2018 World Cup final and what was the score?';
-  await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-  await page.getByLabel('Send message').click();
+  const result = await runAssistantOk(page, question);
 
-  // The answer streams (R62): part of it shows while the turn still runs.
-  await expect(page.getByText('France won the 2018')).toBeVisible();
-  await expect(page.getByLabel('Stop response')).toBeVisible();
-  await expect(page.getByText(FINAL_ANSWER)).toBeVisible();
-  await expect(page.getByLabel('Send message')).toBeVisible();
+  // The answer streams (R62): it arrives in several pieces, not one.
+  expect(result.events.filter((e) => e.type === 'text').length).toBeGreaterThan(1);
+  expect(result.text).toContain(FINAL_ANSWER);
+  expect(result.run?.status).toBe('success');
 
-  // The thinking steps show the app's own tool call, run by the app (R61).
-  // The step list collapses once the answer is done, so the step is attached,
-  // not visible; the SQL ran against the World Cup database and returned a row.
-  await expect(page.getByText('run_readonly_sql — 1 row')).toBeAttached();
+  // The thinking steps show the app's own tool call, run by the app (R61):
+  // the SQL ran against the World Cup database and returned a row.
+  expect(
+    result.events.some((e) => e.type === 'tool' && JSON.stringify(e).includes('run_readonly_sql')),
+  ).toBe(true);
   const toolResult = log().find(
     (e) => e.method === 'session.tools.handlePendingToolCall',
   );
   expect(String(toolResult?.result)).toContain('matches');
   expect(String(toolResult?.result)).not.toMatch(/"error"/i);
 
-  // The turn's session offered the app's tools (R61).
+  // The run's turn offered the app's tools (R61).
   const turn = log().find(
     (e) => e.method === 'session.create' && e.tools?.includes('run_readonly_sql'),
   );
@@ -281,7 +271,7 @@ test('a chat turn runs on GitHub Copilot', async ({
   ).toBe(true);
 });
 
-test('a tool call written as text is never shown', async ({
+test('a tool call written as text is never shown in a run', async ({
   appDataDir,
   launchApp,
 }) => {
@@ -299,18 +289,16 @@ test('a tool call written as text is never shown', async ({
   await putSettings(page, { provider: 'copilot', model: 'auto' });
   await page.reload();
 
-  await createWorldCupSession(page);
-  await page
-    .getByPlaceholder('Ask a follow-up question…')
-    .fill('How many matches are in the data?');
-  await page.getByLabel('Send message').click();
+  const result = await runAssistantOk(page, 'How many matches are in the data?');
 
   // The model first wrote the tool's arguments as its message; the app asked
   // once for the real call (R66), so the answer follows a real tool run.
-  await expect(page.getByText(FINAL_ANSWER)).toBeVisible();
-  await expect(page.getByText('run_readonly_sql — 1 row')).toBeAttached();
-  await expect(page.getByText('Count the matches"}')).toHaveCount(0);
-  await expect(page.getByText(`{"sql":`)).toHaveCount(0);
+  expect(result.text).toContain(FINAL_ANSWER);
+  expect(
+    result.events.some((e) => e.type === 'tool' && JSON.stringify(e).includes('run_readonly_sql')),
+  ).toBe(true);
+  expect(result.text).not.toContain('Count the matches"}');
+  expect(result.text).not.toContain('{"sql":');
   const sends = log().filter((e) => e.method === 'session.send');
   expect(
     sends.some(

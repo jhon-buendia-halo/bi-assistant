@@ -273,6 +273,16 @@ describe('ReadinessBridge (agents.md 3.13)', () => {
       expect(result.summary.reportId).toBe('r-new');
     });
 
+    it('a report from a run stores runId and no sessionId (1.23.16)', async () => {
+      const ctx = build(['World Cup']);
+      await ctx.bridge.assessReadiness({ sessionId: 'run-7f3a' });
+      expect(ctx.readiness.assess).toHaveBeenCalledWith({
+        datasourceId: 'ds-pg',
+        entities: ['wc.public.matches', 'wc.public.teams'],
+        runId: '7f3a',
+      });
+    });
+
     it('asks to name one when the session has several', async () => {
       const ctx = build(['Sales', 'World Cup']);
       for (const call of [

@@ -55,7 +55,7 @@ A user can ask a new Official agent, the **Data Readiness Agent**, how ready a c
 
 - New [capabilities/data-readiness](../../capabilities/data-readiness/spec.md): concepts, rules, Gherkin flows.
 - [capabilities/agents-evals](../../capabilities/agents-evals/spec.md): the Official agents list and the Start chat requirement.
-- [capabilities/sessions-chat](../../capabilities/sessions-chat/spec.md): R52, R61, R64 (the new agent's sessions, its panel item kind `readiness` and the Agent picker).
+- [capabilities/agent-answers](../../capabilities/agent-answers/spec.md): R52, R61, R64 (the new agent's sessions, its panel item kind `readiness` and the Agent picker).
 - [system/architecture.md](../../system/architecture.md): a new ADR. The deterministic engine owns all scores, and profiling queries are a connector capability outside the user SQL path.
 - [system/agents.md](../../system/agents.md): the registry row, a new agent section, the tool contracts, the skill, the prompt appendix, and the evals.
 - [system/api.md](../../system/api.md): the three `/data-readiness/assessments` routes, and the stream event `readiness-report`.

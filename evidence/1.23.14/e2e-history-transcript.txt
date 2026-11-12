@@ -1,0 +1,132 @@
+# GET /workflow-runs
+{
+  "runs": [
+    {
+      "id": "db30532d-d3d4-46eb-a247-fa104d6514ce",
+      "workflowId": "agent:assistant",
+      "workflowName": "Assistant",
+      "status": "success",
+      "title": "Put the notes in the panel",
+      "startedAt": "2026-11-12T00:36:44.372Z",
+      "finishedAt": "2026-11-12T00:36:44.472Z"
+    }
+  ]
+}
+
+# GET /workflow-runs/db30532d-d3d4-46eb-a247-fa104d6514ce
+{
+  "id": "db30532d-d3d4-46eb-a247-fa104d6514ce",
+  "workflowId": "agent:assistant",
+  "workflowName": "Assistant",
+  "input": {
+    "question": "Put the notes in the panel",
+    "datasets": [
+      "World Cup Core"
+    ],
+    "careful": false
+  },
+  "status": "success",
+  "steps": [
+    {
+      "id": "answer",
+      "title": "Answer",
+      "status": "success",
+      "output": {
+        "calls": [],
+        "stopped": false
+      }
+    }
+  ],
+  "datasets": [
+    "World Cup Core"
+  ],
+  "startedAt": "2026-11-12T00:36:44.372Z",
+  "ownerId": "local",
+  "createdAt": "2026-11-12T00:36:44.372Z",
+  "updatedAt": "2026-11-12T00:36:44.472Z",
+  "output": {
+    "calls": [],
+    "stopped": false
+  },
+  "answer": {
+    "role": "assistant",
+    "content": "The notes are in the panel.",
+    "at": "2026-11-12T00:36:44.472Z"
+  },
+  "question": "Put the notes in the panel",
+  "panelItems": [
+    {
+      "id": "a7a76e6d-b491-47ae-ab91-fd7de227468c",
+      "kind": "document",
+      "title": "Findings",
+      "shownAt": "2026-11-12T00:36:44.433Z",
+      "markdown": "# Findings\n\nBrazil scored most."
+    },
+    {
+      "id": "5c8588cf-c0ac-4c06-a048-36c1b42ed734",
+      "kind": "file",
+      "title": "summary.md",
+      "shownAt": "2026-11-12T00:36:44.441Z",
+      "path": "notes/summary.md",
+      "bytes": 43
+    }
+  ],
+  "visualizations": [],
+  "finishedAt": "2026-11-12T00:36:44.472Z"
+}
+
+# GET /workflow-runs/db30532d-d3d4-46eb-a247-fa104d6514ce/panel-items/5c8588cf-c0ac-4c06-a048-36c1b42ed734/file
+{
+  "item": {
+    "id": "5c8588cf-c0ac-4c06-a048-36c1b42ed734",
+    "kind": "file",
+    "title": "summary.md",
+    "shownAt": "2026-11-12T00:36:44.441Z",
+    "path": "notes/summary.md",
+    "bytes": 43
+  },
+  "contentType": "text/markdown",
+  "text": "# Summary notes\n\nGermany reached the final."
+}
+
+# GET /workflow-runs/db30532d-d3d4-46eb-a247-fa104d6514ce/panel-items/5c8588cf-c0ac-4c06-a048-36c1b42ed734/download
+{
+  "content-disposition": "attachment; filename=\"summary.md\"",
+  "body": "# Summary notes\n\nGermany reached the final."
+}
+
+# DELETE /workflow-runs/db30532d-d3d4-46eb-a247-fa104d6514ce
+{
+  "ok": true,
+  "message": "Run deleted"
+}
+
+# GET /workflow-runs/db30532d-d3d4-46eb-a247-fa104d6514ce (after delete)
+{
+  "message": "Run \"db30532d-d3d4-46eb-a247-fa104d6514ce\" not found",
+  "error": "Not Found",
+  "statusCode": 404
+}
+
+# GET /workflow-runs/a9c05136-4b0a-4279-ace7-0c9b13376157 (after a restart)
+{
+  "id": "a9c05136-4b0a-4279-ace7-0c9b13376157",
+  "workflowId": "agent:assistant",
+  "workflowName": "Assistant",
+  "input": {
+    "question": "Hold this one",
+    "datasets": [
+      "World Cup Core"
+    ],
+    "careful": false
+  },
+  "status": "failed",
+  "steps": [],
+  "datasets": [],
+  "startedAt": "2026-11-12T00:36:44.525Z",
+  "ownerId": "local",
+  "createdAt": "2026-11-12T00:36:44.525Z",
+  "updatedAt": "2026-11-12T00:36:45.214Z",
+  "error": "The app stopped before the run finished",
+  "finishedAt": "2026-11-12T00:36:45.214Z"
+}

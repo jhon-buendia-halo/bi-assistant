@@ -21,6 +21,7 @@ import {
   READINESS_REPORTS_STORE,
   SKILL_OVERRIDES_STORE,
   VERIFIED_QUERIES_STORE,
+  WORKFLOW_RUNS_STORE,
 } from './doc-store';
 import { SqliteDocStore } from './sqlite-doc-store';
 import { SqliteTransactions } from './sqlite-transactions';
@@ -53,6 +54,7 @@ const COLLECTIONS = [
   { token: SKILL_OVERRIDES_STORE, table: 'skill_overrides' },
   { token: AGENT_PROMPT_OVERRIDES_STORE, table: 'agent_prompt_overrides' },
   { token: READINESS_REPORTS_STORE, table: 'readiness_reports' },
+  { token: WORKFLOW_RUNS_STORE, table: 'workflow_runs' },
 ];
 
 const sqliteDbProvider: Provider = {

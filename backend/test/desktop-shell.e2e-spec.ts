@@ -43,13 +43,13 @@ describe('Backend for the desktop shell (e2e)', () => {
     backend = await boot(dataDir, {
       env: { INTELLIFY_API: 'off', BACKEND_INSTANCE_ID: 'instance-1721' },
     });
-    const res = await request(backend.url).get('/sessions').expect(200);
+    const res = await request(backend.url).get('/health').expect(200);
     expect(res.headers['x-backend-instance']).toBe('instance-1721');
   });
 
   it('sends no X-Backend-Instance without BACKEND_INSTANCE_ID', async () => {
     backend = await boot(dataDir, { env: { INTELLIFY_API: 'off' } });
-    const res = await request(backend.url).get('/sessions').expect(200);
+    const res = await request(backend.url).get('/health').expect(200);
     expect(res.headers['x-backend-instance']).toBeUndefined();
   });
 

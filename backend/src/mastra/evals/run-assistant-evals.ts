@@ -23,7 +23,7 @@ import { setAgentModelResolver } from '../model-resolver';
  * the app has, without opening an HTTP port.
  *
  * Outside a request nobody is signed in (ADR-0012), so the run is explicitly
- * Demo User's: its throwaway sessions and knowledge are Demo User's own.
+ * Demo User's: its throwaway run hosts and knowledge are Demo User's own.
  */
 async function main(): Promise<void> {
   const datasets = (process.env['EVAL_DATASETS'] ?? '')
@@ -89,11 +89,11 @@ async function runEvals(
   agentKey: string,
 ): Promise<void> {
   // Same Nest app the eval-runs.service in-app runner uses, so a throwaway
-  // session for create_visual/update_visual works here too — no CLI-only
+  // run host for create_visual/update_visual works here too — no CLI-only
   // degrade needed.
   const sessions = app.get(SessionsService);
   // Same curated-knowledge block a real chat turn gets from
-  // SessionsService.agentContext.
+  // TurnOptions.agentContext.
   const knowledgeBlock = await app
     .get(OntologyService)
     .definitionBlock(datasets);

@@ -155,7 +155,7 @@ Settings area, **LLM Configuration** ([../app-shell/spec.md](../app-shell/spec.m
 
 ## Flows
 
-E2E: `frontend/e2e/llm-settings.spec.ts` covers "LenAI needs a deployment name and a base URL", "Never shows the stored key", "Keeps a key saved under the former development secret", "Asks for the key again when the app secret changed", "Offers the effort levels of the chosen model", "Tests a reasoning model at its lowest effort", "Saves the chosen effort and uses it on the next turn", "Sets the reasoning effort from the new-session composer" and "Shows that no model is configured", against a local stub of the LenAI gateway. The other scenarios need a real provider and are not automated yet.
+E2E: `frontend/e2e/llm-settings.spec.ts` covers "LenAI needs a deployment name and a base URL", "Never shows the stored key", "Keeps a key saved under the former development secret", "Asks for the key again when the app secret changed", "Offers the effort levels of the chosen model", "Tests a reasoning model at its lowest effort", and "Saves the chosen effort and uses it on the next turn" (a workflow run), against a local stub of the LenAI gateway. The other scenarios need a real provider and are not automated yet.
 
 ```gherkin
 Feature: LLM settings
@@ -209,14 +209,6 @@ Feature: LLM settings
     And I send the next message
     Then the answer is produced by the new model
 
-  Scenario: Sets the reasoning effort from the new-session composer
-    Given a configuration is saved
-    When I click "Sessions" on the rail
-    And I click "Start New Conversation"
-    Then I see the saved model name and the effort "high"
-    When I choose "Low" from the reasoning effort menu
-    Then I see "Reasoning effort set to low"
-
   Scenario: Offers the effort levels of the chosen model
     When I choose the provider "LenAI (Halo gateway)" and enter the deployment name "gpt-5"
     Then the "Reasoning effort" select offers "Minimal", "Low", "Medium" and "High"
@@ -244,14 +236,8 @@ Feature: LLM settings
     Then I see "Configuration saved"
     When I reopen "LLM Configuration"
     Then "Medium" is selected
-    When I ask a question in a session
+    When I run the Assistant on a question
     Then the model is asked for the effort "medium"
-
-  Scenario: Shows that no model is configured
-    Given nothing is configured
-    When I click "Sessions" on the rail
-    And I click "Start New Conversation"
-    Then I see "No model configured"
 
   Scenario: Keeps a key saved under the former development secret
     Given a LenAI configuration was saved while the app used the former development secret
@@ -272,7 +258,7 @@ Feature: LLM settings
     And the notice is gone
 ```
 
-E2E: `frontend/e2e/llm-custom-endpoint.spec.ts` for the Feature "Custom endpoint connection" covers, in the OpenAI style, "Configures an OpenAI-compatible endpoint by loading models, testing and saving", "A chat turn runs on the custom endpoint", "Uses an endpoint that needs no key", "Reports an unreachable endpoint", "Points at the version path when the endpoint answers 404" and "Never sends another provider's key to a custom endpoint", and in the Anthropic style "Configures an Anthropic-compatible endpoint by loading models, testing and saving" (with a chat turn and the composer chip), "Uses an endpoint that needs no key", "Removes trailing slashes and accepts /v1 in the Anthropic style" and "Reports a rejected key"; "Passes the test on a server without strict JSON-schema support" and "Reports a model list that times out" are not automated yet. The steps run against local stub servers (`helpers/llm-stub.ts` for the OpenAI style, `helpers/anthropic-stub.ts` for the Anthropic style) that record each request's path, headers and body; the controls carry the test ids of [../../system/ui.md](../../system/ui.md) 4.9 (`llm-api-style`, `llm-load-models`, `llm-model-options`).
+E2E: `frontend/e2e/llm-custom-endpoint.spec.ts` for the Feature "Custom endpoint connection" covers, in the OpenAI style, "Configures an OpenAI-compatible endpoint by loading models, testing and saving", "A run of the Assistant runs on the custom endpoint", "Uses an endpoint that needs no key", "Reports an unreachable endpoint", "Points at the version path when the endpoint answers 404" and "Never sends another provider's key to a custom endpoint", and in the Anthropic style "Configures an Anthropic-compatible endpoint by loading models, testing and saving" (with a run of the Assistant), "Uses an endpoint that needs no key", "Removes trailing slashes and accepts /v1 in the Anthropic style" and "Reports a rejected key"; "Passes the test on a server without strict JSON-schema support" and "Reports a model list that times out" are not automated yet. The steps run against local stub servers (`helpers/llm-stub.ts` for the OpenAI style, `helpers/anthropic-stub.ts` for the Anthropic style) that record each request's path, headers and body; the controls carry the test ids of [../../system/ui.md](../../system/ui.md) 4.9 (`llm-api-style`, `llm-load-models`, `llm-model-options`).
 
 ```gherkin
 Feature: Custom endpoint connection
@@ -308,12 +294,9 @@ Feature: Custom endpoint connection
     When I click "Save connection"
     Then I see "Configuration saved"
 
-  Scenario: A chat turn runs on the custom endpoint
+  Scenario: A run of the Assistant runs on the custom endpoint
     Given a custom endpoint configuration with the model "qwen3-8b" at "http://127.0.0.1:8317/v1" is saved
-    When I click "Sessions" on the rail
-    And I click "Start New Conversation"
-    Then I see "qwen3-8b · 127.0.0.1:8317"
-    When I ask a question
+    When I run the Assistant on a question
     Then the server received a request to "/v1/chat/completions" for the model "qwen3-8b"
     And I see the assistant's answer
 
@@ -398,7 +381,6 @@ Feature: GitHub Copilot connection
     Then I see a message starting "Connection successful — copilot/auto"
     When I click "Save connection"
     Then I see "Configuration saved"
-    And the new-session composer shows "auto · GitHub Copilot"
 
   Scenario: Says how to sign in when no GitHub login is found
     Given this machine is not signed in to GitHub
@@ -420,20 +402,18 @@ Feature: GitHub Copilot connection
     When I choose the provider "GitHub Copilot" and click "Load models"
     Then the model list reads "Your Copilot plan lists no models to choose — leave the model as auto."
 
-  Scenario: A chat turn runs on GitHub Copilot
+  Scenario: A run of the Assistant runs on GitHub Copilot
     Given GitHub Copilot is saved as the provider with the model "auto"
-    And a session on the "World Cup Core" dataset
-    When I ask "Who won the 2018 World Cup final and what was the score?"
+    When I run the Assistant on the "World Cup Core" dataset and ask "Who won the 2018 World Cup final and what was the score?"
     Then the answer streams in as it is written
     And the thinking steps show the app's own tool calls, such as "run_readonly_sql"
     And the answer names France and the score 4–2
 
-  Scenario: A tool call written as text is never shown
+  Scenario: A tool call written as text is never shown in a run
     Given GitHub Copilot is saved as the provider
-    And a session on the "World Cup Core" dataset
     And the Copilot model answers my question with the arguments of "run_readonly_sql" written as text
-    When I ask a question
-    Then I never see those arguments in the chat
+    When I run the Assistant on the "World Cup Core" dataset and ask a question
+    Then I never see those arguments in the run's answer
     And the thinking steps show "run_readonly_sql" run by the app
     And I see the answer that follows
 

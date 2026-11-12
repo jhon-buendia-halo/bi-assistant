@@ -1,6 +1,6 @@
-import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
-import { createWorldCupSession } from './helpers/app-actions';
+import { WORLD_CUP_DATASET } from './helpers/app-actions';
+import { runAnswer, runAssistantInTab } from './helpers/run-ui';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import {
   LlmStub,
@@ -11,7 +11,8 @@ import {
 
 /**
  * Mirrors the clarification scenarios of the Feature "Chat answers and
- * reliability signals" in specs/capabilities/sessions-chat/spec.md
+ * reliability signals" in specs/capabilities/agent-answers/spec.md, run in
+ * the Assistant's Run tab
  * ("Answering a clarification" and "A malformed clarification is asked
  * again, never shown without options"). The model is the recording stub.
  */
@@ -45,11 +46,6 @@ function afterToolResult(request: StubRequest): boolean {
   return request.messages.at(-1)?.role === 'tool';
 }
 
-async function ask(page: Page, question: string): Promise<void> {
-  await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-  await page.getByRole('button', { name: 'Send message' }).click();
-}
-
 test('answering a clarification', async ({ page }) => {
   stub.reply = (request) => {
     if (isTurn(request, QUESTION)) {
@@ -62,26 +58,25 @@ test('answering a clarification', async ({ page }) => {
     }
     return { text: FOLLOW_UP };
   };
-  await createWorldCupSession(page);
-  await ask(page, QUESTION);
+  await runAssistantInTab(page, QUESTION, WORLD_CUP_DATASET);
 
-  const card = page.locator('div.card', { hasText: CLARIFY });
+  const card = runAnswer(page).locator('div.card', { hasText: CLARIFY });
   await expect(card).toBeVisible();
   await expect(
     card.getByRole('button', { name: /1\s*Most titles/ }),
   ).toBeVisible();
   const winRate = card.getByRole('button', { name: /2\s*Highest win rate/ });
   await expect(winRate).toContainText('share of matches won');
-  await expect(page.getByText('Thinking')).toHaveCount(0);
+  await expect(page.getByTestId('workflow-run-live')).toHaveCount(0);
 
   await winRate.click();
-  await expect(page.getByText(FOLLOW_UP)).toBeVisible();
+  await expect(runAnswer(page)).toContainText(FOLLOW_UP);
   const followUp = stub.requests.filter((request) =>
     isTurn(request, 'Highest win rate'),
   );
   expect(
     followUp.length,
-    '"Highest win rate" sent as my next message',
+    '"Highest win rate" sent as the next run\'s question',
   ).toBeGreaterThan(0);
   // The model gets the question with the answer, so it continues (R44).
   expect(
@@ -109,10 +104,9 @@ test('a malformed clarification is asked again, never shown without options', as
       },
     };
   };
-  await createWorldCupSession(page);
-  await ask(page, QUESTION);
+  await runAssistantInTab(page, QUESTION, WORLD_CUP_DATASET);
 
-  const cards = page.locator('div.card', { hasText: CLARIFY });
+  const cards = runAnswer(page).locator('div.card', { hasText: CLARIFY });
   await expect(cards).toHaveCount(1);
   await expect(
     cards.getByRole('button', { name: /1\s*Most titles/ }),

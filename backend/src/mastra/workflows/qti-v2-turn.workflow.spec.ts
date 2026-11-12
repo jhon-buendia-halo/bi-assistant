@@ -29,6 +29,7 @@ import { RequestContext } from '@mastra/core/request-context';
 import { qtiV2TurnWorkflow } from './qti-v2-turn.workflow';
 import {
   QTI_V2_TURN_RUNTIME_KEY,
+  QTI_V2_TURN_STEPS,
   QTI_V2_TURN_WORKFLOW_ID,
   type QtiV2TurnRuntime,
 } from './qti-v2-turn.steps';
@@ -74,6 +75,29 @@ describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
       ['analyse', 'Analyse'],
       ['wrap-up', 'Wrap up'],
     ]);
+  });
+
+  // The agent's Graph tab draws the catalogue (agents-evals R108): its
+  // field names must be the built steps' own schema fields, in order.
+  it("matches the step catalogue's ids and input and output fields", () => {
+    const built = workflow.steps as unknown as {
+      id: string;
+      inputSchema: { shape: Record<string, unknown> };
+      outputSchema: { shape: Record<string, unknown> };
+    }[];
+    expect(
+      built.map((step) => ({
+        id: step.id,
+        input: Object.keys(step.inputSchema.shape),
+        output: Object.keys(step.outputSchema.shape),
+      })),
+    ).toEqual(
+      QTI_V2_TURN_STEPS.map((step) => ({
+        id: step.id,
+        input: [...step.input],
+        output: [...step.output],
+      })),
+    );
   });
 
   it('hands Analyse the trimmed question and the catalog, and wraps up its SQL calls', async () => {

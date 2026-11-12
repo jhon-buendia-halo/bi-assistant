@@ -585,7 +585,7 @@ test.describe('Feature: Synthetic data', () => {
     },
   );
 
-  test.describe('Chat', () => {
+  test.describe('Run', () => {
     const QUESTION = 'Give me 50 synthetic rows per table';
     const FILE = `${SLUG}-synthetic-postgresql-seed1.sql`;
     const ANSWER = `The script ${FILE} is in the panel to download.`;
@@ -622,28 +622,26 @@ test.describe('Feature: Synthetic data', () => {
       'Generate a synthetic script from the Data Readiness Agent',
       { tag: ['@demo', '@story-1.22.4'] },
       async ({ page }) => {
-        const panel = page.getByRole('complementary', {
-          name: 'Details panel',
-        });
+        const files = page.getByTestId('workflow-run-files');
         await scenarioStep(
           page,
-          `Given I started a chat with the Data Readiness Agent on the "${WORLD_CUP_DATASET}" dataset`,
+          `Given I opened the Data Readiness Agent's Run tab on the "${WORLD_CUP_DATASET}" dataset`,
           async () => {
-            await rail(page, 'Agents').click();
-            const start = page.getByRole('button', {
-              name: 'Start chat with Data Readiness Agent',
-            });
-            await expect(start).toBeEnabled();
-            await start.click();
-            await expect(page.getByTestId('session-welcome')).toBeVisible();
+            await rail(page, 'Workflows').click();
+            await page.getByTestId('workflow-agent:data-readiness').click();
+            await expect(page.getByTestId('workflow-detail-name')).toHaveText(
+              'Data Readiness Agent',
+            );
+            await page.getByTestId('workflow-execute').click();
+            await page
+              .getByTestId('workflow-input-dataset')
+              .selectOption({ label: WORLD_CUP_DATASET });
           },
         );
-        await scenarioStep(page, `When I ask "${QUESTION}"`, async () => {
-          await page
-            .getByPlaceholder('Ask a follow-up question…')
-            .fill(QUESTION);
-          await page.getByRole('button', { name: 'Send message' }).click();
-          await expect(page.getByText(ANSWER)).toBeVisible({
+        await scenarioStep(page, `When I run it on "${QUESTION}"`, async () => {
+          await page.getByTestId('workflow-input-question').fill(QUESTION);
+          await page.getByTestId('workflow-run').click();
+          await expect(page.getByTestId('run-answer')).toContainText(ANSWER, {
             timeout: 90_000,
           });
         });
@@ -677,12 +675,12 @@ test.describe('Feature: Synthetic data', () => {
         );
         await scenarioStep(
           page,
-          `And the panel shows "Synthetic data — ${WORLD_CUP_DATASET} (seed 1)" with the file "${FILE}"`,
+          `And the run lists "Synthetic data — ${WORLD_CUP_DATASET} (seed 1)" with the file "${FILE}"`,
           async () => {
-            await expect(panel).toContainText(
+            await expect(files).toContainText(
               `Synthetic data — ${WORLD_CUP_DATASET} (seed 1)`,
             );
-            await expect(panel).toContainText('CREATE TABLE');
+            await expect(files).toContainText(FILE);
           },
         );
         await scenarioStep(
@@ -690,7 +688,7 @@ test.describe('Feature: Synthetic data', () => {
           'And "Download file" downloads that .sql script, which starts with "-- Synthetic data for dataset "',
           async () => {
             const download = await downloadOf(page, () =>
-              panel.getByRole('button', { name: 'Download file' }).click(),
+              files.getByRole('button', { name: `Download ${FILE}` }).click(),
             );
             expect(download.suggestedFilename()).toBe(FILE);
             const text = fs.readFileSync(await download.path(), 'utf8');

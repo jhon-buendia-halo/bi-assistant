@@ -26,7 +26,7 @@ Jira lists **no child issues**. The original stories BA-85, BA-86 and BA-87 were
 
 ## Specs touched
 - System: [data-model](../../system/data-model.md) (data-models collection, versions, drift), [api](../../system/api.md) (`/datasets/:name/model*`, `/data-models/schema.json`), [agents](../../system/agents.md) (assistant tools `describe_entity` / `query_entities` / `sample_records`, `query-fixer`, `query-verifier`), [ui](../../system/ui.md) (data model view).
-- Capabilities: [datasets](../../capabilities/datasets/spec.md) (model per dataset, bootstrap on save), [metrics](../../capabilities/metrics/spec.md) (model becomes the editor of record), [sessions-chat](../../capabilities/sessions-chat/spec.md) (logical querying, raw-SQL flag), [datasources](../../capabilities/datasources/spec.md) (bindings per kind).
+- Capabilities: [datasets](../../capabilities/datasets/spec.md) (model per dataset, bootstrap on save), [metrics](../../capabilities/metrics/spec.md) (model becomes the editor of record), [agent-answers](../../capabilities/agent-answers/spec.md) (logical querying, raw-SQL flag), [datasources](../../capabilities/datasources/spec.md) (bindings per kind).
 
 ## Acceptance
 From the epic description (Jira has no separate acceptance list):

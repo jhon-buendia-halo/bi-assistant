@@ -30,10 +30,10 @@ The directory is created (recursively) at backend start if it does not exist.
 
 | Store | Location (relative to app data dir) | Technology (see Implementation note) | What goes in it | Owner |
 |---|---|---|---|---|
-| **App document store** | `app.sqlite` | Embedded SQLite, one table per collection, one JSON document per row | The application collections in section 3: connections, settings, datasets, sessions, inventories, verified queries, metrics, eval runs, knowledge, agents, skills and the overrides | App backend |
+| **App document store** | `app.sqlite` | Embedded SQLite, one table per collection, one JSON document per row | The application collections in section 3: connections, settings, datasets, sessions, inventories, verified queries, metrics, eval runs, knowledge, agents, skills, the overrides, readiness reports and workflow runs | App backend |
 | **Agent memory store** | `mastra.sqlite` | LibSQL file (Mastra runtime storage) | Conversation memory threads/messages for the `assistant` agent (section 5); any other Mastra runtime state | Agent framework |
 | **Observability store** | `observability.duckdb` | DuckDB (memory limit 512 MB, 2 threads) | Agent traces, metrics and logs written by the framework's storage exporter (service name `questions-to-insights`, log level `info`). The `span_events` table is **read by Monitoring** ([../capabilities/monitoring/spec.md](../capabilities/monitoring/spec.md), ADR-0038): event-sourced, one `start` and one `end` row per span (`eventType`, `timestamp`, `traceId`, `spanId`, `parentSpanId`, `entityType`, `entityId`, `entityName`, `threadId`, `name`, `spanType`, `endedAt`, and the JSON columns `attributes`, `metadata`, `input`, `output`, `error`). Monitoring reads the `agent_run`, `model_generation`, `model_step`, `tool_call` and `memory_operation` spans (and, for the waterfall, the framework spans `skill_action`, `processor_run`, `workspace_action` and `model_inference`), in the backend process, one **trace** (`traceId`) being one turn of a session and the `threadId` of its `agent_run` being the session id, through the same store handle that writes them. It adds no collection and writes nothing here | Agent framework |
-| **Session workspaces** | `workspaces/session-<session-id>/` | Plain directories, a contained filesystem root per session | Visual bundles and deep-analysis reports (section 4) | App backend + agents (agents can create/edit files there but cannot delete) |
+| **Session workspaces** | `workspaces/session-<session-id>/`; a stored workflow run's `workspaces/session-run-<run id>/` (3.16) | Plain directories, a contained filesystem root per session or run | Visual bundles, deep-analysis reports, panel files, RFP packages and synthetic scripts (section 4) | App backend + agents (agents can create/edit files there but cannot delete) |
 | **Developer settings** | `developer-settings.json` | JSON file, written atomically (temp file + rename) | `{ observabilityEnabled: boolean, phoenixEndpoint: string, otlpEndpoint: string, updatedAt: ISO string }`. Absent until the first save, and absent means the defaults (`false`, `http://localhost:6006`, `http://localhost:4318`). Invalid or missing values fall back to their defaults. Read synchronously by the backend at startup, before any app module loads (ADR-0006). See [../capabilities/developer-settings/spec.md](../capabilities/developer-settings/spec.md). | App backend |
 | **App secret** | `.app-secret` | Text file, mode `0600` | 64 lowercase hex characters (32 random bytes). The key material for encrypting stored secrets (section 2.3). Read if present and non-empty, else generated once and written. `APP_SECRET` env var, when set, wins and the file is not used. Created by the launcher (Electron main or CLI); a backend started without `APP_SECRET` reads or creates the same file itself. | Launcher, else backend |
 | **Intellify API key** | `.intellify-api-key` | Text file, mode `0600` | 64 lowercase hex characters (32 random bytes): the key the embedded Intellify RFP API accepts in `X-API-Key` ([api.md](api.md) 2.16) and that the `intellify-api` Testing Data fixture stores (encrypted) on the `Intellify RFP API` datasource. Read if present and non-empty, else generated once and written, as `.app-secret`. `INTELLIFY_API_KEY`, when set, wins and the file is not used. Not used by a standalone API, which requires the variable. | Backend (embedded Intellify RFP API) |
@@ -106,7 +106,7 @@ Summary:
 | `connections` | Saved datasources (data platform connections) | `id` | `updatedAt` desc | [datasources](../capabilities/datasources/spec.md) |
 | `settings` | Single-row app settings: the LLM settings, the built-in agent pins and the UI preferences | `key` (`"llm"`, `"builtin-agent-pins"`, `"ui-preferences"`, `"personas-seed"`, `"visuals-seed"`) | n/a | [llm-settings](../capabilities/llm-settings/spec.md) |
 | `datasets` | Named selections of entities with a schema snapshot | `name` (unique, upsert key) | `updatedAt` desc | [datasets](../capabilities/datasets/spec.md) |
-| `sessions` | Chat sessions with full transcript and visual metadata | `id` | `updatedAt` desc | [sessions-chat](../capabilities/sessions-chat/spec.md), [visuals](../capabilities/visuals/spec.md) |
+| `sessions` | Chat sessions with full transcript and visual metadata | `id` | `updatedAt` desc | [agent-answers](../capabilities/agent-answers/spec.md), [visuals](../capabilities/visuals/spec.md) |
 | `datasource_inventories` | Cached catalog/schema/table walk per datasource | `id` = datasource id | n/a | [datasources](../capabilities/datasources/spec.md) |
 | `verified_queries` | User-approved question to SQL pairs | `id`; dedupe key `(sourceSessionId, sourceMessageAt)` | `updatedAt` desc | [verified-queries](../capabilities/verified-queries/spec.md) |
 | `metrics` | Curated metric definitions | `id`; `name` unique | `updatedAt` desc | [metrics](../capabilities/metrics/spec.md) |
@@ -119,8 +119,9 @@ Summary:
 | `skill_overrides` | Org-wide overrides of built-in skills, edited in the app | `name` (a built-in skill's name) | n/a | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `agent_prompt_overrides` | Org-wide overrides of built-in agents' system prompts, edited in the app | `key` (a built-in agent's registry key) | n/a | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `readiness_reports` | Stored data-readiness assessments, one per run, never edited | `id` | `generatedAt` desc (per datasource) | [data-readiness](../capabilities/data-readiness/spec.md) |
+| `workflow_runs` | Every run of a workflow on an input: its input, steps, outcome and, for an agent workflow, its answer and files | `id` | `startedAt` desc | [workflows](../capabilities/workflows/spec.md) |
 
-Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `ontology_items`, `user_personas`, `agents` and `skills` carry a legacy, inert `ownerId` (section 3.14). There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
+Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `ontology_items`, `user_personas`, `agents`, `skills` and `workflow_runs` carry a legacy, inert `ownerId` (section 3.14). There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
 
 ### 3.1 `connections` — datasources
 
@@ -249,6 +250,7 @@ A conversation. The largest document; the whole transcript is embedded.
 | `agentId` | uuid | no | The user agent the session was started from (section 3.10). Absent for a plain-assistant session. Set at creation, never changed. No migration: absent means the plain assistant (ADR-0008). |
 | `agentName` | string | no | Present with `agentId`. The agent's Live name, stamped at creation and re-stamped by every turn that applies the agent, so a deleted agent's sessions can still name it. Also present with `agentKey`: the built-in agent's name at creation (`RFP Builder`, `Data Readiness Agent`, `Questions to Insights v2`). |
 | `agentKey` | string | no | The registry key of the built-in agent the session is bound to (today `rfp`, the RFP Builder, `data-readiness`, the Data Readiness Agent, and `assistant-v2`, Questions to Insights v2, which takes the user's own datasets; ADR-0028 as amended by BA-320, ADR-0031, [agents.md](agents.md) 2.8, 2.10, 2.11). Every turn runs that agent. Absent means the assistant (with or without `agentId`); never set together with `agentId`. Set at creation, never changed. No migration (new optional field). |
+| `workflowId` | string | no | The workflow the session runs ([api.md](api.md) 116; ADR-0040): `qti-v2-turn`, `agent:<registry key>` or `agent:<user-agent id>`. Set at creation on every session created from this version on (by any body form of [api.md](api.md) 3, previews included), never changed. When it is absent (sessions saved before) or no longer resolves (a code workflow removed in a later version), the workflow is **derived at read time** from the agent fields ([agents.md](agents.md) 5.12): `agentKey: "assistant-v2"` → `qti-v2-turn`; `agentKey: "rfp"` / `"data-readiness"` → `agent:rfp` / `agent:data-readiness`; `agentId: <id>` → `agent:<id>` (whether the agent still exists or not); neither → `agent:assistant`. Today the stored value always equals the derived one. No migration (new optional field). |
 | `rfpId` | uuid | no | `agentKey: "rfp"` sessions only: the active RFP record (an `rfp.rfps` id in the Intellify database, section 7), stamped by the turn whose `create_rfp` or `get_rfp` call succeeded, so a resumed chat starts at the right stage. Replaced when a later turn works on another RFP. No migration. |
 | `messages` | `ChatMessage[]` | yes | Transcript in order. Empty at creation. |
 | `visualizations` | `SessionVisualization[]` | no | Visual metadata (section 3.4.3); `[]` at creation. |
@@ -276,7 +278,7 @@ Deleting a session deletes the document, its agent memory thread and its workspa
 | `crossCheck` | object | no | Careful mode only: `{status: "agree" \| "disagree" \| "error", note?: string}`; `note` is a one-line tooltip text (clipped). `agree` = an independent re-derived query returned the same result set, `disagree` = it differed, `error` = the check could not complete. |
 | `reasoning` | `ReasoningStep[]` | no | The assistant's plain-language route to the answer (3.4.2); omitted when no call carried a rationale. Older transcripts lack it; readers derive it from `data[].rationale`. |
 | `knowledge` | `KnowledgeUse[]` | no | The enabled ontology items that fit the turn's context budget (3.9). Records what the model was *given*. |
-| `report` | `AnalysisReport` | no | `{jobId: string, title: string, path: string, angles: number}` — set on the message a finished deep-analysis job appends. `path` is workspace-relative (`reports/<jobId>.md`), `angles` the number of investigation angles covered. |
+| `report` | `AnalysisReport` | no | `{jobId: string, title: string, path: string, angles: number}` — set on the message a finished deep-analysis job appends, and on a successful `deep-analysis` run's `answer` (3.16; `jobId` the run id). `path` is workspace-relative (`reports/<jobId>.md` for a job, `reports/<slug of title>.md` for a run), `angles` the number of investigation angles covered. |
 | `rfpPackage` | `RfpPackageRef` | no | `{rfpId: string, title: string, files: {name: string, bytes: number}[], exportedAt: ISO, draft?: boolean}` — `draft: true` when the package is a draft stored under `rfp/<rfpId>/draft/` by `export_rfp_draft`, absent for the final package. Set on the answer of a turn whose `export_rfp_package` or `export_rfp_draft` call stored an RFP package in the session workspace (`rfp/<rfpId>/`, section 4.1). `files[].name` is relative to that folder (`rfp.md`, `rfp.pdf`, `exhibits/<name>.csv`, `manifest.json`). Rendered as the package card; downloaded through [api.md](api.md) #105. RFP Builder sessions only. |
 | `readinessReport` | `ReadinessReportRef` | no | `{reportId: string, datasourceName: string, overallScore: number, maturity: Maturity, generatedAt: ISO}`, the last report a turn's `assess_data_readiness` or `get_readiness_report` returned ([data-readiness](../capabilities/data-readiness/spec.md) R5, R25). Drives the readiness card. Data Readiness Agent sessions only. Additive, no migration. |
 
@@ -366,12 +368,13 @@ Question to SQL pairs approved with a thumbs-up, retrieved by lexical similarity
 | `sql` | string | yes | The answer's last successful `run_readonly_sql` statement, trimmed. |
 | `datasourceId` | string | no | Datasource when the session's datasets resolved to exactly one; else absent (then the pair matches on any datasource). |
 | `entities` | string[] | yes | Entities the answer drew on (the message's `entities`, else `[]`). |
-| `sourceSessionId` | string | yes | Session the pair came from. Renamed from `sourceProjectId` (section 6). |
+| `sourceSessionId` | string | no | Session the pair came from; absent on a pair from a workflow run's answer. Renamed from `sourceProjectId` (section 6). |
+| `sourceRunId` | string | no | Workflow run whose answer the pair came from (1.23.19); then `sourceSessionId` is absent. |
 | `sourceMessageAt` | ISO | yes | `at` of the source assistant message. |
 | `ownerId` | string | no | Legacy and inert: `local` or absent (section 3.14). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
-Dedupe key `(sourceSessionId, sourceMessageAt)`: saving upserts on it, so re-rating the same message never forks. Thumbs-down deletes all pairs with that key. Exact-match "is this SQL verified" compares normalised SQL text.
+Dedupe key `(sourceSessionId, sourceMessageAt)`, or `sourceRunId` for a pair from a run's answer: saving upserts on it, so re-rating the same message never forks. Thumbs-down deletes all pairs with that key. Exact-match "is this SQL verified" compares normalised SQL text.
 
 ### 3.7 `metrics`
 
@@ -575,7 +578,8 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 
 - REST datasource queries are executed by materialising the referenced endpoints into a throwaway in-memory SQLite database per call; nothing of it is written to disk.
 - Eval runs also keep an in-memory map for in-flight runs (section 3.8 is the durable copy).
-- **Preview sessions** (agents-evals R60, R61) live only in the backend's memory: a `SessionDoc`-shaped object with `id` `preview-<uuid>`, `preview: true` and `agentId`, never written to `sessions`. While one exists its agent memory thread (id = the session id) and its workspace `workspaces/session-preview-<uuid>/` exist like a session's (sections 4 and 5). Discarding the preview deletes all three. A backend restart forgets the in-memory object, and at start-up the backend deletes every `session-preview-*` workspace and the matching memory thread, so a crash leaves nothing behind.
+- **Preview sessions** (agents-evals R60, R61) no longer exist (1.23.27: `POST /sessions { preview }` is removed; the agent editor's preview is a draft run, whose host is a run host, 3.16). At start-up the backend still deletes every `session-preview-*` workspace and its memory thread that an earlier version left. No stored shape changed: the `sessions` collection and its documents stay on disk as past chats.
+- **Run hosts** ([agents.md](agents.md) 5.14) live only in the backend's memory while their run's agent turn runs: a `SessionDoc`-shaped object with `id` `run-<run id>` and `run: true`, never written to `sessions`. Its memory thread (id `run-<run id>`) is deleted when the turn ends; its workspace `workspaces/session-run-<run id>/` belongs to the stored run (3.16) and is never swept with the previews'.
 
 ### 3.13 Relationships and referential rules
 
@@ -588,14 +592,19 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 | `ontology_items` (relation) | `metricId` | `metrics.id` | By value, may dangle (the relation is then skipped in the block and in `KnowledgeUse`). |
 | `ontology_items` (constraint) | `conceptId` | `ontology_items.id` (a concept) | By value. Deleting the concept clears `conceptId` on the constraints that name it. |
 | `datasource_inventories` | `id` | `connections.id` | 1:1; deleted explicitly with the datasource. |
-| `verified_queries` | `sourceSessionId`+`sourceMessageAt` | `sessions.id` + message `at` | No cascade on session deletion; removed explicitly on thumbs-down. |
+| `verified_queries` | `sourceSessionId`+`sourceMessageAt`, or `sourceRunId` | `sessions.id` + message `at`, or `workflow_runs.id` | No cascade on session or run deletion; removed explicitly on thumbs-down. |
 | `metrics` | `datasourceId`, `sourceVerifiedQueryId` | `connections.id`, `verified_queries.id` | Provenance only, may dangle (a verified query id also rotates on re-approval). |
 | `eval_runs` | `datasourceId`, `datasets[]` | `connections.id`, `datasets.name` | Scope snapshot, may dangle. |
 | `agents` | `draft.datasets[]`, `live.datasets[]` | `datasets.name` | By name, no cascade. May dangle; the hub flags the agent as having a missing dataset. |
-| `sessions` | `agentId` | `agents.id` | By value, no cascade. Deleting the agent leaves the session pointing at a missing id; it then runs as the plain assistant and is shown with `agentName` (sessions-chat R59). |
+| `sessions` | `agentId` | `agents.id` | By value, no cascade. Deleting the agent leaves the session pointing at a missing id; it then runs as the plain assistant and is shown with `agentName` (past-chats R59). |
+| `sessions` | `workflowId` (or derived from `agentKey` / `agentId`) | a workflow of the catalogue ([agents.md](agents.md) 5.12) | By id, derived, never a collection: workflows are defined in code or computed from the agent registry and `agents`. A stored id that no longer resolves is ignored and the id is derived again. A deleted user agent's workflow leaves the catalogue; its sessions keep `agent:<id>` and are shown with `agentName` (past-chats R59, R65). |
 | `sessions[].visualizations[]` | `id`, `path` | `workspaces/session-<id>/visuals/<id>/` | Files under the session workspace; both removed with the session. |
 | `sessions[].messages[]` | `visual.visualId`, `report.jobId` | visual id / report file | By value. |
 | session | `id` | agent memory thread id and resource id; workspace `session-<id>` | See section 5. |
+| `workflow_runs` | `workflowId` | a workflow of the catalogue ([agents.md](agents.md) 5.12) | By id, may dangle: a deleted user agent's workflow leaves the catalogue and its runs keep `workflowId` and `workflowName`. |
+| `workflow_runs` | `datasets[]`, `agentId`, `rfpId` | `datasets.name`, `agents.id`, an RFP of the Intellify RFP API | By value, no cascade, may dangle. |
+| `workflow_runs` | `context.fromRunId` | `workflow_runs.id` | By value. Deleting the earlier run leaves it dangling; it is read only when the later run starts. |
+| `workflow_runs` | `id` | workspace `session-run-<id>`; memory thread `run-<id>` while it runs | The workspace is deleted with the run (api.md 122); the thread is deleted when its turn ends. |
 
 ---
 
@@ -603,14 +612,14 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 
 The app is single-user (ADR-0030): one built-in super admin, id `local`, is always the caller, so nothing is scoped, filtered or checked by owner.
 
-- `ownerId` stays on the documents of `sessions`, `verified_queries`, `metrics`, `eval_runs`, `ontology_items`, `user_personas`, `agents` and `skills` as an **inert legacy attribute**. Its only value is `local`: M14 (section 6) sets it on every existing document, and new documents are stamped `local` when created. No reader filters by it and no write depends on it.
+- `ownerId` stays on the documents of `sessions`, `verified_queries`, `metrics`, `eval_runs`, `ontology_items`, `user_personas`, `agents`, `skills` and `workflow_runs` as an **inert legacy attribute**. Its only value is `local`: M14 (section 6) sets it on every existing document, and new documents are stamped `local` when created. No reader filters by it and no write depends on it.
 - A document with no `ownerId` (written by code that predates the stamp) is read exactly like one with `local`.
 - **Uniqueness** that was per owner (agent names, skill names, metric names, the verified-query key `(sourceSessionId, sourceMessageAt)`) is now unique across the collection; M14 renames clashing skills (`-2`, `-3`, …).
 - No identity or access data is stored: the tables `users`, `groups`, `group_members`, `role_assignments`, `group_role_mappings`, `auth_sessions` and `activity_events` of earlier versions are dropped by M14.
 
 ### 3.15 `readiness_reports` — data-readiness assessments
 
-One document per assessment ([data-readiness](../capabilities/data-readiness/spec.md) R24, ADR-0031). It is written once by `POST /data-readiness/assessments` or the agent's `assess_data_readiness`, and never updated. No delete route exists. A datasource deleted later leaves its reports in place (references by value, 3.13). Additive collection, no migration.
+One document per assessment ([data-readiness](../capabilities/data-readiness/spec.md) R24, ADR-0031). It is written once by `POST /data-readiness/assessments` or the agent's `assess_data_readiness` (in a chat or a run), and never updated. No delete route exists. A datasource deleted later leaves its reports in place (references by value, 3.13). Additive collection, no migration.
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
@@ -626,9 +635,45 @@ One document per assessment ([data-readiness](../capabilities/data-readiness/spe
 | `findings` | `Finding[]` | yes | In engine order (R23). Each is `{ dimension: Dimension, level: 'entity' \| 'source', namespace?: string, entity?: string, field?: string, severity: 'info' \| 'low' \| 'medium' \| 'high', measured?: string, description: string, recommendation: string }`. `field` may name several columns, comma-separated, for a key or a column pair. |
 | `notProfiled` | `{ entity: string, reason: 'too-large' \| 'timed-out', rowCount?: number }[]` | no | Entities whose column checks were skipped (ADR-0033). Absent when there are none. Older reports lack it; no migration. |
 | `sessionId` | uuid | no | The chat session it was run from, when there was one. |
+| `runId` | uuid | no | The workflow run it was run from (3.16), when there was one; the readiness bridge sets it for a run host, never with `sessionId` (since 1.23.16). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 `Dimension` is one of `completeness`, `validity`, `consistency`, `uniqueness`, `integrity`, `accessibility`, `timeliness`, `reasonability`, `accuracy`, `currency`. `Severity` is one of `info`, `low`, `medium`, `high`. The wire shape `ReadinessReport` ([api.md](api.md) 2.17) is this document without `createdAt` and `updatedAt`.
+
+### 3.16 `workflow_runs` — workflow runs
+
+One document per run of a workflow on an input ([workflows](../capabilities/workflows/spec.md) R18-R20, ADR-0041; since 1.23.14): every run of 118 and 119 ([api.md](api.md)), a code-only workflow's (`seq-text-demo`) as well as an agent workflow's. It is inserted as `running` when the run starts (before the stream's `run` event) and updated once when it ends; nothing else writes it. Deleted only by `DELETE /workflow-runs/:id` (api.md 122), which also deletes the run's workspace. No retention limit. Additive collection, no migration (section 6).
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | The run id. The run host is `run-<id>` and the workspace `workspaces/session-run-<id>/` (4.1). |
+| `workflowId` | string | yes | The workflow (`seq-text-demo`, `deep-analysis`, `qti-v2-turn`, `agent:<key or id>`; [agents.md](agents.md) 5.12). |
+| `workflowName` | string | yes | Its name when the run started, so a deleted user agent's run still names it. |
+| `input` | object | yes | The checked input (api.md 118: declared fields only, defaults filled), as `Record<string, string \| number \| boolean \| string[]>`. |
+| `context` | `{ fromRunId: string }` | no | The earlier run whose question and answer the agent was given (api.md 3.6). |
+| `status` | `running` \| `success` \| `failed` \| `stopped` | yes | `running` until it ends. |
+| `steps` | `{ id, title, status, output?, outputTruncated?, error? }[]` | yes | `[]` while running; at the end every step in workflow order with `success`, `failed`, `skipped` or `stopped`. `output` is the step's output when its JSON is at most 20 000 characters, else `outputTruncated: true`. |
+| `output` | object | no | The workflow's final output (success only). |
+| `error` | string | no | Why it failed (`failed` only), e.g. the model's error or `The app stopped before the run finished`. |
+| `question` | string | no | Agent workflows: the user message the agent received, trimmed. A `deep-analysis` run: its `question` input. Its presence marks a run with a run host (and a workspace). |
+| `answer` | `ChatMessage` (3.4.1) | no | Agent workflows: the assistant message the turn persisted on the host, with the same shape as a session's, so one renderer serves runs and past chats. Absent when the turn stopped or failed before answering. A successful `deep-analysis` run: the executive summary, with `report` (`jobId` the run id, `path` `reports/<slug of the title>.md`; [agents.md](agents.md) 5.15). |
+| `datasets` | string[] | yes | The datasets the run worked over (`[]` for a code-only run, and while running). |
+| `agentKey` / `agentId`, `agentName` | string | no | The agent its agent step ran, as on a session (3.4). |
+| `rfpId` | uuid | no | RFP Builder runs: the RFP the run worked on. |
+| `panelItems` | `PanelItem[]` (3.4.4) | no | Agent runs: the host's panel items when the run ended. A successful `deep-analysis` run: one file item, id `deep-analysis-report`, its report. |
+| `visualizations` | `SessionVisualization[]` (3.4.3) | no | Agent runs: the visuals the turn made, under the run's workspace. |
+| `events` | `ChatMessage[]` (3.4.1) | no | Agent runs: the cards of the visual actions taken after the run (created, updated, reverted), each an assistant message carrying `visual`, oldest first (api.md 130-132). The run-backed host places them after `answer`. |
+| `workflowState` | `WorkflowState` (3.4.4) | no | Agent runs: the agent's saved phases. |
+| `ownerId` | `local` | no | Legacy and inert (3.14), stamped on insert. |
+| `startedAt` | ISO | yes | When the run started; orders the history (newest first). |
+| `finishedAt` | ISO | no | When it ended. |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+The wire `WorkflowRun` ([api.md](api.md) 3.6, 121) is this document plus, for an agent run, the derived `panelItems`, `workflow` view and `agent`, computed on every read as a session's are (api.md 2.1); they are never stored.
+
+**Start-up recovery.** When the backend starts, a run still `running` was cut off when the app stopped: it becomes `failed` with `error` `The app stopped before the run finished` and `finishedAt` the start-up time, any step still `running` becomes `failed` with the same error, and its memory thread `run-<id>` is deleted; its workspace is kept. A `workspaces/session-run-*` directory with no run document is deleted with its memory thread.
+
+> Implementation note: `modules/workflows/repositories/workflow-runs.repository.ts` (`WorkflowRunsRepository`, token `WORKFLOW_RUNS_STORE`); the shape, the summary, the title rule and the run-backed host are framework-free in `workflow-run-steps.ts`; the recovery is `WorkflowRunsService.onModuleInit`.
 
 ## 4. Files on disk
 
@@ -664,6 +709,8 @@ workspaces/
 The `synthetic-data/` folder holds the scripts `generate_synthetic_data` writes ([agents.md](agents.md) 3.14, [../capabilities/synthetic-data/spec.md](../capabilities/synthetic-data/spec.md) R43): UTF-8, LF-only, at most 256 KB, generated values only. A second call with the same file name overwrites the file; each call stores a new `file` panel item (3.4.4) pointing at it, so the panel and its Download (api.md 106-107) read the file as it is now. Deleted with the workspace.
 
 The `rfp/<rfp-id>/` folder is the unzipped `GET /v1/rfps/:id/package.zip` of the Intellify RFP API ([api.md](api.md) 2.16.5), written by `export_rfp_package` ([agents.md](agents.md) 3.10) and referenced by the answer's `rfpPackage` (3.4.1). Re-exporting the same RFP overwrites the folder (not `draft/`, which holds the latest draft, written by `export_rfp_draft` and replaced by the next draft; neither export touches the other): the record in the `rfp` schema (section 7) is the source of truth. Served by [api.md](api.md) #105; deleted with the workspace.
+
+**Run workspaces.** A stored workflow run of an agent workflow (3.16) has its own workspace, `workspaces/session-run-<run id>/`, with this same layout: it is created when the run's host is (the `session-` prefix keeps the registration scan and the safe-path checks unchanged), written by the run's agent turn as a session's is, and kept after the run ends so its visuals, panel files and RFP packages download (api.md 123-127). It is deleted with the run (api.md 122), never by the previews' start-up sweep; at start-up a `session-run-*` directory with no run document is deleted (3.16).
 
 The workspace directory is created with the session (`createSessionWorkspace`) and registered with the agent framework under id `session-<session-id>` (display name `<session name> Workspace`, no skills; 4.6). At backend start, and whenever the `workspaces/` directory changes, every `session-*` directory on disk is (re)registered, so workspaces survive restarts and are visible to a second framework process (the dev studio). Directories not starting with `session-` are ignored.
 
@@ -758,6 +805,8 @@ A spec visual's synthetic bundle is: body `<div id="qti-chart-root"></div>`, emp
 
 `reports/<job-id>.md` — one Markdown file per finished deep-analysis job (`job-id` matches `^[a-zA-Z0-9-]+$`). Structure assembled by the app, not the model: `# <title>`; `**Question:** <question>`; a line `Deep analysis · session: <name> · <n> angle(s) · generated <ISO>`; `## Executive summary` + summary; the model-written body (starting `## Findings by angle`); `## Data appendix` with, per angle, `### <i>. <angle title>`, the angle question, and each SQL statement in a ```sql fence (or `_No SQL was recorded for this angle._`); then `---` and `Report <job-id>`. Downloaded as `<slug of title, ≤64>.md` (or `deep-analysis-<first 8 of id>.md`).
 
+A `deep-analysis` run (since 1.23.24; [agents.md](agents.md) 5.15) stores its report in its own workspace as `workspaces/session-run-<run id>/reports/<slug of title, ≤64>.md` (or `deep-analysis-<first 8 of the run id>.md`), the same structure without the `session: <name>` part of the line under the question, and closing `Report <run id>`; it downloads under that name as the run's file item `deep-analysis-report` (api.md 126).
+
 ### 4.6 No skills in workspaces
 
 Workspaces hold no skills. Skills ship with the backend build and each agent declares its own ([agents.md](agents.md) sections 7.3 and 7.4). Until version 0.31, every workspace got a copy of the `interactive-visuals` skill at `.agents/skills/interactive-visuals/SKILL.md`, and the framework discovered skills there. Those copies are left on disk untouched and are never read, so no migration is needed.
@@ -812,6 +861,8 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 None for `agents`: it is a new collection, and the store creates the table on first open. The built-in pins document is a new `settings` key and needs no migration.
 
 None for the RFP Builder (BA-213, ADR-0028): `agentKey` and `rfpId` on sessions and `rfpPackage` on messages are new optional fields, and `rfp` is a new key in `agent_prompt_overrides`. The `rfp` schema in the Intellify database has its own versioned migrations (section 7.3).
+
+None for `workflow_runs` (1.23.14): it is a new collection, and the runs of earlier versions were never stored (they were held in memory and their `session-run-*` workspaces are deleted at the first start-up, 3.16).
 
 None for the agent panel (BA-231, ADR-0029): `panelItems` and `workflowState` on sessions are new optional fields; visuals made before are synthesized into the item list at read time (3.4.4), so no stored document is rewritten.
 

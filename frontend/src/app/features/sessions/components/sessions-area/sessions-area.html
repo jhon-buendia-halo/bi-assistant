@@ -1,0 +1,30 @@
+@if (shell.mainView() === "session-chat" && state.activeSession()) {
+  <!-- Every open chat is a past chat: read-only (past-chats R66) -->
+  <div
+    role="note"
+    data-testid="past-chat-banner"
+    class="flex shrink-0 items-center gap-2 border-b border-border bg-surface-muted px-6 py-2 text-[13px] text-fg"
+  >
+    <span class="chip chip-neutral">Past chat</span>
+    <span>This is a past chat. You can read it, but not continue it.</span>
+  </div>
+  <app-workflow-bar
+    class="block shrink-0"
+    [workflow]="state.activeSession()!.workflow"
+  />
+  <app-session-chat
+    class="min-h-0 flex-1"
+    [session]="state.activeSession()!"
+    (panelItem)="state.onPanelItem($event)"
+    (viewVisual)="state.showVisualization($event, $event.version)"
+  />
+} @else if (shell.mainView() === "run-detail") {
+  <app-run-detail class="flex min-h-0 flex-1 flex-col" />
+} @else if (shell.mainView() === "runs") {
+  <!-- The Runs page: the Runs list and Past chats (app-shell R3) -->
+  <div class="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+    @defer (on immediate) {
+      <app-runs-page />
+    }
+  </div>
+}

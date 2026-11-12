@@ -13,9 +13,9 @@ import { assistantEvalDatasetError } from '../../mastra/evals/assistant-eval-dat
 import {
   AssistantEvalCase,
   AssistantEvalCaseResult,
-  EvalSession,
-  cleanupEvalSession,
-  createEvalSession,
+  EvalHost,
+  cleanupEvalHost,
+  createEvalHost,
   fixtureForCases,
   runAssistantEvalCase,
   selectEvalCases,
@@ -186,26 +186,26 @@ export class EvalRunsService {
     // The agent the cases run on, with its context and clean-up (agents.md
     // 8.1); the RFP Builder tags its drafts with this run.
     const target = evalTargetFor(view.agentKey, view.jobId);
-    // A throwaway session so create_visual/update_visual behave the way they
+    // A throwaway run host so create_visual/update_visual behave the way they
     // do in a real chat turn (see assistant.evals.ts). Best-effort: a run
     // still measures the agent without one, just with visual-tool support
     // degraded to "No session in context".
-    let evalSession: EvalSession | undefined;
+    let evalSession: EvalHost | undefined;
     try {
-      evalSession = await createEvalSession(
+      evalSession = await createEvalHost(
         this.sessions,
         view.datasets,
         target.sessionAgentKey,
       );
     } catch (err) {
       this.logger.warn(
-        `Could not create a throwaway session for eval run ${view.jobId}: ${
+        `Could not create a throwaway run host for eval run ${view.jobId}: ${
           err instanceof Error ? err.message : String(err)
         }`,
       );
     }
     // Same curated-knowledge block a real chat turn gets from
-    // SessionsService.agentContext, computed once per run — every case in
+    // TurnOptions.agentContext, computed once per run — every case in
     // the run shares the same datasets.
     const knowledgeBlock = await this.knowledge.definitionBlock(view.datasets);
     try {
@@ -237,7 +237,7 @@ export class EvalRunsService {
       await this.repository.save(view);
       // The agent's own clean-up: the RFP Builder's drafts of this run.
       await target.finish?.(view.datasets);
-      await cleanupEvalSession(this.sessions, evalSession);
+      await cleanupEvalHost(this.sessions, evalSession);
     }
   }
 

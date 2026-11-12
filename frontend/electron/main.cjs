@@ -713,7 +713,7 @@ function reportForeignPortOnce() {
   );
 }
 
-// Readiness probe (api.md 4.3): `GET /sessions` answers 200 once the backend
+// Readiness probe (api.md 4.3): `GET /health` answers 200 once the backend
 // is up; there is no sign-in (ADR-0030). Only the backend this shell spawned
 // counts (`X-Backend-Instance`, app-shell R55).
 function backendIsReady() {
@@ -722,7 +722,7 @@ function backendIsReady() {
       {
         hostname: "127.0.0.1",
         port: BACKEND_PORT,
-        path: "/sessions",
+        path: "/health",
         timeout: 500,
       },
       (response) => {

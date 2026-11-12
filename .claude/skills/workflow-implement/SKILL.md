@@ -5,11 +5,13 @@ description: Use at workflow step 8 when writing production code in frontend/ or
 
 # Step 8 — Implement, and run the app locally
 
-Part of the workflow in [CLAUDE.md](../../../CLAUDE.md), which keeps the always-on core (the mandatory first action, the step list, the fast loop and acceptance gate, the hard gates). Load this skill before the step starts.
+Part of the workflow in [CLAUDE.md](../../../CLAUDE.md), which keeps the always-on core (the mandatory first action, the step list, the story lane, wave check and acceptance gate, the hard gates). Load this skill before the step starts.
 
 ## The step
 
-8. **Implement changes** — production code, built against the Acceptance criteria and the step-5 Gherkin. It runs in the fast loop, before steps 6 and 7.
+8. **Implement changes** — production code, built against the Acceptance criteria and the step-5 Gherkin. It runs in the story lane, before steps 6 and 7.
+
+   **Lean lane for a builder.** Start from the story pack (`node scripts/story-pack.mjs <id>`), not from exploring the repo. Write the code, its unit tests, for a UI story **one** Playwright scenario (`@demo @story-<id>`), and only the spec lines the change makes false. Run only `npx jest --findRelatedTests <files>` (backend), the touched frontend specs, and your own Playwright file (3 workers once 1.23.32 lands). No axe scans, no screenshots in two themes, no evidence, no demo and no `qa.mjs`, unless the brief asks; the lead's wave check does those. Keep output quiet (Jest `--silent`, Playwright `--reporter=dot`, builds to a log file; read back the summary or failure block). Read ranges, not whole files over 500 lines: `grep -n` or [specs/INDEX.md](../../../specs/INDEX.md) first.
 
 ## Code rules — the short list to keep in mind while coding
 

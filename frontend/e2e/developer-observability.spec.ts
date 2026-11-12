@@ -1,6 +1,7 @@
 import { Page } from '@playwright/test';
 import { test, expect, RunningApp } from './fixtures/app.fixture';
-import { createWorldCupWorkspace, openSessions } from './helpers/app-actions';
+import { seedWorldCupDataset } from './helpers/agents-api';
+import { runAssistant } from './helpers/runs-api';
 import { OtlpReceiver, startOtlpReceiver } from './helpers/otlp-receiver';
 
 // Mirrors the "Developer observability export" Feature in
@@ -98,13 +99,13 @@ test('agent runs reach Phoenix when observability is on', async ({
   app,
   page,
 }) => {
-  const sessionId = await createWorldCupWorkspace(page);
+  await seedWorldCupDataset(page);
   await saveAndRestart(app, true);
 
-  await openSessions(page);
-  await page.getByTestId(`session-${sessionId}`).click();
-  await page.getByPlaceholder(/Ask a/).fill('Who won the 2022 World Cup?');
-  await page.getByLabel('Send message').click();
+  // A run of the Assistant: one agent turn (no model is configured, so the
+  // turn ends in the model error; its trace is exported all the same).
+  const run = await runAssistant(page, 'Who won the 2022 World Cup?');
+  expect(run.status, run.body).toBe(200);
 
   await expect
     .poll(() => payloadOf(phoenix, '/v1/traces'), { timeout: 30_000 })

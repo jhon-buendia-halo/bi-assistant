@@ -1,0 +1,76 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`the requests an eval case sends each agent assistant: the first case 1`] = `
+{
+  "agent": "assistant",
+  "context": [
+    {
+      "content": "Datasets for this session: World Cup Core.
+Entities available (fully-qualified catalog.schema.table):
+(none — the datasets are empty)
+Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.",
+      "role": "system",
+    },
+  ],
+  "datasets": [
+    "World Cup Core",
+  ],
+  "input": "Who won the 2022 World Cup?",
+  "maxSteps": 15,
+  "requestContextKeys": [
+    "datasets",
+    "turn-data-records",
+    "turn-question",
+  ],
+}
+`;
+
+exports[`the requests an eval case sends each agent data-readiness: the first case 1`] = `
+{
+  "agent": "data-readiness",
+  "context": [
+    {
+      "content": "Datasets for this session (data readiness):
+- World Cup Core — PostgreSQL datasource "World Cup PostgreSQL", 0 entities
+Today is 2026-11-12.",
+      "role": "system",
+    },
+  ],
+  "datasets": [
+    "World Cup Core",
+  ],
+  "input": "Run a fresh readiness assessment of this data. How ready is it for analysis?",
+  "maxSteps": 15,
+  "requestContextKeys": [
+    "datasets",
+    "turn-data-records",
+    "turn-question",
+  ],
+}
+`;
+
+exports[`the requests an eval case sends each agent rfp: the first case 1`] = `
+{
+  "agent": "rfp-builder",
+  "context": [
+    {
+      "content": "Intellify RFP API for this session: datasource unknown ("Intellify RFP API").
+No RFP is active in this session yet: start at stage 1.
+Today is 2026-11-12.",
+      "role": "system",
+    },
+  ],
+  "datasets": [
+    "World Cup Core",
+  ],
+  "input": "Start an RFP for Orchard Manufacturing",
+  "maxSteps": 15,
+  "requestContextKeys": [
+    "datasets",
+    "rfp-created-by",
+    "turn-data-records",
+    "turn-question",
+    "turn-rfp",
+  ],
+}
+`;

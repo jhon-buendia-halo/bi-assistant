@@ -1,0 +1,60 @@
+@if (shell.mainView() === "agents") {
+  <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+    <app-agent-hub
+      class="w-full max-w-[960px]"
+      (openAgent)="agents.openAgent($event)"
+      (newAgent)="agents.openAgentEditor(null)"
+      (openSkills)="agents.openSkillsLibrary()"
+    />
+  </div>
+} @else if (shell.mainView() === "agent-detail" && agents.activeAgentKey()) {
+  <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+    <app-agent-detail
+      class="w-full max-w-[960px]"
+      [agentKey]="agents.activeAgentKey()!"
+      (back)="agents.closeAgentDetail()"
+      (deleted)="agents.onAgentDeleted()"
+      (edit)="agents.openAgentEditor($event.key)"
+      (openBuiltInSkill)="agents.openBuiltInSkillEditor($event, true)"
+      (openWorkflow)="workflows.openWorkflow($event)"
+    />
+  </div>
+} @else if (shell.mainView() === "agent-editor") {
+  <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+    <app-agent-editor
+      class="w-full max-w-[960px]"
+      [agentId]="agents.editingAgentId()"
+      (back)="agents.closeAgentEditor()"
+      (tryItOpened)="shell.rightPanelOpen.set(true)"
+    />
+  </div>
+} @else if (shell.mainView() === "skills") {
+  <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+    <app-skills-library
+      class="w-full max-w-[960px]"
+      (back)="shell.mainView.set('agents')"
+      (openSkill)="agents.openSkillEditor($event?.id ?? null)"
+      (openBuiltIn)="agents.openBuiltInSkillEditor($event)"
+    />
+  </div>
+} @else if (shell.mainView() === "skill-editor") {
+  <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+    <app-skill-editor
+      class="w-full max-w-[960px]"
+      [skillId]="agents.editingSkillId()"
+      (back)="agents.openSkillsLibrary()"
+      (deleted)="shell.mainView.set('skills')"
+    />
+  </div>
+} @else if (
+  shell.mainView() === "builtin-skill-editor" && agents.editingBuiltInName();
+  as builtInName
+) {
+  <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+    <app-builtin-skill-editor
+      class="w-full max-w-[960px]"
+      [skillName]="builtInName"
+      (back)="agents.closeBuiltInSkillEditor()"
+    />
+  </div>
+}

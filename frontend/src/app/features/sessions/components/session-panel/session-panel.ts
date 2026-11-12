@@ -20,12 +20,10 @@ import {
 } from 'lucide-angular';
 import { ToastService } from '../../../../core/toast/toast.service';
 import {
-  DataPointSelection,
   InteractiveVisualization,
   PanelItem,
   PanelItemKind,
   Session,
-  SessionActionResult,
 } from '../../models/session.model';
 import { SessionsApiService } from '../../services/sessions-api.service';
 import { InteractiveVisualPanel } from '../interactive-visual-panel/interactive-visual-panel';
@@ -120,18 +118,14 @@ export class SessionPanel {
   readonly session = input.required<Session>();
   /** The item the panel shows; null until the agent shows something. */
   readonly item = input<PanelItem | null>(null);
-  // The visual panel's own inputs, passed through unchanged.
+  // A past chat's panel: visuals viewable and downloadable, nothing changes them.
   readonly visualization = input<InteractiveVisualization | null>(null);
-  readonly loading = input(false);
   readonly error = input<string | null>(null);
   readonly downloading = input(false);
 
   readonly selectItem = output<PanelItem>();
   readonly downloadVisual = output<InteractiveVisualization>();
   readonly selectVersion = output<number>();
-  readonly revertVersion = output<number>();
-  readonly visualRefreshed = output<SessionActionResult>();
-  readonly dataPointSelected = output<DataPointSelection>();
 
   readonly menuOpen = signal(false);
   readonly downloadingItem = signal(false);

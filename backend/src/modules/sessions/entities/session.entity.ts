@@ -316,7 +316,7 @@ export interface SessionDoc {
   workspaceId?: string;
   /** Names of the datasets this session works over. */
   datasets: string[];
-  /** The user agent the session was started from (sessions-chat R52). */
+  /** The user agent the session was started from (agent-answers R52). */
   agentId?: string;
   /** The agent's Live name, re-stamped by each turn that applies it (R59). */
   agentName?: string;
@@ -326,10 +326,21 @@ export interface SessionDoc {
    * `agentId`.
    */
   agentKey?: string;
+  /**
+   * The workflow the session runs (api.md 116; ADR-0040): set at creation
+   * from this version on, never changed. Absent on sessions saved before:
+   * derived at read time from `agentKey` / `agentId` (agents.md 5.12).
+   */
+  workflowId?: string;
   /** `agentKey: 'rfp'` only: the active RFP, stamped from `turn-rfp`. */
   rfpId?: string;
   /** An agent editor's preview, held in memory only (agents-evals R60). */
   preview?: boolean;
+  /**
+   * A run host: the in-memory session one run of an agent workflow executes
+   * its agent turn on (ADR-0041; agents.md 5.14). Never stored or listed.
+   */
+  run?: boolean;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   /** What the agent showed in the right panel, oldest first (data-model 3.4.4). */
@@ -351,12 +362,22 @@ export interface SessionAgentRef {
   starterQuestions: string[];
 }
 
+/** The workflow a session runs, as the API shows it (api.md 2.1). */
+export interface SessionWorkflowRef {
+  id: string;
+  name: string;
+  kind: 'code' | 'agent';
+  /** A deleted user agent's workflow: `name` is the stored `agentName`. */
+  deleted: boolean;
+}
+
 /**
  * A session on the wire: the stored document plus its derived `agent`,
- * `workflow` and the full `panelItems` list (visuals included).
+ * `workflowRef`, `workflow` and the full `panelItems` list (visuals included).
  */
 export type SessionView = SessionDoc & {
   agent?: SessionAgentRef;
+  workflowRef: SessionWorkflowRef;
   panelItems: PanelItem[];
   workflow?: WorkflowView;
 };

@@ -14,8 +14,8 @@ import { RFP_PROMPT } from './system-prompts';
 /** The RFP Builder's registry key (agents.md 1.2). */
 export const RFP_AGENT_KEY = 'rfp';
 
-/** Its tool-loop budget per turn (agents.md 2.8). */
-export const RFP_MAX_STEPS = 15;
+// Its tool-loop budget per turn (agents.md 2.8), kept framework-free.
+export { RFP_MAX_STEPS } from '../agent-constants';
 
 // Links become plain mentions before the model reads them (agents.md 2.8, 4.1).
 const shippedInstructions = withToolSection(resolveLinks(RFP_PROMPT), rfpTools);

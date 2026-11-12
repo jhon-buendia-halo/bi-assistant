@@ -5,7 +5,7 @@ description: Use at workflow steps 1–5 of any change in this repo (after readi
 
 # Steps 1–5 — Understand, plan, architecture, specs
 
-Part of the workflow in [CLAUDE.md](../../../CLAUDE.md), which keeps the always-on core (the mandatory first action, the step list, the change sizes, the fast loop and acceptance gate, the hard gates). Load this skill once, before step 1; it covers every step up to the code.
+Part of the workflow in [CLAUDE.md](../../../CLAUDE.md), which keeps the always-on core (the mandatory first action, the step list, the change sizes, the story lane, wave check and acceptance gate, the hard gates). Load this skill once, before step 1; it covers every step up to the code.
 
 Scale each step to the change's size (**S / M / L**, defined in CLAUDE.md). The S column of each step says what a small change does.
 
@@ -14,6 +14,7 @@ Scale each step to the change's size (**S / M / L**, defined in CLAUDE.md). The 
 1. **Restate the goal** in your own words: the user-observable outcome and how we'll know it's done. Apply the [lessons.md](../../../lessons.md) lines that bear on the task. Say which size you judge the change to be.
 2. **Clarify** scope, behaviour, edge cases and acceptance until nothing material is open. Ask only what changes what you'd build; batch questions in one message, each with your recommended answer. When the request is clear, state your assumptions and go on instead of asking.
    - **S:** one-line restatement; ask only when blocked.
+3. **Decide before you build** (an L epic, or an M feature whose end state is unclear). Show a cheap prototype first: an HTML mock or an ASCII/Markdown sketch, at most 10 minutes, with no spec and no ADR. Then ask **one batched confirmation per epic**, in a single message: the epic spec, the ADR, the open questions each with your recommendation, and the branch name. The user's go-ahead confirms all of it (see the Epic gate). If the direction changes afterwards, re-plan once for the whole epic, not story by story.
 
 ## 3. Roadmap, Epic gate, branch
 
@@ -24,7 +25,7 @@ Scale each step to the change's size (**S / M / L**, defined in CLAUDE.md). The 
 1. **Classify, don't append.** Find the milestone the work belongs to (read the milestone descriptions). Extend an existing feature when the work fits it; otherwise add a feature under the right milestone, in dependency order; if no milestone fits, propose one before adding the feature.
 2. Write the entry (Intent / Scope / Out of scope / Acceptance / Notes) and set it `🚧 In progress`. It becomes `✅ Done` at step 10. A cut feature stays, `🚫 Cut` with a one-line reason.
 3. Longer plans go in [docs/plans/](../../../docs/plans/), linked from the feature, never copied into it.
-4. Backlog items are promoted into a milestone before work starts.
+4. Backlog items live in [roadmap-backlog.md](../../../roadmap-backlog.md) (open stories moved out of finished or stale milestones, and unsequenced plans); promote one into a milestone of `roadmap.md` before work starts. Finished milestones live in [roadmap-archive.md](../../../roadmap-archive.md).
 
 - **S:** one feature entry with a one-line Intent, Scope and Acceptance, under the epic it touches, or under Milestone 1.7 *Bug Fixes* for a fix to shipped work.
 
@@ -63,5 +64,5 @@ Architectural: choosing or replacing a framework, splitting or merging container
 - **Where things go:** behaviour rules and user flows → `specs/capabilities/<capability>/spec.md`; endpoints, IPC and CLI → `system/api.md`; collections, document shapes, files on disk and migrations → `system/data-model.md`; agents, prompts, tools and model routing → `system/agents.md`; layout, screens, tokens and copy → `system/ui.md`; frameworks, versions and code layout → `system/tech-stack.md`; build, packaging, release and developer tooling → `system/delivery.md`; terms → `product/glossary.md`. A new capability gets a folder and a row in the [specs/README.md](../../../specs/README.md) table.
 - **Each fact lives in one file.** Link to it; never copy it.
 - **CI enforces coverage:** `python3 scripts/check-specs.py` runs on every PR and is a required check. It fails when a route, collection, agent, Playwright spec, capability or roadmap epic has no spec, or a link breaks. It proves coverage, not correctness. Run it before pushing.
-- **Gherkin:** every user-facing flow is a `Scenario:` under a `Feature:` in the Flows section of the capability spec that owns it (`Given / When / Then / And`), written from the user's point of view (`When I click "New session"`). It covers navigation, dialogs, panels, toasts, form submits, chat and stream behaviour and visual tailoring, not purely visual tweaks or refactors. Each Feature names its Playwright spec file, or says `E2E: none yet`.
+- **Gherkin:** every user-facing flow is a `Scenario:` under a `Feature:` in the Flows section of the capability spec that owns it (`Given / When / Then / And`), written from the user's point of view (`When I click "New session"`). It covers navigation, dialogs, panels, toasts, form submits, chat and stream behaviour and visual tailoring, not purely visual tweaks or refactors. Each Feature names its Playwright spec file, or says `E2E: none yet`. **Gherkin once:** a new or edited Feature keeps its heading, its `E2E: \`<path>\`` line and one line per scenario (`Scenario: <title>`); the Given/When/Then steps live only in the Playwright test (`scenarioStep` lines), and `check-specs.py` checks that every listed title exists in the named file. Existing Features keep their steps until someone edits them. When starting a story, find a spec section through [specs/INDEX.md](../../../specs/INDEX.md) and read the line range, not the whole file.
 - **S:** update only the spec lines that state the fact you changed; a change no spec describes needs none.

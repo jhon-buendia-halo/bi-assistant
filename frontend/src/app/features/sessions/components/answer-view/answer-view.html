@@ -1,0 +1,587 @@
+@let msg = message();
+@if (msg.clarification; as clarification) {
+  <!-- Clarification card, Claude-style -->
+  <div class="card p-4">
+    <p class="text-[14px] font-medium text-fg-strong">
+      {{ clarification.question }}
+    </p>
+    <div class="mt-3 flex flex-col gap-1">
+      @for (
+        option of clarification.options;
+        track option.label;
+        let n = $index
+      ) {
+        <button
+          (click)="pick(option.label)"
+          [disabled]="!latest() || busy()"
+          class="flex items-start gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left hover:border-border-strong hover:bg-surface-muted disabled:cursor-default disabled:opacity-60 disabled:hover:border-transparent disabled:hover:bg-transparent"
+        >
+          <span
+            class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-surface-muted text-[11px] text-fg-muted"
+          >
+            {{ n + 1 }}
+          </span>
+          <span class="flex min-w-0 flex-col">
+            <span class="text-[13px] text-fg">{{ option.label }}</span>
+            @if (option.description) {
+              <span class="text-[12px] text-fg-muted">{{
+                option.description
+              }}</span>
+            }
+          </span>
+        </button>
+      }
+    </div>
+    <!-- Work already done before the question — kept visible, not lost -->
+    <ng-container
+      [ngTemplateOutlet]="reasoningTrail"
+      [ngTemplateOutletContext]="{ $implicit: msg }"
+    />
+    <ng-container
+      [ngTemplateOutlet]="knowledgeApplied"
+      [ngTemplateOutletContext]="{ $implicit: msg }"
+    />
+    <ng-container
+      [ngTemplateOutlet]="dataProvenance"
+      [ngTemplateOutletContext]="{ $implicit: msg }"
+    />
+    @if (latest()) {
+      @if (customAnswerOpen()) {
+        <div
+          class="mt-3 flex items-center gap-2 rounded-xl border border-border-strong bg-surface-muted p-2 focus-within:border-border-selected"
+        >
+          <input
+            id="custom-answer"
+            type="text"
+            placeholder="Type your own answer…"
+            aria-label="Custom answer"
+            [value]="customAnswer()"
+            [disabled]="busy()"
+            (input)="customAnswer.set($any($event.target).value)"
+            (keydown)="onCustomAnswerKeydown($event)"
+            class="min-w-0 flex-1 bg-transparent px-1 text-[13px] text-fg outline-none placeholder:text-fg-muted"
+          />
+          <button
+            type="button"
+            title="Send custom answer"
+            aria-label="Send custom answer"
+            (click)="sendCustomAnswer()"
+            [disabled]="busy() || customAnswer().trim() === ''"
+            class="rounded-md bg-primary p-1.5 text-on-primary hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-fg-muted"
+          >
+            <lucide-angular [img]="ArrowUp" [size]="14" />
+          </button>
+        </div>
+      }
+      <div
+        class="mt-2 flex items-center justify-between border-t border-border pt-2.5"
+      >
+        <button
+          type="button"
+          (click)="toggleCustomAnswer()"
+          [disabled]="busy()"
+          [attr.aria-expanded]="customAnswerOpen()"
+          class="rounded-lg px-2.5 py-1.5 text-[13px] text-fg-muted hover:bg-surface-muted hover:text-fg disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {{ customAnswerOpen() ? "Cancel custom answer" : "Something else" }}
+        </button>
+        <button
+          type="button"
+          (click)="skipClarification()"
+          [disabled]="busy()"
+          class="rounded-lg border border-border-strong px-3 py-1.5 text-[13px] text-fg hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Skip
+        </button>
+      </div>
+    }
+  </div>
+} @else if (msg.report; as report) {
+  <!-- Deep analysis report: title, executive summary, download -->
+  <div class="card p-4" [attr.id]="anchorId()">
+    <div class="flex items-start gap-3">
+      <span
+        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-fg"
+      >
+        <lucide-angular [img]="Telescope" [size]="15" />
+      </span>
+      <span class="flex min-w-0 flex-1 flex-col">
+        <span class="truncate text-[14px] font-medium text-fg-strong">
+          {{ report.title }}
+        </span>
+        <span class="text-[12px] text-fg-muted">
+          Deep analysis · {{ report.angles }}
+          {{ report.angles === 1 ? "angle" : "angles" }} investigated
+        </span>
+      </span>
+      <button
+        type="button"
+        (click)="downloadReport.emit(report)"
+        [disabled]="reportDownloading()"
+        title="Download the full report (.md)"
+        aria-label="Download report"
+        class="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-[12px] text-fg hover:border-border-strong hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        @if (reportDownloading()) {
+          <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
+        } @else {
+          <lucide-angular [img]="Download" [size]="13" />
+        }
+        Report
+      </button>
+    </div>
+    @if (msg.content.trim()) {
+      <div class="prose-dark mt-3" [innerHTML]="msg.content | markdown"></div>
+    }
+  </div>
+} @else if (msg.rfpPackage; as pkg) {
+  <!-- RFP package: title, files, downloads -->
+  <div class="card p-4" [attr.id]="anchorId()" data-testid="rfp-package-card">
+    <div class="flex items-start gap-3">
+      <span
+        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-fg"
+      >
+        <lucide-angular [img]="FileArchive" [size]="15" />
+      </span>
+      <span class="flex min-w-0 flex-1 flex-col">
+        <span class="truncate text-[14px] font-medium text-fg-strong">
+          {{ pkg.title }}
+        </span>
+        <span class="flex items-center gap-2 text-[12px] text-fg-muted">
+          <span data-testid="rfp-package-label">
+            RFP package{{ pkg.draft ? " (draft)" : "" }} ·
+            {{ pkg.files.length }}
+            {{ pkg.files.length === 1 ? "file" : "files" }}
+          </span>
+          @if (pkg.draft) {
+            <span class="chip chip-warning" data-testid="rfp-package-draft-chip"
+              >Draft</span
+            >
+          }
+        </span>
+      </span>
+      @if (hasRfpPdf(pkg)) {
+        <button
+          type="button"
+          data-testid="rfp-package-download-pdf"
+          (click)="downloadRfp.emit({ pkg: pkg, file: 'rfp.pdf' })"
+          [disabled]="!!rfpDownloading()"
+          class="btn btn-primary shrink-0"
+        >
+          @if (rfpDownloading() === pkg.rfpId + "/rfp.pdf") {
+            <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
+          } @else {
+            <lucide-angular [img]="Download" [size]="13" />
+          }
+          <span>{{
+            pkg.draft ? "Download draft (PDF)" : "Download RFP (PDF)"
+          }}</span>
+        </button>
+      }
+      <button
+        type="button"
+        data-testid="rfp-package-download"
+        (click)="downloadRfp.emit({ pkg: pkg })"
+        [disabled]="!!rfpDownloading()"
+        class="btn btn-secondary shrink-0"
+      >
+        @if (rfpDownloading() === pkg.rfpId + "/") {
+          <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
+        } @else {
+          <lucide-angular [img]="Download" [size]="13" />
+        }
+        <span>{{
+          pkg.draft ? "Download draft (.zip)" : "Download package (.zip)"
+        }}</span>
+      </button>
+    </div>
+    <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+      @for (file of pkg.files; track file.name) {
+        @if (file.name !== "manifest.json") {
+          <button
+            type="button"
+            data-testid="rfp-package-file"
+            (click)="downloadRfp.emit({ pkg: pkg, file: file.name })"
+            [disabled]="!!rfpDownloading()"
+            class="text-[12px] text-fg-muted underline hover:text-fg disabled:opacity-50"
+          >
+            {{ file.name }}
+          </button>
+        }
+      }
+    </div>
+    @if (msg.content.trim()) {
+      <div class="prose-dark mt-3" [innerHTML]="msg.content | markdown"></div>
+    }
+  </div>
+} @else if (msg.visual; as visual) {
+  <!-- Visual event card -->
+  <div class="group">
+    <div
+      class="flex items-center gap-3 rounded-xl border border-border bg-surface-muted px-3 py-2.5"
+    >
+      <span
+        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-fg"
+      >
+        <lucide-angular [img]="BarChart3" [size]="15" />
+      </span>
+      <span class="flex min-w-0 flex-col">
+        <span class="truncate text-[13px] text-fg">
+          {{
+            visual.action === "created"
+              ? "Created"
+              : visual.action === "updated"
+                ? "Updated"
+                : "Reverted"
+          }}
+          <span class="font-medium">{{ visual.title }}</span>
+        </span>
+        <span class="text-[12px] text-fg-muted"
+          >Version {{ visual.version }}</span
+        >
+      </span>
+      <button
+        type="button"
+        (click)="viewVisual.emit(visual)"
+        class="ml-auto shrink-0 rounded-lg border border-border px-2.5 py-1 text-[12px] text-fg hover:border-border-strong hover:bg-surface-muted"
+      >
+        View
+      </button>
+    </div>
+    @if (
+      msg.content &&
+      !msg.content.startsWith("Created interactive visual") &&
+      !msg.content.startsWith("Updated interactive visual") &&
+      !msg.content.startsWith("Reverted interactive visual")
+    ) {
+      <div class="prose-dark mt-2" [innerHTML]="msg.content | markdown"></div>
+    }
+  </div>
+} @else {
+  <div class="group flex max-w-[800px] gap-3">
+    <img
+      src="brand/agentic-hub/sparks.svg"
+      alt=""
+      width="24"
+      height="24"
+      class="size-6 shrink-0 self-start"
+    />
+    <div class="flex min-w-0 flex-1 flex-col gap-4">
+      <div class="prose-dark" [innerHTML]="msg.content | markdown"></div>
+      @if (msg.readinessReport; as readiness) {
+        <!-- Data readiness report: score, band, Open scorecard -->
+        <app-readiness-card
+          [report]="readiness"
+          (openScorecard)="openScorecard.emit(readiness)"
+        />
+      }
+      <ng-container
+        [ngTemplateOutlet]="reasoningTrail"
+        [ngTemplateOutletContext]="{ $implicit: msg }"
+      />
+      <ng-container
+        [ngTemplateOutlet]="knowledgeApplied"
+        [ngTemplateOutletContext]="{ $implicit: msg }"
+      />
+      @if (msg.interpretation) {
+        <!-- Deterministic provenance caption, built server-side -->
+        <div
+          class="mt-2 flex items-center gap-1.5 text-[11px] text-fg-muted"
+          [title]="msg.interpretation"
+        >
+          <lucide-angular [img]="Info" [size]="12" class="shrink-0" />
+          <span class="truncate">{{ msg.interpretation }}</span>
+        </div>
+      }
+      <ng-container
+        [ngTemplateOutlet]="dataProvenance"
+        [ngTemplateOutletContext]="{ $implicit: msg }"
+      />
+      <div class="flex min-h-5 items-center">
+        @if (msg.verified) {
+          <!-- Answer's SQL matches a query in the verified library -->
+          <span
+            title="Matches an approved query"
+            class="mr-1 flex items-center gap-1 rounded-full border border-on-success-soft/30 bg-success-soft px-2 py-0.5 text-[11px] font-medium text-on-success-soft"
+          >
+            <lucide-angular [img]="BadgeCheck" [size]="12" />
+            Verified
+          </span>
+        }
+        @if (msg.crossCheck; as check) {
+          <!-- Careful mode: an independent query re-ran the question -->
+          <span
+            [title]="crossCheckTitle(check)"
+            class="mr-1 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
+            [class]="crossCheckClass(check)"
+          >
+            <lucide-angular [img]="crossCheckIcon(check)" [size]="12" />
+            {{ crossCheckLabel(check) }}
+          </span>
+        }
+        <button
+          (click)="copyMessage(msg.content)"
+          title="Copy message"
+          class="rounded-full p-1.5 text-icon hover:bg-surface-muted"
+        >
+          <lucide-angular [img]="Copy" [size]="16" />
+        </button>
+        @if (showRating() && msg.data?.length) {
+          <!-- Answer rating: thumbs-up saves the query as verified -->
+          <button
+            type="button"
+            (click)="rate.emit('up')"
+            [disabled]="ratingPending()"
+            [attr.aria-pressed]="msg.feedback === 'up'"
+            [title]="
+              msg.feedback === 'up'
+                ? 'Saved as verified query'
+                : 'Save as verified query'
+            "
+            aria-label="Save as verified query"
+            class="rounded-full p-1.5 disabled:cursor-not-allowed disabled:opacity-40"
+            [class]="
+              msg.feedback === 'up'
+                ? 'qti-rating-on bg-success-soft text-on-success-soft'
+                : 'text-icon hover:bg-surface-muted'
+            "
+          >
+            <lucide-angular [img]="ThumbsUp" [size]="16" />
+          </button>
+          <button
+            type="button"
+            (click)="rate.emit('down')"
+            [disabled]="ratingPending()"
+            [attr.aria-pressed]="msg.feedback === 'down'"
+            [title]="
+              msg.feedback === 'down' ? 'Marked as wrong' : 'Mark answer as wrong'
+            "
+            aria-label="Mark answer as wrong"
+            class="rounded-full p-1.5 disabled:cursor-not-allowed disabled:opacity-40"
+            [class]="
+              msg.feedback === 'down'
+                ? 'qti-rating-on bg-danger-soft text-on-danger-soft'
+                : 'text-icon hover:bg-surface-muted'
+            "
+          >
+            <lucide-angular [img]="ThumbsDown" [size]="16" />
+          </button>
+        }
+      </div>
+      @if (showGenerateVisual() && msg.content.trim()) {
+        <div class="mt-2 flex flex-wrap items-start gap-2">
+          <button
+            type="button"
+            (click)="requestVisualization()"
+            [disabled]="busy() || visualGenerating()"
+            class="flex items-center gap-2 rounded-lg border border-border bg-surface-muted px-3 py-2 text-[12px] text-fg hover:border-border-strong hover:bg-surface-selected disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            @if (visualGenerating()) {
+              <lucide-angular
+                [img]="Loader2"
+                [size]="14"
+                class="animate-spin"
+              />
+              <span>Generating interactive visuals…</span>
+            } @else {
+              <lucide-angular [img]="Sparkles" [size]="14" />
+              <span>Generate interactive visuals</span>
+            }
+          </button>
+        </div>
+      }
+    </div>
+  </div>
+}
+
+<!--
+  The assistant's route from the question to this answer, in its own words —
+  read before the SQL, so the narrative comes first and the raw queries second.
+-->
+<ng-template #reasoningTrail let-message>
+  @if (message.reasoning?.length) {
+    <details
+      class="mt-2 rounded-lg border border-border bg-surface-muted text-[12px]"
+    >
+      <summary
+        class="cursor-pointer px-3 py-1.5 text-fg-muted select-none hover:text-fg"
+      >
+        How I worked this out ({{ message.reasoning.length }}
+        {{ message.reasoning.length === 1 ? "step" : "steps" }})
+      </summary>
+      <ol class="flex flex-col gap-2 border-t border-border px-3 py-2">
+        @for (step of message.reasoning; track $index) {
+          <li class="flex gap-2.5">
+            <span
+              class="shrink-0 font-mono text-[11px] leading-5 text-fg-muted"
+            >
+              {{ step.step }}.
+            </span>
+            <span class="flex min-w-0 flex-col">
+              <span class="leading-5 text-fg">{{ step.rationale }}</span>
+              @if (reasoningOutcome(step); as outcome) {
+                <span
+                  class="text-[11px] leading-5"
+                  [class]="step.error ? 'text-on-danger-soft' : 'text-fg-muted'"
+                >
+                  {{ outcome }}
+                </span>
+              }
+            </span>
+          </li>
+        }
+      </ol>
+    </details>
+  }
+</ng-template>
+
+<!--
+  The standing knowledge the answer was produced under. Deliberately separate
+  from the reasoning steps: those are things the assistant did, these are
+  things it was told before it did anything. Server-recorded at the moment the
+  system block was built, so it lists what the model was given — not a claim
+  about which snippet changed the SQL.
+-->
+<ng-template #knowledgeApplied let-message>
+  @if (message.knowledge?.length) {
+    <details
+      class="mt-2 rounded-lg border border-border bg-surface-muted text-[12px]"
+    >
+      <summary
+        class="cursor-pointer px-3 py-1.5 text-fg-muted select-none hover:text-fg"
+      >
+        Ontology in context ({{ message.knowledge.length }})
+      </summary>
+      <ul class="flex flex-col gap-2 border-t border-border px-3 py-2">
+        @for (item of message.knowledge; track item.id) {
+          <li class="flex min-w-0 flex-col gap-0.5">
+            <span class="flex flex-wrap items-center gap-1.5">
+              <span
+                class="shrink-0 text-[11px] font-medium"
+                [class]="knowledgeAccentClass(item.kind)"
+                [title]="knowledgeDescription(item.kind)"
+                >{{ knowledgeKindLabel(item.kind) }}</span
+              >
+              <span class="text-fg">{{ item.title }}</span>
+              <span class="text-[11px] text-fg-muted">{{
+                item.datasetId ?? "all datasets"
+              }}</span>
+            </span>
+            <span class="leading-5 text-fg-muted">{{ item.body }}</span>
+          </li>
+        }
+      </ul>
+      <p class="border-t border-border px-3 py-1.5 text-[11px] text-fg-muted">
+        The dataset ontology the assistant was given before answering. Edit it
+        in the dataset's Ontology tab; disabled items are never included.
+      </p>
+    </details>
+  }
+</ng-template>
+
+<!--
+  Provenance blocks shared by answers and clarifications: a clarification that
+  ends a turn carries the data collected up to that point, so the work stays
+  visible instead of being lost.
+-->
+<ng-template #dataProvenance let-message>
+  @if (message.entities?.length) {
+    <div class="mt-2 flex flex-wrap items-center gap-1.5">
+      <span
+        class="text-[11px] font-medium tracking-wide text-fg-muted uppercase"
+      >
+        Data entities
+      </span>
+      @for (entity of message.entities; track entity) {
+        <span
+          class="rounded-full border border-border bg-surface-muted px-2 py-0.5 font-mono text-[11px] text-fg"
+        >
+          {{ entity }}
+        </span>
+      }
+    </div>
+  }
+  @if (message.data?.length) {
+    <details
+      class="qti-data-used w-full rounded-lg border border-border bg-surface text-[12px]"
+    >
+      <summary
+        class="flex cursor-pointer items-center gap-2 p-3 text-[14px] leading-[22px] text-on-primary-soft select-none"
+      >
+        <img
+          src="brand/agentic-hub/data-sources.svg"
+          alt=""
+          width="24"
+          height="24"
+          class="shrink-0"
+        />
+        <span class="min-w-0 flex-1">
+          Data used ({{ message.data.length }}
+          {{ message.data.length === 1 ? "query" : "queries" }})
+        </span>
+        <span class="qti-chevron shrink-0 text-icon" aria-hidden="true"></span>
+      </summary>
+      <div class="flex flex-col gap-2 border-t border-border px-3 py-2">
+        @for (record of message.data; track $index) {
+          <div class="group/record">
+            <div class="flex items-center gap-2 text-fg-muted">
+              <lucide-angular [img]="Wrench" [size]="12" class="shrink-0" />
+              <span
+                class="font-mono"
+                [class.text-on-danger-soft]="record.error"
+                >{{ dataLabel(record) }}</span
+              >
+              @if (record.truncated) {
+                <span
+                  class="shrink-0 text-on-warning-soft"
+                  title="Row cap reached — counts may be incomplete"
+                >
+                  (truncated)
+                </span>
+              }
+              @if (record.input) {
+                <button
+                  type="button"
+                  (click)="copySql(record)"
+                  title="Copy SQL"
+                  aria-label="Copy SQL"
+                  class="ml-auto shrink-0 rounded p-1 text-fg-muted opacity-0 group-hover/record:opacity-100 hover:bg-surface-muted hover:text-fg"
+                >
+                  <lucide-angular [img]="Copy" [size]="12" />
+                </button>
+              }
+            </div>
+            @if (record.rationale) {
+              <!-- Why this query was run, before the query itself -->
+              <p class="mt-1 text-[11px] leading-5 text-fg-muted">
+                {{ record.rationale }}
+              </p>
+            }
+            @for (warning of record.warnings; track $index) {
+              <!-- A fault in the query itself: louder than the rationale,
+                   because the figures above it may not mean what they say -->
+              <p
+                class="mt-1 flex items-start gap-1.5 text-[11px] leading-5 text-on-warning-soft"
+              >
+                <lucide-angular
+                  [img]="TriangleAlert"
+                  [size]="12"
+                  class="mt-0.5 shrink-0"
+                />
+                <span>{{ warning }}</span>
+              </p>
+            }
+            @if (record.input) {
+              <pre
+                class="mt-1 overflow-x-auto rounded bg-surface-muted px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-fg-muted"
+                >{{ record.input }}</pre>
+            }
+            @if (record.error) {
+              <p class="mt-1 text-on-danger-soft">{{ record.error }}</p>
+            }
+          </div>
+        }
+      </div>
+    </details>
+  }
+</ng-template>

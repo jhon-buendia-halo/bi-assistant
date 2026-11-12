@@ -15,7 +15,7 @@ import {
   parseToolEvent,
 } from './sessions-api.service';
 
-describe('SessionsApiService feedback', () => {
+describe('SessionsApiService past chat reads', () => {
   let service: SessionsApiService;
   let http: HttpTestingController;
 
@@ -36,32 +36,6 @@ describe('SessionsApiService feedback', () => {
     );
     expect(req.request.method).toBe('GET');
     req.flush(sampleReadinessReport());
-  });
-
-  it('creates from an agent, sending the typed name only when given', () => {
-    service.createFromAgent('rfp', 'Acme').subscribe();
-    expect(http.expectOne(`${API_BASE_URL}/sessions`).request.body).toEqual({
-      agentId: 'rfp',
-      name: 'Acme',
-    });
-    service.createFromAgent('rfp').subscribe();
-    expect(http.expectOne(`${API_BASE_URL}/sessions`).request.body).toEqual({
-      agentId: 'rfp',
-    });
-  });
-
-  it('creates over picked datasets, sending agentId only when given (R64)', () => {
-    service.create('Q', ['Core']).subscribe();
-    expect(http.expectOne(`${API_BASE_URL}/sessions`).request.body).toEqual({
-      name: 'Q',
-      datasets: ['Core'],
-    });
-    service.create('Q', ['Core'], 'assistant-v2').subscribe();
-    expect(http.expectOne(`${API_BASE_URL}/sessions`).request.body).toEqual({
-      name: 'Q',
-      datasets: ['Core'],
-      agentId: 'assistant-v2',
-    });
   });
 
   it('downloads an RFP package zip or one file as a blob', () => {
@@ -101,61 +75,6 @@ describe('SessionsApiService feedback', () => {
       )
       .flush(new Blob(['m']));
   });
-
-  it('posts the rating for a message', () => {
-    service
-      .sendMessageFeedback('session 1', '2026-01-01T00:00:00.000Z', 'up')
-      .subscribe();
-
-    const req = http.expectOne(
-      `${API_BASE_URL}/sessions/session%201/messages/feedback`,
-    );
-    expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({
-      messageAt: '2026-01-01T00:00:00.000Z',
-      rating: 'up',
-    });
-    req.flush({ ok: true, message: 'Saved' });
-  });
-
-  it('posts a repair request with the failing version', () => {
-    service
-      .repairVisualization('session 1', 'visual 1', 'x is not defined', 2)
-      .subscribe();
-
-    const req = http.expectOne(
-      `${API_BASE_URL}/sessions/session%201/visualizations/visual%201/repair`,
-    );
-    expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ error: 'x is not defined', version: 2 });
-    req.flush({ ok: true, message: 'Repaired' });
-  });
-
-  it('starts a deep-analysis job and polls it', () => {
-    service
-      .startDeepAnalysis('session 1', 'Why are denials rising?')
-      .subscribe();
-    const started = http.expectOne(
-      `${API_BASE_URL}/sessions/session%201/deep-analysis`,
-    );
-    expect(started.request.method).toBe('POST');
-    expect(started.request.body).toEqual({
-      question: 'Why are denials rising?',
-    });
-    started.flush({
-      ok: true,
-      message: 'Deep analysis started',
-      jobId: 'job 1',
-    });
-
-    service.deepAnalysisStatus('session 1', 'job 1').subscribe();
-    const polled = http.expectOne(
-      `${API_BASE_URL}/sessions/session%201/deep-analysis/job%201`,
-    );
-    expect(polled.request.method).toBe('GET');
-    polled.flush({ ok: true, message: 'planning', status: 'planning' });
-  });
-
   it('downloads the report as a blob', () => {
     service.downloadDeepAnalysis('session 1', 'job 1').subscribe();
     const req = http.expectOne(
@@ -166,93 +85,9 @@ describe('SessionsApiService feedback', () => {
     req.flush(new Blob(['# report']));
   });
 
-  it('posts a tailoring instruction', () => {
-    service
-      .tailorVisualization('session 1', 'visual 1', 'Sort descending.')
-      .subscribe();
-
-    const req = http.expectOne(
-      `${API_BASE_URL}/sessions/session%201/visualizations/visual%201/tailor`,
-    );
-    expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ instruction: 'Sort descending.' });
-    req.flush({ ok: true, message: 'Updated' });
-  });
 });
 
-describe('SessionsApiService streaming', () => {
-  let service: SessionsApiService;
-
-  beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [provideHttpClient()] });
-    service = TestBed.inject(SessionsApiService);
-  });
-
-  it('reports a stream that closes without a terminal event', async () => {
-    spyOn(globalThis, 'fetch').and.resolveTo(
-      sseResponse({ type: 'text', content: 'partial answer' }),
-    );
-    const onText = jasmine.createSpy('onText');
-    const onError = jasmine.createSpy('onError');
-
-    await service.streamMessage('session-1', 'question', {
-      onText,
-      onError,
-    });
-
-    expect(onText).toHaveBeenCalledOnceWith('partial answer');
-    expect(onError).toHaveBeenCalledOnceWith('Stream ended before completion');
-  });
-
-  it('accepts a stream that ends with done', async () => {
-    const session = {
-      id: 'session-1',
-      name: 'Analysis',
-      datasets: ['dataset'],
-      messages: [],
-    };
-    spyOn(globalThis, 'fetch').and.resolveTo(
-      sseResponse({ type: 'done', session }),
-    );
-    const onDone = jasmine.createSpy('onDone');
-    const onError = jasmine.createSpy('onError');
-
-    await service.streamMessage('session-1', 'question', {
-      onDone,
-      onError,
-    });
-
-    expect(onDone).toHaveBeenCalledOnceWith(session);
-    expect(onError).not.toHaveBeenCalled();
-  });
-
-  it('reads the rationale off a tool frame, name-only frames included', async () => {
-    const onTool = jasmine.createSpy('onTool');
-    spyOn(globalThis, 'fetch').and.resolveTo(
-      sseResponse({
-        type: 'tool',
-        content: JSON.stringify({
-          name: 'run_readonly_sql',
-          rationale: 'No cost-per-member column, so I checked the keys first.',
-        }),
-      }),
-    );
-
-    await service.streamMessage('session-1', 'question', { onTool });
-    expect(onTool).toHaveBeenCalledOnceWith({
-      name: 'run_readonly_sql',
-      rationale: 'No cost-per-member column, so I checked the keys first.',
-    });
-
-    // Old contract: the frame is the bare tool name.
-    expect(parseToolEvent('run_readonly_sql')).toEqual({
-      name: 'run_readonly_sql',
-    });
-    expect(parseToolEvent('{"rationale":"orphaned"}')).toEqual({
-      name: '{"rationale":"orphaned"}',
-    });
-  });
-
+describe('stream frame parsers (a run host streams them too)', () => {
   it('reads the input a tool call carries, such as the skill it loads', () => {
     expect(
       parseToolEvent('{"name":"skill","input":"rfp-client-renewal"}'),
@@ -262,63 +97,12 @@ describe('SessionsApiService streaming', () => {
     });
   });
 
-  it('hands a tool-progress frame to onToolProgress and ignores malformed ones', async () => {
-    const progress = {
-      tool: 'assess_data_readiness',
-      phase: 'profiling',
-      message: 'Profiling claims (2 of 5)',
-      done: 2,
-      total: 5,
-      entity: 'claims',
-    };
-    spyOn(globalThis, 'fetch').and.resolveTo(
-      sseResponse(
-        { type: 'tool-progress', content: JSON.stringify(progress) },
-        { type: 'tool-progress', content: 'not json' },
-        { type: 'tool-progress', content: JSON.stringify({ phase: 'x' }) },
-      ),
-    );
-    const onToolProgress = jasmine.createSpy('onToolProgress');
-
-    await service.streamMessage('session-1', 'question', { onToolProgress });
-
-    expect(onToolProgress).toHaveBeenCalledOnceWith(progress);
-  });
-
-  it('hands a workflow frame to onWorkflow', async () => {
-    const workflow = {
-      phases: [{ number: 1, title: 'Scope' }],
-      current: 1,
-      done: [],
-      source: 'agent',
-      skipped: [],
-      waiting: true,
-    };
-    spyOn(globalThis, 'fetch').and.resolveTo(
-      sseResponse({ type: 'workflow', content: JSON.stringify(workflow) }),
-    );
-    const onWorkflow = jasmine.createSpy('onWorkflow');
-
-    await service.streamMessage('session-1', 'question', { onWorkflow });
-
-    expect(onWorkflow).toHaveBeenCalledOnceWith(workflow);
-  });
-
-  it('parses the double-encoded readiness-report frame', async () => {
+  it('parses the double-encoded readiness-report frame', () => {
     const event = {
       report: sampleReadinessReport(),
       panelItem: sampleReadinessPanelItem(),
     };
-    spyOn(globalThis, 'fetch').and.resolveTo(
-      sseResponse({ type: 'readiness-report', content: JSON.stringify(event) }),
-    );
-    const onReadinessReport = jasmine.createSpy('onReadinessReport');
-
-    await service.streamMessage('session-1', 'question', {
-      onReadinessReport,
-    });
-
-    expect(onReadinessReport).toHaveBeenCalledOnceWith(event);
+    expect(parseReadinessReportEvent(JSON.stringify(event))).toEqual(event);
   });
 
   it('ignores a malformed readiness-report frame', () => {
@@ -333,82 +117,4 @@ describe('SessionsApiService streaming', () => {
       ),
     ).toBeNull();
   });
-
-  it('asks for careful mode only when the turn requested it', async () => {
-    // A fresh Response per call: a body stream can only be read once.
-    const fetchSpy = spyOn(globalThis, 'fetch').and.callFake(() =>
-      Promise.resolve(sseResponse({ type: 'done' })),
-    );
-
-    await service.streamMessage('session-1', 'question', {});
-    expect(requestBody(fetchSpy)).toEqual({ content: 'question' });
-
-    await service.streamMessage(
-      'session-1',
-      'question',
-      {},
-      undefined,
-      'visual-1',
-      true,
-    );
-    expect(requestBody(fetchSpy)).toEqual({
-      content: 'question',
-      activeVisualizationId: 'visual-1',
-      careful: true,
-    });
-  });
 });
-
-describe('SessionsApiService streaming', () => {
-  let service: SessionsApiService;
-
-  beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [provideHttpClient()] });
-    service = TestBed.inject(SessionsApiService);
-  });
-
-  it('sends no auth header (BA-232)', async () => {
-    const fetchSpy = spyOn(globalThis, 'fetch').and.callFake(() =>
-      Promise.resolve(sseResponse({ type: 'done' })),
-    );
-
-    await service.streamMessage('session-1', 'question', {});
-    const headers = (fetchSpy.calls.mostRecent().args[1] as RequestInit)
-      .headers as Record<string, string>;
-    expect(headers).toEqual({ 'Content-Type': 'application/json' });
-  });
-
-  it('reports a failed stream with its plain status', async () => {
-    spyOn(globalThis, 'fetch').and.resolveTo(
-      new Response('{}', { status: 403 }),
-    );
-    const onError = jasmine.createSpy('onError');
-
-    await service.streamMessage('session-1', 'question', { onError });
-
-    expect(onError).toHaveBeenCalledOnceWith('Stream failed (403)');
-  });
-});
-
-/** The JSON body of the most recent fetch the service issued. */
-function requestBody(fetchSpy: jasmine.Spy): unknown {
-  const init = fetchSpy.calls.mostRecent().args[1] as RequestInit;
-  return JSON.parse(init.body as string);
-}
-
-function sseResponse(...events: unknown[]): Response {
-  const body = new ReadableStream({
-    start(controller) {
-      controller.enqueue(
-        new TextEncoder().encode(
-          events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(''),
-        ),
-      );
-      controller.close();
-    },
-  });
-  return new Response(body, {
-    status: 200,
-    headers: { 'Content-Type': 'text/event-stream' },
-  });
-}

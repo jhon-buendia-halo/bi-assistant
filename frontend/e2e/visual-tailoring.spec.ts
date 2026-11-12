@@ -3,12 +3,14 @@ import path from 'node:path';
 import type { Frame, Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.fixture';
 import {
-  createWorldCupSession,
+  WORLD_CUP_DATASET,
   followOsTheme,
   openSessions,
   WORLD_CUP_SESSION,
 } from './helpers/app-actions';
+import { apiJson } from './helpers/api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
+import { seedPastChat } from './helpers/past-chats';
 import {
   LlmStub,
   StubReply,
@@ -16,10 +18,12 @@ import {
   startLlmStub,
   systemTexts,
 } from './helpers/llm-stub';
+import { scenarioStep } from './support/demo-captions';
 
 /**
- * Mirrors the Feature "Visual tailoring" in specs/capabilities/visuals/spec.md:
- * the scenarios "The visual follows the app's theme" and "An older visual
+ * Mirrors the Feature "Visual tailoring" in specs/capabilities/visuals/spec.md,
+ * against a past chat's read-only panel (the chat composer is retired, plan
+ * 1.24.8; a run's own panel returns with plan 1.25.4): the scenarios "The visual follows the app's theme" and "An older visual
  * opens in the current theme" (visuals R40, BA-230). The visual is designed
  * through the real designer pipeline against the recording LLM stub, so the
  * frame under test is the document the backend builds.
@@ -120,20 +124,68 @@ async function expectFrameTheme(frame: Frame, theme: Theme): Promise<void> {
   );
 }
 
-/** Asks the question and generates the visual from its answer. */
-async function generateVisual(page: Page): Promise<string> {
-  const sessionId = await createWorldCupSession(page);
-  await page.getByPlaceholder('Ask a follow-up question…').fill(QUESTION);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText(ANSWER)).toBeVisible();
-  await page
-    .getByRole('button', { name: 'Generate interactive visuals' })
-    .click();
-  await expect(page.getByText('Interactive visual generated')).toBeVisible();
-  return sessionId;
+/**
+ * Seeds an old chat with a visual into the data dir (no route starts a chat
+ * any more) and opens it from Runs → Past chats. The chat is read-only, with
+ * its visual in the panel.
+ */
+async function openPastChatWithVisual(
+  page: Page,
+  appDataDir: string,
+): Promise<string> {
+  const id = seedPastChat(appDataDir, {
+    name: WORLD_CUP_SESSION,
+    datasets: [WORLD_CUP_DATASET],
+    workflowId: 'agent:assistant',
+    turns: [
+      {
+        question: QUESTION,
+        answer: ANSWER,
+        data: [
+          {
+            tool: 'run_readonly_sql',
+            input: SQL,
+            columns: ['stage', 'matches'],
+            rows: [
+              { stage: 'Group stage', matches: 48 },
+              { stage: 'Round of 16', matches: 8 },
+              { stage: 'Final', matches: 1 },
+            ],
+            rowCount: 3,
+            rationale: 'Count the matches per stage.',
+          },
+        ],
+      },
+    ],
+    visual: {
+      title: VISUAL_TITLE,
+      description: SPEC_REPLY.description,
+      spec: SPEC_REPLY.spec,
+    },
+  });
+  await page.reload();
+  await openPastChat(page);
+  return id;
 }
 
-test("the visual follows the app's theme", async ({ page }) => {
+/** Opens the past chat from Runs → Past chats and its visual in the panel. */
+async function openPastChat(page: Page): Promise<void> {
+  await openSessions(page);
+  await page
+    .getByRole('navigation', { name: 'Past chats', exact: true })
+    .getByRole('button', { name: new RegExp(`^${WORLD_CUP_SESSION}`) })
+    .click();
+  await expect(page.getByTestId('past-chat-banner')).toBeVisible();
+  // The details panel starts collapsed after a reload (app-shell R2): open
+  // the visual from its card in the chat.
+  await page
+    .getByText(`Created ${VISUAL_TITLE}`)
+    .locator('xpath=ancestor::*[.//button[normalize-space()="View"]][1]')
+    .getByRole('button', { name: 'View' })
+    .click();
+}
+
+test("the visual follows the app's theme", async ({ appDataDir, page }) => {
   // The theme is switched while the visual stays open: Settings would replace
   // the chat (and with it the panel), so the app follows the operating system
   // (System) and the OS setting is switched; the app's resolved theme changes
@@ -142,7 +194,7 @@ test("the visual follows the app's theme", async ({ page }) => {
   await followOsTheme(page);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
-  await generateVisual(page);
+  await openPastChatWithVisual(page, appDataDir);
   const frame = await visualFrame(page);
   await expectFrameTheme(frame, 'light');
   // A chart label uses the frame's tokens too, not a hardcoded light grey.
@@ -180,7 +232,7 @@ test('an older visual opens in the current theme', async ({
   page,
   appDataDir,
 }) => {
-  const sessionId = await generateVisual(page);
+  const sessionId = await openPastChatWithVisual(page, appDataDir);
   await visualFrame(page);
 
   // Rewrite the stored visual as one made before the themed frame: a legacy
@@ -225,18 +277,7 @@ test('an older visual opens in the current theme', async ({
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
   // When I open the visual
-  await openSessions(page);
-  await page
-    .getByRole('navigation', { name: 'Sessions', exact: true })
-    .getByRole('button', { name: new RegExp(`^${WORLD_CUP_SESSION}`) })
-    .click();
-  // The details panel starts collapsed after a reload (app-shell R2): open
-  // the visual from its card in the chat.
-  await page
-    .getByText(`Created ${VISUAL_TITLE}`)
-    .locator('xpath=ancestor::*[.//button[normalize-space()="View"]][1]')
-    .getByRole('button', { name: 'View' })
-    .click();
+  await openPastChat(page);
   const frame = await visualFrame(page);
   await expect(frame.getByText('Made before the themed frame')).toBeVisible();
   await expectFrameTheme(frame, 'dark');
@@ -244,3 +285,97 @@ test('an older visual opens in the current theme', async ({
     path: path.join(EVIDENCE, 'visual-older-opens-dark.png'),
   });
 });
+
+/**
+ * "Visual actions on a run's result" (visuals R2, R12-R24 on a run; roadmap
+ * 1.23.25): the visual of a run's answer opens under it on the run page, with
+ * Tailor, versions, Refresh and Download over `/workflow-runs/:id/visualizations`.
+ */
+test(
+  'I generate, tailor, revert and refresh a visual on a run answer',
+  { tag: ['@demo', '@story-1.23.25'] },
+  async ({ page }) => {
+    const runVisual = page.getByTestId('run-visual');
+    const versionButton = runVisual.getByTitle('Version history');
+    let runId = '';
+    await scenarioStep(page, 'Given a run of the Assistant with an answer', async () => {
+      const run = await apiJson<{ id: string }>(
+        page,
+        'POST',
+        '/workflows/agent%3Aassistant/runs',
+        { input: { question: QUESTION, datasets: [WORLD_CUP_DATASET] } },
+      );
+      runId = run.id;
+      await page.reload();
+    });
+    await scenarioStep(page, 'And I open the run from Runs', async () => {
+      await page
+        .getByRole('complementary', { name: 'Navigation rail' })
+        .getByRole('button', { name: 'Runs', exact: true })
+        .click();
+      await page.getByTestId(`run-${runId}`).getByRole('button').first().click();
+      await expect(page.getByTestId('run-detail-answer')).toContainText(ANSWER);
+    });
+    await scenarioStep(page, 'When I click Generate interactive visuals', async () => {
+      await page
+        .getByRole('button', { name: 'Generate interactive visuals' })
+        .click();
+    });
+    await scenarioStep(page, 'Then the visual opens under the answer at version 1', async () => {
+      await expect(runVisual.locator('iframe[title="Interactive visualization"]')).toBeVisible();
+      await expect(versionButton).toHaveText(/v1/);
+      await expect(page.getByTestId('run-detail-answer')).toContainText(
+        `Created ${VISUAL_TITLE}`,
+      );
+    });
+    await scenarioStep(page, 'When I tailor it with Sort ascending', async () => {
+      await runVisual.getByRole('button', { name: 'Tailor' }).click();
+      await runVisual.getByLabel('Sort').selectOption('asc');
+      await runVisual.getByRole('button', { name: 'Apply' }).click();
+    });
+    await scenarioStep(page, 'Then it is version 2', async () => {
+      await expect(versionButton).toHaveText(/v2/);
+      await expect(page.getByTestId('run-detail-answer')).toContainText(
+        `Updated ${VISUAL_TITLE}`,
+      );
+    });
+    await scenarioStep(page, 'When I make version 1 the current version', async () => {
+      await versionButton.click();
+      await runVisual.getByRole('button', { name: /Version 1/ }).click();
+      await versionButton.click();
+      await runVisual
+        .getByRole('button', { name: /Make v1 the current version/ })
+        .click();
+    });
+    await scenarioStep(page, 'Then version 1 is current again', async () => {
+      await expect(versionButton).toHaveText(/v1/);
+      await expect(page.getByTestId('run-detail-answer')).toContainText(
+        `Reverted ${VISUAL_TITLE}`,
+      );
+    });
+    await scenarioStep(page, 'When I refresh its data', async () => {
+      const refreshed = page.waitForResponse(
+        (res) =>
+          res.url().includes(`/workflow-runs/${runId}/visualizations/`) &&
+          res.url().endsWith('/refresh'),
+      );
+      await runVisual.getByRole('button', { name: 'Refresh data' }).click();
+      expect((await refreshed).ok()).toBe(true);
+    });
+    await scenarioStep(page, 'Then the visual stays at version 1 with no new version', async () => {
+      await expect(versionButton).toHaveText(/v1/);
+      await expect(runVisual.locator('iframe[title="Interactive visualization"]')).toBeVisible();
+    });
+    await scenarioStep(page, 'And reopening the run still shows the visual and its three cards', async () => {
+      await page.reload();
+      await page
+        .getByRole('complementary', { name: 'Navigation rail' })
+        .getByRole('button', { name: 'Runs', exact: true })
+        .click();
+      await page.getByTestId(`run-${runId}`).getByRole('button').first().click();
+      await expect(page.getByRole('button', { name: 'View' })).toHaveCount(3);
+      await page.getByRole('button', { name: 'View' }).first().click();
+      await expect(runVisual.locator('iframe[title="Interactive visualization"]')).toBeVisible();
+    });
+  },
+);

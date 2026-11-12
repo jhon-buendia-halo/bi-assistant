@@ -1,0 +1,108 @@
+# Stored workflow runs (1.23.14): api.md 118-122
+# Built backend (node backend/dist/main.js), scratch APP_DATA_DIR, free port; base URL shown as paths.
+# No LLM is configured, so the agent runs below end with the turn path's fallback answer; they are stored as any run.
+# The full agent path with the stub model (answer, panel files downloaded from the run's workspace, delete with
+# the workspace, a run killed mid-turn failed after a restart) is proven by backend/test/workflow-run-history.e2e-spec.ts.
+# Setup (not shown): a PostgreSQL datasource on a closed port and the dataset "World Cup Core" over it.
+
+## 1. A code-only run through 118 is stored and answers its runId
+
+$ curl -s -X POST /workflows/seq-text-demo/runs -H 'Content-Type: application/json' -d '{"input":{"text":"  Hello   workflow   world  "}}'
+{"workflowId":"seq-text-demo","status":"success","steps":[{"id":"clean-text","title":"Clean text","status":"success","output":{"text":"Hello workflow world"}},{"id":"count-words","title":"Count words","status":"success","output":{"text":"Hello workflow world","words":3,"characters":20}},{"id":"format-result","title":"Format result","status":"success","output":{"summary":"3 words, 20 characters: \"Hello workflow world\""}}],"output":{"summary":"3 words, 20 characters: \"Hello workflow world\""},"runId":"d246751d-ed04-4afe-8768-9b2a321150b3"}
+[HTTP 200]
+
+## 2. A streamed code-only run (119): run, steps, done { run }
+
+$ curl -s -X POST /workflows/seq-text-demo/runs/stream -H 'Content-Type: application/json' -d '{"input":{"text":"   "}}'
+data: {"type":"run","runId":"8a8249aa-519b-40b9-bf3b-cb858b7dc3a5","workflowId":"seq-text-demo"}
+
+data: {"type":"step","id":"clean-text","title":"Clean text","status":"running"}
+
+data: {"type":"step","id":"clean-text","title":"Clean text","status":"failed","error":"The text is empty"}
+
+data: {"type":"step","id":"count-words","title":"Count words","status":"skipped"}
+
+data: {"type":"step","id":"format-result","title":"Format result","status":"skipped"}
+
+data: {"type":"done","run":{"id":"8a8249aa-519b-40b9-bf3b-cb858b7dc3a5","workflowId":"seq-text-demo","workflowName":"Sequential test workflow","input":{"text":"   "},"status":"failed","steps":[{"id":"clean-text","title":"Clean text","status":"failed","error":"The text is empty"},{"id":"count-words","title":"Count words","status":"skipped"},{"id":"format-result","title":"Format result","status":"skipped"}],"datasets":[],"startedAt":"2026-11-12T00:36:35.113Z","ownerId":"local","createdAt":"2026-11-12T00:36:35.113Z","updatedAt":"2026-11-12T00:36:35.119Z","error":"The text is empty","finishedAt":"2026-11-12T00:36:35.119Z"}}
+
+
+[HTTP 200]
+
+## 3. An agent run (119): stored with its question and answer; a refused run stores nothing
+
+$ curl -s -X POST /workflows/agent%3Aassistant/runs/stream -H 'Content-Type: application/json' -d '{"input":{"question":"Who won in 2002?","datasets":["World Cup Core"]}}'
+data: {"type":"run","runId":"0ebc3976-951b-4354-8285-8a449abb07fb","workflowId":"agent:assistant"}
+
+data: {"type":"step","id":"answer","title":"Answer","status":"running"}
+
+data: {"type":"step","id":"answer","title":"Answer","status":"success","output":{"calls":[],"stopped":false}}
+
+data: {"type":"text","content":"I completed the data analysis but could not produce a final response. Please retry your question."}
+
+data: {"type":"done","run":{"id":"0ebc3976-951b-4354-8285-8a449abb07fb","workflowId":"agent:assistant","workflowName":"Assistant","input":{"question":"Who won in 2002?","datasets":["World Cup Core"],"careful":false},"status":"success","steps":[{"id":"answer","title":"Answer","status":"success","output":{"calls":[],"stopped":false}}],"datasets":["World Cup Core"],"startedAt":"2026-11-12T00:36:35.127Z","ownerId":"local","createdAt":"2026-11-12T00:36:35.127Z","updatedAt":"2026-11-12T00:36:35.183Z","output":{"calls":[],"stopped":false},"answer":{"role":"assistant","content":"I completed the data analysis but could not produce a final response. Please retry your question.","at":"2026-11-12T00:36:35.183Z"},"question":"Who won in 2002?","panelItems":[],"visualizations":[],"finishedAt":"2026-11-12T00:36:35.183Z"}}
+
+
+[HTTP 200]
+
+$ curl -s -X POST /workflows/agent%3Aassistant/runs/stream -H 'Content-Type: application/json' -d '{"input":{"question":"Who won?","datasets":["Nope"]}}'
+{"message":"Dataset \"Nope\" not found","error":"Bad Request","statusCode":400}
+[HTTP 400]
+
+## 4. The run history (120), newest first, and one workflow's
+
+$ curl -s -X GET /workflow-runs
+{"runs":[{"id":"0ebc3976-951b-4354-8285-8a449abb07fb","workflowId":"agent:assistant","workflowName":"Assistant","status":"success","title":"Who won in 2002?","startedAt":"2026-11-12T00:36:35.127Z","finishedAt":"2026-11-12T00:36:35.183Z"},{"id":"8a8249aa-519b-40b9-bf3b-cb858b7dc3a5","workflowId":"seq-text-demo","workflowName":"Sequential test workflow","status":"failed","title":"Sequential test workflow","startedAt":"2026-11-12T00:36:35.113Z","finishedAt":"2026-11-12T00:36:35.119Z"},{"id":"3abbb178-215c-4acc-958c-fa65626a3ddc","workflowId":"seq-text-demo","workflowName":"Sequential test workflow","status":"success","title":"Stored again","startedAt":"2026-11-12T00:36:35.070Z","finishedAt":"2026-11-12T00:36:35.071Z"},{"id":"d246751d-ed04-4afe-8768-9b2a321150b3","workflowId":"seq-text-demo","workflowName":"Sequential test workflow","status":"success","title":"Hello   workflow   world","startedAt":"2026-11-12T00:36:35.057Z","finishedAt":"2026-11-12T00:36:35.062Z"}]}
+[HTTP 200]
+
+$ curl -s -X GET /workflow-runs?workflowId=agent%3Aassistant
+{"runs":[{"id":"0ebc3976-951b-4354-8285-8a449abb07fb","workflowId":"agent:assistant","workflowName":"Assistant","status":"success","title":"Who won in 2002?","startedAt":"2026-11-12T00:36:35.127Z","finishedAt":"2026-11-12T00:36:35.183Z"}]}
+[HTTP 200]
+
+## 5. One stored run (121), and an unknown one
+
+$ curl -s -X GET /workflow-runs/3abbb178-215c-4acc-958c-fa65626a3ddc
+{"id":"3abbb178-215c-4acc-958c-fa65626a3ddc","workflowId":"seq-text-demo","workflowName":"Sequential test workflow","input":{"text":"Stored again"},"status":"success","steps":[{"id":"clean-text","title":"Clean text","status":"success","output":{"text":"Stored again"}},{"id":"count-words","title":"Count words","status":"success","output":{"text":"Stored again","words":2,"characters":12}},{"id":"format-result","title":"Format result","status":"success","output":{"summary":"2 words, 12 characters: \"Stored again\""}}],"datasets":[],"startedAt":"2026-11-12T00:36:35.070Z","ownerId":"local","createdAt":"2026-11-12T00:36:35.070Z","updatedAt":"2026-11-12T00:36:35.071Z","output":{"summary":"2 words, 12 characters: \"Stored again\""},"finishedAt":"2026-11-12T00:36:35.071Z"}
+[HTTP 200]
+
+$ curl -s -X GET /workflow-runs/nope
+{"message":"Run \"nope\" not found","error":"Not Found","statusCode":404}
+[HTTP 404]
+
+## 6. After a restart the runs are still there, and a stored run is a follow-up's context
+
+$ curl -s -X GET /workflow-runs?workflowId=agent%3Aassistant
+{"runs":[{"id":"0ebc3976-951b-4354-8285-8a449abb07fb","workflowId":"agent:assistant","workflowName":"Assistant","status":"success","title":"Who won in 2002?","startedAt":"2026-11-12T00:36:35.127Z","finishedAt":"2026-11-12T00:36:35.183Z"}]}
+[HTTP 200]
+
+$ curl -s -X POST /workflows/agent%3Aassistant/runs/stream -H 'Content-Type: application/json' -d '{"input":{"question":"And in 2006?","datasets":["World Cup Core"]},"context":{"fromRunId":"0ebc3976-951b-4354-8285-8a449abb07fb"}}'
+data: {"type":"run","runId":"a59ffe59-53aa-4873-952b-2626b15f7b69","workflowId":"agent:assistant"}
+
+data: {"type":"step","id":"answer","title":"Answer","status":"running"}
+
+data: {"type":"step","id":"answer","title":"Answer","status":"success","output":{"calls":[],"stopped":false}}
+
+data: {"type":"text","content":"I completed the data analysis but could not produce a final response. Please retry your question."}
+
+data: {"type":"done","run":{"id":"a59ffe59-53aa-4873-952b-2626b15f7b69","workflowId":"agent:assistant","workflowName":"Assistant","input":{"question":"And in 2006?","datasets":["World Cup Core"],"careful":false},"context":{"fromRunId":"0ebc3976-951b-4354-8285-8a449abb07fb"},"status":"success","steps":[{"id":"answer","title":"Answer","status":"success","output":{"calls":[],"stopped":false}}],"datasets":["World Cup Core"],"startedAt":"2026-11-12T00:36:36.103Z","ownerId":"local","createdAt":"2026-11-12T00:36:36.103Z","updatedAt":"2026-11-12T00:36:36.167Z","output":{"calls":[],"stopped":false},"answer":{"role":"assistant","content":"I completed the data analysis but could not produce a final response. Please retry your question.","at":"2026-11-12T00:36:36.166Z"},"question":"And in 2006?","panelItems":[],"visualizations":[],"finishedAt":"2026-11-12T00:36:36.167Z"}}
+
+
+[HTTP 200]
+
+$ curl -s -X GET /workflow-runs?workflowId=agent%3Aassistant
+{"runs":[{"id":"a59ffe59-53aa-4873-952b-2626b15f7b69","workflowId":"agent:assistant","workflowName":"Assistant","status":"success","title":"And in 2006?","startedAt":"2026-11-12T00:36:36.103Z","finishedAt":"2026-11-12T00:36:36.167Z"},{"id":"0ebc3976-951b-4354-8285-8a449abb07fb","workflowId":"agent:assistant","workflowName":"Assistant","status":"success","title":"Who won in 2002?","startedAt":"2026-11-12T00:36:35.127Z","finishedAt":"2026-11-12T00:36:35.183Z"}]}
+[HTTP 200]
+
+## 7. Delete a run (122); then it is gone
+
+$ curl -s -X DELETE /workflow-runs/3abbb178-215c-4acc-958c-fa65626a3ddc
+{"ok":true,"message":"Run deleted"}
+[HTTP 200]
+
+$ curl -s -X GET /workflow-runs/3abbb178-215c-4acc-958c-fa65626a3ddc
+{"message":"Run \"3abbb178-215c-4acc-958c-fa65626a3ddc\" not found","error":"Not Found","statusCode":404}
+[HTTP 404]
+
+$ curl -s -X DELETE /workflow-runs/3abbb178-215c-4acc-958c-fa65626a3ddc
+{"message":"Run \"3abbb178-215c-4acc-958c-fa65626a3ddc\" not found","error":"Not Found","statusCode":404}
+[HTTP 404]

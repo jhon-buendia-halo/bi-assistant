@@ -3,7 +3,8 @@ import path from 'node:path';
 import axe from 'axe-core';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
-import { createWorldCupSession, followOsTheme } from './helpers/app-actions';
+import { followOsTheme } from './helpers/app-actions';
+import { runAssistantOk } from './helpers/runs-api';
 import {
   createSkill,
   createUserAgent,
@@ -351,10 +352,8 @@ test.describe('built-in skills', () => {
     await expect(row).toContainText('Modified');
     await evidenceShot(page, '1.14.5', 'builtin-skill-modified.png');
 
-    await createWorldCupSession(page);
-    await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-    await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(page.getByText(STUB_ANSWER)).toBeVisible();
+    const result = await runAssistantOk(page, question);
+    expect(result.text).toContain(STUB_ANSWER);
     const requests = turnRequests(stub, question);
     expect(
       requests.length,
@@ -368,7 +367,7 @@ test.describe('built-in skills', () => {
       /<name>curated-knowledge<\/name>\s*<description>Use when the turn carries curated knowledge: glossary, rules and filters\.<\/description>/,
     );
 
-    await openLibrary(page);
+    // The run left the page on the library: open the skill again.
     await openBuiltIn(page, 'curated-knowledge');
     const asked: string[] = [];
     page.once('dialog', (dialog) => {

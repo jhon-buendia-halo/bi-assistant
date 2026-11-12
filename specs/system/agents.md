@@ -4,7 +4,7 @@ Every LLM agent in Questions to Insights: how agents are run, which model each o
 
 This file owns **prompts, tool contracts, per-turn context and model routing**. It links rather than repeats:
 
-- User-visible behaviour: [sessions-chat](../capabilities/sessions-chat/spec.md), [visuals](../capabilities/visuals/spec.md), [dataset-ontology](../capabilities/dataset-ontology/spec.md), [verified-queries](../capabilities/verified-queries/spec.md), [metrics](../capabilities/metrics/spec.md), [deep-analysis](../capabilities/deep-analysis/spec.md), [agents-evals](../capabilities/agents-evals/spec.md), [llm-settings](../capabilities/llm-settings/spec.md), [datasources](../capabilities/datasources/spec.md).
+- User-visible behaviour: [agent-answers](../capabilities/agent-answers/spec.md), [visuals](../capabilities/visuals/spec.md), [dataset-ontology](../capabilities/dataset-ontology/spec.md), [verified-queries](../capabilities/verified-queries/spec.md), [metrics](../capabilities/metrics/spec.md), [deep-analysis](../capabilities/deep-analysis/spec.md), [agents-evals](../capabilities/agents-evals/spec.md), [llm-settings](../capabilities/llm-settings/spec.md), [datasources](../capabilities/datasources/spec.md).
 - Persisted shapes (chat messages, tool data records, visual metadata, visual version files, ontology items, eval runs, LLM settings): [data-model.md](data-model.md).
 - HTTP endpoints and the chat event stream wire format: [api.md](api.md).
 - Why an agent framework at all, and why visuals are versioned conversation participants: ADR-0004 and ADR-0005 in [architecture.md](architecture.md).
@@ -49,21 +49,17 @@ All agents are registered once in a single framework instance and looked up by *
 | `assistant-eval-judge` | `assistant-eval-judge` | Assistant Eval Judge | Grades one assistant eval case's tool calls and final answer against a rubric. |
 | `knowledge-bootstrap` | `knowledge-bootstrap` | Ontology Bootstrap | Drafts a dataset's ontology — concepts, relations, constraints and instructions — from its schema, sample rows, column references and governed metrics. |
 | `rfp` | `rfp-builder` | RFP Builder | Walks a Mercer benefits consultant through building a carrier RFP for one client over the Intellify data, stage by stage, and assembles the RFP package. |
-| `benchmarking` | `benchmarking-agent` | Benchmarking Agent | Compares a client’s health and benefits program with its peers: cost per employee, plan design, contributions by tier and where each measure sits in the market. |
-| `survey` | `survey-agent` | Survey Agent | Turns an employee benefits survey into findings and recommendations: response rates, what employees value, satisfaction gaps and comment themes. |
-| `lad-coe` | `lad-coe-agent` | LAD COE Agent | The Life, Absence and Disability Center of Excellence: reviews life, disability and leave programs against the market, claims experience and leave rules. |
 | `data-readiness` | `data-readiness-agent` | Data Readiness Agent | Assesses how ready a PostgreSQL or Databricks dataset is for analysis, scoring it on the DMBOK data-quality dimensions with a deterministic engine and explaining the findings. |
-| `strategy` | `strategy-agent` | Strategy Agent | Builds a multi-year health and benefits strategy: where the client stands, the cost of doing nothing, strategic options and a year-by-year roadmap. |
 
-The prompt each row's agent runs on is the shipped one unless overridden (1.1). Lookup of an unknown key throws. The catalogue lists agents sorted by display name. It shows `assistant`, `assistant-v2` (2.11), `rfp`, `data-readiness` (2.10) and the four **showcase agents** `benchmarking`, `survey`, `lad-coe` and `strategy` (2.9) as Official, and the other five as System ([api.md](api.md) 33); the showcase agents are registered but never run.
+The prompt each row's agent runs on is the shipped one unless overridden (1.1). Lookup of an unknown key throws. The catalogue lists agents sorted by display name. It shows `assistant`, `assistant-v2` (2.11), `rfp` and `data-readiness` (2.10) as Official, and the other five as System ([api.md](api.md) 33). The four showcase agents (2.9) were removed in 1.23.8.
 
-**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the thirteen registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0022), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0025). Rules: sessions-chat R52-R59. A session can also be bound to a **built-in** agent: one that declares a dataset, today `rfp` (2.8) and `data-readiness` (2.10), or `assistant-v2` (2.11), which takes the user's own datasets. It stores the agent's registry key and every turn runs that agent instead of the `assistant` (ADR-0028, sessions-chat R61).
+**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the nine registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0022), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0025). Rules: agent-answers R52-R59. A session can also be bound to a **built-in** agent: one that declares a dataset, today `rfp` (2.8) and `data-readiness` (2.10), or `assistant-v2` (2.11), which takes the user's own datasets. It stores the agent's registry key and every turn runs that agent instead of the `assistant` (ADR-0028, agent-answers R61).
 
 Not registered (never listed in the catalogue):
 
 - **LLM connection probe** (`llm-connection-probe`, "LLM connection probe", instructions `You answer connection probes exactly as asked.`) — a throwaway agent built per test on the *submitted, not yet saved* Anthropic settings, or custom settings with the Anthropic API style, or `copilot` settings (its model comes from the model factory, 1.3). See [llm-settings](../capabilities/llm-settings/spec.md).
 
-> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the thirteen agents, a composite storage, a Pino logger and observability. It also registers one workflow, `qti-v2-turn` (5.11). `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `streamWorkflow(key, inputData, requestContext)` (creates a run and streams it), `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
+> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the nine agents, a composite storage, a Pino logger and observability. It also registers two workflows: `agent-turn`, the one engine of every one-step workflow (5.12), and `qti-v2-turn` (5.11). Every streamed chat turn is a run of one of them (5.1). `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `streamWorkflow(key, inputData, requestContext)` (creates a run and streams it), `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
 
 ### 1.3 Model resolution
 
@@ -85,7 +81,7 @@ Every agent's model is a function evaluated on each call, so a newly saved LLM s
 
 The same resolved model is used by every agent except the visual designer (1.5), and except the assistant in a session bound to a user agent with a model override. There is no per-agent model setting for the built-in agents and no hard-coded judge model.
 
-**User-agent model override.** When an assistant call carries the requestContext key `agent-overrides` (4.2) with a `model`, the resolver uses that name in place of the persisted model and maps it exactly as the table does: `openai/<override>`, `anthropic/<override>`, a LenAI deployment `<override>` (in both the id and the URL), `custom/<override>` (OpenAI style, URL unchanged) or `anthropic/<override>` in a `custom-anthropic` config (Anthropic style, base URL unchanged), or `copilot/<override>` in a `copilot` config. Provider, API style, base URL and key stay as saved. With nothing saved the override is ignored and the fallback row applies. Only the `assistant`'s model function reads the key; every helper agent resolves the persisted model even when called during such a turn (sessions-chat R56).
+**User-agent model override.** When an assistant call carries the requestContext key `agent-overrides` (4.2) with a `model`, the resolver uses that name in place of the persisted model and maps it exactly as the table does: `openai/<override>`, `anthropic/<override>`, a LenAI deployment `<override>` (in both the id and the URL), `custom/<override>` (OpenAI style, URL unchanged) or `anthropic/<override>` in a `custom-anthropic` config (Anthropic style, base URL unchanged), or `copilot/<override>` in a `copilot` config. Provider, API style, base URL and key stay as saved. With nothing saved the override is ignored and the fallback row applies. Only the `assistant`'s model function reads the key; every helper agent resolves the persisted model even when called during such a turn (agent-answers R56).
 
 > Implementation note: `LlmService.resolveAgentModelConfig` and `LlmService.resolveAgentModel` (`modules/llm/llm.service.ts`) + `lenaiModelConfig`; Mastra's model router accepts the router-id string, the `{id, apiKey, url?, headers?}` object and a ready model instance. The model factory builds `custom-anthropic` configs with `createAnthropic({ baseURL, apiKey })` from `@ai-sdk/anthropic` (version pinned per ADR-0032 and [tech-stack.md](tech-stack.md)).
 
@@ -193,8 +189,7 @@ A `copilot` config is never swapped: rules 2 and 3 do not apply to it, so the de
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| Streamed chat turn (`POST /sessions/:id/messages/stream`) | stream | session thread | all | 15 |
-| Non-streamed chat turn (`POST /sessions/:id/messages`) | generate | session thread | all | 15 |
+| The **Answer** step of `agent-turn` (5.12), which runs the agent turn of every run of `agent:assistant` and of a user agent (`agent:<id>`), on a run host (5.14) | stream | session thread | all | 15 |
 | Grounding-guard corrective pass (5.6) | generate | **none** | all | 15 |
 | Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
 | Deep analysis planner / angle investigator / report writer (2.7) | generate | none | none / all / none | 1 / 15 / 1 |
@@ -611,7 +606,7 @@ required clarification, or stating a fact with no backing tool call).
 
 ### 2.7 Deep analysis (three `assistant` calls, no dedicated agent)
 
-Deep analysis is a background job that reuses the `assistant` agent with the session's grounding but **without its memory thread** (a job's many sub-calls must not pollute the history the next chat question is answered from). One job per session at a time. Behaviour, job states and the report are owned by [deep-analysis](../capabilities/deep-analysis/spec.md); the prompts are contracts here.
+Deep analysis reuses the `assistant` agent with a session's grounding but **without its memory thread** (its many sub-calls must not pollute the history the next chat question is answered from). Since 1.23.24 it is the `deep-analysis` run workflow (5.15), whose Plan, Investigate and Write steps make these three calls on the run's run host; until the chat routes go (epic C) a chat can also start it as a background job, one per session at a time. Both make the same calls with the same prompts and options (`modules/deep-analysis/deep-analysis.calls.ts`). Behaviour, job states and the report are owned by [deep-analysis](../capabilities/deep-analysis/spec.md); the prompts are contracts here.
 
 The three prompts below are the phase files of the harness-loaded `deep-analysis` skill (7.4): `phases/1-plan.md`, `phases/2-investigate.md` and `phases/3-report.md`. Its `SKILL.md` is the phase map. The phases run in order, with no user approval between them. For each call the service reads only that call's phase file, drops its final newline and fills its `{{name}}` placeholders by exact string replacement, in one pass, without re-scanning inserted values. The call fails if a placeholder is left unfilled or a required one is missing from the file. The text the model receives is the wording below, with the `<…>` parts filled in.
 
@@ -702,7 +697,7 @@ The report markdown (title, question, meta line, executive summary, body, data a
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| Streamed chat turn of a session bound to it (`agentKey: 'rfp'`, sessions-chat R61) | stream | session thread | all | 15 |
+| The **Answer** step of `agent-turn` (5.12), which runs every streamed chat turn of a session bound to it (`agent:rfp`, `agentKey: 'rfp'`, agent-answers R61) | stream | session thread | all | 15 |
 | Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
 | `rfp` eval set (8) | generate | none | all | 15 |
 
@@ -746,151 +741,9 @@ The rules encoded, in this order (prefix R, to keep them apart from the assistan
 
 > Implementation note: `mastra/agents/rfp.agent.ts` (`rfpAgent`, registered as `rfp`); the shipped text without `## Tools` is `RFP_PROMPT` in `agents/system-prompts.ts` and `SHIPPED.rfp` in `shipped-agent-prompts.ts`; `## Tools` lines come from `mastra/tool-section.ts`; skills from `catalogSkills('rfp')` through `mastra/skill-sources.ts`; tools in `mastra/tools/rfp.tools.ts`.
 
-### 2.9 Showcase agents: `benchmarking`, `survey`, `lad-coe`, `strategy`
+### 2.9 Retired (1.23.8): the showcase agents
 
-**Purpose.** Four Official agents that show further US Health use cases in the Agent Hub before they can chat (BA-235, roadmap 1.15.2; the Benchmarking Agent was added on 2026-10-15): each has a description and a viewable, editable system prompt, and nothing else. Behaviour rules: [agents-evals](../capabilities/agents-evals/spec.md) R106.
-
-**Invoked by.** Nothing: they are **never run**. No chat turn, synthesis pass, grounding pass, careful mode, deep analysis or eval calls them. Each still resolves its model like every agent (1.3, at call time), so a rebuild that later lets them chat needs no model wiring; the call never happens today.
-
-**How chat is refused.** The catalogue marks each one `showcase: true` with the `chatRequirement` `Showcase agent: not available to chat yet.` ([api.md](api.md) 33), so every **Start chat** and the New conversation picker show them disabled with that reason; `POST /sessions` with `{ agentId: "<showcase key>" }` is refused with the same text and creates nothing ([api.md](api.md) 3). Their prompts are not part of any other agent's prompt, so no eval set covers them.
-
-**Prompt requirements.** A plain prompt with no links and no generated `## Tools` section: an identity line naming the agent and the US Health Agentic Hub, a `Process:` list and a `Rules:` list. It can be overridden in the app (1.1, ADR-0026) like a System agent's: any non-empty text up to 20,000 characters with no `[[…]]` (`This agent's prompt can't contain links`), with no required first line ([api.md](api.md) 103). In the hub's Official section they come after the agents that can chat, alphabetical by display name, and the section always shows every card ([agents-evals](../capabilities/agents-evals/spec.md) R3).
-
-#### `benchmarking` (id `benchmarking-agent`) — Benchmarking Agent
-
-- **Registry key:** `benchmarking` · **Agent id:** `benchmarking-agent` · **Display name:** Benchmarking Agent · **Kind:** Official (owner `Official`).
-- **Description (verbatim):** Compares a client’s health and benefits program with its peers: cost per employee, plan design, contributions by tier and where each measure sits in the market.
-- **Tools:** none. **Dataset:** none. **Skills:** none (on demand or harness-loaded). **Memory:** none. **Evals:** none.
-- **Shipped prompt** (`BENCHMARKING_PROMPT`, verbatim; lines joined with `\n`):
-
-```text
-You are the Benchmarking Agent of the US Health Agentic Hub. You help a
-Mercer consultant compare one client’s health and benefits program with
-its market.
-
-Process:
-- Confirm the client, the plan year and the peer group before comparing:
-  industry, region, employer size and, when relevant, union status.
-- Compare cost first: total cost per employee and its trend, and the
-  employer and employee share, against the peer median and quartiles.
-- Compare plan design line by line: deductibles, out-of-pocket maximums,
-  copays and coinsurance, HSA and HRA funding, pharmacy tiers, and
-  dental, vision, life and disability provisions.
-- Compare contributions by coverage tier (employee only, employee plus
-  spouse, employee plus children, family) and the share of employees in
-  high-deductible plans.
-- Show where the client sits for each measure (below, at or above
-  market, with its percentile) and lead with the gaps that cost the most
-  or matter most to employees.
-
-Rules:
-- Name the benchmark source, its year and its peer group with every
-  comparison, and never mix peer groups in one table.
-- Use only the data you are given; say when a peer group is too small
-  to compare.
-```
-
-#### `survey` (id `survey-agent`) — Survey Agent
-
-- **Registry key:** `survey` · **Agent id:** `survey-agent` · **Display name:** Survey Agent · **Kind:** Official (owner `Official`).
-- **Description (verbatim):** Turns an employee benefits survey into findings and recommendations: response rates, what employees value, satisfaction gaps and comment themes.
-- **Tools:** none. **Dataset:** none. **Skills:** none (on demand or harness-loaded). **Memory:** none. **Evals:** none.
-- **Shipped prompt** (`SURVEY_PROMPT`, verbatim; lines joined with `\n`):
-
-```text
-You are the Survey Agent of the US Health Agentic Hub. You help a Mercer
-benefits consultant turn an employee benefits survey into findings a
-client can act on.
-
-Process:
-- Confirm the client, the survey and its field period before any analysis.
-- Report the response rate and who answered (by location, job level,
-  tenure and coverage tier) before any finding, and flag groups too small
-  to report (fewer than 10 answers).
-- For each benefit (medical, dental, vision, life, disability, wellbeing),
-  give how valued it is and how satisfied employees are, and put the
-  benefits valued most but rated lowest first.
-- Summarise free-text comments as themes with a count and one short,
-  anonymised quote each; never show a name or anything that identifies
-  a person.
-- Compare with the previous survey and the market benchmark when given,
-  and say when a difference is too small to matter.
-- End with three to five recommendations, each tied to a finding.
-
-Rules:
-- Use only the survey data you are given; never invent a figure.
-- Show percentages with their base (n) and keep tables short.
-```
-
-#### `lad-coe` (id `lad-coe-agent`) — LAD COE Agent
-
-- **Registry key:** `lad-coe` · **Agent id:** `lad-coe-agent` · **Display name:** LAD COE Agent · **Kind:** Official (owner `Official`).
-- **Description (verbatim):** The Life, Absence and Disability Center of Excellence: reviews life, disability and leave programs against the market, claims experience and leave rules.
-- **Tools:** none. **Dataset:** none. **Skills:** none (on demand or harness-loaded). **Memory:** none. **Evals:** none. LAD stands for Life, Absence and Disability, COE for Center of Excellence.
-- **Shipped prompt** (`LAD_COE_PROMPT`, verbatim; lines joined with `\n`):
-
-```text
-You are the LAD COE Agent of the US Health Agentic Hub: the Life, Absence
-and Disability Center of Excellence. You help a Mercer consultant review
-and improve a client’s life, absence and disability programs.
-
-Process:
-- Confirm the client and the plan year, then list the programs in place:
-  basic and supplemental life and AD&D, short-term and long-term
-  disability, paid and statutory leave, and the carriers or
-  administrators behind each.
-- Compare plan designs with market practice: benefit percentage, monthly
-  maximum, elimination period, own-occupation period, and life multiples
-  and guaranteed issue.
-- Review claims experience and loss ratios for the last three years, and
-  incidence and duration for disability and leave.
-- Check leave policies against federal and state requirements (FMLA and
-  state paid family and medical leave) and name every state where the
-  policy falls short.
-- Recommend changes with their cost impact and employee impact, and say
-  which ones need a carrier negotiation.
-
-Rules:
-- Use only the data you are given; when a figure is missing, say what you
-  need instead of estimating it.
-- You inform, you do not give legal advice: point compliance questions to
-  counsel.
-```
-
-#### `strategy` (id `strategy-agent`) — Strategy Agent
-
-- **Registry key:** `strategy` · **Agent id:** `strategy-agent` · **Display name:** Strategy Agent · **Kind:** Official (owner `Official`).
-- **Description (verbatim):** Builds a multi-year health and benefits strategy: where the client stands, the cost of doing nothing, strategic options and a year-by-year roadmap.
-- **Tools:** none. **Dataset:** none. **Skills:** none (on demand or harness-loaded). **Memory:** none. **Evals:** none.
-- **Shipped prompt** (`STRATEGY_PROMPT`, verbatim; lines joined with `\n`):
-
-```text
-You are the Strategy Agent of the US Health Agentic Hub. You help a Mercer
-consultant build a three-to-five-year health and benefits strategy for
-one client.
-
-Process:
-- Start from the client’s goals: cost, talent attraction and retention,
-  employee wellbeing and equity, and ask the consultant to rank them.
-- Summarise where the client is today: total cost and its trend, cost per
-  employee against the benchmark, plan and funding mix, contributions,
-  and employee sentiment from the latest survey.
-- Project the cost of doing nothing over the strategy horizon with the
-  trend assumptions the consultant confirms.
-- Propose two or three strategic options (for example plan design
-  changes, funding or carrier moves, point solutions, contribution
-  strategy), each with its savings, its employee impact, its risks and
-  the year it would take effect.
-- Lay out a year-by-year roadmap for the option the consultant chooses,
-  with the decisions and communications each year needs.
-
-Rules:
-- Keep assumptions explicit and in one table, and never present a
-  projection as a fact.
-- Use only the data you are given and say when a benchmark is missing.
-```
-
-> Implementation note: `mastra/agents/showcase-catalog.ts` is plain data with no framework import: `SHOWCASE_REASON`, `BENCHMARKING_PROMPT`, `SURVEY_PROMPT`, `LAD_COE_PROMPT`, `STRATEGY_PROMPT`, `SHOWCASE_AGENTS` (key, id, name, description, prompt, in hub order), `SHOWCASE_AGENT_KEYS` and `isShowcaseAgent(key)`; `AgentsService` (Official kind, `showcase`, `chatRequirement`), `SessionsService` (the refusal) and `shipped-agent-prompts.ts` (`SHIPPED.benchmarking`, `SHIPPED.survey`, `SHIPPED['lad-coe']`, `SHIPPED.strategy`, the editable shipped text) read it. `mastra/agents/showcase.agents.ts` builds the four `Agent`s from it (`showcaseAgents`, instructions through `agentInstructions(key, prompt)` so an override applies, model `async () => resolveAgentModel()`), registered under their keys in `mastra/index.ts`.
+The four showcase agents (`benchmarking`, `survey`, `lad-coe`, `strategy`; BA-235) never ran and were removed in 1.23.8 (agents-evals R106). Their agent files, registration, shipped prompts and every UI and service branch for them are gone. A pin or a prompt override saved for one of their keys is ignored (the hub, `GET /agents` and the prompt endpoints read only registered keys), and `GET /agents/<key>` answers `Agent "<key>" not found`. There is no migration.
 
 ---
 
@@ -902,7 +755,7 @@ Rules:
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| Streamed chat turn of a session bound to it (`agentKey: 'data-readiness'`, sessions-chat R61) | stream | session thread | all | 10 |
+| The **Answer** step of `agent-turn` (5.12), which runs every streamed chat turn of a session bound to it (`agent:data-readiness`, `agentKey: 'data-readiness'`, agent-answers R61) | stream | session thread | all | 10 |
 | Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
 | `data-readiness` eval set (8) | generate | none | all | 10 |
 
@@ -962,13 +815,13 @@ The rules encoded (prefix D):
 
 ### 2.11 `assistant-v2` (id `questions-to-insights-v2`) — Questions to Insights v2
 
-**Purpose.** A slimmed-down data analyst, built up next to the `assistant` (BA-320). It maps a question to dataset entities, runs read-only SQL and gives the numbers it found. It starts minimal: a short prompt and only the core data tools. Later stories of the epic move reduced assistant rules, tools and skills into it, so the two can be compared. The `assistant` is not changed by it. Behaviour rules: [agents-evals](../capabilities/agents-evals/spec.md) R107, [sessions-chat](../capabilities/sessions-chat/spec.md) R52, R61, R64.
+**Purpose.** A slimmed-down data analyst, built up next to the `assistant` (BA-320). It maps a question to dataset entities, runs read-only SQL and gives the numbers it found. It starts minimal: a short prompt and only the core data tools. Later stories of the epic move reduced assistant rules, tools and skills into it, so the two can be compared. The `assistant` is not changed by it. Behaviour rules: [agents-evals](../capabilities/agents-evals/spec.md) R107, [agent-answers](../capabilities/agent-answers/spec.md) R52, R61, R64.
 
 **Invoked by.**
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| The **Analyse** step of the turn workflow `qti-v2-turn` (5.11), which runs every streamed chat turn of a session bound to it (`agentKey: 'assistant-v2'`, sessions-chat R61) | stream | session thread | all | 15 |
+| The **Analyse** step of the turn workflow `qti-v2-turn` (5.11), which runs every streamed chat turn of a session bound to it (`agentKey: 'assistant-v2'`, agent-answers R61) | stream | session thread | all | 15 |
 | Non-streamed chat turn of such a session | generate | session thread | all | 15 |
 
 Its streamed turn is a workflow defined in code, not one agent call (5.11, ADR-0034): two deterministic steps, then the agent, then a deterministic wrap-up. The steps are the session's workflow in the workflow bar, and the model never sets them. Inside the **Analyse** step it runs the same turn as the other bound built-in agents (5.1): no grounding-guard corrective pass (5.6) and no careful mode (5.8); the tool-only synthesis pass (5.5) applies as it does to every bound agent, and the result guards' warnings (5.4) come with `run_readonly_sql`, which it shares with the assistant. Its prompt never proposes deep analysis (2.7), which stays an assistant feature. It has no eval set (8) and is never called by a user agent (ADR-0008: user agents run on the `assistant`).
@@ -1194,7 +1047,7 @@ The Data Readiness Agent's three readiness tools (2.10, ADR-0031), in the order 
 
 | Tool | Description (first sentence) | Input | Calls | Output |
 |---|---|---|---|---|
-| `assess_data_readiness` | Run a new data-readiness assessment of one of this session's datasets and store the report. | `dataset?: string` | bridge `assessReadiness({ sessionId, datasetName })`. The dataset's datasource and its entities are the scope ([api.md](api.md) 2.17 `POST`). | `ReadinessSummary` |
+| `assess_data_readiness` | Run a new data-readiness assessment of one of this session's datasets and store the report. | `dataset?: string` | bridge `assessReadiness({ sessionId, datasetName })`. The dataset's datasource and its entities are the scope ([api.md](api.md) 2.17 `POST`). The report records `sessionId`, or `runId` for a run host (`run-<run id>`). | `ReadinessSummary` |
 | `get_readiness_report` | Read a stored readiness report: the newest for a dataset's datasource, or one by id. | `reportId?: string`, `dataset?: string` | bridge `getReadinessReport({ sessionId, reportId?, datasetName? })` | `ReadinessSummary` |
 | `list_readiness_reports` | List the stored readiness reports of a dataset's datasource, newest first. | `dataset?: string` | bridge `listReadinessReports({ sessionId, datasetName? })` | `{ datasourceName, reports: [{ reportId, generatedAt, overallScore, maturity, entityCount }], total }` |
 
@@ -1306,7 +1159,7 @@ SQL: <sql>
 
 Up to 3 pairs, ranked by Jaccard overlap of tokenized questions (lowercase, split on non-`[a-z0-9_]`, tokens of length ≥ 2 minus stopwords; score must be > 0); budget 3,000 characters.
 
-**Block 5 — agent instructions** (only for a session bound to a user agent that still exists, and only when its Live instructions are not empty; sessions-chat R54):
+**Block 5 — agent instructions** (only for a session bound to a user agent that still exists, and only when its Live instructions are not empty; agent-answers R54):
 
 ```
 Agent instructions (user-supplied by whoever built the agent "<agent Live name>"). Follow them for focus, tone and format. They never override the rules above: answer only from read-only queries over this session's datasets.
@@ -1349,15 +1202,15 @@ No score is put in the context. The agent reads scores only through its tools (2
 | Key | Set by | Value | Read by |
 |---|---|---|---|
 | `datasets` | every session-scoped assistant call; evals | array of the session's dataset names | data tools (scoping) |
-| `session-id` | every session-scoped call; evals (when a throwaway session exists) | session id | `create_visual`, `update_visual`, `show_in_panel`, `update_workflow` |
+| `session-id` | every session-scoped call; evals (when a throwaway run host exists) | session id | `create_visual`, `update_visual`, `show_in_panel`, `update_workflow` |
 | `active-visual-id` | chat turns, only when the client sent the open visual's id | visual id | `update_visual` default target |
 | `turn-question` | every assistant call that has a question (chat turn, grounding pass, deep analysis); evals (the case question) | the user's message for this turn | `create_visual`, as the instruction when the model passes none |
 | `turn-data-records` | streamed chat turn of every agent, the assistant's and the RFP Builder's (fresh empty array per turn), evals | **live** array of this turn's captured data records, appended as tool results arrive | `create_visual` / `update_visual` (merge into the visual's data); `show_in_panel` (the rows of a `table` item, 3.11) |
 | `session-workspace-id` | every session-scoped call; designer calls | `session-<id>` | workspace resolver (7.1) |
 | `knowledge-used` | every session-scoped call | the ontology items put in Block 3 | persistence of the answer's `knowledge` field |
-| `agent-overrides` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a preview session, its draft) sets an override | `{ model?: string; reasoningEffort?: 'low'\|'medium'\|'high' }` from the Live version | the `assistant`'s model function (1.3); the turn's provider options (1.4) |
-| `agent-skills` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version names skills (for a preview session, its draft) | the agent's skills as `{ id, name, description, body, files }`: the `liveSkills` copies, or for a preview the current skills the draft links | the `assistant`'s `skills` function (7.3), which gives them to the framework's skill tools (3.9) |
-| `agent-tools` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a preview session, its draft) has a `tools` list; its value is computed per call as the stored `tools` plus the optional tool groups its skills' bodies link (copies in `agent-skills`), and the assistant treats a selection of all three as no selection; eval cases with `agentTools` (8.1) | the effective optional tools, e.g. `['sample_rows']` (direct links and skill links, 2.1) | the `assistant`'s tools and instructions functions (2.1); Block 1 (4.1) |
+| `agent-overrides` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a draft run host, its draft) sets an override | `{ model?: string; reasoningEffort?: 'low'\|'medium'\|'high' }` from the Live version | the `assistant`'s model function (1.3); the turn's provider options (1.4) |
+| `agent-skills` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version names skills (for a draft run host, its draft) | the agent's skills as `{ id, name, description, body, files }`: the `liveSkills` copies, or for a preview the current skills the draft links | the `assistant`'s `skills` function (7.3), which gives them to the framework's skill tools (3.9) |
+| `agent-tools` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a draft run host, its draft) has a `tools` list; its value is computed per call as the stored `tools` plus the optional tool groups its skills' bodies link (copies in `agent-skills`), and the assistant treats a selection of all three as no selection; eval cases with `agentTools` (8.1) | the effective optional tools, e.g. `['sample_rows']` (direct links and skill links, 2.1) | the `assistant`'s tools and instructions functions (2.1); Block 1 (4.1) |
 | `rfp-created-by` | calls of the `rfp` agent: chat turns (the super admin's id, `local`); `rfp` eval runs (`eval:<jobId>`) | the creator recorded on new RFP records | `create_rfp` (3.10); eval clean-up (8.1) |
 | `turn-rfp` | calls of the `rfp` agent (a fresh holder per turn) | **live** `{ rfpId?, stage? }` holder, filled when `create_rfp`, `get_rfp` or `update_rfp` succeeds (`stage` is the RFP's last completed stage) | the orchestrator, which stores `rfpId` on the session after the turn and moves the workflow tracker from `stage` (5.1) |
 
@@ -1384,6 +1237,8 @@ User prompts are trimmed; an empty prompt is a 400 `message is required`. When t
 
 ### 5.1 Streamed chat turn
 
+**Every streamed turn is one run of the session's workflow** (5.12, ADR-0040). Step 1 happens before the run; steps 2 and 3 happen inside its agent step (the **Answer** step of `agent-turn` for a one-step workflow, the **Analyse** step of `qti-v2-turn` for v2, 5.11); steps 4 to 7 happen after the run, as before. The run adds nothing the user sees: the same events, answer and stored message. Only a code-defined workflow's steps write the workflow bar (5.11); a one-step workflow's run never does, and the agent's own phases, `update_workflow` and the RFP stage keep driving it (ADR-0029).
+
 1. Append (or reuse, 4.3) the user message and **persist it before the model starts**, so a stop during provider connection still survives reload.
 2. Build input (4.3) and options (4.1, 4.2, memory thread, effort, `maxSteps: 15`). Own abort controller, chained to the client's abort.
 3. Consume the stream:
@@ -1402,11 +1257,13 @@ User prompts are trimmed; an empty prompt is a 400 `message is required`. When t
 
 Wire format of these events: [api.md](api.md). Errors thrown during the stream (other than the turn's own abort) propagate and are sent as an `error` event by the controller.
 
+**Errors of the Answer step.** An error thrown by the agent call itself, or while consuming its stream, fails the step, and the turn's `error` event carries that error's own message. A model error that the stream reports as a chunk fails the step only on a custom endpoint, with the R50 text of [llm-settings](../capabilities/llm-settings/spec.md) (R51); for any other provider the turn goes on at step 4, as before. A clarifying question or a stop ends the step early (the run ends there, `stopped: true`); the clarification is persisted and `done` sent after the run, as before.
+
 **Panel items (ADR-0029).** For every agent, `show_in_panel` (3.11) saves a panel item on the session as the result arrives, so an aborted turn keeps what was shown; the persisted `done` session (5.7) and `GET /sessions/:id` carry `panelItems` and the derived `workflow`. `update_workflow` (3.12) saves the workflow state the same way and emits `workflow` instead; the `done` session and `GET /sessions/:id` carry the extended view (`source`, `skipped`, `waiting`, `note`).
 
 **Data record** (from a `run_readonly_sql` / `sample_rows` result; shape in [data-model.md](data-model.md)): `input` = the corrected SQL when repaired, else the SQL, else the entity key; failed calls keep `{tool, input, error, rationale?}`; successful ones keep `columns` (declared, else first row's keys), at most **200** rows, `rowCount` = rows returned, `truncated` when the tool flagged it or rows > 200, `rationale`, and the tool's `warnings`.
 
-**Per-agent turn (ADR-0028).** The turn runs the session's agent: the `assistant`, or the built-in agent named by the session's `agentKey` ([data-model.md](data-model.md) 3.4). For `agentKey: 'assistant-v2'` (2.11) the streamed turn runs as the workflow `qti-v2-turn` (5.11): steps 2 and 3 happen inside its **Analyse** step, whose context is Block 1 (4.1) and the catalog block; the grounding guard (5.6), careful mode (5.8) and deep analysis do not apply; clarification interception has nothing to intercept (no `ask_clarification`). For `agentKey: 'rfp'` the steps above change as follows; an assistant turn is unchanged.
+**Per-agent turn (ADR-0028).** The turn runs the session's agent: the `assistant`, or the built-in agent named by the session's `agentKey` ([data-model.md](data-model.md) 3.4). Which of the steps below apply depends on that agent, never on the workflow. For `agentKey: 'assistant-v2'` (2.11) the streamed turn runs as the workflow `qti-v2-turn` (5.11): steps 2 and 3 happen inside its **Analyse** step, whose context is Block 1 (4.1) and the catalog block; the grounding guard (5.6), careful mode (5.8) and deep analysis do not apply; clarification interception has nothing to intercept (no `ask_clarification`). For `agentKey: 'rfp'` the steps above change as follows; an assistant turn is unchanged.
 
 - Step 2: the context is Block R1 only (4.1) and the requestContext carries the `rfp` keys (4.2); no metrics, knowledge, verified-query or agent-instructions block.
 - Step 3: clarification interception is kept. A `tool-result` that carries `columns` and `rows` (`get_client_financials`) becomes a data record like a SQL result (`{ tool, input: <client and line summary>, columns, rows (≤ 200), rowCount }`; SQL records are unchanged). A `tool-result` of `export_rfp_package` emits the `rfp-package` event ([api.md](api.md) 3.1) and is stored as the answer's `rfpPackage`. Every other RFP tool result emits `tool-result { tool, input: <its first string argument>, error? }`.
@@ -1415,7 +1272,7 @@ Wire format of these events: [api.md](api.md). Errors thrown during the stream (
 - After the turn the orchestrator stores `turn-rfp.rfpId`, when set, on the session as `rfpId`.
 - **Stage drives the workflow bar (ADR-0029).** A `create_rfp`, `get_rfp` or `update_rfp` result sets `turn-rfp.stage` to the RFP's last completed stage. On an `update_rfp` result (mid-turn) and after the turn, the orchestrator sets the session's workflow state to `current = min(stage + 1, 7)` and `done = 1..stage`, and emits `workflow`, so the workflow bar moves without the agent calling a tool; it creates no panel item and emits no `panel-item`, so the right panel is left as it is; when the current step changes it clears the note and `waiting`.
 
-**Non-streamed turn** (`POST /sessions/:id/messages`): a single generate with the same options; persists only `{content, reasoning?, knowledge?}` — no data records, no clarification interception, no synthesis, grounding guard or cross-check.
+**Non-streamed turn** (`POST /sessions/:id/messages`): removed in 1.23.27 with the chat write paths; the turn engine has only the streamed turn.
 
 ### 5.2 Read-only enforcement
 
@@ -1552,7 +1409,7 @@ Composed answer: <guidance>          ← only when composition applies
 
 ### 5.11 Workflow-backed turn: `qti-v2-turn` (Questions to Insights v2)
 
-A streamed turn of a session bound to `assistant-v2` (2.11) is one run of a workflow defined in code (ADR-0034), not one agent call. Its steps run in this fixed order. Each is deterministic code or one bounded agent call, and the order never comes from a prompt.
+A streamed turn of a session bound to `assistant-v2` (2.11) is one run of a workflow defined in code (ADR-0034), not one agent call. It is the catalogue's one code-defined workflow (5.12); every other session runs a one-step workflow on `agent-turn`, through the same turn path (5.1). Its steps run in this fixed order. Each is deterministic code or one bounded agent call, and the order never comes from a prompt.
 
 | # | Step id | Title | Kind | Does |
 |---|---|---|---|---|
@@ -1579,9 +1436,142 @@ With one entity the first line reads `1 entity.`; with none, the block is `Catal
 
 The model never writes this state: v2 has no `update_workflow`. A failed step ends the turn with its error, as any failed turn does (5.1: the controller sends `error`). When the Analyse step failed, the error is the agent's own (for a custom endpoint, the R50 text of [llm-settings](../capabilities/llm-settings/spec.md)). After the run succeeds, the turn goes on at 5.1 step 4 (final text, tool-only synthesis 5.5, persist, `done`).
 
-The non-streamed turn (`POST /sessions/:id/messages`, 5.1) is not a workflow run: it calls the agent once, as before.
+The non-streamed turn was removed in 1.23.27: every turn is a run (5.1).
 
-> Implementation note: `mastra/workflows/qti-v2-turn.workflow.ts` builds the workflow with `createWorkflow` / `createStep` from `@mastra/core/workflows` and registers it on the `Mastra` instance as `qti-v2-turn` (`workflows`), with snapshot persistence off: the session document holds the state. The step ids, titles and pure step code are in `qti-v2-turn.steps.ts`, which imports no framework. The session code starts a run with `run.stream()` and reads `workflow-step-start` and `workflow-step-result` (`status` `success`, `failed`, or `bailed` for a stopped turn) from its `fullStream`. The Analyse step calls back into the session code through a per-run object on the run's `RequestContext`. The event-to-state mapping is `workflowRunState` in `modules/sessions/workflow-run-state.ts`.
+**The step catalogue describes each step for the agent's Graph tab** ([agents-evals](../capabilities/agents-evals/spec.md) R108). Besides the id and title, it holds for each step:
+- its kind, `code` or `agent`;
+- a one-line summary;
+- the field names of its input and output, in the order of the step's input and output schemas;
+- its other exits.
+
+The agent detail returns it as `workflow` ([api.md](api.md) 34). For the agent step it adds the agent's name, its tools (2.11) and its maximum steps. A unit test checks the field names against the built workflow's schemas, so the drawing can't drift from the code.
+
+| Step | Summary | Input | Output | Other exits |
+|---|---|---|---|---|
+| Receive question | `Trims the question. An empty one fails the step.` | question, datasets | question, datasets | `Empty question` fails |
+| Load catalog | `Lists the entities of the session's datasets. No LLM.` | question, datasets | question, catalog | — |
+| Analyse | `The agent answers with its tools and the catalog as context, streamed to the chat.` | question, catalog | calls, stopped | `Model error` fails; `Stop` stops |
+| Wrap up | `Counts the turn's SQL queries, failed queries and rows, and logs the summary.` | calls, stopped | sqlQueries, failedQueries, rows | — |
+
+> Implementation note: `mastra/workflows/qti-v2-turn.workflow.ts` builds the workflow with `createWorkflow` / `createStep` from `@mastra/core/workflows` and registers it on the `Mastra` instance as `qti-v2-turn` (`workflows`), with snapshot persistence off: the session document holds the state. The step ids, titles and pure step code are in `qti-v2-turn.steps.ts`, which imports no framework. The session code starts a run with `run.stream()` and reads `workflow-step-start` and `workflow-step-result` (`status` `success`, `failed`, or `bailed` for a stopped turn) from its `fullStream`. The Analyse step calls back into the session code through a per-run object on the run's `RequestContext`. The event-to-state mapping is `workflowRunState` in `modules/sessions/workflow-run-state.ts`. `TurnEngine.runTurnWorkflow` (`modules/sessions/turn/turn-engine.ts`) runs every streamed turn, of v2 and of a one-step workflow alike, and maps the step events to the state only when the workflow's `bar` is `steps`.
+
+### 5.12 Workflows: the catalogue, ids and the one-step workflow
+
+Every session runs a **workflow** (ADR-0040; [workflows](../capabilities/workflows/spec.md)). A workflow is a fixed sequence of steps defined in code, each deterministic code or one bounded call to an agent. Workflows are never created, edited or stored by the app.
+
+**The catalogue.** Two kinds of workflow:
+
+- **Code-defined workflows**, each with its own id, name, description, steps, trigger and, when its agent step runs one, its agent (its `primaryFor` agent). Today three: `qti-v2-turn`, *Questions to Insights v2*, a chat workflow whose agent is `assistant-v2` and whose steps are those of 5.11; `seq-text-demo`, the *Sequential test workflow*, a run workflow that calls no agent (5.13); and since 1.23.24 `deep-analysis`, *Deep analysis*, a run workflow whose agent steps call the `assistant` (its `calls` agent, which keeps its own one-step workflow and lists both under "Used in"; 5.15). A code workflow drives the workflow bar from its steps (`bar: 'steps'`).
+- **One-step workflows**: one for each agent a chat can run that has no code-defined workflow of its own: the `assistant`, the RFP Builder (`rfp`), the Data Readiness Agent (`data-readiness`) and every **Live** user agent. A `primaryFor` agent (`assistant-v2`) gets none, and neither do the System agents. A one-step workflow is computed at read time from the agent registry and the `agents` collection; nothing is registered per agent. It never writes the workflow bar (`bar: 'agent'`): the agent's own workflow phases, `update_workflow` and the RFP stage keep driving it (ADR-0029).
+
+**Triggers** (ADR-0040 amendment; ADR-0041). Every workflow is started one of two ways: a **chat** workflow (`trigger: 'chat'`) runs on every message of a chat; a **run** workflow (`trigger: 'run'`) runs once on a typed input declared in code with its catalogue entry (`input`: fields `{ name, label, type: 'text' | 'textarea' | 'number' | 'boolean' | 'datasets' | 'dataset', required, placeholder?, help?, default?, datasourceKinds?, hidden? }`; 5.13; [api.md](api.md) 116, 118). Every one-step workflow and `qti-v2-turn` are chat workflows until 1.23.22, and since 1.23.12 they also declare an input and run on it, one agent turn per run (5.14). A run workflow can't start a chat; any workflow with input fields can be run.
+
+**Ids.** A code workflow keeps its own id (`qti-v2-turn`, `seq-text-demo`, `deep-analysis`). A one-step workflow's id is `agent:<registry key>` for a built-in agent (`agent:assistant`, `agent:rfp`, `agent:data-readiness`) and `agent:<user-agent id>` for a user agent. An `agent:` id naming a System agent, a `primaryFor` agent or nothing at all is not a workflow. Ids contain `:`; clients send them URL-encoded.
+
+**Names and listing** ([api.md](api.md) 116). A one-step workflow takes its agent's name and description, except the assistant's, which is named `Assistant` with the description `Answers questions over the datasets you pick.`. A user agent's workflow takes its Live version's name, datasets and starter questions, and is listed only while the agent is Live; a draft-only agent's id answers 404 ([api.md](api.md) 117). The order is `agent:assistant`, the code workflows in catalogue order (`qti-v2-turn`, `seq-text-demo`, `deep-analysis`), the other Official agents' workflows by name, then the user agents' by name.
+
+**The one-step workflow's step.** One agent step:
+
+| Step id | Title | Kind | Summary | Input | Output | Other exits |
+|---|---|---|---|---|---|---|
+| `answer` | Answer | agent | `The agent answers with its tools, streamed to the chat.` | question, datasets | calls, stopped | `Model error` fails; `Stop` stops; `Clarifying question` stops (only when the agent has `ask_clarification`) |
+
+Its agent is the workflow's agent with its tools (a user agent: the assistant's tools its selection gives it, 2.1) and its tool-loop budget: 15 for the `assistant`, the RFP Builder and user agents, 10 for the Data Readiness Agent. Every one-step workflow shares one engine, `agent-turn`, never one per agent. Its input is `{ question, datasets }`, and its output is the step's (`{ calls: { tool, rowCount?, failed }[], stopped }`); it never persists a snapshot. How a turn of a one-step workflow runs is 5.1's per-agent turn: the session code picks the agent and hands the run the turn on its `RequestContext`.
+
+**A session's workflow** ([data-model.md](data-model.md) 3.4). A new session stores `workflowId`, whichever body of [api.md](api.md) 3 created it. A session without it, or whose stored id no longer resolves, derives it from its agent fields:
+
+| Session stored | Derived workflow |
+|---|---|
+| `workflowId` set and resolvable | that id |
+| `agentKey: 'assistant-v2'` | `qti-v2-turn` (the code workflow whose `primaryFor` is the key) |
+| `agentKey: 'rfp'` / `'data-readiness'` | `agent:rfp` / `agent:data-readiness` |
+| `agentId: <id>`, agent exists or deleted | `agent:<id>` |
+| neither (or an `agentKey` that is neither wrapped nor a `primaryFor`) | `agent:assistant` |
+
+Which agent a turn runs is unchanged: `agentKey`, else the `assistant` (with a user agent's Live configuration, or a preview's draft). A deleted user agent's session keeps `agent:<id>`, shows the stored `agentName` with `deleted: true` ([api.md](api.md) 2.1), and its turns run the plain assistant (past-chats R59).
+
+**Which workflows use an agent** ([api.md](api.md) 34 `usedInWorkflows`): the code workflows whose `primaryFor` it is and its own one-step workflow, in catalogue order. `assistant` → `agent:assistant`; `assistant-v2` → `qti-v2-turn`; `rfp` → `agent:rfp`; `data-readiness` → `agent:data-readiness`; a Live user agent → `agent:<id>`; a draft-only user agent and the System agents → none.
+
+> Implementation note: the framework-free catalogue is `mastra/workflows/workflow-catalog.ts` (`CODE_WORKFLOWS`, `WRAPPED_AGENT_KEYS`, `agentWorkflowId`, `parseWorkflowId`, `sessionWorkflowId`, `workflowsUsingAgent`, `oneStepWorkflowSteps`) and `agent-turn.steps.ts` (the `answer` step). `agent-turn.workflow.ts` builds the `agent-turn` workflow, registered in `mastra/index.ts` next to `qti-v2-turn`; its step reads `AgentTurnRuntime` from the run's `RequestContext` (`AGENT_TURN_RUNTIME_KEY`) and returns `runtime.answer()`. The Official and System registry keys and the tool-loop budgets are in `mastra/agent-constants.ts`; drift tests read `mastra/index.ts`'s registered keys as text, so they never load Mastra. `agentWorkflow()` (`agent-workflows.ts`) reads v2's steps from `CODE_WORKFLOWS`. `WorkflowsService` (`modules/workflows/`) builds the API's catalogue from the pure catalogue and `AgentsService.list()`; `SessionsService` never depends on it (that would be a module cycle) and resolves workflows from the pure catalogue.
+
+### 5.13 Run workflows: `seq-text-demo` (the sequential test workflow)
+
+A **run workflow** runs once on a typed input and returns a result, with no chat (ADR-0040 amendment; [workflows](../capabilities/workflows/spec.md) R11). `POST /workflows/:id/runs` ([api.md](api.md) 118) checks the input against the workflow's fields (`<label> is required`, `<label> must be a number`), runs the registered workflow once and answers each step's status and output, and the final output. A failing step fails the run; the steps after it are `skipped`. Nothing is stored: the run is not a session, writes no workflow bar and persists no snapshot.
+
+The first run workflow is `seq-text-demo`, *Sequential test workflow*, described as `A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.`. Its input is one required field, `text` (label `Text`, a textarea, placeholder `Paste or type any text`). Its three steps are deterministic code, in this order:
+
+| # | Step id | Title | Kind | Summary | Input | Output | Other exits |
+|---|---|---|---|---|---|---|---|
+| 1 | `clean-text` | Clean text | code | `Trims the text and collapses repeated spaces. An empty text fails the step.` | text | text | `Empty text` fails |
+| 2 | `count-words` | Count words | code | `Counts the words and characters of the cleaned text.` | text | text, words, characters | — |
+| 3 | `format-result` | Format result | code | `Writes a one-line summary of the counts and the start of the text.` | text, words, characters | summary | — |
+
+- **Clean text** trims the text and collapses every run of whitespace to one space. A text that is empty after that fails the step with `The text is empty`.
+- **Count words** counts the whitespace-separated words and the characters of the cleaned text.
+- **Format result** writes `summary` = `<words> word(s), <characters> character(s): "<the text>"`, singular for 1, with the text cut to its first 60 characters and `…` appended when it is longer. For `  Hello   workflow   world  ` the run's output is `{ summary: '3 words, 20 characters: "Hello workflow world"' }`.
+
+The workflow page draws these steps with the 1.23.1 drawing (GET /workflows/seq-text-demo, [api.md](api.md) 117: no step has an `agent`). A unit test checks the steps' schema fields against the catalogue, as for 5.11.
+
+> Implementation note: `mastra/workflows/seq-text-demo.steps.ts` (framework-free: `SEQ_TEXT_DEMO_STEPS`, `cleanText`, `countWords`, `formatResult`) and `seq-text-demo.workflow.ts` (the Mastra workflow, registered in `mastra/index.ts` as `seq-text-demo`, snapshot persistence off). The catalogue entry, `trigger`, `input` and `parseWorkflowInput` are in `workflow-catalog.ts`. `MastraService.runWorkflow(key, inputData)` creates a run, `start()`s it and maps the engine's result with `workflowRunResult` (`workflow-run.ts`): the steps in the workflow's step-graph order, with the step description as the title. `WorkflowRunsService` (`modules/workflows/workflow-runs.service.ts`) checks the input first (`prepare`), then runs it through `MastraService.runWorkflow` (118) or streams it through `MastraService.streamWorkflow` (119, 5.14).
+
+### 5.14 Runs of agent workflows
+
+A run of an agent workflow (the Assistant, Questions to Insights v2, the Data Readiness Agent, the RFP Builder, a user agent's one-step workflow) is **one agent turn** (ADR-0041; [workflows](../capabilities/workflows/spec.md) R14-R17; [api.md](api.md) 118, 119). It runs on a **run host** through the turn path of 5.1 unchanged, so its model request equals a chat turn's for the same input: the same agent, input messages, system and context blocks, tools, options and requestContext keys. Only what names the host differs: `session-id` is the host id, `session-workspace-id` and the workspace's `Local filesystem at …` line name the run's workspace, and the memory thread is the host's.
+
+**Inputs** ([api.md](api.md) 116). In code, with the catalogue (`workflow-catalog.ts`):
+
+| Workflow | Input | The turn |
+|---|---|---|
+| `agent:assistant` | `question`, `datasets`, `careful` | the user message `question` over `datasets`; careful mode from `careful` (5.8) |
+| `qti-v2-turn` | `question`, `datasets` | as a v2 chat turn (5.11) |
+| `agent:data-readiness` | `dataset` (PostgreSQL or Databricks), `question` (default `Assess the readiness of this dataset`) | over the one dataset |
+| `agent:rfp` | `message`, `rfpId` (hidden) | the user message `message`; the host's `rfpId` makes Block R1 name that RFP and its stage |
+| `agent:<user-agent id>` | `question`, `careful` | over the agent's Live datasets that exist, with its Live instructions, overrides, tools and skills (4.2) |
+
+**The run host.** An in-memory session (`SessionDoc` with `run: true`), held in the sessions service's map with the agent editor's previews, never stored or listed:
+- id `run-<run id>`; name the workflow's; workspace `workspaces/session-run-<run id>/`, created as a session's (7);
+- bound as `POST /sessions` would bind a session of the workflow: `agentKey` for v2, the Data Readiness Agent and the RFP Builder, `agentId` for a user agent, none for the Assistant; `workflowId` derived as a session's (5.12);
+- datasets: the input's (`datasets`, or `[dataset]`), the RFP Builder's declared dataset, or a user agent's Live datasets that exist;
+- `rfpId` from the input;
+- workflow state: none, except on an RFP Continue (the input's `rfpId` equals the earlier run's), where it starts as the earlier run's, so the stage tracker shows the stages already saved before this run saves another (1.23.17);
+- messages: empty, or the context of one earlier run (below).
+
+**One run.**
+1. `WorkflowRunsService.prepare` checks the input ([api.md](api.md) 118 refusals) before anything runs.
+2. It creates the host and sends `run`.
+3. `SessionsService.streamRunTurn` runs the host's turn through the turn engine's `streamTurn` (`modules/sessions/turn/turn-engine.ts`, 5.1): the workflow run (`agent-turn` or `qti-v2-turn`), the agent step, tool-only synthesis (5.5), the grounding guard (5.6), careful mode (5.8), clarification, visuals, panel items, the RFP stage drive and readiness progress, persisted into the host. A step-event listener hands every `workflow-step-start` and `workflow-step-result` of the run to the run, which sends it as a `step` event whatever the workflow's `bar`; the turn's other events are forwarded unchanged, except its `done`.
+4. When the turn ends, `finishRunHost` reads the host as the API shows a session (its derived panel items and workflow view), deletes its memory thread `run-<run id>` and drops it from memory. The run takes the host's last message as its `answer` (when it is an assistant message after this run's question), its datasets, agent binding, `rfpId`, panel items, visuals and workflow state, and ends with `done { run }`, or `error { content }` when the turn threw (the chat stream's message).
+5. **Stop** is a client abort, as for a chat: the turn aborts (which cancels a readiness assessment, ADR-0033), the run ends `stopped` with any partial answer, and nothing more is sent.
+
+**Context from one earlier run** (a follow-up, an answer to a clarifying question, the RFP Builder's Continue). A run with `context.fromRunId` gets, as the host's first two messages, the earlier run's `question` (user) and `answer.content` (assistant; the clarifying question when the earlier run ended on one). The host has no memory thread, so the turn's input is the whole transcript (4.3): those two messages and this run's question. No new agent-input code. One level only: the earlier run's own context is not carried.
+
+**Stored (since 1.23.14).** Every run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16): inserted as `running` before `run` is sent, updated when it ends with the projection of step 4 (the derived `panelItems`, `workflow` view and `agent` are computed again on every read, on the run's run-backed host, and never stored). The host's workspace stays with the stored run; its files are served by the session file services given that host ([api.md](api.md) 123-127), and it is deleted with the run (122). A context run is read from the store, so it survives a restart. At start-up a run still `running` becomes `failed` (`The app stopped before the run finished`) and its memory thread is deleted, and a `run-*` workspace no stored run owns is deleted; the previews' sweep (agents-evals R61) no longer touches `run-*` workspaces.
+
+> Implementation note: `modules/workflows/workflow-runs.service.ts` (`WorkflowRunsService`: `prepare`, `stream`, `run`, the history `list`/`get`/`delete`, the file routes, and the start-up recovery in `onModuleInit`), `workflow-runs.controller.ts` (`/workflow-runs`), `repositories/workflow-runs.repository.ts`, and `workflow-run-steps.ts` (framework-free: `WorkflowRun`, `WorkflowRunDoc`, `RunStepTracker`, `runAnswerOf`, `runTitle`, `runHostDoc`). `SessionsService` serves the files through `panelItemFileOf`, `downloadPanelItemOf`, `getVisualizationOf`, `downloadVisualizationOf` and `downloadRfpPackageOf`, and lists run workspaces with `runHostWorkspaceIds`. `SessionsService` (`createRunHost`, `streamRunTurn`, `finishRunHost`, `deleteRunHostResources`) never depends on `WorkflowsService` or `WorkflowRunsService` (module cycle); `WorkflowsModule` imports `SessionsModule`. The pure `parseWorkflowInput`, `agentRunTurn` and `oneStepWorkflowInput` are in `workflow-catalog.ts`. Parity is proven by `modules/sessions/run-host-sessions.spec.ts` (stubbed agents, the four workflows and a user agent) and `test/workflow-runs.e2e-spec.ts` (the recording stub model).
+
+### 5.15 Run workflows that call an agent: `deep-analysis`
+
+`deep-analysis`, *Deep analysis* (since 1.23.24; plan 1.25.3; [deep-analysis](../capabilities/deep-analysis/spec.md) R20-R27), is a run workflow defined in code whose agent steps call the `assistant` without being its workflow: its catalogue entry names the agent in `calls` rather than `primaryFor`, so the assistant keeps `agent:assistant`. Described as `Investigates a broad question from several angles with SQL and writes a downloadable report: executive summary, findings, anomalies and recommendations. Takes a few minutes.`. Its input is the Assistant's `question` and `datasets` fields (no `careful`). It is listed with the assistant as its agent, `picksDatasets: true` and the assistant's requirement ([api.md](api.md) 116).
+
+| Step | Kind | What it does | Input → output |
+|---|---|---|---|
+| `plan` (Plan) | agent | The Plan call of 2.7 (`maxSteps: 1`, `toolChoice: 'none'`, structured). At most 5 angles are kept; none fails the step (`the planner returned no angles`); a blank title becomes the question's first 80 characters. Exit `No usable plan` fails. | `question`, `datasets` → `question`, `title`, `angles` |
+| `investigate` (Investigate) | agent | The Investigate call of 2.7 once per angle, in order, inside the step (`maxSteps: 15`, all tools). A failing angle becomes its note; it does not fail the step. | `question`, `title`, `angles` → `question`, `title`, `findings` |
+| `write` (Write) | agent | The Report call of 2.7 (`maxSteps: 1`, `toolChoice: 'none'`, structured); the writer's title replaces the plan's when not blank. Exit `No usable report` fails. | `question`, `title`, `findings` → `question`, `title`, `executiveSummary`, `body`, `findings` |
+| `assemble` (Assemble) | code | Assembles the report (the chat job's layout without the session line, closing `Report <run id>`) and writes it to `reports/<slug of the title>.md` in the run's workspace. No LLM. | → `title`, `executiveSummary`, `path`, `angles` |
+
+`GET /workflows/deep-analysis` ([api.md](api.md) 117) gives each agent step an `agent`: `{ name: <the assistant's name>, tools: [], maxSteps: 1 }` for Plan and Write, `{ name, tools: <the assistant's tools>, maxSteps: 15 }` for Investigate. A unit test checks the steps' schema fields against the catalogue, as for 5.11 and 5.13.
+
+**One run** ([api.md](api.md) 118, 119; the stored run, [data-model.md](data-model.md) 3.16):
+1. `prepare` checks the input as any run's, and refuses a blank question with `Question is required`.
+2. The run is stored and `run` sent. A **run host** is created as for an agent workflow (5.14), over the input's datasets and shaped as an Assistant chat (no agent binding), so `backgroundAgentOptions` gives each call exactly the grounding a chat's deep analysis gets, with no memory thread.
+3. The engine runs `deep-analysis` with a RequestContext holding the run's **runtime** (`deep-analysis-runtime`): the three calls of 2.7 on the host (the same functions the chat job calls, so the model request is identical for the same question and replies) and the writer of the run's workspace. Every step event is a `step` event of the stream.
+4. When it ends, the host leaves memory (its workspace stays with the run). A run that succeeded keeps the executive summary as its `answer` (an assistant message carrying `report: { jobId: <run id>, title, path, angles }`), the report as a file item `deep-analysis-report` in `panelItems`, its `question` and `datasets`, and Assemble's output as its `output`. A failed step fails the run with its error (no answer, no file); `done { run }` is sent either way.
+5. **Stop** (a client abort): the call in flight aborts, the running step ends `stopped` and the rest `skipped`; nothing more is sent.
+
+The Run tab shows the answer as the deep-analysis report card; its Report button downloads `deep-analysis-report` through `GET /workflow-runs/:id/panel-items/:itemId/download` ([api.md](api.md) 126), named as the file.
+
+> Implementation note: `mastra/workflows/deep-analysis.steps.ts` (framework-free: `DEEP_ANALYSIS_STEPS`, the `DeepAnalysisRuntime` contract, `receivePlan`, `angleFinding`, `failedAngle`, `findingsBlock`, `reportTitle`, `runReportPath`, `reportMarkdown`, `assembleReport`) and `deep-analysis.workflow.ts` (the Mastra workflow, registered in `mastra/index.ts` as `deep-analysis`, snapshot persistence off). The three calls are `modules/deep-analysis/deep-analysis.calls.ts` (`planAnalysis`, `investigateAngle`, `writeAnalysis`), shared with `DeepAnalysisService`. `modules/workflows/deep-analysis-run.ts` builds the runtime and the run's answer and file; `WorkflowRunsService.runDeepAnalysis` runs it (the engine streaming of `runCode`, with the RequestContext and the abort signal). `SessionsService.createRunHost` accepts a code workflow whose `calls` is the assistant. `WorkflowsService` lists it (`callingRunEntry`); the catalogue's `workflowsUsingAgent` counts `calls`. Proven by `deep-analysis.steps.spec.ts`, `deep-analysis.workflow.spec.ts` and `modules/workflows/deep-analysis-run.spec.ts`.
 
 ---
 
@@ -1853,7 +1843,6 @@ Skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS` for har
 | `assistant` | `curated-knowledge` (how to apply Block 3, 4.1, its `[relation]` lines included), and in a session bound to a user agent that agent's in-app skills (7.3) | `deep-analysis`: one phase file per deep-analysis call (2.7). |
 | `visualization` (designer) | none (it runs without tools) | `interactive-visuals` (7.2): the router body of `SKILL.md`, plus `reference/spec-mode.md` on spec calls or `reference/freeform.md` on freeform calls |
 | `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
-| `benchmarking`, `survey`, `lad-coe`, `strategy` (showcase, 2.9) | none | none |
 | `rfp` (RFP Builder, 2.8) | its seven stage skills (below) | none |
 | `data-readiness` (Data Readiness Agent, 2.10) | `data-readiness` and `readiness-drilldown` (below) | none |
 | `assistant-v2` (Questions to Insights v2, 2.11) | none | none |
@@ -2030,7 +2019,7 @@ CustomCheck = { id, description, run({ answer, toolCalls, datasets, vars }) → 
 
 **Custom checks.** The built-in checks share one scorer id per kind, so a case can hold each kind once; a case that needs several tool checks, a check on a tool's arguments, on the order of particular calls or on state read back after the run uses `customChecks`. Each one's result is `{ id, description, score 0|1, passed, reason? }` like any check; a throw fails it with `check error: <message>`. They run after the result-set check and before the judge.
 
-**Eval target hooks** (the agent a set runs on, `EvalTarget`): besides `orientation`, `configureContext` and `finish`, a target may `prepareQuestion` a case into a string or `{ question, history?, vars? }` — `history` is earlier turns (`{ role: 'user' | 'assistant', content }`, oldest first) sent before the question as one message list, also shown to the judge as "Earlier conversation"; `vars` reach the orientation builder and the custom checks — and may declare `afterCase` (clean-up after every case, never throws), `sessionAgentKey` (the run's throwaway session is created bound to that built-in agent, sessions-chat R61, so `update_workflow` reads its `## Workflow`) and `judgeTraceChars` (how much of each tool input and output the judge reads; 2,000 when unset).
+**Eval target hooks** (the agent a set runs on, `EvalTarget`): besides `orientation`, `configureContext` and `finish`, a target may `prepareQuestion` a case into a string or `{ question, history?, vars? }` — `history` is earlier turns (`{ role: 'user' | 'assistant', content }`, oldest first) sent before the question as one message list, also shown to the judge as "Earlier conversation"; `vars` reach the orientation builder and the custom checks — and may declare `afterCase` (clean-up after every case, never throws), `sessionAgentKey` (the run's throwaway run host is created bound to that built-in agent (5.14), so `update_workflow` reads its `## Workflow`) and `judgeTraceChars` (how much of each tool input and output the judge reads; 2,000 when unset).
 
 Built-in check types used by the cases (each exposes an id, name and a description such as `Checks if output includes "Argentina"`, shown in the UI): `includes(text)`, `matches(regex)`, `calledTool(name)`, `didNotCall(name)`, `toolOrder([names])`, `noToolErrors()`. The report also knows how to explain an `excludes(text)` check, currently unused.
 
@@ -2061,7 +2050,7 @@ Built-in check types used by the cases (each exposes an id, name and a descripti
 
 The several-datasets clarification (D6) and comparing two reports are not in the set: the run binds every dataset of one datasource, and a case cannot store an earlier report before it runs. A change to the agent's prompt, skill or tools passes when every case passes over 3 runs (data-readiness Acceptance 5).
 
-**The `rfp` set** runs on the RFP Builder (2.8). Its cases have no `expectedSql` (the agent runs no SQL). Each case gets Block R1 (4.1) instead of Block 1's dataset half, and `rfp-created-by = eval:<jobId>`; the run's throwaway session is bound to the RFP Builder (`sessionAgentKey: 'rfp'`, named `rfp eval <ISO time>`), and its judge reads up to 12,000 characters of each tool input and output. A case may name a **setup**: an RFP record the harness creates through the API before the case (client, plan year, last completed stage, its lists and narrative sections), tagged with the run; `{rfpId}` in the question or history becomes its id, and a setup marked active is named in Block R1 as the session's active RFP, as in a resumed chat. A question that names `{rfpId}` without a setup gets a draft for Orchard Manufacturing (`IC100100`), plan year 2027, not active. After **every case**, and again when the run ends, the harness deletes the run's records with `DELETE /v1/rfps?createdBy=eval:<jobId>` through the same `restTarget` (3.10), which removes an eval run's records whatever their status ([api.md](api.md) I29), so no case sees another's records. RFP records are shared, so records other users made (a draft for Orchard Manufacturing, say) may show; no case depends on them. Expected figures, names and dates were read from the seeded API on 2026-10-15.
+**The `rfp` set** runs on the RFP Builder (2.8). Its cases have no `expectedSql` (the agent runs no SQL). Each case gets Block R1 (4.1) instead of Block 1's dataset half, and `rfp-created-by = eval:<jobId>`; the run's throwaway run host is bound to the RFP Builder (`sessionAgentKey: 'rfp'`, named `rfp eval`), and its judge reads up to 12,000 characters of each tool input and output. A case may name a **setup**: an RFP record the harness creates through the API before the case (client, plan year, last completed stage, its lists and narrative sections), tagged with the run; `{rfpId}` in the question or history becomes its id, and a setup marked active is named in Block R1 as the host's active RFP. A question that names `{rfpId}` without a setup gets a draft for Orchard Manufacturing (`IC100100`), plan year 2027, not active. After **every case**, and again when the run ends, the harness deletes the run's records with `DELETE /v1/rfps?createdBy=eval:<jobId>` through the same `restTarget` (3.10), which removes an eval run's records whatever their status ([api.md](api.md) I29), so no case sees another's records. RFP records are shared, so records other users made (a draft for Orchard Manufacturing, say) may show; no case depends on them. Expected figures, names and dates were read from the seeded API on 2026-10-15.
 
 The cases' setups (all Maple Ridge Hospitality, `IC100137`, plan year 2027, active): **stage 2** (client background saved); **stage 3** (+ Medical and Dental as-is, scope statement); **stage 4** (+ carriers Cigna incumbent on Medical and Dental, Aetna and Blue Cross Blue Shield on both, Delta Dental on Dental); **stage 5** (+ four requirements in three sections); **stage 6 full** (+ nine milestones from 2026-10-19 to the effective date 2027-01-01, and the executive summary, instructions to bidders and evaluation criteria). Custom checks are named below as *calls* (succeeded / not called / called with), *order* and *saved* (the setup record read back after the case).
 
@@ -2121,9 +2110,9 @@ Before a run starts (and before any tokens are spent):
 
 ### 8.3 Executing a case
 
-Cases run **sequentially** (load equal to one user session). Per run, a throwaway session is created (name `<agent key> eval <ISO time>`, capped at 64 chars; bound to the target's `sessionAgentKey` when it has one, 8.1) bound to the run's datasets and seeded with one assistant message `This is a throwaway session created for the assistant eval suite.` so `create_visual` has an answer to attach to; it is deleted when the run ends (best effort). If it cannot be created the run continues and visual tools report `No session in context`. The knowledge block (4.1 Block 3) is computed once per run.
+Cases run **sequentially** (load equal to one user session). Per run, a throwaway run host (5.14; id `run-eval-<uuid>`, name `<agent key> eval`; bound to the target's `sessionAgentKey` when it has one, 8.1) is created over the run's datasets and seeded, as an earlier run's context, with the question `Eval suite placeholder question` and the answer `This is a throwaway host created for the assistant eval suite.` so `create_visual` has an answer to attach to; an agent that takes every qualifying dataset is narrowed to the run's. The host, its memory thread and its workspace, is deleted when the run ends (best effort). If it cannot be created the run continues and visual tools report `No session in context`. The knowledge block (4.1 Block 3) is computed once per run.
 
-Per case, one `assistant` generate with: input = the question; `maxSteps: 15`; context = Block 1's dataset orientation (entities + join hints, no visuals lines) and the curated-knowledge block (rendered from the ontology); requestContext = `datasets`, `session-id` (when the throwaway session exists), a live `turn-data-records` array filled after each step from that step's tool results. **No memory, no metrics or verified-query blocks, no effort option, no grounding guard.** Then:
+Per case, one `assistant` generate with: input = the question; `maxSteps: 15`; context = Block 1's dataset orientation (entities + join hints, no visuals lines) and the curated-knowledge block (rendered from the ontology); requestContext = `datasets`, `session-id` (the throwaway run host's id, when it exists), a live `turn-data-records` array filled after each step from that step's tool results. **No memory, no metrics or verified-query blocks, no effort option, no grounding guard.** Then:
 
 1. Built-in checks score the agent's own output (scored before any fallback).
 2. If the answer text is empty but tools were called, a tool-only synthesis (5.5, effort `medium`) produces the *reported* answer (scores unchanged).
@@ -2147,7 +2136,7 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
   With neither, both, an unknown set id or an unknown case id, it runs nothing, makes no model call, prints the error and exits 1. The errors are `Set EVAL_SET to one question set (world-cup, world-cup-rest, formula-1, rfp, data-readiness) or EVAL_CASES to comma-separated case ids`, `Set EVAL_SET or EVAL_CASES, not both`, `Unknown question set "<id>" (known: …)` and `Unknown eval case(s): <ids>`. It prints `PASS|FAIL <id> (<ms>)` per case, then each of its checks (`pass|FAIL <check id>: <description>`, with `↳ <reason>` under a failed one), and `<passed>/<total> questions passed`, and exits 1 unless all pass. With `EVAL_RESULTS_FILE` set it also writes the results (8.3) to that path as JSON.
   The model is the saved LLM configuration (1.3). With `EVAL_LLM_PROVIDER=custom` the run targets a custom endpoint instead, without touching the saved settings: `EVAL_LLM_API_STYLE` (`openai` | `anthropic`), `EVAL_LLM_BASE_URL` and `EVAL_LLM_MODEL` are required, `EVAL_LLM_API_KEY` is optional (unset → no credential). `EVAL_LLM_PROVIDER` takes only `custom`; GitHub Copilot is reached through the saved settings (a saved `copilot` configuration runs the evals on the machine's Copilot seat). They are resolved and tuned exactly as the saved `custom` settings would be (1.3, 1.4); a missing or invalid value fails the run before any model call with the matching validation text of [llm-settings](../capabilities/llm-settings/spec.md) R44, and the key is never printed.
-- **Golden-set harness** — a separate developer harness over a JSON golden set (`{name, question, dataset, expectedSql, placeholder?, notes?}`) that runs each question as a **real streamed chat turn** in a throwaway session (300 s timeout) and compares the answer's last successful SQL result with `expectedSql` using 5.9 (strict width). Verdicts `PASS|FAIL|ERROR|SKIP`.
+- **Golden-set harness** — a separate developer harness over a JSON golden set (`{name, question, dataset, expectedSql, placeholder?, notes?}`) that runs each question as a **real agent turn** on a throwaway run host (`streamRunTurn`) (300 s timeout) and compares the answer's last successful SQL result with `expectedSql` using 5.9 (strict width). Verdicts `PASS|FAIL|ERROR|SKIP`.
 
 > Implementation note: the `data-readiness` set and target are in `mastra/evals/data-readiness.evals.ts`, its checks in `data-readiness-eval-checks.ts`. `mastra/evals/assistant.evals.ts` (`runEvals` from `@mastra/core/evals`, checks from `@mastra/evals/checks`), `result-set-check.ts`, `assistant-eval-datasets.ts`, `run-assistant-evals.ts` (`npm run evals:assistant`), `modules/agents/eval-runs.service.ts`, `eval-regression.ts`, `eval-report.ts`; golden set `backend/eval/golden-set.json` via `npm run eval` (`scripts/run-eval.ts`).
 
@@ -2155,7 +2144,7 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
 ## 9. Agents catalogue (introspection contract)
 
-`GET /agents` and `GET /agents/:key` expose, per registered agent: `key`, `id`, `name`, `description`, `tools` (sorted names); detail adds `instructions` (prompt flattened to text, as served: a built-in agent's override is reflected, 1.1; for a user agent it follows the agent's tool selection but does not list its in-app skills), for a built-in agent `prompt` (`{editable, shipped, modified, builtInChanged, linksAllowed, updatedAt}`, [api.md](api.md) 34), for a showcase agent (2.9) `showcase: true` and its `chatRequirement`, `toolDetails` (`{name, description, inputs: top-level input field names}`), `memory` (`null` when none, else `{storage, lastMessages, semanticRecall, workingMemory, generateTitle}`), and `model` (`{id, provider}` of the currently resolved model, `null` when it cannot be resolved without settings; for a custom endpoint `provider` is `custom` in both API styles, even though the Anthropic style's id starts with `anthropic/` (1.3), and the UI shows it as "Custom endpoint", [llm-settings](../capabilities/llm-settings/spec.md) R53; for GitHub Copilot `provider` is `copilot`, shown "GitHub Copilot", R65). An agent's skills are a separate endpoint, `GET /agents/:key/skills` (7.3, [api.md](api.md) 2.6). Any accessor that throws is reported as empty. UI strings for agents without tools/memory/evals (`This agent runs in a single step with no tools.`, `This agent is stateless — no memory is configured.`, `No evals configured for this agent yet.`) are owned by [agents-evals](../capabilities/agents-evals/spec.md).
+`GET /agents` and `GET /agents/:key` expose, per registered agent: `key`, `id`, `name`, `description`, `tools` (sorted names); detail adds `instructions` (prompt flattened to text, as served: a built-in agent's override is reflected, 1.1; for a user agent it follows the agent's tool selection but does not list its in-app skills), for a built-in agent `prompt` (`{editable, shipped, modified, builtInChanged, linksAllowed, updatedAt}`, [api.md](api.md) 34), `toolDetails` (`{name, description, inputs: top-level input field names}`), `memory` (`null` when none, else `{storage, lastMessages, semanticRecall, workingMemory, generateTitle}`), and `model` (`{id, provider}` of the currently resolved model, `null` when it cannot be resolved without settings; for a custom endpoint `provider` is `custom` in both API styles, even though the Anthropic style's id starts with `anthropic/` (1.3), and the UI shows it as "Custom endpoint", [llm-settings](../capabilities/llm-settings/spec.md) R53; for GitHub Copilot `provider` is `copilot`, shown "GitHub Copilot", R65). An agent's skills are a separate endpoint, `GET /agents/:key/skills` (7.3, [api.md](api.md) 2.6). Any accessor that throws is reported as empty. UI strings for agents without tools/memory/evals (`This agent runs in a single step with no tools.`, `This agent is stateless — no memory is configured.`, `No evals configured for this agent yet.`) are owned by [agents-evals](../capabilities/agents-evals/spec.md).
 
 ---
 
@@ -2167,7 +2156,6 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 - **Open question:** the eval judge sends `temperature: 0` as a *provider option*; for OpenAI/LenAI buckets this is likely an unknown option rather than the sampling temperature. Is temperature actually applied?
 - **Gap:** deep-analysis investigation calls keep `ask_clarification`, `create_visual` and `update_visual` available; only the prompt forbids them, and nothing intercepts a clarification in `generate` mode. Should these tools be removed for background calls?
 - **Gap:** `list_entities`' description says the kind is "databricks or postgres", omitting `rest` (which the SQL tool description and prompt do mention).
-- **Gap:** the non-streamed chat endpoint persists no `data`, `entities`, `interpretation`, clarification, grounding guard or cross-check. Is it still used by any client? (The frontend service still has a caller.)
 - **Gap:** `run_readonly_sql` does not enforce that the SQL only references session entities (prompt-only rule A24); any table reachable on the datasource can be read.
 - **Gap:** auto-repair designs from the **source answer's** data, not the current version's stored `data.json` (which may include merged turn records or refreshed rows), so a repaired version can lose drill-down data or a refresh.
 - **Gap:** the eval harness omits the metrics and verified-query blocks, the effort setting, the session workspace and the grounding guard, so it does not measure exactly what production runs (the code comments claim parity for step budget and grounding only).
@@ -2352,7 +2340,7 @@ Curated knowledge:
   never assume a snippet exists that you cannot see.
 ```
 
-> Implementation note (file map): agents in `backend/src/mastra/agents/*.agent.ts`; tools in `mastra/tools/`; context builders `mastra/context-blocks.ts`; step budget `mastra/agent-constants.ts`; bridges `mastra/model-resolver.ts`, `mastra/tool-services.ts`; tuning `mastra/model-compat.ts`; storage `mastra/storage.ts`; workspaces `mastra/session-workspaces.ts`; skills `mastra/app-skills.ts` and `mastra/skills/<name>/`; orchestration `modules/sessions/sessions.service.ts`, `turn-data.ts`, `result-guards.ts`, `result-compare.ts`, `chart-heuristic.ts`; designer pipeline `modules/sessions/visualization.service.ts`, `visual-spec.ts`, `visual-runtime.ts`, `visualization-document.ts`; ontology bootstrap `modules/ontology/ontology-bootstrap.service.ts`; deep analysis `modules/deep-analysis/`; catalogue and eval runs `modules/agents/`; model settings `modules/llm/`.
+> Implementation note (file map): agents in `backend/src/mastra/agents/*.agent.ts`; tools in `mastra/tools/`; context builders `mastra/context-blocks.ts`; step budget `mastra/agent-constants.ts`; bridges `mastra/model-resolver.ts`, `mastra/tool-services.ts`; tuning `mastra/model-compat.ts`; storage `mastra/storage.ts`; workspaces `mastra/session-workspaces.ts`; skills `mastra/app-skills.ts` and `mastra/skills/<name>/`; orchestration `modules/sessions/sessions.service.ts` (sessions, run hosts, panel items) and its turn engine in `modules/sessions/turn/` (`turn-engine.ts`, `turn-options.ts`, `sql-checks.ts`; tech-stack.md, code layout), `turn-data.ts`, `result-guards.ts`, `result-compare.ts`, `chart-heuristic.ts`; designer pipeline `modules/sessions/visualization.service.ts`, `visual-spec.ts`, `visual-runtime.ts`, `visualization-document.ts`; ontology bootstrap `modules/ontology/ontology-bootstrap.service.ts`; deep analysis `modules/deep-analysis/`; catalogue and eval runs `modules/agents/`; model settings `modules/llm/`.
 
 ## Appendix C — `rfp` (RFP Builder) system prompt (shipped wording)
 

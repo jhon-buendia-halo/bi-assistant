@@ -33,7 +33,7 @@ Capability-local vocabulary:
 ### The workflow section
 
 - R8. An agent's instructions MAY contain a **workflow section**: a line that is exactly `## Workflow` (trailing spaces ignored), up to the next line that starts with `## ` or the end of the text. Inside it, each list line `<n>. <title>` or `<n>) <title>` is a phase, optionally ending with ` — [[skill:<name>]]` (an em dash, an en dash or a hyphen) that names the skill the phase uses, and optionally with a **default action**, `: <action>`, after the title or after the skill link (`3. What to market — [[skill:rfp-market-scope]]: Decide which lines go out to bid.`, `2. Analyse: Run the queries and compare the results.`): the action is everything after the first `: ` that follows the title (or the skill link), trimmed and cut to 120 characters, and tells the user what to do in that step; a line without it has no default action. A phase's number SHALL be its position in the list, whatever number is written; its title is trimmed and cut to 80 characters; at most 20 phases are read; every other line is prose. The section SHALL be read from the prompt with its links intact, and the model sees the section with the links shown as plain mentions. The session's workflow is that of the prompt its agent runs: the RFP Builder's prompt (its override when an admin saved one); a user agent's Live instructions (the draft's in the preview) when they contain the section, otherwise the assistant's prompt; a plain session's, the assistant's. The app, not the model, SHALL derive the phases, so the tracker shows every phase from the first turn, before the agent calls the tool.
-- R8a. A **workflow-backed agent** (today only Questions to Insights v2, ADR-0034) has no workflow section and no `update_workflow`: each streamed turn runs a workflow defined in code, and its steps are the session's workflow. The bar SHALL show those steps (for v2: `Receive question`, `Load catalog`, `Analyse`, `Wrap up`) from the session's first view, before any turn, all upcoming. During a turn the app, never the model, SHALL set their status from the run: the step that starts is current (the first one clears the previous turn's progress), a step that ends is done, and a step that fails is **Failed** and stays the current step; the bar moves live through the `workflow` event (R19). A failed step ends the turn with its error, as a failed turn does today ([sessions-chat](../sessions-chat/spec.md) R61); a stopped turn leaves the running step current. The steps, their order and the state rules are in [agents.md](../../system/agents.md) 5.11.
+- R8a. A **workflow-backed agent** (today only Questions to Insights v2, ADR-0034) is the agent of a **code-defined workflow** ([workflows](../workflows/spec.md), ADR-0040). It has no workflow section and no `update_workflow`: each streamed turn runs that code-defined workflow, and its steps are the session's workflow. The bar SHALL show those steps (for v2: `Receive question`, `Load catalog`, `Analyse`, `Wrap up`) from the session's first view, before any turn, all upcoming. During a turn the app, never the model, SHALL set their status from the run: the step that starts is current (the first one clears the previous turn's progress), a step that ends is done, and a step that fails is **Failed** and stays the current step; the bar moves live through the `workflow` event (R19). A failed step ends the turn with its error, as a failed turn does today ([agent-answers](../agent-answers/spec.md) R61); a stopped turn leaves the running step current. The steps, their order and the state rules are in [agents.md](../../system/agents.md) 5.11.
 - R9. The RFP Builder's seven stages SHALL be its workflow section, and its saved stage SHALL drive the workflow bar: when the agent creates, opens or updates an RFP, the bar SHALL show the stages up to the RFP's last completed stage as done and the next one as current (the seventh stays current once all seven are done), without the agent calling the tool. The auto-drive updates the saved workflow state and sends the `workflow` event (R19) only: it SHALL NOT create a panel item, send `panel-item` or open the right panel. It SHALL clear the note when it moves the current step to a different step and keep it when the current step is unchanged; it also clears `waiting` (R20). After it exports the package the agent SHALL show the RFP document by calling the tool with the file `rfp/<rfpId>/rfp.md` ([rfp](../rfp/spec.md) R4, R9).
 
 ### History and download
@@ -43,18 +43,18 @@ Capability-local vocabulary:
 
 ### Opening and restoring
 
-- R12. The panel SHALL open, if collapsed, and show the item as soon as the agent shows it, while the turn is still streaming and without disturbing the turn ([sessions-chat](../sessions-chat/spec.md) R21). The user SHALL be able to open any earlier item from the shown-items menu, and the panel SHALL stay on what the user chose until the agent shows something else. Opening a session SHALL show its latest item; a session with no items SHALL show the empty state `Nothing to show yet`, whether or not it has a workflow: a workflow alone SHALL NOT open the panel. Panel items and the workflow SHALL be returned with the session, so reopening a session, in the same or another window, shows the same history.
+- R12. The panel SHALL open, if collapsed, and show the item as soon as the agent shows it, while the turn is still streaming and without disturbing the turn ([agent-answers](../agent-answers/spec.md) R21). The user SHALL be able to open any earlier item from the shown-items menu, and the panel SHALL stay on what the user chose until the agent shows something else. Opening a session SHALL show its latest item; a session with no items SHALL show the empty state `Nothing to show yet`, whether or not it has a workflow: a workflow alone SHALL NOT open the panel. Panel items and the workflow SHALL be returned with the session, so reopening a session, in the same or another window, shows the same history.
 
 ### The workflow bar
 
 - R13. Every agent SHALL be able to call the tool `update_workflow`, always on exactly like `show_in_panel` (R1): part of the assistant's core tools, never optional, in the RFP Builder's tools, so in every user agent's, and listed and linkable in the Tools library (`Always on` in a user agent's Tools tab). It takes optional `steps`, `current`, `done`, `skipped`, `waiting`, `note` and `todo` and answers `{ updated: true, steps, current, done, skipped }` or `{ error }`; it SHALL never throw and SHALL answer `No session in context` without a session. It SHALL NOT create a panel item and SHALL NOT open or change the right panel. Its schema, description and errors are in [agents.md](../../system/agents.md) 3.12.
 - R14. Where the steps come from. An agent whose prompt has a workflow section (R8) has its steps from the prompt: they are fixed, and the agent only sets their status; a call with `steps` SHALL be refused with `Your ## Workflow section defines the steps; set their status instead`. An agent without that section MAY define its own steps by passing `steps`: 2 to 12 titles separated by ` | `, each 1 to 80 characters after trimming (`steps takes 2 to 12 titles of at most 80 characters each`); a call with `steps` replaces the agent's steps and resets the progress (current step 1, nothing done, nothing skipped). A call that sets no steps while there are none SHALL answer `There is no workflow yet: pass steps to create one`. `current` SHALL be a step number from 1 to the number of steps, and `done` and `skipped` SHALL list step numbers in that range (comma-separated), otherwise the call is refused. Keep and clear rules: an omitted `current`, `done` or `skipped` keeps the stored value; `note` and `waiting` belong to the current step, so when they are omitted they are cleared if `current` changes and kept if it does not. `note` is at most 2,000 characters. `waiting` is `true` when the current step waits for the user's answer or decision. `todo` says what the user must do, or what still has to happen, in open steps: `<step>: <action>` items separated by ` | `, each action at most 120 characters (`todo must list "<step>: <action>" items separated by " | "`, `todo step <n> is not a step number from 1 to <count>`, `A step action is at most 120 characters`). It replaces the action of each step it names, `<step>:` with nothing after it restores the step's default, and the other steps keep theirs; todos are kept across calls and cleared when new `steps` reset the workflow.
-- R15. One workflow state. `update_workflow`, the RFP stage auto-drive (R9) and a workflow-backed agent's turn (R8a) write the same saved state of the session, and the bar and its Details render it, so they never disagree. `show_in_panel` never writes it. A session has a workflow when its prompt has a workflow section, its agent has defined steps or its agent is workflow-backed (R8a); the steps come from the agent's code-defined workflow for a workflow-backed agent, else from the prompt when the section exists, otherwise from the agent's steps. Each step's **action** is the agent's `todo` for it, else the prompt's default action (R8); the view carries it, and the bar and Details hide it for done and skipped steps.
+- R15. One workflow state. `update_workflow`, the RFP stage auto-drive (R9) and a workflow-backed agent's turn (R8a) write the same saved state of the session, and the bar and its Details render it, so they never disagree. `show_in_panel` never writes it. Every streamed turn is a run of the session's workflow ([agents.md](../../system/agents.md) 5.1), but only a code-defined workflow's steps write the state: the run of a **one-step workflow** (the assistant's, the RFP Builder's, the Data Readiness Agent's and every user agent's, ADR-0040) SHALL NOT write it, and its single step never shows in the bar, so the bar's sources stay as above. A session has a workflow when its prompt has a workflow section, its agent has defined steps or its agent is workflow-backed (R8a); the steps come from the agent's code-defined workflow for a workflow-backed agent, else from the prompt when the section exists, otherwise from the agent's steps. Each step's **action** is the agent's `todo` for it, else the prompt's default action (R8); the view carries it, and the bar and Details hide it for done and skipped steps.
 - R16. The **workflow bar** SHALL be shown in the session's chat view directly under the page header and above the conversation, in every session, whatever the right panel shows or whether it is open (asked by the user on 2026-10-14). While the session has no workflow (no `## Workflow` section and no steps created yet) it shows the empty state `Workflow · No workflow yet · The agent shows its steps here when it guides you through a process.` (the last sentence hidden on a narrow bar), with no fold button. With a workflow, including before the first turn when the prompt has a section, it is one row: the steps as a horizontal stepper, each with an icon and its title, and at the right the count `<n>/<m> done`, where n is the steps done and m the steps not skipped, then the **Details** button (R17a) and the fold button. The status of each step SHALL be visible: Done (a check), Current (a filled dot, the title emphasised), Waiting for you (a clock, with the tooltip `Waiting for you`, replacing the current dot while `waiting` is set), Failed (a cross in the danger colour, the title emphasised, the tooltip `Failed`; R8a), Skipped (muted, struck through) and upcoming (an empty circle). The row SHALL be a list labelled `Workflow`, with the current step marked as the current step for assistive technology. When the row is wider than the bar it scrolls horizontally with the current step in view; on a narrow bar (under 720 px) only the current step and the count show. While the row is wider than the room before the count, done and skipped steps show only their icon (their title is the tooltip and the accessible name), and if it still overflows the row's right edge fades out so the cut reads as a scroll edge.
 - R17. The **next-step row** is ONE line. When the step to do next has an action (the current step, current or waiting, or, before the agent has marked one, the first open step), a second row SHALL read `Your next step:` followed by the action, truncated with an ellipsis and carrying the full text as its tooltip. When there is no action but a note, the row reads `Your next step:` followed by the first line of the note as plain text, truncated. The note is read in Details (R17a), which opens on the current step; the bar itself never shows the note, so it has no clamp and no `Show more` / `Show less`. When every step is done or skipped the row SHALL read `All steps done` (a check, success colour) instead, with no next step. Otherwise, with neither an action nor a note there is no second row. Every upcoming step with an action SHALL have the tooltip `To do: <action>` and its popover (R18) a `To do` line with the action; done and skipped steps show no action.
 - R17a. **Details.** While the session has a workflow, a button `Details` (a chevron, `aria-expanded`, `aria-controls`) sits beside the count and opens a dropdown panel anchored under the bar and overlaying the chat, labelled `Workflow details`, that scrolls when taller than about 60% of the window. It lists every step vertically: the step number, the title, its status (Done, Current, Waiting for you, Skipped struck through, upcoming muted), for each open step (current, waiting and upcoming) `To do: <action>` when it has an action, the step's skill as a small monospace caption when it has one and, under the current step, the agent's note as sanitised Markdown. The dropdown SHALL open scrolled so the current step sits just under its sticky header `Workflow · <n>/<m> done`, with the steps above it hidden behind the header (never half-cut), even when it is one of the last steps, and SHALL close on Escape, on a click outside it and on the `Details` button; opening it closes any step popover. It leaves the right panel untouched.
 - R18. The user SHALL be able to fold the bar with the button `Hide workflow` (`Show workflow` unfolds it); folded, it is the single line `Workflow · <current step title> · <n>/<m>` with the `Details` button still beside the fold button, and the next-step row hidden. The folded state SHALL be remembered per browser, not per session, and the bar SHALL work without browser storage. Clicking a step SHALL open a small popover with the step's number and title, its status, the action (`To do`, open steps only) and, when it has one, the skill it uses; Escape or a click outside closes it.
-- R19. The stream SHALL carry a `workflow` event with the whole workflow view, sent after every successful `update_workflow`, after the RFP stage auto-drive and after each step status change of a workflow-backed agent's turn (R8a), so the bar moves while the turn streams and without disturbing it ([sessions-chat](../sessions-chat/spec.md) R21). The `done` event and `GET /sessions/:id` carry the persisted view, so reopening a session, in the same or another window, shows the same bar. Neither sends `panel-item`: that event is only for `show_in_panel`.
+- R19. The stream SHALL carry a `workflow` event with the whole workflow view, sent after every successful `update_workflow`, after the RFP stage auto-drive and after each step status change of a workflow-backed agent's turn (R8a), so the bar moves while the turn streams and without disturbing it ([agent-answers](../agent-answers/spec.md) R21). The `done` event and `GET /sessions/:id` carry the persisted view, so reopening a session, in the same or another window, shows the same bar. Neither sends `panel-item`: that event is only for `show_in_panel`.
 - R20. The RFP stage auto-drive (R9) moves the current step to the stage after the saved one and SHALL clear the note and `waiting` when it moves the current step to a different step, and keep them when the current step is unchanged.
 
 ## Edge cases and errors
@@ -94,6 +94,7 @@ See [ui.md](../../system/ui.md), section 4.13 (Session panel) and 4.12.1 (Workfl
 - **Workflow bar:** under the page header, above the chat: the steps with their statuses, `<n>/<m> done`, `Your next step: <action>`, the note, `To do: <action>` tooltips, `Hide workflow` / `Show workflow`, a `Details` dropdown (`Workflow details`) listing every step and opening on the current one, a step popover (4.12.1).
 - **Header:** the item's title (`Panel` when none), the shown-items menu (title `Shown in this session`, newest first, each with its kind icon, title and time) and the **Download** button (title `Download PDF` for a document or a `.md` file, with a `Download as…` menu offering `PDF (.pdf)` and `Markdown (.md)`; `Download file` for other files; `Download (.csv)` for a table; hidden for a visual).
 - **Body by kind:** the visual panel, a document, a file, a sortable table. There is no workflow view in the panel.
+- **A past chat's panel** (past-chats R66) is read-only: visuals are viewable in every version and downloadable, and files, documents and tables viewable and downloadable, but the visual panel offers no Tailor, Refresh data, revert or auto-repair.
 - **Empty state:** `Nothing to show yet` / `The agent can show files, documents, query results and visuals here.`
 - **Loading and errors:** `Loading file…` while a file is read; its error in the file view.
 
@@ -109,159 +110,91 @@ Feature: Agent panel
   Background:
     Given the app runs with the LLM stub as its provider
     And the World Cup sample dataset is loaded
-    And a session is open on that dataset
 
-  Scenario: A composed document opens in the panel and downloads as PDF
+  Scenario: A composed document is a run panel item and downloads as Markdown
     Given the stub answers by calling "show_in_panel" with kind "document", title "Findings" and markdown "# Findings\n\nBrazil scored most."
     And the stub then answers with text "The findings are in the panel."
-    When I send "Write up the findings"
-    Then the right panel opens and shows the heading "Findings"
-    And the chat shows the step "show_in_panel"
-    When I click "Download PDF"
-    Then a PDF file named "findings.pdf" downloads
-    And I see the toast "Downloaded findings.pdf"
-    When I open "Download as…" and click "Markdown (.md)"
-    Then a file named "findings.md" downloads containing "Brazil scored most."
+    When I run the Assistant on "Write up the findings"
+    Then the stream announces the panel item before the run ends
+    And the run holds the document "Findings"
+    And its download is "findings.md" containing "Brazil scored most."
 
-  Scenario: A query result shows as a sortable table
+  Scenario: A query result is a run table panel item and downloads as CSV
     Given the stub answers by calling "run_readonly_sql" for the top scorers
     And the stub then calls "show_in_panel" with kind "table" and no record
-    When I send "Show me the top scorers as a table"
-    Then the panel shows a table with the query's columns and rows
-    And the footer shows the row count
-    When I click the header of the numeric column
-    Then the rows are sorted ascending and the header is marked "ascending"
-    When I click it again
-    Then the rows are sorted descending
-    When I click "Download (.csv)"
-    Then a file ending in ".csv" downloads with the header row first
+    When I run the Assistant on "Show me the top scorers as a table"
+    Then the run holds one table item titled by the query's rationale
+    And its download is a CSV with the header row first and one row per stage
 
-  Scenario: A workspace file opens in the panel with a download
-    Given the session workspace holds the file "notes/summary.md"
-    And the stub answers by calling "show_in_panel" with kind "file" and path "notes/summary.md"
-    When I send "Show me the summary notes"
-    Then the panel shows the content of "summary.md" rendered as a document
-    And its Download button has the title "Download PDF", with "Download as…" offering Markdown
+  Scenario: A workspace file is a run panel item with a download
+    Given the stub writes "notes/summary.md" to the run's workspace
+    And then answers by calling "show_in_panel" with kind "file" and path "notes/summary.md"
+    When I run the Assistant on "Show me the summary notes"
+    Then the run holds the file "summary.md", read as "text/markdown"
+    And its download is the file's own bytes
 
-  Scenario: An invalid path is refused and the panel does not change
-    Given the panel shows the document "Findings"
-    And the stub answers by calling "show_in_panel" with kind "file" and path "../secrets.md"
-    When I send "Show me the secrets"
-    Then the chat shows the step "show_in_panel" with the error "Invalid file path \"../secrets.md\""
-    And the panel still shows "Findings"
+  Scenario: An invalid path is refused and the run items do not change
+    Given the stub shows the document "Findings"
+    And then answers by calling "show_in_panel" with kind "file" and path "../secrets.md"
+    When I run the Assistant on "Show me the findings and the secrets"
+    Then the step "show_in_panel" shows the error "Invalid file path \"../secrets.md\""
+    And the run still holds only "Findings"
 
   Scenario: The agent brings an existing visual back
-    Given the session has a visual "Goals per team" and the panel shows a document
-    And the stub answers by calling "show_in_panel" with kind "visual" and the visual's id
-    When I send "Bring the chart back"
-    Then the panel shows the visual "Goals per team"
-    And the shown-items menu lists "Goals per team" first
+    Given I ran the Assistant on "How many matches were played at each stage?"
+    When I run it again as a follow-up that makes a visual, shows a document and shows the visual by its id
+    Then the run lists the visual "Goals per team" first and "Findings" second, once each
+    And the visual downloads through its own route, never as a panel item
 
-  Scenario: The workflow never appears in the right panel
+  Scenario: The workflow never appears among a run's panel items
     Given an agent whose instructions have a "## Workflow" section with the phases "Understand", "Analyse" and "Report"
-    When I start a chat with that agent
-    Then the workflow bar shows the three phases
-    And the right panel shows "Nothing to show yet" and has no "Workflow" view
     When the stub answers by calling "update_workflow" with current 2 and done "1"
-    And I send "Go on"
-    Then the bar shows "Understand" as Done and "Analyse" as Current
-    And the right panel does not open and its shown-items menu has no "Workflow" entry
+    And I run that agent on "Go on"
+    Then the run holds no panel item and its workflow has the three phases
 
-  Scenario: The agent guides me through the current phase
+  Scenario: The run shows the agent's phases and moves them as it goes
     Given an agent whose instructions have a "## Workflow" section with the phases "Understand", "Analyse" and "Report"
-    When the stub answers by calling "update_workflow" with current 2, done "1", todo "2: Choose the lines to market" and note "Pick the lines to market."
-    And I send "Go on"
-    Then the bar shows the one-line "Your next step: Choose the lines to market"
-    And the bar does not show the note itself
-    When I click "Details"
-    Then the "Workflow details" dropdown opens scrolled to "Analyse"
-    And it shows "Pick the lines to market." under "Analyse"
+    And the stub answers by calling "update_workflow" with current 2, done "1", waiting true, todo "2: Choose the lines to market" and note "Pick the lines to market."
+    When I open the agent's workflow, its Run tab, type "Go on" and click Execute
+    Then the agent's step lists the three phases with "Understand" as Done and "Analyse" as Current
 
-  Scenario: Details lists every step and closes on Escape, outside click and its button
-    Given a session whose workflow bar shows three steps with "Analyse" as current
-    When I click "Details"
-    Then the "Workflow details" dropdown opens over the chat listing "Understand", "Analyse" and "Report" with their statuses
-    And the open steps show "To do: <action>" and the skills show as captions
-    When I press Escape
-    Then the dropdown closes
-    When I click "Details" and then click on the chat
-    Then the dropdown closes
-    When I click "Details" and then click "Details" again
-    Then the dropdown closes
-
-  Scenario: Every session shows the workflow bar, empty until there is a workflow
-    Given a session over "World Cup Core" with no agent
-    Then the workflow bar shows "No workflow yet"
-    And it has no "Hide workflow" button
-
-  Scenario: The workflow bar shows my agent's steps from the first turn
-    Given an agent whose instructions have a "## Workflow" section with the steps "Understand", "Analyse" and "Report"
-    When I start a chat with that agent
-    Then the workflow bar is shown under the page header, above the chat
-    And it shows the three steps as upcoming, none as current, and "0/3 done"
-    And "Your next step:" shows the action of "Understand"
-    And no step shows as "Done"
-
-  Scenario: The agent moves the workflow bar as we go
-    Given an agent whose instructions have a "## Workflow" section with the steps "Understand", "Analyse" and "Report"
-    And the stub answers by calling "update_workflow" with current 2, done "1", waiting true, todo "2: Choose the lines to market", note "Pick the lines to market."
-    When I send "Go on"
-    Then the bar shows step 1 "Understand" as Done and step 2 "Analyse" as Current, waiting for me
-    And it shows "1/3 done"
-    And the bar shows "Your next step: Choose the lines to market"
-    And "Details" opens on "Analyse" with the note "Pick the lines to market."
-
-  Scenario: Every open step says what needs to be done
-    Given an agent whose instructions have a "## Workflow" section whose steps end with ": <action>", such as "3. Report: Review the report and approve it."
-    When I open a session with that agent
-    Then the bar's step "Report" has the tooltip "To do: Review the report and approve it."
-    And the step's popover and the Details dropdown show "To do" with that action
+  Scenario: The run keeps the moved workflow with its next step and note
+    Given the same agent and the same stub
+    When I run that agent on "Go on"
+    Then the run's workflow has the prompt's three steps, "Analyse" current and waiting, "Understand" done, and the note "Pick the lines to market."
+    And "Report" says "Review the report and approve it."
+    And the stored run reads back the same workflow
 
   Scenario: An agent without a Workflow section creates its own steps
     Given an agent whose instructions have no "## Workflow" section
     And the stub answers by calling "update_workflow" with steps "Scope | Analyse | Report" and current 1
-    When I send "Guide me through a review"
-    Then the bar shows the three steps "Scope", "Analyse" and "Report" with "Scope" as current
+    When I run that agent on "Guide me through a review"
+    Then the run's workflow has the three steps "Scope", "Analyse" and "Report" with "Scope" as current
 
   Scenario: The agent can't rename prompt-defined steps
     Given an agent whose instructions have a "## Workflow" section with the steps "Understand", "Analyse" and "Report"
     And the stub answers by calling "update_workflow" with steps "One | Two"
-    When I send "Rename the steps"
+    When I run that agent on "Rename the steps"
     Then the next model request carries the tool message "Your ## Workflow section defines the steps; set their status instead"
-    And the bar still shows "Understand", "Analyse" and "Report"
+    And the run's workflow still has "Understand", "Analyse" and "Report"
+
+  Scenario: Shown items survive reopening the run
+    Given I ran the Assistant to show a document "Findings", then followed up to show a table
+    When I reload the app
+    Then each stored run reads back its own items
 
   Scenario: Questions to Insights v2 shows its code-defined steps advancing
-    Given a session bound to "Questions to Insights v2" over the World Cup dataset
-    Then the workflow bar shows "Receive question", "Load catalog", "Analyse" and "Wrap up" as upcoming and "0/4 done"
     When the stub answers by running "run_readonly_sql" and then "There were 64 matches."
-    And I send "How many matches were played in 2018?"
-    Then while the answer streams the bar shows "Analyse" as Current
-    And when the turn ends the bar shows "All steps done" and "4/4 done"
-    And the answer shows "There were 64 matches."
+    And I run "Questions to Insights v2" on "How many matches were played in 2018?"
+    Then its four steps "Receive question", "Load catalog", "Analyse" and "Wrap up" each report running, then success, in order
+    And the model was offered only "list_entities", "describe_entity" and "run_readonly_sql"
+    And the run's workflow shows 4 of 4 steps done
 
   Scenario: A failing step of the v2 workflow is marked failed
-    Given a session bound to "Questions to Insights v2" over the World Cup dataset
-    And the stub fails the model call with an error
-    When I send "How many matches were played in 2018?"
-    Then the bar shows "Receive question" and "Load catalog" as Done and "Analyse" as Failed
-    And the chat shows the turn's error
-
-  Scenario: I can fold the workflow bar
-    Given a session whose workflow bar shows three steps with "Analyse" as current
-    When I click "Hide workflow"
-    Then the bar shows one line "Workflow · Analyse · 1/3"
-    When I reopen the app
-    Then the bar is still folded
-    When I click "Show workflow"
-    Then the bar shows the three steps again
-
-  Scenario: Shown items survive reopening the session
-    Given I showed a document "Findings" and then a table
-    When I open another session and then reopen this one
-    Then the panel opens on the table
-    And the shown-items menu lists the table and "Findings"
-    When I choose "Findings" in the menu
-    Then the panel shows the document
+    Given the stub fails the model call with an error
+    When I run "Questions to Insights v2" on "How many matches were played in 2018?"
+    Then "Receive question" and "Load catalog" succeed, "Analyse" fails and "Wrap up" is skipped
+    And the run ends with the turn's error
 ```
 
 ## Acceptance
@@ -271,7 +204,7 @@ Feature: Agent panel
 3. The workflow lives only in the bar: an agent with a `## Workflow` section shows it before its first answer, the RFP Builder's bar moves when it saves a stage, and neither creates a panel item or opens the right panel; `show_in_panel` has no `phases` kind.
 4. The shown items, in order, survive reopening the session, and visuals made before this capability appear in the menu.
 5. An agent with a `## Workflow` section shows the workflow bar from its first turn, and each open step says what the user must do (the prompt's default action or the agent's `todo`); an `update_workflow` call moves it live (statuses, `n/m done` and the note in Details), and an agent without a section can create its own steps but cannot rename the prompt's.
-6. The bar folds, and stays folded across a reload.
+6. The chat's workflow bar (its fold, details and popover scenarios) is retired with the chat composer; a run shows the agent's phases inside its step.
 6a. A Questions to Insights v2 session shows its four code-defined steps before the first turn; a turn moves them to all done live, and a failing step shows as Failed while the turn ends with its error (R8a).
 7. The assistant's and the RFP Builder's eval sets (`world-cup`, `formula-1`, `rfp`) pass at 100% over 3 runs on the branch.
 

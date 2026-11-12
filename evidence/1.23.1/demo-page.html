@@ -1,0 +1,153 @@
+<title>1.23.1 Graph tab draws</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --fg: #1d1f23;
+  --muted: #5b616b;
+  --border: #dcdde0;
+  --accent: #2f5bd3;
+  --code-bg: #eef0f3;
+  --focus: #2f5bd3;
+  --ok-bg: #e3f4e8;
+  --ok-fg: #17663a;
+  --warn-bg: #fdf0d8;
+  --warn-fg: #7a4d00;
+  --bad-bg: #fbe4e2;
+  --bad-fg: #a3261b;
+  --neutral-bg: #eceef1;
+  --neutral-fg: #444a53;
+  --video-bg: #e9eaed;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141518;
+    --surface: #1c1e22;
+    --fg: #e7e8ea;
+    --muted: #a0a6b0;
+    --border: #33363d;
+    --accent: #8aa8ff;
+    --code-bg: #262930;
+    --focus: #8aa8ff;
+    --ok-bg: #173523;
+    --ok-fg: #8fdcaa;
+    --warn-bg: #3a2c10;
+    --warn-fg: #f2c46b;
+    --bad-bg: #42201d;
+    --bad-fg: #ff9d92;
+    --neutral-bg: #2a2d33;
+    --neutral-fg: #c3c7ce;
+    --video-bg: #0e0f11;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141518;
+  --surface: #1c1e22;
+  --fg: #e7e8ea;
+  --muted: #a0a6b0;
+  --border: #33363d;
+  --accent: #8aa8ff;
+  --code-bg: #262930;
+  --focus: #8aa8ff;
+  --ok-bg: #173523;
+  --ok-fg: #8fdcaa;
+  --warn-bg: #3a2c10;
+  --warn-fg: #f2c46b;
+  --bad-bg: #42201d;
+  --bad-fg: #ff9d92;
+  --neutral-bg: #2a2d33;
+  --neutral-fg: #c3c7ce;
+  --video-bg: #0e0f11;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-wrap: anywhere;
+}
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 48px;
+}
+header { margin-bottom: 20px; }
+.eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 0.8125rem; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 1.2rem + 1.4vw, 2rem); line-height: 1.2; letter-spacing: -0.01em; }
+h2 { margin: 36px 0 10px; font-size: 1.125rem; line-height: 1.3; }
+p, li { max-width: 65ch; }
+p { margin: 0 0 10px; }
+.intent { color: var(--muted); font-size: 1.0625rem; margin-bottom: 12px; }
+ul, ol { margin: 0 0 10px; padding-left: 1.4em; }
+li { margin: 3px 0; }
+li > ul, li > ol { margin: 4px 0 0; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, video:focus-visible, .scroll:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+code, pre { font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace; font-size: 0.875em; }
+code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+.chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.8125rem; font-weight: 600; line-height: 1.6; }
+.chip.ok { background: var(--ok-bg); color: var(--ok-fg); }
+.chip.warn { background: var(--warn-bg); color: var(--warn-fg); }
+.chip.bad { background: var(--bad-bg); color: var(--bad-fg); }
+.chip.neutral { background: var(--neutral-bg); color: var(--neutral-fg); }
+.demo { margin: 0; }
+.demo video { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; height: auto; background: var(--video-bg); border: 1px solid var(--border); border-radius: 8px; }
+.demo pre { margin: 0; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; white-space: pre; line-height: 1.45; }
+.demo figcaption { margin-top: 8px; color: var(--muted); font-size: 0.8125rem; max-width: 65ch; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; }
+.card > :last-child { margin-bottom: 0; }
+.shipped { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.shipped > li { max-width: none; margin: 0; }
+.date { color: var(--muted); font-size: 0.8125rem; margin: 0 0 4px; }
+.aside { color: var(--muted); font-size: 0.9375rem; }
+.scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td code { font-size: 0.8125em; color: var(--muted); }
+td:first-child { min-width: 16ch; }
+.result-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.8125rem; }
+footer p { margin: 0 0 4px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+</style>
+<main>
+<header>
+<p class="eyebrow">Questions to Insights v2: a workflow you can follow (M1-23) · roadmap 1.23.1</p>
+<h1>The Graph tab draws a workflow-backed agent&#39;s turn</h1>
+<p class="intent">open Questions to Insights v2 → <strong>Graph</strong> and see, step by step, what happens on each message.</p>
+<span class="chip warn">In progress</span>
+</header>
+<section aria-label="Demo">
+<figure class="demo">
+<video src="demo.webm" controls playsinline muted preload="metadata" aria-label="Demo of 1.23.1 The Graph tab draws a workflow-backed agent&#39;s turn"></video>
+<figcaption>Recorded by <code>scripts/qa.mjs 1.23.1 --fast</code> with <code>DEMO=1</code>; captions are the scenario's Gherkin lines.</figcaption>
+</figure>
+</section>
+<section aria-labelledby="h-scope">
+<h2 id="h-scope">Scope</h2>
+<ul><li><code>GET /agents/:key</code> (api.md 34) gains <code>workflow?</code> for a workflow-backed agent (today only <code>assistant-v2</code>). It holds the workflow id and its steps in order, each with:<ul><li>id, title, kind (<code>code</code> or <code>agent</code>) and a one-line summary;</li><li>input and output field names, taken from the step&#39;s schemas;</li><li>for the agent step, its tools and maximum steps;</li><li>the step&#39;s other exits (<code>fails</code> or <code>stops</code>, with a label).</li></ul></li><li>The data is built from the registered workflow and its step catalogue, never written twice, so a step added in code shows up without a UI change.</li><li>Graph tab of a workflow-backed agent, top section <strong>What happens on each message</strong>:<ul><li>one node per step, left to right, in the workflow bar&#39;s titles and numbering;</li><li>code steps and the agent step in two distinct styles, with a legend;</li><li>the agent step drawn open: agent name, its tools and a loop marker <code>≤ &lt;n&gt; steps</code>;</li><li>labelled arrows carry the data passed between steps;</li><li>each step&#39;s other exits are drawn under it.</li><li>Hovering or focusing a step highlights it. Clicking it opens a details card under the drawing with its kind, summary, input and output.</li></ul></li><li>Under it, the existing prompt-links graph keeps its behaviour under a <strong>Prompt links</strong> heading.</li><li>Specs: agents-evals R105 (+ a new rule and a Gherkin scenario), api.md 34, ui.md 4.5.6, agents.md 5.11 (the step catalogue&#39;s summaries and exits).</li></ul>
+</section>
+<section aria-labelledby="h-acceptance">
+<h2 id="h-acceptance">Acceptance</h2>
+<ul><li>Questions to Insights v2&#39;s Graph tab shows <code>Receive question</code>, <code>Load catalog</code>, <code>Analyse</code> and <code>Wrap up</code> in order:<ul><li>Analyse is in the agent style, with <code>list_entities</code>, <code>describe_entity</code>, <code>run_readonly_sql</code> and <code>≤ 15 steps</code>;</li><li>the other three are in the code style;</li><li>the arrows are labelled with the step outputs;</li><li>the exits are visible: empty question fails, Stop ends at Analyse, model error fails.</li></ul></li><li>Clicking <code>Load catalog</code> shows its input <code>question, datasets</code> and output <code>question, catalog</code>.</li><li>The Prompt links graph is still there.</li><li>The assistant&#39;s Graph tab is unchanged.</li><li>The axe scan passes in both themes.</li><li>Unit tests:<ul><li>the <code>workflow</code> field matches the registered workflow&#39;s step order and schemas;</li><li>the layout is a pure function.</li></ul></li><li>The <code>@demo @story-1.23.1</code> scenario passes.</li><li>Builds and check-specs are green.</li></ul>
+</section>
+<section aria-labelledby="h-gate">
+<h2 id="h-gate">Gate results</h2>
+<p class="result-line"><span class="chip neutral">Not run yet</span><span class="aside">Gate results: not run yet (<code>scripts/qa.mjs 1.23.1 --gate</code> writes <code>evidence/1.23.1/tests.md</code>).</span></p>
+</section>
+<footer>
+<p>branch <code>feat/M1-23-v2-workflow-graph</code> · commit <code>1931d193</code> · generated 2026-11-11</p>
+<p>Generated by scripts/demo-page.mjs from roadmap.md, changelog.md and evidence/1.23.1/</p>
+</footer>
+</main>

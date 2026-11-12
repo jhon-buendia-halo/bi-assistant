@@ -90,7 +90,7 @@ On the Context page
 - Collection and document shape (ontology item, per-answer knowledge record), the reference rules and migration M15: see [../../system/data-model.md](../../system/data-model.md) 3.9, 3.13 and 6.
 - Agents: the Ontology Bootstrap agent (prompt requirements, output schema, draft cap, post-processing) and the assistant's curated-knowledge instructions (the `curated-knowledge` skill) and block format: see [../../system/agents.md](../../system/agents.md) 2.5, 4.1 and Appendix B.
 - Decision: [../../system/architecture.md](../../system/architecture.md) ADR-0036.
-- Per-answer provenance is stored on the assistant message and read by [../sessions-chat/spec.md](../sessions-chat/spec.md).
+- Per-answer provenance is stored on the assistant message and read by [../agent-answers/spec.md](../agent-answers/spec.md).
 - Related: [../datasets/spec.md](../datasets/spec.md) (the editor that hosts the tab, the delete cascade), [../metrics/spec.md](../metrics/spec.md) (the governed metrics a relation can point at; a sibling context block), [../verified-queries/spec.md](../verified-queries/spec.md) (a sibling context block), [../agents-evals/spec.md](../agents-evals/spec.md) (eval runs reuse the block), [../app-shell/spec.md](../app-shell/spec.md) (Context page).
 
 ## UI
@@ -281,4 +281,4 @@ Feature: Dataset ontology
 - Open question: the "Pending suggestions" view hides the Edit action; a mined suggestion can only be edited after it is accepted. Intended?
 - Open question: the non-streaming bootstrap endpoint exists but nothing in the UI calls it. Keep it as part of the public contract?
 
-<!-- sources: backend/src/modules/ontology/**, backend/src/mastra/agents/knowledge-bootstrap.agent.ts, backend/src/mastra/skills/curated-knowledge/SKILL.md, backend/src/mastra/context-blocks.ts (knowledgeContext), backend/src/modules/sessions/sessions.service.ts (agentContext, knowledgeUsed), backend/src/modules/agents/eval-runs.service.ts, backend/src/infrastructure/database/database.module.ts (M15), frontend/src/app/features/ontology/**, frontend/src/app/features/datasets/components/catalog-browser, frontend/src/app/features/sessions/components/session-chat/session-chat.html (knowledgeApplied) -->
+<!-- sources: backend/src/modules/ontology/**, backend/src/mastra/agents/knowledge-bootstrap.agent.ts, backend/src/mastra/skills/curated-knowledge/SKILL.md, backend/src/mastra/context-blocks.ts (knowledgeContext), backend/src/modules/sessions/sessions.service.ts (agentContext, knowledgeUsed), backend/src/modules/agents/eval-runs.service.ts, backend/src/infrastructure/database/database.module.ts (M15), frontend/src/app/features/ontology/**, frontend/src/app/features/datasets/components/catalog-browser, frontend/src/app/features/sessions/components/answer-view/answer-view.html (knowledgeApplied) -->

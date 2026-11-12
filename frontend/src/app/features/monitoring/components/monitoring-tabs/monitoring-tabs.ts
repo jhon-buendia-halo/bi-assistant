@@ -25,7 +25,7 @@ export class MonitoringTabs {
 
   readonly tabs: { id: MonitoringTab; label: string }[] = [
     { id: 'calls', label: 'LLM calls' },
-    { id: 'sessions', label: 'Sessions' },
+    { id: 'sessions', label: 'Runs' },
   ];
 
   /** Chooses a tab; the arrow keys also move the focus to it. */

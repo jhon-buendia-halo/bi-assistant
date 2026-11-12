@@ -5,4 +5,9 @@ export interface AssessDto {
   entities?: string[];
   /** Recorded on the report when the assessment comes from a chat. */
   sessionId?: string;
+  /**
+   * Recorded on the report when the assessment comes from a workflow run;
+   * the readiness bridge sets it for a run host, never with `sessionId`.
+   */
+  runId?: string;
 }

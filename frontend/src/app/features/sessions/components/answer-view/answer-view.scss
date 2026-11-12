@@ -1,0 +1,33 @@
+// The host adds no box of its own: the answer's blocks lay out in the
+// host's container exactly as they did inside the chat transcript.
+:host {
+  display: contents;
+}
+
+// Selected answer rating: lucide ships stroke-only SVGs, so fill the thumb.
+.qti-rating-on ::ng-deep svg {
+  fill: currentColor;
+}
+
+// "Data used" disclosure: Figma "Data Sources" row with a trailing chevron.
+.qti-data-used > summary {
+  list-style: none;
+
+  &::-webkit-details-marker { display: none; }
+}
+
+.qti-chevron {
+  width: 8px;
+  height: 8px;
+  margin: 0 4px 3px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 120ms ease;
+}
+
+.qti-data-used[open] .qti-chevron {
+  margin-bottom: 0;
+  margin-top: 3px;
+  transform: rotate(225deg);
+}

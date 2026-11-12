@@ -20,11 +20,11 @@ Format: a Markdown table, first column the spec path in backticks (`` `frontend/
 
 ## 7. Write the E2E
 
-Apply the step-6 decisions to [frontend/e2e/](../../../frontend/e2e/) (and backend `test/*.e2e-spec.ts` for API-level flows). Each added or updated scenario asserts the specific behaviour the change introduced, so it would fail on the base commit. A UI story's main scenario was already written in the fast loop (tagged `@demo` and `@story-<roadmap-id>`, Given/When/Then lines as `scenarioStep` captions from `frontend/e2e/support/demo-captions.ts`); this step adds the rest.
+Apply the step-6 decisions to [frontend/e2e/](../../../frontend/e2e/) (and backend `test/*.e2e-spec.ts` for API-level flows). Each added or updated scenario asserts the specific behaviour the change introduced, so it would fail on the base commit. A UI story's main scenario was already written in the story lane (tagged `@demo` and `@story-<roadmap-id>`, Given/When/Then lines as `scenarioStep` captions from `frontend/e2e/support/demo-captions.ts`); this step adds the rest.
 
 ### E2E test convention
 
-Playwright specs are the executable mirror of the Gherkin Features in [specs/capabilities/](../../../specs/capabilities/): one spec file per `Feature:`. A Feature marked `E2E: none yet` gets its spec the first time a change touches it. Don't ship a flow change without its E2E change, or with an impacted spec red. Unit tests sit beside their source (`*.spec.ts`, Jest in backend, `ng test` in frontend) and are not governed by this rule. Visual baselines (`*-snapshots/`) change only with `npm run test:e2e:update` and only for an intended visual change.
+Playwright specs hold the Gherkin steps of the Features in [specs/capabilities/](../../../specs/capabilities/) (Gherkin once: the capability spec lists only each scenario's title; existing Features keep their steps until edited): one spec file per `Feature:`. A Feature marked `E2E: none yet` gets its spec the first time a change touches it. Don't ship a flow change without its E2E change, or with an impacted spec red. Unit tests sit beside their source (`*.spec.ts`, Jest in backend, `ng test` in frontend) and are not governed by this rule. Visual baselines (`*-snapshots/`) change only with `npm run test:e2e:update` and only for an intended visual change.
 
 ### Test target convention — web by default, desktop on request
 
@@ -52,14 +52,28 @@ Only after step 9 is green.
 
 ### Demo artifact
 
-A UI story's demo is shared as a Claude artifact so the video and the work description are one link ([delivery.md](../../../specs/system/delivery.md) 13). It is first published in the fast loop, right after `qa.mjs --fast`:
+A UI story's demo is shared as a Claude artifact so the video and the work description are one link ([delivery.md](../../../specs/system/delivery.md) 13). It is first published right after the wave check (`qa.mjs --wave … --demo <id>`) or the plain-session `qa.mjs --fast`, so the user can review it by hand:
 
 1. `node scripts/demo-page.mjs <roadmap-id>` writes `evidence/<roadmap-id>/demo-page.html` from the roadmap entry, the changelog entry, `tests.md` and the demo.
 2. Publish it with the Artifact tool: `file_path` = that `demo-page.html`, `files` = `{ "demo.webm": "evidence/<roadmap-id>/demo.webm" }` (omit `files` for `demo.txt`), an `icon` such as `video` on the first publish, a one-sentence `description`. Re-publishing the same story passes its `url`, so the link stays the same.
 3. Record the artifact URL in `evidence/<roadmap-id>/README.md` (`Demo: <url>`), and later in the story's changelog bullet.
 4. Tell the human to share the link from the page's Share menu; artifacts are private by default.
 
-Re-publish at step 10 only when the demo changed after the fast loop.
+Re-publish at step 10 only when the demo changed after the wave check. Demos and evidence are recorded per wave; the acceptance gate stays per epic.
+
+### Session handoff
+
+One lead session per epic wave. Before starting a new session, write `.context/handoff.md` (git-ignored scratch; keep it under 30 lines) and start the new session from it:
+
+```
+# Handoff — <EPIC-ID>, <date>
+Branch / worktree: <branch>, <path>
+Done: <story ids merged, wave checks green>
+In flight: <story ids, unit branches, who owns them>
+Next: <the next wave or gate step, with the exact command>
+Open questions for the user: <one line each, with the recommendation>
+Traps: <anything the next session would rediscover>
+```
 
 ### The epic PR
 

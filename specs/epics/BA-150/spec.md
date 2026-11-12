@@ -65,7 +65,7 @@ All stories are built on one branch, `feat/BA-150-agent-hub`, and ship as one PR
 - [system/agents.md](../../system/agents.md): how a user agent's instructions, datasets and model override are applied to an assistant turn (BA-153).
 - [system/ui.md](../../system/ui.md): the hub screen, cards, filters, the System section, the editor and the preview chat (BA-154, BA-155).
 - [capabilities/agents-evals/spec.md](../../capabilities/agents-evals/spec.md): the agent catalogue rules R1–R9 are rewritten for the hub. New rules and Gherkin cover user agents, the lifecycle, pins, search and filters (BA-152, BA-154, BA-155).
-- [capabilities/sessions-chat/spec.md](../../capabilities/sessions-chat/spec.md): rules and Gherkin for sessions started from an agent and for starter questions (BA-153).
+- [capabilities/agent-answers/spec.md](../../capabilities/agent-answers/spec.md): rules and Gherkin for sessions started from an agent and for starter questions (BA-153).
 - [product/glossary.md](../../product/glossary.md): *user agent*, *official agent*, *system agent*, *draft*, *Live*, *pin* (BA-152, BA-154).
 
 ## Acceptance

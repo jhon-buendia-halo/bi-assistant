@@ -272,13 +272,17 @@ async function call(method, path, body) {
   return { status: res.status, json, text };
 }
 
-/** POST the turn and read the SSE stream to its end. */
-async function streamTurn(sessionId, content) {
-  const label = `POST /sessions/${sessionId}/messages/stream`;
-  const res = await fetch(`${BASE}/sessions/${sessionId}/messages/stream`, {
+const ASSISTANT_RUN = '/workflows/agent%3Aassistant/runs/stream';
+
+/** POST an Assistant run and read the SSE stream to its end. */
+async function streamTurn(content) {
+  const label = `POST ${ASSISTANT_RUN}`;
+  const res = await fetch(`${BASE}${ASSISTANT_RUN}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({
+      input: { question: content, datasets: [PLACEHOLDER_DATASET] },
+    }),
     signal: AbortSignal.timeout(STREAM_TIMEOUT_MS),
   });
   const decoder = new TextDecoder();
@@ -432,31 +436,54 @@ async function runStyle({ style, baseUrl }) {
     fail(scope, 'assistant turn', 'skipped: settings were not saved');
     return;
   }
+  let datasourceId;
   try {
-    const created = await call('POST', '/sessions', {
-      name: `Custom endpoint smoke (${style})`,
-      datasets: [PLACEHOLDER_DATASET],
+    // A run needs a dataset that exists; this one points at a closed port and
+    // is never queried (the turn is data-free).
+    const source = await call('POST', '/datasources', {
+      kind: 'postgres',
+      name: PLACEHOLDER_DATASET,
+      config: {
+        host: '127.0.0.1',
+        port: 1,
+        database: 'none',
+        user: 'none',
+        password: 'none',
+        ssl: false,
+      },
     });
-    const sessionId = created.json?.session?.id;
-    if (created.json?.ok !== true || !sessionId) {
+    datasourceId = source.json?.datasource?.id;
+    const dataset = datasourceId
+      ? await call('POST', '/datasets', {
+          name: PLACEHOLDER_DATASET,
+          tables: ['smoke.smoke.placeholder'],
+          entities: [
+            {
+              key: 'smoke.smoke.placeholder',
+              columns: [{ name: 'id', type: 'integer', nullable: false }],
+            },
+          ],
+          datasourceId,
+          datasourceKind: 'postgres',
+        })
+      : undefined;
+    if (dataset?.json?.ok !== true) {
       fail(
         scope,
-        'POST /sessions',
-        `HTTP ${created.status}: ${created.json?.message ?? created.text.slice(0, 300)}`,
+        'placeholder dataset',
+        `HTTP ${dataset?.status ?? source.status}: ${dataset?.json?.message ?? source.json?.message ?? 'not created'}`,
       );
       return;
     }
     const started = Date.now();
-    const { status, events } = await streamTurn(sessionId, PROMPT);
+    const { status, events } = await streamTurn(PROMPT);
     const errors = events.filter((e) => e.type === 'error');
     const done = events.find((e) => e.type === 'done');
     const streamed = events
       .filter((e) => e.type === 'text')
       .map((e) => e.content ?? '')
       .join('');
-    const messages = done?.session?.messages ?? [];
-    const last = [...messages].reverse().find((m) => m.role === 'assistant');
-    const answer = (last?.content ?? streamed).trim();
+    const answer = (done?.run?.answer?.content ?? streamed).trim();
     const ms = Date.now() - started;
     if (status !== 200) fail(scope, 'assistant turn', `HTTP ${status}`);
     else if (errors.length > 0)
@@ -481,6 +508,16 @@ async function runStyle({ style, baseUrl }) {
       );
   } catch (err) {
     fail(scope, 'assistant turn', err.message);
+  } finally {
+    // Leave no placeholder behind: its dataset and its datasource.
+    await call(
+      'DELETE',
+      `/datasets/${encodeURIComponent(PLACEHOLDER_DATASET)}`,
+    ).catch(() => undefined);
+    if (datasourceId)
+      await call('DELETE', `/datasources/${datasourceId}`).catch(
+        () => undefined,
+      );
   }
 }
 

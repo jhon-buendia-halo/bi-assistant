@@ -11,7 +11,7 @@ Every version can be exported as a self-contained bundle that opens offline, wit
 
 ## Concepts
 
-Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version** (current vs. viewed), **Visual spec** (the small chart description rendered by the fixed chart runtime), **Freeform visual** (designer-written markup, style and script), **Readable frame**, **Takeaway**, **Data provenance**, **Data mark**, **Auto-repair**, **Tailoring instruction**, **Visual bundle**, **Session workspace**, **Answer**, **Data record**, **Reasoning trail**. Chat-side concepts (answer, data records, turn) are specified in [sessions-chat](../sessions-chat/spec.md).
+Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version** (current vs. viewed), **Visual spec** (the small chart description rendered by the fixed chart runtime), **Freeform visual** (designer-written markup, style and script), **Readable frame**, **Takeaway**, **Data provenance**, **Data mark**, **Auto-repair**, **Tailoring instruction**, **Visual bundle**, **Session workspace**, **Answer**, **Data record**, **Reasoning trail**. Chat-side concepts (answer, data records, turn) are specified in [agent-answers](../agent-answers/spec.md).
 
 ## Rules
 
@@ -19,6 +19,7 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
 
 - R1. The system SHALL create a visual only from a completed assistant answer. The answer must have non-empty text and must not be a clarification. When no answer is named, the latest such answer is used.
 - R2. Every answer with text SHALL offer "Generate interactive visuals". While generating, the label reads "Generating interactive visuals…" and the button is disabled. It is also disabled while a chat turn runs. One generation runs per session at a time.
+  - On a run (workflows R18-R20), the button sits under the answer in the Run tab and on the run page. It is disabled while the run is `running`, and one generation runs at a time.
 - R3. The assistant SHALL create a visual when the user asks for a chart or visual of an answer, and SHALL never paste HTML, CSS or JavaScript into the chat. A visual created during a turn SHALL also see that turn's query results, merged onto the source answer's data records. When both share the same SQL text, the turn's record wins.
 - R4. A new visual SHALL get a unique id and start at version 1, with `currentVersion` = 1. Its title comes from the designer, trimmed to 100 characters (default "Interactive visual"). Its description (the takeaway) also comes from the designer. Its source answer is recorded by timestamp.
 
@@ -75,7 +76,7 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
   - the version control is highlighted.
 - R17. Reverting SHALL only move the current-version pointer to an existing version. No files change. An unknown version is rejected with "Version <N> does not exist".
 - R18. Creating (button), tailoring (panel) and reverting SHALL each add a visual event card to the chat, persisted as an assistant message: `Created|Updated|Reverted interactive visual "<title>" (v<N>).` A chat turn that created or updated a visual carries the same card on its answer message. Refreshing and auto-repair SHALL NOT add chat messages.
-- R19. When a chat turn creates or updates a visual, the panel SHALL switch to that visual at the new version while the turn is still streaming, without disturbing the turn (see [sessions-chat](../sessions-chat/spec.md) R21). The visual becomes the latest item of the session's panel history ([agent-panel](../agent-panel/spec.md) R10).
+- R19. When a chat turn creates or updates a visual, the panel SHALL switch to that visual at the new version while the turn is still streaming, without disturbing the turn (see [agent-answers](../agent-answers/spec.md) R21). The visual becomes the latest item of the session's panel history ([agent-panel](../agent-panel/spec.md) R10).
 - R20. Opening a session SHALL load into the panel the latest item the agent or the user showed, at its current version when that is a visual: the visual that changed most recently when nothing else was shown after it ([agent-panel](../agent-panel/spec.md) R12). Every visual of the session is also an item of the unified shown-items history ([agent-panel](../agent-panel/spec.md) R10); an agent can bring a visual back with `show_in_panel` ([agent-panel](../agent-panel/spec.md) R6).
 
 ### Refresh data in place
@@ -236,7 +237,7 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
   - the `visual-updated` event of the chat stream.
 - Data in [data-model.md](../../system/data-model.md): the session document's visual list (visual metadata and version entries), the chat message's visual event, the version directory layout in the session workspace, and the legacy un-versioned layout.
 - Agents in [agents.md](../../system/agents.md): the interactive visual designer (spec and freeform output shapes, the interactive-visuals skill, model routing including the `VISUAL_MODEL` override and swaps away from reasoning-class and nano-class models), and the assistant's `create_visual` / `update_visual` tools.
-- Chat integration: [sessions-chat](../sessions-chat/spec.md).
+- Chat integration: [agent-answers](../agent-answers/spec.md).
 
 ## UI
 
@@ -271,11 +272,22 @@ Placement in the shell's right "Details panel" is in [ui.md](../../system/ui.md)
 
 ### Covered: Chat and visuals
 
-The scenario "Renders a deterministic interactive visualization and its version controls" belongs to the Feature "Chat and visuals" in [sessions-chat](../sessions-chat/spec.md#feature-chat-and-visuals) (E2E: `frontend/e2e/chat-and-visuals.spec.ts`). It covers generating a visual from an answer, the frame title, "Download bundle", and the "Version history" list with "Version 1" and "current".
+The scenario "Renders a deterministic interactive visualization and its version controls" (generate a visual from a chat answer, the frame title, "Download bundle", the "Version history" list) is retired with the chat composer's **Generate interactive visuals** (workflows-first roadmap, plan 1.24.8). A visual the agent makes in a run is covered by "Skills the designer is given" below; the run page's panel and its versions return with plans 1.24.5 and 1.25.4.
+
+### Visual actions on a run
+
+R2 and R12-R24 hold on a stored agent run (workflows R18-R20): the answer's "Generate interactive visuals", the panel's Tailor form, version menu, "Make v<N> the current version", "Refresh data", auto-repair and "Download bundle" work over `/workflow-runs/:id/visualizations` (api.md 123, 124, 130-134) instead of a session's, on the run's workspace, with these differences:
+
+- The visual opens in a "Visual" section under the answer, in the Run tab of the designer and on the run page (ui.md 4.4c): the right panel holds the designer, so there is no panel history. The card's "View" and a new visual open it there; "Close visual" hides it.
+- The cards (R18) are stored on the run (`events`, data-model 3.16), shown after the answer, and reappear when the run is reopened. The agent's own `create_visual` and `update_visual` cards stay on the answer.
+- R19 is the generate and tailor result opening in the section; R20 does not apply: a run opens with no visual until "View" is pressed.
+- A running run, or a code-only run, refuses every action (api.md 130).
+
+The scenario "I generate, tailor, revert and refresh a visual on a run answer" of the Feature below covers them.
 
 ### Feature: Visual tailoring
 
-E2E: `frontend/e2e/visual-tailoring.spec.ts` covers "The visual follows the app's theme" (the theme is switched through System and the operating system setting, so the chat and its panel stay open) and "An older visual opens in the current theme" (the stored visual is rewritten on disk as a legacy bundle whose own styles hardcode the old dark frame); the other scenarios have none yet.
+E2E: `frontend/e2e/visual-tailoring.spec.ts` covers "The visual follows the app's theme" (the theme is switched through System and the operating system setting, so the chat and its panel stay open) and "An older visual opens in the current theme" (the stored visual is rewritten on disk as a legacy bundle whose own styles hardcode the old dark frame); and "I generate, tailor, revert and refresh a visual on a run answer" (a stored run of the Assistant opened from Runs: its answer's visual is generated, tailored with Sort, reverted and refreshed); the other scenarios have none yet.
 
 ```gherkin
 Feature: Visual tailoring
@@ -376,24 +388,26 @@ Feature: Visual tailoring
 
   Scenario: The visual follows the app's theme
     Given the app is in the Light theme
-    And a visual is open in the panel
+    And a visual is open in a past chat's read-only panel
     Then the frame and its chart are light
     When I switch Appearance to Dark
     Then the open visual turns dark without reloading
     And its state, hover and filters are kept
 
   Scenario: An older visual opens in the current theme
-    Given a visual made before the themed frame existed
+    Given a visual made before the themed frame existed, in a past chat
     And the app is in the Dark theme
-    When I open the visual
+    When I open the past chat's visual
     Then the frame and its chart are dark
+
+  Scenario: I generate, tailor, revert and refresh a visual on a run answer
 ```
 
 ### Feature: Skills the designer is given
 
 E2E: `frontend/e2e/designer-skills.spec.ts`
 
-What the visual designer is told, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent" in [sessions-chat](../sessions-chat/spec.md#feature-sessions-started-from-an-agent); here it also runs one query for the answer and returns a valid spec for the designer's call. Which parts of the `interactive-visuals` skill reach the designer: [agents.md](../../system/agents.md) sections 6.4 and 7.2; decision ADR-0018.
+What the visual designer is told, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent" in [agent-answers](../agent-answers/spec.md#feature-sessions-started-from-an-agent); here it also runs one query for the answer and returns a valid spec for the designer's call. Which parts of the `interactive-visuals` skill reach the designer: [agents.md](../../system/agents.md) sections 6.4 and 7.2; decision ADR-0018.
 
 ```gherkin
 Feature: Skills the designer is given
@@ -403,28 +417,25 @@ Feature: Skills the designer is given
     And the model is the recording stub
 
   Scenario: A spec visual is designed with the spec-mode instructions only
-    Given a session over "World Cup Core"
-    When I send "How many matches were played at each stage?"
-    And the model runs a query counting the matches per stage, then answers
-    Then I see the answer with "Data used (1 query)"
-    When I click "Generate interactive visuals"
-    Then I see the toast "Interactive visual generated"
-    And the panel shows the visual "Matches by stage"
+    Given I ran the Assistant on "World Cup Core" with "How many matches were played at each stage?"
+    And the model ran a query counting the matches per stage, then answered
+    When I run the Assistant again as a follow-up of that run with "Chart the matches per stage as bars."
+    And the model calls create_visual with no instruction, then answers
+    Then the run holds the visual "Matches by stage"
     And the designer received the interactive-visuals router and its spec-mode reference
     And the designer received nothing of the freeform reference
 
-  Scenario: A chart asked for in the chat is designed from my request when the model gives no instruction
-    Given a session over "World Cup Core"
-    And I sent "How many matches were played at each stage?" and the model answered from one query
-    When I send "Chart the matches per stage as bars."
+  Scenario: A chart asked for in a run is designed from my request when the model gives no instruction
+    Given I ran the Assistant on "World Cup Core" with "How many matches were played at each stage?" and the model answered from one query
+    When I run the Assistant again as a follow-up of that run with "Chart the matches per stage as bars."
     And the model calls create_visual with no instruction, then answers
-    Then the panel shows the visual "Matches by stage"
+    Then the run holds the visual "Matches by stage"
     And the designer received "Chart the matches per stage as bars." as its instruction
 ```
 
 ## Acceptance
 
-- Every scenario above passes. The covered scenario runs in `chat-and-visuals.spec.ts`.
+- Every scenario above passes. They run through the Assistant's workflow, as follow-up runs (`create_visual` needs an earlier answer).
 - A visual generated against real data renders a chart whose values match its "Data used" rows. Its exported `index.html` renders identically when opened offline straight from the zip.
 - No designer output can reach the frame outside the visual area. A visual with hostile markup or script can neither change the frame, reach the network nor reach the host app.
 - A broken visual is repaired at most once per version. An auto-repaired version is never repaired again.
@@ -434,4 +445,4 @@ Feature: Skills the designer is given
   - **Repair data source.** Repair regenerates from the source answer's data, not from the current version's stored (possibly refreshed or merged) data. A repaired tailored visual can lose the rows a chat turn added.
   - **Default source answer.** When the assistant creates a visual without naming an answer, "latest completed answer" can be a previous visual event card rather than the current turn's answer, which is not persisted yet.
 
-<!-- sources: backend/src/modules/sessions/visualization.service.ts, visualization-document.ts, visual-spec.ts, visual-runtime.ts, chart-heuristic.ts, zip-archive.ts, sessions.service.ts (generate/tailor/revert/refresh/repair/saveVisualMetadata), sessions.controller.ts; backend/src/mastra/agents/visualization.agent.ts, tools/visual.tools.ts; frontend/src/app/features/sessions/components/interactive-visual-panel/*, session-chat/session-chat.html|ts (visual cards, follow-up chips), services/sessions-api.service.ts; frontend/src/app/app.ts (showVisualization, revert, download, generate, loadLatestVisualization); frontend/e2e/chat-and-visuals.spec.ts, designer-skills.spec.ts; the frame tokens and theme bridge in visualization-document.ts, visual-runtime.ts and the interactive-visual-panel -->
+<!-- sources: backend/src/modules/sessions/visualization.service.ts, visualization-document.ts, visual-spec.ts, visual-runtime.ts, chart-heuristic.ts, zip-archive.ts, sessions.service.ts (generate/tailor/revert/refresh/repair/saveVisualMetadata), sessions.controller.ts; backend/src/mastra/agents/visualization.agent.ts, tools/visual.tools.ts; frontend/src/app/features/sessions/components/interactive-visual-panel/*, session-chat/session-chat.html|ts (follow-up chips), answer-view/answer-view.html (visual cards), services/sessions-api.service.ts; frontend/src/app/app.ts (showVisualization, revert, download, generate, loadLatestVisualization); frontend/e2e/chat-and-visuals.spec.ts, designer-skills.spec.ts; the frame tokens and theme bridge in visualization-document.ts, visual-runtime.ts and the interactive-visual-panel -->

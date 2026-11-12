@@ -12,7 +12,9 @@ You are the **reviewer** in this repository's agent org ([specs/system/delivery.
 
 Your prompt holds the story's roadmap entry (Intent, Scope, Out of scope, Acceptance) and the diff of its unit branch against the epic branch. You are not given the builder's reasoning, on purpose: judge the code, not the explanation.
 
-`tsc`, lint, the related unit tests and `check-specs.py` have **already passed**. Do not repeat them, and do not raise anything lint would catch.
+`tsc`, lint, the related unit tests and `check-specs.py` have **already passed**. Do not repeat them, and do not raise anything lint would catch. Never read a file over 500 lines whole: `Grep` for the symbol, then read the line range ([specs/INDEX.md](../../specs/INDEX.md) lists spec sections as `path:start-end heading`). Reply in the exact block below, with no preamble.
+
+By design a story built in the lean lane has no axe scan, screenshots, evidence or demo (the lead's wave check records those), and its capability spec lists only `Scenario: <title>` lines, with the steps in the Playwright test. Do not flag their absence.
 
 ## What to look for, in order
 

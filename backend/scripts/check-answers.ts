@@ -35,6 +35,7 @@
  * trusted SQL, this one asserts the answer is not degenerate. Same boot path,
  * same throwaway-session mechanics.
  */
+import { randomUUID } from 'crypto';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -334,8 +335,8 @@ async function provision(
 // ---------------------------------------------------------------- runtime
 
 /**
- * One turn in a throwaway session through the same path the desktop app drives
- * (`SessionsService.streamMessage` with a no-op emitter), then the persisted
+ * One turn on a throwaway run host through the same path a workflow run drives
+ * (`SessionsService.streamRunTurn` with a no-op emitter), then the host's
  * assistant message — identical mechanics to `scripts/run-eval.ts`.
  */
 async function ask(
@@ -345,15 +346,24 @@ async function ask(
   const { SessionsService } =
     require('../src/modules/sessions/sessions.service') as typeof import('../src/modules/sessions/sessions.service');
   const sessions = app.get(SessionsService);
-  const session = await sessions.create(
-    `check-answers ${new Date().toISOString()}`.slice(0, 64),
-    [DATASET_NAME],
-  );
+  const session = await sessions.createRunHost({
+    runId: `eval-${randomUUID()}`,
+    workflowId: 'agent:assistant',
+    name: 'check-answers',
+    datasets: [DATASET_NAME],
+  });
   try {
     const turn = new AbortController();
     const timer = setTimeout(() => turn.abort(), TURN_TIMEOUT_MS);
     try {
-      await sessions.streamMessage(session.id, question, () => {}, turn.signal);
+      await sessions.streamRunTurn(
+        session.id,
+        question,
+        () => {},
+        turn.signal,
+        false,
+        () => {},
+      );
     } finally {
       clearTimeout(timer);
     }
@@ -362,7 +372,7 @@ async function ask(
         `the turn exceeded ${Math.round(TURN_TIMEOUT_MS / 1000)}s`,
       );
     }
-    const answered = await sessions.get(session.id);
+    const answered = await sessions.finishRunHost(session.id);
     const message = lastAssistantMessage(answered.messages);
     return {
       question,
@@ -371,10 +381,10 @@ async function ask(
     };
   } finally {
     await sessions
-      .delete(session.id)
+      .deleteRunHostResources(session.id)
       .catch((error: unknown) =>
         console.warn(
-          `  ! could not delete throwaway session ${session.id} — ${message(error)}`,
+          `  ! could not delete throwaway run host ${session.id} — ${message(error)}`,
         ),
       );
   }

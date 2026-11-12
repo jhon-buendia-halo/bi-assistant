@@ -13,7 +13,11 @@ export class UsageError extends Error {}
 export const USAGE = [
   'Usage: node scripts/qa.mjs <roadmap-id> --fast|--gate [--base <ref>] [--rebuild] [--no-demo] [--dry-run]',
   '       node scripts/qa.mjs <roadmap-id> --draft-impact [--base <ref>] [--dry-run]',
-  '  --fast          fast loop: build, related unit tests, check-specs, selected Playwright specs, demo',
+  '       node scripts/qa.mjs --wave <id>,<id>,... [--base <ref>] [--no-demo] [--demo <id>] [--rebuild] [--dry-run]',
+  '  --wave <ids>    one verification for several stories: build, related unit tests of the union of changed files,',
+  '                  check-specs, the union of the touched Playwright specs, optionally one demo (--demo <id>);',
+  '                  writes evidence/<id>/tests.md per story and evidence/waves/<first>...<last>.md',
+  '  --fast         fast loop: build, related unit tests, check-specs, selected Playwright specs, demo',
   '  --gate          acceptance gate: build, full unit suites, lint, check-specs, the step-6 specs, tests.md',
   '  --draft-impact  write a draft evidence/<id>/e2e-impact.md from the diff (never overwrites)',
   '  --base <ref>    epic base for the diff (default: git merge-base HEAD origin/main)',
@@ -35,11 +39,20 @@ export function parseArgs(argv) {
   let rebuild = false;
   let noDemo = false;
   let dryRun = false;
+  let wave;
+  let demo;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg.startsWith('--') && MODES.includes(arg.slice(2))) {
-      if (mode) throw new UsageError('Choose one of --fast, --gate and --draft-impact');
+      if (mode) throw new UsageError('Choose one of --fast, --gate, --draft-impact and --wave');
       mode = arg.slice(2);
+    } else if (arg === '--wave') {
+      if (mode) throw new UsageError('Choose one of --fast, --gate, --draft-impact and --wave');
+      mode = 'wave';
+      wave = parseWaveIds(argv[++i]);
+    } else if (arg === '--demo') {
+      demo = argv[++i];
+      if (!demo || !/^\d+(\.\d+)+[a-z]?$/.test(demo)) throw new UsageError('--demo needs a roadmap id like 1.23.29');
     } else if (arg === '--base') {
       base = argv[++i];
       if (!base) throw new UsageError('--base needs a git ref');
@@ -57,15 +70,114 @@ export function parseArgs(argv) {
       throw new UsageError(`Unexpected argument ${arg}`);
     }
   }
+  if (mode === 'wave') {
+    if (id) throw new UsageError(`--wave takes the ids as its value, not "${id}"`);
+    if (demo && noDemo) throw new UsageError('--demo and --no-demo exclude each other');
+    if (demo && !wave.includes(demo)) throw new UsageError(`--demo ${demo} is not one of the wave's stories`);
+    return { id: waveName(wave), ids: wave, mode, base, rebuild, noDemo: !demo, demo, dryRun };
+  }
+  if (demo) throw new UsageError('--demo goes with --wave');
   if (!id) throw new UsageError('Missing the roadmap id');
-  if (!/^\d+(\.\d+)+$/.test(id)) {
+  if (!/^\d+(\.\d+)+[a-z]?$/.test(id)) {
     throw new UsageError(`"${id}" is not a roadmap id like 1.21.6`);
   }
-  if (!mode) throw new UsageError('Choose --fast, --gate or --draft-impact');
+  if (!mode) throw new UsageError('Choose --fast, --gate, --draft-impact or --wave');
   if (mode === 'draft-impact' && (rebuild || noDemo)) {
     throw new UsageError('--rebuild and --no-demo go with --fast or --gate');
   }
   return { id, mode, base, rebuild, noDemo, dryRun };
+}
+
+/** `1.23.29,1.23.30` becomes ['1.23.29', '1.23.30'] (unique, in order). */
+export function parseWaveIds(value) {
+  if (!value || value.startsWith('--')) throw new UsageError('--wave needs ids like 1.23.29,1.23.30');
+  const ids = value.split(',').map((x) => x.trim()).filter(Boolean);
+  const bad = ids.find((x) => !/^\d+(\.\d+)+[a-z]?$/.test(x));
+  if (!ids.length || bad) throw new UsageError(`"${bad ?? value}" is not a roadmap id like 1.21.6`);
+  return [...new Set(ids)];
+}
+
+/** The wave's name: `<first>…<last>` (just the id for one story). */
+export function waveName(ids) {
+  return ids.length === 1 ? ids[0] : `${ids[0]}…${ids[ids.length - 1]}`;
+}
+
+/** Repo-relative path of the shared wave report. */
+export function waveReportPath(ids) {
+  return `evidence/waves/${waveName(ids)}.md`;
+}
+
+/** Every Playwright run: dot on the console, JSON and HTML reports beside the logs. */
+export const PW_REPORTERS = '--reporter=dot,json,html';
+
+/** The env that points the json and html reporters at `reportDir` (a command-line `--reporter` replaces the config's). */
+export function playwrightReportEnv(reportDir) {
+  return {
+    QA_REPORT_DIR: reportDir,
+    PLAYWRIGHT_JSON_OUTPUT_NAME: path.join(reportDir, 'results.json'),
+    PLAYWRIGHT_HTML_OUTPUT_DIR: path.join(reportDir, 'html'),
+    PLAYWRIGHT_HTML_OPEN: 'never',
+  };
+}
+
+/** The union of the step-6 specs of the wave's stories (sorted, unique). */
+export function waveSpecUnion(listsByStory) {
+  return [...new Set(Object.values(listsByStory).flat())].sort();
+}
+
+/** The lines `--wave --dry-run` prints. */
+export function renderWavePlan({ ids, base, changedCount, buildLine, parallel, specs, demo, reportPath, lane }) {
+  return [
+    `qa wave ${waveName(ids)} (dry run): stories ${ids.join(', ')}, base ${base}, ${changedCount} changed file(s)`,
+    buildLine,
+    'parallel:',
+    ...parallel.map((s) => `  ${s.name}${s.solo ? ' (alone, after the others)' : ''}: ${s.command}`),
+    `playwright (Postgres lane ${lane}): ${specs.length ? specs.join(' ') : '(none)'}`,
+    demo ? `demo: ${demo}` : 'demo: none (--no-demo)',
+    `evidence: ${ids.map((i) => `evidence/${i}/tests.md`).join(', ')} -> ${reportPath}`,
+  ];
+}
+
+/** evidence/waves/<first>…<last>.md: the shared report of one wave run. */
+export function renderWaveReport({ ids, date, base, steps, specs, ran, failures = [], links = [] }) {
+  const ok = steps.every((s) => s.status === 'passed');
+  const n = (v) => (v === undefined ? '—' : String(v));
+  const out = [
+    `# Wave report — ${waveName(ids)}`,
+    '',
+    `Written by \`node scripts/qa.mjs --wave ${ids.join(',')}\` on ${date}, base \`${base}\`. Stories: ${ids.join(', ')}. **Result: ${ok ? 'passed' : 'failed'}.**`,
+    '',
+    '| Step | Command | Result | Passed | Failed | Skipped |',
+    '|---|---|---|---|---|---|',
+    ...steps.map(
+      (s) =>
+        `| ${s.name} | \`${s.command.replace(/\|/g, '\\|')}\` | ${s.status} | ${n(s.counts?.passed)} | ${n(s.counts?.failed)} | ${n(s.counts?.skipped)} |`,
+    ),
+    '',
+    '## Playwright specs (union of the stories)',
+    '',
+    '| Spec | Ran |',
+    '|---|---|',
+    ...[...new Set([...specs, ...ran])].sort().map((spec) => `| \`${spec}\` | ${ran.includes(spec) ? 'yes' : '**no**'} |`),
+  ];
+  if (failures.length) {
+    out.push('', '## Failed tests', '');
+    for (const f of failures) out.push(`- \`${f.file}\` › ${f.title}${f.video ? ` — video: \`${f.video}\`` : ''}`);
+  }
+  if (links.length) out.push('', '## Artifacts', '', ...links.map((l) => `- ${l}`));
+  return `${out.join('\n')}\n`;
+}
+
+/** evidence/<id>/tests.md of one story of a wave: the result and a pointer to the shared report. */
+export function renderWaveStoryTests({ id, ids, date, base, ok }) {
+  return [
+    `# Tests — ${id}`,
+    '',
+    `Verified in a wave on ${date}, base \`${base}\`, by \`node scripts/qa.mjs --wave ${ids.join(',')}\`. **Result: ${ok ? 'passed' : 'failed'}.**`,
+    '',
+    `The steps, the Playwright specs and the failures are in the shared wave report: [${waveReportPath(ids)}](../waves/${waveName(ids)}.md).`,
+    '',
+  ].join('\n');
 }
 
 /**
