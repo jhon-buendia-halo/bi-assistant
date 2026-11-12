@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { WorkflowRun } from '../../../workflows/models/workflow.model';
+import { RunVisualsState } from '../../services/run-visuals-state';
 import { RunsState } from '../../services/runs-state';
 import { RunDetail, runInputEntries } from './run-detail';
 
@@ -74,6 +75,44 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       'Run failed: Boom',
     );
     expect(el.querySelector('[data-testid="run-detail-answer"]')).toBeNull();
+  });
+
+  it('offers Generate interactive visuals on the answer and hands the run to the visual state', () => {
+    const el = mount(RUN);
+    const generate = spyOn(TestBed.inject(RunVisualsState), 'generate');
+    const button = Array.from(el.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Generate interactive visuals'),
+    )!;
+    button.click();
+    expect(generate).toHaveBeenCalledWith(RUN, jasmine.any(Function));
+  });
+
+  it('shows the visual cards stored on the run, and View opens that visual', () => {
+    const el = mount({
+      ...RUN,
+      events: [
+        {
+          role: 'assistant',
+          content: 'Created interactive visual "Goals" (v1).',
+          at: '2026-01-01T00:00:02Z',
+          visual: {
+            visualId: 'vis-1',
+            version: 1,
+            title: 'Goals',
+            action: 'created',
+          },
+        },
+      ],
+    });
+    const view = spyOn(TestBed.inject(RunVisualsState), 'view');
+    const card = Array.from(el.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'View',
+    )!;
+    card.click();
+    expect(view).toHaveBeenCalledWith(
+      jasmine.objectContaining({ id: 'r1' }),
+      jasmine.objectContaining({ visualId: 'vis-1', version: 1 }),
+    );
   });
 
   it('turns an input into one entry per field', () => {

@@ -2172,6 +2172,56 @@ describe('SessionsService visual tailoring and repair', () => {
     expect(last?.content).toContain('Updated interactive visual');
   });
 
+  it('runs a visual action on a run host: event and panel item returned, nothing persisted here', async () => {
+    const { service, session, visuals } = build();
+    const host = { ...session, id: 'run-r1', run: true } as SessionDoc;
+
+    const tailored = await service.runVisualAction(host, {
+      kind: 'tailor',
+      visualId: 'visual-1',
+      instruction: '  Make the bars green  ',
+    });
+    expect(visuals.update).toHaveBeenCalledWith(
+      host,
+      'visual-1',
+      'Make the bars green',
+    );
+    expect(tailored.version).toBe(2);
+    expect(tailored.event).toEqual({
+      visualId: 'visual-1',
+      version: 2,
+      title: 'Claims by month',
+      action: 'updated',
+    });
+    expect(tailored.panelItems).toEqual([
+      expect.objectContaining({ id: 'visual:visual-1', kind: 'visual' }),
+    ]);
+
+    const repaired = await service.runVisualAction(host, {
+      kind: 'repair',
+      visualId: 'visual-1',
+      error: 'blank',
+      version: 1,
+    });
+    expect(repaired.event).toBeUndefined();
+    await expect(
+      service.runVisualAction(host, {
+        kind: 'repair',
+        visualId: 'visual-1',
+        error: 'blank',
+        version: 5,
+      }),
+    ).rejects.toThrow(/Only the current version can be repaired/);
+    await expect(
+      service.runVisualAction(host, {
+        kind: 'tailor',
+        visualId: 'visual-1',
+        instruction: ' ',
+      }),
+    ).rejects.toThrow(/instruction is required/);
+    expect(session.messages).toHaveLength(0);
+  });
+
   it('rejects an empty tailoring instruction before running the designer', async () => {
     const { service, visuals } = build();
 

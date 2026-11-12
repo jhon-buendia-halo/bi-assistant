@@ -116,6 +116,23 @@ export const RUN_HOST_ID_PREFIX = 'run-';
  * runs, the input's datasets and RFP, and the one earlier run given as
  * context (plan 5.4).
  */
+/** A visual action on a run-backed host (api.md 130-134). */
+export type RunVisualAction =
+  | { kind: 'create'; sourceMessageAt?: string }
+  | { kind: 'tailor'; visualId: string; instruction: string }
+  | { kind: 'revert'; visualId: string; version: number }
+  | { kind: 'refresh'; visualId: string }
+  | { kind: 'repair'; visualId: string; error: string; version: number };
+
+/** What `runVisualAction` answers: the caller stores it on the run. */
+export interface RunVisualOutcome {
+  metadata: SessionVisualization;
+  version: number;
+  event?: VisualEvent;
+  /** The host's panel items with the visual's item shown. */
+  panelItems: PanelItem[];
+}
+
 export interface RunHostSpec {
   runId: string;
   /** `agent:assistant`, `qti-v2-turn`, `agent:<key>` or `agent:<user-agent id>`. */
@@ -1376,6 +1393,120 @@ export class SessionsService implements OnModuleInit {
         repaired,
       ),
     };
+  }
+
+  /**
+   * A visual action on a run-backed host (api.md 130-134): the same
+   * pipeline as the session routes above, but nothing is persisted here:
+   * the caller stores the metadata and the event on the stored run.
+   * Returns the new metadata, the version to show and, for create, tailor
+   * and revert, the event card to log (repair and refresh log none).
+   */
+  async runVisualAction(
+    host: SessionDoc,
+    action: RunVisualAction,
+  ): Promise<RunVisualOutcome> {
+    const outcome = await this.runVisualStep(host, action);
+    return {
+      ...outcome,
+      // The visual joins the panel history, newest shown (ADR-0029).
+      panelItems: upsertPanelItem(host.panelItems ?? [], {
+        id: visualItemId(outcome.metadata.id),
+        kind: 'visual',
+        title: outcome.metadata.title,
+        shownAt: new Date().toISOString(),
+        visualId: outcome.metadata.id,
+      }),
+    };
+  }
+
+  private async runVisualStep(
+    host: SessionDoc,
+    action: RunVisualAction,
+  ): Promise<{
+    metadata: SessionVisualization;
+    version: number;
+    event?: VisualEvent;
+  }> {
+    switch (action.kind) {
+      case 'create': {
+        const { metadata } = await this.visuals.create(
+          host,
+          action.sourceMessageAt || undefined,
+        );
+        return {
+          metadata,
+          version: 1,
+          event: {
+            visualId: metadata.id,
+            version: 1,
+            title: metadata.title,
+            action: 'created',
+          },
+        };
+      }
+      case 'tailor': {
+        const instruction = (action.instruction ?? '').trim();
+        if (!instruction) {
+          throw new BadRequestException('instruction is required');
+        }
+        const { metadata } = await this.visuals.update(
+          host,
+          action.visualId,
+          instruction,
+        );
+        const version = this.visuals.currentVersion(metadata);
+        return {
+          metadata,
+          version,
+          event: {
+            visualId: metadata.id,
+            version,
+            title: metadata.title,
+            action: 'updated',
+          },
+        };
+      }
+      case 'revert': {
+        const metadata = await this.visuals.revert(
+          host,
+          action.visualId,
+          action.version,
+        );
+        return {
+          metadata,
+          version: action.version,
+          event: {
+            visualId: metadata.id,
+            version: action.version,
+            title: metadata.title,
+            action: 'reverted',
+          },
+        };
+      }
+      case 'refresh': {
+        const { metadata } = await this.visuals.refreshData(
+          host,
+          action.visualId,
+        );
+        return { metadata, version: this.visuals.currentVersion(metadata) };
+      }
+      case 'repair': {
+        const meta = this.visuals.find(host, action.visualId);
+        const current = this.visuals.currentVersion(meta);
+        if (action.version !== current) {
+          throw new BadRequestException(
+            `Only the current version can be repaired (requested v${action.version}, current v${current})`,
+          );
+        }
+        const { metadata } = await this.visuals.repair(
+          host,
+          action.visualId,
+          action.error,
+        );
+        return { metadata, version: this.visuals.currentVersion(metadata) };
+      }
+    }
   }
 
   /** Upsert visual metadata on the session, optionally logging a chat event. */

@@ -1,0 +1,38 @@
+@if (open() !== null || state.loading() || state.error()) {
+  <section
+    class="card mt-4 overflow-hidden"
+    aria-label="Visual"
+    data-testid="run-visual"
+  >
+    <div class="flex items-center justify-between px-3 pt-2">
+      <h2
+        class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+      >
+        Visual
+      </h2>
+      <button
+        type="button"
+        aria-label="Close visual"
+        title="Close visual"
+        (click)="state.close()"
+        class="rounded-lg p-1 text-icon hover:bg-surface-muted"
+      >
+        <lucide-angular [img]="X" [size]="14" />
+      </button>
+    </div>
+    <div class="h-[520px]">
+      <app-interactive-visual-panel
+        class="h-full"
+        [runId]="run().id"
+        [visualization]="open()?.visualization ?? null"
+        [loading]="state.loading()"
+        [error]="state.error()"
+        [downloading]="state.downloading() !== null"
+        (downloadVisual)="state.download($event)"
+        (selectVersion)="state.selectVersion($event)"
+        (revertVersion)="state.revert($event, apply)"
+        (visualRefreshed)="onRefreshed($event)"
+      />
+    </div>
+  </section>
+}
