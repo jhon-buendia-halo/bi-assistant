@@ -55,17 +55,6 @@
             }
           </div>
         </div>
-        <div class="ml-auto flex max-w-full shrink-0 items-center gap-3">
-          <button
-            type="button"
-            data-testid="workflow-execute"
-            (click)="execute()"
-            class="btn btn-primary shrink-0"
-          >
-            <lucide-angular [img]="Rocket" [size]="14" />
-            <span>Execute</span>
-          </button>
-        </div>
       </div>
     }
   </header>
@@ -87,7 +76,9 @@
       [workflow]="w"
       [selectedId]="designer.selectedStepId()"
       [statuses]="designer.stepStatuses()"
-      (selectStep)="onSelectStep($event)"
+      (selectNode)="onSelectStep($event)"
+      (openNode)="onSelectStep($event)"
+      (execute)="execute()"
     />
   }
 </div>

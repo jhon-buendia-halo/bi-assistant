@@ -1,8 +1,11 @@
 import {
   Component,
+  DestroyRef,
   ElementRef,
+  afterNextRender,
   computed,
   effect,
+  inject,
   input,
   output,
   signal,
@@ -10,18 +13,35 @@ import {
   viewChild,
 } from '@angular/core';
 import {
+  Braces,
   Check,
   CircleX,
+  Cpu,
+  Ellipsis,
+  Flag,
   LucideAngularModule,
   Loader2,
+  LucideIconData,
   Maximize,
+  Minus,
+  Play,
+  RotateCcw,
+  Sparkles,
   Square,
+  Wrench,
   X,
+  Zap,
   ZoomIn,
   ZoomOut,
 } from 'lucide-angular';
-import { WorkflowDetail, WorkflowRunStepStatus } from '../../models/workflow.model';
 import {
+  WorkflowDetail,
+  WorkflowRunStepStatus,
+} from '../../models/workflow.model';
+import {
+  CanvasNode,
+  CanvasNodeKind,
+  CanvasSubNode,
   MAX_ZOOM,
   MIN_ZOOM,
   fitZoom,
@@ -34,12 +54,34 @@ import { runStepStatusLabel } from '../../services/workflows.util';
 /** A drag shorter than this, in pixels, is a click on the background. */
 const PAN_THRESHOLD = 3;
 
+const NODE_ICONS: Record<CanvasNodeKind, LucideIconData> = {
+  trigger: Zap,
+  code: Braces,
+  agent: Sparkles,
+  output: Flag,
+};
+
+const SUB_ICONS: Record<CanvasSubNode['kind'], LucideIconData> = {
+  model: Cpu,
+  tool: Wrench,
+  more: Ellipsis,
+};
+
+const STATUS_ICONS: Record<WorkflowRunStepStatus, LucideIconData> = {
+  success: Check,
+  failed: X,
+  running: Loader2,
+  skipped: Minus,
+  stopped: Square,
+};
+
 /**
- * The workflow designer's canvas (workflows R7, ui.md 4.4b): the graph from
- * Start to End on a dotted grid, nodes as buttons over an SVG layer of
- * connectors, a zoom toolbar at the top-left, panning by dragging the
- * background, and each step's run status while a run is shown. Read-only:
- * selecting a node only reports it.
+ * The workflow page's n8n-style canvas (workflows R7, ui.md 4.4b): Start, the
+ * steps and End left to right on a dotted grid, nodes as buttons over an SVG
+ * layer of edges, an agent step's model and tools hanging below it, a zoom
+ * toolbar at the bottom-left and Execute workflow at the top-right. Fits the
+ * graph on load and on resize until the user zooms by hand; dragging the
+ * background pans. Read-only: it only reports what was chosen.
  */
 @Component({
   selector: 'app-workflow-canvas',
@@ -49,46 +91,42 @@ const PAN_THRESHOLD = 3;
   host: { class: 'relative flex min-h-0 flex-col' },
 })
 export class WorkflowCanvas {
-  protected readonly Check = Check;
   protected readonly CircleX = CircleX;
-  protected readonly Loader2 = Loader2;
   protected readonly Maximize = Maximize;
+  protected readonly Play = Play;
+  protected readonly RotateCcw = RotateCcw;
   protected readonly Square = Square;
-  protected readonly X = X;
   protected readonly ZoomIn = ZoomIn;
   protected readonly ZoomOut = ZoomOut;
   protected readonly MIN_ZOOM = MIN_ZOOM;
   protected readonly MAX_ZOOM = MAX_ZOOM;
+  protected readonly nodeIcons = NODE_ICONS;
+  protected readonly subIcons = SUB_ICONS;
+  protected readonly statusIcons = STATUS_ICONS;
+  protected readonly statusLabel = runStepStatusLabel;
 
   readonly workflow = input.required<WorkflowDetail>();
+  /** The selected node: `start`, `end` or a step id. */
   readonly selectedId = input<string | null>(null);
-  /** Each step's status in the run shown, by step id. */
-  readonly statuses = input<Record<string, WorkflowRunStepStatus>>(
-    {},
-  );
-  /** A node chosen (its step id), or null for a click on the background. */
-  readonly selectStep = output<string | null>();
+  /** Each node's status in the run shown, by node id (incl. `start` / `end`). */
+  readonly statuses = input<Record<string, WorkflowRunStepStatus>>({});
+  /** A node chosen by a single click, or null for a click on the background. */
+  readonly selectNode = output<string | null>();
+  /** Open a node's details: double click or Enter, or a click on an agent's sub-node (its step id). */
+  readonly openNode = output<string>();
+  /** The Execute workflow button. */
+  readonly execute = output<void>();
 
   private readonly viewport =
     viewChild.required<ElementRef<HTMLElement>>('viewport');
 
   protected readonly layout = computed(() =>
-    workflowCanvasLayout(this.workflow().steps),
+    workflowCanvasLayout(this.workflow()),
   );
-  protected readonly lastConnector = computed(() => {
-    const connectors = this.layout().connectors;
-    return connectors[connectors.length - 1];
-  });
-  protected readonly steps = computed(() =>
-    this.layout().nodes.filter((node) => node.kind === 'step'),
-  );
-  protected readonly start = computed(() => this.layout().nodes[0]);
-  protected readonly end = computed(() => {
-    const nodes = this.layout().nodes;
-    return nodes[nodes.length - 1];
-  });
 
   readonly zoom = signal(1);
+  /** Fit on load and on resize, until the user zooms by hand. */
+  readonly autoFit = signal(true);
   protected readonly zoomPercent = computed(
     () => `${Math.round(this.zoom() * 100)}%`,
   );
@@ -100,14 +138,25 @@ export class WorkflowCanvas {
     top: number;
     moved: boolean;
   } | null = null;
-
-  protected readonly statusLabel = runStepStatusLabel;
+  private rendered = false;
 
   constructor() {
-    // Another workflow opens at 100%.
+    const destroyRef = inject(DestroyRef);
+    afterNextRender(() => {
+      this.rendered = true;
+      this.fitIfAuto();
+      if (typeof ResizeObserver === 'undefined') return;
+      const observer = new ResizeObserver(() => this.fitIfAuto());
+      observer.observe(this.viewport().nativeElement);
+      destroyRef.onDestroy(() => observer.disconnect());
+    });
+    // Another workflow fits again.
     effect(() => {
-      this.workflow();
-      untracked(() => this.zoom.set(1));
+      this.layout();
+      untracked(() => {
+        this.autoFit.set(true);
+        if (this.rendered) this.fitIfAuto();
+      });
     });
   }
 
@@ -116,27 +165,73 @@ export class WorkflowCanvas {
     return Object.hasOwn(statuses, id) ? statuses[id] : null;
   }
 
-  /** The connector that ends on the given node (the one drawn above it). */
-  protected connectorInto(index: number) {
-    return this.layout().connectors[index];
+  /** An edge is done once the node it leaves succeeded. */
+  protected done(id: string): boolean {
+    return this.status(id) === 'success';
+  }
+
+  protected subNodeLabel(node: CanvasNode, sub: CanvasSubNode): string {
+    const what =
+      sub.kind === 'model'
+        ? 'Model'
+        : sub.kind === 'tool'
+          ? 'Tool'
+          : 'More tools:';
+    return `${what} ${sub.label} of ${node.title}`;
   }
 
   protected zoomOut(): void {
-    this.zoom.set(zoomOut(this.zoom()));
+    this.setZoom(zoomOut(this.zoom()));
   }
 
   protected zoomIn(): void {
-    this.zoom.set(zoomIn(this.zoom()));
+    this.setZoom(zoomIn(this.zoom()));
   }
 
-  /** The zoom at which the whole graph shows, between 75% and 150%. */
+  protected resetZoom(): void {
+    this.setZoom(1);
+  }
+
+  /** Fit to screen, and keep fitting on resize. */
   protected fit(): void {
+    this.autoFit.set(true);
+    this.applyFit();
+  }
+
+  private setZoom(zoom: number): void {
+    this.autoFit.set(false);
+    this.zoom.set(zoom);
+  }
+
+  private fitIfAuto(): void {
+    if (this.autoFit()) this.applyFit();
+  }
+
+  private applyFit(): void {
     const el = this.viewport().nativeElement;
+    // Hidden (no size yet): keep the zoom until it shows.
+    if (!el.clientWidth || !el.clientHeight) return;
     this.zoom.set(fitZoom(this.layout(), el.clientWidth, el.clientHeight));
   }
 
   protected onNodeClick(id: string): void {
-    this.selectStep.emit(id);
+    this.selectNode.emit(id);
+  }
+
+  protected onNodeDblClick(id: string): void {
+    this.openNode.emit(id);
+  }
+
+  /** Enter opens, as a double click does; the button's own click would only select. */
+  protected onNodeEnter(event: Event, id: string): void {
+    event.preventDefault();
+    this.selectNode.emit(id);
+    this.openNode.emit(id);
+  }
+
+  /** A sub-node opens its agent step's details (Enter clicks the button too). */
+  protected onSubNodeClick(stepId: string): void {
+    this.openNode.emit(stepId);
   }
 
   protected onPointerDown(event: PointerEvent): void {
@@ -176,7 +271,7 @@ export class WorkflowCanvas {
     if (pan === null) return;
     this.pan = null;
     this.panning.set(false);
-    if (!pan.moved) this.selectStep.emit(null);
+    if (!pan.moved) this.selectNode.emit(null);
   }
 
   protected onPointerCancel(): void {

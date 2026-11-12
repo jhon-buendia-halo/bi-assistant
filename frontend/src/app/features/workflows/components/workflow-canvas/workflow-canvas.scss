@@ -1,24 +1,14 @@
-// The workflow designer's canvas (ui.md 4.4b). Positions come from
-// workflowCanvasLayout; this file only paints.
-
-.canvas-toolbar {
-  border: 1px solid var(--qti-border);
-  border-radius: 10px;
-  background: var(--qti-surface);
-  box-shadow: var(--qti-shadow-subtle);
-}
+// The workflow page's n8n-style canvas (ui.md 4.4b). Positions come from
+// workflowCanvasLayout; this file only paints, with theme tokens only
+// (text and labels use Tailwind utilities in the template).
 
 // A dotted grid that scrolls with the graph. `border` dots: `surface-muted`
 // ones do not show on `surface` in the light theme.
 .canvas-viewport {
-  background-color: var(--qti-surface);
-  background-image: radial-gradient(
-    circle,
-    var(--qti-border) 1.25px,
-    transparent 1.5px
-  );
-  background-size: 16px 16px;
-  background-attachment: local;
+  display: flex;
+  background: var(--qti-surface)
+    radial-gradient(circle, var(--qti-border) 1.25px, transparent 1.5px) 0 0 /
+    16px 16px local;
   cursor: grab;
   touch-action: none;
 
@@ -28,73 +18,64 @@
   }
 }
 
-.canvas-stage {
+// `margin: auto` centres a small graph without clipping a large one.
+.canvas-size {
   position: relative;
+  flex: none;
+  margin: auto;
+}
+
+.canvas-stage {
+  position: absolute;
+  inset: 0 auto auto 0;
   transform-origin: 0 0;
 }
 
-.connector-line {
+.canvas-wires {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+// Edges: neutral until the node they leave succeeded, then green.
+.edge,
+.sub-edge {
   fill: none;
   stroke: var(--qti-border-strong);
+  stroke-width: 2;
+
+  &.done {
+    stroke: var(--qti-on-success-soft);
+  }
+}
+
+.sub-edge {
   stroke-width: 1.5;
+  stroke-dasharray: 5 4;
 }
 
-.connector-arrow {
+.edge-arrow {
   fill: var(--qti-border-strong);
+
+  &.done {
+    fill: var(--qti-on-success-soft);
+  }
 }
 
-.connector-label {
-  position: absolute;
-  transform: translateY(-50%);
-  border-radius: 4px;
-  background: var(--qti-surface);
-  padding: 0 4px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11px;
-  line-height: 16px;
-  color: var(--qti-fg-muted);
-  white-space: nowrap;
-}
-
-.canvas-terminal {
+.canvas-node,
+.sub-node {
   position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1.5px solid var(--qti-border-strong);
-  border-radius: 9999px;
-  background: var(--qti-surface-muted);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--qti-fg-strong);
-}
-
-// A row of title, id and badges; the agent step adds a full-width line.
-.canvas-node {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  border: 1px solid var(--qti-border-strong);
-  border-radius: 12px;
+  border: 2px solid var(--qti-border-strong);
   background: var(--qti-surface);
-  padding: 8px 12px 8px 14px;
-  text-align: left;
+  padding: 0;
   cursor: pointer;
-  box-shadow: var(--qti-shadow-subtle);
+  user-select: none;
   transition:
     border-color 0.15s,
     box-shadow 0.15s;
-
-  &:hover {
-    border-color: var(--qti-border-selected);
-  }
-
-  &[aria-pressed='true'] {
-    border-color: var(--qti-border-selected);
-    box-shadow: 0 0 0 2px var(--qti-border-selected);
-  }
 
   &:focus-visible {
     outline: 2px solid var(--qti-focus);
@@ -102,21 +83,188 @@
   }
 }
 
-.node-badge {
-  padding: 0 0.5rem;
-  font-size: 11px;
-  letter-spacing: 0.04em;
+// Start (rounded left), code squares, the wide agent, End (rounded right).
+.canvas-node {
+  border-radius: 14px;
+  box-shadow: var(--qti-shadow-card);
+
+  &[data-kind="trigger"] {
+    border-radius: 40px 14px 14px 40px;
+  }
+
+  &[data-kind="output"] {
+    border-radius: 14px 40px 40px 14px;
+  }
+
+  &[data-kind="agent"] {
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 0 14px;
+    border-color: var(--qti-span-agent);
+  }
+
+  &:hover,
+  &[aria-pressed="true"] {
+    border-color: var(--qti-border-selected);
+  }
+
+  &[data-status="success"] {
+    border-color: var(--qti-on-success-soft);
+  }
+
+  &[data-status="failed"] {
+    border-color: var(--qti-on-danger-soft);
+  }
+
+  &[data-status="running"] {
+    border-color: var(--qti-on-info-soft);
+  }
+
+  &[aria-pressed="true"] {
+    box-shadow: 0 0 0 4px var(--qti-surface-selected);
+  }
 }
 
-.exit-note {
+// The icon tile, tinted by kind.
+.node-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--qti-neutral-soft);
+  color: var(--qti-on-neutral-soft);
+
+  &[data-kind="trigger"] {
+    background: var(--qti-warning-soft);
+    color: var(--qti-on-warning-soft);
+  }
+
+  &[data-kind="agent"] {
+    width: 36px;
+    height: 36px;
+    background: var(--qti-surface-muted);
+    color: var(--qti-span-agent);
+  }
+
+  &[data-kind="output"] {
+    background: var(--qti-success-soft);
+    color: var(--qti-on-success-soft);
+  }
+}
+
+// In / out handles on the centre line.
+.handle {
   position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 16px;
-  border-radius: 4px;
+  top: calc(50% - 5px);
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--qti-border-strong);
+  border-radius: 50%;
   background: var(--qti-surface);
-  padding: 0 4px;
-  font-size: 11px;
-  white-space: nowrap;
+
+  &.in {
+    left: -6px;
+  }
+
+  &.out {
+    right: -6px;
+  }
+}
+
+// CODE / LLM on the node's bottom edge.
+.kind-badge {
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 1px solid var(--qti-border);
+  border-radius: 9999px;
+  background: var(--qti-neutral-soft);
+  padding: 0 7px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.04em;
+  color: var(--qti-on-neutral-soft);
+
+  &[data-kind="agent"] {
+    border-color: var(--qti-span-agent);
+    background: var(--qti-surface);
+    color: var(--qti-span-agent);
+  }
+}
+
+// The run status at the node's top-right corner.
+.status-badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--qti-surface);
+  border-radius: 50%;
+  background: var(--qti-neutral-soft);
+  color: var(--qti-on-neutral-soft);
+
+  &[data-status="success"] {
+    background: var(--qti-success-soft);
+    color: var(--qti-on-success-soft);
+  }
+
+  &[data-status="failed"] {
+    background: var(--qti-danger-soft);
+    color: var(--qti-on-danger-soft);
+  }
+
+  &[data-status="running"] {
+    background: var(--qti-info-soft);
+    color: var(--qti-on-info-soft);
+  }
+}
+
+// Model / Tools ports on the agent's bottom edge; their label in the template.
+.port {
+  position: absolute;
+  pointer-events: none;
+}
+
+// The model is required: `Model*`.
+.port-label[data-required]::after {
+  content: "*";
+  color: var(--qti-on-danger-soft);
+}
+
+.diamond {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--qti-border-strong);
+  background: var(--qti-surface);
+  transform: translate(-50%, -50%) rotate(45deg);
+
+  &.top {
+    top: -1px;
+    left: 50%;
+  }
+}
+
+.sub-node {
+  border-radius: 50%;
+  color: var(--qti-span-tool);
+
+  &[data-kind="model"] {
+    color: var(--qti-span-model);
+  }
+
+  &[data-kind="more"] {
+    color: var(--qti-fg-muted);
+  }
+
+  &:hover {
+    border-color: var(--qti-border-selected);
+  }
 }

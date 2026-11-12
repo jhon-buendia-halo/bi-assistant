@@ -1,50 +1,4 @@
-<!-- Zoom toolbar, floating over the canvas top-left -->
-<div
-  role="toolbar"
-  aria-label="Canvas zoom"
-  data-testid="workflow-canvas-toolbar"
-  class="canvas-toolbar absolute top-3 left-3 z-10 flex items-center gap-0.5 p-1"
->
-  <button
-    type="button"
-    class="btn-icon"
-    aria-label="Zoom out"
-    title="Zoom out"
-    data-testid="workflow-zoom-out"
-    [disabled]="zoom() <= MIN_ZOOM"
-    (click)="zoomOut()"
-  >
-    <lucide-angular [img]="ZoomOut" [size]="16" />
-  </button>
-  <span
-    data-testid="workflow-zoom-level"
-    aria-live="polite"
-    class="w-11 text-center text-[12px] font-medium text-fg tabular-nums"
-    >{{ zoomPercent() }}</span
-  >
-  <button
-    type="button"
-    class="btn-icon"
-    aria-label="Zoom in"
-    title="Zoom in"
-    data-testid="workflow-zoom-in"
-    [disabled]="zoom() >= MAX_ZOOM"
-    (click)="zoomIn()"
-  >
-    <lucide-angular [img]="ZoomIn" [size]="16" />
-  </button>
-  <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true"></span>
-  <button
-    type="button"
-    class="btn-icon"
-    aria-label="Fit to screen"
-    title="Fit to screen"
-    data-testid="workflow-zoom-fit"
-    (click)="fit()"
-  >
-    <lucide-angular [img]="Maximize" [size]="16" />
-  </button>
-</div>
+@let l = layout();
 
 <!-- The canvas: scrolls when the graph is larger; dragging the background pans -->
 <div
@@ -58,147 +12,170 @@
   (pointercancel)="onPointerCancel()"
 >
   <div
-    class="mx-auto"
-    [style.width.px]="layout().width * zoom()"
-    [style.height.px]="layout().height * zoom()"
+    class="canvas-size"
+    [style.width.px]="l.width * zoom()"
+    [style.height.px]="l.height * zoom()"
   >
     <div
       class="canvas-stage"
       role="group"
       [attr.aria-label]="workflow().name + ' graph'"
-      [style.width.px]="layout().width"
-      [style.height.px]="layout().height"
+      [style.width.px]="l.width"
+      [style.height.px]="l.height"
       [style.transform]="'scale(' + zoom() + ')'"
     >
       <svg
-        class="absolute inset-0"
+        class="canvas-wires"
         aria-hidden="true"
-        [attr.width]="layout().width"
-        [attr.height]="layout().height"
-        [attr.viewBox]="'0 0 ' + layout().width + ' ' + layout().height"
+        [attr.width]="l.width"
+        [attr.height]="l.height"
+        [attr.viewBox]="'0 0 ' + l.width + ' ' + l.height"
       >
         <defs>
           <marker
             id="workflow-canvas-arrow"
             viewBox="0 0 10 10"
-            refX="10"
+            refX="9"
             refY="5"
-            markerWidth="8"
-            markerHeight="8"
+            markerWidth="7"
+            markerHeight="7"
             orient="auto"
           >
-            <path class="connector-arrow" d="M 0 0 L 10 5 L 0 10 z" />
+            <path class="edge-arrow" d="M 0 0 L 10 5 L 0 10 z" />
+          </marker>
+          <marker
+            id="workflow-canvas-arrow-done"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto"
+          >
+            <path class="edge-arrow done" d="M 0 0 L 10 5 L 0 10 z" />
           </marker>
         </defs>
-        @for (connector of layout().connectors; track connector.id) {
+        @for (edge of l.edges; track edge.id) {
           <path
-            class="connector-line"
-            [attr.d]="connector.path"
-            [attr.data-testid]="'workflow-connector-' + connector.id"
-            marker-end="url(#workflow-canvas-arrow)"
+            class="edge"
+            [class.done]="done(edge.from)"
+            [attr.d]="edge.path"
+            [attr.data-testid]="'workflow-connector-' + edge.id"
+            [attr.data-done]="done(edge.from) ? 'true' : 'false'"
+            [attr.marker-end]="
+              done(edge.from)
+                ? 'url(#workflow-canvas-arrow-done)'
+                : 'url(#workflow-canvas-arrow)'
+            "
+          />
+        }
+        @for (sub of l.subEdges; track sub.id) {
+          <path
+            class="sub-edge"
+            [class.done]="done(sub.nodeId)"
+            [attr.d]="sub.path"
+            [attr.data-subnode]="sub.subNodeId"
+            [attr.data-done]="done(sub.nodeId) ? 'true' : 'false'"
           />
         }
       </svg>
 
-      <div
-        class="canvas-terminal"
-        data-testid="workflow-node-start"
-        [style.left.px]="start().x"
-        [style.top.px]="start().y"
-        [style.width.px]="start().width"
-        [style.height.px]="start().height"
-      >
-        Start
-      </div>
-
-      @for (node of steps(); track node.id; let i = $index) {
-        @if (connectorInto(i).label) {
+      @for (edge of l.edges; track edge.id) {
+        @if (edge.label) {
           <span
-            class="connector-label"
-            [attr.data-testid]="'workflow-connector-label-' + connectorInto(i).id"
-            [style.left.px]="connectorInto(i).labelX"
-            [style.top.px]="connectorInto(i).labelY"
-            ><span class="sr-only">Passes on: </span>{{ connectorInto(i).label }}</span
+            class="edge-label absolute -translate-x-1/2 -translate-y-1/2 rounded bg-surface px-1 font-mono text-[11px] leading-4 whitespace-nowrap text-fg-muted"
+            [attr.data-testid]="'workflow-connector-label-' + edge.id"
+            [attr.title]="'Passes on: ' + edge.fields.join(', ')"
+            [style.left.px]="edge.labelX"
+            [style.top.px]="edge.labelY"
+            ><span aria-hidden="true">{{ edge.label }}</span
+            ><span class="sr-only"
+              >Passes on: {{ edge.fields.join(", ") }}</span
+            ></span
           >
         }
-        @if (node.step; as step) {
-          <button
-            type="button"
-            class="canvas-node"
-            [attr.data-testid]="'workflow-node-' + step.id"
-            [attr.aria-pressed]="selectedId() === step.id"
-            [style.left.px]="node.x"
-            [style.top.px]="node.y"
-            [style.width.px]="node.width"
-            [style.height.px]="node.height"
-            (click)="onNodeClick(step.id)"
+      }
+
+      @for (node of l.nodes; track node.id) {
+        @let s = status(node.id);
+        <button
+          type="button"
+          class="canvas-node"
+          [attr.data-kind]="node.kind"
+          [attr.data-status]="s"
+          [attr.data-testid]="'workflow-node-' + node.id"
+          [attr.aria-pressed]="selectedId() === node.id"
+          [style.left.px]="node.x"
+          [style.top.px]="node.y"
+          [style.width.px]="node.width"
+          [style.height.px]="node.height"
+          (click)="onNodeClick(node.id)"
+          (dblclick)="onNodeDblClick(node.id)"
+          (keydown.enter)="onNodeEnter($event, node.id)"
+        >
+          @if (node.kind !== "trigger") {
+            <span class="handle in" aria-hidden="true"></span>
+          }
+          @if (node.kind !== "output") {
+            <span class="handle out" aria-hidden="true"></span>
+          }
+          @if (node.number !== null) {
+            <span class="sr-only">Step {{ node.number }}:</span>
+          }
+
+          <span
+            class="node-icon"
+            [attr.data-kind]="node.kind"
+            aria-hidden="true"
           >
-            <span class="flex w-full items-center gap-3">
-            <span class="flex min-w-0 flex-1 flex-col">
-              <span class="sr-only">Step {{ node.number }}:</span>
+            <lucide-angular
+              [img]="nodeIcons[node.kind]"
+              [size]="node.kind === 'agent' ? 18 : 20"
+            />
+          </span>
+
+          <!-- The agent's text sits inside it; a square's label hangs below it. -->
+          <span
+            [class]="
+              node.kind === 'agent'
+                ? 'flex min-w-0 flex-col gap-px text-left'
+                : 'pointer-events-none absolute top-[calc(100%+8px)] left-1/2 flex w-[150px] -translate-x-1/2 flex-col items-center gap-px text-center'
+            "
+          >
+            <span
+              class="node-title max-w-full truncate text-[13px] leading-[18px] font-medium text-fg-strong"
+              [attr.data-testid]="
+                node.step !== null ? 'workflow-node-title' : null
+              "
+              >{{ node.title }}</span
+            >
+            @if (node.subtitle) {
               <span
-                class="truncate text-[14px] leading-5 font-medium text-fg-strong"
-                data-testid="workflow-node-title"
-                >{{ step.title }}</span
-              >
-              <span
-                class="truncate font-mono text-[12px] leading-4 text-fg-muted"
-                data-testid="workflow-node-id"
-                >{{ step.id }}</span
-              >
-            </span>
-            <span class="flex shrink-0 flex-col items-end gap-1">
-              <span
-                class="chip node-badge"
-                [class.chip-info]="step.kind === 'agent'"
-                [class.chip-neutral]="step.kind !== 'agent'"
-                data-testid="workflow-node-kind"
-                >{{ step.kind === "agent" ? "LLM" : "CODE" }}</span
-              >
-              @if (status(step.id); as s) {
-                <span
-                  class="chip node-badge"
-                  [class.chip-success]="s === 'success'"
-                  [class.chip-danger]="s === 'failed'"
-                  [class.chip-info]="s === 'running'"
-                  [class.chip-neutral]="s === 'skipped' || s === 'stopped'"
-                  data-testid="workflow-node-status"
-                >
-                  @if (s === "success") {
-                    <lucide-angular [img]="Check" [size]="11" aria-hidden="true" />
-                  } @else if (s === "failed") {
-                    <lucide-angular [img]="X" [size]="11" aria-hidden="true" />
-                  } @else if (s === "running") {
-                    <lucide-angular
-                      [img]="Loader2"
-                      [size]="11"
-                      class="animate-spin"
-                      aria-hidden="true"
-                    />
-                  } @else if (s === "stopped") {
-                    <lucide-angular [img]="Square" [size]="11" aria-hidden="true" />
-                  }
-                  <span>{{ statusLabel(s) }}</span>
-                </span>
-              }
-            </span>
-            </span>
-            @if (step.agent; as agent) {
-              <span
-                class="w-full truncate text-[12px] leading-4 text-fg"
-                data-testid="workflow-node-agent"
-                >{{ agent.name }} · ≤ {{ agent.maxSteps }} steps</span
+                class="node-subtitle line-clamp-2 max-w-full text-[11px] leading-[14px] [overflow-wrap:anywhere] text-fg-muted"
+                [class.font-mono]="node.step !== null"
+                [attr.data-testid]="
+                  node.step !== null ? 'workflow-node-id' : null
+                "
+                >{{ node.subtitle }}</span
               >
             }
-          </button>
+            @if (node.agentLine !== null) {
+              <span
+                class="line-clamp-2 text-[11px] leading-[14px] text-fg-muted"
+                data-testid="workflow-node-agent"
+                >{{ node.agentLine }}</span
+              >
+            }
+          </span>
+
           @for (exit of node.exits; track exit.text) {
             <span
-              class="exit-note"
+              class="pointer-events-none absolute flex h-4 -translate-x-1/2 items-center gap-1 px-1 text-[11px] leading-4 whitespace-nowrap"
               [class.text-on-danger-soft]="exit.outcome === 'fails'"
               [class.text-fg-muted]="exit.outcome === 'stops'"
               data-testid="workflow-node-exit"
-              [style.left.px]="exit.x"
-              [style.top.px]="exit.y"
+              [style.left.px]="exit.x - node.x"
+              [style.top.px]="exit.y - node.y"
             >
               <lucide-angular
                 [img]="exit.outcome === 'fails' ? CircleX : Square"
@@ -207,28 +184,159 @@
               />{{ exit.text }}
             </span>
           }
+
+          @if (node.step !== null) {
+            <span
+              class="kind-badge"
+              [attr.data-kind]="node.kind"
+              data-testid="workflow-node-kind"
+              >{{ node.kind === "agent" ? "LLM" : "CODE" }}</span
+            >
+          }
+
+          @if (s !== null) {
+            <span
+              class="status-badge"
+              [attr.data-status]="s"
+              data-testid="workflow-node-status"
+            >
+              <lucide-angular
+                [img]="statusIcons[s]"
+                [size]="12"
+                [class.animate-spin]="s === 'running'"
+                aria-hidden="true"
+              />
+              <span class="sr-only">{{ statusLabel(s) }}</span>
+            </span>
+          }
+        </button>
+
+        @for (port of node.ports; track port.kind) {
+          <span
+            class="port"
+            aria-hidden="true"
+            [style.left.px]="port.x"
+            [style.top.px]="port.y"
+          >
+            <span class="diamond"></span>
+            <span
+              class="port-label absolute top-2.5 left-0 -translate-x-1/2 text-[11px] leading-[14px] whitespace-nowrap text-fg-muted"
+              [attr.data-required]="port.kind === 'model' ? '' : null"
+              >{{ port.label }}</span
+            >
+          </span>
+        }
+
+        @for (sub of node.subNodes; track sub.id) {
+          <button
+            type="button"
+            class="sub-node"
+            [attr.data-kind]="sub.kind"
+            [attr.data-testid]="'workflow-subnode-' + sub.id"
+            [attr.aria-label]="subNodeLabel(node, sub)"
+            [attr.title]="sub.label"
+            [style.left.px]="sub.x"
+            [style.top.px]="sub.y"
+            [style.width.px]="sub.size"
+            [style.height.px]="sub.size"
+            (click)="onSubNodeClick(node.id)"
+          >
+            <span class="diamond top" aria-hidden="true"></span>
+            <lucide-angular
+              [img]="subIcons[sub.kind]"
+              [size]="20"
+              aria-hidden="true"
+            />
+            <span
+              class="pointer-events-none absolute top-[calc(100%+6px)] left-1/2 flex w-[116px] -translate-x-1/2 flex-col items-center text-center"
+              aria-hidden="true"
+            >
+              <span
+                class="node-title max-w-full truncate text-[12px] leading-4 font-medium text-fg-strong"
+                >{{ sub.label }}</span
+              >
+              @if (sub.subtitle) {
+                <span
+                  class="node-subtitle text-[11px] leading-[14px] text-fg-muted"
+                  >{{ sub.subtitle }}</span
+                >
+              }
+            </span>
+          </button>
         }
       }
-
-      @if (lastConnector().label) {
-        <span
-          class="connector-label"
-          [attr.data-testid]="'workflow-connector-label-' + lastConnector().id"
-          [style.left.px]="lastConnector().labelX"
-          [style.top.px]="lastConnector().labelY"
-          ><span class="sr-only">Passes on: </span>{{ lastConnector().label }}</span
-        >
-      }
-      <div
-        class="canvas-terminal"
-        data-testid="workflow-node-end"
-        [style.left.px]="end().x"
-        [style.top.px]="end().y"
-        [style.width.px]="end().width"
-        [style.height.px]="end().height"
-      >
-        End
-      </div>
     </div>
   </div>
+</div>
+
+<!-- Execute workflow, pinned to the canvas top-right -->
+<div class="absolute top-3 right-3 z-10">
+  <button
+    type="button"
+    class="btn btn-primary shadow-subtle"
+    data-testid="workflow-execute"
+    (click)="execute.emit()"
+  >
+    <lucide-angular [img]="Play" [size]="14" aria-hidden="true" />
+    <span>Execute workflow</span>
+  </button>
+</div>
+
+<!-- Zoom toolbar, pinned to the canvas bottom-left -->
+<div
+  role="toolbar"
+  aria-label="Canvas zoom"
+  data-testid="workflow-canvas-toolbar"
+  class="absolute bottom-3 left-3 z-10 flex items-center gap-0.5 rounded-[10px] border border-border bg-surface p-1 shadow-subtle"
+>
+  <button
+    type="button"
+    class="btn-icon"
+    aria-label="Fit to screen"
+    title="Fit to screen"
+    data-testid="workflow-zoom-fit"
+    [attr.aria-pressed]="autoFit()"
+    (click)="fit()"
+  >
+    <lucide-angular [img]="Maximize" [size]="16" />
+  </button>
+  <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true"></span>
+  <button
+    type="button"
+    class="btn-icon"
+    aria-label="Zoom in"
+    title="Zoom in"
+    data-testid="workflow-zoom-in"
+    [disabled]="zoom() >= MAX_ZOOM"
+    (click)="zoomIn()"
+  >
+    <lucide-angular [img]="ZoomIn" [size]="16" />
+  </button>
+  <button
+    type="button"
+    class="btn-icon"
+    aria-label="Zoom out"
+    title="Zoom out"
+    data-testid="workflow-zoom-out"
+    [disabled]="zoom() <= MIN_ZOOM"
+    (click)="zoomOut()"
+  >
+    <lucide-angular [img]="ZoomOut" [size]="16" />
+  </button>
+  <button
+    type="button"
+    class="btn-icon"
+    aria-label="Reset zoom"
+    title="Reset zoom"
+    data-testid="workflow-zoom-reset"
+    (click)="resetZoom()"
+  >
+    <lucide-angular [img]="RotateCcw" [size]="16" />
+  </button>
+  <span
+    data-testid="workflow-zoom-level"
+    aria-live="polite"
+    class="w-11 text-center text-[12px] font-medium text-fg tabular-nums"
+    >{{ zoomPercent() }}</span
+  >
 </div>
