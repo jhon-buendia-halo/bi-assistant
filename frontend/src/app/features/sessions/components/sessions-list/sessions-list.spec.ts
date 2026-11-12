@@ -46,8 +46,8 @@ describe('SessionsList', () => {
         name: 'Alpha',
         datasets: ['World Cup'],
         workflowRef: {
-          id: 'agent:rfp',
-          name: 'RFP Builder',
+          id: 'agent:report',
+          name: 'Report Builder',
           kind: 'agent',
           deleted: false,
         },
@@ -81,8 +81,8 @@ describe('SessionsList', () => {
     expect(rows[0].textContent).toContain('Alpha');
     const chip = (row: Element) =>
       row.querySelector('[data-testid="row-session-workflow"]') as HTMLElement;
-    expect(chip(rows[0]).textContent?.trim()).toBe('RFP Builder');
-    expect(chip(rows[0]).title).toBe('Workflow: RFP Builder');
+    expect(chip(rows[0]).textContent?.trim()).toBe('Report Builder');
+    expect(chip(rows[0]).title).toBe('Workflow: Report Builder');
     expect(rows[0].textContent).toContain('World Cup');
     expect(chip(rows[1]).textContent?.trim()).toBe('Assistant');
     expect(chip(rows[2]).textContent?.trim()).toBe(

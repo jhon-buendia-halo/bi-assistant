@@ -257,26 +257,26 @@ test('a chat saved before workflows names the workflow of its agent', async ({
 }) => {
   // Saved with an agent binding and no `workflowId` (past-chats R65).
   const id = seedPastChat(appDataDir, {
-    name: 'Saved RFP chat',
+    name: 'Saved readiness chat',
     datasets: [WORLD_CUP_DATASET],
-    agentKey: 'rfp',
-    agentName: 'RFP Builder',
+    agentKey: 'data-readiness',
+    agentName: 'Data Readiness Agent',
   });
   await page.reload();
 
   await openSessions(page);
-  const row = sessionRow(page, 'Saved RFP chat');
+  const row = sessionRow(page, 'Saved readiness chat');
   await expect(row.getByTestId('row-session-workflow')).toHaveText(
-    'RFP Builder',
+    'Data Readiness Agent',
   );
-  await row.getByRole('button', { name: /^Saved RFP chat/ }).click();
+  await row.getByRole('button', { name: /^Saved readiness chat/ }).click();
   await expect(page.locator('header').getByTestId('session-id')).toHaveText(
     `ID ${id.slice(0, 8)}`,
   );
   await expect(
     page.locator('header').getByText('Workflow', { exact: true }),
   ).toBeVisible();
-  await expect(headerWorkflow(page)).toHaveText('RFP Builder');
+  await expect(headerWorkflow(page)).toHaveText('Data Readiness Agent');
 });
 
 // ------------------------------------------------------------------ Runs

@@ -80,16 +80,16 @@ describe('sessionListWorkflow', () => {
     expect(
       sessionListWorkflow(
         session({
-          agentKey: 'rfp',
+          agentKey: 'report',
           workflowRef: {
-            id: 'agent:rfp',
-            name: 'RFP Builder',
+            id: 'agent:report',
+            name: 'Report Builder',
             kind: 'agent',
             deleted: false,
           },
         }),
       ),
-    ).toBe('RFP Builder');
+    ).toBe('Report Builder');
     expect(
       sessionListWorkflow(
         session({

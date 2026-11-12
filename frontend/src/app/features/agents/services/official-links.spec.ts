@@ -14,41 +14,41 @@ const SKILLS = [
   },
   { name: 'deep-analysis', loading: 'harness' as const, agents: ['assistant'] },
   {
-    name: 'rfp-client-renewal',
+    name: 'report-outline',
     loading: 'on-demand' as const,
-    agents: ['rfp'],
-    tools: ['list_clients', 'get_rfp'],
+    agents: ['report'],
+    tools: ['list_clients', 'get_report'],
   },
   {
-    name: 'rfp-package',
+    name: 'report-package',
     loading: 'on-demand' as const,
-    agents: ['rfp'],
-    tools: ['get_rfp'],
+    agents: ['report'],
+    tools: ['get_report'],
   },
 ];
 
-const RFP = {
-  key: 'rfp',
-  name: 'RFP Builder',
+const report = {
+  key: 'report',
+  name: 'Report Builder',
   toolDetails: [
     { name: 'list_clients', description: 'List the clients. Then more.' },
-    { name: 'get_rfp', description: 'Read one RFP record.' },
+    { name: 'get_report', description: 'Read one report record.' },
     { name: 'ask_clarification', description: 'Ask one question.' },
   ],
   prompt: {
     editable:
-      'You are the RFP Builder. Load [[skill:rfp-client-renewal]], then [[tool:list_clients]].',
+      'You are the Report Builder. Load [[skill:report-outline]], then [[tool:list_clients]].',
   },
 };
 
 describe('official-links (agents-evals R99, R105)', () => {
-  it("links the assistant's library tools and the RFP Builder's own tools", () => {
+  it("links the assistant's library tools and the Report Builder's own tools", () => {
     expect(officialLinkTools({ key: 'assistant', toolDetails: [] })).toBe(
       LINKABLE_TOOLS,
     );
-    expect(officialLinkTools(RFP)).toEqual([
+    expect(officialLinkTools(report)).toEqual([
       { kind: 'tool', name: 'list_clients', description: 'List the clients.' },
-      { kind: 'tool', name: 'get_rfp', description: 'Read one RFP record.' },
+      { kind: 'tool', name: 'get_report', description: 'Read one report record.' },
       {
         kind: 'tool',
         name: 'ask_clarification',
@@ -61,31 +61,31 @@ describe('official-links (agents-evals R99, R105)', () => {
     expect(officialLinkSkills(SKILLS, 'assistant').map((s) => s.name)).toEqual([
       'curated-knowledge',
     ]);
-    expect(officialLinkSkills(SKILLS, 'rfp').map((s) => s.name)).toEqual([
-      'rfp-client-renewal',
-      'rfp-package',
+    expect(officialLinkSkills(SKILLS, 'report').map((s) => s.name)).toEqual([
+      'report-outline',
+      'report-package',
     ]);
-    expect(officialLinkSkills(null, 'rfp')).toEqual([]);
+    expect(officialLinkSkills(null, 'report')).toEqual([]);
   });
 
-  it("draws the RFP Builder's graph: its skills with the tools each links, and every tool, always on", () => {
-    const graph = officialGraphInput(RFP, SKILLS);
+  it("draws the Report Builder's graph: its skills with the tools each links, and every tool, always on", () => {
+    const graph = officialGraphInput(report, SKILLS);
     expect(graph.skills).toEqual([
-      { name: 'rfp-client-renewal', tools: ['list_clients', 'get_rfp'] },
-      { name: 'rfp-package', tools: ['get_rfp'] },
+      { name: 'report-outline', tools: ['list_clients', 'get_report'] },
+      { name: 'report-package', tools: ['get_report'] },
     ]);
     expect(graph.toolLinks).toEqual([
       {
         name: 'list_clients',
         status: 'always-on',
-        linkedVia: { instructions: true, skills: ['rfp-client-renewal'] },
+        linkedVia: { instructions: true, skills: ['report-outline'] },
       },
       {
-        name: 'get_rfp',
+        name: 'get_report',
         status: 'always-on',
         linkedVia: {
           instructions: false,
-          skills: ['rfp-client-renewal', 'rfp-package'],
+          skills: ['report-outline', 'report-package'],
         },
       },
       {
@@ -111,9 +111,9 @@ describe('official-links (agents-evals R99, R105)', () => {
         '## Tools — generated from the tools the assistant gets',
     });
     expect(
-      officialPromptCopy({ key: 'rfp', name: 'RFP Builder' })
+      officialPromptCopy({ key: 'report', name: 'Report Builder' })
         .generatedToolsNote,
-    ).toBe('## Tools — generated from the tools the RFP Builder gets');
+    ).toBe('## Tools — generated from the tools the Report Builder gets');
   });
 
   it('names Questions to Insights v2 without an article and offers tools only (R107)', () => {

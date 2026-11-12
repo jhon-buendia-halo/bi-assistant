@@ -12,7 +12,6 @@ import {
   dispatchAgentEvent,
   readEventStream,
 } from '../../sessions/services/sessions-api.service';
-import { PanelFileContent } from '../../sessions/models/session.model';
 import {
   WorkflowRun,
   WorkflowRunRequest,
@@ -199,13 +198,6 @@ export class WorkflowRunsApiService {
     );
   }
 
-  /** A run's file panel item with its text (api.md 125), as a session's (106). */
-  panelItemFile(runId: string, itemId: string): Observable<PanelFileContent> {
-    return this.http.get<PanelFileContent>(
-      `${API_BASE_URL}/workflow-runs/${encodeURIComponent(runId)}/panel-items/${encodeURIComponent(itemId)}/file`,
-    );
-  }
-
   /**
    * Rate the run's answer (api.md 128): a thumbs-up saves a verified query,
    * a thumbs-down removes it. Answers the updated run.
@@ -217,32 +209,6 @@ export class WorkflowRunsApiService {
     return this.http.post<{ ok: boolean; message: string; run: WorkflowRun }>(
       `${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}/answer/feedback`,
       { rating },
-    );
-  }
-
-  /**
-   * A run's RFP package as a zip, or one of its files when `file` is given;
-   * `draft` serves the draft package (api.md 127, as 105).
-   */
-  downloadRfpPackage(
-    runId: string,
-    rfpId: string,
-    file?: string,
-    draft?: boolean,
-  ): Observable<Blob> {
-    return this.http.get(
-      `${API_BASE_URL}/workflow-runs/${encodeURIComponent(runId)}/rfp-packages/${encodeURIComponent(rfpId)}/download`,
-      {
-        responseType: 'blob',
-        ...(file || draft
-          ? {
-              params: {
-                ...(file ? { file } : {}),
-                ...(draft ? { draft: 'true' } : {}),
-              },
-            }
-          : {}),
-      },
     );
   }
 

@@ -37,7 +37,7 @@ export interface PastChatVisual {
 export interface PastChatSeed {
   name: string;
   datasets?: string[];
-  /** A built-in agent the chat was bound to, as an older RFP or readiness chat. */
+  /** A built-in agent the chat was bound to, as an older readiness chat. */
   agentKey?: string;
   agentName?: string;
   /** A user agent the chat was started from. */

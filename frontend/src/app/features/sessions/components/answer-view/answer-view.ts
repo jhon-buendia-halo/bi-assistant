@@ -34,7 +34,6 @@ import {
   MessageFeedback,
   ReadinessReportRef,
   ReasoningStep,
-  RfpPackage,
   ToolDataRecord,
   VisualEvent,
 } from '../../models/session.model';
@@ -47,12 +46,6 @@ import { ToastService } from '../../../../core/toast/toast.service';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import { ReadinessCard } from '../session-chat/readiness-card';
 
-/** One download of an RFP package card: the zip, or one of its files. */
-export interface RfpDownloadRequest {
-  pkg: RfpPackage;
-  file?: string;
-}
-
 /** What the clarification card's **Skip** answers. */
 export const SKIP_CLARIFICATION_ANSWER =
   'Skip — proceed with your best judgment.';
@@ -60,7 +53,7 @@ export const SKIP_CLARIFICATION_ANSWER =
 /**
  * One assistant answer and its provenance (ui.md 4.12; 1.23.13): the
  * Markdown body, the reasoning, ontology and data blocks, the badges and
- * rating, the clarification card and the report, RFP package, readiness and
+ * rating, the clarification card and the report, readiness and
  * visual event cards. It holds no session: everything that reaches the
  * backend is an output, so the chat, a run result and a past chat can host
  * it alike.
@@ -102,7 +95,7 @@ export class AnswerView {
 
   /** The assistant message to render (not a user message, not an error). */
   readonly message = input.required<ChatMessage>();
-  /** Element id of the report and RFP package cards (the chat's `msg-<i>`). */
+  /** Element id of the report card (the chat's `msg-<i>`). */
   readonly anchorId = input<string | null>(null);
   /** Only the latest clarification card can be answered. */
   readonly latest = input(false);
@@ -117,8 +110,6 @@ export class AnswerView {
   readonly visualGenerating = input(false);
   /** This message's report is being downloaded. */
   readonly reportDownloading = input(false);
-  /** `rfpId/file` the host is downloading (`rfpId/` for the zip), if any. */
-  readonly rfpDownloading = input<string | null>(null);
 
   /** A clarification answer: an option label, a custom answer or Skip. */
   readonly optionPicked = output<string>();
@@ -127,7 +118,6 @@ export class AnswerView {
   readonly viewVisual = output<VisualEvent>();
   readonly openScorecard = output<ReadinessReportRef>();
   readonly downloadReport = output<AnalysisReport>();
-  readonly downloadRfp = output<RfpDownloadRequest>();
 
   /** Inline custom answer inside the clarification card. */
   readonly customAnswerOpen = signal(false);
@@ -176,11 +166,6 @@ export class AnswerView {
   requestVisualization(): void {
     if (this.busy() || this.visualGenerating()) return;
     this.generateVisual.emit();
-  }
-
-  /** Whether the package holds the rendered `rfp.pdf`. */
-  hasRfpPdf(pkg: RfpPackage): boolean {
-    return pkg.files.some((f) => f.name === 'rfp.pdf');
   }
 
   copyMessage(content: string): void {

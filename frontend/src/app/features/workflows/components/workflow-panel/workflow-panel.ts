@@ -10,7 +10,6 @@ import {
 import {
   Brain,
   CircleCheck,
-  CornerDownRight,
   Database,
   Loader2,
   LucideAngularModule,
@@ -75,7 +74,6 @@ const FORM_CONTROLS =
 export class WorkflowPanel {
   protected readonly Brain = Brain;
   protected readonly CircleCheck = CircleCheck;
-  protected readonly CornerDownRight = CornerDownRight;
   protected readonly Database = Database;
   protected readonly Loader2 = Loader2;
   protected readonly MessageSquareReply = MessageSquareReply;
@@ -137,12 +135,6 @@ export class WorkflowPanel {
   }
 
   protected readonly stepStatusLabel = runStepStatusLabel;
-
-  /** The RFP Builder draws no visuals (rfp R15), in a run as in a chat. */
-  protected readonly offersVisuals = computed(() => {
-    const workflow = this.designer.workflow();
-    return workflow === null || workflow.id !== 'agent:rfp';
-  });
 
   protected readonly runStatus = computed(() => {
     const result = this.designer.runResult();
@@ -270,15 +262,5 @@ export class WorkflowPanel {
 
   protected sendFollowUp(): void {
     this.designer.followUp(this.designer.followUpText());
-  }
-
-  /** RFP Continue (plan 4.3): the cleared message takes the focus for the reply. */
-  protected continueRun(): void {
-    this.designer.continueRun();
-    const field = this.designer.questionField();
-    if (field === null) return;
-    setTimeout(() =>
-      document.getElementById(this.inputId(field))?.focus(),
-    );
   }
 }

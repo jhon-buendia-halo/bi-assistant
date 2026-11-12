@@ -22,10 +22,10 @@ const V2_DESCRIPTION =
 const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
 /**
  * The Official cards in hub order, alphabetical by name ("Data Readiness
- * Agent", "Questions to Insights Assistant", "Questions to Insights v2",
- * "RFP Builder"; agents-evals R1, R107).
+ * Agent", "Questions to Insights Assistant", "Questions to Insights v2";
+ * agents-evals R1, R107).
  */
-const OFFICIAL_KEYS = ['data-readiness', 'assistant', V2_KEY, 'rfp'];
+const OFFICIAL_KEYS = ['data-readiness', 'assistant', V2_KEY];
 const HEALTH = 'Health plan analyst';
 const HEALTH_DESCRIPTION = 'Answers questions about the 2026 health plan';
 const CLAIMS = 'Claims triage';
@@ -186,8 +186,8 @@ test('filters limit the hub to one kind of agent', async ({ page }) => {
   expect(await sectionIds(page)).toEqual(['mine']);
 
   await filter(page, 'Official').click();
-  // The assistant, Questions to Insights v2, the RFP Builder, the Data
-  // Readiness Agent are Official; every card shows, alphabetical by name
+  // The assistant, Questions to Insights v2 and the Data Readiness Agent
+  // are Official; every card shows, alphabetical by name
   // (R1-R3, R107).
   await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
   await expect(cards(page)).toHaveCount(OFFICIAL_KEYS.length);
@@ -422,7 +422,7 @@ test(
     const official = section(page, 'official');
     await scenarioStep(
       page,
-      'Then the Official section shows "Questions to Insights Assistant", "Questions to Insights v2", "Data Readiness Agent" and "RFP Builder"',
+      'Then the Official section shows "Questions to Insights Assistant", "Questions to Insights v2" and "Data Readiness Agent"',
       async () => {
         await expect(
           official.getByTestId('agent-card-assistant'),
@@ -432,7 +432,6 @@ test(
           ['assistant', ASSISTANT],
           [V2_KEY, V2],
           ['data-readiness', 'Data Readiness Agent'],
-          ['rfp', 'RFP Builder'],
         ]) {
           const card = official.getByTestId(`agent-card-${key}`);
           await expect(card).toContainText(name);
@@ -603,10 +602,10 @@ test(
     );
     await scenarioStep(
       page,
-      'When I open the "RFP Builder" agent',
+      'When I open the "Data Readiness Agent" agent',
       async () => {
         await openHub(page);
-        await openAgent(page, 'rfp', 'RFP Builder');
+        await openAgent(page, 'data-readiness', 'Data Readiness Agent');
       },
     );
     await scenarioStep(
@@ -619,10 +618,10 @@ test(
           0,
         );
         await expect(page.getByTestId('agent-prompt-view')).toContainText(
-          'You are the RFP Builder',
+          'You are the Data Readiness Agent',
         );
-        await expect(page.getByTestId('agent-used-in-agent:rfp')).toHaveText(
-          'RFP Builder',
+        await expect(page.getByTestId('agent-used-in-agent:data-readiness')).toHaveText(
+          'Data Readiness Agent',
         );
       },
     );

@@ -7,7 +7,7 @@ import {
   ReadinessReportRef,
   VisualEvent,
 } from '../../models/session.model';
-import { AnswerView, RfpDownloadRequest } from './answer-view';
+import { AnswerView } from './answer-view';
 
 /**
  * The answer view renders one assistant answer (1.23.13). These specs moved
@@ -463,62 +463,15 @@ describe('AnswerView', () => {
       expect(button(el, '[aria-label="Download report"]').disabled).toBeTrue();
     });
 
-    it('renders the RFP package card and emits each download', () => {
-      const pkg = {
-        rfpId: 'rfp-1',
-        title: 'Acme RFP',
-        files: [
-          { name: 'rfp.md', bytes: 10 },
-          { name: 'rfp.pdf', bytes: 20 },
-          { name: 'manifest.json', bytes: 5 },
-        ],
-        exportedAt: '2026-01-01T00:00:02.000Z',
-      };
+    it('renders an old message that carries an RFP package as plain text', () => {
       const el = render({
         role: 'assistant',
-        content: 'Package ready.',
-        at: '2026-01-01T00:00:02.000Z',
-        rfpPackage: pkg,
-      });
-      const requests: RfpDownloadRequest[] = [];
-      fixture.componentInstance.downloadRfp.subscribe((r) => requests.push(r));
-      const card = el.querySelector('[data-testid="rfp-package-card"]')!;
-      expect(card.textContent).toContain('RFP package · 3 files');
-      expect(card.querySelectorAll('[data-testid="rfp-package-file"]').length).toBe(2);
-
-      button(el, '[data-testid="rfp-package-download"]').click();
-      button(el, '[data-testid="rfp-package-download-pdf"]').click();
-      el.querySelectorAll<HTMLButtonElement>(
-        '[data-testid="rfp-package-file"]',
-      )[0].click();
-      expect(requests).toEqual([
-        { pkg },
-        { pkg, file: 'rfp.pdf' },
-        { pkg, file: 'rfp.md' },
-      ]);
-    });
-
-    it('disables every RFP download while one runs', () => {
-      const el = render(
-        {
-          role: 'assistant',
-          content: '',
-          at: 'x',
-          rfpPackage: {
-            rfpId: 'rfp-1',
-            title: 'Acme RFP',
-            files: [{ name: 'rfp.md', bytes: 10 }],
-            exportedAt: 'x',
-          },
-        },
-        { rfpDownloading: 'rfp-1/rfp.md' },
-      );
-      expect(
-        button(el, '[data-testid="rfp-package-download"]').disabled,
-      ).toBeTrue();
-      expect(
-        el.querySelector('[data-testid="rfp-package-download-pdf"]'),
-      ).toBeNull();
+        content: 'The package is ready.',
+        at: 'x',
+        rfpPackage: { rfpId: 'rfp-1', title: 'Acme', files: [] },
+      } as ChatMessage);
+      expect(el.textContent).toContain('The package is ready.');
+      expect(el.querySelector('[data-testid="rfp-package-card"]')).toBeNull();
     });
 
     it('renders a visual event card and emits View', () => {

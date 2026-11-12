@@ -124,7 +124,7 @@ export function skillLinked(instructions: string, name: string): boolean {
 /**
  * The agents every user agent builds on: their built-in skills are the ones
  * "included in every agent" (agents-evals R75). An Official agent's own
- * skills, such as the RFP Builder's stages, are not.
+ * skills are not.
  */
 const EVERY_AGENT_SKILL_OWNERS = new Set(['assistant', 'visualization']);
 

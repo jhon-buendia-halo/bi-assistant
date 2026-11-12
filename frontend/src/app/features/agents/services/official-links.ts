@@ -9,7 +9,7 @@ import {
 /**
  * The links of an Official agent's shared prompt (agents-evals R99, R105;
  * agents.md 2.1, 2.8): the assistant links the library tools and its
- * built-in skills, the RFP Builder its own tools and its stage skills. Links
+ * built-in skills, other Official agents their own tools and skills. Links
  * are mentions: every tool of the agent stays on.
  */
 
@@ -92,7 +92,7 @@ const ASSISTANT_V2_KEY = 'assistant-v2';
 
 /**
  * How the copy of the built-in prompt editor names the agent: `the assistant`,
- * `the RFP Builder`, `Questions to Insights v2`.
+ * `the Data Readiness Agent`, `Questions to Insights v2`.
  */
 function agentPhrase(agent: { key: string; name: string }): string {
   if (agent.key === ASSISTANT_KEY) return 'the assistant';

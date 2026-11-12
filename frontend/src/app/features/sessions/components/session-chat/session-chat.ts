@@ -13,7 +13,6 @@ import { LucideAngularModule, Copy } from 'lucide-angular';
 import { SessionsApiService } from '../../services/sessions-api.service';
 import {
   AnalysisReport,
-  RfpPackage,
   Session,
   PanelItemEvent,
   ReadinessPanelItem,
@@ -32,7 +31,7 @@ import { AnswerView } from '../answer-view/answer-view';
  * A past chat (past-chats R66): its transcript, read-only. Since 1.23.22
  * nothing starts or continues a chat, so there is no composer, no rating and
  * no clarification answer; the reader can still open a visual, a scorecard,
- * download a report or an RFP package, and copy a question.
+ * download a report, and copy a question.
  */
 @Component({
   selector: 'app-session-chat',
@@ -54,8 +53,6 @@ export class SessionChat {
   readonly messages = computed(() => this.session().messages);
   /** Job id whose report is being downloaded right now. */
   readonly reportDownloading = signal<string | null>(null);
-  /** `rfpId/file` being downloaded right now (`rfpId/` for the zip). */
-  readonly rfpDownloading = signal<string | null>(null);
 
   /** Chat-history navigator (Conductor-style tick strip). */
   readonly historyOpen = signal(false);
@@ -126,38 +123,6 @@ export class SessionChat {
             reportId: ref.reportId,
           },
     });
-  }
-
-  /** Save an RFP package's zip, or one of its files (ui.md 4.12). */
-  downloadRfpPackage(pkg: RfpPackage, file?: string): void {
-    if (this.rfpDownloading()) return;
-    this.rfpDownloading.set(`${pkg.rfpId}/${file ?? ''}`);
-    this.api
-      .downloadRfpPackage(this.session().id, pkg.rfpId, file, pkg.draft)
-      .subscribe({
-        next: (blob) => {
-          this.rfpDownloading.set(null);
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          // The server's name for the zip (api.md #105): `link.download` wins
-          // over its Content-Disposition, so build the same one here.
-          link.download = file
-            ? (file.split('/').pop() ?? file)
-            : `rfp-${slug(pkg.title) || pkg.rfpId.slice(0, 8)}${pkg.draft ? '-draft' : ''}.zip`;
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 0);
-          this.toast.success('RFP package downloaded');
-        },
-        error: (err) => {
-          this.rfpDownloading.set(null);
-          this.toast.error(
-            err?.error?.message ?? 'RFP package download failed',
-          );
-        },
-      });
   }
 
   /** Copy a user message (an answer's copy button lives in `AnswerView`). */

@@ -101,14 +101,14 @@ describe('AgentDetail Used in and tabs (agents-evals R5, R109)', () => {
 
   it('opens an Official agent on System Prompt, with no Chat Box tab and no Start chat', () => {
     const el = open(
-      agent('rfp', 'official', [{ id: 'agent:rfp', name: 'RFP Builder' }]),
+      agent('report', 'official', [{ id: 'agent:report', name: 'Report Builder' }]),
     );
     expect(fixture.componentInstance.activeTab()).toBe('prompt');
     expect(byId(el, 'agent-tab-chat')).toBeNull();
     expect(byId(el, 'agent-tab-prompt')).not.toBeNull();
     expect(byId(el, 'agent-start-chat')).toBeNull();
-    expect(byId(el, 'agent-used-in-agent:rfp')?.textContent?.trim()).toBe(
-      'RFP Builder',
+    expect(byId(el, 'agent-used-in-agent:report')?.textContent?.trim()).toBe(
+      'Report Builder',
     );
   });
 

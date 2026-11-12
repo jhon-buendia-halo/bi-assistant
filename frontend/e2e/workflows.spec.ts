@@ -15,8 +15,6 @@ const V2 = 'Questions to Insights v2';
 const V2_ID = 'qti-v2-turn';
 const V2_STEPS = ['Receive question', 'Load catalog', 'Analyse', 'Wrap up'];
 const HEALTH = 'Health plan analyst';
-const RFP_REQUIREMENT =
-  'Load the "Intellify RFP API" sample in Settings → Testing Data first';
 const SEQ = 'Sequential test workflow';
 const SEQ_ID = 'seq-text-demo';
 const SEQ_STEPS = ['Clean text', 'Count words', 'Format result'];
@@ -27,7 +25,6 @@ const OFFICIAL = [
   [SEQ_ID, SEQ],
   ['deep-analysis', 'Deep analysis'],
   ['agent:data-readiness', 'Data Readiness Agent'],
-  ['agent:rfp', 'RFP Builder'],
 ] as const;
 
 /** The Background's published user agent (a user agent's key is its id). */
@@ -126,7 +123,7 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see "Assistant", "Questions to Insights v2", "Data Readiness Agent" and "RFP Builder" under Official',
+        'Then I see "Assistant", "Questions to Insights v2" and "Data Readiness Agent" under Official',
         async () => {
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
@@ -216,35 +213,6 @@ test.describe('Feature: Workflows', () => {
     },
   );
 
-  test('A workflow that cannot run says why', async ({ page }) => {
-    await test.step('When I open Workflows', async () => {
-      await openWorkflows(page);
-    });
-    await test.step(
-      'Then the "RFP Builder" card has Run and no Start chat',
-      async () => {
-        const card = page.getByTestId('workflow-card-agent:rfp');
-        await expect(
-          card.getByRole('button', { name: 'Run RFP Builder' }),
-        ).toBeVisible();
-        await expect(card.getByRole('button', { name: /Start chat/ })).toHaveCount(0);
-      },
-    );
-    await test.step('When I open "RFP Builder" and click Execute', async () => {
-      await openWorkflow(page, 'agent:rfp', 'RFP Builder');
-      await page.getByTestId('workflow-execute').click();
-    });
-    await test.step(
-      'Then its Run panel writes the requirement and its Execute is disabled',
-      async () => {
-        await expect(page.getByTestId('workflow-run-requirement')).toHaveText(
-          RFP_REQUIREMENT,
-        );
-        await expect(page.getByTestId('workflow-run')).toBeDisabled();
-      },
-    );
-  });
-
   test("Workflows can't be edited", async ({ page }) => {
     const editing = /^(edit|new|delete|remove|add|move|reorder|duplicate|rename|save)\b/i;
     await test.step('When I open Workflows', async () => {
@@ -284,15 +252,15 @@ test.describe('Feature: Workflows', () => {
       await openWorkflows(page);
     });
     const search = page.getByTestId('workflow-search');
-    await test.step('When I search for "rfp"', async () => {
+    await test.step('When I search for "readiness"', async () => {
       await expect(search).toHaveAttribute(
         'placeholder',
         'Search workflows by name or description',
       );
-      await search.fill('rfp');
+      await search.fill('readiness');
     });
-    await test.step('Then only the "RFP Builder" card is shown', async () => {
-      await expect(page.getByTestId('workflow-card-agent:rfp')).toBeVisible();
+    await test.step('Then only the "Data Readiness Agent" card is shown', async () => {
+      await expect(page.getByTestId('workflow-card-agent:data-readiness')).toBeVisible();
       await expect(page.locator('[data-testid^="workflow-card-"]')).toHaveCount(1);
       await expect(section(page, 'mine')).toHaveCount(0);
     });
@@ -712,9 +680,9 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await scan('Questions to Insights v2 page, Workflow state panel on Analyse');
 
   await backToWorkflows(page);
-  await openWorkflow(page, 'agent:rfp', 'RFP Builder');
+  await openWorkflow(page, 'agent:data-readiness', 'Data Readiness Agent');
   await expect(page.getByTestId('workflow-execute')).toBeVisible();
-  await scan('RFP Builder page');
+  await scan('Data Readiness Agent page');
 
   await backToWorkflows(page);
   await openSeqFromRun(page);

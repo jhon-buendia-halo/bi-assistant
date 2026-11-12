@@ -17,25 +17,25 @@ function builtIn(
   return {
     key,
     id: key,
-    name: key === 'rfp' ? 'RFP Builder' : 'SQL Fixer',
+    name: key === 'report' ? 'Report Builder' : 'SQL Fixer',
     description: '',
     tools: [],
     kind,
     status: 'builtin',
     instructions: 'SERVED',
     toolDetails:
-      key === 'rfp'
+      key === 'report'
         ? [
             { name: 'list_clients', description: 'List clients.', inputs: [] },
-            { name: 'get_rfp', description: 'Read an RFP.', inputs: [] },
+            { name: 'get_report', description: 'Read an report.', inputs: [] },
           ]
         : [],
     memory: null,
     model: null,
     prompt: {
       editable:
-        key === 'rfp'
-          ? 'You are the RFP Builder. Load [[skill:rfp-client-renewal]], then read the RFP with [[tool:get_rfp]].'
+        key === 'report'
+          ? 'You are the Report Builder. Load [[skill:report-outline]], then read the report with [[tool:get_report]].'
           : 'Fix it.',
       shipped: '',
       modified: false,
@@ -74,10 +74,10 @@ describe('AgentDetail Graph tab (agents-evals R88, R105)', () => {
       req.flush({
         skills: [
           {
-            name: 'rfp-client-renewal',
+            name: 'report-outline',
             description: 'Stage 1.',
             loading: 'on-demand',
-            agents: ['rfp'],
+            agents: ['report'],
             tools: ['list_clients'],
           },
           {
@@ -94,23 +94,23 @@ describe('AgentDetail Graph tab (agents-evals R88, R105)', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  it("draws the RFP Builder's links: its stage skill, the tools the skill links, and its tools", () => {
-    const el = open(builtIn('rfp', 'official', true));
+  it("draws the Report Builder's links: its stage skill, the tools the skill links, and its tools", () => {
+    const el = open(builtIn('report', 'official', true));
     expect(el.querySelector('[data-testid="agent-graph"]')).not.toBeNull();
     expect(el.textContent).not.toContain('This agent has no links');
     const text = el.querySelector('[data-testid="agent-graph"]')!.textContent;
-    expect(text).toContain('rfp-client-renewal');
+    expect(text).toContain('report-outline');
     expect(text).toContain('list_clients');
-    expect(text).toContain('get_rfp');
+    expect(text).toContain('get_report');
     expect(text).toContain(
-      'The instructions link the rfp-client-renewal skill',
+      'The instructions link the report-outline skill',
     );
-    expect(text).toContain('The instructions link the get_rfp tool');
+    expect(text).toContain('The instructions link the get_report tool');
     // The stage skill's body links its tools (api.md 99 `tools`).
     expect(text).toContain(
-      'The rfp-client-renewal skill links the list_clients tool',
+      'The report-outline skill links the list_clients tool',
     );
-    // The assistant's skill is not the RFP Builder's.
+    // The assistant's skill is not the Report Builder's.
     expect(text).not.toContain('curated-knowledge');
   });
 
