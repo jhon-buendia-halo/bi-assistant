@@ -49,6 +49,11 @@ import {
   storyTitle,
   toPosix,
 } from './qa-lib.mjs';
+import { ARCHIVE_FILE, joinRoadmaps } from './roadmap-archive-lib.mjs';
+
+// roadmap.md and roadmap-archive.md together: an archived story is still found (roadmap 1.23.30).
+const readRoadmaps = () =>
+  joinRoadmaps(...['roadmap.md', ARCHIVE_FILE].map((f) => (fs.existsSync(path.join(root, f)) ? fs.readFileSync(path.join(root, f), 'utf8') : null)));
 
 const IS_WIN = process.platform === 'win32';
 
@@ -421,7 +426,7 @@ async function main() {
     const failedBeforeDemo = steps.some((s) => s.status === 'failed');
     if (noDemo) {
       leaveLane();
-      const roadmap = fs.readFileSync(path.join(root, 'roadmap.md'), 'utf8');
+      const roadmap = readRoadmaps();
       fs.writeFileSync(path.join(evidenceDir, 'demo.txt'), renderDemoTxt(id, storyTitle(roadmap, id), steps, { noDemo: true }));
       console.log(`  demo: ${rel(path.join(evidenceDir, 'demo.txt'))} (--no-demo, no video recorded)`);
     } else if (demoSpecs.length) {
@@ -450,7 +455,7 @@ async function main() {
       }
     } else {
       leaveLane();
-      const roadmap = fs.readFileSync(path.join(root, 'roadmap.md'), 'utf8');
+      const roadmap = readRoadmaps();
       fs.writeFileSync(path.join(evidenceDir, 'demo.txt'), renderDemoTxt(id, storyTitle(roadmap, id), steps));
       console.log(`  demo: ${rel(path.join(evidenceDir, 'demo.txt'))} (no UI scenario tagged @story-${id})`);
     }
