@@ -1,13 +1,43 @@
 import { AgentWorkflow } from '../../agents/services/agents-api.service';
+import {
+  ChatMessage,
+  PanelItem,
+  SessionAgent,
+  SessionVisualization,
+  WorkflowView,
+} from '../../sessions/models/session.model';
 
-/** One field of a run workflow's input, defined in code (api.md 116). */
+/** The control a run form shows for a field (api.md 116). */
+export type WorkflowInputFieldType =
+  | 'text'
+  | 'textarea'
+  | 'number'
+  /** A checkbox; absent means false (or its default). */
+  | 'boolean'
+  /** One or more dataset names. */
+  | 'datasets'
+  /** Exactly one dataset name. */
+  | 'dataset';
+
+/** One field of a workflow's input, defined in code (api.md 116). */
 export interface WorkflowInputField {
   name: string;
   label: string;
-  type: 'text' | 'textarea' | 'number';
+  type: WorkflowInputFieldType;
   required: boolean;
   placeholder?: string;
+  /** One line under the control. */
+  help?: string;
+  /** The value of a field that is missing or empty. */
+  default?: string | number | boolean;
+  /** 'dataset' / 'datasets': only datasets bound to these kinds. */
+  datasourceKinds?: ('postgres' | 'databricks' | 'rest')[];
+  /** Set by the app (the RFP Builder's Continue), never rendered as a control. */
+  hidden?: boolean;
 }
+
+/** One value of a run's input (api.md 118). */
+export type WorkflowInputValue = string | number | boolean | string[];
 
 /**
  * One workflow of the catalogue, as `GET /workflows` lists it (api.md 116;
@@ -41,6 +71,8 @@ export interface WorkflowSummary {
   starterQuestions: string[];
   /** Why a chat can't start now; absent when it can. */
   chatRequirement?: string;
+  /** Why a run can't start now; absent when it can (api.md 116). */
+  runRequirement?: string;
 }
 
 /**
@@ -51,23 +83,59 @@ export interface WorkflowDetail extends WorkflowSummary {
   steps: AgentWorkflow['steps'];
 }
 
-/** One step of a run, in the workflow's order (api.md 118). */
-export interface WorkflowRunStepResult {
+/** A step's status in a streamed run (api.md 3.6 `step`). */
+export type WorkflowRunStepStatus =
+  | 'running'
+  | 'success'
+  | 'failed'
+  | 'skipped'
+  | 'stopped';
+
+/** One `step` event of the run stream, or a step of a stored run (api.md 3.6). */
+export interface WorkflowRunStep {
   id: string;
   title: string;
-  status: 'success' | 'failed' | 'skipped';
+  status: WorkflowRunStepStatus;
   output?: Record<string, unknown>;
+  outputTruncated?: true;
   error?: string;
 }
 
+/** The body of `POST /workflows/:id/runs/stream` (api.md 118, 119). */
+export interface WorkflowRunRequest {
+  input: Record<string, WorkflowInputValue>;
+  context?: { fromRunId: string };
+}
+
 /**
- * What `POST /workflows/:id/runs` answers (api.md 118). Copied from the
- * backend's `WorkflowRunResult` (backend/src/mastra/workflows/workflow-run.ts).
+ * A stored run (api.md 3.6 `WorkflowRun`, 121), as `done.run` carries it.
+ * Copied from api.md, not from the backend.
  */
-export interface WorkflowRunResult {
+export interface WorkflowRun {
+  id: string;
   workflowId: string;
-  status: 'success' | 'failed';
-  steps: WorkflowRunStepResult[];
+  workflowName: string;
+  input: Record<string, WorkflowInputValue>;
+  context?: { fromRunId: string };
+  status: 'running' | 'success' | 'failed' | 'stopped';
+  steps: WorkflowRunStep[];
   output?: Record<string, unknown>;
   error?: string;
+  /** Agent workflows: the user message the agent received. */
+  question?: string;
+  /** Agent workflows: the persisted answer; absent when it stopped or failed first. */
+  answer?: ChatMessage;
+  datasets: string[];
+  agentKey?: string;
+  agentId?: string;
+  agentName?: string;
+  agent?: SessionAgent;
+  rfpId?: string;
+  panelItems?: PanelItem[];
+  visualizations?: SessionVisualization[];
+  workflow?: WorkflowView;
+  startedAt: string;
+  finishedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }

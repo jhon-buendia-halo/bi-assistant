@@ -2,7 +2,7 @@
 
 Every chat runs a **workflow**: a fixed sequence of steps defined in code, each one deterministic code or a call to an agent. The app ships two kinds: **code-defined workflows** (today *Questions to Insights v2*'s four-step turn) and a **one-step workflow** for each agent a chat can run that has no workflow of its own (the assistant, the RFP Builder, the Data Readiness Agent and every Live user agent). The workflow catalogue lists them all, says which agents each one calls, and is where a chat starts. Agents stay the building blocks that workflow steps call: workflows → agents → skills → tools. Workflows are read-only: the app never creates, edits or deletes one (ADR-0040).
 
-Since 2026-11-11 (ADR-0040 amendment) a workflow also has a **trigger**: a **chat workflow** runs on every message of a chat (every workflow above), and a **run workflow** runs once on a typed input defined in code and shows each step's result on its page, with no chat. The first run workflow is the **Sequential test workflow** (`seq-text-demo`), three code steps and no LLM. Since 2026-11-11 chats are being retired (ADR-0041): every workflow will run on its input. From story 1.23.12 the agent workflows (the Assistant, Questions to Insights v2, the Data Readiness Agent, the RFP Builder and each user agent's) also declare a typed input and run on it, one agent turn per run, with the same answer a chat turn gives; they stay chat workflows until 1.23.22. Since story 1.23.14 every run is stored: it is listed, reopened with its result and files, and deleted with them. Since story 1.23.10 a workflow's page is a designer: its graph on a canvas, its configuration, run and code in the right panel.
+Since 2026-11-11 (ADR-0040 amendment) a workflow also has a **trigger**: a **chat workflow** runs on every message of a chat (every workflow above), and a **run workflow** runs once on a typed input defined in code and shows each step's result on its page, with no chat. The first run workflow is the **Sequential test workflow** (`seq-text-demo`), three code steps and no LLM. Since 2026-11-11 chats are being retired (ADR-0041): every workflow will run on its input. From story 1.23.12 the agent workflows (the Assistant, Questions to Insights v2, the Data Readiness Agent, the RFP Builder and each user agent's) also declare a typed input and run on it, one agent turn per run, with the same answer a chat turn gives; they stay chat workflows until 1.23.22. Since story 1.23.14 every run is stored: it is listed, reopened with its result and files, and deleted with them. Since story 1.23.10 a workflow's page is a designer: its graph on a canvas, its configuration, run and code in the right panel. Since story 1.23.15 the Assistant, Questions to Insights v2 and each user agent's workflow also run from their page: the Run tab streams the run step by step and shows the answer with its provenance, and the user can stop it, follow up on it and answer its clarifying question.
 
 ## Concepts
 
@@ -39,10 +39,13 @@ Runs of agent workflows (ADR-0041; backend only in 1.23.12)
 - R16. A streamed run SHALL report, in order: that it started (its run id), each step's start and end with its status (`running`, then `success`, `failed`, `stopped`, or `skipped` for a step that never ran) and output, the agent turn's events exactly as the chat stream sends them, and one terminal event: the run with its answer, steps, output, datasets, panel items, visuals and RFP, or the chat stream's error for the same failure ([../../system/api.md](../../system/api.md) 119, 3.6). A refusal SHALL answer its real status before anything streams. Closing the connection SHALL stop the run as Stop stops a chat turn: the agent turn aborts, nothing more is sent, and the run ends `stopped` with any partial answer.
 - R17. A run MAY name one earlier run as its context: that run's question and answer SHALL reach the agent before this run's question, as a user and an assistant message, and nothing else of it; its own context SHALL NOT be carried. The earlier run SHALL be read from the stored runs (R18), so it can be named after the app restarts. A context naming no stored run SHALL be refused with `Run "<id>" not found`, and one without an answer with `Run "<id>" has no answer to continue from`.
 
-Stored runs (1.23.14; backend only, the UI is 1.23.15 and 1.23.21)
+Stored runs (1.23.14; the run history UI is 1.23.21)
 - R18. Every run of a workflow on an input, code-only or agent, streamed (119) or not (118), SHALL be stored when it starts, as `running` with its workflow, the workflow's name, its checked input and its context, and updated when it ends with its status (`success`, `failed` or `stopped`), every step's status and output, its output or error and, for an agent workflow, its question, answer, datasets, agent, RFP, panel items, visuals and the agent's saved phases ([../../system/data-model.md](../../system/data-model.md) 3.16). A stopped run SHALL be stored `stopped` with any partial answer; a run that fails while ending SHALL be stored `failed` with that error. `POST /workflows/:id/runs` SHALL answer the stored run's id (`runId`) for a code-only workflow. An agent run's workspace SHALL stay with the stored run, so its files can be downloaded after the run, and after a restart.
 - R19. The run history SHALL list every stored run, newest first, optionally one workflow's, each with its workflow, its status, its start and end, and a title: its question, else the workflow's first text input with a value, else the workflow's name, at most 120 characters ([../../system/api.md](../../system/api.md) 120). A stored run SHALL be readable with its full result, the panel items, workflow view and agent derived as a session's are (121), and its visuals, panel files and RFP packages SHALL download as a session's do (123-127). An unknown run SHALL answer `Run "<id>" not found` (HTTP 404).
 - R20. Deleting a run SHALL remove it, its workspace and its files, and its memory thread (122: `Run deleted`). A run still running SHALL NOT be deleted (`Stop the run before deleting it`). When the app starts, a run left `running` SHALL become `failed` with `The app stopped before the run finished`, keeping its workspace, and a run workspace that no stored run owns SHALL be deleted. The start-up clean-up of the agent editor's previews SHALL NOT touch run workspaces.
+
+Runs from a workflow's page (1.23.15)
+- R21. The Assistant, Questions to Insights v2 and each user agent's workflow SHALL offer **Execute** and the **Run** tab on their page beside Start chat (which stays until 1.23.22); the Data Readiness Agent and the RFP Builder SHALL get them with their own stories (1.23.16, 1.23.17). The Run tab's form SHALL have one control per input field the app does not set itself, by type: a text area (under the question, the workflow's starter questions as example chips, which fill it and do not run), a text or number input, a checkbox for `boolean` (checked when its default is true), a datasets picker for `datasets` and a list for `dataset` (the datasets of the field's datasource kinds); a workflow over its own datasets (a user agent's) SHALL show them read-only instead. While the workflow has a run requirement, Execute SHALL be disabled with it, and the requirement written. Every run from the page SHALL stream ([../../system/api.md](../../system/api.md) 119), the Sequential test workflow's included: the status `Running…` and each step's status live in the Run tab and on its canvas node (`Running`, then `Done`, `Failed`, `Skipped` or `Stopped`), and inside a running agent step the agent's Thinking, each tool call with its rows and the answer forming; when it ends, the run as stored: its status line, each step's output field by field (a text as it is, quotes unescaped) and, for an agent workflow, its answer as a chat shows one (text, reasoning, interpretation, data with its SQL, badges, visual and report cards, the clarification card). **Stop** SHALL abort the stream; the run reads `Run stopped`, its running step `Stopped`, and is then shown as stored, with any partial answer. **Follow up** SHALL start a run on the shown run's input with the new question and the shown run as its context (R17), saying `Follows up on “<earlier question>”`; picking a clarification option (or `Something else`, or Skip) SHALL do the same with the pick as the question. A refusal before the run starts SHALL show the server's message under Execute (`Select at least one dataset`) and no result; a failure after it started SHALL read `Run failed: <error>`.
 
 ## Edge cases and errors
 
@@ -69,7 +72,8 @@ Stored runs (1.23.14; backend only, the UI is 1.23.15 and 1.23.21)
 
 - The **Workflows** rail item, between Datasets and Agents (lucide `workflow` icon; [../../system/ui.md](../../system/ui.md) 1.3), and the `workflows` and `workflow-detail` views (ui.md 1.4).
 - The Workflows page: the note `Each chat runs a workflow. Its steps call agents, and agents use skills and tools.`, the search, the Official and Mine sections and the workflow cards with Start chat (ui.md 4.4a).
-- A workflow's page, a designer (ui.md 4.4b): the header with the breadcrumb, the name, id and kind and Execute or Start chat with its requirement; the graph canvas with its zoom toolbar; the right panel's Workflow, Step, Run and Code tabs, with the bar note and the Agents rows on Workflow.
+- A workflow's page, a designer (ui.md 4.4b): the header with the breadcrumb, the name, id and kind and Execute or Start chat with its requirement (both for the Assistant, Questions to Insights v2 and user agents' workflows); the graph canvas with its zoom toolbar; the right panel's Workflow, Step, Run and Code tabs, with the bar note and the Agents rows on Workflow.
+- An agent workflow's Run tab (ui.md 4.4b): the form per field type with the example chips, Execute and Stop, the live steps with the Thinking block, the answer view (`run-answer`), and Follow up.
 - A run workflow: the card's `Runs on an input` chip and **Run** (ui.md 4.4a); its page's **Execute** in the header, and the Run tab's **Input** form, **Execute** and **Result**, with the run status on the canvas nodes (ui.md 4.4b).
 - No control creates, edits, reorders or deletes a workflow or a step (R3).
 
@@ -151,6 +155,52 @@ Feature: Workflows
     Then I see the result and "Done" on the three canvas nodes
 ```
 
+### Feature: Workflow runs
+
+E2E: `frontend/e2e/workflow-runs.spec.ts`
+
+```gherkin
+Feature: Workflow runs
+
+  Background:
+    Given a dataset "World Cup Core" and the recording stub model as the LLM
+
+  @demo @story-1.23.15
+  Scenario: I run the Assistant on a question
+    When I open the Assistant from Workflows and click Execute
+    Then the Run tab shows the question, the datasets to pick and Careful
+    When I pick "World Cup Core", type "Which team scored the most goals?" and click Execute
+    Then the Answer step is running on the canvas and in the Run tab, with its SQL call
+    And I see the stub's answer with its SQL
+    When I follow up with "And the fewest?"
+    Then I see the second answer
+    And the follow-up reached the model after the earlier question and answer
+    When I run "Questions to Insights v2" on "How many matches were played in each stage?" over "World Cup Core"
+    Then its four canvas nodes go Done and I see its answer
+
+  Scenario: A run needs its datasets
+    Given I am on the Assistant's Run tab
+    When I type "Which team scored the most goals?" and click Execute with no dataset picked
+    Then I see "Select at least one dataset" and no result
+
+  Scenario: Stop ends the run
+    Given the Assistant is running on a question
+    When I click Stop
+    Then the run reads "Run stopped" and its Answer step "Stopped"
+
+  Scenario: A clarifying question becomes options
+    Given the Assistant asked "Which measure of best do you mean?" with two options
+    When I pick "Highest win rate"
+    Then a new run answers, given the question and my pick
+
+  Scenario: A user agent's workflow runs over its own datasets
+    Given a published user agent "Health plan analyst" over "World Cup Core" with its own instructions
+    And I am on its workflow's Run tab
+    Then its dataset "World Cup Core" is shown read-only, with no picker
+    When I run it on "Which team scored the most goals?"
+    Then I see its answer, and its instructions reached the model
+```
+
 ## Acceptance
 
 - `GET /workflows` on a fresh data dir lists `agent:assistant`, `qti-v2-turn`, `agent:data-readiness` and `agent:rfp` in that order, the last two with their requirement; a published user agent adds `agent:<id>` and a draft-only one does not (R1).
@@ -164,4 +214,5 @@ Feature: Workflows
 - `GET /workflows` gives the Assistant, Questions to Insights v2, the Data Readiness Agent, the RFP Builder and each user agent's workflow their input and run requirement; each refusal of R14 has its exact message (R14). A streamed run of the Assistant, v2, the Data Readiness Agent and the RFP Builder sends the stub model the same requests as a chat turn on the same question and datasets, and ends with `done` carrying the answer; v2's run reports its four steps; closing the connection stops the run; a follow-up run sends the earlier question and answer first (R15–R17). The agents' `getInstructions()` and tool-list hashes are unchanged ([../../../evidence/1.23.12/agent-hashes.md](../../../evidence/1.23.12/agent-hashes.md)).
 - Every run is stored when it starts and updated when it ends, including failed and stopped runs and a run that throws while ending; `POST /workflows/seq-text-demo/runs` answers its `runId`; the history lists runs newest first with their titles, filtered by workflow; a run reads back as its stream ended it; its panel files download from its workspace; deleting it removes its workspace, and a running run can't be deleted; after a restart, a run the app was killed in is `failed` with `The app stopped before the run finished`, an orphan run workspace is gone, and a stored run is still a follow-up's context (R17-R20). Proven by `backend/test/workflow-run-history.e2e-spec.ts` (the stub model, a real restart), `backend/src/modules/workflows/workflow-runs.service.spec.ts`, `workflow-run-steps.spec.ts`, `repositories/workflow-runs.repository.spec.ts` and `backend/src/modules/sessions/run-host-sessions.spec.ts` (the previews-only sweep). Evidence: [../../../evidence/1.23.14/api-transcript.txt](../../../evidence/1.23.14/api-transcript.txt).
 - The Sequential test workflow's card shows `Runs on an input` and Run and no Start chat; its page runs it and shows each step `Done`, or `Failed` and `Skipped`, and the output; the New conversation screen never lists it (R12, R13).
+- From the Assistant's page, Execute opens the Run tab with the question, the datasets picker and Careful; Execute streams the run (the Answer step `Running` on its node and in the tab, with the Thinking block and its SQL call), then shows the answer with its SQL and `Done`; Follow up runs again with the earlier question and answer before the new question in the model request; Questions to Insights v2's run puts `Done` on its four nodes; a run without a dataset is refused with `Select at least one dataset`; Stop reads `Run stopped`; a clarification's pick runs with the clarifying question in the request; a user agent's run shows its datasets read-only and sends its instructions (R21). Proven by `frontend/e2e/workflow-runs.spec.ts` (the stub model, World Cup), the unit tests of the run form per field type, the run stream (`workflow-runs-api.service.spec.ts`), the stream-to-state mapping, Stop and the Follow up body (`workflow-designer.service.spec.ts`, `workflow-panel.spec.ts`, `workflows.util.spec.ts`), and the axe scan of the Run tab with an answer in both themes.
 - Proven by the backend's unit tests and its API-level tests of the workflow catalogue and runs (R1–R4, R11, R14–R17: `backend/test/workflows.e2e-spec.ts`, `backend/test/workflow-runs.e2e-spec.ts`, `backend/src/modules/sessions/run-host-sessions.spec.ts`, `backend/src/modules/workflows/workflow-runs.service.spec.ts`), the frontend unit tests of the sections, the Start chat branch and the run page, and `frontend/e2e/workflows.spec.ts` (R3, R5–R8, R10, R12, R13).

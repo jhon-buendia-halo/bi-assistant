@@ -657,8 +657,8 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 |---|---|---|---|
 | 116 | `GET /workflows` | The workflow catalogue | no |
 | 117 | `GET /workflows/:id` | One workflow with its steps | no |
-| 118 | `POST /workflows/:id/runs` | Run a workflow once on an input and answer when it ends | yes |
-| 119 | `POST /workflows/:id/runs/stream` | Run a workflow once on an input, streamed (SSE) | no |
+| 118 | `POST /workflows/:id/runs` | Run a workflow once on an input and answer when it ends | no |
+| 119 | `POST /workflows/:id/runs/stream` | Run a workflow once on an input, streamed (SSE) | yes |
 
 #### 116. `GET /workflows`
 - Response `200`: `{ workflows: WorkflowSummary[] }`.
@@ -762,7 +762,7 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
 | 120 | `GET /workflow-runs` | The run history, newest first | no |
-| 121 | `GET /workflow-runs/:id` | One stored run | no |
+| 121 | `GET /workflow-runs/:id` | One stored run | yes |
 | 122 | `DELETE /workflow-runs/:id` | Delete a run with its workspace | no |
 | 123 | `GET /workflow-runs/:id/visualizations/:vid` | Load a run's visual (document + metadata) | no |
 | 124 | `GET /workflow-runs/:id/visualizations/:vid/download` | A run's visual as a zip | no |

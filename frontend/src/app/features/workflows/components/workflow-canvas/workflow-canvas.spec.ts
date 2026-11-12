@@ -219,4 +219,14 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     expect(all('workflow-node-status').map(text)).toEqual(['Done', 'Failed', 'Skipped']);
     expect(q('workflow-node-wrap-up')?.querySelector('[data-testid="workflow-node-status"]')).toBeNull();
   });
+
+  it('shows a step running live, and one a stop ended (workflows R21)', () => {
+    fixture.componentRef.setInput('statuses', {
+      'receive-question': 'success',
+      'load-catalog': 'running',
+      analyse: 'stopped',
+    });
+    fixture.detectChanges();
+    expect(all('workflow-node-status').map(text)).toEqual(['Done', 'Running', 'Stopped']);
+  });
 });

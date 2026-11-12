@@ -67,6 +67,18 @@
               <span>Execute</span>
             </button>
           } @else {
+            @if (runnable()) {
+              <!-- A chat workflow that also runs on its input (1.23.15) -->
+              <button
+                type="button"
+                data-testid="workflow-execute"
+                (click)="execute()"
+                class="btn btn-secondary shrink-0"
+              >
+                <lucide-angular [img]="Rocket" [size]="14" />
+                <span>Execute</span>
+              </button>
+            }
             @if (w.chatRequirement) {
               <span
                 data-testid="workflow-chat-requirement"

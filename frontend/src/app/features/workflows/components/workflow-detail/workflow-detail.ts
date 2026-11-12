@@ -17,7 +17,10 @@ import {
 } from 'lucide-angular';
 import { WorkflowSummary } from '../../models/workflow.model';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
-import { workflowKindLabel } from '../../services/workflows.util';
+import {
+  canRunFromPage,
+  workflowKindLabel,
+} from '../../services/workflows.util';
 import { WorkflowCanvas } from '../workflow-canvas/workflow-canvas';
 
 /**
@@ -61,6 +64,11 @@ export class WorkflowDetailPage {
   readonly kindLabel = computed(() => {
     const workflow = this.designer.workflow();
     return workflow === null ? '' : workflowKindLabel(workflow);
+  });
+  /** Execute and the Run tab (workflows R12, R21). */
+  readonly runnable = computed(() => {
+    const workflow = this.designer.workflow();
+    return workflow !== null && canRunFromPage(workflow);
   });
   readonly missing = computed(() => {
     const workflow = this.designer.workflow();

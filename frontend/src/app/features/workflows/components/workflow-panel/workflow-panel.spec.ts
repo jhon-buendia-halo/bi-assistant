@@ -4,8 +4,16 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { WorkflowDetail, WorkflowRunResult } from '../../models/workflow.model';
+import {
+  WorkflowDetail,
+  WorkflowRun,
+  WorkflowRunRequest,
+} from '../../models/workflow.model';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
+import {
+  RunStreamHandlers,
+  WorkflowRunsApiService,
+} from '../../services/workflow-runs-api.service';
 import { NO_STEP_SELECTED, WorkflowPanel } from './workflow-panel';
 
 const STEP = (id: string, title: string, input: string[], output: string[]) => ({
@@ -76,30 +84,122 @@ const V2: WorkflowDetail = {
   ],
 };
 
+/** A run stream the test drives: each call is recorded with its handlers. */
+class FakeRunsApi {
+  calls: {
+    workflowId: string;
+    body: WorkflowRunRequest;
+    handlers: RunStreamHandlers;
+    signal?: AbortSignal;
+  }[] = [];
+  getRun = jasmine.createSpy('getRun');
+
+  streamRun(
+    workflowId: string,
+    body: WorkflowRunRequest,
+    handlers: RunStreamHandlers,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    this.calls.push({ workflowId, body, handlers, signal });
+    return new Promise<void>(() => undefined);
+  }
+
+  get last() {
+    return this.calls[this.calls.length - 1];
+  }
+}
+
+const ASSISTANT: WorkflowDetail = {
+  ...SEQ,
+  id: 'agent:assistant',
+  name: 'Assistant',
+  kind: 'agent',
+  trigger: 'chat',
+  bar: 'agent',
+  stepCount: 1,
+  agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
+  picksDatasets: true,
+  input: [
+    {
+      name: 'question',
+      label: 'Question',
+      type: 'textarea',
+      required: true,
+      placeholder: 'Ask a question about your data',
+    },
+    { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
+    {
+      name: 'careful',
+      label: 'Careful: cross-check the result with an independent query',
+      type: 'boolean',
+      required: false,
+      default: false,
+    },
+  ],
+  steps: [
+    {
+      ...STEP('answer', 'Answer', ['question', 'datasets'], ['calls', 'stopped']),
+      kind: 'agent',
+    },
+  ],
+};
+
+function seqRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
+  return {
+    id: 'run-1',
+    workflowId: 'seq-text-demo',
+    workflowName: 'Sequential test workflow',
+    input: { text: 'a' },
+    status: 'success',
+    steps: [],
+    datasets: [],
+    startedAt: '2026-11-11T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function assistantRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
+  return seqRun({
+    workflowId: 'agent:assistant',
+    workflowName: 'Assistant',
+    input: { question: 'Which team scored the most goals?', datasets: [], careful: false },
+    question: 'Which team scored the most goals?',
+    steps: [{ id: 'answer', title: 'Answer', status: 'success', output: { stopped: false } }],
+    ...overrides,
+  });
+}
+
 describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13; ui.md 4.4b)', () => {
   let fixture: ComponentFixture<WorkflowPanel>;
   let designer: WorkflowDesigner;
   let http: HttpTestingController;
   let el: HTMLElement;
   let openedAgents: string[];
+  let runs: FakeRunsApi;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [WorkflowPanel],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: WorkflowRunsApiService, useFactory: () => new FakeRunsApi() },
+      ],
     }).compileComponents();
     http = TestBed.inject(HttpTestingController);
     designer = TestBed.inject(WorkflowDesigner);
+    runs = TestBed.inject(WorkflowRunsApiService) as unknown as FakeRunsApi;
     openedAgents = [];
   });
 
   afterEach(() => http.verify());
 
-  function open(workflow: WorkflowDetail): void {
+  function open(workflow: WorkflowDetail, afterLoad?: () => void): void {
     designer.load(workflow.id);
     http
-      .expectOne((r) => r.url.endsWith(`/workflows/${workflow.id}`))
+      .expectOne((r) => r.url.endsWith(`/workflows/${encodeURIComponent(workflow.id)}`))
       .flush(workflow);
+    afterLoad?.();
     fixture = TestBed.createComponent(WorkflowPanel);
     fixture.componentInstance.openAgent.subscribe((key) => openedAgents.push(key));
     fixture.detectChanges();
@@ -276,11 +376,14 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       fixture.detectChanges();
     }
 
-    function execute(): ReturnType<HttpTestingController['expectOne']> {
+    function execute() {
       click('workflow-run');
-      return http.expectOne(
-        (r) => r.method === 'POST' && r.url.endsWith('/workflows/seq-text-demo/runs'),
-      );
+      return runs.last;
+    }
+
+    function done(run: Partial<WorkflowRun>): void {
+      runs.last.handlers.onDone!(seqRun(run));
+      fixture.detectChanges();
     }
 
     function openRun(): void {
@@ -296,37 +399,47 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(field.getAttribute('aria-required')).toBe('true');
       expect(el.querySelector(`label[for="${field.id}"]`)?.textContent?.trim()).toBe('Text');
       expect(text('workflow-run')).toBe('Execute');
+      expect(q('workflow-run-stop')).toBeNull();
       expect(q('workflow-run-result')).toBeNull();
     });
 
-    it('runs on the typed input, says Executing… meanwhile, then shows each step and the output', () => {
+    it('streams the run on the typed input: Executing… and Stop meanwhile, each step as it goes, then the result', () => {
       openRun();
       type('  Hello  ');
-      const req = execute();
-      expect(req.request.body).toEqual({ input: { text: '  Hello  ' } });
+      const call = execute();
+      expect(call.workflowId).toBe('seq-text-demo');
+      expect(call.body).toEqual({ input: { text: '  Hello  ' } });
+      fixture.detectChanges();
       const button = q('workflow-run') as HTMLButtonElement;
       expect(button.disabled).toBe(true);
       expect(button.textContent?.trim()).toBe('Executing…');
-      const result: WorkflowRunResult = {
-        workflowId: 'seq-text-demo',
-        status: 'success',
+      expect(text('workflow-run-stop')).toBe('Stop');
+      expect(text('workflow-run-status')).toBe('Running…');
+
+      call.handlers.onRun!({ runId: 'run-1', workflowId: 'seq-text-demo' });
+      call.handlers.onStep!({ id: 'clean-text', title: 'Clean text', status: 'running' });
+      fixture.detectChanges();
+      expect(q('workflow-run-step-clean-text')?.textContent).toContain('Running');
+
+      done({
         steps: [
-          { id: 'clean-text', title: 'Clean text', status: 'success', output: { text: 'Hello' } },
+          { id: 'clean-text', title: 'Clean text', status: 'success', output: { text: '"Hello"' } },
           { id: 'count-words', title: 'Count words', status: 'success', output: { words: 1 } },
           { id: 'format-result', title: 'Format result', status: 'success', output: { summary: 'S' } },
         ],
         output: { summary: '1 word, 5 characters: "Hello"' },
-      };
-      req.flush(result);
-      fixture.detectChanges();
+      });
       expect(button.disabled).toBe(false);
+      expect(q('workflow-run-stop')).toBeNull();
       expect(text('workflow-run-status')).toBe('Run succeeded');
       const row = q('workflow-run-step-clean-text')!;
       expect(row.textContent).toContain('Clean text');
       expect(row.textContent).toContain('Done');
-      expect(row.querySelector('pre')?.textContent).toBe(
-        JSON.stringify({ text: 'Hello' }, null, 2),
-      );
+      // Step outputs read as key/value rows, a text with its quotes unescaped.
+      const output = row.querySelector('[data-testid="workflow-run-step-output"]')!;
+      expect(output.querySelector('dt')?.textContent?.trim()).toBe('text');
+      expect(output.querySelector('dd')?.textContent?.trim()).toBe('"Hello"');
+      expect(output.textContent).not.toContain('\\"');
       expect(q('workflow-run-output')?.textContent).toContain('1 word, 5 characters: "Hello"');
       expect(designer.stepStatuses()).toEqual({
         'clean-text': 'success',
@@ -338,17 +451,17 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
     it('shows a failed run: the failing step with its error, the others skipped', () => {
       openRun();
       type('   ');
-      execute().flush({
-        workflowId: 'seq-text-demo',
+      execute();
+      done({
         status: 'failed',
         steps: [
           { id: 'clean-text', title: 'Clean text', status: 'failed', error: 'The text is empty' },
           { id: 'count-words', title: 'Count words', status: 'skipped' },
           { id: 'format-result', title: 'Format result', status: 'skipped' },
         ],
+        output: undefined,
         error: 'The text is empty',
-      } satisfies WorkflowRunResult);
-      fixture.detectChanges();
+      });
       expect(text('workflow-run-status')).toBe('Run failed: The text is empty');
       expect(q('workflow-run-step-clean-text')?.textContent).toContain('Failed');
       expect(q('workflow-run-step-clean-text')?.textContent).toContain('The text is empty');
@@ -358,21 +471,18 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
 
     it("shows the server's refusal and keeps no result; running again replaces the result", () => {
       openRun();
-      execute().flush(
-        { statusCode: 400, message: 'Text is required', error: 'Bad Request' },
-        { status: 400, statusText: 'Bad Request' },
-      );
+      execute().handlers.onError!('Text is required');
       fixture.detectChanges();
       expect(text('workflow-run-error')).toBe('Text is required');
       expect(q('workflow-run-error')?.getAttribute('role')).toBe('alert');
       expect(q('workflow-run-result')).toBeNull();
 
       type('a');
-      execute().flush({ workflowId: 'seq-text-demo', status: 'success', steps: [], output: { summary: 'first' } });
-      fixture.detectChanges();
+      execute();
+      done({ output: { summary: 'first' } });
       expect(q('workflow-run-error')).toBeNull();
-      execute().flush({ workflowId: 'seq-text-demo', status: 'success', steps: [], output: { summary: 'second' } });
-      fixture.detectChanges();
+      execute();
+      done({ output: { summary: 'second' } });
       expect(q('workflow-run-output')?.textContent).toContain('second');
       expect(q('workflow-run-output')?.textContent).not.toContain('first');
     });
@@ -383,6 +493,194 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       click('workflow-panel-tab-workflow');
       click('workflow-panel-tab-run');
       expect((q('workflow-input-text') as HTMLTextAreaElement).value).toBe('kept');
+    });
+  });
+
+  describe('Run tab of an agent workflow (workflows R21)', () => {
+    const DATASETS = [
+      { name: 'World Cup Core', tables: ['a', 'b'], datasourceKind: 'postgres' },
+      { name: 'Sales', tables: ['c'], datasourceKind: 'rest' },
+    ];
+
+    function openAssistant(workflow: WorkflowDetail = ASSISTANT): void {
+      open(workflow, () => {
+        if (workflow.input.some((f) => f.type === 'datasets' || f.type === 'dataset')) {
+          http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: DATASETS });
+        }
+      });
+      click('workflow-panel-tab-run');
+    }
+
+    function typeQuestion(value: string): void {
+      const field = q('workflow-input-question') as HTMLTextAreaElement;
+      field.value = value;
+      field.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+
+    it('generates a control per field type: a text area, a datasets picker and a checkbox', () => {
+      openAssistant();
+      const question = q('workflow-input-question') as HTMLTextAreaElement;
+      expect(question.tagName).toBe('TEXTAREA');
+      expect(question.placeholder).toBe('Ask a question about your data');
+      expect(el.querySelector(`label[for="${question.id}"]`)?.textContent?.trim()).toBe('Question');
+
+      const picker = q('workflow-input-datasets')!;
+      expect(picker.getAttribute('role')).toBe('group');
+      expect(picker.textContent).toContain('Datasets');
+      const cards = Array.from(picker.querySelectorAll('button'));
+      expect(
+        cards.map((b) =>
+          Array.from(b.querySelectorAll('span')).map((span) => span.textContent?.trim()),
+        ),
+      ).toEqual([
+        ['World Cup Core', '2 entities'],
+        ['Sales', '1 entities'],
+      ]);
+      expect(cards[0].getAttribute('aria-pressed')).toBe('false');
+      cards[0].click();
+      fixture.detectChanges();
+      expect(cards[0].getAttribute('aria-pressed')).toBe('true');
+      expect(designer.picked('datasets')).toEqual(['World Cup Core']);
+
+      const careful = q('workflow-input-careful') as HTMLInputElement;
+      expect(careful.type).toBe('checkbox');
+      expect(careful.checked).toBe(false);
+      expect(careful.closest('label')?.textContent?.trim()).toBe(
+        'Careful: cross-check the result with an independent query',
+      );
+      careful.click();
+      fixture.detectChanges();
+      expect(designer.checked('careful')).toBe(true);
+
+      typeQuestion('Which team scored the most goals?');
+      click('workflow-run');
+      expect(runs.last.body).toEqual({
+        input: {
+          question: 'Which team scored the most goals?',
+          datasets: ['World Cup Core'],
+          careful: true,
+        },
+      });
+    });
+
+    it('a dataset field is a list of the datasets of its kinds', () => {
+      openAssistant({
+        ...ASSISTANT,
+        input: [
+          {
+            name: 'dataset',
+            label: 'Dataset',
+            type: 'dataset',
+            required: true,
+            datasourceKinds: ['postgres', 'databricks'],
+          },
+        ],
+      });
+      const select = q('workflow-input-dataset') as HTMLSelectElement;
+      expect(select.tagName).toBe('SELECT');
+      expect(Array.from(select.options).map((o) => o.textContent?.trim())).toEqual([
+        'Select a dataset',
+        'World Cup Core',
+      ]);
+    });
+
+    it('example chips fill the question and do not run', () => {
+      openAssistant({ ...ASSISTANT, starterQuestions: ['Which team scored the most goals?'] });
+      click('workflow-example-0');
+      expect((q('workflow-input-question') as HTMLTextAreaElement).value).toBe(
+        'Which team scored the most goals?',
+      );
+      expect(runs.calls.length).toBe(0);
+    });
+
+    it("a user agent's own datasets are read-only chips, not a picker", () => {
+      openAssistant({
+        ...ASSISTANT,
+        id: 'agent:u1',
+        owner: 'You',
+        picksDatasets: false,
+        datasets: ['World Cup Core'],
+        input: ASSISTANT.input.filter((f) => f.type !== 'datasets'),
+      });
+      expect(q('workflow-input-datasets')).toBeNull();
+      expect(text('workflow-run-datasets')).toContain('World Cup Core');
+    });
+
+    it('a run requirement disables Execute with its text', () => {
+      openAssistant({ ...ASSISTANT, runRequirement: "None of this agent's datasets exist" });
+      const button = q('workflow-run') as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      expect(button.title).toBe("None of this agent's datasets exist");
+      expect(text('workflow-run-requirement')).toBe("None of this agent's datasets exist");
+    });
+
+    it('shows the agent step live (Thinking, tool rows, the answer forming), then the answer and Follow up', () => {
+      openAssistant();
+      typeQuestion('Which team scored the most goals?');
+      click('workflow-run');
+      const h = runs.last.handlers;
+      h.onRun!({ runId: 'run-1', workflowId: 'agent:assistant' });
+      h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
+      h.onReasoning!('Looking at the goals table');
+      h.onTool!({ name: 'run_readonly_sql', input: 'SELECT 1' });
+      h.onToolResult!({ tool: 'run_readonly_sql', rowCount: 3 });
+      h.onText!('Brazil scored');
+      fixture.detectChanges();
+      const live = q('workflow-run-live')!;
+      expect(live.textContent).toContain('Thinking');
+      expect(live.textContent).toContain('Looking at the goals table');
+      expect(
+        Array.from(q('workflow-run-tool')!.querySelectorAll('span')).map((span) =>
+          span.textContent?.trim(),
+        ),
+      ).toEqual(['run_readonly_sql', '3 rows']);
+      expect(live.textContent).toContain('Brazil scored');
+      expect(q('run-answer')).toBeNull();
+
+      h.onDone!(
+        assistantRun({
+          answer: {
+            role: 'assistant',
+            content: 'Brazil scored the most goals.',
+            at: 'x',
+            data: [{ tool: 'run_readonly_sql', input: 'SELECT team FROM goals', rowCount: 3 }],
+          },
+        }),
+      );
+      fixture.detectChanges();
+      expect(q('workflow-run-live')).toBeNull();
+      expect(q('run-answer')?.textContent).toContain('Brazil scored the most goals.');
+      expect(q('workflow-run-output')).toBeNull();
+
+      const followUp = q('workflow-follow-up-input') as HTMLInputElement;
+      expect(followUp.placeholder).toBe('Ask a follow-up about this result');
+      expect((q('workflow-run-follow-up') as HTMLButtonElement).disabled).toBe(true);
+      followUp.value = 'And the fewest?';
+      followUp.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      click('workflow-run-follow-up');
+      expect(runs.last.body).toEqual({
+        input: { question: 'And the fewest?', datasets: [], careful: false },
+        context: { fromRunId: 'run-1' },
+      });
+      fixture.detectChanges();
+      expect(text('workflow-run-context')).toBe(
+        'Follows up on “Which team scored the most goals?”',
+      );
+    });
+
+    it('Stop ends the run: the run reads "Run stopped"', () => {
+      openAssistant();
+      click('workflow-run');
+      const h = runs.last.handlers;
+      h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
+      fixture.detectChanges();
+      click('workflow-run-stop');
+      expect(runs.last.signal?.aborted).toBe(true);
+      expect(text('workflow-run-status')).toBe('Run stopped');
+      expect(q('workflow-run-step-answer')?.textContent).toContain('Stopped');
+      expect(text('workflow-run')).toBe('Execute');
     });
   });
 });
