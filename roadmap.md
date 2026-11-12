@@ -855,7 +855,7 @@ Stories 1.23.10–1.23.27 retire chats: every workflow runs once on a typed inpu
 - **Acceptance:** per plan 1.25.4, including the visual card's View in a run's answer (not wired in 1.23.15: the right panel holds the designer).
 
 #### 1.23.26 — Extract the turn engine; evals and dev scripts on run hosts  `🚧 In progress`
-- **Scope now (moved up, wave S2):** only the turn-engine extraction, per [the speed-up contract](docs/plans/m1-23-dev-speedup.md) section "1.23.26 (moved up)". Evals and dev scripts on run hosts stay for later (plan 1.25.5).
+- **Scope now (moved up, wave S2):** only the turn-engine extraction, per [the speed-up contract](docs/plans/m1-23-dev-speedup.md), plan 1.23.26. Evals and dev scripts on run hosts stay for later (plan 1.25.5).
 - **Acceptance:** per the speed-up contract: `sessions.service.ts` shrinks by more than 1,500 lines; backend unit and e2e suites, the request-recording Playwright specs and the agent hashes are unchanged.
 
 #### 1.23.27 — Remove the chat write paths and specs  `📋 Planned`
@@ -879,7 +879,7 @@ Stories 1.23.28–1.23.33 make the development workflow faster and cheaper, and 
 - **Acceptance:** contract section 1.23.32: 3 workers, three green runs in a row, timings before and after.
 
 #### 1.23.33 — Split `app.ts` / `app.html` by area  `🚧 In progress`
-- **Scope:** [the speed-up contract](docs/plans/m1-23-dev-speedup.md) section "1.23.33".
+- **Scope:** [the speed-up contract](docs/plans/m1-23-dev-speedup.md), plan 1.23.33.
 - **Acceptance:** `app.ts` under ~500 lines and `app.html` under ~400; no visible or test-id change; the frontend unit suite and the full web Playwright suite pass.
 ---
 
