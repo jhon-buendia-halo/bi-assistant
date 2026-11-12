@@ -16,7 +16,6 @@ import {
   Layers,
   Menu,
   PanelRight,
-  RotateCcw,
   ScrollText,
   Settings,
   Workflow,
@@ -29,7 +28,7 @@ import { AgentEditorService } from './features/agents/services/agent-editor.serv
 import { AgentsNavState } from './features/agents/services/agents-nav-state';
 import { EvalSelectionService } from './features/agents/services/eval-selection.service';
 import { AgentsArea } from './features/agents/components/agents-area/agents-area';
-import { AgentPreview } from './features/agents/components/agent-preview/agent-preview';
+import { AgentTryIt } from './features/agents/components/agent-try-it/agent-try-it';
 import { EvalTrace } from './features/agents/components/eval-trace/eval-trace';
 import { ContextArea } from './features/context/components/context-area/context-area';
 import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
@@ -81,7 +80,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     SessionsHeader,
     MonitoringArea,
     SessionsPanel,
-    AgentPreview,
+    AgentTryIt,
     EvalTrace,
     WorkflowPanel,
     EntityDetails,
@@ -104,7 +103,6 @@ export class App {
 
   readonly Menu = Menu;
   readonly PanelRight = PanelRight;
-  readonly RotateCcw = RotateCcw;
   readonly ScrollText = ScrollText;
   readonly Settings = Settings;
 

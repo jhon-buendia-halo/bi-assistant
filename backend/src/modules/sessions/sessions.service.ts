@@ -129,6 +129,11 @@ export interface RunHostSpec {
   workflowState?: WorkflowState;
   /** The earlier run's question and answer, put before this run's question. */
   context?: { question: string; answer: string };
+  /**
+   * A draft run (agents-evals R60): the user agent whose saved draft the host
+   * runs, as a preview does. `workflowId` is then unused.
+   */
+  draftAgentId?: string;
 }
 
 @Injectable()
@@ -583,6 +588,7 @@ export class SessionsService implements OnModuleInit {
    * stored or listed.
    */
   async createRunHost(spec: RunHostSpec): Promise<SessionDoc> {
+    if (spec.draftAgentId) return this.createDraftRunHost(spec);
     const notFound = () =>
       new NotFoundException(`Workflow "${spec.workflowId}" not found`);
     const parsed = parseWorkflowId(spec.workflowId);
@@ -645,6 +651,54 @@ export class SessionsService implements OnModuleInit {
             { role: 'assistant', content: spec.context.answer, at: now },
           ]
         : [],
+      visualizations: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.memoryHosts.set(id, host);
+    return { ...host };
+  }
+
+  /**
+   * What a draft run (api.md R12) runs on: the user agent's saved draft, its
+   * name and the datasets of it that exist. 404 for an unknown agent; 400
+   * `Select at least one dataset to preview` when none exists.
+   */
+  async draftRunTarget(
+    agentId: string,
+  ): Promise<{ name: string; datasets: string[] }> {
+    const agent = await this.userAgents.get(agentId);
+    if (!agent) throw new NotFoundException(`Agent "${agentId}" not found`);
+    const datasets = await this.existingDatasets(agent.draft.datasets);
+    if (!datasets.length) {
+      throw new BadRequestException('Select at least one dataset to preview');
+    }
+    return { name: agent.draft.name, datasets };
+  }
+
+  /**
+   * The run host of a draft run: a preview-shaped session (it runs the
+   * draft's instructions, model, tools and skills) that is also a run host,
+   * so the turn path and its clean-up are a run's. Never stored or listed.
+   */
+  private async createDraftRunHost(spec: RunHostSpec): Promise<SessionDoc> {
+    const agentId = spec.draftAgentId as string;
+    const target = await this.draftRunTarget(agentId);
+    const id = `${RUN_HOST_ID_PREFIX}${spec.runId}`;
+    const name = spec.name.slice(0, 64);
+    const workspace = await this.mastra.ensureSessionWorkspace(id, name);
+    const now = new Date().toISOString();
+    const host: SessionDoc = {
+      id,
+      name,
+      workspaceId: workspace.id,
+      datasets: target.datasets,
+      agentId,
+      agentName: target.name,
+      workflowId: sessionWorkflowId({ agentId }),
+      preview: true,
+      run: true,
+      messages: [],
       visualizations: [],
       createdAt: now,
       updatedAt: now,

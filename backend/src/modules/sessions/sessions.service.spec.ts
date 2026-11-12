@@ -2347,6 +2347,45 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
     });
   });
 
+  describe('draft run hosts (api.md R12)', () => {
+    it('is a preview-shaped run host over the draft, never stored, discarded with its resources', async () => {
+      const { service, repository, mastra } = build(
+        { id: 'agent-1', draft: { ...live, name: 'Draft name' } },
+        ['World Cup Core'],
+      );
+      const host = await service.createRunHost({
+        runId: 'r1',
+        workflowId: 'agent:agent-1',
+        name: 'Draft name',
+        draftAgentId: 'agent-1',
+      });
+
+      expect(host).toMatchObject({
+        id: 'run-r1',
+        datasets: ['World Cup Core'],
+        agentId: 'agent-1',
+        preview: true,
+        run: true,
+      });
+      expect(repository.insert).not.toHaveBeenCalled();
+      expect((await service.toView(host)).agent?.name).toBe('Draft name');
+
+      await service.deleteRunHostResources('run-r1');
+      expect(mastra.deleteSessionResources).toHaveBeenCalledWith('run-r1');
+    });
+
+    it('refuses an unknown agent and a draft with no existing dataset', async () => {
+      await expect(
+        build(null, []).service.draftRunTarget('nope'),
+      ).rejects.toThrow('Agent "nope" not found');
+      await expect(
+        build({ id: 'agent-1', draft: live }, []).service.draftRunTarget(
+          'agent-1',
+        ),
+      ).rejects.toThrow('Select at least one dataset to preview');
+    });
+  });
+
   describe('preview sessions (agents-evals R60, R61)', () => {
     it('runs the draft in memory and is never stored', async () => {
       const { service, repository, mastra } = build(

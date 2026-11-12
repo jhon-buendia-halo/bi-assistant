@@ -1,4 +1,5 @@
 import {
+  AGENT_TAB_ORDER,
   agentTabIds,
   brokenLinkMessage,
   brokenLinks,
@@ -13,7 +14,7 @@ import {
 import { knownLinks } from './prompt-links';
 
 describe('agent page util', () => {
-  it('orders the tabs and keeps the Chat Box for user agents only (R5, R90)', () => {
+  it('orders the tabs and keeps Try it for user agents only (R5, R90)', () => {
     expect(agentTabIds('user')).toEqual([
       'chat',
       'prompt',
@@ -27,9 +28,12 @@ describe('agent page util', () => {
     expect(agentTabIds('official')).not.toContain('chat');
     expect(agentTabIds('official')[0]).toBe('prompt');
     expect(agentTabIds('system')).not.toContain('chat');
+    expect(
+      AGENT_TAB_ORDER.find((tab) => tab.id === 'chat')?.label,
+    ).toBe('Try it');
   });
 
-  it('opens a user agent on the Chat Box and every built-in agent on System Prompt (R5, R91)', () => {
+  it('opens a user agent on Try it and every built-in agent on System Prompt (R5, R91)', () => {
     expect(defaultAgentTab('user')).toBe('chat');
     expect(defaultAgentTab('official')).toBe('prompt');
     expect(defaultAgentTab('system')).toBe('prompt');

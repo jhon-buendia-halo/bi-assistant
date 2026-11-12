@@ -236,53 +236,23 @@ describe('AgentEditorService', () => {
     expect(editor.showPublish()).toBeFalse();
   });
 
-  it('a new agent without datasets previews nothing and saves nothing', async () => {
+  it('Try it is blocked until the form has an existing dataset (R60)', async () => {
     await open(null);
     editor.update({ name: 'Cup historian' });
-    await editor.startPreview();
-    expect(editor.preview()).toEqual({
-      kind: 'no-dataset',
-      message: 'Select at least one dataset to preview',
-    });
+    expect(editor.tryBlocked()).toBe('Select at least one dataset to preview');
+    expect(await editor.beforeTry()).toBeFalse();
+
+    editor.update({ datasets: ['World Cup Core'] });
+    expect(editor.tryBlocked()).toBeNull();
   });
 
-  it('starts a preview of the saved draft and discards it', async () => {
+  it('a run of an untouched saved draft saves nothing; one with changes saves first', async () => {
     await open('cup-historian');
-    const started = editor.startPreview();
-    expect(editor.preview().kind).toBe('starting');
-    await new Promise((resolve) => setTimeout(resolve));
-    const create = http.expectOne(`${API_BASE_URL}/sessions`);
-    expect(create.request.body).toEqual({
-      agentId: 'cup-historian',
-      preview: true,
-    });
-    create.flush({
-      ok: true,
-      message: 'Preview started',
-      session: {
-        id: 'preview-1',
-        name: 'Preview: Cup historian',
-        datasets: ['World Cup Core'],
-        messages: [],
-        preview: true,
-      },
-    });
-    await started;
-    expect(editor.preview().kind).toBe('ready');
-
-    editor.close();
-    const discard = http.expectOne(`${API_BASE_URL}/sessions/preview-1`);
-    expect(discard.request.method).toBe('DELETE');
-    discard.flush({ ok: true, message: 'Preview discarded' });
-    expect(editor.preview().kind).toBe('idle');
-  });
-
-  it('sending in the preview saves the changes first', async () => {
-    await open('cup-historian');
-    expect(await editor.beforePreviewSend()).toBeTrue();
+    expect(await editor.beforeTry()).toBeTrue();
 
     editor.update({ instructions: 'Talk like a pirate.' });
-    const proceed = editor.beforePreviewSend();
+    const proceed = editor.beforeTry();
+    await new Promise((resolve) => setTimeout(resolve));
     http
       .expectOne(`${API_BASE_URL}/agents/cup-historian/draft`)
       .flush({ ok: false, message: 'Agent name is required' });

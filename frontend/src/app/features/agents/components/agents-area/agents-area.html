@@ -25,7 +25,7 @@
       class="w-full max-w-[960px]"
       [agentId]="agents.editingAgentId()"
       (back)="agents.closeAgentEditor()"
-      (preview)="shell.rightPanelOpen.set(true)"
+      (tryItOpened)="shell.rightPanelOpen.set(true)"
     />
   </div>
 } @else if (shell.mainView() === "skills") {

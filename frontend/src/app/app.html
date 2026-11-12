@@ -267,7 +267,7 @@
               (dblclick)="resetRightPanelWidth()"
             ></div>
 
-            <!-- Panel header: collapse; the agent editor's preview adds its title and Reset -->
+            <!-- Panel header: collapse; the agent editor's Try it adds its title -->
             <div
               class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3"
             >
@@ -275,21 +275,8 @@
                 <h3
                   class="pl-3 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
                 >
-                  Preview
+                  Try it
                 </h3>
-                <button
-                  type="button"
-                  data-testid="agent-preview-reset"
-                  (click)="agentEditor.resetPreview()"
-                  [disabled]="
-                    agentEditor.preview().kind !== 'ready' &&
-                    agentEditor.preview().kind !== 'error'
-                  "
-                  class="btn btn-ghost"
-                >
-                  <lucide-angular [img]="RotateCcw" [size]="14" />
-                  <span>Reset preview</span>
-                </button>
               }
               <button
                 type="button"
@@ -308,7 +295,12 @@
               @if (shell.mainView() === "session-chat" && sessions.activeSession()) {
                 <app-sessions-panel />
               } @else if (shell.mainView() === "agent-editor") {
-                <app-agent-preview class="min-h-0 flex-1" />
+                <app-agent-try-it
+                  class="min-h-0 flex-1"
+                  [agentId]="agentEditor.agentId()"
+                  [blocked]="agentEditor.tryBlocked()"
+                  [beforeRun]="agentEditor.beforeTry"
+                />
               } @else if (shell.mainView() === "agent-detail") {
                 <app-eval-trace class="min-h-0 flex-1 overflow-y-auto" />
               } @else if (shell.mainView() === "workflow-detail") {

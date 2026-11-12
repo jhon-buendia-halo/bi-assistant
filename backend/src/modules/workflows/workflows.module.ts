@@ -4,6 +4,7 @@ import { AgentsModule } from '../agents/agents.module';
 import { DatasetsModule } from '../datasets/datasets.module';
 import { SessionsModule } from '../sessions/sessions.module';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
+import { DraftRunsController } from './draft-runs.controller';
 import { WorkflowRunsController } from './workflow-runs.controller';
 import { WorkflowRunsService } from './workflow-runs.service';
 import { WorkflowsController } from './workflows.controller';
@@ -21,7 +22,11 @@ import { WorkflowsService } from './workflows.service';
  */
 @Module({
   imports: [AgentsModule, MastraModule, SessionsModule, DatasetsModule],
-  controllers: [WorkflowsController, WorkflowRunsController],
+  controllers: [
+    WorkflowsController,
+    WorkflowRunsController,
+    DraftRunsController,
+  ],
   providers: [WorkflowsService, WorkflowRunsService, WorkflowRunsRepository],
 })
 export class WorkflowsModule {}

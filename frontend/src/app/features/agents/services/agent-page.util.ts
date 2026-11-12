@@ -18,7 +18,7 @@ export type AgentTabId =
 
 /** The tabs of the agent page, in order (agents-evals R86). */
 export const AGENT_TAB_ORDER: { id: AgentTabId; label: string }[] = [
-  { id: 'chat', label: 'Chat Box' },
+  { id: 'chat', label: 'Try it' },
   { id: 'prompt', label: 'System Prompt' },
   { id: 'skills', label: 'Skills' },
   { id: 'tools', label: 'Tools' },
@@ -29,7 +29,7 @@ export const AGENT_TAB_ORDER: { id: AgentTabId; label: string }[] = [
 ];
 
 /**
- * The tab an agent's page opens on: a user agent's Chat Box, else System
+ * The tab an agent's page opens on: a user agent's Try it, else System
  * Prompt (agents-evals R5, R91).
  */
 export function defaultAgentTab(kind: AgentKind): AgentTabId {
@@ -37,7 +37,7 @@ export function defaultAgentTab(kind: AgentKind): AgentTabId {
 }
 
 /**
- * Only a user agent has a Chat Box, the chat with its draft (R90). A chat
+ * Only a user agent has Try it, a run of its draft (R90; the tab id stays `chat`). A chat
  * with a built-in agent starts from its workflow (workflows R6).
  */
 export function hasChatTab(kind: AgentKind): boolean {
