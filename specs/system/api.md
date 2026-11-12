@@ -1248,9 +1248,9 @@ Controller prefix `/data-readiness`. Capability: [data-readiness](../capabilitie
 | 110 | `GET /data-readiness/assessments/:id` | Read one stored report | yes (scorecard) |
 
 #### 108. `POST /data-readiness/assessments`
-- Body: `{ datasourceId: string; entities?: string[]; sessionId?: string }`.
+- Body: `{ datasourceId: string; entities?: string[]; sessionId?: string; runId?: string }`.
   - `entities` are entity keys (`catalog.schema.table` on Databricks, `database.schema.table` on PostgreSQL, as in the inventory, #20) and narrow the scope. Left out, the scope is every entity in the datasource's inventory. Keys that no longer exist are dropped.
-  - `sessionId` is recorded on the report when the assessment comes from a chat.
+  - `sessionId` is recorded on the report when the assessment comes from a chat, `runId` when it comes from a workflow run; the readiness bridge sends one or the other, never both.
 - Runs synchronously: profile (connector profiling queries, 15 s per statement), engine with `now` = the request time, store.
 - Response `201`: `ReadinessReport` ([data-model.md](data-model.md)). It carries `notProfiled?: { entity, reason: "too-large"|"timed-out", rowCount? }[]` for entities whose column checks were skipped (ADR-0033); absent when none.
 - Errors:
@@ -1263,7 +1263,7 @@ Controller prefix `/data-readiness`. Capability: [data-readiness](../capabilitie
 
 #### 109. `GET /data-readiness/assessments`
 - Query: `datasourceId` (required).
-- Response `200`: `{ reports: ReadinessReportSummary[] }`, newest `generatedAt` first, where `ReadinessReportSummary = { id, datasourceId, datasourceName, datasourceKind, generatedAt, overallScore, maturity, entityCount, sessionId? }`. An unknown or report-less datasource gives `{ reports: [] }`.
+- Response `200`: `{ reports: ReadinessReportSummary[] }`, newest `generatedAt` first, where `ReadinessReportSummary = { id, datasourceId, datasourceName, datasourceKind, generatedAt, overallScore, maturity, entityCount, sessionId?, runId? }`. An unknown or report-less datasource gives `{ reports: [] }`.
 - Errors: 400 `"datasourceId is required"`.
 
 #### 110. `GET /data-readiness/assessments/:id`

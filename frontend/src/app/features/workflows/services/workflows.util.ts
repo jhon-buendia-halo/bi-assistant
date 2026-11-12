@@ -215,10 +215,10 @@ export function runOutputEntries(
 }
 
 /**
- * Agent workflows whose page run lands in a later story: the Data Readiness
- * Agent (1.23.16) and the RFP Builder (1.23.17).
+ * Agent workflows whose page run lands in a later story: the RFP Builder
+ * (1.23.17). The Data Readiness Agent runs from its page since 1.23.16.
  */
-const PAGE_RUN_LATER = new Set(['agent:data-readiness', 'agent:rfp']);
+const PAGE_RUN_LATER = new Set(['agent:rfp']);
 
 /**
  * Whether the workflow's page offers Execute and the Run tab (workflows R12,

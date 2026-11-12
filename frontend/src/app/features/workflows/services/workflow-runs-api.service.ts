@@ -73,6 +73,14 @@ export class WorkflowRunsApiService {
     );
   }
 
+  /** A run's file panel item as its bytes (api.md 126). */
+  downloadPanelItem(runId: string, itemId: string): Observable<Blob> {
+    return this.http.get(
+      `${API_BASE_URL}/workflow-runs/${encodeURIComponent(runId)}/panel-items/${encodeURIComponent(itemId)}/download`,
+      { responseType: 'blob' },
+    );
+  }
+
   /**
    * Run a workflow once, streamed. Aborting `signal` is Stop (api.md 3.6):
    * nothing more is reported, and the run is stored `stopped`.

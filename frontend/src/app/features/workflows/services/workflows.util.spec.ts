@@ -322,7 +322,7 @@ describe('workflows.util', () => {
       },
     ];
 
-    it('the run workflows, the Assistant, v2 and user agents run from their page; Data Readiness and the RFP Builder not yet', () => {
+    it('the run workflows, the Assistant, v2, Data Readiness and user agents run from their page; the RFP Builder not yet', () => {
       const runnable = [SEQ, ...CATALOGUE]
         .map((w) => ({ ...w, input: w.input.length ? w.input : ASSISTANT_INPUT }))
         .filter(canRunFromPage)
@@ -331,6 +331,7 @@ describe('workflows.util', () => {
         'seq-text-demo',
         'agent:assistant',
         'qti-v2-turn',
+        'agent:data-readiness',
         'agent:u2',
         'agent:u1',
       ]);

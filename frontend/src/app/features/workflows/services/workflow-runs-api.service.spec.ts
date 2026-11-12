@@ -1,5 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { WorkflowRun, WorkflowRunStep } from '../models/workflow.model';
 import { RunStreamHandlers, WorkflowRunsApiService } from './workflow-runs-api.service';
@@ -156,5 +159,25 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
     const onError = jasmine.createSpy('onError');
     await service.streamRun('seq-text-demo', { input: {} }, { onError }, controller.signal);
     expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+describe("WorkflowRunsApiService, a run's files (api.md 126)", () => {
+  it('downloads a file panel item of a run as a blob, ids encoded', () => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    const service = TestBed.inject(WorkflowRunsApiService);
+    const http = TestBed.inject(HttpTestingController);
+    let got: Blob | undefined;
+    service.downloadPanelItem('run-1', 'file:synthetic/a b.sql').subscribe((b) => (got = b));
+    const req = http.expectOne((r) =>
+      r.url.endsWith('/workflow-runs/run-1/panel-items/file%3Asynthetic%2Fa%20b.sql/download'),
+    );
+    expect(req.request.method).toBe('GET');
+    expect(req.request.responseType).toBe('blob');
+    req.flush(new Blob(['INSERT INTO t VALUES (1);']));
+    expect(got).toBeDefined();
+    http.verify();
   });
 });

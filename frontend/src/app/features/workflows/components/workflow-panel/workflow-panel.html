@@ -609,8 +609,44 @@
                   [latest]="true"
                   [busy]="designer.running()"
                   (optionPicked)="designer.followUp($event)"
+                  (openScorecard)="openScorecard($event)"
                 />
               </div>
+              @if (shownScorecard(); as readiness) {
+                <!-- Data Readiness: the report's scorecard, with Past assessments -->
+                <section
+                  class="mt-4 rounded-lg border border-border"
+                  data-testid="workflow-run-scorecard"
+                  aria-label="Readiness scorecard"
+                >
+                  <div class="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
+                    <h3 class="m-0 text-[12px] font-medium text-fg-muted">Scorecard</h3>
+                    <button
+                      type="button"
+                      data-testid="workflow-run-scorecard-close"
+                      class="btn btn-ghost btn-icon"
+                      aria-label="Close scorecard"
+                      title="Close scorecard"
+                      (click)="closeScorecard()"
+                    >
+                      <lucide-angular [img]="X" [size]="14" />
+                    </button>
+                  </div>
+                  <app-panel-readiness-view #scorecard [item]="readiness">
+                    @if (scorecard.report(); as shown) {
+                      <app-readiness-history
+                        readinessHistory
+                        [datasourceId]="shown.datasourceId"
+                        [currentReportId]="scorecard.shownReportId()"
+                        (openReport)="scorecard.showReport($event.id)"
+                      />
+                    }
+                  </app-panel-readiness-view>
+                </section>
+              }
+              @if (runFiles().length > 0 && designer.run(); as stored) {
+                <app-workflow-run-files class="mt-4" [runId]="stored.id" [items]="runFiles()" />
+              }
               @if (designer.canFollowUp() && !answer.clarification) {
                 <form
                   class="mt-4 flex items-center gap-2"

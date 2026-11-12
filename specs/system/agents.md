@@ -1048,7 +1048,7 @@ The Data Readiness Agent's three readiness tools (2.10, ADR-0031), in the order 
 
 | Tool | Description (first sentence) | Input | Calls | Output |
 |---|---|---|---|---|
-| `assess_data_readiness` | Run a new data-readiness assessment of one of this session's datasets and store the report. | `dataset?: string` | bridge `assessReadiness({ sessionId, datasetName })`. The dataset's datasource and its entities are the scope ([api.md](api.md) 2.17 `POST`). | `ReadinessSummary` |
+| `assess_data_readiness` | Run a new data-readiness assessment of one of this session's datasets and store the report. | `dataset?: string` | bridge `assessReadiness({ sessionId, datasetName })`. The dataset's datasource and its entities are the scope ([api.md](api.md) 2.17 `POST`). The report records `sessionId`, or `runId` for a run host (`run-<run id>`). | `ReadinessSummary` |
 | `get_readiness_report` | Read a stored readiness report: the newest for a dataset's datasource, or one by id. | `reportId?: string`, `dataset?: string` | bridge `getReadinessReport({ sessionId, reportId?, datasetName? })` | `ReadinessSummary` |
 | `list_readiness_reports` | List the stored readiness reports of a dataset's datasource, newest first. | `dataset?: string` | bridge `listReadinessReports({ sessionId, datasetName? })` | `{ datasourceName, reports: [{ reportId, generatedAt, overallScore, maturity, entityCount }], total }` |
 
