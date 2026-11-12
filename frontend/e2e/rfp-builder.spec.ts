@@ -252,10 +252,7 @@ async function openRfpRunTab(page: Page): Promise<void> {
   await page.getByTestId('workflow-agent:rfp').click();
   await expect(page.getByTestId('workflow-detail-name')).toHaveText(AGENT);
   await page.getByTestId('workflow-execute').click();
-  await expect(page.getByTestId('workflow-panel-tab-run')).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
+  await expect(page.getByTestId('workflow-run')).toBeVisible();
 }
 
 /** Types the message and runs one exchange; waits until the run is stored. */

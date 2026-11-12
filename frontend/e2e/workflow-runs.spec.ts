@@ -119,10 +119,7 @@ async function openWorkflowPage(page: Page, id: string, name: string): Promise<v
 
 async function openRunTab(page: Page): Promise<void> {
   await page.getByTestId('workflow-execute').click();
-  await expect(page.getByTestId('workflow-panel-tab-run')).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
+  await expect(page.getByTestId('workflow-run')).toBeVisible();
 }
 
 function datasetCard(page: Page, name: string): Locator {
