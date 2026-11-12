@@ -68,6 +68,24 @@ test('parseArgs reads the story, the mode, an optional base and the flags', () =
   }
 });
 
+test('parseArgs --free takes no roadmap id and no demo flags', () => {
+  assert.deepEqual(parseArgs(['--free']), { id: 'free', mode: 'free', base: undefined, rebuild: false, noDemo: true, dryRun: false });
+  assert.deepEqual(parseArgs(['--free', '--base', 'abc', '--rebuild', '--dry-run']), {
+    id: 'free',
+    mode: 'free',
+    base: 'abc',
+    rebuild: true,
+    noDemo: true,
+    dryRun: true,
+  });
+  assert.throws(() => parseArgs(['1.2.3', '--free']), /--free takes no roadmap id/);
+  assert.throws(() => parseArgs(['--free', '1.2.3']), /--free takes no roadmap id/);
+  for (const bad of [['--free', '--no-demo'], ['--free', '--demo', '1.2.3'], ['--free', '--fast'], ['--gate', '--free'], ['--free', '--wave', '1.2.3']]) {
+    assert.throws(() => parseArgs(bad), UsageError, JSON.stringify(bad));
+  }
+  assert.throws(() => parseArgs(['--fast', '--gate', '1.2.3']), /Choose one of --fast, --gate, --draft-impact, --wave and --free/);
+});
+
 test('buildDecision skips the build only when every output is newer than every input', () => {
   const outputs = [
     { path: 'backend/dist/cli.js', mtimeMs: 2000 },

@@ -14,6 +14,9 @@ export const USAGE = [
   'Usage: node scripts/qa.mjs <roadmap-id> --fast|--gate [--base <ref>] [--rebuild] [--no-demo] [--dry-run]',
   '       node scripts/qa.mjs <roadmap-id> --draft-impact [--base <ref>] [--dry-run]',
   '       node scripts/qa.mjs --wave <id>,<id>,... [--base <ref>] [--no-demo] [--demo <id>] [--rebuild] [--dry-run]',
+  '       node scripts/qa.mjs --free [--base <ref>] [--rebuild] [--dry-run]',
+  '  --free          free style checks with no story: build, full unit suites, backend lint, check-specs, the --fast',
+  '                  Playwright selection; reports in .qa-reports/free/, nothing under evidence/, no demo',
   '  --wave <ids>    one verification for several stories: build, related unit tests of the union of changed files,',
   '                  check-specs, the union of the touched Playwright specs, optionally one demo (--demo <id>);',
   '                  writes evidence/<id>/tests.md per story and evidence/waves/<first>...<last>.md',
@@ -26,7 +29,8 @@ export const USAGE = [
   '  --dry-run       print the plan and the build decision, run nothing, write nothing',
 ].join('\n');
 
-const MODES = ['fast', 'gate', 'draft-impact'];
+const MODES = ['fast', 'gate', 'draft-impact', 'free'];
+const CHOOSE_ONE = 'Choose one of --fast, --gate, --draft-impact, --wave and --free';
 
 /**
  * `<roadmap-id> --fast|--gate|--draft-impact [--base <ref>] [--rebuild]
@@ -44,10 +48,10 @@ export function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg.startsWith('--') && MODES.includes(arg.slice(2))) {
-      if (mode) throw new UsageError('Choose one of --fast, --gate, --draft-impact and --wave');
+      if (mode) throw new UsageError(CHOOSE_ONE);
       mode = arg.slice(2);
     } else if (arg === '--wave') {
-      if (mode) throw new UsageError('Choose one of --fast, --gate, --draft-impact and --wave');
+      if (mode) throw new UsageError(CHOOSE_ONE);
       mode = 'wave';
       wave = parseWaveIds(argv[++i]);
     } else if (arg === '--demo') {
@@ -69,6 +73,11 @@ export function parseArgs(argv) {
     } else {
       throw new UsageError(`Unexpected argument ${arg}`);
     }
+  }
+  if (mode === 'free') {
+    if (id) throw new UsageError('--free takes no roadmap id');
+    if (demo || noDemo) throw new UsageError('--free records no demo: --demo and --no-demo do not go with it');
+    return { id: 'free', mode, base, rebuild, noDemo: true, dryRun };
   }
   if (mode === 'wave') {
     if (id) throw new UsageError(`--wave takes the ids as its value, not "${id}"`);
