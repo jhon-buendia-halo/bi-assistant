@@ -14,6 +14,11 @@ import {
   RunStreamHandlers,
   WorkflowRunsApiService,
 } from '../../services/workflow-runs-api.service';
+import { of } from 'rxjs';
+import {
+  sampleReadinessPanelItem,
+  sampleReadinessReport,
+} from '../../../sessions/models/readiness.testing';
 import { NO_STEP_SELECTED, WorkflowPanel } from './workflow-panel';
 
 const STEP = (id: string, title: string, input: string[], output: string[]) => ({
@@ -93,6 +98,7 @@ class FakeRunsApi {
     signal?: AbortSignal;
   }[] = [];
   getRun = jasmine.createSpy('getRun');
+  downloadPanelItem = jasmine.createSpy('downloadPanelItem');
 
   streamRun(
     workflowId: string,
@@ -668,6 +674,148 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(text('workflow-run-context')).toBe(
         'Follows up on “Which team scored the most goals?”',
       );
+    });
+
+    describe('a Data Readiness run (1.23.16; data-readiness R2, R5)', () => {
+      const REPORT = sampleReadinessReport({ id: 'r1', datasourceName: 'World Cup DB' });
+      const READINESS: WorkflowDetail = {
+        ...ASSISTANT,
+        id: 'agent:data-readiness',
+        name: 'Data Readiness Agent',
+        agents: [{ key: 'data-readiness', name: 'Data Readiness Agent' }],
+        input: [
+          {
+            name: 'dataset',
+            label: 'Dataset',
+            type: 'dataset',
+            required: true,
+            datasourceKinds: ['postgres', 'databricks'],
+          },
+          {
+            name: 'question',
+            label: 'Question',
+            type: 'textarea',
+            required: false,
+            placeholder: 'Assess the readiness of this dataset',
+            default: 'Assess the readiness of this dataset',
+          },
+        ],
+      };
+      const SQL_FILE = {
+        id: 'file:synthetic/world_cup.sql',
+        kind: 'file' as const,
+        title: 'Synthetic data — World Cup',
+        shownAt: '2026-11-11T10:00:02.000Z',
+        path: 'synthetic/world_cup.sql',
+        bytes: 2048,
+      };
+
+      function readinessRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
+        return assistantRun({
+          workflowId: 'agent:data-readiness',
+          workflowName: 'Data Readiness Agent',
+          input: { dataset: 'World Cup Core', question: 'Assess the readiness of this dataset' },
+          question: 'Assess the readiness of this dataset',
+          answer: {
+            role: 'assistant',
+            content: 'The dataset scored 82.',
+            at: 'x',
+            readinessReport: {
+              reportId: 'r1',
+              datasourceName: 'World Cup DB',
+              overallScore: 82,
+              maturity: 'Managed',
+              generatedAt: REPORT.generatedAt,
+            },
+          },
+          panelItems: [sampleReadinessPanelItem('r1')],
+          ...overrides,
+        });
+      }
+
+      function finishRun(run: WorkflowRun): void {
+        click('workflow-run');
+        const h = runs.last.handlers;
+        h.onRun!({ runId: run.id, workflowId: run.workflowId });
+        h.onDone!(run);
+        fixture.detectChanges();
+      }
+
+      it('the running tool row shows the assessment progress', () => {
+        openAssistant(READINESS);
+        click('workflow-run');
+        const h = runs.last.handlers;
+        h.onRun!({ runId: 'run-1', workflowId: 'agent:data-readiness' });
+        h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
+        h.onTool!({ name: 'assess_data_readiness' });
+        h.onToolProgress!({
+          tool: 'assess_data_readiness',
+          phase: 'profiling',
+          message: 'Profiling world_cup.goals (3/12)…',
+          done: 3,
+          total: 12,
+        });
+        fixture.detectChanges();
+        expect(q('workflow-run-tool')?.textContent).toContain(
+          'Profiling world_cup.goals (3/12)…',
+        );
+      });
+
+      it('Open scorecard on the readiness card shows the scorecard in the Run tab, and Close hides it', () => {
+        openAssistant(READINESS);
+        finishRun(readinessRun());
+        expect(q('workflow-run-scorecard')).toBeNull();
+        click('readiness-open-scorecard');
+        http
+          .expectOne((r) => r.url.endsWith('/data-readiness/assessments/r1'))
+          .flush(REPORT);
+        fixture.detectChanges();
+        const scorecard = q('workflow-run-scorecard')!;
+        expect(scorecard.querySelector('[data-testid="readiness-scorecard"]')?.textContent).toContain(
+          'World Cup DB',
+        );
+        expect(scorecard.textContent).toContain('Past assessments');
+        click('workflow-run-scorecard-close');
+        expect(q('workflow-run-scorecard')).toBeNull();
+      });
+
+      it('a new run closes the scorecard of the earlier one', () => {
+        openAssistant(READINESS);
+        finishRun(readinessRun());
+        click('readiness-open-scorecard');
+        http
+          .expectOne((r) => r.url.endsWith('/data-readiness/assessments/r1'))
+          .flush(REPORT);
+        finishRun(readinessRun({ id: 'run-2' }));
+        expect(q('workflow-run-scorecard')).toBeNull();
+      });
+
+      it("lists the run's synthetic SQL files and downloads one through the run's route", () => {
+        runs.downloadPanelItem.and.returnValue(of(new Blob(['INSERT INTO t VALUES (1);'])));
+        spyOn(URL, 'createObjectURL').and.returnValue('blob:x');
+        const clicks = spyOn(HTMLAnchorElement.prototype, 'click');
+        openAssistant(READINESS);
+        finishRun(readinessRun({ panelItems: [sampleReadinessPanelItem('r1'), SQL_FILE] }));
+        const files = q('workflow-run-files')!;
+        expect(files.textContent).toContain('Synthetic data — World Cup');
+        expect(files.textContent).toContain('world_cup.sql');
+        const button = files.querySelector<HTMLButtonElement>(
+          'button[aria-label="Download world_cup.sql"]',
+        )!;
+        button.click();
+        fixture.detectChanges();
+        expect(runs.downloadPanelItem).toHaveBeenCalledOnceWith(
+          'run-1',
+          'file:synthetic/world_cup.sql',
+        );
+        expect(clicks).toHaveBeenCalled();
+      });
+
+      it('a run without file items lists no files', () => {
+        openAssistant(READINESS);
+        finishRun(readinessRun());
+        expect(q('workflow-run-files')).toBeNull();
+      });
     });
 
     it('Stop ends the run: the run reads "Run stopped"', () => {

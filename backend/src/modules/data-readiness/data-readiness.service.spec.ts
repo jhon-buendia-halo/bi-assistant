@@ -403,6 +403,19 @@ describe('DataReadinessService', () => {
       expect(report.sessionId).toBe('s-9');
     });
 
+    it('a report from a run stores the trimmed runId and no sessionId (1.23.16)', async () => {
+      const { service, repository, stored } = build();
+      const report = await service.assess(
+        { datasourceId: 'ds-pg', runId: '  run-uuid ' },
+        NOW,
+      );
+      expect(report.runId).toBe('run-uuid');
+      expect(report).not.toHaveProperty('sessionId');
+      repository.listByDatasource.mockResolvedValue(stored);
+      const { reports } = await service.list('ds-pg');
+      expect(reports.find((r) => r.id === report.id)?.runId).toBe('run-uuid');
+    });
+
     it('drops keys that no longer exist and counts only assessed entities', async () => {
       mockPostgres.mockResolvedValue(profile([entity('public', 'orders')]));
       const { service } = build();

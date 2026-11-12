@@ -74,6 +74,14 @@ export class WorkflowRunsApiService {
     );
   }
 
+  /** A run's file panel item as its bytes (api.md 126). */
+  downloadPanelItem(runId: string, itemId: string): Observable<Blob> {
+    return this.http.get(
+      `${API_BASE_URL}/workflow-runs/${encodeURIComponent(runId)}/panel-items/${encodeURIComponent(itemId)}/download`,
+      { responseType: 'blob' },
+    );
+  }
+
   /**
    * Rate the run's answer (api.md 128): a thumbs-up saves a verified query,
    * a thumbs-down removes it. Answers the updated run.

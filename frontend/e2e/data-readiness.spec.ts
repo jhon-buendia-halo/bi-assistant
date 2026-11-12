@@ -5,6 +5,7 @@ import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { apiJson } from './helpers/api';
 import { saveLenaiSettings } from './helpers/agents-api';
+import { scenarioStep } from './support/demo-captions';
 import { WORLD_CUP_DATASOURCE } from './helpers/app-actions';
 
 /** Saves an evidence screenshot when E2E_EVIDENCE_DIR names a folder. */
@@ -155,6 +156,7 @@ interface ReadinessReport {
   dimensionScores: DimensionScore[];
   findings: { dimension: Dimension; severity: Severity }[];
   sessionId?: string;
+  runId?: string;
   notProfiled?: {
     entity: string;
     reason: 'too-large' | 'timed-out';
@@ -456,6 +458,170 @@ test.afterEach(async () => {
 });
 
 // ------------------------------------------------------------ scenarios
+
+test(
+  'I run the Data Readiness Agent on a dataset',
+  { tag: ['@demo', '@story-1.23.16'] },
+  async ({ page }) => {
+    const followUp = 'Show the rows behind the worst finding';
+    const goals = worldCupKey('goals');
+    const sql = `SELECT id, scorer_player_id, assist_player_id FROM ${goals} WHERE assist_player_id IS NULL ORDER BY id LIMIT 20`;
+    let datasourceId = '';
+    let runId = '';
+    const run = page.getByTestId('workflow-run');
+    const answer = page.getByTestId('run-answer');
+
+    await scenarioStep(
+      page,
+      'Given the World Cup sample datasource and a dataset "World Cup" over it exist',
+      async () => {
+        datasourceId = await seedWorldCup(page);
+      },
+    );
+    // The stub: the assessment run calls assess_data_readiness, then answers;
+    // the follow-up drills down with describe_entity and run_readonly_sql,
+    // then answers with the rows the query returned as a table.
+    stub.reply = (request) => {
+      const results = turnToolResults(request);
+      if (lastUserText(request) === ASSESS_QUESTION) {
+        return results.length === 0
+          ? { toolCall: { name: 'assess_data_readiness', arguments: { dataset: DATASET } } }
+          : { text: ASSESS_ANSWER };
+      }
+      if (lastUserText(request) !== followUp) return { text: 'Noted.' };
+      if (results.length === 0) {
+        return { toolCall: { name: 'describe_entity', arguments: { entity: goals, datasourceId } } };
+      }
+      if (results.length === 1) {
+        return {
+          toolCall: {
+            name: 'run_readonly_sql',
+            arguments: { sql, datasourceId, rationale: 'The goals with no assist.' },
+          },
+        };
+      }
+      const { rows = [] } = JSON.parse(results[1]) as { rows?: Record<string, unknown>[] };
+      const table = [
+        '| id | scorer_player_id |',
+        '| --- | --- |',
+        ...rows.map((row) => `| ${String(row['id'])} | ${String(row['scorer_player_id'])} |`),
+      ].join('\n');
+      return { text: `There are ${rows.length} goals with a null assist_player_id.\n\n${table}` };
+    };
+
+    await scenarioStep(
+      page,
+      'When I open the "Data Readiness Agent" from Workflows and click Execute',
+      async () => {
+        await openWorkflows(page);
+        await page.getByTestId(`workflow-agent:${AGENT_KEY}`).click();
+        await expect(page.getByTestId('workflow-detail-name')).toHaveText(AGENT);
+        await page.getByTestId('workflow-execute').click();
+        await expect(page.getByTestId('workflow-panel-tab-run')).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+      },
+    );
+    await scenarioStep(
+      page,
+      `Then the Run tab offers the dataset "${DATASET}" and the question "${ASSESS_QUESTION}"`,
+      async () => {
+        const dataset = page.getByTestId('workflow-input-dataset');
+        await expect(dataset.locator('option', { hasText: DATASET })).toHaveCount(1);
+        await expect(page.getByTestId('workflow-input-question')).toHaveValue(ASSESS_QUESTION);
+        for (const [index, starter] of STARTERS.entries()) {
+          await expect(page.getByTestId(`workflow-example-${index}`)).toHaveText(starter);
+        }
+      },
+    );
+    await scenarioStep(page, `When I pick "${DATASET}" and click Execute`, async () => {
+      await page.getByTestId('workflow-input-dataset').selectOption({ label: DATASET });
+      // Records every text the running tool row shows: the run lasts well
+      // under a second, so the progress lines are read back afterwards.
+      await page.evaluate(() => {
+        const seen: string[] = [];
+        (window as unknown as { __toolRowTexts: string[] }).__toolRowTexts = seen;
+        new MutationObserver(() => {
+          document
+            .querySelectorAll('[data-testid="workflow-run-tool"]')
+            .forEach((row) => seen.push((row.textContent ?? '').replace(/\s+/g, ' ').trim()));
+        }).observe(document.body, { subtree: true, childList: true, characterData: true });
+      });
+      await run.click();
+    });
+    await scenarioStep(
+      page,
+      'Then the "assess_data_readiness" row shows "Profiling … (n/m)…" while it runs',
+      async () => {
+        await expect(answer).toContainText(ASSESS_ANSWER, { timeout: TURN_TIMEOUT });
+        const texts = await page.evaluate(
+          () => (window as unknown as { __toolRowTexts: string[] }).__toolRowTexts,
+        );
+        expect(
+          texts.some((text) => /^assess_data_readiness\s*Profiling .+ \(\d+\/\d+\)…$/.test(text)),
+          `a profiling line on the tool row, among: ${[...new Set(texts)].join(' | ')}`,
+        ).toBe(true);
+      },
+    );
+    await scenarioStep(
+      page,
+      'And the answer carries a readiness card, and the stored report records the run that made it',
+      async () => {
+        await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+        const [newest] = await listReports(page, datasourceId);
+        expect(newest, 'the run stored a report').toBeTruthy();
+        const report = await getReport(page, newest.id);
+        expect(report.sessionId, 'a report from a run names no session').toBeUndefined();
+        runId = report.runId ?? '';
+        expect(runId, 'the report names its run').not.toBe('');
+        const stored = await apiJson<{ workflowId: string; status: string }>(
+          page,
+          'GET',
+          `/workflow-runs/${runId}`,
+        );
+        expect(stored.workflowId).toBe(`agent:${AGENT_KEY}`);
+        const card = answer.getByTestId('readiness-card');
+        await expect(card).toContainText(WORLD_CUP_DATASOURCE);
+        await expect(card.getByTestId('readiness-card-score')).toContainText(
+          `${report.overallScore}/100 · ${report.maturity}`,
+        );
+      },
+    );
+    await scenarioStep(page, 'When I click "Open scorecard"', async () => {
+      await answer.getByTestId('readiness-open-scorecard').click();
+    });
+    await scenarioStep(
+      page,
+      'Then the Run tab shows the scorecard for the World Cup datasource, with Past assessments',
+      async () => {
+        const [newest] = await listReports(page, datasourceId);
+        const report = await getReport(page, newest.id);
+        const section = page.getByTestId('workflow-run-scorecard');
+        await expect(section).toBeVisible();
+        await expectScorecardShows(page, report);
+        await expect(section.getByRole('button', { name: /Past assessments/ })).toBeVisible();
+      },
+    );
+    await scenarioStep(page, `When I follow up with "${followUp}"`, async () => {
+      await page.getByTestId('workflow-follow-up-input').fill(followUp);
+      await page.getByTestId('workflow-run-follow-up').click();
+    });
+    await scenarioStep(page, 'Then I see the rows behind the finding in a table', async () => {
+      await expect(answer).toContainText('goals with a null assist_player_id', {
+        timeout: TURN_TIMEOUT,
+      });
+      const nulls = Number(
+        await worldCupScalar('select count(*) from world_cup.goals where assist_player_id is null'),
+      );
+      const rows = answer.locator('table tbody tr');
+      await expect(rows).toHaveCount(Math.min(nulls, 20));
+      await expect(page.getByTestId('workflow-run-context')).toHaveText(
+        `Follows up on “${ASSESS_QUESTION}”`,
+      );
+    });
+  },
+);
 
 test('start chat is blocked without a PostgreSQL or Databricks dataset', async ({
   page,

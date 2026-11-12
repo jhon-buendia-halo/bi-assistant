@@ -618,7 +618,7 @@ The app is single-user (ADR-0030): one built-in super admin, id `local`, is alwa
 
 ### 3.15 `readiness_reports` — data-readiness assessments
 
-One document per assessment ([data-readiness](../capabilities/data-readiness/spec.md) R24, ADR-0031). It is written once by `POST /data-readiness/assessments` or the agent's `assess_data_readiness`, and never updated. No delete route exists. A datasource deleted later leaves its reports in place (references by value, 3.13). Additive collection, no migration.
+One document per assessment ([data-readiness](../capabilities/data-readiness/spec.md) R24, ADR-0031). It is written once by `POST /data-readiness/assessments` or the agent's `assess_data_readiness` (in a chat or a run), and never updated. No delete route exists. A datasource deleted later leaves its reports in place (references by value, 3.13). Additive collection, no migration.
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
@@ -634,6 +634,7 @@ One document per assessment ([data-readiness](../capabilities/data-readiness/spe
 | `findings` | `Finding[]` | yes | In engine order (R23). Each is `{ dimension: Dimension, level: 'entity' \| 'source', namespace?: string, entity?: string, field?: string, severity: 'info' \| 'low' \| 'medium' \| 'high', measured?: string, description: string, recommendation: string }`. `field` may name several columns, comma-separated, for a key or a column pair. |
 | `notProfiled` | `{ entity: string, reason: 'too-large' \| 'timed-out', rowCount?: number }[]` | no | Entities whose column checks were skipped (ADR-0033). Absent when there are none. Older reports lack it; no migration. |
 | `sessionId` | uuid | no | The chat session it was run from, when there was one. |
+| `runId` | uuid | no | The workflow run it was run from (3.16), when there was one; the readiness bridge sets it for a run host, never with `sessionId` (since 1.23.16). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 `Dimension` is one of `completeness`, `validity`, `consistency`, `uniqueness`, `integrity`, `accessibility`, `timeliness`, `reasonability`, `accuracy`, `currency`. `Severity` is one of `info`, `low`, `medium`, `high`. The wire shape `ReadinessReport` ([api.md](api.md) 2.17) is this document without `createdAt` and `updatedAt`.

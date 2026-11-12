@@ -532,54 +532,54 @@ specs/capabilities/app-shell/spec.md:357-361  ## Acceptance
 specs/capabilities/app-shell/spec.md:363-369  ## Open questions
 
 specs/capabilities/data-readiness/spec.md:5-22  ## Concepts
-specs/capabilities/data-readiness/spec.md:24-216  ## Rules
-specs/capabilities/data-readiness/spec.md:26-46  ### The agent on the hub
+specs/capabilities/data-readiness/spec.md:24-223  ## Rules
+specs/capabilities/data-readiness/spec.md:26-52  ### The agent on the hub
 specs/capabilities/data-readiness/spec.md:28-36  R1 The Data Readiness Agent SHALL be a built-in agent shown on the Agent
-specs/capabilities/data-readiness/spec.md:37-46  R2 **Start chat** on the Data Readiness Agent's workflow (R1) SHALL creat
-specs/capabilities/data-readiness/spec.md:48-67  ### How the agent works
-specs/capabilities/data-readiness/spec.md:50-57  R3 The agent SHALL have exactly these tools, besides the shared `show_in_
-specs/capabilities/data-readiness/spec.md:58-62  R4 The agent SHALL quote a score, a band or a finding only from a tool re
-specs/capabilities/data-readiness/spec.md:63-67  R5 After a successful `assess_data_readiness` or `get_readiness_report`,
-specs/capabilities/data-readiness/spec.md:69-108  ### Profiling
-specs/capabilities/data-readiness/spec.md:71-74  R6 An assessment SHALL build a source profile from aggregate, read-only q
-specs/capabilities/data-readiness/spec.md:75-81  R7 Per entity in scope, the profile SHALL hold:
-specs/capabilities/data-readiness/spec.md:82-87  R8 Semantic types SHALL be classified from the declared type:
-specs/capabilities/data-readiness/spec.md:88-102  R9 A readable `text` column SHALL get a **format rule** from its name, ca
-specs/capabilities/data-readiness/spec.md:103-103  R10 A readable `text` column with between 2 and 1,000 distinct values SHAL
-specs/capabilities/data-readiness/spec.md:104-108  R11 The profile's relationships SHALL be:
-specs/capabilities/data-readiness/spec.md:110-156  ### Checks
-specs/capabilities/data-readiness/spec.md:119-124  R12 **Completeness** (entity check). For an entity with a row count above
-specs/capabilities/data-readiness/spec.md:125-125  R13 **Validity** (entity check). Each column with a format rule (R9) count
-specs/capabilities/data-readiness/spec.md:126-126  R14 **Consistency** (entity check). Each column with both a distinct count
-specs/capabilities/data-readiness/spec.md:127-129  R15 **Uniqueness** (entity check). Each declared key counts as one check.
-specs/capabilities/data-readiness/spec.md:130-130  R16 **Integrity** (source check). Each relationship counts as one check. A
-specs/capabilities/data-readiness/spec.md:131-133  R17 **Accessibility** (source check). Each entity counts as one check. Per
-specs/capabilities/data-readiness/spec.md:134-143  R18 **Timeliness** (entity check). The freshness signal is the first of th
-specs/capabilities/data-readiness/spec.md:144-155  R19 **Reasonability** (entity check). One check each for:
-specs/capabilities/data-readiness/spec.md:156-156  R20 Accuracy and currency SHALL be listed in every report as **not assesse
-specs/capabilities/data-readiness/spec.md:158-169  ### Scoring
-specs/capabilities/data-readiness/spec.md:160-160  R21 A dimension's score SHALL be `round(100 × (1 − Σ weight / checks run))
-specs/capabilities/data-readiness/spec.md:161-168  R22 The overall score SHALL be the rounded mean of the eight assessed dime
-specs/capabilities/data-readiness/spec.md:169-169  R23 The same profile with the same `now` SHALL always give the same scores
-specs/capabilities/data-readiness/spec.md:171-190  ### Saved reports
-specs/capabilities/data-readiness/spec.md:173-181  R24 Each assessment SHALL be stored as a report with:
-specs/capabilities/data-readiness/spec.md:182-189  R25 The **scorecard** SHALL show:
-specs/capabilities/data-readiness/spec.md:190-190  R26 The scorecard SHALL offer **Past assessments**. It lists the stored re
-specs/capabilities/data-readiness/spec.md:192-196  ### Fidelity
-specs/capabilities/data-readiness/spec.md:194-196  R27 A golden suite SHALL run the engine over labelled source profiles copi
-specs/capabilities/data-readiness/spec.md:198-216  ### Speed, not-profiled entities and progress (ADR-0033)
-specs/capabilities/data-readiness/spec.md:202-204  R28 **One pooled session per assessment.** An assessment SHALL profile thr
-specs/capabilities/data-readiness/spec.md:205-207  R29 **Per-table statistics.** A readable entity's statistics statement SHA
-specs/capabilities/data-readiness/spec.md:208-210  R30 **Row-count gate.** The profiler SHALL count an entity's rows first. A
-specs/capabilities/data-readiness/spec.md:211-213  R31 **Not-profiled entities in the report.** A stored report SHALL list it
-specs/capabilities/data-readiness/spec.md:214-215  R32 **Live progress.** While `assess_data_readiness` runs, the app SHALL s
-specs/capabilities/data-readiness/spec.md:216-216  R33 **Stop and reload cancel the assessment.** Stopping the turn or reload
-specs/capabilities/data-readiness/spec.md:218-230  ## Edge cases and errors
-specs/capabilities/data-readiness/spec.md:232-238  ## Contracts
-specs/capabilities/data-readiness/spec.md:240-248  ## UI
-specs/capabilities/data-readiness/spec.md:250-322  ## Flows
-specs/capabilities/data-readiness/spec.md:252-322  ### Feature: Data readiness
-specs/capabilities/data-readiness/spec.md:324-336  ## Acceptance
+specs/capabilities/data-readiness/spec.md:37-52  R2 The Data Readiness Agent's workflow (R1) SHALL run on one dataset from
+specs/capabilities/data-readiness/spec.md:54-74  ### How the agent works
+specs/capabilities/data-readiness/spec.md:56-63  R3 The agent SHALL have exactly these tools, besides the shared `show_in_
+specs/capabilities/data-readiness/spec.md:64-68  R4 The agent SHALL quote a score, a band or a finding only from a tool re
+specs/capabilities/data-readiness/spec.md:69-74  R5 After a successful `assess_data_readiness` or `get_readiness_report`,
+specs/capabilities/data-readiness/spec.md:76-115  ### Profiling
+specs/capabilities/data-readiness/spec.md:78-81  R6 An assessment SHALL build a source profile from aggregate, read-only q
+specs/capabilities/data-readiness/spec.md:82-88  R7 Per entity in scope, the profile SHALL hold:
+specs/capabilities/data-readiness/spec.md:89-94  R8 Semantic types SHALL be classified from the declared type:
+specs/capabilities/data-readiness/spec.md:95-109  R9 A readable `text` column SHALL get a **format rule** from its name, ca
+specs/capabilities/data-readiness/spec.md:110-110  R10 A readable `text` column with between 2 and 1,000 distinct values SHAL
+specs/capabilities/data-readiness/spec.md:111-115  R11 The profile's relationships SHALL be:
+specs/capabilities/data-readiness/spec.md:117-163  ### Checks
+specs/capabilities/data-readiness/spec.md:126-131  R12 **Completeness** (entity check). For an entity with a row count above
+specs/capabilities/data-readiness/spec.md:132-132  R13 **Validity** (entity check). Each column with a format rule (R9) count
+specs/capabilities/data-readiness/spec.md:133-133  R14 **Consistency** (entity check). Each column with both a distinct count
+specs/capabilities/data-readiness/spec.md:134-136  R15 **Uniqueness** (entity check). Each declared key counts as one check.
+specs/capabilities/data-readiness/spec.md:137-137  R16 **Integrity** (source check). Each relationship counts as one check. A
+specs/capabilities/data-readiness/spec.md:138-140  R17 **Accessibility** (source check). Each entity counts as one check. Per
+specs/capabilities/data-readiness/spec.md:141-150  R18 **Timeliness** (entity check). The freshness signal is the first of th
+specs/capabilities/data-readiness/spec.md:151-162  R19 **Reasonability** (entity check). One check each for:
+specs/capabilities/data-readiness/spec.md:163-163  R20 Accuracy and currency SHALL be listed in every report as **not assesse
+specs/capabilities/data-readiness/spec.md:165-176  ### Scoring
+specs/capabilities/data-readiness/spec.md:167-167  R21 A dimension's score SHALL be `round(100 × (1 − Σ weight / checks run))
+specs/capabilities/data-readiness/spec.md:168-175  R22 The overall score SHALL be the rounded mean of the eight assessed dime
+specs/capabilities/data-readiness/spec.md:176-176  R23 The same profile with the same `now` SHALL always give the same scores
+specs/capabilities/data-readiness/spec.md:178-197  ### Saved reports
+specs/capabilities/data-readiness/spec.md:180-188  R24 Each assessment SHALL be stored as a report with:
+specs/capabilities/data-readiness/spec.md:189-196  R25 The **scorecard** SHALL show:
+specs/capabilities/data-readiness/spec.md:197-197  R26 The scorecard SHALL offer **Past assessments**. It lists the stored re
+specs/capabilities/data-readiness/spec.md:199-203  ### Fidelity
+specs/capabilities/data-readiness/spec.md:201-203  R27 A golden suite SHALL run the engine over labelled source profiles copi
+specs/capabilities/data-readiness/spec.md:205-223  ### Speed, not-profiled entities and progress (ADR-0033)
+specs/capabilities/data-readiness/spec.md:209-211  R28 **One pooled session per assessment.** An assessment SHALL profile thr
+specs/capabilities/data-readiness/spec.md:212-214  R29 **Per-table statistics.** A readable entity's statistics statement SHA
+specs/capabilities/data-readiness/spec.md:215-217  R30 **Row-count gate.** The profiler SHALL count an entity's rows first. A
+specs/capabilities/data-readiness/spec.md:218-220  R31 **Not-profiled entities in the report.** A stored report SHALL list it
+specs/capabilities/data-readiness/spec.md:221-222  R32 **Live progress.** While `assess_data_readiness` runs, the app SHALL s
+specs/capabilities/data-readiness/spec.md:223-223  R33 **Stop and reload cancel the assessment.** Stopping the turn or reload
+specs/capabilities/data-readiness/spec.md:225-237  ## Edge cases and errors
+specs/capabilities/data-readiness/spec.md:239-245  ## Contracts
+specs/capabilities/data-readiness/spec.md:247-255  ## UI
+specs/capabilities/data-readiness/spec.md:257-331  ## Flows
+specs/capabilities/data-readiness/spec.md:259-331  ### Feature: Data readiness
+specs/capabilities/data-readiness/spec.md:333-345  ## Acceptance
 
 specs/capabilities/dataset-ontology/spec.md:5-9  ## Concepts
 specs/capabilities/dataset-ontology/spec.md:11-73  ## Rules
@@ -1204,7 +1204,7 @@ specs/capabilities/synthetic-data/spec.md:117-117  R37 Before every raw export t
 specs/capabilities/synthetic-data/spec.md:118-118  R38 The rows SHALL be **re-read on export** with the profile's tables, sam
 specs/capabilities/synthetic-data/spec.md:119-121  R39 A raw `.sql` export SHALL use the dialect writer of the datasource wit
 specs/capabilities/synthetic-data/spec.md:122-122  R40 The Data Readiness Agent SHALL have two tools for this capability, `pr
-specs/capabilities/synthetic-data/spec.md:123-123  R41 **Chat limits:** at most 20 tables per call (no `tables` means every t
+specs/capabilities/synthetic-data/spec.md:123-123  R41 **Agent limits** (in a chat or a run): at most 20 tables per call (no
 specs/capabilities/synthetic-data/spec.md:124-124  R42 `profile_data_sample` SHALL return a projection of the profile of R7-R
 specs/capabilities/synthetic-data/spec.md:125-125  R43 `generate_synthetic_data` SHALL build the `.sql` script of R24-R30 in
 specs/capabilities/synthetic-data/spec.md:126-126  R44 A tool call with no `profileId` SHALL profile the tables first; with a
@@ -1406,7 +1406,7 @@ specs/capabilities/workflows/spec.md:40-42  R17 A run MAY name one earlier run a
 specs/capabilities/workflows/spec.md:43-43  R18 Every run of a workflow on an input, code-only or agent, streamed (119
 specs/capabilities/workflows/spec.md:44-44  R19 The run history SHALL list every stored run, newest first, optionally
 specs/capabilities/workflows/spec.md:45-47  R20 Deleting a run SHALL remove it, its workspace and its files, and its m
-specs/capabilities/workflows/spec.md:48-48  R21 The Assistant, Questions to Insights v2 and each user agent's workflow
+specs/capabilities/workflows/spec.md:48-48  R21 The Assistant, Questions to Insights v2, the Data Readiness Agent and
 specs/capabilities/workflows/spec.md:49-49  R22 The answer on the Run tab SHALL offer the same rating as a chat answer
 specs/capabilities/workflows/spec.md:51-64  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:66-70  ## Contracts
@@ -1972,7 +1972,7 @@ specs/system/data-model.md:61-73  ### 2.1 Abstract interface
 specs/system/data-model.md:75-79  ### 2.2 Filters and sorts
 specs/system/data-model.md:81-89  ### 2.3 Secret handling (`CryptoService`)
 specs/system/data-model.md:91-97  ### 2.4 Concurrency and atomicity
-specs/system/data-model.md:99-673  ## 3. Collections
+specs/system/data-model.md:99-674  ## 3. Collections
 specs/system/data-model.md:125-180  ### 3.1 `connections` — datasources
 specs/system/data-model.md:182-210  ### 3.2 `settings` — LLM settings
 specs/system/data-model.md:201-210  #### 3.2.1 `settings` document `ui-preferences`
@@ -1997,24 +1997,24 @@ specs/system/data-model.md:572-574  ### 3.11 Deep-analysis jobs (not persisted)
 specs/system/data-model.md:576-581  ### 3.12 Other non-persisted data
 specs/system/data-model.md:583-608  ### 3.13 Relationships and referential rules
 specs/system/data-model.md:610-617  ### 3.14 Ownership (legacy `ownerId`)
-specs/system/data-model.md:619-639  ### 3.15 `readiness_reports` — data-readiness assessments
-specs/system/data-model.md:641-673  ### 3.16 `workflow_runs` — workflow runs
-specs/system/data-model.md:675-821  ## 4. Files on disk
-specs/system/data-model.md:679-712  ### 4.1 Workspace layout
-specs/system/data-model.md:714-732  ### 4.2 Visual version directory
-specs/system/data-model.md:734-749  ### 4.3 `manifest.json`
-specs/system/data-model.md:751-799  ### 4.4 Visual spec (`spec.json`, schema v1)
-specs/system/data-model.md:801-803  ### 4.5 Reports
-specs/system/data-model.md:805-807  ### 4.6 No skills in workspaces
-specs/system/data-model.md:809-811  ### 4.8 Old user skill folder
-specs/system/data-model.md:813-821  ### 4.7 Legacy visual layout
-specs/system/data-model.md:823-832  ## 5. Agent memory
-specs/system/data-model.md:834-866  ## 6. Migrations
-specs/system/data-model.md:868-977  ## 7. External databases
-specs/system/data-model.md:872-893  ### 7.1 The Intellify database
-specs/system/data-model.md:895-968  ### 7.2 The `rfp` schema
-specs/system/data-model.md:970-977  ### 7.3 Migration rule
-specs/system/data-model.md:979-990  ## Open questions, gaps and discrepancies
+specs/system/data-model.md:619-640  ### 3.15 `readiness_reports` — data-readiness assessments
+specs/system/data-model.md:642-674  ### 3.16 `workflow_runs` — workflow runs
+specs/system/data-model.md:676-822  ## 4. Files on disk
+specs/system/data-model.md:680-713  ### 4.1 Workspace layout
+specs/system/data-model.md:715-733  ### 4.2 Visual version directory
+specs/system/data-model.md:735-750  ### 4.3 `manifest.json`
+specs/system/data-model.md:752-800  ### 4.4 Visual spec (`spec.json`, schema v1)
+specs/system/data-model.md:802-804  ### 4.5 Reports
+specs/system/data-model.md:806-808  ### 4.6 No skills in workspaces
+specs/system/data-model.md:810-812  ### 4.8 Old user skill folder
+specs/system/data-model.md:814-822  ### 4.7 Legacy visual layout
+specs/system/data-model.md:824-833  ## 5. Agent memory
+specs/system/data-model.md:835-867  ## 6. Migrations
+specs/system/data-model.md:869-978  ## 7. External databases
+specs/system/data-model.md:873-894  ### 7.1 The Intellify database
+specs/system/data-model.md:896-969  ### 7.2 The `rfp` schema
+specs/system/data-model.md:971-978  ### 7.3 Migration rule
+specs/system/data-model.md:980-991  ## Open questions, gaps and discrepancies
 
 specs/system/delivery.md:7-41  ## 1. Electron single-app delivery
 specs/system/delivery.md:24-26  ### Why `--base-href ./`

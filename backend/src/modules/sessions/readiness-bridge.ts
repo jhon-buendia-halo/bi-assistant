@@ -74,6 +74,7 @@ export interface ReadinessReports {
       datasourceId: string;
       entities?: string[];
       sessionId?: string;
+      runId?: string;
     },
     now?: Date,
     options?: {
@@ -256,6 +257,22 @@ export function readinessOrientationBlock(
   ].join('\n');
 }
 
+/**
+ * Id prefix of a run host (`run-<run id>`, agents.md 5.14), as
+ * `RUN_HOST_ID_PREFIX` in sessions.service.ts, which imports this file.
+ */
+const RUN_HOST_PREFIX = 'run-';
+
+/**
+ * Where an assessment came from, as the report records it (data-readiness
+ * R24): a run host's `runId`, else the chat's `sessionId`, never both.
+ */
+function origin(sessionId: string): { sessionId: string } | { runId: string } {
+  return sessionId.startsWith(RUN_HOST_PREFIX)
+    ? { runId: sessionId.slice(RUN_HOST_PREFIX.length) }
+    : { sessionId };
+}
+
 function kindLabel(kind: DatasourceKind | undefined): string {
   return (kind && KIND_LABELS[kind]) ?? kind ?? 'unknown';
 }
@@ -287,7 +304,7 @@ export class ReadinessBridge implements ReadinessToolServices {
       const request = {
         datasourceId: dataset.datasourceId,
         entities: dataset.tables,
-        sessionId: input.sessionId,
+        ...origin(input.sessionId),
       };
       report =
         input.signal || input.onProgress
