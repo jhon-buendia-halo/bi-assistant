@@ -5,7 +5,7 @@ description: Use once the user has accepted a change by hand (the acceptance gat
 
 # Acceptance gate — steps 6, 7, 10, 11
 
-Part of the workflow in [CLAUDE.md](../../../CLAUDE.md), which keeps the always-on core. Load this skill when the user accepts a change; step 9 between 7 and 10 is the `verify` skill. Scale to the change's size (**S / M / L**, defined in CLAUDE.md).
+Part of the [`workflow-strict`](../workflow-strict/SKILL.md) workflow; in [`workflow-free-style`](../workflow-free-style/SKILL.md) these steps are optional. Load this skill when the user accepts a change; step 9 between 7 and 10 is the `verify` skill. Scale to the change's size (**S / M / L**, defined in `workflow-strict`).
 
 ## 6. E2E impact analysis
 

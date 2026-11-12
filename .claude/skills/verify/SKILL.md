@@ -5,7 +5,7 @@ description: Use for the wave check (qa.mjs --wave, the demo and hand-over), the
 
 # Wave check, step 9, and the running app
 
-Part of the workflow in [CLAUDE.md](../../../CLAUDE.md), which keeps the always-on core. Load this skill before the wave check and before step 9. Run test commands quietly (Playwright `--reporter=dot`, Jest `--silent`, output to a log file) and read back only the summary or the failure block.
+Part of the [`workflow-strict`](../workflow-strict/SKILL.md) workflow (the wave check, the fast run and step 9) and step 4 of [`workflow-free-style`](../workflow-free-style/SKILL.md) (`node scripts/qa.mjs --free`: the gate's checks with no story and no evidence). Load this skill before the wave check and before step 9. Run test commands quietly (Playwright `--reporter=dot`, Jest `--silent`, output to a log file) and read back only the summary or the failure block.
 
 ## The step
 

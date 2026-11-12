@@ -35,6 +35,44 @@ Correctness fixes to the shipped app that don't belong to a product phase.
 
 ### Milestone 0.5 — Faster workflow, repo-only planning (M0-5) — archived, see roadmap-archive.md
 
+### Milestone 0.6 — Workflow modes: Strict and Free style (M0-6)
+
+Two workflows instead of one: the current eleven-step workflow becomes **Strict**, and a new **Free style** runs only understand, clarify, implement and checks, with every other step optional. At the start of a new session Claude asks which one to follow and remembers the answer for the workspace. `CLAUDE.md` becomes a short router that holds only the rules both workflows share. No app behaviour changes. Epic spec: [specs/epics/M0-6/spec.md](specs/epics/M0-6/spec.md). Requested by the user on 2026-11-12.
+
+#### 0.6.1 — Workflow choice at session start  `✅ Done`
+
+- **Intent:** the user picks the workflow for each new session, once, and Claude keeps to it.
+- **Scope:** `CLAUDE.md` rewritten as a router: what the app is, the mandatory first action, *Choose the workflow* (a picker with Strict and Free style; the answer saved in `.context/workflow-mode`; a later session or a resumed one confirms it in one line instead of asking; "switch to strict/free style" changes it mid-session), the rules both workflows share (never on `main`, specs change with the code, ports and Postgres from a worktree, bootstrap, read and output rules), and the model routing table. History lines (Jira dates, usage figures) leave `CLAUDE.md`.
+- **Out of scope:** changing what either workflow's steps do.
+- **Acceptance:** `CLAUDE.md` is under 60 lines, names both workflow skills and `.context/workflow-mode`, and repeats no rule that lives in `lessons.md` or a skill; `check-specs.py` passes.
+
+#### 0.6.2 — Strict workflow skill  `✅ Done`
+
+- **Intent:** the current workflow keeps working unchanged, loaded only when the user picks it.
+- **Scope:** a new project skill `workflow-strict` holding the `## Workflow` section moved from `CLAUDE.md` (the eleven steps, change sizes, decide-before-build, story lane, wave check, acceptance gate, the Epic gate); `workflow-start`, `workflow-implement`, `workflow-gate` and `verify` point at it instead of `CLAUDE.md`; switching from Free style to Strict mid-epic adds the roadmap story for the work already done.
+- **Out of scope:** editing the step skills' conventions.
+- **Acceptance:** every step line keeps the `<n>. **<title>** — <description>` form; no skill says the workflow is defined in `CLAUDE.md`.
+
+#### 0.6.3 — Free style workflow skill  `✅ Done`
+
+- **Intent:** a quick path for work that doesn't need the full process.
+- **Scope:** a new project skill `workflow-free-style`: 1 Understand the goal, 2 Clarify, 3 Implement changes, 4 Run checks and fix until green (`node scripts/qa.mjs --free`, and an agent's evals when its input changed); the other strict steps (roadmap, ADR, E2E impact and specs, evidence, changelog, retrospective) are optional. Kept from the shared rules: a new branch, never `main`, Conventional Commits, and spec lines the change makes false are updated.
+- **Out of scope:** builder or reviewer agents in Free style.
+- **Acceptance:** the skill lists the four steps, names the optional ones, and says how to switch to Strict.
+
+#### 0.6.4 — QA checks without a story (`qa.mjs --free`)  `✅ Done`
+
+- **Intent:** Free style's step 4 runs the same checks as the gate without a roadmap id.
+- **Scope:** `node scripts/qa.mjs --free [--base <ref>] [--rebuild] [--dry-run]`: the build, the full unit suites, backend lint and check-specs in parallel, then the Playwright specs the `--fast` selection picks (changed specs and `--only-changed` against the base); reports in `.qa-reports/free/`; writes nothing under `evidence/` and records no demo.
+- **Out of scope:** changing `--fast`, `--gate` or `--wave`.
+- **Acceptance:** `parseArgs(['--free'])` returns mode `free` with no id; an id with `--free` is a usage error; `--free --dry-run` prints the plan; `node --test scripts/qa-lib.test.mjs` passes.
+
+#### 0.6.5 — Workflow pane reads the strict skill  `✅ Done`
+
+- **Intent:** the `workflow-steps` mod keeps showing the real eleven steps after they leave `CLAUDE.md`.
+- **Scope:** the mod reads the `## Workflow` section from `.claude/skills/workflow-strict/SKILL.md`, then from `CLAUDE.md`, then falls back to its built-in copy; the mandatory first action is still read from `CLAUDE.md`; the pane says which file it read.
+- **Acceptance:** `claude plugin test` in the mod passes with a test for each source.
+
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
 Source of truth for scope and dates: Jira project **BA**, version *1.0 Beta* ([timeline](https://halo-powered.atlassian.net/jira/software/projects/BA/boards/2688/timeline)). Each milestone mirrors one Jira epic and each feature mirrors one story, so IDs map 1:1. Imported 2026-10-01. Status changes are made in both places.
