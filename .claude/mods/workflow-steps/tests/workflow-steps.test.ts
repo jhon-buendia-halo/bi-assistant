@@ -32,16 +32,19 @@ const NARROW = { ...PANE, props: { ...PANE.props, bodyColumns: 96 } } as const
 type On = Parameters<Parameters<typeof test>[1]>[1]
 
 // Stubs for everything the mod calls, with a session cost the test can raise.
-const world = (on: On, opts: { claudeMd?: string; failCommands?: RegExp } = {}) => {
+const world = (on: On, opts: { claudeMd?: string; strictSkill?: string; failCommands?: RegExp } = {}) => {
   const state = { usd: 0 }
   const clock = mock.clock(on)
   on('session.start', () => ({ cwd: '/work' }))
   on('command.register', () => ({ value: undefined }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.toast', () => ({ value: undefined }))
-  on('fs.read', ($, e) =>
-    e.path.endsWith('CLAUDE.md') && opts.claudeMd !== null ? { value: opts.claudeMd ?? CLAUDE_MD } : { deny: 'no such file' },
-  )
+  on('fs.read', ($, e) => {
+    if (e.path.endsWith('workflow-strict/SKILL.md')) {
+      return opts.strictSkill !== undefined ? { value: opts.strictSkill } : { deny: 'no such file' }
+    }
+    return e.path.endsWith('CLAUDE.md') && opts.claudeMd !== null ? { value: opts.claudeMd ?? CLAUDE_MD } : { deny: 'no such file' }
+  })
   on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200000 }, rateLimits: [], cost: { usd: state.usd } } }))
   on('tool.call', ($, e) => {
     const cmd = typeof (e as { command?: unknown }).command === 'string' ? ((e as { command: string }).command) : ''
@@ -377,6 +380,26 @@ test("a subagent's own turn credits its tokens to it and to the task it was spaw
   expect(await text(ui, /Agents +main +2\.5k/)).toBeDefined()
   expect(await text(ui, /↳ general-purpose · claude-haiku-4-5 · "rules tests" +4\.1k +✓/)).toBeDefined()
   expect(await text(ui, /✓ no subagent still running/)).toBeDefined()
+  await ui.unmount()
+})
+
+test('the steps come from the workflow-strict skill when CLAUDE.md has no Workflow section', async ($, on) => {
+  const router = '# Repo\n\n> **MANDATORY FIRST ACTION — read [lessons.md](lessons.md) before doing anything else.**\n\n## Choose the workflow\n'
+  const skill = CLAUDE_MD.replace('2. **Ask clarifying questions until the goal is 100% understood**', '2. **Clarify**')
+  world(on, { claudeMd: router, strictSkill: skill })
+  await start($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /From workflow-strict/)).toBeDefined()
+  expect(await text(ui, /#2 +Clarify.*step 2/)).toBeDefined()
+  expect(await text(ui, /#11 +Retrospective/)).toBeDefined()
+  await ui.unmount()
+})
+
+test('the steps come from CLAUDE.md when the workflow-strict skill is missing', async ($, on) => {
+  world(on)
+  await start($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /From CLAUDE\.md/)).toBeDefined()
   await ui.unmount()
 })
 

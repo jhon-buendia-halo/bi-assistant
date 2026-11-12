@@ -4,7 +4,7 @@ export type Step = {
   summary: string
 }
 
-export type StepsSource = 'claude-md' | 'fallback' | ''
+export type StepsSource = 'strict-skill' | 'claude-md' | 'fallback' | ''
 
 export type TaskStatus = 'running' | 'tentative' | 'done'
 
