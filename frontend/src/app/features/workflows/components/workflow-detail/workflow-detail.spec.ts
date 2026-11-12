@@ -4,7 +4,8 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { WorkflowDetail, WorkflowRunResult } from '../../models/workflow.model';
+import { WorkflowDetail } from '../../models/workflow.model';
+import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { WorkflowDetailPage } from './workflow-detail';
 
 const STEP = (id: string, title: string) => ({
@@ -28,13 +29,7 @@ const SEQ: WorkflowDetail = {
   bar: 'steps',
   trigger: 'run',
   input: [
-    {
-      name: 'text',
-      label: 'Text',
-      type: 'textarea',
-      required: true,
-      placeholder: 'Paste or type any text',
-    },
+    { name: 'text', label: 'Text', type: 'textarea', required: true },
   ],
   picksDatasets: false,
   datasets: [],
@@ -57,10 +52,12 @@ const V2: WorkflowDetail = {
   picksDatasets: true,
 };
 
-describe('WorkflowDetailPage, a run workflow (workflows R12, R13; ui.md 4.4b)', () => {
+describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.4b)', () => {
   let fixture: ComponentFixture<WorkflowDetailPage>;
   let http: HttpTestingController;
+  let designer: WorkflowDesigner;
   let el: HTMLElement;
+  let events: string[];
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -68,6 +65,8 @@ describe('WorkflowDetailPage, a run workflow (workflows R12, R13; ui.md 4.4b)', 
       providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
     http = TestBed.inject(HttpTestingController);
+    designer = TestBed.inject(WorkflowDesigner);
+    events = [];
   });
 
   afterEach(() => http.verify());
@@ -75,144 +74,135 @@ describe('WorkflowDetailPage, a run workflow (workflows R12, R13; ui.md 4.4b)', 
   function open(workflow: WorkflowDetail): void {
     fixture = TestBed.createComponent(WorkflowDetailPage);
     fixture.componentRef.setInput('workflowId', workflow.id);
+    const page = fixture.componentInstance;
+    page.back.subscribe(() => events.push('back'));
+    page.openPanel.subscribe(() => events.push('openPanel'));
+    page.startChat.subscribe((w) => events.push(`startChat:${w.id}`));
     fixture.detectChanges();
+    el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Loading workflow…');
     http
       .expectOne((r) => r.url.endsWith(`/workflows/${workflow.id}`))
       .flush(workflow);
     fixture.detectChanges();
-    el = fixture.nativeElement as HTMLElement;
   }
 
   const q = (testId: string) =>
     el.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null;
+  const text = (testId: string) => q(testId)?.textContent?.trim() ?? '';
 
-  function type(text: string): void {
-    const field = q('workflow-input-text') as HTMLTextAreaElement;
-    field.value = text;
-    field.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-  }
-
-  function run(): ReturnType<HttpTestingController['expectOne']> {
-    q('workflow-run')!.click();
-    fixture.detectChanges();
-    return http.expectOne(
-      (r) => r.method === 'POST' && r.url.endsWith('/workflows/seq-text-demo/runs'),
-    );
-  }
-
-  it('shows the input form and Run instead of Start chat, with no bar note or Agents', () => {
+  it('shows the breadcrumb, the name as h1, the id and kind, and the canvas', () => {
     open(SEQ);
-    expect(q('workflow-detail-kind')?.textContent?.trim()).toBe(
-      'Runs on an input',
+    const nav = el.querySelector('nav[aria-label="Breadcrumb"]')!;
+    expect(nav.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      'Workflows / Sequential test workflow',
     );
+    expect(nav.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe(
+      'Sequential test workflow',
+    );
+    q('workflow-breadcrumb')!.click();
+    expect(events).toEqual(['back']);
+    expect(q('workflow-detail-name')?.tagName).toBe('H1');
+    expect(text('workflow-detail-name')).toBe('Sequential test workflow');
+    expect(text('workflow-detail-id')).toBe('seq-text-demo');
+    expect(text('workflow-detail-kind')).toBe('Runs on an input');
+    expect(q('workflow-canvas')).not.toBeNull();
+    expect(
+      Array.from(el.querySelectorAll('[data-testid="workflow-node-title"]')).map((n) =>
+        n.textContent?.trim(),
+      ),
+    ).toEqual(['Clean text', 'Count words', 'Format result']);
+  });
+
+  it('a run workflow has Execute, which asks for the panel on Run; no Start chat', () => {
+    open(SEQ);
     expect(q('workflow-start-chat')).toBeNull();
-    expect(q('workflow-bar-note')).toBeNull();
-    expect(el.querySelector('#workflow-agents-heading')).toBeNull();
-    const field = q('workflow-input-text') as HTMLTextAreaElement;
-    expect(field.tagName).toBe('TEXTAREA');
-    expect(field.placeholder).toBe('Paste or type any text');
-    expect(field.getAttribute('aria-required')).toBe('true');
-    const label = el.querySelector(`label[for="${field.id}"]`);
-    expect(label?.textContent?.trim()).toBe('Text');
-    expect(q('workflow-run')?.textContent?.trim()).toBe('Run');
-    expect(q('workflow-run-result')).toBeNull();
+    expect(text('workflow-execute')).toBe('Execute');
+    q('workflow-execute')!.click();
+    expect(designer.tab()).toBe('run');
+    expect(events).toEqual(['openPanel']);
   });
 
-  it('runs on the typed input, says Running… meanwhile, then shows each step and the output', () => {
-    open(SEQ);
-    type('  Hello  ');
-    const req = run();
-    expect(req.request.body).toEqual({ input: { text: '  Hello  ' } });
-    const button = q('workflow-run') as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-    expect(button.textContent?.trim()).toBe('Running…');
-    const result: WorkflowRunResult = {
-      workflowId: 'seq-text-demo',
-      status: 'success',
-      steps: [
-        { id: 'clean-text', title: 'Clean text', status: 'success', output: { text: 'Hello' } },
-        { id: 'count-words', title: 'Count words', status: 'success', output: { words: 1 } },
-        { id: 'format-result', title: 'Format result', status: 'success', output: { summary: 'S' } },
-      ],
-      output: { summary: '1 word, 5 characters: "Hello"' },
-    };
-    req.flush(result);
-    fixture.detectChanges();
-    expect(button.disabled).toBe(false);
-    expect(q('workflow-run-status')?.textContent?.trim()).toBe('Run succeeded');
-    const row = q('workflow-run-step-clean-text')!;
-    expect(row.textContent).toContain('1');
-    expect(row.textContent).toContain('Clean text');
-    expect(row.textContent).toContain('Done');
-    expect(row.querySelector('pre')?.textContent).toBe(
-      JSON.stringify({ text: 'Hello' }, null, 2),
-    );
-    expect(q('workflow-run-output')?.textContent).toContain(
-      '1 word, 5 characters: "Hello"',
-    );
-  });
-
-  it('shows a failed run: the failing step with its error, the others skipped', () => {
-    open(SEQ);
-    type('   ');
-    run().flush({
-      workflowId: 'seq-text-demo',
-      status: 'failed',
-      steps: [
-        { id: 'clean-text', title: 'Clean text', status: 'failed', error: 'The text is empty' },
-        { id: 'count-words', title: 'Count words', status: 'skipped' },
-        { id: 'format-result', title: 'Format result', status: 'skipped' },
-      ],
-      error: 'The text is empty',
-    } satisfies WorkflowRunResult);
-    fixture.detectChanges();
-    expect(q('workflow-run-status')?.textContent?.trim()).toBe(
-      'Run failed: The text is empty',
-    );
-    expect(q('workflow-run-step-clean-text')?.textContent).toContain('Failed');
-    expect(q('workflow-run-step-clean-text')?.textContent).toContain(
-      'The text is empty',
-    );
-    expect(q('workflow-run-step-count-words')?.textContent).toContain('Skipped');
-    expect(q('workflow-run-output')).toBeNull();
-  });
-
-  it("shows the server's refusal and keeps no result; running again replaces the result", () => {
-    open(SEQ);
-    run().flush(
-      { statusCode: 400, message: 'Text is required', error: 'Bad Request' },
-      { status: 400, statusText: 'Bad Request' },
-    );
-    fixture.detectChanges();
-    expect(q('workflow-run-error')?.textContent?.trim()).toBe('Text is required');
-    expect(q('workflow-run-error')?.getAttribute('role')).toBe('alert');
-    expect(q('workflow-run-result')).toBeNull();
-
-    type('a');
-    run().flush({
-      workflowId: 'seq-text-demo',
-      status: 'success',
-      steps: [],
-      output: { summary: 'first' },
-    });
-    fixture.detectChanges();
-    expect(q('workflow-run-error')).toBeNull();
-    run().flush({
-      workflowId: 'seq-text-demo',
-      status: 'success',
-      steps: [],
-      output: { summary: 'second' },
-    });
-    fixture.detectChanges();
-    expect(q('workflow-run-output')?.textContent).toContain('second');
-    expect(q('workflow-run-output')?.textContent).not.toContain('first');
-  });
-
-  it('a chat workflow keeps Start chat and shows no input form', () => {
+  it('a chat workflow keeps Start chat and has no Execute', () => {
     open(V2);
-    expect(q('workflow-start-chat')).not.toBeNull();
-    expect(q('workflow-run')).toBeNull();
-    expect(q('workflow-bar-note')).not.toBeNull();
+    expect(q('workflow-execute')).toBeNull();
+    q('workflow-start-chat')!.click();
+    expect(events).toEqual(['startChat:qti-v2-turn']);
+  });
+
+  it('writes the chat requirement beside a disabled Start chat', () => {
+    open({ ...V2, chatRequirement: 'Load the sample first' });
+    const start = q('workflow-start-chat') as HTMLButtonElement;
+    expect(start.disabled).toBe(true);
+    expect(start.title).toBe('Load the sample first');
+    expect(text('workflow-chat-requirement')).toBe('Load the sample first');
+  });
+
+  it('a node selects its step and asks for the panel on Step; the background clears it', () => {
+    open(SEQ);
+    q('workflow-node-count-words')!.click();
+    fixture.detectChanges();
+    expect(designer.selectedStepId()).toBe('count-words');
+    expect(designer.tab()).toBe('step');
+    expect(events).toEqual(['openPanel']);
+    expect(q('workflow-node-count-words')?.getAttribute('aria-pressed')).toBe('true');
+
+    const canvas = q('workflow-canvas')!;
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+    canvas.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 }));
+    fixture.detectChanges();
+    expect(designer.selectedStepId()).toBeNull();
+    expect(q('workflow-node-count-words')?.getAttribute('aria-pressed')).toBe('false');
+    expect(events).toEqual(['openPanel']);
+  });
+
+  it('shows the run status on the canvas nodes while a run is shown', () => {
+    open(SEQ);
+    designer.runResult.set({
+      workflowId: 'seq-text-demo',
+      status: 'success',
+      steps: SEQ.steps.map((s) => ({ id: s.id, title: s.title, status: 'success' })),
+    });
+    fixture.detectChanges();
+    expect(
+      Array.from(el.querySelectorAll('[data-testid="workflow-node-status"]')).map((n) =>
+        n.textContent?.trim(),
+      ),
+    ).toEqual(['Done', 'Done', 'Done']);
+  });
+
+  it("shows the server's error, and leaving the page discards the workflow and its run", () => {
+    fixture = TestBed.createComponent(WorkflowDetailPage);
+    fixture.componentRef.setInput('workflowId', 'nope');
+    fixture.detectChanges();
+    http
+      .expectOne((r) => r.url.endsWith('/workflows/nope'))
+      .flush(
+        { statusCode: 404, message: 'Workflow "nope" not found' },
+        { status: 404, statusText: 'Not Found' },
+      );
+    fixture.detectChanges();
+    el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Workflow "nope" not found');
+    expect(el.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe('nope');
+
+    fixture.destroy();
+    open(SEQ);
+    designer.select('clean-text');
+    designer.setInput('text', 'x');
+    fixture.destroy();
+    expect(designer.workflow()).toBeNull();
+    expect(designer.selectedStepId()).toBeNull();
+    expect(designer.inputValues()).toEqual({});
+    expect(designer.tab()).toBe('workflow');
+  });
+
+  it('leaves room for the Expand button when the right panel is closed', () => {
+    open(SEQ);
+    const header = el.querySelector('header')!;
+    expect(header.classList).toContain('pr-6');
+    fixture.componentRef.setInput('panelOpen', false);
+    fixture.detectChanges();
+    expect(header.classList).toContain('pr-14');
   });
 });

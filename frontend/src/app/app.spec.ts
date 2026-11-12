@@ -1211,6 +1211,21 @@ describe('Workflows area (workflows R5-R8, app-shell R3)', () => {
     expect(app.mainView()).toBe('workflows');
   });
 
+  it('opens a workflow page with the right panel open on its configuration (ui.md 4.4b)', async () => {
+    const { app, fixture, el } = setup();
+    expect(app.rightPanelOpen()).toBe(false);
+    app.openWorkflow('qti-v2-turn');
+    fixture.detectChanges();
+    // Both are deferred blocks.
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(app.rightPanelOpen()).toBe(true);
+    const panel = el.querySelector('aside[aria-label="Details panel"]');
+    expect(panel?.querySelector('app-workflow-panel')).toBeTruthy();
+    expect(panel?.querySelector('app-entity-details')).toBeNull();
+    expect(el.querySelector('main app-workflow-detail')).toBeTruthy();
+  });
+
   it('Start chat on a workflow that picks datasets opens the composer preselected', () => {
     const { app } = setup();
     app.startChatWithWorkflow(v2);
