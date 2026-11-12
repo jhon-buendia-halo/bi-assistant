@@ -90,6 +90,18 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 | `build:all` | `build` then `build:web` | Everything the npm package needs. |
 | `prepack` | `build:all` | `npm pack` / `npm publish` always ship a fresh UI. |
 
+### Repo scripts (`scripts/`, no root `package.json`)
+
+The repo keeps no root `package.json`; its developer scripts are plain Node files run as `node scripts/<name>.mjs` (pure logic in `<name>-lib.mjs`, tests in `scripts/*.test.mjs`, run with `node --test scripts/*.test.mjs`).
+
+| Command | Purpose |
+|---|---|
+| `node scripts/spec-index.mjs [--check]` | Writes `specs/INDEX.md` (section index with line ranges); `--check` exits 1 when it is stale. Roadmap 1.23.29, see 13. |
+| `node scripts/story-pack.mjs <roadmap-id> [--out <file>]` | Writes `.context/story-packs/<id>.md`, the builder's starting brief. Roadmap 1.23.29, see 13. |
+| `node scripts/qa.mjs …` | Deterministic QA, see 13. |
+| `node scripts/demo-page.mjs <roadmap-id>` | Shareable demo page, see 13. |
+| `node scripts/bootstrap.mjs` | Workspace bootstrap, see above. |
+
 ### Local run recipes
 
 ```bash
@@ -521,3 +533,7 @@ node scripts/qa.mjs <roadmap-id> --draft-impact [--base <ref>] [--dry-run]
   4. When: in the fast loop, publish right after `qa.mjs --fast` so the user can review the demo by hand; at step 10, regenerate and republish to the same URL only when the demo changed after the fast loop; the epic's changelog entry links it.
 - **Playwright configuration** (`frontend/playwright.config.ts`): when `QA_REPORT_DIR` is set, the reporters are `list`, `json` (`<dir>/results.json`) and `html` (`<dir>/html`). `DEMO=1` is read by the app fixture (video, `slowMo`) and by `scenarioStep` (captions).
 - **`check-specs.py` on Windows:** paths are compared with forward slashes, so the Playwright-mirror check passes on Windows as it does on Linux.
+- **Spec section index and story pack (roadmap 1.23.29).**
+  - `node scripts/spec-index.mjs` writes `specs/INDEX.md`: for every `specs/**/*.md`, `roadmap.md` and `roadmap-archive.md`, each heading (levels 2-4) and each rule id (`- R<n>.`) as `path:first-last  heading`, outside code fences. A heading runs to the line before the next heading of its level or higher; a rule to the line before the next rule or heading. Never edit it by hand; regenerate it after any spec or roadmap edit.
+  - `check-specs.py` fails when the index is stale (it runs `node scripts/spec-index.mjs --check`; skipped when `node` is missing), and when a `Scenario:` of a Feature that has no Given/When/Then lines under its scenarios has a title that is not in its `E2E:` file (a Feature that keeps its steps in the spec is not checked).
+  - `node scripts/story-pack.mjs <roadmap-id> [--out <file>]` writes `.context/story-packs/<id>.md` (gitignored): the story's roadmap entry verbatim (from `roadmap.md` or `roadmap-archive.md`); the plan sections it cites (links to `docs/plans/*.md`, "plan section N", "plan 1.24.x", looked up in every plan file when unlinked), capped at 400 lines; the spec sections it names (`specs/...md#anchor` paths, or `Specs: <capability> R2, R5` short names, with their line ranges); a file map (top-level symbols with line numbers of each code path named); the `lessons.md` lines for the touched areas; the builder rules and report block. It prints the size and warns above 60 KB.

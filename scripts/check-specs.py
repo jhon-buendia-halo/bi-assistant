@@ -121,5 +121,30 @@ check(not missing, f"{len(roadmap_epics)} roadmap milestone epics have a spec in
 no_status = sorted(e for e, t in epics.items() if not re.search(r"\*\*Status:\*\* (Draft|Confirmed)", t))
 check(not no_status, "every epic spec has a Status of Draft or Confirmed", no_status)
 
+# 9. Gherkin once (roadmap 1.23.29): a Feature written as bare `Scenario:` titles (no Given/When/Then lines
+#    under them) lives in its E2E file only, so each title must appear there as a test or scenarioStep title.
+#    Features that keep their steps in the spec are not checked here.
+STEP = re.compile(r"^\s*(Given|When|Then|And|But)\b")
+bare = []
+for c, t in capabilities.items():
+    ref = re.search(r"^E2E: `([^`]+)`", t, flags=re.M)
+    if not ref or not os.path.isfile(ref.group(1)):
+        continue
+    e2e = read(ref.group(1))
+    for block in re.findall(r"```gherkin\n(.*?)```", t, flags=re.S):
+        parts = re.split(r"^\s*Scenario(?: Outline)?:\s*(.*)$", block, flags=re.M)
+        for title, body in zip(parts[1::2], parts[2::2]):
+            if not any(STEP.match(line) for line in body.splitlines()):
+                if title.strip() not in e2e and title.strip().replace('"', '\\"') not in e2e:
+                    bare.append(f"{c}: {title.strip()} (not in {ref.group(1)})")
+check(not bare, "every step-less Scenario title exists in its E2E file", bare)
+
+# 10. The spec section index is current (roadmap 1.23.29): regenerate it in memory and compare.
+try:
+    stale = subprocess.run(["node", "scripts/spec-index.mjs", "--check"], capture_output=True, text=True).returncode != 0
+    check(not stale, "specs/INDEX.md is current (node scripts/spec-index.mjs)")
+except FileNotFoundError:
+    check(True, "specs/INDEX.md freshness skipped (node is not installed)")
+
 print("\n" + ("ALL CHECKS PASSED" if not failures else f"{failures} CHECK(S) FAILED"))
 sys.exit(1 if failures else 0)
